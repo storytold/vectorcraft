@@ -604,7 +604,7 @@ fn unembed_writes_several_images_to_one_picked_folder() {
     std::fs::create_dir_all(&out).unwrap();
     // PLAN: assumed `scripted` and `poll` of fl.A20 live in `crate::tests::picks`.
     let picker = scripted(&mut app);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert!(super::links::can_unembed(&app, 2));
     // No folder picked: nothing written or linked.
     super::links::unembed_several(&mut app, vec![embedded, other]);

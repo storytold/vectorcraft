@@ -124,6 +124,7 @@ pub(super) fn alternates_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canv
                     .thumb_size(ThumbSize::Small)
                     .caption(CaptionPlace::None)
                     .card_columns(found.count())
+                    .natural_height(true)
                     .activate(ActivateOn::Click)
                     .show_items(ui, &Cells(found.count()), &mut |key, _| {
                         let cell = GlyphCell::Glyph(found.gid(*key).unwrap_or_default());

@@ -829,7 +829,7 @@ mod tests {
     /// A click on the cell at `at` of the guide shown now, through the panel's click glue.
     fn click(app: &mut VectorcraftApp, at: GuideCellAt) {
         let cell = cell_at(&guide_of(app), at);
-        let mut out = egui::Context::default().run_ui(egui::RawInput::default(), |ui| chosen(app, ui, cell));
+        let mut out = crate::testing::ui_context().run_ui(egui::RawInput::default(), |ui| chosen(app, ui, cell));
         out.textures_delta.clear();
     }
 
@@ -847,7 +847,7 @@ mod tests {
         app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
         let blue = app.run("shape.rectangle", json!({"x": 20, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
         app.run("paint.setFill", json!({"color": "#3366cc"})).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         assert_eq!(base_color(&app).to_hex(), "#3366cc", "the first show takes the current color");
         app.run("select.set", json!({"ids": [red]})).unwrap();
@@ -872,7 +872,7 @@ mod tests {
         let mut app = app();
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
         app.run("paint.setFill", json!({"color": "#3366cc"})).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let g = guide_of(&app);
         let fill = |app: &VectorcraftApp| crate::panels::current_paints(app).0.color().map(|c| c.to_hex());
@@ -898,7 +898,7 @@ mod tests {
     #[test]
     fn save_colors_as_swatches_saves_each_selected_cell() {
         let mut app = app();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let before = app.session.doc().unwrap().doc.swatches.len();
         let cells = picked_cells(&app, &[(0, 0), (1, 4), (0, 8)]);
@@ -917,7 +917,7 @@ mod tests {
         let mut app = app();
         app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
         app.run("paint.setFill", json!({"color": "#3366cc", "keepModel": true})).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let cells = picked_cells(&app, &[(0, 0), (0, 6)]);
         save_selected(&mut app, &cells);
@@ -939,7 +939,7 @@ mod tests {
     #[test]
     fn save_color_group_saves_the_selected_cells_in_grid_order() {
         let mut app = app();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let st = app.session.doc().unwrap();
         let (groups, swatches, undo) = (st.doc.swatch_groups.len(), st.doc.swatches.len(), st.history.undo.len());
@@ -961,7 +961,7 @@ mod tests {
     #[test]
     fn save_color_group_without_a_selection_saves_the_harmony_colors() {
         let mut app = app();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let g = guide_of(&app);
         save_group(&mut app, &[]);
@@ -976,7 +976,7 @@ mod tests {
         app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
         app.run("paint.setFill", json!({"color": "#c04020", "keepModel": true})).unwrap();
         app.run("ui.colorGuideLimit", json!({"library": "web-safe-216"})).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let g = guide(&mut app);
         let cells: Vec<GuideCell> = [(0, 1), (0, 7)].iter().map(|&(row, column)| cell_at(&g, grid(row, column))).collect();
@@ -1019,7 +1019,7 @@ mod tests {
     #[test]
     fn a_spot_color_base_gives_tints_of_that_spot_color() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let g = guide_of(&app);
         let c = g.centre();
@@ -1060,7 +1060,7 @@ mod tests {
     #[test]
     fn a_tinted_spot_base_gives_lighter_tints_and_a_lost_link_gives_process_colors() {
         let mut app = spot_app(0.5);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let c = guide_of(&app).centre();
         let cell = |app: &VectorcraftApp, _: &egui::Context, col| cell_paint(app, &guide_of(app), 0, col).unwrap();
@@ -1091,7 +1091,7 @@ mod tests {
     #[test]
     fn a_renamed_spot_color_stays_the_base() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let c = guide_of(&app).centre();
         app.run("swatch.edit", json!({"name": "Ink", "newName": "Deep Ink"})).unwrap();
@@ -1116,7 +1116,7 @@ mod tests {
     #[test]
     fn a_deleted_spot_color_ends_the_link() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let c = guide_of(&app).centre();
         let linked = |app: &VectorcraftApp, _: &egui::Context| {
@@ -1186,7 +1186,7 @@ mod tests {
     #[test]
     fn an_undone_rename_keeps_the_link() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let c = guide_of(&app).centre();
         let linked = |app: &VectorcraftApp, _: &egui::Context| {
@@ -1240,7 +1240,7 @@ mod tests {
     #[test]
     fn a_resting_link_keeps_the_color_it_showed() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let shown = base_color(&app);
         app.session.execute("swatch.delete", &json!({"name": "Ink"})).unwrap();
@@ -1260,7 +1260,7 @@ mod tests {
     #[test]
     fn a_script_run_ends_the_link() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         // Commands that only list scripts or plug-ins keep the link, also as batch steps.
         app.run("script.engines", json!({})).unwrap();
@@ -1279,7 +1279,7 @@ mod tests {
     #[test]
     fn a_batch_follows_the_spot_color_across_documents() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let c = guide_of(&app).centre();
         let linked = |app: &VectorcraftApp, _: &egui::Context| {
@@ -1409,7 +1409,7 @@ mod tests {
     #[test]
     fn a_deleted_color_group_ends_the_link() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let c = guide_of(&app).centre();
         let linked = |app: &VectorcraftApp, _: &egui::Context| {
@@ -1465,7 +1465,7 @@ mod tests {
     #[test]
     fn saved_spot_tints_are_tint_swatches_of_the_spot_color() {
         let mut app = spot_app(1.0);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let g = guide_of(&app);
         let c = g.centre();
@@ -1532,7 +1532,7 @@ mod tests {
     #[test]
     fn limit_to_library_snaps_the_panel_and_follows_the_document_swatches() {
         let mut app = app();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.run("paint.setFill", json!({"color": "#3a7bd5"})).unwrap();
         frame(&mut app, &ctx);
         assert!(shown(&mut app).contains(&"#3a7bd5".to_string()), "no limit: the base itself");
@@ -1564,7 +1564,7 @@ mod tests {
     #[test]
     fn edit_or_apply_without_art_saves_the_limited_colours_as_a_group() {
         let mut app = app();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.run("paint.setFill", json!({"color": "#c04020"})).unwrap();
         app.run("select.none", json!({})).unwrap();
         app.run("ui.colorGuideLimit", json!({"library": "web-safe-216"})).unwrap();
@@ -1582,7 +1582,7 @@ mod tests {
         let g = guide(&mut app);
         assert_eq!(rows.len(), g.colors.len());
         assert!(g.colors.iter().all(|c| members.contains(&c.to_hex())), "the colors are the library's");
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         assert!(dialogs.with(|host| host.confirm_by_id(&ctx, recolor.id)), "OK confirms");
     }
 }

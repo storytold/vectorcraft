@@ -54,7 +54,7 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", serde_json::json!({"width": 400, "height": 300})).unwrap();
     app.select_tool("livePaintBucket");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let at = app.canvas_view().unwrap().to_screen(Point::new(200.0, 150.0));
     let shown = |app: &mut VectorcraftApp, mods: egui::Modifiers| {

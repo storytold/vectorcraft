@@ -71,7 +71,7 @@ fn align_stroke_styles_the_characters_the_type_tool_selects() {
     app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
     app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
     assert!(character::text_editing(&app).is_some());
-    assert!(stroke_mixed(&app, &egui::Context::default()).can_align, "the buttons are on");
+    assert!(stroke_mixed(&app, &crate::testing::ui_context()).can_align, "the buttons are on");
     let mut panel = Panel::new(app, stroke::show);
     panel.click("Outside");
     let app = panel.app();
@@ -92,13 +92,13 @@ fn the_stroke_panel_shows_the_live_paint_bucket_stroke_as_one_stroke() {
     run(&mut app, "stroke.set", json!({"weight": 1, "ids": [a]}));
     run(&mut app, "stroke.set", json!({"weight": 7, "ids": [b]}));
     run(&mut app, "select.set", json!({ "ids": [] }));
-    let none_selected = stroke_mixed(&app, &egui::Context::default());
+    let none_selected = stroke_mixed(&app, &crate::testing::ui_context());
     assert!(none_selected.can_align, "Align Stroke applies with nothing selected");
     run(&mut app, "select.set", json!({ "ids": [a, b] }));
-    let mixed = stroke_mixed(&app, &egui::Context::default());
+    let mixed = stroke_mixed(&app, &crate::testing::ui_context());
     assert!(mixed.weight, "the selection's weights differ");
     app.session.select_tool("livePaintBucket", Default::default()).unwrap();
-    let mixed = stroke_mixed(&app, &egui::Context::default());
+    let mixed = stroke_mixed(&app, &crate::testing::ui_context());
     assert_eq!(mixed, none_selected, "one stroke that Align Stroke applies to, as with nothing selected");
     assert_eq!(stroke::shown_weight(&app, current_stroke(&app).as_ref(), &mixed), Some(app.session.paint.stroke_width));
 }

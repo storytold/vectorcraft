@@ -25,7 +25,7 @@ fn tile_numbers(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
 #[test]
 fn the_canvas_numbers_the_print_tiles_of_print_preview() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert!(tile_numbers(&mut app, &ctx).is_empty(), "hidden by default");
     app.run("view.printTiling", json!({})).unwrap();
     assert_eq!(tile_numbers(&mut app, &ctx), ["1"], "the page is numbered");

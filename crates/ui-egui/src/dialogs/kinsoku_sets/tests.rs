@@ -5,7 +5,7 @@ use super::*;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(egui::Context::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     app
 }
@@ -29,7 +29,7 @@ fn is_open(app: &VectorcraftApp) -> bool {
 
 /// Sets a field as automation does.
 fn set(app: &VectorcraftApp, field: &str, value: Value) {
-    dialog(app, |d| d.set_json_field(&egui::Context::default(), field, value)).unwrap();
+    dialog(app, |d| d.set_json_field(&crate::testing::ui_context(), field, value)).unwrap();
 }
 
 /// The picked set's name, as the dialog lists it.
@@ -182,7 +182,7 @@ fn ok_sets_the_document_the_dialog_opened_on() {
     let first = app.session.active().unwrap().uid;
     app.run("type.kinsokuSets.set", json!({ "sets": [{"name": "First", "cannotStart": "ゝ"}] })).unwrap();
     open(&mut app).unwrap();
-    assert!(dialog(&app, |d| d.set_json_field(&egui::Context::default(), "__doc", json!(1))).is_err(), "automation cannot change the document");
+    assert!(dialog(&app, |d| d.set_json_field(&crate::testing::ui_context(), "__doc", json!(1))).is_err(), "automation cannot change the document");
     set(&app, "name", json!("Soft"));
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let other = app.session.active().unwrap().uid;

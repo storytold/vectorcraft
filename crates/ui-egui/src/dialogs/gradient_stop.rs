@@ -506,7 +506,7 @@ mod tests {
     /// and stop 1 selected, in an app with the window context that hosts the popover.
     fn app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(egui::Context::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
         let stops = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#000000"}]);

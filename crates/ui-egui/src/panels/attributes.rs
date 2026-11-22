@@ -255,7 +255,7 @@ mod tests {
 
     /// The URLs the app asked egui to open in one frame.
     fn opened(app: &mut VectorcraftApp) -> Vec<String> {
-        let out = egui::Context::default().run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+        let out = crate::testing::ui_context().run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.platform_output
             .commands
             .iter()

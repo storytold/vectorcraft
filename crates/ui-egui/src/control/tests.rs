@@ -14,7 +14,7 @@ fn dialog_open(app: &VectorcraftApp) -> bool {
 
 fn input_request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
     let (req, _) = ControlRequest::new(method, params);
-    let Reply::Done(r) = handle(app, &egui::Context::default(), &req) else { panic!("expected immediate reply") };
+    let Reply::Done(r) = handle(app, &crate::testing::ui_context(), &req) else { panic!("expected immediate reply") };
     r
 }
 
@@ -667,7 +667,7 @@ fn render_takes_the_artboard_asked_for() {
     let mut request = |method: &str, params: Value| {
         let (req, reply) = ControlRequest::new(method, params);
         tx.send(req).unwrap();
-        app.run_control(&egui::Context::default());
+        app.run_control(&crate::testing::ui_context());
         reply.try_recv().unwrap()
     };
     let new = json!({"width": 64, "height": 64, "units": "Points", "artboards": 2});
@@ -882,7 +882,7 @@ fn pointer_replies_name_the_key_object() {
     let b = app.run("shape.rectangle", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [a, b]})).unwrap();
     app.run("tool.select", json!({"tool": "selection"})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let click = |app: &mut VectorcraftApp| {
         let events = json!([{"kind": "down", "x": 110, "y": 20}, {"kind": "up", "x": 110, "y": 20}]);
         let (req, _) = ControlRequest::new("ui.pointer", json!({"events": events}));
@@ -906,7 +906,7 @@ fn pointer_reply_waits_for_a_merge_on_another_thread() {
     }
     app.run("select.all", json!({})).unwrap();
     app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let send = |app: &mut VectorcraftApp, events: Value| {
         let (req, reply) = ControlRequest::new("ui.pointer", json!({"events": events}));
         tx.send(req).unwrap();

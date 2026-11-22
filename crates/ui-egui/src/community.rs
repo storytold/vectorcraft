@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn link_clicks_open_the_right_urls() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut opened = vec![];
         for id in ["help.discord", "help.website", "help.appPage", "help.github"] {
             crate::menus::invoke(&mut app, id, serde_json::json!({}));

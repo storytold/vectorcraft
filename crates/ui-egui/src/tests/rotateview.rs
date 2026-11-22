@@ -67,7 +67,7 @@ fn view_rotate_turns_the_view_to_any_angle() {
 #[test]
 fn control_rotate_view_gesture_turns_the_canvas_and_reset_restores_it() {
     let mut app = with_document();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     super::synthetic::key_frame(&mut app, &ctx, vec![]);
     let view = app.view_mut().unwrap();
     view.center = vectorcraft_geom::Point::new(200.0, 150.0);
@@ -102,7 +102,7 @@ fn control_rotate_view_gesture_turns_the_canvas_and_reset_restores_it() {
 #[test]
 fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_requests() {
     let mut app = with_document();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     super::synthetic::key_frame(&mut app, &ctx, vec![]);
     let view = app.view_mut().unwrap();
     view.center = vectorcraft_geom::Point::new(200.0, 150.0);
@@ -126,7 +126,7 @@ fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_request
 #[test]
 fn control_rotate_view_rejects_nonfinite_positions_and_a_changed_document() {
     let mut app = with_document();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     super::synthetic::key_frame(&mut app, &ctx, vec![]);
     let send = super::synthetic::control;
     send(&mut app, &ctx, "ui.tool.select", json!({"tool": "rotateView"}));
@@ -160,7 +160,7 @@ fn control_rotate_view_rejects_malformed_packets_without_leaving_a_press() {
         json!({"events": null}),
     ] {
         let mut app = with_document();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         super::synthetic::key_frame(&mut app, &ctx, vec![]);
         let view = app.view_mut().unwrap();
         view.center = vectorcraft_geom::Point::new(200.0, 150.0);
@@ -181,7 +181,7 @@ fn control_rotate_view_rejects_malformed_packets_without_leaving_a_press() {
 #[test]
 fn control_rotate_view_screen_events_require_a_live_press() {
     let mut app = with_document();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     super::synthetic::key_frame(&mut app, &ctx, vec![]);
     let c = app.canvas_view().unwrap().rect.center();
     let view = app.view_mut().unwrap();
@@ -291,7 +291,7 @@ fn rotate_to_selection(app: &mut VectorcraftApp) -> f64 {
 fn rotate_view_to_selection_squares_the_view_to_the_selected_object() {
     let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
     let mut app = with_document();
-    super::synthetic::key_frame(&mut app, &egui::Context::default(), vec![]);
+    super::synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
     let id = rectangle(&mut app, 40.0);
     turn(&mut app, &id, 30.0);
     let (zoom, center) = (app.view().unwrap().zoom, app.view().unwrap().center);
@@ -327,7 +327,7 @@ struct Window {
 
 impl Window {
     fn new() -> Self {
-        let mut w = Self { app: with_document(), ctx: egui::Context::default(), time: 0.0 };
+        let mut w = Self { app: with_document(), ctx: crate::testing::ui_context(), time: 0.0 };
         w.app.select_tool("selection");
         w.app.run("view.rotate", json!({"angle": 30})).unwrap();
         w.after(0.0, vec![]);

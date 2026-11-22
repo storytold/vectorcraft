@@ -110,7 +110,7 @@ impl Mac {
         if native {
             app.services.native_menu = Some(NativeMenu::new(Box::new(fake.clone())));
         }
-        let mut m = Mac { app, fake, ctx: egui::Context::default(), time: 0.0 };
+        let mut m = Mac { app, fake, ctx: crate::testing::ui_context(), time: 0.0 };
         for _ in 0..3 {
             m.frame(vec![]);
         }
@@ -377,7 +377,7 @@ fn a_key_equivalent_paste_pastes_a_picture_from_another_app() {
     super::sysclip::copy_elsewhere(&board, vec![(PNG, super::sysclip::blue_png())]);
     let fake = Fake::default();
     app.services.native_menu = Some(NativeMenu::new(Box::new(fake.clone())));
-    let mut m = Mac { app, fake, ctx: egui::Context::default(), time: 0.0 };
+    let mut m = Mac { app, fake, ctx: crate::testing::ui_context(), time: 0.0 };
     for _ in 0..3 {
         m.frame(vec![]);
     }

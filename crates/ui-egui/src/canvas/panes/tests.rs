@@ -209,7 +209,7 @@ fn columns_and_rows(c: &[egui::Rect]) -> (usize, usize) {
 #[test]
 fn n_up_shows_that_many_documents_and_keeps_the_rest_under_their_tabs() {
     let mut app = app_with(5);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert_eq!(app.run("window.arrange.tile", json!({"layout": "2up"})).unwrap(), json!({"tiled": true, "panes": 2, "layout": "2up"}));
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0, [0, 4], "the current document takes the last pane");
@@ -259,7 +259,7 @@ fn n_up_shows_that_many_documents_and_keeps_the_rest_under_their_tabs() {
 #[test]
 fn closing_a_document_in_an_n_up_layout_fits_the_documents_that_change_panes() {
     let mut app = app_with(4);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("document.activate", json!({"index": 1})).unwrap();
     app.run("window.arrange.tile", json!({"layout": "2up"})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -284,7 +284,7 @@ fn closing_a_document_in_an_n_up_layout_fits_the_documents_that_change_panes() {
 #[test]
 fn closing_a_document_keeps_the_zoom_of_the_documents_whose_panes_stay() {
     let mut app = app_with(6);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.tile", json!({"layout": "6up"})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -410,7 +410,7 @@ fn the_arrange_documents_items_tile_and_consolidate() {
 #[test]
 fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     assert!(panes(&app).0.is_empty(), "documents open under their tabs");
     let tabbed = app.canvas_view().unwrap().rect;
@@ -472,7 +472,7 @@ fn tiled_pair() -> (VectorcraftApp, egui::Context) {
     app.select_tool("selection");
     app.ui.task_bar = false;
     app.run("window.arrange.tile", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app_frame(&mut app, &ctx, vec![]);
     app_frame(&mut app, &ctx, vec![]);
     (app, ctx)
@@ -691,7 +691,7 @@ fn a_drag_released_off_a_panes_art_area_or_after_escape_changes_nothing() {
 #[test]
 fn consolidate_all_windows_shows_one_document_again() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let tabbed = app.canvas_view().map(|v| v.rect);
     app.run("window.arrange.tile", json!({})).unwrap();
@@ -722,7 +722,7 @@ fn arrange_items_follow_the_open_documents() {
     app.run("window.arrange.tile", json!({})).unwrap();
     app.run("file.close", json!({})).unwrap();
     app.run("file.close", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(items(&app), (false, false), "every document closed");
     assert!(!app.ui.tiled);
@@ -731,7 +731,7 @@ fn arrange_items_follow_the_open_documents() {
 #[test]
 fn tile_with_one_document_leaves_the_next_one_under_its_tab() {
     let mut app = app_with(1);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": false, "panes": 1, "layout": "grid"}));
     assert!(!app.ui.tiled);
     assert!(!enabled(&app, "window.arrange.consolidateAllWindows"));
@@ -743,7 +743,7 @@ fn tile_with_one_document_leaves_the_next_one_under_its_tab() {
 #[test]
 fn closing_a_document_while_tiled_tiles_the_others() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0, [0, 1, 2]);
@@ -765,7 +765,7 @@ fn closing_a_document_while_tiled_tiles_the_others() {
 #[test]
 fn an_edit_shows_in_its_pane_once_another_document_is_current() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -788,7 +788,7 @@ fn other_panes_draw_their_guides_and_selected_objects() {
     app.session.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
     app.run("document.activate", json!({"index": 1})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![]);
     // The pane hands its document's guides and selected objects to the overlays it shows.
@@ -803,7 +803,7 @@ fn other_panes_draw_their_guides_and_selected_objects() {
 #[test]
 fn opening_a_document_while_tiled_fits_each_document_to_its_new_pane() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     let side_by_side = app.views[0].zoom;
@@ -818,7 +818,7 @@ fn opening_a_document_while_tiled_fits_each_document_to_its_new_pane() {
 #[test]
 fn other_panes_show_pixel_preview() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     app.ui.view.pixel_preview = true;
@@ -833,7 +833,7 @@ fn other_panes_show_pixel_preview() {
 #[test]
 fn other_panes_render_within_the_largest_texture_side() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.set_pixels_per_point(2.0);
     app.run("window.arrange.tile", json!({})).unwrap();
     let mut run = |app: &mut VectorcraftApp| {
@@ -861,7 +861,7 @@ fn other_panes_render_within_the_largest_texture_side() {
 #[test]
 fn a_panes_key_takes_its_documents_placed_value() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     let before = pane_source(&mut app, &ctx, (0, 1)).frame.revision;
@@ -875,7 +875,7 @@ fn a_panes_key_takes_its_documents_placed_value() {
 #[test]
 fn a_resized_window_fits_the_tiled_documents_again_unless_one_was_zoomed() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![]);
@@ -942,7 +942,7 @@ fn other_panes_draw_through_their_documents_profiles() {
         }
         out.shapes.iter().any(|c| any(&c.shape, &|c: Color32| c.a() == 255 && near([c.r(), c.g(), c.b()], rgb)))
     };
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let raw = || egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
         max_texture_side: Some(8192),
@@ -1025,7 +1025,7 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     app.run("select.none", json!({})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // The second document's pane: the picture it shows, and its width.
     let pane = |app: &mut VectorcraftApp| -> (Vec<Color32>, usize) {
         forget(app, &ctx);
@@ -1093,7 +1093,7 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
 #[test]
 fn a_pane_draws_its_own_views_outline() {
     let mut app = translucent_in_two_windows();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let other = (0, 1);
     let red = |[r, g, b]: [u8; 3]| r > g.saturating_add(60) && r > b.saturating_add(60);
     let shown = |app: &mut VectorcraftApp, pane_outline: bool, current_outline: bool| {
@@ -1123,7 +1123,7 @@ fn a_pane_blends_translucent_art_before_the_display_profile() {
     let p3 = crate::display_profile::tests::p3();
     app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
     app.session.prefs.monitor_profile_display = true;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let other = (0, 1);
     pane_out(&mut app, &ctx, other).textures_delta.clear();
     assert!(pane_source(&mut app, &ctx, other).frame.cache.over().is_some(), "the pane's Preview blends with its paper");
@@ -1138,7 +1138,7 @@ fn a_pane_blends_translucent_art_before_the_display_profile() {
 #[test]
 fn an_edit_in_one_view_shows_in_the_other() {
     let mut app = app_with(1);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.newWindow", json!({})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -1158,7 +1158,7 @@ fn an_edit_in_one_view_shows_in_the_other() {
 #[test]
 fn each_pane_draws_its_own_views_outline_or_preview() {
     let mut app = app_with(1);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.newWindow", json!({})).unwrap();
     crate::doc_windows::show_window(&mut app, (0, 1));
     app.run("view.outline", json!({})).unwrap();

@@ -543,7 +543,7 @@ mod tests {
         assert_eq!(label(&app), "Edit Contents");
         app.run("object.envelope.editContents", json!({})).unwrap();
         assert_eq!(label(&app), "Edit Envelope");
-        crate::tests_synthetic::key_frame(&mut app, &egui::Context::default(), vec![]);
+        crate::tests_synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
         assert!(crate::menus::shortcut_of(&app, "object.envelope.editContents").is_none(), "its reference shortcut is Paste in Place's here");
     }
 

@@ -25,7 +25,7 @@ fn zoomed_in(tool: &str) -> (VectorcraftApp, egui::Context, vectorcraft_doc::Nod
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.select_tool(tool);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let v = app.view_mut().unwrap();
     v.zoom = 4.0;

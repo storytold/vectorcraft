@@ -150,7 +150,7 @@ fn stored(ctx: &egui::Context, uid: u64) -> (usize, usize) {
 #[test]
 fn closing_a_document_releases_only_its_layer_thumbnails() {
     let (mut app, _, _) = two_rects();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.ui_ctx = Some(ctx.clone());
     let first = app.session.active().unwrap().uid;
     pass(&mut app, &ctx);
@@ -174,7 +174,7 @@ fn closing_a_document_releases_only_its_layer_thumbnails() {
 fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let (mut app, _, _) = two_rects();
     app.session.execute("select.all", &json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let uid = app.session.active().unwrap().uid;
     for _ in 0..4 {
         pass(&mut app, &ctx);
@@ -202,7 +202,7 @@ fn row_thumbnails_wait_for_the_end_of_a_drag() {
 #[test]
 fn rename_opens_the_name_field_of_the_selected_object() {
     let (mut app, _, [a, _]) = two_rects();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.ui_ctx = Some(ctx.clone());
     let name = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(a).unwrap().display_name();
     let before = name(&app);
@@ -227,7 +227,7 @@ fn rename_opens_the_name_field_of_the_selected_object() {
 #[test]
 fn rename_names_the_current_layer_and_refuses_several_or_hidden_rows() {
     let (mut app, layer, [a, b]) = two_rects();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.ui_ctx = Some(ctx.clone());
     assert_eq!(app.run("ui.rename", json!({})).unwrap()["id"], json!(layer.0), "nothing selected: the current layer");
     app.ui.layers_ui.rename = None;
@@ -304,7 +304,7 @@ fn isolation_opens_the_isolated_row_and_keeps_drops_inside_it() {
 #[test]
 fn isolation_drops_highlights_outside_the_isolated_art() {
     let (mut app, [_, sub, _, b, _, c]) = nested();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.session.execute("layer.highlight", &json!({"ids": [c.0, b.0], "mode": "set"})).unwrap();
     app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
     pass(&mut app, &ctx);
@@ -315,7 +315,7 @@ fn isolation_drops_highlights_outside_the_isolated_art() {
 #[test]
 fn isolation_keeps_rename_and_locate_to_the_rows_listed() {
     let (mut app, [layer, sub, g, b, _, c]) = nested();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.ui_ctx = Some(ctx.clone());
     app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
     let err = app.run("ui.rename", json!({"id": c.0})).unwrap_err();
@@ -455,7 +455,7 @@ fn isolation_keeps_a_confirmed_delete_to_the_rows_listed() {
 #[test]
 fn isolation_opens_the_isolated_row_of_each_document() {
     let (mut app, [_, _, g, ..]) = nested();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     pass(&mut app, &ctx);
     app.session.execute("document.activate", &json!({"index": 0})).unwrap();
@@ -512,7 +512,7 @@ fn isolation_keeps_alt_clicks_on_eyes_and_locks_inside_it() {
 #[test]
 fn with_show_layers_only_locate_object_becomes_locate_layer() {
     let (mut app, [layer, sub, _, b, _, _]) = nested();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
     assert!(locate_titled(&app, "Locate Object"));
     footer_locate(&mut app);
@@ -537,7 +537,7 @@ fn with_show_layers_only_locate_object_becomes_locate_layer() {
 #[test]
 fn a_repeated_locate_reveals_the_row_it_already_highlighted() {
     let (mut app, [layer, sub, g, b, _, _]) = nested();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
 
     options(&mut app).layers_only = true;
@@ -595,7 +595,7 @@ fn groups_of_one(n: usize) -> (VectorcraftApp, NodeId, Vec<NodeId>) {
 #[test]
 fn without_the_option_a_selection_leaves_the_rows_and_the_scroll_as_they_were() {
     let (mut app, layer, paths) = groups_of_one(500);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     app.session.execute("select.set", &json!({"ids": [paths[0].0]})).unwrap();
     assert_eq!(reveal_of(&app), Some(LayersReveal::Selected(paths[0])));
@@ -613,7 +613,7 @@ fn without_the_option_a_selection_leaves_the_rows_and_the_scroll_as_they_were() 
 fn with_the_option_a_selected_object_is_opened_and_scrolled_into_view() {
     let (mut app, layer, paths) = groups_of_one(500);
     options(&mut app).locate_selected = true;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let top = parent(&app, paths[499]).unwrap();
     app.session.execute("layer.highlight", &json!({"ids": [top.0]})).unwrap();
     pass(&mut app, &ctx);
@@ -637,7 +637,7 @@ fn with_the_option_the_panels_own_clicks_locate_nothing() {
     let (mut app, [layer, sub, g, b, _, c]) = nested();
     options(&mut app).locate_selected = true;
     expand(&mut app, &json!({"ids": [sub.0, g.0], "open": false})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     assert_eq!(listed_ids(&app).len(), 3, "Layer 1, Sub (closed) and c");
     select_rows(&mut app, &[layer, sub, c]);
@@ -658,7 +658,7 @@ fn with_the_option_the_panel_menu_locates_nothing() {
     let (mut app, [_, sub, g, b, _, c]) = nested();
     options(&mut app).locate_selected = true;
     app.session.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     expand(&mut app, &json!({"ids": [sub.0, g.0], "open": false})).unwrap();
     app.session.execute("layer.highlight", &json!({"ids": [c.0]})).unwrap();
@@ -679,7 +679,7 @@ fn with_the_option_a_selection_recalled_from_the_panel_menu_is_not_located() {
     app.run("select.set", json!({"ids": [b.0]})).unwrap();
     app.run("select.save", json!({"name": "Kept"})).unwrap();
     app.run("select.set", json!({"ids": [c.0]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     expand(&mut app, &json!({"ids": [sub.0, g.0], "open": false})).unwrap();
     pass(&mut app, &ctx);
@@ -699,7 +699,7 @@ fn with_the_option_a_document_becoming_active_locates_nothing() {
     options(&mut app).locate_selected = true;
     app.session.execute("layer.highlight", &json!({"ids": []})).unwrap();
     app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     expand(&mut app, &json!({"ids": [sub.0, g.0], "open": false})).unwrap();
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
@@ -721,7 +721,7 @@ fn with_the_option_a_selection_made_during_a_drag_is_located_when_it_ends() {
     let (mut app, [_, sub, g, b, ..]) = nested();
     options(&mut app).locate_selected = true;
     app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     expand(&mut app, &json!({"ids": [sub.0, g.0], "open": false})).unwrap();
     pass(&mut app, &ctx);
@@ -749,7 +749,7 @@ fn with_the_option_the_located_object_is_revealed_instead_of_its_active_layer() 
     options(&mut app).locate_selected = true;
     app.session.execute("layer.new", &json!({})).unwrap();
     assert_ne!(app.session.active().unwrap().current_layer(), Some(layer));
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     app.session.execute("select.set", &json!({"ids": [paths[0].0]})).unwrap();
     assert_eq!(app.session.active().unwrap().current_layer(), Some(layer), "the path's layer is the active one");
@@ -776,7 +776,7 @@ fn with_the_option_and_show_layers_only_the_active_layer_is_revealed() {
         rect(&mut app);
     }
     run(&mut app, "select.none", json!({}));
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     let bottom_layer = app.session.active().unwrap().doc.layer_of(NodeId(bottom)).unwrap();
     run(&mut app, "select.set", json!({"ids": [bottom]}));
@@ -794,7 +794,7 @@ fn with_the_option_and_show_layers_only_the_active_layer_is_revealed() {
 fn with_the_option_art_the_panel_does_not_list_opens_nothing() {
     let (mut app, _, paths) = groups_of_one(500);
     options(&mut app).locate_selected = true;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let open = |app: &VectorcraftApp, i: usize| is_open(app, parent(app, paths[i]).unwrap());
     let locate = |app: &mut VectorcraftApp, i: usize| {
         app.session.execute("select.set", &json!({"ids": [paths[i].0]})).unwrap();
@@ -830,7 +830,7 @@ fn a_canvas_selection_reveals_its_active_layer() {
         rects.push(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5}))["id"].as_u64().unwrap());
     }
     run(&mut app, "select.none", json!({}));
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     pass(&mut app, &ctx);
     let doc = app.session.active().unwrap().doc.clone();
     let bottom_layer = doc.layer_of(NodeId(rects[0])).unwrap();

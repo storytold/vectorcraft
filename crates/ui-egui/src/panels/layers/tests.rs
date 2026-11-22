@@ -172,7 +172,7 @@ fn deleting_a_layer_that_holds_art_asks_first() {
     let art = app.session.active().unwrap().doc.layers[0].id;
     run(&mut app, "layer.new", json!({}));
     let there = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(art).is_some();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let question = Some("Delete this layer and its artwork?".to_string());
     feed(&mut app, vec![LayersEvent::Delete(vec![layer_key(art)])]);
     assert_eq!(asked(&app), question, "Delete asks");
@@ -195,7 +195,7 @@ fn deleting_a_layer_that_holds_art_asks_first() {
 #[test]
 fn delete_selection_asks_only_for_layers_with_art() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
     let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
@@ -240,7 +240,7 @@ fn delete_selection_asks_only_for_layers_with_art() {
 #[test]
 fn delete_selection_refusals_and_a_document_change() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
@@ -350,7 +350,7 @@ pub(super) fn undo_len(app: &VectorcraftApp) -> usize {
 fn cmd_alt_l_opens_new_layer_options() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let layers = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.len();
     // PLAN: assumed `Chord::parse(&str) -> Option<Chord>` and `Chord::to_egui_shortcut() -> egui::KeyboardShortcut`.
     let press = |app: &mut VectorcraftApp, chord: &str| {

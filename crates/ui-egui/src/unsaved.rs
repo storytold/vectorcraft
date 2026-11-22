@@ -248,7 +248,7 @@ fn advance(app: &mut VectorcraftApp, mut closing: Closing, mut step: GuardStep<u
 /// One frame of the app, so it has its dialog host.
 #[cfg(test)]
 pub(crate) fn ready_for_test(app: &mut VectorcraftApp) -> egui::Context {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.ui(ui));
     out.textures_delta.clear();
     ctx

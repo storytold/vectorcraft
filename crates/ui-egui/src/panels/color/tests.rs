@@ -312,7 +312,7 @@ fn ui_color_panel_answers_junk_params_without_a_panic() {
 #[test]
 fn a_mixed_selection_has_no_colour_to_edit() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let b = app.run("shape.rectangle", json!({"x": 80, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
     app.run("select.all", json!({})).unwrap();
     app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
@@ -339,7 +339,7 @@ fn picked_mesh_points_are_the_color_the_panel_shows_and_edits() {
     use vectorcraft_engine::ViewInfo;
     use vectorcraft_tools::{PointerEvent, PointerKind};
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let id = app.session.active().unwrap().selection.objects[0];
     app.run("paint.setFill", json!({"color": "#ff8500"})).unwrap();
     app.run("object.mesh.create", json!({"rows": 2, "cols": 2})).unwrap();

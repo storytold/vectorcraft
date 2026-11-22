@@ -134,7 +134,7 @@ pub(super) mod driver {
 
     /// Gives the app a window context, so a dialog can open.
     pub fn install(app: &mut VectorcraftApp) {
-        app.ui_ctx = Some(egui::Context::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
     }
 
     fn ctx(app: &VectorcraftApp) -> egui::Context {

@@ -533,7 +533,7 @@ mod tests {
             let input = egui::RawInput { viewport_id: id, viewports, events: events.take(), ..Default::default() };
             ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui)).textures_delta.clear();
         });
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.set_embed_viewports(false);
         watch_input(&B, &ctx);
         let child = egui::ViewportId::from_hash_of("floating panel");
@@ -577,7 +577,7 @@ mod tests {
             let input = egui::RawInput { viewport_id: id, viewports, ..Default::default() };
             ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui)).textures_delta.clear();
         });
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.set_embed_viewports(false);
         watch_input(&B, &ctx);
         let child = egui::ViewportId::from_hash_of("floating panel");

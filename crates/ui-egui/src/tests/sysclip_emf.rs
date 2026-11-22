@@ -69,7 +69,7 @@ fn a_copied_ai_file_pastes_from_its_editing_data() {
     let (cmd, params) = import_command(&Flavour { mime: AI, data: file.clone() }, None);
     assert_eq!((cmd, &params["editingData"]), ("clipboard.importPdf", &json!(true)));
     let (mut app, _) = app();
-    app.paste_from_host(&egui::Context::default(), Flavour { mime: AI, data: file }, egui::Modifiers::COMMAND);
+    app.paste_from_host(&crate::testing::ui_context(), Flavour { mime: AI, data: file }, egui::Modifiers::COMMAND);
     let names: Vec<String> = pasted(&app).iter().map(|n| n.name.clone().unwrap_or_default()).collect();
     assert_eq!(names, ["Pair", "Ring", "Window", "Shaded", "", "Sub", ""]);
 }

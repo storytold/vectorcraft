@@ -130,18 +130,18 @@ fn list_events_and_menu_rows_reach_their_commands() {
     apply(&mut app, vec![PageListEvent::new_row(None, true)]);
     assert_eq!(board_names(&app).len(), 5, "no artboard is added before OK");
     assert!(is_open::<ArtboardOptionsDialog>(&app));
-    cancel_open(&mut app, &egui::Context::default());
+    cancel_open(&mut app, &crate::testing::ui_context());
 
     // Options, Fit and Rearrange.
     let mut app = menu_app(3);
     apply(&mut app, vec![PageListEvent::Options(2)]);
     assert_eq!((selected(&app, 3), is_open::<ArtboardOptionsDialog>(&app)), (2, true));
-    cancel_open(&mut app, &egui::Context::default());
+    cancel_open(&mut app, &crate::testing::ui_context());
     apply(&mut app, vec![PageListEvent::Fit(1)]);
     assert_eq!(app.view().unwrap().artboard, 1);
     apply(&mut app, vec![PageListEvent::Rearrange]);
     assert!(is_open::<RearrangeArtboardsDialog>(&app));
-    cancel_open(&mut app, &egui::Context::default());
+    cancel_open(&mut app, &crate::testing::ui_context());
 
     // The panel menu's rows: Rename asks the list to open a field; another id is not the panel's.
     let mut app = menu_app(3);
@@ -435,7 +435,7 @@ fn the_panel_menus_artboard_options_opens_the_active_artboards_options() {
     app.session.execute("artboard.new", &json!({"x": 400, "y": 300, "width": 100, "height": 50})).unwrap();
     select(&mut app, 1);
     let tool = app.session.tool_id().to_string();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("tool.options", json!({"tool": "artboard"})).unwrap();
     assert!(is_open::<ArtboardOptionsDialog>(&app));
     let fields = dialog_fields(&app);
@@ -578,7 +578,7 @@ fn choosing_the_artboard_tool_starts_it_on_the_active_artboard() {
     assert_eq!(app.ui.artboards_ui.rename, None);
     app.run("tool.options", json!({"tool": "artboard"})).unwrap();
     assert_eq!(dialog_fields(&app)["index"].as_f64(), Some(1.0), "Artboard Options shows the active artboard");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     cancel_open(&mut app, &ctx);
     let view = app.view_info();
     crate::canvas::dispatch(&mut app, &vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Move, 100.0, 75.0), view);
@@ -617,7 +617,7 @@ fn dragging_a_row_onto_new_artboard_duplicates_it() {
 #[test]
 fn the_row_menus_rename_opens_the_rename_dialog_for_the_selected_artboards() {
     let mut app = menu_app(4);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     select(&mut app, 2);
     app.session.set_tool_option("selected", &json!([2, 1]));
     let steps = undo_steps(&app);
@@ -652,7 +652,7 @@ fn the_row_menu_renames_the_right_clicked_artboard_with_any_tool() {
     app.session.execute("file.new", &json!({"width": 100, "height": 50, "units": "Points", "artboards": 3})).unwrap();
     app.session.execute("artboard.setProps", &json!({"index": 2, "locked": true})).unwrap();
     select(&mut app, 0);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     apply(&mut app, vec![set_rows(&[1])]);
     assert_eq!((app.session.tool_id(), selected(&app, 3)), (app.session.tool_id(), 1), "the right-clicked artboard is active, the tool unchanged");
     apply(&mut app, vec![set_rows(&[2])]);
@@ -717,7 +717,7 @@ fn alt_clicking_new_artboard_opens_artboard_options_for_the_new_artboard() {
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     app.session.execute("artboard.new", &json!({"x": 400, "y": 300, "width": 100, "height": 50})).unwrap();
     select(&mut app, 0);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.len();
     // Alt: the dialog for Artboard 3, 20 pt right of Artboard 2 and as large; no artboard yet.
     apply(&mut app, vec![PageListEvent::new_row(None, true)]);
@@ -753,7 +753,7 @@ fn alt_clicking_new_artboard_opens_artboard_options_for_the_new_artboard() {
 #[test]
 fn new_artboard_options_with_an_empty_name_add_the_default_name() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert!(app.run("ui.newArtboard", json!({})).is_err(), "no document");
     app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
     app.select_tool("artboard");
@@ -1063,7 +1063,7 @@ fn the_artboard_tools_menu_fits_the_selected_artboards_and_undoes() {
 #[test]
 fn the_artboard_tools_menu_deletes_empty_artboards_and_opens_dialogs() {
     let mut app = menu_app(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     // PLAN: assumed `crate::dialogs::ExportForScreensDialog` (ex.A8).
     let opened: [(&str, fn(&VectorcraftApp) -> bool); 4] = [

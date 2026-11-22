@@ -116,7 +116,7 @@ fn make_traces_off_the_ui_thread_as_one_undo_step() {
 #[test]
 fn starting_a_trace_asks_for_a_frame() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.adopt_context(&ctx);
     for _ in 0..5 {
         if !ctx.has_requested_repaint() {

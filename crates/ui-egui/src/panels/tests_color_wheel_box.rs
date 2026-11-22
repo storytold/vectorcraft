@@ -94,7 +94,7 @@ fn ui_color_wheel_sets_and_reads_the_view_and_the_channel() {
     let e = app.run("ui.colorWheel", json!({"view": "wheel", "channel": 7})).unwrap_err();
     assert_eq!(e, "`channel` must be hue, saturation, brightness, red, green or blue");
     assert_eq!(app.ui.color_wheel, Settings { view: View::Box, channel: Channel::Green, ..Default::default() }, "an error changes nothing");
-    let ui = crate::control::inspect(&app, &egui::Context::default());
+    let ui = crate::control::inspect(&app, &crate::testing::ui_context());
     assert_eq!(ui["ui"]["color_wheel"], with(json!({"view": "box", "channel": "green"})));
 }
 

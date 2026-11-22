@@ -73,7 +73,7 @@ mod tests {
 
     fn app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(egui::Context::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app
     }

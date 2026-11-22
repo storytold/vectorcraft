@@ -319,7 +319,7 @@ fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
     app.run("gradient.selectStop", json!({"index": 0})).unwrap();
     let (paint, selected) = (current(&app), app.session.active().unwrap().selection.objects.clone());
     stop_eyedropper(&mut app);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let escape = egui::Event::Key { key: Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
     crate::tests::synthetic::key_frame(&mut app, &ctx, vec![escape]);
     assert_eq!(app.session.tool_id(), "gradient");

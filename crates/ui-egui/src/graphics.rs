@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn a_loss_is_reported_once_from_any_thread() {
-        let (loss, ctx) = (GraphicsLoss::default(), egui::Context::default());
+        let (loss, ctx) = (GraphicsLoss::default(), crate::testing::ui_context());
         let (l, c) = (loss.clone(), ctx.clone());
         std::thread::spawn(move || {
             l.report(&c, "Unknown: driver reset");
@@ -210,7 +210,7 @@ mod tests {
     fn the_app_uploads_everything_again_in_a_new_context() {
         let mut app = app();
         app.canvas.worker_started = true; // render on this thread
-        let old = egui::Context::default();
+        let old = crate::testing::ui_context();
         for _ in 0..3 {
             frame(&mut app, &old);
         }
@@ -218,7 +218,7 @@ mod tests {
         assert_eq!(texture_name(&old, canvas).as_deref(), Some("canvas"));
 
         // The host lost its graphics and started again: same app, new context.
-        let new = egui::Context::default();
+        let new = crate::testing::ui_context();
         for _ in 0..3 {
             frame(&mut app, &new);
         }

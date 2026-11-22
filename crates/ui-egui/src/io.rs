@@ -507,7 +507,7 @@ mod tests {
         let (mut app, written) = app();
         app.session.execute("file.new", &json!({"width": 30, "height": 20})).unwrap();
         let (req, _) = craft::automation::control::ControlRequest::new("app.export", json!({"format": "png", "scale": 2}));
-        let craft::automation::Reply::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
+        let craft::automation::Reply::Done(r) = crate::control::handle(&mut app, &crate::testing::ui_context(), &req) else { panic!("not done") };
         assert_eq!(r["ok"], true, "{r}");
         let png = vectorcraft_format::base64_decode(r["result"]["dataBase64"].as_str().unwrap()).unwrap();
         assert_eq!(&png[16..20], 60u32.to_be_bytes(), "30 pt at scale 2");

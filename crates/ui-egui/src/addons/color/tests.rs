@@ -62,7 +62,7 @@ fn every_adjustment_offered_is_a_colour_adjustment_with_its_defaults() {
 #[test]
 fn the_halftone_effect_dialog_has_the_command_fields_and_edits_the_effect() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     open(&mut app, &ctx, json!({"effect": "addon.color.halftone"}));
     let (_, fields) = top(&app);
     let shown: std::collections::BTreeSet<&str> = fields.as_object().unwrap().keys().map(String::as_str).collect();
@@ -84,7 +84,7 @@ fn the_halftone_effect_dialog_has_the_command_fields_and_edits_the_effect() {
 #[test]
 fn the_duotone_dialog_has_a_row_per_tone_and_the_curve_of_one() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("swatch.new", json!({"name": "Ink", "color": "#e07020", "spot": true})).unwrap();
     open(&mut app, &ctx, json!({"effect": "addon.color.duotone"}));
     assert!(app.session.in_interaction(), "the preview runs");

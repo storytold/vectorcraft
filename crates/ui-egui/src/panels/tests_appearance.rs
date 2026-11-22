@@ -71,7 +71,7 @@ pub(super) fn text_rect(texts: &[(String, egui::Rect)], s: &str) -> egui::Rect {
 
 /// One whole app frame, so the dialog host and the effect dialogs' pump run as in production.
 pub(super) fn app_frame(app: &mut VectorcraftApp) {
-    key_frame(app, &egui::Context::default(), vec![]);
+    key_frame(app, &crate::testing::ui_context(), vec![]);
 }
 
 /// The id of the open effect dialog.
@@ -152,7 +152,7 @@ fn shows(panel: &mut Panel, name: &str) -> bool {
 /// The Cmd+/ or Cmd+Alt+/ key pressed through the whole app frame.
 fn press_slash(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
     let ev = egui::Event::Key { key: egui::Key::Slash, physical_key: None, pressed: true, repeat: false, modifiers };
-    key_frame(app, &egui::Context::default(), vec![ev]);
+    key_frame(app, &crate::testing::ui_context(), vec![ev]);
 }
 
 /// The name of the colour chip of the "Fill:" or "Stroke:" row.

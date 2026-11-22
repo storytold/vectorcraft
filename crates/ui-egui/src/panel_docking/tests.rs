@@ -24,7 +24,7 @@ impl Harness {
     fn new() -> Self {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.enable_accesskit();
         let mut h = Self { app, ctx, time: 0.0, nodes: Vec::new() };
         h.frames(3);

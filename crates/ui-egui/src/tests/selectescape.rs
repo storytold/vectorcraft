@@ -10,7 +10,7 @@ use crate::VectorcraftApp;
 
 /// One app frame pressing `key`, after an empty frame that builds the board's keymap.
 fn press(app: &mut VectorcraftApp, key: Key) {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     key_frame(app, &ctx, vec![]);
     let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
     key_frame(app, &ctx, vec![ev]);

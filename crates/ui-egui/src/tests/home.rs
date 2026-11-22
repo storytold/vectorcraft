@@ -34,7 +34,7 @@ fn home_shows_over_open_documents_until_a_document_is_chosen() {
     app.run("app.home", json!({})).unwrap();
     assert!(!shows_document(&mut app), "Home replaces the canvas");
     assert_eq!(app.session.documents().len(), 1, "the document stays open");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert!(!dialogs_open(&mut app, &ctx), "Home is not the New Document dialog");
     // Choosing the document's tab returns to it.
     app.ui.home = None;
@@ -76,7 +76,7 @@ fn home_screen_without_documents_follows_its_preference() {
 fn cmd_alt_n_makes_a_document_without_the_new_document_dialog() {
     use vectorcraft_doc::ColorMode;
     use vectorcraft_engine::cmd::newdoc;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let press = |app: &mut VectorcraftApp| {
         // The first frame of a context builds the keymap the key stage reads.
         crate::tests_synthetic::key_frame(app, &ctx, vec![]);

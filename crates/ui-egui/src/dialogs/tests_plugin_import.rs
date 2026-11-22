@@ -17,7 +17,7 @@ use crate::tests::picks::{poll, scripted};
 /// Sends `app.open` with `params` through the control channel and returns the reply.
 fn control(app: &mut VectorcraftApp, params: serde_json::Value) -> serde_json::Value {
     let (req, _rx) = craft::automation::ControlRequest::new("app.open", params);
-    let craft::automation::Reply::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("not done") };
+    let craft::automation::Reply::Done(r) = crate::control::handle(app, &crate::testing::ui_context(), &req) else { panic!("not done") };
     r
 }
 
@@ -130,7 +130,7 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     let picker = scripted(&mut app);
     app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams"})).unwrap();
     picker.answer(&[&file]);
-    poll(&mut app, &egui::Context::default());
+    poll(&mut app, &crate::testing::ui_context());
     assert_eq!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
     frame(&mut app);
     set(&mut app, "density", json!(7));

@@ -131,7 +131,7 @@ fn window(app: &VectorcraftApp) -> egui::Context {
 
 /// `app` with a window for its dialogs, as its first frame gives it one.
 fn windowed(mut app: VectorcraftApp) -> VectorcraftApp {
-    app.ui_ctx = Some(egui::Context::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app
 }
 

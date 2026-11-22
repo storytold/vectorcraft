@@ -259,7 +259,7 @@ mod tests {
         let mut app = app_with_two_rectangles();
         app.session.execute("edit.undo", &json!({})).unwrap();
         let source = app.session.active().unwrap().doc.clone();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.enable_accesskit();
         egui_extras::install_image_loaders(&ctx);
         let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(240.0, 400.0)));

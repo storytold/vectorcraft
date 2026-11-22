@@ -48,7 +48,7 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, draw: fn(&mu
 }
 
 fn context() -> egui::Context {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
     crate::testing::install(&ctx);
     ctx

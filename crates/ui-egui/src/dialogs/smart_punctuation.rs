@@ -90,7 +90,7 @@ mod tests {
 
     fn app_with_text(text: &str) -> (VectorcraftApp, u64) {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(egui::Context::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
         let id = app.run("text.create", json!({"x": 10, "y": 40, "text": text, "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
         (app, id)

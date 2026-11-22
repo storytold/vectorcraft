@@ -724,7 +724,7 @@ mod tests {
     /// Sets fields as `ui.dialog.set` does, all or none.
     fn set(app: &VectorcraftApp, fields: &[(&str, Value)]) -> Result<(), String> {
         let fields: Vec<(String, Value)> = fields.iter().map(|(k, v)| ((*k).to_string(), v.clone())).collect();
-        app.dialogs().unwrap().with(|h| h.set_json_fields(&egui::Context::default(), id(), &fields))
+        app.dialogs().unwrap().with(|h| h.set_json_fields(&crate::testing::ui_context(), id(), &fields))
     }
 
     /// Changes the value as the form's controls do (the parts no field names).
@@ -735,7 +735,7 @@ mod tests {
     /// Presses OK: the host files the value, `pump` runs the command, and the host closes the dialog
     /// when the command succeeded.
     fn ok(app: &mut VectorcraftApp) -> Result<(), String> {
-        let (ctx, host) = (egui::Context::default(), app.dialogs().unwrap());
+        let (ctx, host) = (crate::testing::ui_context(), app.dialogs().unwrap());
         host.with(|h| h.confirm_by_id(&ctx, id()));
         pump(app, &ctx);
         match host.with(|h| h.held_state(id())) {
@@ -977,7 +977,7 @@ mod tests {
         assert_eq!(bounds, [None, None]);
         let before = app.session.doc().unwrap().doc.clone();
         set(&app, &[("width", json!(10))]).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id()));
         assert!(!is_open(&app));
         assert_eq!(*app.session.doc().unwrap().doc, *before);

@@ -598,13 +598,13 @@ mod tests {
 
     /// `ui.dialog.set` on the open dialog.
     fn set(app: &mut VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
-        let ctx = Context::default();
+        let ctx = crate::testing::ui_context();
         app.dialogs().expect("a window").with(|host| host.set_json_field(&ctx, dialog_id(KIND), field, value))
     }
 
     /// OK as a click: the dialog files its answer, the app runs the command, and an accepted answer closes the dialog.
     fn ok(app: &mut VectorcraftApp) {
-        let ctx = Context::default();
+        let ctx = crate::testing::ui_context();
         let confirm = |app: &mut VectorcraftApp| {
             app.dialogs().expect("a window").with(|host| host.confirm_by_id(&ctx, dialog_id(KIND)));
         };
@@ -637,7 +637,7 @@ mod tests {
     fn constrain_ratio_percentages_and_use_ratio_set_the_fields() {
         let mut app = app_with_image();
         open(&mut app, &json!({"columns": 10, "rows": 10})).unwrap();
-        let ctx = Context::default();
+        let ctx = crate::testing::ui_context();
         set(&mut app, "lock", json!(true)).unwrap();
         set(&mut app, "width", json!(300)).unwrap();
         assert_eq!(number_of(&mut app, "height"), 150.0, "height follows the width");
@@ -697,7 +697,7 @@ mod tests {
         app.run("ui.paramDialog", json!({"command": COMMAND, "params": params})).unwrap();
         let f = fields(&mut app);
         assert_eq!((&f["columns"], &f["rows"], &f["constrain"], &f["lock"]), (&json!(8.0), &json!(4.0), &json!("height"), &json!(false)));
-        let ctx = Context::default();
+        let ctx = crate::testing::ui_context();
         app.dialogs().unwrap().with(|host| host.cancel::<ObjectMosaicDialog>(&ctx));
         // Params the command refuses open nothing and say why.
         for (bad, key) in [(json!({"width": "abc"}), "width"), (json!({"constrain": "both"}), "constrain"), (json!({"widht": 200}), "widht")] {
@@ -767,7 +767,7 @@ mod tests {
     /// With no image selected, switching is refused and the note asks for one.
     #[test]
     fn percentages_convert_against_the_image_scaled_while_the_dialog_is_open() {
-        let ctx = Context::default();
+        let ctx = crate::testing::ui_context();
         let control = |app: &mut VectorcraftApp, field: &str, value: Value| {
             let (req, _) = craft::automation::ControlRequest::new("ui.dialog.set", json!({"field": field, "value": value}));
             let craft::automation::Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("expected an immediate reply") };

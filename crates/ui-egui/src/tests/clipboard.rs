@@ -195,7 +195,7 @@ fn with_system_clipboard(text: &'static str) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), services);
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     assert!(!menus::enabled(&app, "edit.paste"), "not checked before a frame");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.run_ui(Default::default(), |ui| app.tick(ui.ctx())).textures_delta.clear();
     app
 }

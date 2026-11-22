@@ -284,7 +284,7 @@ fn a_run_waiting_at_its_file_dialog_lets_the_app_idle() {
     script_runs::poll(&mut app);
     assert!(app.session.script_picker().is_some(), "the run waits at its folder dialog");
     assert!(is_open::<ScriptFiles>(&app));
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut wait = std::time::Duration::ZERO;
     for frame in 0..4 {
         let time = f64::from(frame);

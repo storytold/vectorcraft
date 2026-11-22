@@ -1406,7 +1406,7 @@ fn the_task_bar_chips_follow_the_proxies_and_show_swatches_anywhere() {
     let first = square(160.0, "#2244cc");
     let second = square(220.0, "#22cc44");
     app.select_tool("selection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // Two strokes that differ: "?", as the proxy shows them.
     select(&mut app, &[first, second]);
     let (_, _, _, stroke_mixed) = chip_paints(&app, &ctx);
@@ -1444,7 +1444,7 @@ fn the_type_tools_fill_chip_shows_the_edited_characters_fill() {
     let [(he, he_fill), (llo, llo_fill)] = &fills[..] else { panic!("{fills:?}") };
     assert_eq!((he.as_str(), llo.as_str()), ("He", "llo"));
     assert_ne!(he_fill, llo_fill);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let (fill, _, mixed, _) = chip_paints(&app, &ctx);
     assert!(fill == *llo_fill && !mixed, "{fill:?} {mixed}");
     app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));

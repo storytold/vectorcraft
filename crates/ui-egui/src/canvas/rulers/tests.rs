@@ -64,7 +64,7 @@ fn video_rulers_count_the_artboard_in_pixels_of_its_aspect_ratio() {
 #[test]
 fn new_ruler_guides_follow_alt_through_preview_release_and_undo() {
     for along in [Axis::X, Axis::Y] {
-        let (mut app, ctx) = (app(), egui::Context::default());
+        let (mut app, ctx) = (app(), crate::testing::ui_context());
         let (before, undo) = (app.session.active().unwrap().doc.clone(), undo_len(&app));
         let vertical = matches!(along, Axis::Y);
         send(&mut app, &ctx, drag(along, GesturePhase::Begin, 80.0, false));
@@ -82,7 +82,7 @@ fn new_ruler_guides_follow_alt_through_preview_release_and_undo() {
 
 #[test]
 fn new_ruler_guide_alt_cancel_keeps_document_and_redo() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     app.session.execute("shape.rectangle", &json!({"x": 40, "y": 50, "width": 20, "height": 30})).unwrap();
     app.session.execute("edit.undo", &json!({})).unwrap();
     let before = app.session.active().unwrap().doc.clone();
@@ -102,7 +102,7 @@ fn new_ruler_guide_alt_cancel_keeps_document_and_redo() {
 #[test]
 fn cmd_ruler_drags_make_artboard_guides_with_the_preference_on() {
     for on in [false, true] {
-        let (mut app, ctx) = (app(), egui::Context::default());
+        let (mut app, ctx) = (app(), crate::testing::ui_context());
         app.session.execute("prefs.set", &json!({"key": "cmdRulerDragArtboardGuides", "value": on})).unwrap();
         let board = app.session.active().unwrap().doc.artboards[0].id;
         let place = |app: &mut VectorcraftApp, at: f64| {
@@ -119,7 +119,7 @@ fn cmd_ruler_drags_make_artboard_guides_with_the_preference_on() {
 
 #[test]
 fn guides_from_the_rulers_snap_and_artboard_guides_span_their_artboard() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     app.ui.view.smart_guides = true;
     app.ui.view.snap_to_point = true;
     app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 400, "height": 300})).unwrap();
@@ -139,7 +139,7 @@ fn guides_from_the_rulers_snap_and_artboard_guides_span_their_artboard() {
 /// A zero-point drag edits nothing until the release, which is one history step.
 #[test]
 fn ruler_guide_shift_origin_preview_release_and_history() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     let (before, undo) = (app.session.active().unwrap().doc.clone(), undo_len(&app));
     let to = Point::new(125.25, 90.5);
     zero(&mut app, &ctx, |app, ui| zero_begin(app, ui));
@@ -154,7 +154,7 @@ fn ruler_guide_shift_origin_preview_release_and_history() {
 
 #[test]
 fn ruler_guide_shift_origin_cancel_preserves_redo() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     app.session.execute("shape.rectangle", &json!({"x": 40, "y": 50, "width": 20, "height": 30})).unwrap();
     app.session.execute("edit.undo", &json!({})).unwrap();
     let before = app.session.active().unwrap().doc.clone();
@@ -170,7 +170,7 @@ fn ruler_guide_shift_origin_cancel_preserves_redo() {
 /// A guide being dragged shows its position readout.
 #[test]
 fn ruler_guide_origin_tooltip_matches_selected_guide_fields() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     send(&mut app, &ctx, drag(Axis::Y, GesturePhase::Begin, 80.0, false));
     send(&mut app, &ctx, drag(Axis::Y, GesturePhase::Update, 120.0, false));
     let overlays = app.session.overlays(app.view_info());
@@ -179,7 +179,7 @@ fn ruler_guide_origin_tooltip_matches_selected_guide_fields() {
 
 #[test]
 fn trim_view_makes_no_guide_from_the_rulers() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     app.ui.view.trim_view = true;
     let undo = undo_len(&app);
     send(&mut app, &ctx, drag(Axis::Y, GesturePhase::Begin, 80.0, false));
@@ -193,7 +193,7 @@ fn trim_view_makes_no_guide_from_the_rulers() {
 
 #[test]
 fn a_ruler_drag_trim_view_cancelled_stays_cancelled_until_released() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     app.ui.view.trim_view = true;
     send(&mut app, &ctx, drag(Axis::Y, GesturePhase::Begin, 80.0, false));
     app.ui.view.trim_view = false;
@@ -208,7 +208,7 @@ fn a_ruler_drag_trim_view_cancelled_stays_cancelled_until_released() {
 
 #[test]
 fn trim_view_toggled_during_a_ruler_origin_drag_cancels_it() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     let (before, undo) = (app.session.active().unwrap().doc.clone(), undo_len(&app));
     zero(&mut app, &ctx, |app, ui| zero_begin(app, ui));
     app.ui.view.trim_view = true;
@@ -223,7 +223,7 @@ fn trim_view_toggled_during_a_ruler_origin_drag_cancels_it() {
 /// A strip's double press reports one `Commit` with no `Begin`: one guide at the pointer, even with guides hidden.
 #[test]
 fn double_clicking_a_ruler_adds_a_guide_at_that_position() {
-    let (mut app, ctx) = (app(), egui::Context::default());
+    let (mut app, ctx) = (app(), crate::testing::ui_context());
     app.ui.view.guides = false;
     let undo = undo_len(&app);
     send(&mut app, &ctx, drag(Axis::Y, GesturePhase::Commit, 150.0, false));

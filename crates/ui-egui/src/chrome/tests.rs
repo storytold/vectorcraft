@@ -225,7 +225,7 @@ fn art_of(layers: &[Arc<vectorcraft_doc::Node>]) -> Vec<vectorcraft_doc::Node> {
 fn hints_name_keys_as_the_menus_do() {
     // A drawn frame gives the window its keymap, which the Search Commands shortcut is read from.
     let mut app = crate::VectorcraftApp::new(Session::new(), crate::Services::default());
-    crate::tests_synthetic::key_frame(&mut app, &egui::Context::default(), vec![]);
+    crate::tests_synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
     let text = |tool: &str| super::hint_segments(&app, tool).into_iter().map(|(s, _)| s).collect::<String>();
     for tool in vectorcraft_tools::catalog::all_tools().map(|t| t.id) {
         let hint = text(tool);

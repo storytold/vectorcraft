@@ -92,6 +92,10 @@ const SETTABLE: [&str; 19] = [
 /// The check column of the list view and its name column.
 const CHECK: ColumnKey = ColumnKey::new("check");
 const NAME: ColumnKey = ColumnKey::new("name");
+/// Rows of the list view and of the grid view the items pane shows before it scrolls, a pane as tall as the options
+/// column's first sections.
+const LIST_ROWS: u16 = 9;
+const GRID_ROWS: u16 = 3;
 
 /// The longest side of an artboard thumbnail, in pixels.
 const THUMB_PX: u32 = 92;
@@ -547,12 +551,11 @@ impl ExportForScreensDialog {
     fn items_pane(&mut self, ui: &mut Ui, fields: &mut Map<String, Value>) {
         let tab = TABS.iter().position(|k| *k == text(fields, "tab")).unwrap_or(0);
         let titles = Items(vec![(0, tl!("Artboards").to_string()), (1, tl!("Assets").to_string())]);
-        let strip =
-            TabStrip::new(tl!("Export for Screens"))
-                .id_salt("efs-tabs")
-                .kind(TabKind::Text)
-                .shown(tab)
-                .show_items(ui, &titles, &mut |k, _| Tab::new(titles.name(*k)).id_salt(("efs-tab", *k)));
+        let strip = TabStrip::new(tl!("Export for Screens")).id_salt("efs-tabs").kind(TabKind::Text).shown(tab).natural_height(true).show_items(
+            ui,
+            &titles,
+            &mut |k, _| Tab::new(titles.name(*k)).id_salt(("efs-tab", *k)),
+        );
         let picked = strip.response.events.into_iter().find_map(|e| match e {
             CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.last().copied(),
             _ => None,
@@ -730,7 +733,8 @@ impl Shelf<'_> {
                 .space(SpaceAction::ToggleCell)
                 .columns(columns)
                 .rename(rename)
-                .enabled(enabled);
+                .enabled(enabled)
+                .max_rows(LIST_ROWS);
             if rename {
                 view = view.rename_column(NAME);
             }
@@ -753,7 +757,7 @@ impl Shelf<'_> {
                 }
             }
         } else {
-            let mut grid = TileGrid::<u64>::new(tl!("Export for Screens")).checks(true).rename(rename).enabled(enabled);
+            let mut grid = TileGrid::<u64>::new(tl!("Export for Screens")).checks(true).rename(rename).enabled(enabled).max_rows(GRID_ROWS);
             if let Some(key) = reveal {
                 grid = grid.reveal(key);
             }

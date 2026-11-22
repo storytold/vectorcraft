@@ -287,7 +287,7 @@ mod tests {
 
     /// Every line the panel shows.
     fn texts(app: &mut VectorcraftApp) -> Vec<String> {
-        let l = lines(app, &egui::Context::default());
+        let l = lines(app, &crate::testing::ui_context());
         let mut out: Vec<String> = l.left.into_iter().chain(l.right).chain(l.zoom).chain(l.brush).collect();
         for p in [l.fill, l.stroke] {
             out.extend(p.values);
@@ -321,7 +321,7 @@ mod tests {
         let id = run(&mut app, "text.create", json!({"x": 10, "y": 150, "text": "Hi", "size": 12}))["id"].clone();
         run(&mut app, "select.set", json!({ "ids": [id] }));
         run(&mut app, "object.scale", json!({"sx": 200}));
-        let size = lines(&mut app, &egui::Context::default()).type_block.map(|(_, size)| size);
+        let size = lines(&mut app, &crate::testing::ui_context()).type_block.map(|(_, size)| size);
         assert_eq!(size.as_deref(), Some("Size: 24 pt  Tracking: 0"));
     }
 

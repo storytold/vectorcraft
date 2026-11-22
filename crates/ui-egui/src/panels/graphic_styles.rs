@@ -490,6 +490,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ]
         };
         Panel::new(tl!("Graphic Styles"))
+            .collection_body()
             .footer(|ui, _| *footer.borrow_mut() = Some(FooterBar::actions(actions.clone()).at_start(AT_START).show_footer(ui)))
             .show(ui, |ui, _| {
                 PresetBrowser::new(tl!("Graphic Styles"), Bind::bound(&mut panel.state), &source)

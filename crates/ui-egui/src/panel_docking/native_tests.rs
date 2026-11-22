@@ -114,7 +114,7 @@ impl Harness {
         let host = Rc::new(RefCell::new(Host { windows: HashMap::new(), focus: ViewportId::ROOT, time: 0.0 }));
         let shared = host.clone();
         egui::Context::set_immediate_viewport_renderer(move |ctx, viewport| Host::render(&shared, ctx, viewport));
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.set_embed_viewports(false);
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();

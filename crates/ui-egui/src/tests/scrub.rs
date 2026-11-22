@@ -33,7 +33,7 @@ fn app_with_rect() -> (VectorcraftApp, egui::Context) {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
-    (app, egui::Context::default())
+    (app, crate::testing::ui_context())
 }
 
 fn width(app: &VectorcraftApp) -> f64 {
@@ -121,7 +121,7 @@ fn a_scrub_leaves_another_documents_undo_group_open() {
     app.session.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 100, "height": 50})).unwrap();
     app.session.execute("document.activate", &json!({"index": 1})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let other = |app: &VectorcraftApp| (app.session.documents()[0].undo_group.is_some(), objects(&app.session.documents()[0]));
     drag_w(&mut app, &ctx, 40.0, true);
     assert!((width(&app) - 100.0).abs() < 1e-6, "Escape: {}", width(&app));
@@ -167,7 +167,7 @@ fn a_scrub_closes_its_group_in_its_own_document_after_a_switch() {
     app.session.execute("edit.undoGroup.begin", &json!({})).unwrap();
     app.session.execute("document.activate", &json!({"index": 1})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 100, "height": 50})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let undo = undo_len(&app);
     let mut w = None;
     for _ in 0..4 {

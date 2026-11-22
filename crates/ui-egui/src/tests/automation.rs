@@ -579,7 +579,7 @@ fn a_pass_with_injected_input_runs_inside_the_roots() {
         }
     }
     let (mut app, tx, base) = confined("synthetic");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let (req, _reply) = ControlRequest::new("ui.key", json!({"key": "Escape"}));
     tx.send(req).unwrap();
     app.run_control(&ctx);
@@ -691,11 +691,11 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
         "ui.dialog.set",
         json!({"fields": [{"field": "fontsFolder", "value": inside}, {"field": "templatesFolder", "value": outside}]}),
     );
-    let Reply::Done(filled) = crate::control::handle(&mut app, &egui::Context::default(), &fill) else { panic!("deferred") };
+    let Reply::Done(filled) = crate::control::handle(&mut app, &crate::testing::ui_context(), &fill) else { panic!("deferred") };
     assert_eq!(filled["ok"], true, "{filled}");
 
     // The person sees every path.
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let person = crate::control::inspect(&app, &ctx);
     assert_eq!(person["opening"], json!([a, b, c]));
     assert_eq!(person["ui"]["recent_files"], json!([a, b, c]));
@@ -745,7 +745,7 @@ fn ui_inspect_leaves_out_an_insert_menu_item_path_outside_the_read_root() {
         set_top_fields(app, &[("command", json!(load)), ("params", json!({"path": path}))]);
     };
     pick(&mut app, &outside);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert_eq!(top_dialog_fields(&crate::control::inspect(&app, &ctx))["params"]["path"], outside, "the person sees it");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     let fields = top_dialog_fields(&r["result"]);
@@ -784,7 +784,7 @@ fn ui_inspect_hides_a_selected_javascript_file_outside_the_read_root() {
     crate::dialogs::javascript_files::open(&mut app).unwrap();
     set_top_fields(&mut app, &[("selected", json!(outside))]);
     let selected = |v: &Value| top_dialog_fields(v)["selected"].clone();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert_eq!(selected(&crate::control::inspect(&app, &ctx)), json!(outside), "the person's");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(selected(&r["result"]), "menu.js", "{r}");
@@ -1287,7 +1287,7 @@ fn ui_inspect_hides_a_closed_librarys_path_outside_the_read_root() {
     assert!(hidden_panels(ui).iter().any(|p| p == "library:swatches:loaded/b.svg"), "{r}");
     let hidden = json!(s(base.join("outside"))).to_string();
     assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
-    assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_guide_limit"], json!(theirs), "the person's");
+    assert_eq!(crate::control::inspect(&app, &crate::testing::ui_context())["ui"]["color_guide_limit"], json!(theirs), "the person's");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -1386,7 +1386,7 @@ fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
         }
     };
     finish(&mut app, json!({"source": source, "name": "t.js"}));
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let outside = json!(s(base.join("outside"))).to_string();
     let person = crate::control::inspect(&app, &ctx);
     assert_eq!(person["scriptReport"]["written"], json!([kept, hidden]), "{person}");

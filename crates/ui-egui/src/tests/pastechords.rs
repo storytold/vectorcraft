@@ -26,7 +26,7 @@ fn cmd_shift_v_pastes_in_place() {
     app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 30})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [id]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, Modifiers::NONE, vec![]);
     frame(&mut app, &ctx, Modifiers::COMMAND, vec![Event::Copy]);
     let svg = app.clipboard.read_text().ok().flatten().expect("copy publishes SVG");

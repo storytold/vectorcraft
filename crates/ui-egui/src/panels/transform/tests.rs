@@ -863,7 +863,7 @@ fn app_without_transform_panel() -> VectorcraftApp {
 /// saved steps and in Presentation Mode the panel stays closed.
 #[test]
 fn show_on_shape_creation_shows_the_transform_panel_after_a_shape() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let visible = |app: &VectorcraftApp| crate::panel_docking::visible(&app, "transform");
     let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
 

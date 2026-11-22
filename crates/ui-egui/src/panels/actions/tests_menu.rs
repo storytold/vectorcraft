@@ -87,7 +87,7 @@ fn menu_insert_rows_open_their_dialog_on_the_selected_step_the_action_end_or_the
     };
     for id in ["actionsPanel.insertStop", "actionsPanel.insertMenuItem", "ui.action.selectObjectDialog"] {
         let mut app = with_sets();
-        app.ui_ctx = Some(egui::Context::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.ui.actions.insert_step(1, 0, craft::automation::actions::ActionStep::new("a.b", json!({}))).unwrap();
         app.ui.actions_panel.expanded.insert("A in S2".into());
 

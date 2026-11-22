@@ -100,7 +100,7 @@ fn right_click_selects_the_object_and_lists_its_commands() {
     let mut app = app();
     let id = rect(&mut app, 50.0, 50.0);
     app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     assert!(app.ui.context_menu_at.is_none() && !has(&app, "Arrange"));
     let p = screen(&app, 100.0, 100.0);
@@ -121,7 +121,7 @@ fn right_click_selects_the_object_and_lists_its_commands() {
 fn right_click_on_empty_canvas_offers_the_view_and_selects_nothing() {
     let mut app = app();
     app.select_tool("rectangle");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = screen(&app, 300.0, 250.0);
     click(&mut app, &ctx, p, PointerButton::Secondary);
@@ -141,7 +141,7 @@ fn right_click_on_a_locked_object_offers_unlock_by_its_name() {
     let mut app = app();
     let id = rect(&mut app, 50.0, 50.0);
     app.run("layer.setProps", json!({"ids": [id.0], "name": "Sky", "locked": true})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = screen(&app, 100.0, 100.0);
     click(&mut app, &ctx, p, PointerButton::Secondary);
@@ -166,7 +166,7 @@ fn cmd_alt_shift_u_switches_to_the_next_unit() {
     let mut app = app();
     assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
     fn press(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         crate::tests_synthetic::key_frame(app, &ctx, vec![]);
         let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT | egui::Modifiers::SHIFT;
         let ev = Event::Key { key: egui::Key::U, physical_key: None, pressed: true, repeat: false, modifiers };
@@ -409,7 +409,7 @@ fn right_click_where_three_intertwined_objects_overlap_arranges_the_nearest_one(
     app.run("select.set", json!({"ids": [a.0, b.0, c.0]})).unwrap();
     let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
     assert_eq!(app.session.tool_id(), "intertwine");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     // By the right edge of A (the first rectangle), where all three overlap.
     let p = screen(&app, 169.0, 100.0);
@@ -515,7 +515,7 @@ fn right_click_on_an_underlined_word_offers_its_suggestions() {
         .map(|s| s.as_str().unwrap().to_string())
         .collect();
     assert!(!want.is_empty(), "the dictionary has suggestions for `speling`");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = word_at(&app, id, 4, 11);
     click(&mut app, &ctx, p, PointerButton::Secondary);
@@ -535,7 +535,7 @@ fn right_click_on_an_underlined_word_offers_its_suggestions() {
 fn no_spelling_items_off_a_misspelled_word_or_with_auto_spell_check_off() {
     let mut app = app();
     let id = spelled(&mut app, "the Vqzxtrwk");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = word_at(&app, id, 0, 3);
     click(&mut app, &ctx, p, PointerButton::Secondary);
@@ -556,7 +556,7 @@ fn no_spelling_items_off_a_misspelled_word_or_with_auto_spell_check_off() {
 fn a_word_under_other_type_is_not_the_one_right_clicked() {
     let mut app = app();
     let under = spelled(&mut app, "Qzvxtrwk");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let p = word_at(&app, under, 0, 8);
     click(&mut app, &ctx, p, PointerButton::Secondary);
@@ -580,7 +580,7 @@ fn in_an_intertwine_group_the_type_drawn_on_top_is_the_one_right_clicked() {
     let g = NodeId(app.run("object.intertwine.make", json!({})).unwrap()["id"].as_u64().unwrap());
     app.select_tool("selection");
     app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     // A point on the word where glyphs of both overlap: Intertwine's areas follow the outlines.
     let quad = {

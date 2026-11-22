@@ -33,7 +33,7 @@ impl Gate {
 /// Gives `app` a window host over `jobs`, as the window installs it, so its background work runs
 /// where the test says.
 pub(crate) fn with_jobs(app: &mut VectorcraftApp, jobs: Arc<dyn craft::host::Jobs>) {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     craft::host::Host::builder(craft::host::AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") })
         .jobs(jobs)
         .install(&ctx);
@@ -557,7 +557,7 @@ fn controlled_with(
 fn request(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest>, method: &str, params: Value) -> Value {
     let (req, reply) = ControlRequest::new(method, params);
     tx.send(req).unwrap();
-    app.run_control(&egui::Context::default());
+    app.run_control(&crate::testing::ui_context());
     reply.try_recv().unwrap()
 }
 

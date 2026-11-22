@@ -234,7 +234,7 @@ mod tests {
     /// launcher manages ignores the offer and fails the test.
     #[cfg(not(target_arch = "wasm32"))]
     fn offer_and_wait(updater: &mut Updater, release: craft::update::Release) {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let (answered, wait) = std::sync::mpsc::channel();
         ctx.set_repaint_observer(move |info| {
             if info.delay.is_zero() {

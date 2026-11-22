@@ -115,7 +115,7 @@ fn an_unsaved_document_asks_for_a_folder() {
     let dir = folder("picked");
     let mut app = app();
     let picker = scripted(&mut app);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     click(&mut app, "Save a Timestamped Copy");
     assert!(asked_for_folder(&picker));
     picker.answer(&[dir.to_str().unwrap()]);
@@ -169,7 +169,7 @@ fn export_all_open_documents_writes_each_to_the_folder_picked() {
     std::fs::create_dir_all(&out).unwrap();
     std::fs::write(out.join(format!("{untitled}.pdf")), b"keep").unwrap();
     let picker = scripted(&mut app);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let active = app.session.active_index();
     click(&mut app, "Export All Open Documents as PDF");
     assert!(asked_for_folder(&picker));
@@ -214,7 +214,7 @@ fn batch_trace_folder_asks_for_both_folders() {
     std::fs::write(src.join("b.png"), b"not a png").unwrap();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let picker = scripted(&mut app);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     click(&mut app, "Batch Trace Folder");
     // The destination is asked only after the source is answered.
     assert_eq!(picker.requests().len(), 1);

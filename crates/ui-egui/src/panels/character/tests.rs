@@ -1359,7 +1359,7 @@ fn panels_show_the_same_with_the_kept_selected_stories() {
 fn panels_work_out_the_selected_stories_once_per_frame() {
     let (mut app, [a, ..], other) = story_selected_in_its_first_frame();
     app.run("select.set", json!({"ids": [other, a]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let frame = |app: &mut VectorcraftApp| {
         let builds = STORY_BUILDS.get();
         super::super::tests_appearance::frame_events(&ctx, app, vec![], |app, ui| {

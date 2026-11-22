@@ -75,7 +75,7 @@ fn start_global_edit_quick_action_and_escape() {
     assert!(panel.shows("Stop Global Edit") && !panel.shows("Start Global Edit"));
     // The escape chain is the app's key stage, which the panel harness does not run.
     let escape = Event::Key { key: Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    key_frame(&mut panel.app(), &egui::Context::default(), vec![escape]);
+    key_frame(&mut panel.app(), &crate::testing::ui_context(), vec![escape]);
     panel.frame();
     assert!(!on(&panel), "Escape stops Global Edit");
     assert!(panel.shows("Start Global Edit"));
@@ -476,7 +476,7 @@ fn artboard_history_delete_after_undo(key: Key, duplicate: bool) {
         (st.doc.clone(), st.selection.clone(), st.history.undo.len())
     };
     let mut panel = artboards_panel(app);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     add_board(&mut panel, duplicate);
     assert_eq!(undo_depth(&panel.app()), undo + 1);
     artboard_history_key(&mut panel, &ctx, Key::Z, Modifiers::COMMAND);
@@ -569,7 +569,7 @@ fn artboard_history_undo_prunes_only_removed_indices() {
             (st.doc.clone(), st.selection.clone(), st.history.undo.len())
         };
         let mut panel = artboards_panel(app);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         artboard_history_new(&mut panel);
         let created = panel.app().session.doc().unwrap().doc.clone();
         for (at, i) in order.into_iter().enumerate() {
@@ -606,7 +606,7 @@ fn artboard_history_valid_multiselection_survives_undo_redo() {
     app.session.set_tool_option("moveArt", &json!(false));
     app.session.set_tool_option("scaleArt", &json!(true));
     let mut panel = artboards_panel(app);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     select_artboard_rows(&mut panel, &[0, 1]);
     let (options, view, before, selection, undo) = {
         let mut app = panel.app();

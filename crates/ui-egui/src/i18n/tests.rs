@@ -205,7 +205,7 @@ fn bundled_catalogs_are_consistent() {
 #[test]
 fn the_engine_follows_the_interface_language() {
     let mut app = crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let frame = |app: &mut crate::VectorcraftApp| {
         ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx())).textures_delta.clear();
     };

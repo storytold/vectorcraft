@@ -88,7 +88,7 @@ fn bucket_triple_click_with_a_view_tool_press_between_matches_the_fill_before() 
             v.zoom = 1.0;
             v.fitted = true;
         }
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx, vec![]);
         let xf = app.canvas_view().unwrap();
         let at = xf.to_screen(Point::new(25.0, 125.0));
@@ -124,7 +124,7 @@ fn a_release_ends_the_image_trace_hold_without_the_panel() {
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let made = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     let id = vectorcraft_doc::NodeId(made["id"].as_u64().unwrap());
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let at = pos2(400.0, 300.0);
     let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), press(true)]);
@@ -147,7 +147,7 @@ fn a_click_activates_its_artboard_and_paste_in_place_goes_onto_it() {
     let boards: Vec<_> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
     app.session.execute("shape.rectangle", &json!({"x": boards[0].x0 + 10.0, "y": boards[0].y0 + 15.0, "width": 20, "height": 20})).unwrap();
     app.run("edit.copy", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.select_tool("selection");
     let view = app.view_info();
@@ -180,7 +180,7 @@ fn a_shift_click_activates_its_artboard_and_align_to_artboard_aligns_to_it() {
     };
     let ids = [rect(10.0, 15.0), rect(50.0, 40.0)];
     app.session.execute("select.set", &json!({"ids": [ids[0].0, ids[1].0]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.select_tool("selection");
     let view = app.view_info();
@@ -206,7 +206,7 @@ fn two_finger_tap_in_touch_switches_selection_and_drawing_modes() {
     app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 40, "height": 40})).unwrap();
     crate::workspaces::switch(&mut app, crate::workspaces::TOUCH).unwrap();
     app.select_tool("rectangle");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
     let c = app.canvas_view().unwrap().rect.center();
@@ -386,7 +386,7 @@ fn a_shape_tool_scales_the_shape_just_drawn_by_its_bounding_box_handle() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
         app.select_tool(tool);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx, vec![]);
         let drag = |app: &mut VectorcraftApp, a: Pos2, b: Pos2| {
             for ev in [
@@ -431,7 +431,7 @@ fn cmd_with_another_tool_drags_with_the_selection_tool_used_last() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let xf = app.canvas_view().unwrap();
     let cmd_frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
@@ -571,7 +571,7 @@ fn an_edit_renders_only_its_part_of_the_canvas() {
     let id = app.run("shape.rectangle", json!({"x":50,"y":50,"width":40,"height":30})).unwrap()["id"].as_u64().unwrap();
     app.run("shape.rectangle", json!({"x":250,"y":200,"width":40,"height":30})).unwrap();
     app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // Where the canvas texture changed in a frame, and how much of it.
     let canvas = |app: &VectorcraftApp, mut delta: egui::TexturesDelta| {
         let tex = app.canvas.texture.as_ref().map(|t| t.id());
@@ -604,7 +604,7 @@ fn the_art_renders_within_the_largest_texture_side() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width":400,"height":300})).unwrap();
     app.canvas.worker_started = true; // every frame on this thread, however long it takes
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.set_pixels_per_point(2.0);
     // The first frame sets the pixels a point, the second draws at them.
     for _ in 0..2 {
@@ -680,7 +680,7 @@ fn a_ready_placed_bitmap() {
         .collect();
     app.run("shape.rectangle", json!({"x":250,"y":200,"width":40,"height":30})).unwrap();
     app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // Where the canvas texture changed in a frame, and how much of it.
     let canvas = |app: &VectorcraftApp, mut delta: egui::TexturesDelta| {
         let tex = app.canvas.texture.as_ref().map(|t| t.id());
@@ -727,7 +727,7 @@ fn an_edit_while_a_mask_is_viewed_renders_all_of_the_canvas() {
     app.run("select.set", json!({"ids": [obj, mask]})).unwrap();
     app.run("transparency.makeOpacityMask", json!({})).unwrap();
     app.run("transparency.viewOpacityMask", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let (_, mut delta) = frame_output(&mut app, &ctx);
     delta.clear();
     app.run("paint.setFill", json!({"color": "#ff0000", "ids": [obj]})).unwrap();
@@ -748,7 +748,7 @@ fn pixel_preview_shows_the_document_pixels() {
     // Its 1 pt stroke covers a quarter of document pixel 99 and most of pixel 100.
     app.session.execute("shape.rectangle", &json!({"x": 100.25, "y": 50, "width": 200, "height": 200})).unwrap();
     app.canvas.worker_started = true; // render on this thread
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // The art's raster uploaded by one frame: (width, height, hard-edged, pixels).
     let upload = |app: &mut VectorcraftApp| {
         let (_, mut delta) = frame_output(app, &ctx);
@@ -799,7 +799,7 @@ fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() 
     app.session.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
     app.canvas.worker_started = true; // render on this thread
     assert!(app.session.prefs.monitor_profile_display, "on by default");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // How many pixels of the art's raster one frame uploads are `c`, None when it was not re-rendered.
     let count = |app: &mut VectorcraftApp, c: egui::Color32| -> Option<usize> {
         let (_, mut delta) = frame_output(app, &ctx);
@@ -862,7 +862,7 @@ fn translucent_art_over_the_paper() {
     app.run("paint.setFill", json!({"ids": [outside], "color": "#00ff00"})).unwrap();
     app.run("transparency.set", json!({"ids": [outside], "opacity": 50})).unwrap();
     app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // The art's raster one frame uploads: where it goes ([x, y] for a part), its width and its pixels.
     let upload = |app: &mut VectorcraftApp| -> Option<(Option<[usize; 2]>, usize, Vec<egui::Color32>)> {
         let (_, mut delta) = frame_output(app, &ctx);
@@ -979,7 +979,7 @@ fn hide_template_leaves_template_layers_off_the_canvas() {
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
     let layer = app.session.active().unwrap().doc.layers[0].id.0;
     app.session.execute("layer.template", &json!({"ids": [layer], "on": true})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // How many pixels of the art's raster one frame uploads are painted, None when it was not
     // re-rendered.
     let painted = |app: &mut VectorcraftApp| -> Option<usize> {
@@ -1011,7 +1011,7 @@ fn anti_aliased_artwork_preference_smooths_the_canvas() {
     app.canvas.worker_started = true;
     // A disc: its edge crosses pixels at every angle.
     app.session.execute("shape.ellipse", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // The alphas of the art's raster uploaded by one frame, None when it was not re-rendered.
     let alphas = |app: &mut VectorcraftApp| -> Option<Vec<u8>> {
         let (_, mut delta) = frame_output(app, &ctx);
@@ -1043,7 +1043,7 @@ fn highlight_substituted_fonts_preference_reaches_the_canvas() {
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true; // render on this thread
     app.session.execute("text.create", &json!({"x": 20, "y": 120, "text": "Hamburg", "size": 60, "font": "Missing Family"})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // How many pink pixels the art's raster uploaded by one frame has, None when it was not
     // re-rendered.
     let pink = |app: &mut VectorcraftApp| -> Option<usize> {
@@ -1137,7 +1137,7 @@ fn undecodable_images_are_marked_and_reported_once() {
         }
         st.revision += 1;
     }
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.status("");
     frame(&mut app, &ctx, vec![]);
     assert!(app.canvas.shown.as_ref().is_some_and(|(_, o)| o.mark_undecoded_images), "the canvas marks them");
@@ -1163,7 +1163,7 @@ fn the_first_view_reports_the_plug_in_effects_it_deferred() {
     // Each reading of the clock is 3 s later: the first run's result comes back after the budget,
     // and no later run starts.
     let step = std::sync::Arc::new(AtomicU64::new(3_000));
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     for (count, said) in [
         (2, "Opened with 2 plug-in effects deferred. Effect › Refresh Deferred Effects runs them."),
         (1, "Opened with 1 plug-in effect deferred. Effect › Refresh Deferred Effects runs it."),
@@ -1238,7 +1238,7 @@ fn dragging_with_raster_effects() {
     for effect in ["stylize.dropShadow", "texture.craquelure"] {
         app.run("effect.apply", json!({"effect": effect, "ids": [id]})).unwrap();
     }
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // The art's raster uploaded by one frame, None when it was not re-rendered.
     let upload = |app: &mut VectorcraftApp| -> Option<Vec<Color32>> {
         let (_, mut delta) = frame_output(app, &ctx);
@@ -1295,7 +1295,7 @@ fn a_drag_at_a_lower_resolution() {
     let id = app.run("shape.rectangle", json!({"x": 100, "y": 80, "width": 200, "height": 150})).unwrap()["id"].clone();
     app.run("effect.apply", json!({"effect": "texture.texturizer", "ids": [id]})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // One headless frame on a 1920 × 1200 window (a view larger than the drag's budget) with
     // `events` → the art's raster it uploaded, None when it was not re-rendered.
     let run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| -> Option<Vec<Color32>> {
@@ -1361,7 +1361,7 @@ fn a_drag_over_a_wide_blur() {
         let square = app.run("shape.rectangle", json!({"x": 260, "y": 380, "width": 60, "height": 60})).unwrap()["id"].clone();
         app.run("select.set", json!({"ids": [square]})).unwrap();
         app.select_tool("selection");
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         // One headless frame with `events`, then, with a worker, its frames rendered and shown
         // until none is pending.
         let run = |app: &mut VectorcraftApp, side: &mut Option<WorkerSide>, events: Vec<egui::Event>| {
@@ -1424,7 +1424,7 @@ fn an_interaction_stays_on_the_worker_that_drew_the_frame_shown() {
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
     app.canvas.worker_started = true; // the first frame renders on this thread
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     shapes(&mut app, &ctx);
     for from_worker in [true, false] {
         app.canvas.worker = crate::render_worker::Worker::spawn(ctx.clone());
@@ -1455,7 +1455,7 @@ fn a_drag_back_to_its_start() {
     app.canvas.worker_started = true; // render on this thread
     let id = app.run("shape.rectangle", json!({"x": 100, "y": 80, "width": 120, "height": 90})).unwrap()["id"].clone();
     app.run("effect.apply", json!({"effect": "texture.craquelure", "ids": [id]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     shapes(&mut app, &ctx);
     app.select_tool("selection");
     let view = app.view_info();
@@ -1624,7 +1624,7 @@ fn a_turned_view() {
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
     app.canvas.worker_started = true; // render on this thread
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     shapes(&mut app, &ctx); // the first frame fits the view to the artboard
     app.view_mut().unwrap().rotation = 30.0;
     shapes(&mut app, &ctx);
@@ -1690,7 +1690,7 @@ fn a_pan_fills_the_area_the_last_frame_leaves_until_the_worker_frame_arrives() {
 }
 
 fn a_pan_fills_the_area() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 300, "y": 100, "width": 80, "height": 100})).unwrap();
@@ -1826,7 +1826,7 @@ fn without_a_worker_a_heavy_canvas() {
     assert!(!app.canvas.waits_for_still, "off the web build");
     app.canvas.worker_started = true; // no worker, as in the web build
     app.canvas.waits_for_still = true;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // One frame → (the bounds of the mesh that draws the art's texture, the repaint delay asked for).
     let frame = |app: &mut VectorcraftApp| {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
@@ -1935,7 +1935,7 @@ fn edits_while_the_view_is_still() {
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
     app.canvas.worker_started = true; // no worker, as in the web build
     app.canvas.waits_for_still = true;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let frame = |app: &mut VectorcraftApp| {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
@@ -1970,7 +1970,7 @@ fn the_canvas_waits_only_while_the_view_of_a_slow_frame_changes() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true; // render on this thread
-    shapes(&mut app, &egui::Context::default());
+    shapes(&mut app, &crate::testing::ui_context());
     let shown = app.canvas.key.clone().unwrap();
     let mut still = Some((shown.clone(), 0.0));
     let moved = CacheKey { cx: shown.cx + 5.0, zoom: shown.zoom * 2.0, ..shown.clone() };
@@ -2019,7 +2019,7 @@ fn a_bitmap_for_another_documents_file() {
     std::fs::write(&path, vectorcraft_format::save_file(&src.active().unwrap().doc)).unwrap();
     other.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     other.session.execute("file.place", &json!({"path": path.to_string_lossy(), "at": [100, 100]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let frame = |app: &mut VectorcraftApp| {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
@@ -2034,7 +2034,7 @@ fn a_bitmap_for_another_documents_file() {
     // The other canvas asks for the bitmap, and it is made: the generation changes before the
     // bitmap stops being pending.
     let generation = vectorcraft_render::placed_document::generation();
-    shapes(&mut other, &egui::Context::default());
+    shapes(&mut other, &crate::testing::ui_context());
     while vectorcraft_render::placed_document::busy() {
         std::thread::yield_now();
     }
@@ -2131,7 +2131,7 @@ fn the_canvas_key_takes_the_documents_placed_value() {
     let generation = vectorcraft_render::placed_document::generation();
     let marked = generation.wrapping_add(1000);
     app.canvas.placed_keys.insert(uid, crate::PlacedKey { checked: generation, key: marked, before: (marked, generation) });
-    shapes(&mut app, &egui::Context::default());
+    shapes(&mut app, &crate::testing::ui_context());
     assert_eq!(app.canvas.key.as_ref().map(|k| k.placed), Some(marked));
 }
 
@@ -2197,7 +2197,7 @@ fn pixel_preview_smooths_bitmaps_only_when_asked() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true; // render on this thread
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let smooth = |app: &mut VectorcraftApp| {
         let (_, mut delta) = frame_output(app, &ctx);
         delta.clear();
@@ -2225,7 +2225,7 @@ fn appearance_of_black_on_screen_shows_pure_black_as_rgb_black() {
         let [c, m, y, k] = cmyk;
         app.run("paint.setFill", json!({"ids": [id], "color": {"c": c, "m": m, "y": y, "k": k}})).unwrap();
     };
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // The middle pixel of the art's raster uploaded by one frame, None when it was not re-rendered.
     let middle = |app: &mut VectorcraftApp| -> Option<[u8; 4]> {
         let (_, mut delta) = frame_output(app, &ctx);
@@ -2265,7 +2265,7 @@ fn top_bounding_box_handle_scales_a_default_mirror_repeat() {
     app.run("object.repeat.mirror", json!({})).unwrap();
     app.ui.task_bar = false;
     app.ui.view.rulers = false;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
 
     let initial = app.selection_bounds().unwrap();
@@ -2338,7 +2338,7 @@ fn hidden_corner_widgets_do_not_answer_the_pointer() {
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     let id = vectorcraft_doc::NodeId(id);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.select_tool("selection");
     let widget = |app: &VectorcraftApp| {
@@ -2379,7 +2379,7 @@ fn a_hidden_bounding_box_and_type_widget_do_not_answer_the_pointer() {
     let id = app.session.execute("text.create", &json!({"x": 100, "y": 100, "text": "Type"})).unwrap()["id"].as_u64().unwrap();
     let id = vectorcraft_doc::NodeId(id);
     app.session.execute("select.set", &json!({"ids": [id.0]})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.select_tool("selection");
     let bx = |app: &VectorcraftApp| {
@@ -2619,7 +2619,7 @@ fn hidden_characters_mark_no_space_at_a_bullet() {
 fn view_actual_size_follows_display_print_size() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     // The view's zoom after Actual Size from 250%, and the percent the app's zoom scheme reads it as.
     let actual = |app: &mut VectorcraftApp| {
@@ -2644,7 +2644,7 @@ fn view_actual_size_follows_display_print_size() {
 fn fit_artboard_fits_the_artboard_turned_with_the_view() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 612, "height": 792, "artboards": 2})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.view_mut().unwrap().artboard = 1;
     app.run("view.rotate", json!({"angle": 45})).unwrap();
@@ -2762,7 +2762,7 @@ fn space_pressed_mid_drag_moves_what_the_tool_draws() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.ui.view.smart_guides = false;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let xf = app.canvas_view().unwrap();
     let space = |pressed| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers: Modifiers::NONE };
@@ -2807,7 +2807,7 @@ fn double_clicking_type_with_the_selection_tool_puts_the_caret_there() {
     let id = app.session.execute("text.create", &json!({"x": 100, "y": 150, "text": "Hello world", "size": 24})).unwrap()["id"].as_u64().unwrap();
     app.session.execute("select.none", &json!({})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
         let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| show(app, ui));
@@ -2950,7 +2950,7 @@ fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
     let id = app.session.execute("text.create", &json!({"x": 100, "y": 150, "text": "Hello world", "size": 24})).unwrap()["id"].as_u64().unwrap();
     app.session.execute("select.none", &json!({})).unwrap();
     app.select_tool("directSelection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
         let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
@@ -3110,7 +3110,7 @@ fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolati
     app.session.execute("select.all", &json!({})).unwrap();
     app.session.execute("object.group", &json!({})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
         let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
@@ -3166,7 +3166,7 @@ fn escape_leaves_an_isolated_sublayer_in_one_step() {
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
     app.session.execute("object.isolate", &json!({"id": deep})).unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
         let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
@@ -3203,7 +3203,7 @@ fn art_moved_off_the_canvas_waits_and_drops_on_the_panel() {
         let id = vectorcraft_doc::NodeId(id);
         app.session.execute("select.none", &json!({})).unwrap();
         app.select_tool(tool);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx, vec![]);
         let view = app.canvas_view().unwrap();
         let before = app.session.active().unwrap().doc.clone();
@@ -3247,7 +3247,7 @@ fn art_alt_dragged_off_the_canvas_reaches_the_panels_as_the_original() {
     let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     let id = vectorcraft_doc::NodeId(id);
     app.select_tool("selection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let view = app.canvas_view().unwrap();
     let before = app.session.active().unwrap().doc.clone();
@@ -3278,7 +3278,7 @@ fn art_moved_off_the_canvas_resumes_when_the_pointer_returns() {
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let view = app.canvas_view().unwrap();
     let undo = app.session.active().unwrap().history.undo.len();
@@ -3520,7 +3520,7 @@ fn a_modifier_changed_mid_scale_applies_with_the_pointer_held_still() {
     app.ui.view.snap_to_point = false;
     let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 50})).unwrap()["id"].as_u64().unwrap();
     app.select_tool("selection");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let xf = app.canvas_view().unwrap();
     let with = |app: &mut VectorcraftApp, mut events: Vec<Event>, modifiers: Modifiers| {
@@ -3563,7 +3563,7 @@ fn backtick_changed_mid_selection_drag_applies_with_the_pointer_held_still() {
     app.ui.view.rulers = false;
     app.ui.view.smart_guides = false;
     app.ui.view.snap_to_point = false;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let xf = app.canvas_view().unwrap();
     let from = xf.to_screen(Point::new(125.0, 125.0));
@@ -3602,7 +3602,7 @@ fn backtick_places_a_flares_rings_anew_with_the_pointer_held_still() {
     app.ui.task_bar = false;
     app.ui.view.rulers = false;
     app.ui.view.smart_guides = false;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let xf = app.canvas_view().unwrap();
     let from = xf.to_screen(Point::new(100.0, 100.0));
@@ -3668,7 +3668,7 @@ fn pen_app() -> (VectorcraftApp, craft::ui::runtime::pen::PenSource, egui::Conte
     let stylus = craft::ui::runtime::pen::PenSource::default();
     app.services.pen = Some(stylus.clone());
     app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(Pos2::new(400.0, 300.0))]);
     (app, stylus, ctx)
 }
@@ -3869,7 +3869,7 @@ fn a_pen_tap_within_one_frame_clicks_where_it_tapped() {
     app.session.execute("file.new", &json!({"width": 800, "height": 600})).unwrap();
     let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
     app.session.execute("select.none", &json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.select_tool("selection");
     let before = app.session.active().unwrap().doc.art_bounds();
@@ -4593,7 +4593,7 @@ fn the_pasteboard_fade_leaves_exports_unchanged() {
     let plain = exports(&mut app);
     app.run("prefs.set", json!({"key": "fadeRegionOutsideArtboard", "value": true})).unwrap();
     app.select_tool("artboard");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     assert!(super::artboards::fades_outside_artboards(&app));
     assert_eq!(exports(&mut app), plain);
@@ -4609,7 +4609,7 @@ fn poll_worker_accepts_frames_not_older_than_displayed_and_discards_obsolete_fra
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.canvas.worker_started = true;
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw.clone(), |ui| show(&mut app, ui));
     out.textures_delta.clear();
@@ -4797,7 +4797,7 @@ fn pan_doc() -> (std::sync::Arc<vectorcraft_doc::Document>, CacheKey) {
         app.run("paint.setFill", json!({"ids": [id], "color": color})).unwrap();
     }
     app.canvas.worker_started = true;
-    shapes(&mut app, &egui::Context::default());
+    shapes(&mut app, &crate::testing::ui_context());
     let key = app.canvas.key.clone().expect("a frame was rendered");
     (app.session.active().unwrap().doc.clone(), CacheKey { zoom: 1.0, rot: 0.0, ppp: 1.0, pixel: None, ..key })
 }
@@ -4849,7 +4849,7 @@ fn a_plug_in_change() {
     app.session.execute("file.new", &json!({"width": 256, "height": 128})).unwrap();
     let rect = app.run("shape.rectangle", json!({"x": 16, "y": 16, "width": 64, "height": 96})).unwrap()["id"].clone();
     app.canvas.worker_started = true; // render on this thread
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     shapes(&mut app, &ctx);
     // Other keys' fields (placed documents' bitmaps) follow what other tests do; this one's don't.
     let plugins = |app: &VectorcraftApp| app.canvas.key.as_ref().expect("a frame was rendered").plugins;
@@ -5171,7 +5171,7 @@ fn a_frame_with_copied_pixels() {
     app.canvas.worker_started = true;
     let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
     app.canvas.worker = Some(worker);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let frame = |app: &mut VectorcraftApp, t: f64| {
         let raw =
             egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(t), ..Default::default() };
@@ -5221,7 +5221,7 @@ fn a_pan_after_the_settling_frame() {
     app.canvas.worker_started = true;
     let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
     app.canvas.worker = Some(worker);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let frame = |app: &mut VectorcraftApp, t: f64| {
         let raw =
             egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(t), ..Default::default() };
@@ -5300,7 +5300,7 @@ fn a_frame_after_a_zoom_or_an_edit_holds_no_pixels() {
 #[test]
 fn the_render_worker_thread_copies_a_pan() {
     let (doc, key) = pan_doc();
-    let mut worker = crate::render_worker::Worker::spawn(egui::Context::default()).expect("a worker");
+    let mut worker = crate::render_worker::Worker::spawn(crate::testing::ui_context()).expect("a worker");
     // Blocks until the worker sends its frame. A worker thread that stopped gives None.
     let wait = |worker: &mut crate::render_worker::Worker| worker.wait(std::time::Duration::MAX).expect("the worker sends the frame");
     worker.submit(pan_job(&doc, &key, (0.0, 0.0)));
@@ -5323,7 +5323,7 @@ fn a_documents_first_frame() {
     app.canvas.worker_started = true;
     let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
     app.canvas.worker = Some(worker);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
     let frame = |app: &mut VectorcraftApp| ctx.run_ui(raw.clone(), |ui| show(app, ui)).textures_delta.clear();
 
@@ -5351,7 +5351,7 @@ fn the_render_worker_waits_for_a_frame_only_as_long_as_asked() {
     app.canvas.worker_started = true;
     let (worker, jobs, _) = crate::render_worker::Worker::test_channel();
     app.canvas.worker = Some(worker);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(200.0, 150.0))), ..Default::default() };
     ctx.run_ui(raw, |ui| show(&mut app, ui)).textures_delta.clear();
     let job = jobs.try_recv().expect("a job to finish");
@@ -5385,7 +5385,7 @@ fn an_edit_to_a_3d_effect_redraws_with_the_art_measured() {
     app.canvas.worker_started = true; // render on this thread
     let id = app.run("shape.rectangle", json!({"x": 380, "y": 280, "width": 40, "height": 40})).unwrap()["id"].clone();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "ids": [id], "params": {"depth": 60.0}})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     shapes(&mut app, &ctx);
     assert_eq!(app.canvas.renderer.stats.three_d_built, 1, "the whole frame made the art");
     app.run("effect.setParams", json!({"ids": [id], "index": 0, "item": null, "params": {"depth": 5.0}})).unwrap();
@@ -5409,7 +5409,7 @@ fn art_measured_for_an_edit_not_drawn_here_is_let_go() {
         let (x, size) = if worker { (0, 800) } else { (5000, 40) };
         let id = app.run("shape.rectangle", json!({"x": x, "y": 0, "width": size, "height": size})).unwrap()["id"].clone();
         app.run("effect.apply", json!({"effect": "threeD.extrude", "ids": [id], "params": {"depth": 60.0}})).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         shapes(&mut app, &ctx);
         // A worker whose jobs the test receives: none finishes unless the test says so.
         let mut jobs = None;
@@ -5472,7 +5472,7 @@ fn a_move_stops_snapping_to_guides_hidden_during_it() {
         app.ui.view.smart_guides = false;
         app.ui.view.snap_to_point = true;
         app.ui.view.guides = true;
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx, vec![]);
         let xf = app.canvas_view().unwrap();
         let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };

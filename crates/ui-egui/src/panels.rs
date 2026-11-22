@@ -698,7 +698,10 @@ pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool) {
     }
     // The popover keeps its own open state: the Swatches body opens menus of its own (Swatch
     // Libraries, Show Swatch Kinds), which close with it (#536).
-    let _ = Popover::new(label, Bind::bound(&mut open)).opened_by(&out.edit.response).show(ui, |ui, _| paint_popover(app, ui));
+    // The Swatches body is one collection that scrolls inside the popover's room; the mixer scrolls with the popover.
+    let popover = Popover::new(label, Bind::bound(&mut open)).opened_by(&out.edit.response);
+    let popover = if app.ui.paint_popover.is_some_and(|p| p.mixer) { popover } else { popover.collection_body() };
+    let _ = popover.show(ui, |ui, _| paint_popover(app, ui));
     if !open {
         app.ui.paint_popover = None;
     }

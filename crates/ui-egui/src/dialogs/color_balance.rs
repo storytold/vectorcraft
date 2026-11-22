@@ -236,7 +236,7 @@ mod tests {
     /// An app with the window context that hosts the dialog.
     fn app() -> (VectorcraftApp, egui::Context) {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.ui_ctx = Some(ctx.clone());
         (app, ctx)
     }

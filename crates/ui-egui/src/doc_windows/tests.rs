@@ -101,7 +101,7 @@ fn tab_drawn(shapes: &[Shape], title: &str) -> bool {
 #[test]
 fn float_in_window_moves_the_current_document_out_of_the_tabs() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let shapes = frame(&mut app, &ctx, vec![]);
     let title = app.session.documents()[2].title();
     assert!(tab_drawn(&shapes, &title), "the current document has a tab");
@@ -128,7 +128,7 @@ fn float_in_window_moves_the_current_document_out_of_the_tabs() {
 #[test]
 fn a_press_in_another_documents_window_or_the_main_window_makes_its_document_current() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.floatInWindow", json!({})).unwrap();
@@ -156,7 +156,7 @@ fn a_press_in_another_documents_window_or_the_main_window_makes_its_document_cur
 #[test]
 fn a_resized_window_fits_its_document_again_unless_it_was_zoomed() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.floatInWindow", json!({})).unwrap();
@@ -186,7 +186,7 @@ fn a_resized_window_fits_its_document_again_unless_it_was_zoomed() {
 #[test]
 fn cascade_floats_every_document_and_stacks_the_windows() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.arrange.tile", json!({})).unwrap();
     app.run("document.activate", json!({"index": 1})).unwrap();
@@ -224,7 +224,7 @@ fn cascade_floats_every_document_and_stacks_the_windows() {
 #[test]
 fn float_all_in_windows_floats_the_tabbed_documents_and_consolidate_brings_them_back() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let tabbed = canvas_rect(&app);
     app.run("window.arrange.floatInWindow", json!({})).unwrap();
@@ -248,7 +248,7 @@ fn float_all_in_windows_floats_the_tabbed_documents_and_consolidate_brings_them_
 #[test]
 fn tile_brings_floating_documents_back_into_the_grid() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.arrange.tile", json!({})).unwrap();
     app.run("window.arrange.floatInWindow", json!({})).unwrap();
@@ -265,7 +265,7 @@ fn tile_brings_floating_documents_back_into_the_grid() {
 #[test]
 fn closing_a_floating_window_closes_its_document_and_asks_to_save_an_unsaved_one() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -317,7 +317,7 @@ fn closing_a_floating_window_closes_its_document_and_asks_to_save_an_unsaved_one
 #[test]
 fn presentation_mode_shows_the_floating_current_document_in_the_main_window() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -350,7 +350,7 @@ fn presentation_mode_shows_the_floating_current_document_in_the_main_window() {
 #[test]
 fn a_document_made_current_in_presentation_mode_comes_to_the_front_after_it() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -412,7 +412,7 @@ fn native_host() -> std::rc::Rc<std::cell::RefCell<Host>> {
 #[test]
 fn closing_an_os_window_keeps_it_while_its_unsaved_document_stays_open() {
     let host = native_host();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.set_embed_viewports(false);
     let mut app = app_with(2);
     if !WindowHost::of(&ctx).viewports_available() {
@@ -439,7 +439,7 @@ fn closing_an_os_window_keeps_it_while_its_unsaved_document_stays_open() {
 #[cfg(not(target_arch = "wasm32"))]
 fn the_update_prompt_takes_the_keyboard_from_a_document_window() {
     let _host = native_host();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.set_embed_viewports(false);
     let mut app = app_with(2);
     if !WindowHost::of(&ctx).viewports_available() {
@@ -482,7 +482,7 @@ fn tab_at(shapes: &[Shape], title: &str) -> Pos2 {
 #[test]
 fn dragging_a_tab_off_the_strip_floats_its_document_at_the_pointer() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let shapes = frame(&mut app, &ctx, vec![]);
     let title = app.session.documents()[0].title();
@@ -511,7 +511,7 @@ fn dragging_a_tab_off_the_strip_floats_its_document_at_the_pointer() {
 #[test]
 fn a_window_dragged_by_its_tab_onto_the_strip_goes_back_under_the_tabs() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -544,7 +544,7 @@ fn a_window_dragged_by_its_tab_onto_the_strip_goes_back_under_the_tabs() {
 #[test]
 fn after_touch_input_a_window_tab_dragged_onto_the_strip_still_docks() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -567,7 +567,7 @@ fn after_touch_input_a_window_tab_dragged_onto_the_strip_still_docks() {
 #[test]
 fn a_document_floated_again_after_cascade_opens_where_it_is_asked_to() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -603,7 +603,7 @@ fn float_in_window_and_consolidate_take_a_document() {
 #[test]
 fn with_open_documents_as_tabs_cleared_new_documents_open_in_floating_windows() {
     let mut app = app_with(1);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("prefs.set", json!({"key": "openDocumentsAsTabs", "value": false})).unwrap();
     assert_eq!(docked(&app), [0], "a document already open stays under its tab");
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
@@ -671,7 +671,7 @@ fn checking_open_documents_as_tabs_again_leaves_floating_documents_where_they_ar
 #[test]
 fn an_os_windows_tab_docks_on_the_strip() {
     let host = native_host();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.set_embed_viewports(false);
     let mut app = app_with(2);
     if !WindowHost::of(&ctx).viewports_available() {
@@ -735,7 +735,7 @@ fn title_of(app: &VectorcraftApp, w: Win) -> String {
 #[test]
 fn new_window_opens_a_numbered_view_with_its_own_zoom() {
     let mut app = app_with(1);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let name = app.session.documents()[0].title();
     assert!(!title_of(&app, (0, 1)).contains(&format!("{name}:")), "one view: no number");
@@ -763,7 +763,7 @@ fn new_window_opens_a_numbered_view_with_its_own_zoom() {
 #[test]
 fn closing_a_view_leaves_the_document_open() {
     let mut app = app_with(1);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
     app.run("window.newWindow", json!({})).unwrap();
     app.run("window.newWindow", json!({})).unwrap();
@@ -786,7 +786,7 @@ fn closing_a_view_leaves_the_document_open() {
 #[test]
 fn arrange_treats_each_view_as_a_window() {
     let mut app = app_with(1);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     assert!(!enabled(&app, "window.arrange.tile") && !enabled(&app, "window.arrange.cascade"), "one window");
     app.run("window.newWindow", json!({})).unwrap();
@@ -927,7 +927,7 @@ fn selected_center(app: &VectorcraftApp) -> vectorcraft_geom::Point {
 
 #[test]
 fn a_selection_drag_released_in_another_documents_floating_window_copies_the_art_there() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = floating_pair(&ctx);
     // The target's view differs from the source's: the grab point still lands under the pointer.
     let v = view_mut(&mut app, (1, 1)).unwrap();
@@ -961,7 +961,7 @@ fn a_selection_drag_released_in_another_documents_floating_window_copies_the_art
 
 #[test]
 fn a_release_in_the_first_frame_over_a_floating_window_still_copies_the_art() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = floating_pair(&ctx);
     let source = app.session.documents()[0].doc.clone();
     grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
@@ -979,7 +979,7 @@ fn a_release_in_the_first_frame_over_a_floating_window_still_copies_the_art() {
 
 #[test]
 fn a_floating_window_drop_lands_where_the_button_went_up() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = floating_pair(&ctx);
     grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
     let drop = in_noted(&app, (1, 1), vectorcraft_geom::Point::new(200.0, 150.0));
@@ -996,7 +996,7 @@ fn a_floating_window_drop_lands_where_the_button_went_up() {
 
 #[test]
 fn art_dragged_from_a_floating_window_drops_into_the_main_windows_document() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = floating_pair(&ctx);
     show_window(&mut app, (1, 1));
     app_frame(&mut app, &ctx, vec![]);
@@ -1021,7 +1021,7 @@ fn art_dragged_from_a_floating_window_drops_into_the_main_windows_document() {
 
 #[test]
 fn a_selection_drag_into_a_floating_view_of_its_document_moves_the_art() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = app_with(0);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("shape.rectangle", json!({"x": 300, "y": 230, "width": 50, "height": 50})).unwrap();
@@ -1050,7 +1050,7 @@ fn a_selection_drag_into_a_floating_view_of_its_document_moves_the_art() {
 #[test]
 fn a_drag_released_on_a_floating_windows_title_bar_or_after_escape_changes_nothing() {
     for (case, escape) in [("title bar", false), ("art area after Escape", true)] {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut app = floating_pair(&ctx);
         let docs: Vec<_> = app.session.documents().iter().map(|d| (d.doc.clone(), d.history.undo.len())).collect();
         grab(&mut app, &ctx, vectorcraft_geom::Point::new(325.0, 255.0));
@@ -1076,7 +1076,7 @@ fn a_drag_released_on_a_floating_windows_title_bar_or_after_escape_changes_nothi
 
 #[test]
 fn a_tab_transfer_whose_source_changed_drops_nothing_in_a_floating_window() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = floating_pair(&ctx);
     app.run("file.new", json!({"width": 400, "height": 300, "name": "Third"})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
@@ -1110,7 +1110,7 @@ fn a_tab_transfer_whose_source_changed_drops_nothing_in_a_floating_window() {
 
 #[test]
 fn a_tab_transfer_whose_target_is_no_longer_current_drops_nothing_in_a_floating_window() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = floating_pair(&ctx);
     app.run("file.new", json!({"width": 400, "height": 300, "name": "Third"})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();

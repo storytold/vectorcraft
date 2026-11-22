@@ -736,6 +736,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut footer_pick = None;
     let (mut activated, mut menu_for, mut row_act) = (None, None, None);
     Panel::new(tl!("Links"))
+        .collection_body()
         .footer(|ui, _| {
             let info = FooterAction::new(IconId::new(if o.info { "chevron-down" } else { "chevron-right" }), tl!("Show Link Info"));
             let actions = std::iter::once(info)

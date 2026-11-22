@@ -209,6 +209,7 @@ fn mask_row(
     let keys = [()];
     List::<()>::new(tl!("Opacity mask thumbnails"))
         .select(SelectMode::None)
+        .natural_height(true)
         .enabled(object)
         .show_items(ui, &keyed(&keys, |_| ()), &mut |_, _| row.take().unwrap_or_else(|| ListRow::new("")))
         .events

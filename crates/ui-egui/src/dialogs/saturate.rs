@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn commits_without_a_drawn_frame_as_one_step() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.ui_ctx = Some(ctx.clone());
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();

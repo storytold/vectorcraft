@@ -208,7 +208,7 @@ fn laid_out(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::Rect {
 #[test]
 fn a_drop_with_a_position_places_on_the_canvas_and_opens_off_it() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let rect = laid_out(&mut app, &ctx);
     let pos = rect.center() + vec2(60.0, -40.0);
     let want = app.canvas_view().unwrap().to_doc(pos);
@@ -228,7 +228,7 @@ fn a_drop_with_a_position_places_on_the_canvas_and_opens_off_it() {
 #[test]
 fn a_drop_without_a_position_opens_documents_and_places_pictures() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     laid_out(&mut app, &ctx);
     let center = app.view().unwrap().center;
     let uid = app.session.active().unwrap().uid;
@@ -267,7 +267,7 @@ fn a_dropped_file_of_each_library_kind_opens_in_its_destination() {
         let path = dir.file(name, &bytes);
         for route in 0..4 {
             let mut app = app();
-            let ctx = egui::Context::default();
+            let ctx = crate::testing::ui_context();
             let rect = laid_out(&mut app, &ctx);
             match route {
                 0 => frame(&mut app, &ctx, over(rect), &[&path], false),
@@ -310,7 +310,7 @@ fn a_dropped_file_of_each_library_kind_opens_in_its_destination() {
 #[test]
 fn a_dropped_png_is_placed_where_it_was_dropped() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let rect = laid_out(&mut app, &ctx);
     let dir = Folder::new("ui-place-png");
     let path = dir.file("drop.png", &png(20, 10, 72.0));
@@ -333,7 +333,7 @@ fn a_dropped_png_is_placed_where_it_was_dropped() {
 #[test]
 fn a_dropped_document_opens_as_a_tab_of_its_own() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     laid_out(&mut app, &ctx);
     let dir = Folder::new("ui-place-tab");
     let svg = dir.file("dropped.svg", SVG.as_bytes());
@@ -353,7 +353,7 @@ fn a_native_svg_drop_uses_file_open_even_with_a_path_only_handle() {
     let dir = Folder::new("ui-place-path-only");
     let path = dir.file("path-only.svg", SVG.as_bytes());
     let mut dropped = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     laid_out(&mut dropped, &ctx);
     let handle = Arc::new(MockDrop { path: path.clone().into(), bytes: Err("only a path".into()) }) as egui::DroppedFileHandle;
     frame_files(&mut dropped, &ctx, vec![], vec![handle], false);
@@ -379,7 +379,7 @@ fn a_native_svg_drop_uses_file_open_even_with_a_path_only_handle() {
 #[test]
 fn an_svg_drop_without_a_path_is_detected_from_its_bytes() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let rect = laid_out(&mut app, &ctx);
     let svg = Arc::new(MockDrop { path: Default::default(), bytes: Ok(SVG.as_bytes().to_vec()) }) as egui::DroppedFileHandle;
     frame_files(&mut app, &ctx, vec![], vec![svg], false);
@@ -396,7 +396,7 @@ fn an_svg_drop_without_a_path_is_detected_from_its_bytes() {
 #[test]
 fn multiple_svg_drops_open_individually() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     laid_out(&mut app, &ctx);
     let dir = Folder::new("ui-place-several-svg");
     let a = dir.file("first.svg", SVG.as_bytes());
@@ -410,7 +410,7 @@ fn multiple_svg_drops_open_individually() {
 #[test]
 fn unsupported_and_unreadable_drops_leave_the_document_open() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let rect = laid_out(&mut app, &ctx);
     let dir = Folder::new("ui-place-unreadable");
     // Over the canvas the first is a place; the SVGs are dropped off it, so they open.
@@ -433,7 +433,7 @@ fn unsupported_and_unreadable_drops_leave_the_document_open() {
 #[test]
 fn files_dropped_with_no_document_open_open_and_are_recent() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let dir = Folder::new("ui-place-no-document");
     let path = dir.file("open-me.png", &png(8, 8, 72.0));
     frame(&mut app, &ctx, vec![], &[], false);
@@ -456,7 +456,7 @@ fn a_file_read_after_another_document_became_active_lands_where_it_was_dropped()
     let mut app = app();
     let inbox = crate::place::PlaceInbox::default();
     app.services.place_inbox = Some(inbox.clone());
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let rect = laid_out(&mut app, &ctx);
     let want = app.canvas_view().unwrap().to_doc(rect.center() + vec2(60.0, -40.0));
     let drop_on_active = |app: &VectorcraftApp| match app.drop_target("late.png", DropSpot::Canvas(want), false) {
@@ -488,7 +488,7 @@ fn a_file_read_after_another_document_became_active_lands_where_it_was_dropped()
 #[test]
 fn the_place_dialog_lists_the_files_and_loads_the_cursor_with_several() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let dir = Folder::new("ui-place-dialog");
     let a = dir.file("a.png", &png(300, 150, 300.0));
     let b = dir.file("b.png", &png(10, 10, 72.0));
@@ -509,7 +509,7 @@ fn the_place_dialog_lists_the_files_and_loads_the_cursor_with_several() {
 #[test]
 fn one_file_places_centred_in_the_view_and_replace_swaps_the_selection() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.view_mut().unwrap().center = vectorcraft_geom::Point::new(120.0, 80.0);
     let dir = Folder::new("ui-place-replace");
     place_picked(&mut app, &ctx, &dir.file("one.png", &png(300, 150, 300.0)));
@@ -704,7 +704,7 @@ fn the_control_bars_mask_clips_the_image_and_selects_the_clipping_path() {
 #[test]
 fn a_vectorcraft_document_places_linked_and_edit_original_opens_it() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // A one-artboard document with a rectangle.
     let mut src = Session::new();
     src.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
@@ -736,7 +736,7 @@ fn a_vectorcraft_document_places_linked_and_edit_original_opens_it() {
 #[test]
 fn the_place_dialog_links_a_pdf_page_and_embeds_it_with_link_off() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut src = Session::new();
     src.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
     src.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
@@ -760,7 +760,7 @@ fn the_place_dialog_links_a_pdf_page_and_embeds_it_with_link_off() {
 #[test]
 fn the_place_dialog_offers_a_postscript_ai_and_an_eps_file_as_a_locked_object() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let ps = b"%!PS-Adobe-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n1 0 0 setrgbcolor 10 10 50 50 rectfill\nshowpage\n%%EOF\n";
     let dir = Folder::new("ui-place-postscript");
     for name in ["legacy.ai", "legacy.eps", "legacy.ps"] {
@@ -1347,7 +1347,7 @@ fn a_file_placed_while_idle_follows_its_changes() {
     // worker during the idle frames asks for a repaint.
     app.canvas.worker_started = true;
     app.run("prefs.set", json!({"key": "updateLinks", "value": "automatically"})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut time = 0.0;
     idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
     // A look finds the new document without links: no wakes of its own for it.
@@ -1386,7 +1386,7 @@ fn a_look_whose_worker_stopped_does_not_stop_later_looks() {
     let path = dir.file("stopped-watch.png", &png(40, 30, 72.0));
     app.run("file.place", json!({"path": path})).unwrap();
     let id = app.session.active().unwrap().selection.objects[0];
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut time = 0.0;
     idle(&mut app, &ctx, &mut time, 3.0, &|_| false);
     // A look that is due starts in this frame and is applied in the next one, at the same time.

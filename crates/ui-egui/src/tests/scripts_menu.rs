@@ -18,7 +18,7 @@ use crate::{VectorcraftApp, script_runs, scripts_menu};
 /// own, each with its own listing.
 fn ctx() -> egui::Context {
     thread_local!(static CTX: egui::Context = {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         Host::builder(AppInfo { id: "vectorcraft", name: "VectorCraft", version: "0" }).jobs(Arc::new(ThreadJobs)).install(&ctx);
         ctx
     });

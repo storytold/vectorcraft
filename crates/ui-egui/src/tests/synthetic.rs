@@ -61,7 +61,7 @@ fn chord(key: egui::Key, modifiers: Modifiers) -> Vec<egui::Event> {
 #[test]
 fn shift_arrow_nudges_ten_points_and_alt_arrow_copies() {
     let (mut app, id) = one_square();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     key_frame(&mut app, &ctx, vec![]);
     key_frame(&mut app, &ctx, chord(egui::Key::ArrowDown, Modifiers::SHIFT));
     assert_eq!(top_left(&app, id), (10.0, 20.0), "Shift+↓ nudges by 10 pt");
@@ -77,7 +77,7 @@ fn a_pointer_release_after_a_key_waits_for_the_key() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
     app.run("tool.select", json!({"tool": "arc"})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     key_frame(&mut app, &ctx, vec![]);
     control(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "down", "x": 100, "y": 100}, {"kind": "drag", "x": 200, "y": 180}]}));
     let (key, _key_reply) = ControlRequest::new("ui.key", json!({"key": "c"}));

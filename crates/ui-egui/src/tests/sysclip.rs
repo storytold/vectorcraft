@@ -352,7 +352,7 @@ fn hold_worker(app: &mut VectorcraftApp, label: &str) -> Sender<()> {
 /// tool copies.
 fn window_frame(app: &mut VectorcraftApp, copy: Option<&str>) {
     thread_local! {
-        static CTX: egui::Context = egui::Context::default();
+        static CTX: egui::Context = crate::testing::ui_context();
     }
     let ctx = CTX.with(Clone::clone);
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0)));
@@ -403,7 +403,7 @@ fn copy_publishes_the_formats_the_worker_makes_and_pastes_meanwhile() {
     assert_eq!(app.ui.status, "Ready");
     let bar = crate::tests_background::status_bar_texts(&mut app);
     assert!(bar.iter().any(|t| t == "Ready") && !bar.iter().any(|t| t.contains('…')), "{bar:?}");
-    assert_eq!(crate::control::inspect(&app, &egui::Context::default())["background"], json!([]));
+    assert_eq!(crate::control::inspect(&app, &crate::testing::ui_context())["background"], json!([]));
     run(&mut app, "edit.paste", json!({}));
     assert!(matches!(pasted(&app)[0].kind, NodeKind::Path { .. }), "the copied rectangle, not the other app's text");
     drop(hold);
@@ -627,7 +627,7 @@ fn the_menus_paste_into_a_field_waits_for_the_formats() {
     run(&mut app, "edit.copy", json!({}));
     let hold = hold_worker(&mut app, "Saving a.vectorcraft");
     // A text field with the keyboard; in the second frame Paste is chosen from the menu.
-    let (ctx, id, mut field) = (egui::Context::default(), egui::Id::unique("field"), String::new());
+    let (ctx, id, mut field) = (crate::testing::ui_context(), egui::Id::unique("field"), String::new());
     for paste in [false, true] {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             if paste {
@@ -878,7 +878,7 @@ fn on_the_web_a_picture_the_host_read_from_a_paste_pastes() {
     run(&mut app, "file.new", json!({"width": 400, "height": 300}));
     let v = app.view_mut().unwrap();
     (v.center, v.fitted) = (Point::new(250.0, 180.0), true);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.paste_from_host(&ctx, Flavour { mime: PNG, data: blue_png() }, egui::Modifiers::COMMAND);
     let n = &pasted(&app)[0];
     let NodeKind::Image(im) = &n.kind else { panic!("not an image: {:?}", n.kind) };

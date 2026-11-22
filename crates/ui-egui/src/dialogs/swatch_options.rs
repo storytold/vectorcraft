@@ -504,7 +504,7 @@ mod tests {
 
     /// An app with a window for its dialogs and one open document.
     fn setup() -> (egui::Context, VectorcraftApp) {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.ui_ctx = Some(ctx.clone());
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();

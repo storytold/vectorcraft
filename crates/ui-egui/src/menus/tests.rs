@@ -39,7 +39,7 @@ fn separators(nodes: &[Node]) -> Vec<usize> {
 
 /// The label the built bar shows for `id`, with the step-naming wording (Undo Move) applied.
 fn shown_label(app: &mut VectorcraftApp, id: &str) -> Option<String> {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // PLAN: assumed `app.menus.bar` is the `craft::menu::MenuBar` that `refresh` builds, with dynamic labels written into its items
     crate::menus::model::refresh(app, &ctx);
     app.menus.bar.items().into_iter().find(|it| it.command.id == id).map(|it| it.label.clone())
@@ -391,7 +391,7 @@ fn help_starts_with_search_commands() {
     );
     assert!(matches!(help[1], Node::Separator), "{:?}", help[1]);
     assert!(enabled(&app, "help.commandPalette"));
-    crate::tests_synthetic::key_frame(&mut app, &egui::Context::default(), vec![]);
+    crate::tests_synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
     assert!(shortcut_of(&app, "help.commandPalette").is_some(), "the search's shortcut shows next to the item");
     fn count(nodes: &[Node]) -> usize {
         nodes
@@ -410,7 +410,7 @@ fn help_starts_with_search_commands() {
 #[test]
 fn the_bar_starts_at_file() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     crate::menus::model::refresh(&mut app, &ctx);
     // PLAN: assumed `app.menus.laid` is the `craft::menu::MenuBar` laid out for the window
     let titles: Vec<&str> = app.menus.laid.menus.iter().map(|menu| menu.title.as_str()).collect();
@@ -588,7 +588,7 @@ fn center_on_top_and_bottom_are_type_on_a_path_items() {
     app.run("select.set", json!({"ids": [closed]})).unwrap();
     use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
     let fired = Fired::new(craft::menu::CommandRef::new(ids[0]), FireSource::Palette, FirePhase::Press, 0.0);
-    crate::shortcuts::run_fired(&mut app, &egui::Context::default(), &fired);
+    crate::shortcuts::run_fired(&mut app, &crate::testing::ui_context(), &fired);
     let doc = &app.session.active().unwrap().doc;
     let start = match &doc.node(vectorcraft_doc::NodeId(closed.as_u64().unwrap())).unwrap().kind {
         vectorcraft_doc::NodeKind::Text(t) => match t.kind {
@@ -1117,7 +1117,7 @@ fn precise_cursors_command_is_listed_and_assignable_in_the_shortcut_editor() {
     assert_eq!(ed::default_of(ID), None, "no default key");
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     // The `shortcuts.*` commands read the window's keymap, which its first frame builds.
-    crate::tests::synthetic::key_frame(&mut app, &egui::Context::default(), vec![]);
+    crate::tests::synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
     let shortcut = |app: &mut VectorcraftApp| {
         let rows = app.run("shortcuts.list", json!({ "query": ID })).unwrap();
         rows.as_array().and_then(|rows| rows.iter().find(|r| r["id"] == ID)).expect("listed")["shortcut"].clone()

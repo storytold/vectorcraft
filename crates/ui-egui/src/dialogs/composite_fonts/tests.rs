@@ -9,7 +9,7 @@ use crate::tests::picks::{poll, scripted};
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(egui::Context::default());
+    app.ui_ctx = Some(crate::testing::ui_context());
     app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
     app
 }

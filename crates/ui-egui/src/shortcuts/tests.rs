@@ -45,7 +45,7 @@ fn press_f() -> Vec<egui::Event> {
 
 /// A context that has run its first pass, which builds the board's keymap.
 fn ready(app: &mut VectorcraftApp) -> egui::Context {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     key_frame(app, &ctx, vec![]);
     ctx
 }
@@ -507,7 +507,7 @@ fn cmd_comma_opens_settings_on_a_mac() {
     let on = |os, setup: fn(&mut VectorcraftApp)| {
         let mut app = new_app();
         setup(&mut app);
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         ctx.set_os(os);
         key_frame(&mut app, &ctx, vec![]);
         key_frame(&mut app, &ctx, tap(Key::Comma, Modifiers::COMMAND));

@@ -761,7 +761,7 @@ mod tests {
     fn app_on(session: Session) -> VectorcraftApp {
         crate::i18n::set_current(Lang::EN);
         let mut app = VectorcraftApp::new(session, crate::Services::default());
-        crate::menus::model::refresh(&mut app, &egui::Context::default());
+        crate::menus::model::refresh(&mut app, &crate::testing::ui_context());
         app
     }
 
@@ -774,7 +774,7 @@ mod tests {
     /// A pick of result `id`: the command its entry runs ([`crate::keymap::command_of`]), fired
     /// from the palette.
     fn pick(app: &mut VectorcraftApp, id: &str) {
-        fire(app, &egui::Context::default(), crate::keymap::command_of(id), FireSource::Palette);
+        fire(app, &crate::testing::ui_context(), crate::keymap::command_of(id), FireSource::Palette);
     }
 
     /// Cancels, or confirms, every open dialog.
@@ -827,7 +827,7 @@ mod tests {
 
     /// The entries and index [`show`] builds for `app` in the current language.
     fn built_for(app: &VectorcraftApp) -> Built {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut built = None;
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| built = Some(build(app, ui)));
         out.textures_delta.clear();
@@ -1081,7 +1081,7 @@ mod tests {
                 let before = outcome(&picked);
                 pick(&mut picked, id);
                 if row.is_enabled() {
-                    fire(&mut clicked, &egui::Context::default(), item.clone(), FireSource::Menu);
+                    fire(&mut clicked, &crate::testing::ui_context(), item.clone(), FireSource::Menu);
                     assert_eq!(outcome(&picked), outcome(&clicked), "{id} [state {n}]");
                     compared += 1;
                 } else {
@@ -1743,7 +1743,7 @@ mod tests {
         let before = outcome(&picked);
         pick(&mut picked, shadow);
         let click = CommandRef::with_params(item.command, json!({ "effect": item.effect }));
-        fire(&mut clicked, &egui::Context::default(), click, FireSource::Menu);
+        fire(&mut clicked, &crate::testing::ui_context(), click, FireSource::Menu);
         let after = outcome(&picked);
         assert!(after.0, "the dialog opens: {}", after.2);
         assert_eq!(after.1, before.1, "nothing changes yet");
@@ -1835,7 +1835,7 @@ mod tests {
         let mut alike = vec![];
         for lang in Lang::all() {
             crate::i18n::set_current(lang);
-            crate::menus::model::refresh(&mut app, &egui::Context::default());
+            crate::menus::model::refresh(&mut app, &crate::testing::ui_context());
             let mut seen = std::collections::HashMap::new();
             for e in &entries(&app, lang) {
                 let row = (kind_of(id_of(e)).0, e.label().as_str().to_string(), e.home().map(|h| h.as_str().to_string()));
@@ -2178,7 +2178,7 @@ mod tests {
     /// An app over `session` with its menu model built in the current language.
     fn app_on_current(session: Session) -> VectorcraftApp {
         let mut app = VectorcraftApp::new(session, crate::Services::default());
-        crate::menus::model::refresh(&mut app, &egui::Context::default());
+        crate::menus::model::refresh(&mut app, &crate::testing::ui_context());
         app
     }
 
@@ -2260,7 +2260,7 @@ mod tests {
         fn on(session: Session) -> Window {
             crate::i18n::set_current(Lang::EN);
             let app = VectorcraftApp::new(session, crate::Services::default());
-            let ctx = egui::Context::default();
+            let ctx = crate::testing::ui_context();
             ctx.enable_accesskit();
             let mut window = Window { app, ctx, time: 0.0 };
             window.frame(vec![]);

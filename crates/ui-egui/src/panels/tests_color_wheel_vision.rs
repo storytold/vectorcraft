@@ -91,7 +91,7 @@ fn ui_color_wheel_sets_and_reads_the_settings() {
     let settings = |view: &str, vision: bool| json!({"view": view, "channel": "hue", "gamut": false, "harmony": false, "harmonyRule": "complementary", "vision": vision, "sliders": "none", "documentColors": false});
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), settings("wheel", false));
     assert_eq!(app.run("ui.colorWheel", json!({"vision": true})).unwrap(), settings("wheel", true));
-    assert_eq!(crate::control::inspect(&app, &egui::Context::default())["ui"]["color_wheel"]["vision"], true);
+    assert_eq!(crate::control::inspect(&app, &crate::testing::ui_context())["ui"]["color_wheel"]["vision"], true);
     assert_eq!(app.run("ui.colorWheel", json!({"vision": "no"})).unwrap_err(), "`vision` must be true or false");
     assert_eq!(app.run("ui.colorWheel", json!({"view": "box", "channel": "red", "vision": 1})).unwrap_err(), "`vision` must be true or false");
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), settings("wheel", true));

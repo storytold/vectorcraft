@@ -566,6 +566,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     ];
     let footer: RefCell<Option<FooterOutput>> = RefCell::new(None);
     let mut shown = Panel::new(tl!("Symbols"))
+        .collection_body()
         .footer(|ui, _| *footer.borrow_mut() = Some(FooterBar::actions(actions.clone()).at_start(AT_START).show_footer(ui)))
         .show(ui, |ui, _| {
             // Art dropped anywhere on the list becomes a symbol; dropped on a symbol, the browser's

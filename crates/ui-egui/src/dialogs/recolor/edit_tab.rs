@@ -51,6 +51,8 @@ const REMOVE: &str = "remove";
 const TOOLS: [(&str, &str, &str); 2] = [(ADD, "plus", "Add Color Tool"), (REMOVE, "minus", "Remove Color Tool")];
 /// A colour bar is this many times as wide as it is high.
 const BAR_ASPECT: u16 = 6;
+/// Bars shown before the list scrolls: as tall as the wheel the bars replace.
+const BAR_ROWS: u16 = 11;
 /// The target of the wheel's right-click menu: `{marker, line, hs}` (row indexes and the hue and
 /// saturation clicked).
 const MENU_AT: &str = "__wheelMenu";
@@ -317,10 +319,12 @@ fn bars(ui: &mut Ui, d: &mut Fields, rows: &mut [Value], active: &[usize], base:
     }
     let selection = sel.filter(|s| active.contains(s)).map_or_else(Selection::default, Selection::single);
     let shown: &[Value] = rows;
-    let out = List::new(tl!("Color bars")).select(SelectMode::Single).reorder(ReorderRule::new()).selection(Bind::given(selection)).show_items(
-        ui,
-        &keyed(active, |&i| i),
-        &mut |key, item| {
+    let out = List::new(tl!("Color bars"))
+        .select(SelectMode::Single)
+        .max_rows(BAR_ROWS)
+        .reorder(ReorderRule::new())
+        .selection(Bind::given(selection))
+        .show_items(ui, &keyed(active, |&i| i), &mut |key, item| {
             let i = *key;
             let color = shown.get(i).and_then(to_color).map(|c| c32(&c)).unwrap_or_default();
             let mut state = item.row.clone();
@@ -328,8 +332,7 @@ fn bars(ui: &mut Ui, d: &mut Fields, rows: &mut [Value], active: &[usize], base:
             ListRow::new(color_name(i)).state(state).thumb_aspect(ThumbSize::Small, ThumbAspect::new(BAR_ASPECT, 1), move |cx, rect| {
                 cx.painter.rect_filled(rect, 0.0, color);
             })
-        },
-    );
+        });
     let mut moved = false;
     for event in out.events {
         match event {

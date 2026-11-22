@@ -500,7 +500,7 @@ fn place_cursor_exec_checks_recording_step_limit_on_completion() {
             assert_eq!(placed(&app), 0);
             assert_ne!(app.ui.status, steps, "nothing is checked before the file is placed");
             // The read runs on the place lane; a frame after it ends places the file.
-            let ctx = egui::Context::default();
+            let ctx = crate::testing::ui_context();
             let t0 = std::time::Instant::now();
             while !app.placing.pending.is_empty() && t0.elapsed().as_secs() < 60 {
                 craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
@@ -535,7 +535,7 @@ fn a_journal_rewrite_or_a_direct_commit_is_checked_on_the_next_frame() {
     let into = set_actions(&app, 0)[0].name.clone();
     app.run(START_RECORDING, json!({})).unwrap();
     app.ui.recording_into = Some(into);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let frame = |app: &mut VectorcraftApp| {
         craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));

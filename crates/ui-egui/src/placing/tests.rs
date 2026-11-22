@@ -595,7 +595,7 @@ fn a_synchronous_paste_replaces_a_deferred_swatch_dialog() {
     app.sync_views();
     let result = crate::control::handle(
         &mut app,
-        &egui::Context::default(),
+        &crate::testing::ui_context(),
         &craft::automation::ControlRequest::new("engine.execute", json!({"command": "edit.pasteInPlace", "params": {}})).0,
     );
     let craft::automation::Reply::Done(result) = result else { panic!("expected command result") };
@@ -635,7 +635,7 @@ fn a_find_font_dialog_releases_a_deferred_swatch_paste_before_queued_work() {
         assert!(requested != newer);
         let result = crate::control::handle(
             &mut app,
-            &egui::Context::default(),
+            &crate::testing::ui_context(),
             &craft::automation::ControlRequest::new("engine.execute", json!({"command": "type.findFont", "params": {}})).0,
         );
         let craft::automation::Reply::Done(result) = result else { panic!("expected command result") };
@@ -683,7 +683,7 @@ fn a_deferred_swatch_paste_rejects_a_changed_token_or_closed_document() {
         } else {
             let result = crate::control::handle(
                 &mut app,
-                &egui::Context::default(),
+                &crate::testing::ui_context(),
                 &craft::automation::ControlRequest::new("ui.dialog.set", json!({"field": "__deferredPaste", "value": 999999})).0,
             );
             let craft::automation::Reply::Done(result) = result else { panic!("expected dialog result") };
@@ -1350,7 +1350,7 @@ fn what_the_user_places_is_read_off_the_ui_thread_and_commands_read_at_once() {
     assert_eq!(app.ui.status, "Placing a.tif, b.bmp…");
     assert_eq!(app.session.tool_id(), "selection");
     let (inspect, _) = craft::automation::ControlRequest::new("ui.inspect", json!({}));
-    let craft::automation::Reply::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &inspect) else { panic!("not done") };
+    let craft::automation::Reply::Done(r) = crate::control::handle(&mut app, &crate::testing::ui_context(), &inspect) else { panic!("not done") };
     assert_eq!(r["result"]["placing"], json!(["a.tif, b.bmp"]), "ui.inspect lists the files being read");
     placed(&mut app);
     assert_eq!((app.session.tool_id(), app.session.tool_options()["count"].as_u64()), ("place", Some(2)));
@@ -1508,7 +1508,7 @@ fn a_placed_image_is_drawn_without_decoding_it_on_the_ui_thread() {
     let blob = st.doc.images.values().next().unwrap().clone();
     assert!(vectorcraft_render::image_cached(&blob), "kept before the canvas draws it");
     let decodes = vectorcraft_render::image_decodes();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| crate::canvas::show(&mut app, ui));
     out.textures_delta.clear();

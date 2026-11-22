@@ -207,7 +207,7 @@ fn opens_with_the_rows_selected_in_the_artboards_panel_else_on_the_saved_choice(
     app.run("file.exportForScreens", json!({"fullDocument": true, "prefix": "proof-", "formats": [{"format": "jpg", "quality": 80, "scale": "2x"}]}))
         .unwrap();
     app.run("tool.select", json!({"tool": "artboard"})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(240.0, 400.0)));
     let panel = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
         let raw = egui::RawInput { events, time: Some(time), screen_rect: screen, ..Default::default() };
@@ -1176,7 +1176,7 @@ fn an_applied_preset_keeps_its_item_folders() {
             set(&mut app, "exportPreset", json!("Items"));
             set(&mut app, "folder", json!(dir.to_string_lossy()));
             let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": "subfolders", "value": on}));
-            let Reply::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
+            let Reply::Done(r) = crate::control::handle(&mut app, &crate::testing::ui_context(), &req) else { panic!("not done") };
             assert_eq!(r["ok"], true, "{r}");
             try_confirm(&mut app).unwrap();
             assert_eq!(files_under(&dir).first().map(String::as_str), Some(first), "subfolders {on}");
@@ -1274,7 +1274,7 @@ fn an_exported_preset_file_is_named_after_the_preset() {
 fn setting_the_export_preset_field_applies_the_preset() {
     use craft::automation::{ControlRequest, Reply};
     let (mut app, _) = app(1, false);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     open(&mut app);
     let set_preset = |app: &mut VectorcraftApp, name: &str| {
         let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": "exportPreset", "value": name}));

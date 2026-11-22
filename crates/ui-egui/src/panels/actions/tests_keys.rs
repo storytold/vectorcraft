@@ -32,7 +32,7 @@ fn tap(key: egui::Key, modifiers: egui::Modifiers) -> Vec<egui::Event> {
 
 /// A context whose first whole app frame has run, so the board holds the app's keymap.
 fn ready(app: &mut VectorcraftApp) -> egui::Context {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     key_frame(app, &ctx, vec![]);
     ctx
 }

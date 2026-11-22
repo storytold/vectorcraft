@@ -485,7 +485,7 @@ mod tests {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let request = ThumbRequest::for_cell(100.0, 1.0);
         // One pass of the panel's picture: the images the store uploaded in it, and the version asked for.
         let frame = |app: &mut VectorcraftApp, held: bool| {

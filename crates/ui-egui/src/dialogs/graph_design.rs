@@ -843,7 +843,7 @@ mod tests {
 
     fn app_with_design() -> (VectorcraftApp, egui::Context) {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.ui_ctx = Some(ctx.clone());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let r = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
@@ -931,7 +931,7 @@ mod tests {
         let (src, _) = app_with_design();
         let bytes = vectorcraft_format::save_file(&src.session.active().unwrap().doc);
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.ui_ctx = Some(ctx.clone());
         let p = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "Dots.vectorcraft"});
         app.run("swatch.library.load", p).unwrap();

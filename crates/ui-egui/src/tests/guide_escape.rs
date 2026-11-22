@@ -61,7 +61,7 @@ impl GuideDrag {
         let (before, selection, undo) = (st.doc.clone(), st.selection.clone(), st.history.undo.len());
         let mut f = Self {
             app,
-            ctx: egui::Context::default(),
+            ctx: crate::testing::ui_context(),
             time: 0.0,
             vertical,
             copy,

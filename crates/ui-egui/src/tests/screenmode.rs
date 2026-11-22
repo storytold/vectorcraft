@@ -82,7 +82,7 @@ fn in_screen_mode(ctx: &egui::Context, mode: u8) -> VectorcraftApp {
 #[test]
 fn escape_leaves_both_full_screen_modes_without_editing() {
     for mode in [1, 2] {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut app = in_screen_mode(&ctx, mode);
         let unchanged = snapshot(&app);
         frame(&mut app, &ctx, escape());
@@ -96,7 +96,7 @@ fn escape_leaves_both_full_screen_modes_without_editing() {
 #[test]
 fn modified_escape_keeps_full_screen_mode() {
     for modifiers in [egui::Modifiers::SHIFT, egui::Modifiers::CTRL, egui::Modifiers::COMMAND, egui::Modifiers::ALT] {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut app = in_screen_mode(&ctx, 2);
         let events =
             [true, false].map(|pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers }).to_vec();
@@ -108,7 +108,7 @@ fn modified_escape_keeps_full_screen_mode() {
 #[test]
 fn isolation_takes_escape_before_full_screen() {
     for mode in [1, 2] {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut app = in_screen_mode(&ctx, mode);
         app.run("shape.rectangle", json!({"x": 130, "y": 40, "width": 20, "height": 20})).unwrap();
         app.run("select.all", json!({})).unwrap();
@@ -125,7 +125,7 @@ fn isolation_takes_escape_before_full_screen() {
 
 #[test]
 fn a_rotated_view_resets_before_full_screen_exits() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = in_screen_mode(&ctx, 2);
     app.select_tool("rotateView");
     app.run("view.rotate", json!({"angle": 30})).unwrap();
@@ -139,7 +139,7 @@ fn a_rotated_view_resets_before_full_screen_exits() {
 #[test]
 fn pattern_edit_and_global_edit_take_escape_before_full_screen() {
     for mode in [1, 2] {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut app = in_screen_mode(&ctx, mode);
         app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
         assert!(app.session.active().unwrap().doc.pattern_edit.is_some());
@@ -149,7 +149,7 @@ fn pattern_edit_and_global_edit_take_escape_before_full_screen() {
         frame(&mut app, &ctx, escape());
         assert_eq!(app.ui.screen_mode, 0, "after pattern edit in mode {mode}");
 
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut app = in_screen_mode(&ctx, mode);
         app.run("shape.rectangle", json!({"x": 130, "y": 40, "width": 20, "height": 20})).unwrap();
         app.run("select.globalEdit", json!({})).unwrap();
@@ -165,7 +165,7 @@ fn pattern_edit_and_global_edit_take_escape_before_full_screen() {
 #[test]
 fn escape_exits_full_screen_then_resets_the_rotation_with_selection_tool() {
     for mode in [1, 2] {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut app = in_screen_mode(&ctx, mode);
         app.run("view.rotate", json!({"angle": 30})).unwrap();
         frame(&mut app, &ctx, escape());
@@ -180,7 +180,7 @@ fn escape_exits_full_screen_then_resets_the_rotation_with_selection_tool() {
 fn escape_leaves_presentation_mode() {
     let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(app.run("view.presentation", json!({})).unwrap(), json!(3));
     frame(&mut app, &ctx, vec![]);
@@ -198,7 +198,7 @@ fn escape_leaves_presentation_mode() {
 #[test]
 fn arrow_keys_go_between_artboards_in_presentation_mode() {
     use egui::Key::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp};
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = presenting(&ctx);
     app.run("select.all", json!({})).unwrap();
     let unchanged = snapshot(&app);
@@ -233,7 +233,7 @@ fn arrow_keys_go_between_artboards_in_presentation_mode() {
 /// last artboard a click leaves the view as it is.
 #[test]
 fn a_click_goes_to_the_next_artboard_in_presentation_mode() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = presenting(&ctx);
     app.run("select.none", json!({})).unwrap();
     let unchanged = snapshot(&app);
@@ -283,7 +283,7 @@ fn a_click_goes_to_the_next_artboard_in_presentation_mode() {
 /// other screen modes (Enable Touch Gestures), undoes nothing and goes to no other artboard.
 #[test]
 fn a_tap_goes_to_the_next_artboard_in_presentation_mode() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = presenting(&ctx);
     let objects = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
     let c = app.canvas_view().unwrap().rect.center();
@@ -310,7 +310,7 @@ fn a_tap_goes_to_the_next_artboard_in_presentation_mode() {
 #[test]
 fn no_other_key_works_in_presentation_mode() {
     use egui::{Key, Modifiers};
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = presenting(&ctx);
     // A press and release of `key` with `modifiers` held, and the text it types.
     let press = |key, modifiers: Modifiers, text: Option<&str>| {
@@ -364,7 +364,7 @@ fn the_screen_mode_is_not_saved() {
 /// changes size (the window going full screen).
 #[test]
 fn presentation_mode_fits_the_artboard() {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.run("shape.rectangle", json!({"x": 90, "y": 40, "width": 20, "height": 20})).unwrap();

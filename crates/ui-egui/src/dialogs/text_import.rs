@@ -144,7 +144,7 @@ pub(super) mod test_support {
 
     /// `app` with a window to host dialogs in.
     pub fn with_window(mut app: VectorcraftApp) -> VectorcraftApp {
-        app.ui_ctx = Some(egui::Context::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app
     }
 

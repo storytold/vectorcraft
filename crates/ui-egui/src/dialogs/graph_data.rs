@@ -800,13 +800,13 @@ mod tests {
     }
 
     fn set_field(app: &VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.dialogs().expect("a window").with(|host| host.set_json_field(&ctx, dialog_id(KIND), field, value))
     }
 
     /// OK through the host, then the pump: what Apply does.
     fn apply_through_host(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let closed = app.dialogs().expect("a window").with(|host| host.confirm::<GraphDataDialog>(&ctx));
         assert!(!closed, "Apply leaves the window open");
         pump(app, &ctx);
@@ -991,7 +991,7 @@ mod tests {
         assert_eq!(read(h.state(), |d| cell_of(&d.sheet.grid, 0, 1)), "a");
         // The tool's Graph Data after drawing opens the same sheet.
         let app = h.state_mut();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         app.dialogs().expect("a window").with(|host| host.cancel::<GraphDataDialog>(&ctx));
         super::super::tools::open_tool_dialog(app, "graphData", json!({}));
         assert!(app.dialogs().is_some_and(|d| d.with(|host| host.is_open::<GraphDataDialog>())));

@@ -1515,7 +1515,7 @@ mod tests {
     /// An app whose window has drawn a frame, so the `shortcuts.*` commands have its keymap.
     fn app() -> (VectorcraftApp, egui::Context) {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
         (app, ctx)
     }

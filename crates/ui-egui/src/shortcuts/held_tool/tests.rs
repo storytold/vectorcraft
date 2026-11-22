@@ -13,7 +13,7 @@ struct Keyboard {
 
 impl Keyboard {
     fn new() -> Self {
-        Self { ctx: egui::Context::default() }
+        Self { ctx: crate::testing::ui_context() }
     }
 
     /// One frame at `time` seconds delivering `events`.

@@ -131,7 +131,7 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
     for (key, value) in [("uiColorScheme", "classic"), ("uiAccent", "pink"), ("canvasColor", "white")] {
         app.run("prefs.set", json!({"key": key, "value": value})).unwrap();
     }
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     for _ in 0..2 {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
@@ -148,7 +148,7 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
 #[test]
 fn a_render_threads_change_restarts_the_renderer_at_the_next_push() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     apply_runtime(&mut app, &ctx);
     app.canvas.worker_started = true;
     // The automatic count as an explicit value: the process-wide count other tests read stays the same.

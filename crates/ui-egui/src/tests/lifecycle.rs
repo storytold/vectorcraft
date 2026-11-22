@@ -71,7 +71,7 @@ fn run_frame(
 #[test]
 fn a_discarded_rerun_runs_a_duplicate_once() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     // Fonts install on the first pass and are ready on the second.
     run_frame(&mut app, &ctx, vec![], |_| {}, false);
     run_frame(&mut app, &ctx, vec![], |_| {}, false);
@@ -139,7 +139,7 @@ fn preedit(t: &str, chars: usize) -> Event {
 #[test]
 fn home_takes_down_a_live_composition() {
     let (mut app, id) = app_with_text("Same");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ime_frame(&mut app, &ctx, vec![], |_| {});
     ime_frame(&mut app, &ctx, vec![], |_| {});
     begin_typing(&mut app, &ctx, id);
@@ -157,7 +157,7 @@ fn home_takes_down_a_live_composition() {
 #[test]
 fn closing_the_document_takes_down_a_live_composition() {
     let (mut app, id) = app_with_text("Same");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ime_frame(&mut app, &ctx, vec![], |_| {});
     ime_frame(&mut app, &ctx, vec![], |_| {});
     begin_typing(&mut app, &ctx, id);
@@ -176,7 +176,7 @@ fn an_ime_quote_commit_uses_the_character_before_its_pre_edit() {
     let (mut app, id) = app_with_text("a");
     // The pre-edit ends in an opening quote, but replacement starts after the letter `a`.
     app.run("document.setup", json!({"quotes": {"double": ["\"", "”"]}})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ime_frame(&mut app, &ctx, vec![], |_| {});
     ime_frame(&mut app, &ctx, vec![], |_| {});
     begin_typing(&mut app, &ctx, id);
@@ -192,7 +192,7 @@ fn an_ime_quote_commit_uses_the_character_before_its_pre_edit() {
 #[test]
 fn ime_delete_surrounding_then_commit_edit_the_type_tool_once_in_order() {
     let (mut app, id) = app_with_text("abc");
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ime_frame(&mut app, &ctx, vec![], |_| {});
     ime_frame(&mut app, &ctx, vec![], |_| {});
     begin_typing(&mut app, &ctx, id);

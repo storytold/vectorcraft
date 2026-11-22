@@ -31,7 +31,7 @@ fn frame_texts(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
 #[test]
 fn the_canvas_numbers_slices_until_they_are_hidden() {
     let mut app = app();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert!(!frame_texts(&mut app, &ctx).iter().any(|t| t == "01"), "no slices, no numbers");
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 50, "height": 50})).unwrap();
     app.run("object.slice.make", json!({})).unwrap();

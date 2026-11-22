@@ -154,7 +154,7 @@ fn an_object_type_reaches_every_selected_object_in_one_undo_step() {
 fn a_drag_ends_when_the_selection_goes_away() {
     let mut app = app();
     set_type(&mut app, "extrude").unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let history = undo_len(&app);
     begin(&mut app, GESTURE);
     update(&mut app, GESTURE, &[("depth", json!(90.0))]);
@@ -497,7 +497,7 @@ fn a_light_drag_keeps_the_objects_whose_lights_matched_when_it_started() {
 fn a_drag_ends_when_the_panel_is_no_longer_drawn() {
     let mut app = app();
     set_type(&mut app, "extrude").unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let history = undo_len(&app);
     begin(&mut app, GESTURE);
     update(&mut app, GESTURE, &[("depth", json!(90.0))]);

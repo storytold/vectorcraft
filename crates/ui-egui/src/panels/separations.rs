@@ -153,10 +153,14 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         ColumnSpec::new(NAME, Label::Empty, ColumnWidth::fill(1.0)),
     ];
     // Disabled while the preview is off: the eyes then take no press and the rows read dim.
-    let out = List::new(tl!("Plates")).id_salt("plates").select(SelectMode::None).sizing(Sizing::Content).enabled(on).columns(columns).show_items(
-        ui,
-        &rows,
-        &mut |key, item| {
+    let out = List::new(tl!("Plates"))
+        .id_salt("plates")
+        .select(SelectMode::None)
+        .sizing(Sizing::Content)
+        .natural_height(true)
+        .enabled(on)
+        .columns(columns)
+        .show_items(ui, &rows, &mut |key, item| {
             let Some(row) = rows.0.get(*key) else { return ListRow::new(Label::Empty) };
             let tooltip =
                 if *key == 0 { tl!("Show all plates") } else { tl!("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)") };
@@ -167,8 +171,7 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 });
             }
             list_row.cells(item.cells()).state(item.row.clone())
-        },
-    );
+        });
     for event in out.events {
         // A flip lands once: a click's set, or a sweep's commit at the release. It carries the Alt held at the press.
         let CollectionEvent::Toggle(EditEvent::Set { after: edit, .. } | EditEvent::Commit { after: edit, .. }) = event else { continue };

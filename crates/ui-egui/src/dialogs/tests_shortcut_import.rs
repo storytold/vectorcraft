@@ -16,7 +16,7 @@ fn app() -> VectorcraftApp {
 /// One frame of a window, which builds its keymap, then a pass of Keyboard Shortcuts in it, which
 /// takes up a pending review.
 fn frame(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     crate::tests::synthetic::key_frame(app, &ctx, vec![]);
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| shortcut_editor::show(app, ui));
     out.textures_delta.clear();

@@ -265,7 +265,7 @@ mod tests {
 
     fn app(artboards: u32) -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(egui::Context::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app.run("file.new", json!({"width": 100, "height": 50, "artboards": artboards})).unwrap();
         app
     }

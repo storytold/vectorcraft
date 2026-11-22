@@ -654,7 +654,7 @@ mod tests {
     /// An app whose window has a dialog host (it has a context).
     fn new_app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.ui_ctx = Some(egui::Context::default());
+        app.ui_ctx = Some(crate::testing::ui_context());
         app
     }
 
@@ -860,7 +860,7 @@ mod tests {
         assert!(!app.ui.status.is_empty());
 
         app.session.execute("object.unlockAll", &json!({})).unwrap();
-        let ctx = egui::Context::default();
+        let ctx = crate::testing::ui_context();
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
         assert_eq!(app.ui.status, "");

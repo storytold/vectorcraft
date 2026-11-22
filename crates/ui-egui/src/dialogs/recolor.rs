@@ -173,6 +173,8 @@ const TITLE: &str = "Recolor Artwork";
 /// The fields of the Color Groups list: whether it is shown, a request from its buttons, and the
 /// group whose colors the rows were last given.
 const GROUP_STORAGE: &str = "groupStorage";
+/// Rows the Color Groups list shows before it scrolls: as tall as the tabs beside it.
+const GROUP_ROWS: u16 = 10;
 const GROUP_ACTION: &str = "groupAction";
 const GROUP_LOADED: &str = "__groupLoaded";
 /// The `recolor.reduce` parameters the art's rows were last reduced with.
@@ -2287,12 +2289,15 @@ fn group_list(ui: &mut Ui, d: &mut Fields, feed: &Feed) {
     let mut picked: Option<Value> = None;
     Stack::new().show(ui, |ui, _| {
         let source = keyed(&keys, |k| *k).with_text(|k| Cow::Owned(names.get(*k).cloned().unwrap_or_default()));
-        let out =
-            List::new(tl!("Color Groups")).select(SelectMode::Single).selection(Bind::bound(&mut chosen)).show_items(ui, &source, &mut |key, _| {
+        let out = List::new(tl!("Color Groups")).select(SelectMode::Single).max_rows(GROUP_ROWS).selection(Bind::bound(&mut chosen)).show_items(
+            ui,
+            &source,
+            &mut |key, _| {
                 let colors: Vec<egui::Color32> = feed.groups.get(*key).map(|(_, cs)| cs.iter().map(c32).collect()).unwrap_or_default();
                 ListRow::new(names.get(*key).cloned().unwrap_or_default())
                     .thumb_aspect(ThumbSize::Small, ThumbAspect::new(4, 1), move |cx, rect| cx.data_shapes(chips(rect, &colors)))
-            });
+            },
+        );
         for event in out.events {
             if let CollectionEvent::Selection { change, .. } = event {
                 picked = match change {
