@@ -2547,9 +2547,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
 
 - `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects
   and directives, such as `$`, `alert`, `UnitValue`, `#target` and `#targetengine`), `dom` (the reference app's
-  document model), `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the reference app has:
-  palettes, BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading, reflection, actions
-  and `selectTool`).
+  document model), `files`, `menuCommands`, `dialogs` (dialogs and palettes), and `hostOnly` (features only the
+  reference app has: BridgeTalk, sockets, native code, XMP, the XML object and E4X, operator overloading,
+  reflection, actions and `selectTool`).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
   `locale`. A directive is read where it starts a line, written `#name` or `//@name`.
@@ -2902,8 +2902,9 @@ https://extendscript.docsforadobe.dev/user-interface-tools/control-objects/ and
 https://extendscript.docsforadobe.dev/user-interface-tools/types-of-controls/ describe ScriptUI's `Window` and its
 controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and shows it:
 
-- `new Window("dialog"[, title, bounds, properties])` makes a dialog. Another type (`palette`, `window`) or a
-  resource string throws an `Error` that says it is not available yet.
+- `new Window("dialog"[, title, bounds, properties])` makes a dialog, and `new Window("palette", ...)` a palette,
+  which is described after the dialogs below. The type `window` and a resource string throw an `Error` that says
+  it is not available yet.
 - `container.add(type[, bounds, ...])` adds a control to the dialog, a `group` or a `panel` and returns it. The
   types are `group`, `panel`, `statictext`, `edittext`, `button`, `checkbox`, `radiobutton`, `dropdownlist`,
   `listbox`, `slider` and `progressbar`. After `bounds`, a text control takes its text and `properties` (`name`,
@@ -2965,6 +2966,45 @@ an error in a handler ends `show()`, with steps it did not use.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "var w = new Window(\"dialog\", \"Frame\"); var name = w.add(\"edittext\", undefined, \"Frame\", {name: \"name\"}); w.add(\"button\", undefined, \"OK\"); w.add(\"button\", undefined, \"Cancel\"); if (w.show() == 1) vc.log(name.text);", "answers": [{"kind": "window", "value": [{"control": "name", "event": "change", "value": "Border"}, {"control": "OK", "event": "click"}]}]}'
+```
+
+A palette is a ScriptUI window that stays open beside the documents after the script that showed it has ended, and
+that the person can use while they work (the window-object help page above). A script builds it like a dialog, with
+the same controls, handlers and limits:
+
+- A palette needs a named engine, which keeps its controls and handlers after the run. In a script without
+  `#targetengine`, or with `#targetengine main`, `new Window("palette")` throws an `Error` that says to add a
+  `#targetengine` line (see [Script engines](#script-engines)).
+- `show()` runs `onShow` and returns `undefined` at once. `hide()` hides the palette, and `show()` shows it again.
+  `close()` runs `onClose` and closes the palette unless `onClose` returns `false`; the close box does the same.
+  A palette also closes when `script.engine.drop` drops its engine, when its engine ends with an internal error,
+  and when the session ends. The palette shows its controls as `show()`, `add()`, each event's handlers and each
+  run of its engine leave them; a run that a limit or `script.stop` ended can leave it showing them as they were.
+  A handler's run reads and writes the files the person allowed the script that first showed the palette.
+- Each click, change or close the person gives a palette runs its handler as a run of its own in the palette's
+  engine, with its own report and, when it changes a document, its own Run Script undo step. While another run
+  goes on, the event waits and runs after it; events run one at a time, oldest first. While an event waits, a
+  newer click on the same control, change of the same control or close of the same palette takes its place,
+  with the newer value. A list's change ends its run with an error when a script added or removed the list's
+  items after the person chose, even if the list again holds the same texts. A text typed in a palette's field
+  that is longer than 16 KiB stays in the field with the error in the status bar, and a click or close waits
+  until it is fixed. An error in a handler ends that run like any failed run, puts the documents back, and
+  leaves the palette open. In the app, `alert`, `confirm`, `prompt` and a dialog's `show()` throw inside a
+  handler; with nobody to ask, a handler's run has no `answers` and ends at the first of them.
+- A session keeps at most 16 palettes, shown or hidden, past which `show()` throws a `RangeError`, and at most 64
+  waiting events, past which an event is refused. Hiding or closing a palette drops its waiting events. These
+  limits are VectorCraft's own.
+
+`script.palettes {}` lists the palettes in the order they were first shown: `{palettes: [{id, engine, title,
+visible, controls: [{index, kind, name, text, enabled, visible, value?, items?, selection?}]}], waiting, limit: 16,
+waitingLimit: 64}`. `script.palette.event {palette, event, control?, value?}` gives a shown palette a `click`, a
+`change` or a `close`, with `control` and `value` as in a `window` answer's step (`control` can also be a control's
+index). In the app it returns `{waiting: true, merged, waitingEvents}`, and the handler's report is later in
+`ui.inspect`'s `scriptReport`. With nobody to ask, it runs the waiting events and returns the report of this one,
+or its error. A hidden palette, a disabled or hidden control, and a control that cannot take the event are errors.
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"source": "#targetengine tools\nvar p = new Window(\"palette\", \"Tools\"); var go = p.add(\"button\", undefined, \"Add\"); go.onClick = function () { vc.run(\"shape.rectangle\", {x: 0, y: 0, width: 20, height: 20}); }; p.show();"}'
 ```
 
 The help pages https://extendscript.docsforadobe.dev/file-system-access/file-object/ and

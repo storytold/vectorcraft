@@ -2,10 +2,11 @@
 //! <https://extendscript.docsforadobe.dev/user-interface-tools/window-object/> describes it, whose
 //! drawing a host does ([`crate::Realm::define_script_ui`]).
 //!
-//! `new Window("dialog"[, title, bounds, properties])` makes a dialog, with or without `new`. A
-//! window of type `palette` or `window`, and a resource specification in place of the type, throw
-//! an `Error` that says they are not available yet. `add(type[, bounds, text, properties])` adds a
-//! control to a dialog, a `group` or a `panel` and returns it: `statictext`, `edittext`, `button`,
+//! `new Window("dialog"[, title, bounds, properties])` makes a dialog, with or without `new`, and
+//! `new Window("palette", ...)` a palette, once the host's `palette` allows it. A window of type
+//! `window`, and a resource specification in place of the type, throw an `Error` that says they are
+//! not available yet. `add(type[, bounds, text, properties])` adds a
+//! control to a dialog, a palette, a `group` or a `panel` and returns it: `statictext`, `edittext`, `button`,
 //! `checkbox`, `radiobutton`, `dropdownlist`, `listbox` (whose third argument is an array of item
 //! texts), `slider` (third to fifth: value, minimum, maximum) and `progressbar` (value, maximum).
 //! The other documented control types throw an `Error` that says they are not available yet. A
@@ -23,6 +24,15 @@
 //! open when it returns `false`. A dialog that is showing cannot be shown again, and no other dialog
 //! can be shown while one is. When `show()` ends, the host's `end` is given its result and whether
 //! it ended normally.
+//!
+//! A palette's `show()` gives the host's `paletteShow` its description and its id (none the first
+//! time), which gives back the id, then runs `onShow` and returns `undefined` without waiting.
+//! `hide()` gives `paletteHide` the id, and `close()` runs `onClose`, and unless it returns `false`
+//! gives `paletteClose` the id; a `close()` while `onClose` runs does nothing more. The realm keeps
+//! each palette the host shows until it closes. `Window.__vcPaletteEvent()` takes an event from the
+//! host's `paletteEvent` (`{palette, event, id, value}`, or `null`), gives it to that palette as a
+//! dialog takes one, and then gives `paletteUpdate` each palette's description; `add()` on a shown
+//! palette does the same for that palette, so the host's list of its controls stays in step.
 //!
 //! An element keeps its kind, its container, its controls and a list's items in properties that a
 //! script cannot change. The description lists the dialog first and every control after the
@@ -66,8 +76,14 @@ const CLOSING: &str = "__vcClosing";
 const ITEMS: &str = "__vcItems";
 const SELECTION: &str = "__vcSelection";
 const LIST: &str = "__vcList";
+const PALETTE_ID: &str = "__vcPaletteId";
+const IN_CLOSE: &str = "__vcInClose";
+/// How many times a list's items were added or removed: a palette's waiting change of the list is
+/// for the items it had then.
+const REVISION: &str = "__vcRevision";
 
-/// The objects of `Window`, kept by the realm, and the dialog that is showing.
+/// The objects of `Window`, kept by the realm, the dialog that is showing, and the palettes the
+/// host shows, shown or hidden.
 #[derive(Clone, Debug)]
 pub(crate) struct Classes {
     window_proto: ObjId,
@@ -78,6 +94,7 @@ pub(crate) struct Classes {
     selection_get: ObjId,
     selection_set: ObjId,
     showing: Option<ObjId>,
+    palettes: Vec<ObjId>,
 }
 
 impl Classes {
@@ -85,8 +102,19 @@ impl Classes {
     pub(crate) fn objects(&self) -> Vec<ObjId> {
         let mut all = vec![self.window_proto, self.control_proto, self.item_proto, self.layout, self.host, self.selection_get, self.selection_set];
         all.extend(self.showing);
+        all.extend(self.palettes.iter().copied());
         all
     }
+}
+
+/// Is `kind` a window's: a dialog's or a palette's?
+fn is_window(kind: &str) -> bool {
+    kind == "dialog" || kind == "palette"
+}
+
+/// Does `kind` hold controls?
+fn is_container(kind: &str) -> bool {
+    is_window(kind) || kind == "group" || kind == "panel"
 }
 
 /// Forgets the dialog that was showing when a run ended where it was.
@@ -254,7 +282,7 @@ fn new_element(
         set_open(i, o, "bounds", bounds.clone())?;
     }
     set_open(i, o, "layout", Value::Object(layout))?;
-    if matches!(kind, "dialog" | "group" | "panel") {
+    if is_container(kind) {
         let kids = list(i, &[], false)?;
         set_slot(i, o, KIDS, Value::Object(kids))?;
         let children = list(i, &[], true)?;
@@ -274,16 +302,24 @@ fn window_ctor(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Va
         return Err(error(i, "Window: resource specifications are not available yet; build the dialog with add()"));
     }
     let lower = kind.to_lowercase();
-    if lower == "palette" || lower == "window" {
-        return Err(error(i, &format!("Window: a window of type {lower} is not available yet; use dialog")));
+    if lower == "window" {
+        return Err(error(i, "Window: a window of type window is not available yet; use dialog or palette"));
     }
-    if lower != "dialog" {
+    if lower != "dialog" && lower != "palette" {
         return Err(error(i, "Window: the type must be dialog, palette or window"));
     }
+    if lower == "palette" {
+        let allowed = host_fn(i, "palette")?;
+        if !i.is_callable(&allowed) {
+            return Err(error(i, "Window: this host shows no palettes"));
+        }
+        i.call(&allowed, &Value::Undefined, &[])?;
+    }
+    let ty = if lower == "palette" { "palette" } else { "dialog" };
     let proto = classes(i)?.window_proto;
     let mark = i.temp_roots.len();
     let r = (|| {
-        let o = new_element(i, proto, "dialog", None, None, 0, [&arg(args, 2), &arg(args, 1), &arg(args, 3)])?;
+        let o = new_element(i, proto, ty, None, None, 0, [&arg(args, 2), &arg(args, 1), &arg(args, 3)])?;
         set_slot(i, o, COUNT, Value::Number(0.0))?;
         set_slot(i, o, ITEM_COUNT, Value::Number(0.0))?;
         Ok(Value::Object(o))
@@ -308,9 +344,13 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
         if ty.to_lowercase() != "item" {
             return Err(error(i, "add: a list holds only items"));
         }
-        return add_item(i, o, &arg(args, 1));
+        let item = add_item(i, o, &arg(args, 1))?;
+        if let Some(win) = object_slot(i, o, WINDOW)? {
+            i.rooted(std::slice::from_ref(&item), |i| update_palette(i, win))?;
+        }
+        return Ok(item);
     }
-    if !matches!(kind.as_str(), "dialog" | "group" | "panel") {
+    if !is_container(&kind) {
         return Err(error(i, &format!("add: a {kind} holds no controls")));
     }
     if ty.contains('{') {
@@ -401,6 +441,9 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
         append(i, o, KIDS, "children", Value::Object(c))?;
         set_slot(i, win, COUNT, Value::Number(count + 1.0))?;
         set_slot(i, win, ITEM_COUNT, Value::Number(items + staged as f64))?;
+        // The host's copy of a shown palette keeps each control's place in the list, which events
+        // name it by.
+        update_palette(i, win)?;
         Ok(Value::Object(c))
     })();
     i.temp_roots.truncate(mark);
@@ -433,6 +476,7 @@ fn new_item(i: &mut Interp, o: ObjId, text: Value) -> JsResult<Value> {
             set_slot(i, item, LIST, Value::Object(o))?;
             set_open(i, item, "text", text.clone())?;
             append(i, o, ITEMS, "items", Value::Object(item))?;
+            bump_revision(i, o)?;
             Ok(Value::Object(item))
         })
     })
@@ -530,7 +574,14 @@ fn remove_all(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Val
     let items = list(i, &[], true)?;
     set_open(i, o, "items", Value::Object(items))?;
     set_slot(i, o, SELECTION, Value::Number(-1.0))?;
+    bump_revision(i, o)?;
     Ok(Value::Undefined)
+}
+
+/// Counts a change of the list `o`'s items ([`REVISION`]).
+fn bump_revision(i: &mut Interp, o: ObjId) -> JsResult<()> {
+    let r = number_slot(i, o, REVISION)?;
+    set_slot(i, o, REVISION, Value::Number(r + 1.0))
 }
 
 fn kids_of(i: &Interp, o: ObjId) -> JsResult<Vec<Value>> {
@@ -597,29 +648,158 @@ fn nothing(_: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
     Ok(Value::Undefined)
 }
 
-fn dialog_of(i: &mut Interp, this: &Value, what: &str) -> JsResult<ObjId> {
+/// `this` as a window, and whether it is a palette.
+fn window_of(i: &mut Interp, this: &Value, what: &str) -> JsResult<(ObjId, bool)> {
     match kind_of(i, this)? {
-        Some((o, kind)) if kind == "dialog" => Ok(o),
+        Some((o, kind)) if is_window(&kind) => Ok((o, kind == "palette")),
         _ => Err(i.type_error(&format!("{what}: this is not a ScriptUI window"))),
     }
 }
 
-/// `close([result])`: closes the dialog that is showing once the running handler returns.
+/// `close([result])`: closes the dialog that is showing once the running handler returns, or the
+/// palette at once.
 fn close(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let o = dialog_of(i, &this, "close")?;
+    let (o, palette) = window_of(i, &this, "close")?;
     let result = match arg(args, 0) {
         Value::Undefined => 0.0,
         v => number_arg(i, &v, "close: the result")?,
     };
-    if classes(i)?.showing == Some(o) {
+    if palette {
+        close_palette(i, o)?;
+    } else if classes(i)?.showing == Some(o) {
         set_slot(i, o, CLOSING, Value::Number(result))?;
     }
     Ok(Value::Undefined)
 }
 
-/// `hide()`: closes the dialog that is showing with the result 0.
+/// `hide()`: closes the dialog that is showing with the result 0, or hides the palette, which a
+/// later `show()` shows again as it was.
 fn hide(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    close(i, this, &[], false)
+    let (o, palette) = window_of(i, &this, "hide")?;
+    if !palette {
+        return close(i, this, &[], false);
+    }
+    if let Value::Number(id) = slot(i, o, PALETTE_ID)? {
+        let f = host_fn(i, "paletteHide")?;
+        i.call(&f, &Value::Undefined, &[Value::Number(id)])?;
+    }
+    Ok(Value::Undefined)
+}
+
+fn set_palettes(i: &mut Interp, f: impl FnOnce(&mut Vec<ObjId>)) {
+    if let Some(c) = i.script_ui.as_mut() {
+        f(&mut c.palettes);
+    }
+}
+
+/// Closes the palette `win` once its `onClose` allows it: the host no longer shows it and its
+/// handlers no longer run. A `close()` while its `onClose` runs does nothing more.
+fn close_palette(i: &mut Interp, win: ObjId) -> JsResult<()> {
+    if slot(i, win, IN_CLOSE)?.truthy() {
+        return Ok(());
+    }
+    set_slot(i, win, IN_CLOSE, Value::Bool(true))?;
+    let allowed = may_close(i, win);
+    set_slot(i, win, IN_CLOSE, Value::Undefined)?;
+    if !allowed? {
+        return Ok(());
+    }
+    if let Value::Number(id) = slot(i, win, PALETTE_ID)? {
+        set_slot(i, win, PALETTE_ID, Value::Undefined)?;
+        set_palettes(i, |p| p.retain(|o| *o != win));
+        let f = host_fn(i, "paletteClose")?;
+        i.call(&f, &Value::Undefined, &[Value::Number(id)])?;
+    }
+    Ok(())
+}
+
+/// Gives the host the controls of the palette `win` as they are now, when it shows the palette.
+fn update_palette(i: &mut Interp, win: ObjId) -> JsResult<()> {
+    let Value::Number(id) = slot(i, win, PALETTE_ID)? else { return Ok(()) };
+    let (desc, ..) = describe(i, win)?;
+    let f = host_fn(i, "paletteUpdate")?;
+    i.rooted(std::slice::from_ref(&desc), |i| i.call(&f, &Value::Undefined, &[desc.clone(), Value::Number(id)]))?;
+    Ok(())
+}
+
+/// Gives the host the controls of every palette it shows, after a handler may have changed them.
+fn update_palettes(i: &mut Interp) -> JsResult<()> {
+    for win in classes(i)?.palettes {
+        update_palette(i, win)?;
+    }
+    Ok(())
+}
+
+/// Gives the host the controls of every palette the realm keeps, as a run left them
+/// ([`crate::Realm::refresh_script_ui`]); nothing without palettes.
+pub(crate) fn refresh(i: &mut Interp) -> JsResult<()> {
+    if i.script_ui.as_ref().is_none_or(|c| c.palettes.is_empty()) {
+        return Ok(());
+    }
+    update_palettes(i)
+}
+
+/// A palette's `show()`: the host shows its description at once, then `onShow` runs, and `show()`
+/// returns `undefined` without waiting.
+fn show_palette(i: &mut Interp, win: ObjId) -> JsResult<Pause> {
+    let (desc, ..) = describe(i, win)?;
+    let id = slot(i, win, PALETTE_ID)?;
+    let f = host_fn(i, "paletteShow")?;
+    Ok(Pause { host: f, args: vec![desc, id], keep: vec![Value::Object(win)], resume: palette_shown, failed: None })
+}
+
+fn palette_shown(i: &mut Interp, keep: &[Value], id: Value) -> JsResult<Value> {
+    let Some(win) = arg(keep, 0).as_object() else { return Err(Abrupt::Internal("show lost its palette".into())) };
+    let Value::Number(_) = id else { return Err(Abrupt::Internal("the host gave the palette no id".into())) };
+    set_slot(i, win, PALETTE_ID, id)?;
+    if !classes(i)?.palettes.contains(&win) {
+        set_palettes(i, |p| p.push(win));
+    }
+    handler(i, win, "onShow")?;
+    update_palette(i, win)?;
+    Ok(Value::Undefined)
+}
+
+/// `Window.__vcPaletteEvent()`, which the run of a palette's handler calls: takes the event from the
+/// host's `paletteEvent`, gives it to the palette the way a dialog takes the person's event, and
+/// gives the host every palette's controls afterward. An event for a palette that has closed does
+/// nothing.
+fn palette_event(i: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let f = host_fn(i, "paletteEvent")?;
+    let answer = i.call(&f, &Value::Undefined, &[])?;
+    let Some(ev) = answer.as_object() else { return Ok(Value::Undefined) };
+    let mark = i.temp_roots.len();
+    i.temp_roots.push(answer.clone());
+    let r = (|| {
+        let id = slot(i, ev, "palette")?;
+        let palettes = classes(i)?.palettes;
+        let mut win = None;
+        for p in palettes {
+            if matches!((slot(i, p, PALETTE_ID)?, &id), (Value::Number(a), Value::Number(b)) if a == *b) {
+                win = Some(p);
+            }
+        }
+        let Some(win) = win else { return Ok(Value::Undefined) };
+        let event = match slot(i, ev, "event")? {
+            Value::String(s) => s.to_rust_string(),
+            _ => String::new(),
+        };
+        if event == "close" {
+            close_palette(i, win)?;
+        } else {
+            let (_, nodes, ..) = describe(i, win)?;
+            i.temp_roots.push(Value::Object(nodes));
+            let count = list_values(i, nodes)?.len();
+            if !matches!(slot(i, ev, "id")?, Value::Number(n) if n >= 1.0 && n.fract() == 0.0 && (n as usize) < count) {
+                return Err(error(i, "a palette event names a control the palette no longer holds"));
+            }
+            take_event(i, win, nodes, ev, &event, None)?;
+        }
+        update_palettes(i)?;
+        Ok(Value::Undefined)
+    })();
+    i.temp_roots.truncate(mark);
+    r
 }
 
 fn host_fn(i: &mut Interp, name: &str) -> JsResult<Value> {
@@ -633,9 +813,13 @@ fn set_showing(i: &mut Interp, showing: Option<ObjId>) {
     }
 }
 
-/// `show()` on a dialog: gives its description to the host's `open`, then runs it ([`opened`]).
+/// `show()` on a dialog: gives its description to the host's `open`, then runs it ([`opened`]). On a
+/// palette: [`show_palette`].
 fn show(i: &mut Interp, this: Value, _: &[Value]) -> JsResult<Pause> {
-    let win = dialog_of(i, &this, "show")?;
+    let (win, palette) = window_of(i, &this, "show")?;
+    if palette {
+        return show_palette(i, win);
+    }
     match classes(i)?.showing {
         Some(o) if o == win => return Err(error(i, "show: this dialog is already showing")),
         Some(_) => return Err(error(i, "show: a dialog cannot open while another dialog is showing")),
@@ -745,72 +929,120 @@ fn answered(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
             }
             return next(i, win);
         }
-        let id = match slot(i, ev, "id")? {
-            Value::Number(n) if n >= 0.0 && n.fract() == 0.0 => n as usize,
-            _ => return Err(Abrupt::Internal("the host gave show an event without a control".into())),
-        };
-        let nodes = list_values(i, nodes)?;
-        let Some((c, kind)) = nodes.get(id).map(|v| kind_of(i, v)).transpose()?.flatten() else {
-            return Err(Abrupt::Internal("the host gave show an event for a control the dialog does not hold".into()));
-        };
-        let value = slot(i, ev, "value")?;
-        match event.as_str() {
-            "click" => {
-                if kind == "checkbox" {
-                    let on = i.get_value(&Value::Object(c), &key("value"))?.truthy();
-                    i.put(c, key("value"), Value::Bool(!on), true)?;
-                } else if kind == "radiobutton" {
-                    let parent = object_slot(i, c, PARENT)?;
-                    for other in parent.map(|p| kids_of(i, p)).transpose()?.unwrap_or_default() {
-                        if !same(&other, &Value::Object(c))
-                            && let Some((o, k)) = kind_of(i, &other)?
-                            && k == "radiobutton"
-                        {
-                            i.put(o, key("value"), Value::Bool(false), true)?;
-                        }
-                    }
-                    i.put(c, key("value"), Value::Bool(true), true)?;
-                }
-                if handler(i, c, "onClick")?.is_none() && kind == "button" {
-                    let is = |k: usize| matches!(arg(keep, k), Value::Number(n) if n == id as f64);
-                    if is(2) {
-                        set_slot(i, win, CLOSING, Value::Number(1.0))?;
-                    } else if is(3) {
-                        set_slot(i, win, CLOSING, Value::Number(2.0))?;
-                    }
-                }
-            }
-            "change" => {
-                match kind.as_str() {
-                    "edittext" => {
-                        i.put(c, key("text"), value, true)?;
-                        handler(i, c, "onChanging")?;
-                    }
-                    "slider" => {
-                        i.put(c, key("value"), value, true)?;
-                        handler(i, c, "onChanging")?;
-                    }
-                    _ => {
-                        let n = match value {
-                            Value::Number(n) => n,
-                            _ => -1.0,
-                        };
-                        // The index is into the items the person saw.
-                        let shown = match arg(keep, 4).as_object() {
-                            Some(lists) => list_values(i, lists)?.get(id).cloned().unwrap_or(Value::Undefined),
-                            None => Value::Undefined,
-                        };
-                        if !same(&slot(i, c, ITEMS)?, &shown) {
-                            return Err(error(i, "show: a list's items changed before the person's choice was taken"));
-                        }
-                        set_slot(i, c, SELECTION, Value::Number(n))?;
-                    }
-                }
-                handler(i, c, "onChange")?;
-            }
-            _ => return Err(Abrupt::Internal(format!("the host gave show the event {event}"))),
-        }
+        take_event(i, win, nodes, ev, &event, Some(keep))?;
         next(i, win)
+    })
+}
+
+/// A click or a change the host gave in `ev` for control `id` of `nodes` (a description's list of
+/// elements): the control takes it and its handler runs. A dialog's button without `onClick` asks
+/// to close it with 1 when it is the default element and 2 when it is the cancel element, which
+/// `keep` (`show()`'s kept values) names; a palette has no `keep`.
+fn take_event(i: &mut Interp, win: ObjId, nodes: ObjId, ev: ObjId, event: &str, keep: Option<&[Value]>) -> JsResult<()> {
+    let id = match slot(i, ev, "id")? {
+        Value::Number(n) if n >= 0.0 && n.fract() == 0.0 => n as usize,
+        _ => return Err(Abrupt::Internal("the host gave show an event without a control".into())),
+    };
+    let nodes = list_values(i, nodes)?;
+    let Some((c, kind)) = nodes.get(id).map(|v| kind_of(i, v)).transpose()?.flatten() else {
+        return Err(Abrupt::Internal("the host gave show an event for a control the dialog does not hold".into()));
+    };
+    let value = slot(i, ev, "value")?;
+    match event {
+        "click" => {
+            if kind == "checkbox" {
+                let on = i.get_value(&Value::Object(c), &key("value"))?.truthy();
+                i.put(c, key("value"), Value::Bool(!on), true)?;
+            } else if kind == "radiobutton" {
+                let parent = object_slot(i, c, PARENT)?;
+                for other in parent.map(|p| kids_of(i, p)).transpose()?.unwrap_or_default() {
+                    if !same(&other, &Value::Object(c))
+                        && let Some((o, k)) = kind_of(i, &other)?
+                        && k == "radiobutton"
+                    {
+                        i.put(o, key("value"), Value::Bool(false), true)?;
+                    }
+                }
+                i.put(c, key("value"), Value::Bool(true), true)?;
+            }
+            if handler(i, c, "onClick")?.is_none()
+                && kind == "button"
+                && let Some(keep) = keep
+            {
+                let is = |k: usize| matches!(arg(keep, k), Value::Number(n) if n == id as f64);
+                if is(2) {
+                    set_slot(i, win, CLOSING, Value::Number(1.0))?;
+                } else if is(3) {
+                    set_slot(i, win, CLOSING, Value::Number(2.0))?;
+                }
+            }
+        }
+        "change" => {
+            match kind.as_str() {
+                "edittext" => {
+                    i.put(c, key("text"), value, true)?;
+                    handler(i, c, "onChanging")?;
+                }
+                "slider" => {
+                    i.put(c, key("value"), value, true)?;
+                    handler(i, c, "onChanging")?;
+                }
+                _ => {
+                    let n = match value {
+                        Value::Number(n) => n,
+                        _ => -1.0,
+                    };
+                    match keep {
+                        // The index is into the items the person saw.
+                        Some(keep) => {
+                            let shown = match arg(keep, 4).as_object() {
+                                Some(lists) => list_values(i, lists)?.get(id).cloned().unwrap_or(Value::Undefined),
+                                None => Value::Undefined,
+                            };
+                            if !same(&slot(i, c, ITEMS)?, &shown) {
+                                return Err(error(i, "show: a list's items changed before the person's choice was taken"));
+                            }
+                        }
+                        // A palette's list may have changed while the event waited: the host gives
+                        // the items the person saw and the list's revision then.
+                        None => {
+                            let revised = match slot(i, ev, "revision")? {
+                                Value::Number(r) => r != number_slot(i, c, REVISION)?,
+                                _ => false,
+                            };
+                            if revised || !same_items(i, c, &slot(i, ev, "items")?)? || (n >= 0.0 && n as usize >= items_of(i, c)?.len()) {
+                                return Err(error(i, "a palette's list changed before the person's choice was taken"));
+                            }
+                        }
+                    }
+                    set_slot(i, c, SELECTION, Value::Number(n))?;
+                }
+            }
+            handler(i, c, "onChange")?;
+        }
+        _ => return Err(Abrupt::Internal(format!("the host gave show the event {event}"))),
+    }
+    Ok(())
+}
+
+/// Does the list `c` hold items with the texts in `seen` (an array of strings), in that order? True
+/// when `seen` is not an array.
+fn same_items(i: &mut Interp, c: ObjId, seen: &Value) -> JsResult<bool> {
+    let Some(seen) = seen.as_object() else { return Ok(true) };
+    let seen = list_values(i, seen)?;
+    let items = items_of(i, c)?;
+    if seen.len() != items.len() {
+        return Ok(false);
+    }
+    i.rooted(&items, |i| {
+        for (item, want) in items.iter().zip(&seen) {
+            let Some(item) = item.as_object() else { return Ok(false) };
+            let text = get(i, item, "text")?;
+            if i.to_str(&text)?.to_rust_string() != i.to_str(want)?.to_rust_string() {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     })
 }
 
@@ -963,8 +1195,10 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         let name = text_of(i, &name_v, "a control's name")?;
         let text_v = get(i, o, "text")?;
         let text = text_of(i, &text_v, "a control's text")?;
+        // A palette is described as a dialog is; the host knows which it shows.
+        let shown_kind = if kind == "palette" { "dialog" } else { kind.as_str() };
         let mut d: Vec<(String, Data)> = vec![
-            ("kind".into(), Data::String(kind.clone())),
+            ("kind".into(), Data::String(shown_kind.to_string())),
             ("parent".into(), Data::Number(*parent)),
             ("name".into(), Data::String(name.clone())),
             ("text".into(), Data::String(text.clone())),
@@ -981,7 +1215,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         d.push(("size".into(), numbers(i, &size, &["width", "height"], "preferredSize")?));
         let a = get_kept(i, o, "alignment")?;
         d.push(("alignment".into(), alignment(i, &a)?));
-        if matches!(kind.as_str(), "dialog" | "group" | "panel") {
+        if is_container(kind) {
             let orientation = get(i, o, "orientation")?;
             d.push(("orientation".into(), Data::String(text_of(i, &orientation, "an orientation")?.to_lowercase())));
             let ac = get_kept(i, o, "alignChildren")?;
@@ -1026,6 +1260,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
                 d.push(("items".into(), Data::Array(texts)));
                 let sel = selection_index(i, o)?.filter(|n| *n < items.len());
                 d.push(("selection".into(), sel.map_or(Data::Null, |n| Data::Number(n as f64))));
+                d.push(("revision".into(), Data::Number(number_slot(i, o, REVISION)?)));
             }
             _ => {}
         }
@@ -1079,9 +1314,21 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
         i.temp_roots.push(Value::Object(selection_get));
         let selection_set = native(i, "selection", selection_set, 1, NativeKind::Plain, false)?;
         i.temp_roots.push(Value::Object(selection_set));
-        i.script_ui = Some(Classes { window_proto, control_proto, item_proto, layout, host, selection_get, selection_set, showing: None });
+        i.script_ui = Some(Classes {
+            window_proto,
+            control_proto,
+            item_proto,
+            layout,
+            host,
+            selection_get,
+            selection_set,
+            showing: None,
+            palettes: Vec::new(),
+        });
         let window = native(i, "Window", window_ctor, 4, NativeKind::Plain, true)?;
         constructor(i, "Window", window, window_proto)?;
+        let event = native(i, "__vcPaletteEvent", palette_event, 0, NativeKind::Plain, false)?;
+        i.define(window, key("__vcPaletteEvent"), Prop::Data { value: Value::Object(event), flags: 0 })?;
         method(i, window_proto, "add", add, 4)?;
         method(i, window_proto, "findElement", find_element, 1)?;
         method(i, window_proto, "close", close, 1)?;

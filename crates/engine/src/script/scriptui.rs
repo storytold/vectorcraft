@@ -1,6 +1,9 @@
 //! ScriptUI dialogs (`new Window("dialog")`, [`vectorcraft_js::scriptui`]): the description a run
 //! gives when it shows one, checked and laid out here before the app draws it, and the events the
-//! person or `script.run`'s `answers` give back.
+//! person or `script.run`'s `answers` give back. A palette (`new Window("palette")`) is described
+//! and laid out the same way; [`super::palettes`] keeps it and its events, and the host functions
+//! `palette`, `paletteShow`, `paletteUpdate`, `paletteHide`, `paletteClose` and `paletteEvent` here
+//! act for a run in a named engine, and throw [`PALETTE_NEEDS_ENGINE`] in any other.
 //!
 //! A description lists the dialog first and each control after the container that holds it. It is
 //! refused with an error thrown at `show()` when a control's container comes after it or is not a
@@ -136,6 +139,9 @@ pub struct UiNode {
     pub max: f64,
     pub items: Vec<String>,
     pub selection: Option<usize>,
+    /// How many times a list's items were added or removed, which a palette's waiting change of
+    /// the list is checked against.
+    pub revision: f64,
     pub multiline: bool,
     pub readonly: bool,
     pub rect: UiRect,
@@ -497,6 +503,7 @@ pub fn parse(d: &Data) -> Result<ScriptUiDialog, HostError> {
             max,
             items,
             selection,
+            revision: number(field(f, "revision")).unwrap_or(0.0),
             multiline: flag("multiline"),
             readonly: flag("readonly"),
             rect: UiRect::default(),
@@ -668,7 +675,89 @@ fn function(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>
 
 /// Adds `Window` to the realm, for the run `link` holds.
 pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunError> {
-    realm.define_script_ui(vec![("open".into(), function(link, open)), ("wait".into(), function(link, wait)), ("end".into(), function(link, end))])
+    realm.define_script_ui(vec![
+        ("open".into(), function(link, open)),
+        ("wait".into(), function(link, wait)),
+        ("end".into(), function(link, end)),
+        ("palette".into(), function(link, palette)),
+        ("paletteShow".into(), function(link, palette_show)),
+        ("paletteUpdate".into(), function(link, palette_update)),
+        ("paletteHide".into(), function(link, palette_hide)),
+        ("paletteClose".into(), function(link, palette_close)),
+        ("paletteEvent".into(), function(link, palette_event)),
+    ])
+}
+
+/// The error of `new Window("palette")` in a run without a named engine.
+pub const PALETTE_NEEDS_ENGINE: &str = "Window: a palette needs a named engine, which keeps its controls and handlers after the script ends; put a #targetengine line with a name other than main at the top of the script";
+
+/// The named engine of the run, for a palette.
+fn palette_engine(host: &Host) -> Result<&str, HostError> {
+    host.engine.as_deref().ok_or_else(|| HostError::Error(PALETTE_NEEDS_ENGINE.into()))
+}
+
+/// A palette's id as a script holds it: a whole number from 1, or none.
+fn palette_id(d: Option<&Data>) -> Option<u64> {
+    match d {
+        Some(Data::Number(n)) if *n >= 1.0 && n.fract() == 0.0 && *n < 9.0e15 => Some(*n as u64),
+        _ => None,
+    }
+}
+
+/// `new Window("palette")`: refused in a run without a named engine.
+fn palette(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    palette_engine(host)?;
+    Ok(Data::Undefined)
+}
+
+/// A palette's `show()`, with its description and its id (none the first time). → its id.
+fn palette_show(host: &Host, args: &[Data]) -> Result<Data, HostError> {
+    let engine = palette_engine(host)?.to_string();
+    let dialog = described(host, args)?;
+    let id = palette_id(args.get(1));
+    let grants = host.disk.borrow().own().to_string();
+    let shown = host.session.borrow_mut().script_palettes.show(id, &engine, (host.file.clone(), grants), dialog);
+    shown.map(|id| Data::Number(id as f64)).map_err(HostError::Range)
+}
+
+/// The palette `id`'s controls as a handler or `add()` left them.
+fn palette_update(host: &Host, args: &[Data]) -> Result<Data, HostError> {
+    let engine = palette_engine(host)?.to_string();
+    let dialog = described(host, args)?;
+    if let Some(id) = palette_id(args.get(1)) {
+        host.session.borrow_mut().script_palettes.update(id, &engine, dialog);
+    }
+    Ok(Data::Undefined)
+}
+
+fn palette_hide(host: &Host, args: &[Data]) -> Result<Data, HostError> {
+    let engine = palette_engine(host)?.to_string();
+    if let Some(id) = palette_id(args.first()) {
+        host.session.borrow_mut().script_palettes.hide(id, &engine);
+    }
+    Ok(Data::Undefined)
+}
+
+fn palette_close(host: &Host, args: &[Data]) -> Result<Data, HostError> {
+    let engine = palette_engine(host)?.to_string();
+    if let Some(id) = palette_id(args.first()) {
+        host.session.borrow_mut().script_palettes.close(id, &engine);
+    }
+    Ok(Data::Undefined)
+}
+
+/// The event a palette handler's run is for, once: `{palette, event, id, value, items}`, as `show()`
+/// takes a dialog's event with the palette's id added, and for a list's change the items the
+/// palette showed; `null` for any other run, and after the first call.
+fn palette_event(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    let Some(queued) = host.palette_event.borrow_mut().take() else { return Ok(Data::Null) };
+    let Data::Object(mut fields) = queued.event.data() else { return Ok(Data::Null) };
+    fields.push(("palette".into(), Data::Number(queued.palette as f64)));
+    if let Some((items, revision)) = queued.list {
+        fields.push(("items".into(), Data::Array(items.into_iter().map(Data::String).collect())));
+        fields.push(("revision".into(), Data::Number(revision)));
+    }
+    Ok(Data::Object(fields))
 }
 
 fn described(host: &Host, args: &[Data]) -> Result<ScriptUiDialog, HostError> {

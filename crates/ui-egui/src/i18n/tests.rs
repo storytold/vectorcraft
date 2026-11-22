@@ -5760,6 +5760,39 @@ fn f(p: &Value) -> Result<()> {
     assert_eq!(source_messages(code, &engine, &consts), ["the name is too long", "`path` is empty"]);
 }
 
+/// The status a ScriptUI palette's click shows when the line of waiting events is full is
+/// translated in every language that translates every message, with the count kept.
+#[test]
+fn script_palette_line_full_is_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::script::UiEvent;
+    let template = "{MAX_WAITING} script palette events already wait; this one was not kept";
+    assert!(message_literals().contains(template));
+    let mut s = vectorcraft_engine::Session::new();
+    let source = "#targetengine tools\nvar p = new Window('palette'); for (var i = 0; i < 70; i++) p.add('button', undefined, 'B' + i); p.show();";
+    s.execute("script.run", &json!({"source": source})).unwrap();
+    let id = s.script_palettes()[0].id;
+    s.script_frames = true;
+    assert_eq!(s.execute("script.run", &json!({"source": "confirm('Go?');"})).unwrap()["running"], true);
+    while s.script_dialog().is_none() {
+        assert!(s.script_pump().is_none(), "the run waits at its confirm");
+    }
+    let mut full = None;
+    for c in 1..=70 {
+        if let Err(e) = s.script_palette_event(id, UiEvent::Click(c)) {
+            full = Some(e);
+            break;
+        }
+    }
+    let full = full.expect("the line filled");
+    assert_eq!(full, template.replace("{MAX_WAITING}", "64"));
+    for code in COMPLETE_MESSAGES {
+        let shown = message(Lang::from_code(code).expect("registered"), &full);
+        assert_ne!(shown, full, "{code}");
+        assert!(shown.contains("64"), "{code}: {shown}");
+    }
+}
+
 /// `script.run`'s refusals of `answers`, the list's own, an answer's at its index and the refusal
 /// of `answers` in the app, are translated in every language that translates every message, with
 /// the index, the counts and the code names kept. The command's error stays in English.

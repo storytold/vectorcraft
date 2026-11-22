@@ -176,6 +176,7 @@
 @msg	`answer` for this {kind} dialog must be one of: {_1}	დიალოგისთვის (ტიპი: {kind}) `answer` უნდა იყოს ერთ-ერთი: {_1}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` შეიცავს {MAX_ANSWERS}-ზე მეტ პასუხს
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	სკრიპტის პალიტრების {MAX_WAITING} მოვლენა უკვე ელოდება; ეს არ შენარჩუნდა
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB-ზე დიდია
 @msg	`answers` must be a list of answers	`answers` უნდა იყოს პასუხების სია
 @msg	`artboard` must be the index of an artboard of the document	`artboard` უნდა იყოს დოკუმენტის სამუშაო დაფის ინდექსი

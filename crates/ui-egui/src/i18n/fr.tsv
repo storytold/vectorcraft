@@ -8853,6 +8853,7 @@ breakText	Glyphs	Glyphes
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` doit lister des indices de points d’ancrage (0, 1, 2…), pas {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pour cette boîte de dialogue {kind} doit valoir l’une de ces valeurs : {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` contient plus de {MAX_ANSWERS} réponses
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} événements de palettes de script attendent déjà, celui-ci n’a donc pas été conservé
 @msg	`answers` is larger than 1 MiB	`answers` dépasse 1 Mio
 @msg	`answers` must be a list of answers	`answers` doit être une liste de réponses
 @msg	`artboard` must be the index of an artboard of the document	`artboard` doit être l’indice d’un plan de travail du document

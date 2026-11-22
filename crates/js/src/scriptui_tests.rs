@@ -232,7 +232,8 @@ fn a_dialog_can_be_shown_again_after_it_closed() {
 #[test]
 fn types_that_are_not_available_yet_throw_errors_that_say_so() {
     for (source, want) in [
-        ("new Window('palette')", "Window: a window of type palette is not available yet; use dialog"),
+        ("new Window('window')", "Window: a window of type window is not available yet; use dialog or palette"),
+        ("new Window('palette')", "Window: this host shows no palettes"),
         ("new Window('dialog { b: Button {} }')", "Window: resource specifications are not available yet; build the dialog with add()"),
         ("new Window('dialog').add('tabbedpanel')", "add: the control type tabbedpanel is not available yet"),
         ("new Window('dialog').add('wobble')", "add: there is no control type wobble"),
@@ -371,6 +372,129 @@ fn a_show_that_waits_resumes_with_the_host_s_answer() {
     r.answer(click(5)).unwrap();
     assert_eq!(r.advance(1_000_000).unwrap(), Progress::Done(JsValue::String("1:clicked".into())));
     assert_eq!(seen.borrow().ends, vec![(1.0, true)]);
+}
+
+/// What a palette host was asked: each call's name and its palette id (0 for none).
+type Calls = Rc<RefCell<Vec<(String, f64)>>>;
+
+/// A realm with palette host functions: `paletteShow` gives ids from 1, and `paletteEvent` gives
+/// the events in `events`, in order, then `null`.
+fn palette_realm(events: Vec<Data>) -> (Realm, Calls) {
+    let mut r = Realm::new();
+    r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+    let calls: Calls = Rc::default();
+    let events = Rc::new(RefCell::new(VecDeque::from(events)));
+    let id_of = |args: &[Data], at: usize| match args.get(at) {
+        Some(Data::Number(n)) => *n,
+        _ => 0.0,
+    };
+    let record = |name: &'static str, at: usize| -> HostFunction {
+        let c = calls.clone();
+        Rc::new(move |args| {
+            c.borrow_mut().push((name.to_string(), id_of(&args, at)));
+            Ok(Data::Undefined)
+        })
+    };
+    let c = calls.clone();
+    let show: HostFunction = Rc::new(move |args| {
+        let given = id_of(&args, 1);
+        let id = if given > 0.0 { given } else { 1.0 + c.borrow().iter().filter(|(n, _)| n == "paletteShow").count() as f64 };
+        c.borrow_mut().push(("paletteShow".into(), id));
+        Ok(Data::Number(id))
+    });
+    let event: HostFunction = Rc::new(move |_| Ok(events.borrow_mut().pop_front().unwrap_or(Data::Null)));
+    let none: HostFunction = Rc::new(|_| Err(HostError::Error("no dialog here".into())));
+    let items = vec![
+        ("open".into(), HostItem::Function(none.clone())),
+        ("wait".into(), HostItem::Function(none.clone())),
+        ("end".into(), HostItem::Function(none)),
+        ("palette".into(), HostItem::Function(record("palette", 0))),
+        ("paletteShow".into(), HostItem::Function(show)),
+        ("paletteUpdate".into(), HostItem::Function(record("paletteUpdate", 1))),
+        ("paletteHide".into(), HostItem::Function(record("paletteHide", 0))),
+        ("paletteClose".into(), HostItem::Function(record("paletteClose", 0))),
+        ("paletteEvent".into(), HostItem::Function(event)),
+    ];
+    r.define_script_ui(items).unwrap();
+    (r, calls)
+}
+
+fn palette_event(palette: f64, event: Data) -> Data {
+    let Data::Object(mut fields) = event else { return Data::Null };
+    fields.push(("palette".into(), Data::Number(palette)));
+    Data::Object(fields)
+}
+
+fn names(calls: &Calls) -> Vec<String> {
+    calls.borrow().iter().map(|(n, _)| n.clone()).collect()
+}
+
+#[test]
+fn a_palette_s_show_returns_at_once_and_its_events_run_its_handlers() {
+    let (mut r, calls) = palette_realm(vec![palette_event(1.0, click(2)), palette_event(1.0, change(3, Data::String("typed".into())))]);
+    let made = r
+        .run(
+            "var p = new Window('palette', 'Tools'); var label = p.add('statictext', undefined, 'idle'); \
+             var b = p.add('button', undefined, 'Go'); var t = p.add('edittext', undefined, ''); var log = []; \
+             b.onClick = function () { log.push('click'); label.text = 'clicked'; }; \
+             t.onChange = function () { log.push('change ' + t.text); }; String(p.show())",
+        )
+        .unwrap();
+    assert_eq!(made, JsValue::String("undefined".into()), "show() gives undefined without waiting");
+    assert_eq!(names(&calls), ["palette", "paletteShow", "paletteUpdate"]);
+    r.run("Window.__vcPaletteEvent(); Window.__vcPaletteEvent();").unwrap();
+    assert_eq!(r.run("log.join('|') + '|' + label.text").unwrap(), JsValue::String("click|change typed|clicked".into()));
+    assert_eq!(calls.borrow().iter().filter(|(n, id)| n == "paletteUpdate" && *id == 1.0).count(), 3, "each event gives the host the new controls");
+    assert_eq!(r.run("Window.__vcPaletteEvent(); 'nothing'").unwrap(), JsValue::String("nothing".into()), "no event left: nothing runs");
+}
+
+#[test]
+fn closing_a_palette_runs_on_close_which_can_keep_it_open() {
+    let (mut r, calls) = palette_realm(vec![palette_event(1.0, close()), palette_event(1.0, close()), palette_event(1.0, click(1))]);
+    r.run(
+        "var p = new Window('palette'); var b = p.add('button', undefined, 'Go'); var clicks = 0; b.onClick = function () { clicks++; }; \
+         var asked = 0; p.onClose = function () { asked++; p.close(); return asked > 1; }; p.show();",
+    )
+    .unwrap();
+    r.run("Window.__vcPaletteEvent();").unwrap();
+    assert!(!names(&calls).contains(&"paletteClose".to_string()), "the first onClose kept it open");
+    r.run("Window.__vcPaletteEvent(); Window.__vcPaletteEvent();").unwrap();
+    assert_eq!(r.run("[asked, clicks].join()").unwrap(), JsValue::String("2,0".into()), "a close inside onClose does not run it again");
+    assert_eq!(calls.borrow().iter().filter(|(n, _)| n == "paletteClose").count(), 1);
+    assert!(calls.borrow().contains(&("paletteClose".into(), 1.0)));
+}
+
+#[test]
+fn a_palette_list_change_after_its_items_changed_throws() {
+    let seen = |index: f64| {
+        let Data::Object(mut fields) = palette_event(1.0, change(1, Data::Number(index))) else { return Data::Null };
+        fields.push(("items".into(), Data::Array(vec![Data::String("a".into()), Data::String("b".into())])));
+        // The two items the list was made with.
+        fields.push(("revision".into(), Data::Number(2.0)));
+        Data::Object(fields)
+    };
+    let (mut r, _) = palette_realm(vec![seen(1.0), seen(1.0), seen(1.0), seen(1.0)]);
+    r.run("var p = new Window('palette'); var l = p.add('listbox', undefined, ['a', 'b']); var got = []; l.onChange = function () { got.push(String(l.selection)); }; p.show();")
+        .unwrap();
+    r.run("Window.__vcPaletteEvent(); l.removeAll(); l.add('item', 'c'); l.add('item', 'd');").unwrap();
+    let message = "a palette's list changed before the person's choice was taken";
+    let e = r.run("try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
+    assert_eq!(e, JsValue::String(message.into()), "the same number of items, other texts");
+    r.run("l.removeAll(); l.add('item', 'a');").unwrap();
+    let e = r.run("try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
+    assert_eq!(e, JsValue::String(message.into()), "fewer items");
+    r.run("l.removeAll(); l.add('item', 'a'); l.add('item', 'b');").unwrap();
+    let e = r.run("try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
+    assert_eq!(e, JsValue::String(message.into()), "new items with the same texts");
+    assert_eq!(r.run("got.join()").unwrap(), JsValue::String("b".into()));
+}
+
+#[test]
+fn hide_keeps_the_palette_and_show_shows_it_again_with_the_same_id() {
+    let (mut r, calls) = palette_realm(Vec::new());
+    r.run("var p = new Window('palette'); p.add('button', undefined, 'Go'); p.show(); p.hide(); p.show();").unwrap();
+    let shows: Vec<f64> = calls.borrow().iter().filter(|(n, _)| n == "paletteShow" || n == "paletteHide").map(|(_, id)| *id).collect();
+    assert_eq!(shows, [1.0, 1.0, 1.0]);
 }
 
 #[test]

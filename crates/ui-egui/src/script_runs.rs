@@ -2,7 +2,8 @@
 //! its end, while the app goes on drawing the documents as they were before the run. The status bar
 //! shows it with a Stop button; a run that has added a great deal, or that opened a dialog with
 //! `alert`, `confirm`, `prompt`, a ScriptUI dialog's `show()` or a `File` or `Folder` file dialog,
-//! waits for the person's answer.
+//! waits for the person's answer. With no run going, the oldest event a ScriptUI palette waits
+//! with starts its run ([`crate::script_palettes`]).
 
 use serde_json::json;
 
@@ -13,7 +14,8 @@ use crate::state::Dialog;
 /// Advances the running script by one slice, or asks what its growth needs asked.
 pub fn poll(app: &mut VectorcraftApp) {
     script_run::drain(app);
-    if !app.session.script_running() {
+    // With no run going, a waiting palette event starts its run.
+    if !app.session.script_running() && !crate::script_palettes::start_next(app) {
         return;
     }
     script_run::settle_close(app);

@@ -4951,6 +4951,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	there is no script engine named {name}	det finns ingen skriptmotor med namnet {name}
 @msg	`answers` must be a list of answers	`answers` måste vara en lista med svar
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har fler än {MAX_ANSWERS} svar
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} händelser från skriptpaletter väntar redan; den här sparades inte
 @msg	`answers` is larger than 1 MiB	`answers` är större än 1 MiB
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	must be an object with `kind` and `value`	måste vara ett objekt med `kind` och `value`

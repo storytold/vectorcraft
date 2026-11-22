@@ -6493,6 +6493,7 @@ imageTrace	Outline	Contour
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` moet ankerindexen bevatten (0, 1, 2…), niet {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` voor dit dialoogvenster {kind} moet een van de volgende zijn: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` heeft meer dan {MAX_ANSWERS} antwoorden
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	er wachten al {MAX_WAITING} gebeurtenissen van scriptpaletten; deze is niet bewaard
 @msg	`answers` is larger than 1 MiB	`answers` is groter dan 1 MiB
 @msg	`answers` must be a list of answers	`answers` moet een lijst met antwoorden zijn
 @msg	`artboard` must be the index of an artboard of the document	`artboard` moet de index van een tekengebied van het document zijn

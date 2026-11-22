@@ -2779,6 +2779,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	there is no script engine named {name}	δεν υπάρχει μηχανή σεναρίων με όνομα {name}
 @msg	`answers` must be a list of answers	το `answers` πρέπει να είναι λίστα απαντήσεων
 @msg	`answers` has more than {MAX_ANSWERS} answers	το `answers` έχει περισσότερες από {MAX_ANSWERS} απαντήσεις
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	ήδη περιμένουν {MAX_WAITING} συμβάντα παλετών σεναρίων· αυτό δεν κρατήθηκε
 @msg	`answers` is larger than 1 MiB	το `answers` είναι μεγαλύτερο από 1 MiB
 @msg	`answers[{i}]` {e}	το `answers[{i}]` {e}
 @msg	must be an object with `kind` and `value`	πρέπει να είναι αντικείμενο με `kind` και `value`

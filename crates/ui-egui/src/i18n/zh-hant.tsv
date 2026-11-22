@@ -8621,6 +8621,7 @@ breakText	Glyphs	字符
 @msg	`align` must be a string	`align` 必須是字串
 @msg	`answer` for this {kind} dialog must be one of: {_1}	此 {kind} 對話框的 `answer` 必須是下列其中之一：{_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 的答案超過 {MAX_ANSWERS} 個
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	已有 {MAX_WAITING} 個指令碼面板事件在等待；此事件未保留
 @msg	`answers` is larger than 1 MiB	`answers` 大於 1 MiB
 @msg	`answers` must be a list of answers	`answers` 必須是答案清單
 @msg	`artboard` must be the index of an artboard of the document	`artboard` 必須是文件中某個工作區域的索引

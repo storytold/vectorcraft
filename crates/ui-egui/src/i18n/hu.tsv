@@ -8857,6 +8857,7 @@ breakText	Glyphs	Glifák
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors`: horgonypont-indexek listája kell (0, 1, 2…), ez nem az: {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer`: ennél a párbeszédablaknál ({kind}) ezek egyike kell: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers`: több mint {MAX_ANSWERS} választ tartalmaz
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	már {MAX_WAITING} parancsfájlpaletta-esemény várakozik; ez nem lett megtartva
 @msg	`answers` is larger than 1 MiB	`answers`: nagyobb 1 MiB-nál
 @msg	`answers` must be a list of answers	`answers`: válaszok listája kell
 @msg	`artboard` must be the index of an artboard of the document	`artboard`: a dokumentum egyik rajztáblájának indexe kell

@@ -368,6 +368,11 @@ impl VectorcraftApp {
         crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
         crate::dialogs::proof_setup::poll(self, ctx);
+        // A palette event whose run starts on the next frame. While a run goes on, the block below
+        // asks for its frames, and a run that waits for the person goes on at their next input.
+        if self.session.script_palette_events_waiting() > 0 && !self.session.script_running() {
+            ctx.request_repaint();
+        }
         if self.session.script_running()
             && !self.session.script_waiting()
             && self.session.script_dialog().is_none()
@@ -638,6 +643,7 @@ impl VectorcraftApp {
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));
         panels::learn::locate::tidy(self, &ctx);
         crate::doc_windows::show(self, &ctx);
+        crate::script_palettes::show(self, &ctx);
         dialogs::show(self, &ctx);
         updates_ui::show(self, &ctx);
         export_progress::show(self, &ctx);

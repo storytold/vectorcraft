@@ -5076,6 +5076,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	there is no script engine named {name}	движка скриптов с именем {name} нет
 @msg	`answers` must be a list of answers	`answers` должен быть списком ответов
 @msg	`answers` has more than {MAX_ANSWERS} answers	в `answers` больше {MAX_ANSWERS} ответов
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	уже ожидают {MAX_WAITING} событий палитр скриптов; это событие не сохранено
 @msg	`answers` is larger than 1 MiB	`answers` больше 1 МиБ
 @msg	must be an object with `kind` and `value`	должен быть объектом с `kind` и `value`
 @msg	must have exactly `kind` and `value`	должен содержать ровно `kind` и `value`

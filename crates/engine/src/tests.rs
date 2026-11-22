@@ -176,6 +176,7 @@ mod script_engines;
 mod script_folder;
 mod script_include;
 mod script_io;
+mod script_palettes;
 mod script_run;
 mod script_scriptui;
 mod scripts;

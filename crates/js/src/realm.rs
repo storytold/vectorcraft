@@ -502,6 +502,16 @@ impl Realm {
         }
     }
 
+    /// Gives the host's `paletteUpdate` the controls of each ScriptUI palette this realm keeps, as
+    /// the run that just ended left them; nothing when it keeps none. A getter it reads runs in the
+    /// run's fuel, and what it throws ends the run.
+    pub fn refresh_script_ui(&mut self) -> Result<(), RunError> {
+        match crate::scriptui::refresh(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,

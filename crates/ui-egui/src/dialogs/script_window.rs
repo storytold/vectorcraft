@@ -215,7 +215,13 @@ pub(crate) fn prompt_of(w: &ScriptUiDialog, i: usize) -> &str {
 
 /// Draws control `i` (`n`, with the prompt [`prompt_of`] gives) at its place from `origin`. → the
 /// event it gives.
-fn control(ui: &mut egui::Ui, d: &mut Dialog, origin: egui::Pos2, (i, n, prompt): (usize, &UiNode, &str), default: bool) -> Option<UiEvent> {
+pub(crate) fn control(
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    origin: egui::Pos2,
+    (i, n, prompt): (usize, &UiNode, &str),
+    default: bool,
+) -> Option<UiEvent> {
     let rect = egui::Rect::from_min_size(origin + egui::vec2(n.rect.x, n.rect.y), egui::vec2(n.rect.w, n.rect.h));
     let t = Tokens::get(ui.ctx());
     let mut event = None;

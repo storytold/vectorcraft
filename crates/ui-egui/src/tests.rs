@@ -42,6 +42,7 @@ mod screenmode;
 mod screenshots;
 mod script_check;
 mod script_dialogs;
+mod script_palettes;
 mod script_run;
 mod script_window;
 mod scripts_menu;

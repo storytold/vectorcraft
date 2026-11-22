@@ -133,6 +133,7 @@
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` tidak memiliki jawaban tersisa untuk dialog ini
 @msg	`answers` must be a list of answers	`answers` harus berupa daftar jawaban
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` berisi lebih dari {MAX_ANSWERS} jawaban
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} peristiwa palet skrip sudah menunggu; yang ini tidak disimpan
 @msg	`answers` is larger than 1 MiB	`answers` lebih besar dari 1 MiB
 @msg	must be an object with `kind` and `value`	harus berupa objek dengan `kind` dan `value`
 @msg	must have exactly `kind` and `value`	harus memiliki tepat `kind` dan `value`

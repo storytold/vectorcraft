@@ -7669,6 +7669,7 @@ axis	Y Axis	Y ekseni
 @msg	`align` must be a string	`align` bir dize olmalıdır
 @msg	`answer` for this {kind} dialog must be one of: {_1}	bu {kind} iletişim kutusu için `answer` şunlardan biri olmalıdır: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` içinde {MAX_ANSWERS} taneden fazla yanıt var
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} betik paleti olayı zaten bekliyor; bu olay tutulmadı
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB'tan büyük
 @msg	`answers` must be a list of answers	`answers` bir yanıt listesi olmalıdır
 @msg	`artboard` must be the index of an artboard of the document	`artboard`, belgedeki bir çalışma yüzeyinin dizini olmalıdır

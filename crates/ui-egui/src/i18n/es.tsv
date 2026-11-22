@@ -5054,6 +5054,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
 @msg	`answers` must be a list of answers	`answers` debe ser una lista de respuestas
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tiene más de {MAX_ANSWERS} respuestas
+@msg	{MAX_WAITING} script palette events already wait; this one was not kept	ya esperan {MAX_WAITING} eventos de paletas de scripts; este no se ha conservado
 @msg	`answers` is larger than 1 MiB	`answers` ocupa más de 1 MiB
 @msg	must be an object with `kind` and `value`	debe ser un objeto con `kind` y `value`
 @msg	must have exactly `kind` and `value`	debe tener exactamente `kind` y `value`
