@@ -7,7 +7,9 @@
 //! about the point the object turns about: in points in OBJ and USD (whose layer says how many
 //! meters a unit is), in meters in glTF, as its specification asks. glTF and USD colors are linear,
 //! as their specifications ask; MTL colors are the display colors. Materials are two-sided, since
-//! an open solid or a turned plane is seen from both sides.
+//! an open solid or a turned plane is seen from both sides. Every corner carries its normal and
+//! texture coordinates (`vt`, `TEXCOORD_0`, `primvars:st`); a mesh whose lists do not match, or
+//! that holds a value that is not a number, is refused before anything is written.
 //!
 //! The graphics mapped onto a face of a solid ([`textures`]) are a PNG picture of that face: its
 //! color with the graphics drawn over it, flat and unshaded, which the face's own mesh shows through
@@ -140,6 +142,7 @@ pub(crate) fn image_maps(textures: &[Option<Texture>]) -> Vec<bool> {
 /// OBJ with its MTL after it and the PNG files of `textures` last (an OBJ's opacity maps each after
 /// its texture). `textures` holds the picture of each part that has one, in the order of `parts`.
 pub(crate) fn mesh_files(stem: &str, format: &str, parts: &[SolidMesh], textures: &[Option<Texture>]) -> Result<Vec<(String, Vec<u8>)>, String> {
+    check_parts(parts)?;
     let (images, image) = images(parts.len(), textures);
     let maps: Vec<bool> = images.iter().map(|(_, map)| map.is_some()).collect();
     let names = mesh_file_names(stem, format, &maps)?;
@@ -180,6 +183,21 @@ impl Scene<'_> {
         let t = self.textures.get(k)?.as_ref()?;
         Some((t.uv.as_slice(), (*self.image.get(k)?)?))
     }
+
+    /// Part `k`'s texture coordinates, one for each corner, 0 to 1 across from the left and down
+    /// from the top: its picture's when it has one, else its mesh's own.
+    fn coords(&self, k: usize) -> Option<&[[f64; 2]]> {
+        let count = self.parts.get(k)?.mesh.positions.len();
+        let own = self.parts.get(k).map(|p| p.mesh.uvs.as_slice());
+        self.texture(k).map(|(uv, _)| uv).into_iter().chain(own).find(|uv| uv.len() == count && count > 0)
+    }
+}
+
+/// An error when a part's mesh cannot be written as it is: its lists do not match, or a
+/// position, normal or texture coordinate is not a number
+/// ([`vectorcraft_render::effects::Mesh::check`]).
+fn check_parts(parts: &[SolidMesh]) -> Result<(), String> {
+    parts.iter().try_for_each(|p| p.mesh.check())
 }
 
 /// A material: a color, with a picture that replaces its red, green and blue.
@@ -230,7 +248,7 @@ fn obj(stem: &str, scene: &Scene) -> (String, String) {
     }
     // OBJ's texture coordinates run up from the picture's bottom.
     for k in 0..parts.len() {
-        for uv in scene.texture(k).map(|(uv, _)| uv).unwrap_or_default() {
+        for uv in scene.coords(k).unwrap_or_default() {
             let _ = writeln!(o, "vt {} {}", num(uv[0]), num(1.0 - uv[1]));
         }
     }
@@ -243,9 +261,9 @@ fn obj(stem: &str, scene: &Scene) -> (String, String) {
     for (k, p) in parts.iter().enumerate() {
         let _ = writeln!(o, "g Solid_{}", k + 1);
         let _ = writeln!(o, "usemtl Material_{}", material.get(k).copied().unwrap_or(0) + 1);
-        let textured = scene.texture(k).filter(|(uv, _)| uv.len() == p.mesh.positions.len()).is_some();
+        let coords = scene.coords(k).is_some();
         for t in &p.mesh.triangles {
-            if textured {
+            if coords {
                 let [a, b, c] = t.map(|i| i as usize);
                 let corner = |i: usize| format!("{}/{}/{}", i + base, i + uv_base, i + base);
                 let _ = writeln!(o, "f {} {} {}", corner(a), corner(b), corner(c));
@@ -255,7 +273,7 @@ fn obj(stem: &str, scene: &Scene) -> (String, String) {
             }
         }
         base += p.mesh.positions.len();
-        uv_base += scene.texture(k).map_or(0, |(uv, _)| uv.len());
+        uv_base += scene.coords(k).map_or(0, <[_]>::len);
     }
     let mut m = String::new();
     for (k, mat) in materials.iter().enumerate() {
@@ -313,7 +331,7 @@ fn gltf(stem: &str, scene: &Scene) -> String {
             "material": material.get(k).copied().unwrap_or(0),
         });
         // glTF's texture coordinates run down from the picture's top, as the picture's own do.
-        if let Some((uv, _)) = scene.texture(k).filter(|(uv, _)| uv.len() == count) {
+        if let Some(uv) = scene.coords(k) {
             let bytes = uv.iter().flatten().flat_map(|x| (*x as f32).to_le_bytes()).collect();
             let coords = view(&mut buffer, bytes, 34962);
             primitive["attributes"]["TEXCOORD_0"] = json!(accessors.len());
@@ -415,7 +433,7 @@ fn usda(stem: &str, scene: &Scene) -> String {
         );
         let _ = writeln!(u, "        float[] primvars:displayOpacity = [{}] (\n            interpolation = \"constant\"\n        )", c[3]);
         // USD's texture coordinates run up from the picture's bottom.
-        if let Some((uv, _)) = scene.texture(k).filter(|(uv, _)| uv.len() == p.mesh.positions.len()) {
+        if let Some(uv) = scene.coords(k) {
             let st = list(uv.iter().map(|t| format!("({}, {})", num(t[0]), num(1.0 - t[1]))).collect());
             let _ = writeln!(u, "        texCoord2f[] primvars:st = [{st}] (\n            interpolation = \"vertex\"\n        )");
         }

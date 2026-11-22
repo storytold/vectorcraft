@@ -1,12 +1,18 @@
 use serde_json::Value;
-use vectorcraft_render::effects::{Mesh, SolidMesh};
+use vectorcraft_render::effects::{Mesh, MeshPart, SolidMesh};
 
 use super::*;
 
 /// A 10 × 10 square facing the viewer: two triangles, each with corners of its own.
 fn square(color: [f32; 4]) -> SolidMesh {
     let [a, b, c, d] = [[-5.0, -5.0, 0.0], [5.0, -5.0, 0.0], [5.0, 5.0, 0.0], [-5.0, 5.0, 0.0]];
-    let mesh = Mesh { positions: vec![a, b, c, a, c, d], normals: vec![[0.0, 0.0, 1.0]; 6], triangles: vec![[0, 1, 2], [3, 4, 5]] };
+    let mesh = Mesh {
+        positions: vec![a, b, c, a, c, d],
+        normals: vec![[0.0, 0.0, 1.0]; 6],
+        uvs: vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]],
+        triangles: vec![[0, 1, 2], [3, 4, 5]],
+        parts: vec![MeshPart::Front; 2],
+    };
     SolidMesh::plain(mesh, color)
 }
 
@@ -31,8 +37,9 @@ fn obj_numbers_corners_across_solids_and_names_its_materials() {
     assert!(obj.starts_with("mtllib Box.mtl\no Box\n"));
     assert_eq!(obj.lines().filter(|l| l.starts_with("v ")).count(), 18);
     assert_eq!(obj.lines().filter(|l| l.starts_with("vn ")).count(), 18);
+    assert_eq!(obj.lines().filter(|l| l.starts_with("vt ")).count(), 18);
     // The third solid's last triangle uses corners 13 to 18; red solids share Material_1.
-    assert_eq!(obj.lines().rfind(|l| l.starts_with("f ")), Some("f 16//16 17//17 18//18"));
+    assert_eq!(obj.lines().rfind(|l| l.starts_with("f ")), Some("f 16/16/16 17/17/17 18/18/18"));
     assert_eq!(obj.lines().filter(|l| l.starts_with("usemtl ")).collect::<Vec<_>>(), ["usemtl Material_1", "usemtl Material_2", "usemtl Material_1"]);
     let mtl = text(&files, "Box.mtl");
     assert_eq!(mtl.matches("newmtl").count(), 2);
@@ -64,8 +71,12 @@ fn gltf_holds_its_buffer_and_every_accessor_fits_it() {
     assert_eq!(g["materials"][1]["alphaMode"], "BLEND");
     assert!(g["materials"][0].get("alphaMode").is_none());
     assert_eq!(g["materials"][0]["doubleSided"], true);
-    // Without graphics there are no textures.
-    assert!(g.get("images").is_none() && g.get("textures").is_none() && prims[0]["attributes"].get("TEXCOORD_0").is_none());
+    // Without graphics there are no textures, but every corner has its mesh's texture coordinates.
+    assert!(g.get("images").is_none() && g.get("textures").is_none());
+    for p in prims {
+        let uv = &g["accessors"][p["attributes"]["TEXCOORD_0"].as_u64().unwrap() as usize];
+        assert_eq!((uv["type"].as_str(), uv["count"].as_u64()), (Some("VEC2"), Some(6)));
+    }
 }
 
 #[test]
@@ -82,7 +93,28 @@ fn usda_is_y_up_in_points_with_a_material_for_each_color() {
     // sRGB 0.5 is about 0.214 linear.
     assert!(u.contains("color3f inputs:diffuseColor = (0.21404"), "{u}");
     assert_eq!(u.matches('{').count(), u.matches('}').count());
-    assert!(!u.contains("primvars:st") && !u.contains("UsdUVTexture"));
+    // Each mesh carries its own texture coordinates, up from the bottom, with no picture to show.
+    assert_eq!(u.matches("texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 0), (1, 1), (0, 1)]").count(), 2, "{u}");
+    assert!(!u.contains("UsdUVTexture"));
+}
+
+#[test]
+fn a_mesh_whose_lists_do_not_match_or_hold_no_number_is_refused() {
+    let good = square(RED);
+    let mut nan = square(RED);
+    nan.mesh.uvs[2] = [f64::NAN, 0.0];
+    let mut infinite = square(RED);
+    infinite.mesh.normals[0] = [f64::INFINITY, 0.0, 0.0];
+    let mut short = square(RED);
+    short.mesh.uvs.pop();
+    let mut unnamed = square(RED);
+    unnamed.mesh.parts.pop();
+    for bad in [nan, infinite, short, unnamed] {
+        for format in FORMATS_3D {
+            assert!(plain_files("Box", format, &[good.clone(), bad.clone()]).is_err(), "{format} {bad:?}");
+        }
+    }
+    assert!(plain_files("Box", "obj", &[good]).is_ok());
 }
 
 #[test]
@@ -141,7 +173,10 @@ fn prim_names_are_usd_identifiers() {
 fn textured(png: &[u8]) -> (Vec<SolidMesh>, Vec<Option<Texture>>) {
     let uv = vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
     let texture = Texture { png: Arc::new(png.to_vec()), opacity: None, uv };
-    (vec![square(RED), square(BLUE)], vec![None, Some(texture)])
+    // The picture's coordinates replace the mesh's own.
+    let mut blue = square(BLUE);
+    blue.mesh.uvs = vec![[0.25, 0.25]; 6];
+    (vec![square(RED), blue], vec![None, Some(texture)])
 }
 
 #[test]
@@ -154,16 +189,18 @@ fn each_format_carries_a_textured_part_with_its_coordinates_and_picture() {
     assert_eq!(files.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["My_Box.obj", "My_Box.mtl", "My_Box-texture-1.png"]);
     assert_eq!(files[2].1, png);
     let obj = text(&files, "My_Box.obj");
-    assert_eq!(obj.lines().filter(|l| l.starts_with("vt ")).collect::<Vec<_>>(), ["vt 0 0", "vt 1 0", "vt 1 1", "vt 0 0", "vt 1 1", "vt 0 1"]);
-    assert_eq!(obj.lines().rfind(|l| l.starts_with("f ")), Some("f 10/4/10 11/5/11 12/6/12"));
-    assert!(obj.contains("f 1//1 2//2 3//3"), "the plain part keeps no texture coordinates");
+    // The plain part's own coordinates come first, then the textured part's picture's.
+    let square_vt = ["vt 0 0", "vt 1 0", "vt 1 1", "vt 0 0", "vt 1 1", "vt 0 1"];
+    assert_eq!(obj.lines().filter(|l| l.starts_with("vt ")).collect::<Vec<_>>(), [square_vt, square_vt].concat());
+    assert_eq!(obj.lines().rfind(|l| l.starts_with("f ")), Some("f 10/10/10 11/11/11 12/12/12"));
+    assert!(obj.contains("f 1/1/1 2/2/2 3/3/3"), "the plain part keeps its mesh's texture coordinates");
     let mtl = text(&files, "My_Box.mtl");
     assert!(mtl.contains("newmtl Material_2\nKd 1 1 1\nd 1\nillum 1\nmap_Kd -clamp on My_Box-texture-1.png\n"), "{mtl}");
     assert_eq!(mtl.matches("map_Kd").count(), 1);
     // glTF: TEXCOORD_0 down from the top, and the picture embedded as a data URI.
     let g: Value = serde_json::from_str(&text(&mesh_files("Box", "gltf", &parts, &pictures).unwrap(), "Box.gltf")).unwrap();
     let prims = g["meshes"][0]["primitives"].as_array().unwrap();
-    assert!(prims[0]["attributes"].get("TEXCOORD_0").is_none());
+    assert!(prims[0]["attributes"].get("TEXCOORD_0").is_some(), "the plain part keeps its mesh's texture coordinates");
     let uv = &g["accessors"][prims[1]["attributes"]["TEXCOORD_0"].as_u64().unwrap() as usize];
     assert_eq!((uv["type"].as_str(), uv["count"].as_u64(), uv["componentType"].as_u64()), (Some("VEC2"), Some(6), Some(5126)));
     let view = &g["bufferViews"][uv["bufferView"].as_u64().unwrap() as usize];
@@ -182,8 +219,7 @@ fn each_format_carries_a_textured_part_with_its_coordinates_and_picture() {
     let files = mesh_files("Box", "usda", &parts, &pictures).unwrap();
     assert_eq!(files.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Box.usda", "Box-texture-1.png"]);
     let u = text(&files, "Box.usda");
-    assert_eq!(u.matches("primvars:st").count(), 1);
-    assert!(u.contains("texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 0), (1, 1), (0, 1)]"), "{u}");
+    assert_eq!(u.matches("texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 0), (1, 1), (0, 1)]").count(), 2, "{u}");
     assert!(u.contains("color3f inputs:diffuseColor.connect = </Box/Materials/Material_2/Texture.outputs:rgb>"), "{u}");
     assert!(u.contains("asset inputs:file = @Box-texture-1.png@") && u.contains("uniform token info:id = \"UsdUVTexture\""));
     assert!(u.contains("float2 inputs:st.connect = </Box/Materials/Material_2/Coordinates.outputs:result>"));

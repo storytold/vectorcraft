@@ -1,7 +1,11 @@
-use super::build::{Builder, Built, Camera, Keep, Order, Turn, check_bounds, cuts, fit, newell, outward};
+use super::build::{
+    Attrs, BandMesh, Builder, Built, Camera, Keep, Order, Placing, PlaneUv, Turn, along_ring, check_bounds, cuts, fit, newell, outward, rings_bounds,
+    share,
+};
 use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, crossings, filled, material};
 use super::rings::{MAX_SOLID_POINTS, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings};
 use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, PathData, PlanarFace, Point, Rect, V3, Vec2, View};
+use crate::mesh::MeshPart;
 
 /// The slices the sides are cut into: more to follow a twist or taper.
 fn slices(o: &Inflate) -> usize {
@@ -278,6 +282,12 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
         if n.dot(n) > 0.5 { n } else { V3(0.0, 0.0, 1.0) }
     };
     let smooth = view.shade && view.has_colored_lights();
+    // For a mesh, a point of the front or back takes its art point in the shape's bounds, and on a
+    // puffed surface its own normal, front or back (turned as the back is).
+    let area = rings_bounds(rings.iter().map(Vec::as_slice));
+    let uv = |q: Point| [share(q.x, area.x0, area.x1), share(q.y, area.y0, area.y1)];
+    let puffed = height > 0.0;
+    let back_normal = |n: V3, turn: &Turn| V3(turn.cos * n.0 - turn.sin * n.1, turn.sin * n.0 + turn.cos * n.1, -n.2);
     let camera = Camera::new(view, bounds, o.depth + 2.0 * height.max(reach));
     // A graphic's offsets are from the center of the bounds the solid is built with.
     let center = bounds.center();
@@ -481,9 +491,12 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                             let before = b.facets.len();
                             let outward = newell(&[front.to_vec()]);
                             if smoothed {
-                                b.smooth_triangle(front, points.map(|q| camera.rotate(normal(q))), false)?;
+                                b.smooth_triangle(front, points.map(|q| camera.rotate(normal(q))), false, MeshPart::Front, points.map(uv))?;
                             } else {
-                                b.face(vec![front.to_vec()], outward, order)?;
+                                let attrs = |_: &[Vec<V3>]| {
+                                    Attrs::Corners(vec![points.iter().map(|q| (uv(*q), puffed.then(|| camera.rotate(normal(*q))))).collect()])
+                                };
+                                b.face(vec![front.to_vec()], outward, order, MeshPart::Front, attrs)?;
                             }
                             if o.map_surface {
                                 mark_surface(&mut b, before, points, center, outward, PlanarFace::Front);
@@ -496,15 +509,16 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                                 // normal is reversed.
                                 let outward = V3(-n.0, -n.1, -n.2);
                                 if smoothed {
-                                    let normals = points.map(|q| {
-                                        let n = normal(q);
-                                        // A uniform taper scales all three coordinates equally;
-                                        // twist turns the back normal about the shape's z-axis.
-                                        camera.rotate(V3(back_turn.cos * n.0 - back_turn.sin * n.1, back_turn.sin * n.0 + back_turn.cos * n.1, -n.2))
-                                    });
-                                    b.smooth_triangle(back, normals, true)?;
+                                    // A uniform taper scales all three coordinates equally; twist
+                                    // turns the back normal about the shape's z-axis.
+                                    let normals = points.map(|q| camera.rotate(back_normal(normal(q), &back_turn)));
+                                    b.smooth_triangle(back, normals, true, MeshPart::Back, points.map(uv))?;
                                 } else {
-                                    b.face(vec![back.to_vec()], outward, order)?;
+                                    let attrs = |_: &[Vec<V3>]| {
+                                        let corner = |q: &Point| (uv(*q), puffed.then(|| camera.rotate(back_normal(normal(*q), &back_turn))));
+                                        Attrs::Corners(vec![points.iter().map(corner).collect()])
+                                    };
+                                    b.face(vec![back.to_vec()], outward, order, MeshPart::Back, attrs)?;
                                 }
                                 if o.map_surface {
                                     mark_surface(&mut b, before, points, center, outward, PlanarFace::Back);
@@ -521,7 +535,11 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                         pieces.iter().zip(&lifts).map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(*q, half + h)).collect()).collect();
                     let n = newell(&front);
                     let order = if flat { Order::Last } else { Order::Depth };
-                    b.face(front, n, order)?;
+                    let corners = |side: &dyn Fn(Point) -> Option<V3>| -> Attrs {
+                        Attrs::Corners(pieces.iter().map(|p| p.iter().map(|q| (uv(*q), side(*q))).collect()).collect())
+                    };
+                    let front_normal = |q: Point| puffed.then(|| camera.rotate(normal(q)));
+                    b.face(front, n, order, MeshPart::Front, |_| corners(&front_normal))?;
                     if o.both_sides && o.cap {
                         // The back winds the same way round as the front, so its outward normal is
                         // reversed.
@@ -531,7 +549,8 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
                             .map(|(p, h)| p.iter().zip(h).map(|(q, h)| camera.place(back_turn.apply(*q), -half - h * back_turn.scale)).collect())
                             .collect();
                         let n = newell(&back);
-                        b.face(back, V3(-n.0, -n.1, -n.2), order)?;
+                        let back_side = |q: Point| puffed.then(|| camera.rotate(back_normal(normal(q), &back_turn)));
+                        b.face(back, V3(-n.0, -n.1, -n.2), order, MeshPart::Back, |_| corners(&back_side))?;
                     }
                 }
             }
@@ -539,9 +558,11 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
     }
     if !o.both_sides && o.cap {
         let back: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|p| camera.place(back_turn.apply(*p), -half)).collect()).collect();
+        let (x, y, origin) = Placing::new(&camera, bounds.center(), back_turn, -half).frame();
+        let plane = Attrs::Planar(PlaneUv { origin, x, y, area });
         // The back turned toward the viewer covers the walls it overlaps, even those nearer than
         // its center: twisted walls, and the walls of a fill inside the solid of its stroke.
-        b.face(back, camera.rotate(V3(0.0, 0.0, -1.0)), Order::Last)?;
+        b.face(back, camera.rotate(V3(0.0, 0.0, -1.0)), Order::Last, MeshPart::Back, |_| plane)?;
     }
     if o.depth > 0.0 {
         // The sides, cut into slices that follow a twist or taper.
@@ -558,10 +579,14 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
         if b.len().saturating_add(edges.saturating_mul(slices)) > MAX_SOLID_FACES {
             return Err(TOO_COMPLEX_SURFACE.into());
         }
+        // For a mesh, the sides run across from the front (0) to the back (1).
+        let across = |k: usize| k as f64 / slices.max(1) as f64;
         let sides = |b: &mut Builder<'_>, pieces: &[Vec<usize>]| -> Result<(), String> {
             for (ring, pieces) in rings.iter().zip(pieces) {
+                let u = along_ring(ring);
                 for k in 0..slices {
-                    b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0))?;
+                    let mesh = BandMesh { part: MeshPart::Side, u: &u, v: [across(k), across(k + 1)], normals: None };
+                    b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0), &mesh)?;
                 }
             }
             Ok(())

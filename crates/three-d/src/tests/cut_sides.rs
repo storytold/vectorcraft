@@ -276,8 +276,8 @@ fn the_cut_sides_kept_for_a_mesh_have_a_corner_at_every_corner_of_the_side() {
     // cut side's alone, which faces back against the sweep.
     let in_plane = |all: bool| {
         let start = |n: &V3| (n.0.abs() + n.1.abs() + (n.2 + 1.0).abs()) < 1e-9;
-        let kept = faces.iter().filter(|(_, n)| all || start(n));
-        kept.flat_map(|(contours, _)| contours.iter().flatten().copied()).filter(|v| v.2.abs() < 1e-9).collect::<Vec<V3>>()
+        let kept = faces.iter().filter(|f| all || start(&f.normal));
+        kept.flat_map(|f| f.contours.iter().flatten().copied()).filter(|v| v.2.abs() < 1e-9).collect::<Vec<V3>>()
     };
     let cut = in_plane(false);
     assert!(!cut.is_empty());

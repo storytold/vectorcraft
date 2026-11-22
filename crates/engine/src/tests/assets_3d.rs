@@ -301,8 +301,9 @@ fn export_3d_paints_mapped_graphics_on_their_caps_in_every_format() {
     assert!(is_red(pixel(back, at(20.0), 64)) && is_blue(pixel(back, 64, 64)), "{:?}", pixel(back, 64, 64));
     // The USDA's front cap shows the front picture through st, up from the picture's bottom.
     let usda = String::from_utf8(out[0].1.clone()).unwrap();
-    assert_eq!(usda.matches("primvars:st").count(), 2);
+    assert_eq!(usda.matches("UsdUVTexture").count(), 2);
     assert_eq!(usda.matches("def Mesh").count(), 3, "the walls, the front cap and the back cap");
+    assert_eq!(usda.matches("texCoord2f[] primvars:st").count(), 3, "every mesh carries texture coordinates");
     // glTF holds both pictures, and a cap's coordinates stay inside its picture.
     let (mut s, _) = mapped("gltf");
     let out = files(&run(&mut s, "assets.export3D", json!({})));
@@ -354,7 +355,7 @@ fn export_3d_paints_graphics_mapped_onto_a_revolves_side_in_every_format() {
     let middle = (150.0 * scale) as u32;
     assert!(is_red(pixel(picture, 256, middle)) && is_blue(pixel(picture, 10, 10)), "{:?}", pixel(picture, 256, middle));
     let usda = String::from_utf8(out[0].1.clone()).unwrap();
-    assert_eq!((usda.matches("def Mesh").count(), usda.matches("primvars:st").count()), (1, 1), "the side is the only face");
+    assert_eq!((usda.matches("def Mesh").count(), usda.matches("UsdUVTexture").count()), (1, 1), "the side is the only face");
     // Moved 50 pt around the axis, the graphic moves as far across the picture.
     let (mut s, _) = revolved("usda", json!({}), 50.0);
     let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 512})));
@@ -381,7 +382,8 @@ fn a_partial_revolve_keeps_its_cut_sides_plain_beside_its_textured_side() {
     let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
     assert_eq!(out.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Ball.usda", "Ball-texture-1.png"]);
     let usda = String::from_utf8(out[0].1.clone()).unwrap();
-    assert_eq!((usda.matches("def Mesh").count(), usda.matches("primvars:st").count()), (2, 1), "the cut sides and the side");
+    assert_eq!((usda.matches("def Mesh").count(), usda.matches("UsdUVTexture").count()), (2, 1), "the cut sides and the side");
+    assert_eq!(usda.matches("texCoord2f[] primvars:st").count(), 2, "the plain cut sides keep their own texture coordinates");
     let d = &s.doc().unwrap().doc;
     let id = d.asset(asset).unwrap().nodes[0].0;
     // Without its graphics the surface is one plain mesh, as before.
@@ -476,7 +478,11 @@ fn export_3d_keeps_flat_colors_without_graphics_and_refuses_bad_texture_sizes() 
     let out = files(&run(&mut s, "assets.export3D", json!({"textureSize": 128})));
     assert_eq!(out.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Box.obj", "Box.mtl"]);
     let obj = String::from_utf8(out[0].1.clone()).unwrap();
-    assert!(!obj.contains("vt ") && obj.lines().filter(|l| l.starts_with("g ")).count() == 1);
+    assert!(!out[1].1.windows(6).any(|w| w == b"map_Kd") && obj.lines().filter(|l| l.starts_with("g ")).count() == 1);
+    // The plain mesh still carries a texture coordinate, 0 to 1, for every corner.
+    let count = |p: &str| obj.lines().filter(|l| l.starts_with(p)).count();
+    assert!(count("vt ") > 0 && count("vt ") == count("v "));
+    assert!(obj.lines().filter_map(|l| l.strip_prefix("vt ")).flat_map(|l| l.split(' ')).all(|v| (0.0..=1.0).contains(&v.parse::<f64>().unwrap())));
 }
 
 #[test]
