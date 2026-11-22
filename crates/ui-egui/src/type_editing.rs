@@ -13,7 +13,7 @@ use craft::ui::contract::{
     Show as _,
 };
 use craft::ui::primitives::{EditorPurpose, EditorState};
-use craft::ui::runtime::focus::KeyUse;
+use craft::ui::runtime::focus::{self, FocusTarget, KeyUse};
 use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::{Rect, Response, Vec2};
 use serde_json::json;
@@ -126,6 +126,8 @@ pub(crate) fn keep_marked_text(app: &mut VectorcraftApp) {
 #[derive(Debug)]
 pub(crate) struct TypeEditorOutput {
     response: Response,
+    /// The part appeared this pass without the keys.
+    unfocused_start: bool,
 }
 
 impl Outcome for TypeEditorOutput {
@@ -284,7 +286,7 @@ impl Component for TypeEditor<'_> {
         while let Some((command, _)) = cx.take_command::<TypeEditorCommand>() {
             fired.push(command);
         }
-        // PLAN: no framework request to take the keys when editing starts was found; a click on the part takes them.
+        // A new edit takes the keys ([`show`]); a click away loses them.
         if !cx.appeared() && !cx.is_focused() {
             keep_marked_text(self.app);
         }
@@ -304,7 +306,7 @@ impl Component for TypeEditor<'_> {
     }
 
     fn finish(self, cx: Cx<'_, Self>) -> TypeEditorOutput {
-        TypeEditorOutput { response: cx.response.clone() }
+        TypeEditorOutput { response: cx.response.clone(), unfocused_start: cx.appeared() && !cx.is_focused() }
     }
 }
 
@@ -319,7 +321,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some(target) = app.session.tool_ime_target(view) else { return };
     let Some(canvas_view) = app.canvas_view() else { return };
     let caret = Rect::from_two_pos(canvas_view.to_screen(a), canvas_view.to_screen(b)).expand2(egui::vec2(1.0, 0.0));
-    ui.scope_builder(egui::UiBuilder::new().max_rect(caret), |ui| {
-        TypeEditor::new(app, caret).id_salt(target).show(ui);
-    });
+    let out = ui.scope_builder(egui::UiBuilder::new().max_rect(caret), |ui| TypeEditor::new(app, caret).id_salt(target).show(ui)).inner;
+    // Typing goes to the edit that starts, as a click on the part would take the keys.
+    if out.unfocused_start {
+        focus::request(ui.ctx(), FocusTarget::Id(out.response.id));
+    }
 }
