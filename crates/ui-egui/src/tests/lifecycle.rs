@@ -146,8 +146,10 @@ fn home_takes_down_a_live_composition() {
     ime_frame(&mut app, &ctx, vec![preedit("が", 1)], |_| {});
     assert!(app.ime_marked.is_some());
     app.run("app.home", json!({})).unwrap();
+    // The framework interrupts the old owner's composition in the pass it loses focus; no pass after names an owner.
     let home = ime_frame(&mut app, &ctx, vec![], |_| {});
-    assert!(home.is_none(), "Home has no IME owner");
+    assert!(home.is_none_or(|ime| ime.should_interrupt_composition), "Home only interrupts the composition");
+    assert!(ime_frame(&mut app, &ctx, vec![], |_| {}).is_none(), "Home has no IME owner");
     assert!(app.ime_marked.is_none(), "Home takes the marked text down");
     assert!(!app.session.tool_composing(), "no stale composition survives Home");
     assert!(plain(&app, id).contains('が'), "the marked text stays as typed");
@@ -165,7 +167,8 @@ fn closing_the_document_takes_down_a_live_composition() {
     assert!(app.ime_marked.is_some());
     assert!(app.session.close_document(0), "the document closes");
     let closed = ime_frame(&mut app, &ctx, vec![], |_| {});
-    assert!(closed.is_none(), "no document, no IME owner");
+    assert!(closed.is_none_or(|ime| ime.should_interrupt_composition), "closing only interrupts the composition");
+    assert!(ime_frame(&mut app, &ctx, vec![], |_| {}).is_none(), "no document, no IME owner");
     assert!(app.ime_marked.is_none(), "closing takes the marked text down");
     assert!(!app.session.tool_composing());
 }

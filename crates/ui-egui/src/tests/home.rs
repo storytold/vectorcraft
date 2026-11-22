@@ -14,6 +14,10 @@ fn app_with_doc() -> VectorcraftApp {
 
 /// Draw one canvas frame; whether it drew the document (else the Home screen).
 fn shows_document(app: &mut VectorcraftApp) -> bool {
+    // Only a view this frame lays out counts.
+    if let Some(view) = app.view_mut() {
+        view.rect = egui::Rect::NOTHING;
+    }
     let ctx = crate::testing::ui_context();
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| canvas::show(app, ui));

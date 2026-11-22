@@ -96,12 +96,15 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let full = ui.available_rect_before_wrap();
     if crate::menus::home_showing(app) {
+        // No type editor shows to lose the keys: the marked text stays as typed.
+        crate::type_editing::keep_marked_text(app);
         home(app, ui, full);
         return;
     }
     // A document opened straight through the session has no view yet.
     app.sync_views();
     let Some(win) = doc_windows::current(app).filter(|_| app.session.active().is_some()) else {
+        crate::type_editing::keep_marked_text(app);
         // No document and Show The Home Screen When No Documents Are Open off: an empty window.
         let env = Env::of(ui);
         let fill = StyleCx::of_env(ui.ctx(), &env).color(env.tokens.color.surface.canvas);
