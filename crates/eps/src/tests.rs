@@ -448,6 +448,77 @@ fn spot_colours_are_separations_and_overprints_are_kept_or_dropped() {
     assert!(!page_of(&d, &EpsOptions { overprint: Overprint::Discard, ..opts(&d) }).contains("true op"));
 }
 
+/// Whether overprinting is on at each fill a page paints, by its `true op` and `false op` lines.
+fn overprint_at_fills(page: &str) -> Vec<bool> {
+    let mut on = false;
+    let mut fills = vec![];
+    for line in page.lines() {
+        match line {
+            "true op" => on = true,
+            "false op" => on = false,
+            l if l == "f" || l.ends_with(" f") || l.ends_with(" f*") || l == "f*" => fills.push(on),
+            _ => {}
+        }
+    }
+    fills
+}
+
+#[test]
+fn tiles_overprint_with_their_overprinting_pattern() {
+    // A rectangle filled with an overprinting pattern whose tile is a white square marked to
+    // overprint and then a cyan one that is not.
+    let mut d = doc_with(|_| vec![]);
+    let square = |d: &mut Document, paint: Paint, overprint: bool| {
+        let mut n = path(d, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), paint, Paint::None, 0.0);
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.overprint = overprint;
+        }
+        Arc::new(n)
+    };
+    let tile = vec![square(&mut d, Paint::solid(Color::WHITE), true), square(&mut d, Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), false)];
+    d.patterns.push(vectorcraft_doc::PatternDef::new("tile", tile));
+    let mut n = red_rect(&mut d);
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+        f.paint = Paint::Pattern { pattern: "tile".into(), xf: Affine::IDENTITY };
+        f.overprint = true;
+    }
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, n).unwrap();
+    // The whole pattern overprints, as in PDF export: the white square's own mark does not turn
+    // overprinting off for the cyan square after it, and Discard White Overprint applies to the
+    // pattern fill, not to its tiles.
+    let fills = overprint_at_fills(&page_of(&d, &opts(&d)));
+    assert!(!fills.is_empty() && fills.iter().all(|&on| on), "{fills:?}");
+    // On a plate too.
+    let plate = crate::scene::Scene::new(&d, &opts(&d)).on_plate(true).run();
+    let fills = overprint_at_fills(&plate.body);
+    assert!(!fills.is_empty() && fills.iter().all(|&on| on), "{fills:?}");
+}
+
+/// A white character fill, and a white fill of the type object itself, marked to overprint knock
+/// out with Discard White Overprint and overprint without it.
+#[test]
+fn white_type_fills_knock_out_with_discard_white_overprint() {
+    use vectorcraft_doc::{CharStyle, FillLayer, TextObject};
+    let white = Paint::solid(Color::WHITE);
+    let char_fill = CharStyle { size: 30.0, fill: white.clone(), overprint_fill: true, ..CharStyle::default() };
+    let object_fill = CharStyle { size: 30.0, fill: Paint::None, ..CharStyle::default() };
+    for (i, style) in [char_fill, object_fill].into_iter().enumerate() {
+        let mut d = doc_with(|d| {
+            let mut n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 100.0), "AB", style))));
+            if i == 1 {
+                n.appearance.items = vec![AppearanceItem::Fill(FillLayer { overprint: true, ..FillLayer::new(white.clone()) })];
+            }
+            vec![n]
+        });
+        let fills = overprint_at_fills(&page_of(&d, &opts(&d)));
+        assert!(!fills.is_empty() && fills.iter().all(|&on| !on), "{i}: {fills:?}");
+        d.setup.discard_white_overprint = false;
+        let fills = overprint_at_fills(&page_of(&d, &opts(&d)));
+        assert!(!fills.is_empty() && fills.iter().all(|&on| on), "{i}: {fills:?}");
+    }
+}
+
 const GOLD: Color = Color::Cmyk { c: 0.0, m: 0.2, y: 0.8, k: 0.1 };
 const LEAF: Color = Color::Cmyk { c: 1.0, m: 0.0, y: 1.0, k: 0.0 };
 
