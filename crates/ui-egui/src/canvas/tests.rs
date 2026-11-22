@@ -7264,6 +7264,27 @@ fn the_widgets_follow_the_pointer_in_the_frame_it_moves() {
     assert!(away + 2 <= plain, "away from it, hidden in the same frame: {away} of {plain}");
 }
 
+/// With a shape tool, Cmd held lends the selection tool chosen last; when that is Direct
+/// Selection, which does not press them, a selected live ellipse's pie widgets hide while the key
+/// is down.
+#[test]
+fn pie_widgets_hide_while_cmd_lends_direct_selection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 200, "height": 100})).unwrap();
+    app.session.execute("object.setLiveShape", &json!({"pieStart": 0, "pieEnd": 90})).unwrap();
+    app.select_tool("directSelection");
+    app.select_tool("ellipse");
+    let ctx = egui::Context::default();
+    let r = vectorcraft_tools::pie::RADIUS_PX;
+    let widgets = |app: &mut VectorcraftApp, modifiers: egui::Modifiers| {
+        drawn_with(app, &ctx, modifiers, None).iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == r && c.fill == Color32::WHITE)).count()
+    };
+    assert_eq!(widgets(&mut app, egui::Modifiers::NONE), 2, "the Ellipse tool shows them");
+    assert_eq!(widgets(&mut app, egui::Modifiers::COMMAND), 0, "hidden while Cmd lends Direct Selection");
+    assert_eq!(widgets(&mut app, egui::Modifiers::NONE), 2, "back when the key is let go");
+}
+
 /// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
 /// Path tools.
 #[test]

@@ -276,10 +276,10 @@ pub(super) fn selection_overlay(
             p.add(Shape::convex_polygon(diamond, Color32::WHITE, Stroke::new(1.0, color)));
         }
     }
-    // Pie widgets (Selection tool, with View › Show Bounding Box and Show Shape Widgets, on live
-    // ellipses): each joined by a line to the outline's point at its angle. They stay while one is
-    // dragged.
-    if (tool == "selection" || (shape_tool && !drawing)) && app.ui.view.bounding_box && shape_widgets {
+    // Pie widgets (Selection tool and the shape tools while no other tool is lent, with View › Show
+    // Bounding Box and Show Shape Widgets, on live ellipses): each joined by a line to the outline's
+    // point at its angle. They stay while one is dragged.
+    if (tool == "selection" || (shape_tool && own && !drawing)) && app.ui.view.bounding_box && shape_widgets {
         for w in vectorcraft_tools::pie::PieWidget::of(&st.doc, &st.selection, xf.zoom) {
             let (on, c, r, color) = (xf.to_screen(w.on), xf.to_screen(w.at), vectorcraft_tools::pie::RADIUS_PX, c32(st.doc.layer_color(w.id)));
             p.line_segment([on, c], Stroke::new(1.0, color));
