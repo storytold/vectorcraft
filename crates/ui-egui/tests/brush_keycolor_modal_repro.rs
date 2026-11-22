@@ -2,7 +2,7 @@
 //! while the dialog stays open, the release starts no stroke, and OK saves the sampled key.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use craft::ui::patterns::form_dialogs::HostedParamDialog;
+use craft::ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
 use craft::ui::runtime::env::WindowKey;
 use craft::ui::shell::{WindowDialogs, embed};
 use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
@@ -73,9 +73,14 @@ fn with_options<R>(app: &VectorcraftApp, ctx: &egui::Context, f: impl FnOnce(&mu
     WindowDialogs::of(ctx, &WindowKey::main()).with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(f)).expect("Brush Options is open")
 }
 
+/// The dialog's Key Color: the brush's colour as the dialog opened with it, or the one the eyedropper sampled.
 fn key_color(app: &VectorcraftApp, ctx: &egui::Context) -> Color {
-    let [r, g, b] = with_options(app, ctx, |dialog| dialog.fields().color("keyColor")).expect("Key Color field");
-    Color::rgb(r, g, b)
+    with_options(app, ctx, |dialog| match dialog.fields().get("keyColor") {
+        Some(FieldValue::Json(value)) => serde_json::from_value(value.clone()).ok(),
+        Some(FieldValue::Color([r, g, b])) => Some(Color::rgb(*r, *g, *b)),
+        _ => None,
+    })
+    .expect("Key Color field")
 }
 
 fn open_options(app: &mut VectorcraftApp, ctx: &egui::Context) {

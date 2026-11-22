@@ -183,10 +183,16 @@ fn open_dialog(app: &mut VectorcraftApp, f: &Map<String, Value>, object_keys: Op
         initial.set(OPENED, FieldValue::Json(Value::Object(opened)));
         initial.set(KEYS, FieldValue::Json(json!(keys)));
     }
-    // PLAN: `HostedParamDialog::new` takes (ctx, key, fields, build); the sheet's (KIND, title, build) has no such form.
-    let dialog =
-        HostedParamDialog::new(&ctx, KIND, initial, move |fields| ParamDialog::new(KIND, title.clone(), rows.clone()).values(Bind::bound(fields)))
-            .held_ok();
+    // The canvas of the current window: the Key Color dropper samples there while the dialog is open.
+    let canvas = crate::doc_windows::current(app).map(crate::canvas::canvas_id);
+    let dialog = HostedParamDialog::new(&ctx, KIND, initial, move |fields| {
+        let dialog = ParamDialog::new(KIND, title.clone(), rows.clone()).values(Bind::bound(fields));
+        match canvas {
+            Some(canvas) => dialog.canvas(canvas),
+            None => dialog,
+        }
+    })
+    .held_ok();
     app.ui.brush_options = Some(host::open_held(app, dialog, ok).ok_or("no window")?);
     Ok(Value::Null)
 }
