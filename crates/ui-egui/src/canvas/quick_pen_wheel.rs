@@ -59,6 +59,14 @@ pub(super) fn arc_size(app: &mut VectorcraftApp, ui: &Ui, over: bool) -> bool {
     let (any, scrolling) = ui.input(|i| {
         let mut any = false;
         for e in &i.events {
+            // Keys pressed or let go between a touchpad gesture's wheel events count for the rest of
+            // the gesture too, in the order they came.
+            if let egui::Event::ModifiersChanged(m) | egui::Event::Key { modifiers: m, .. } = e {
+                if now.gesture {
+                    now.held |= *m;
+                }
+                continue;
+            }
             let egui::Event::MouseWheel { unit, delta, phase, modifiers, source } = e else { continue };
             any = true;
             // A wheel event after egui's scroll timeout, or a touchpad gesture's start, begins a

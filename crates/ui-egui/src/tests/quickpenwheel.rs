@@ -422,6 +422,57 @@ fn ctrl_wheel_steps_in_event_order() {
     assert_eq!(view(&app), still, "the notch did not move the view");
 }
 
+/// Shift pressed and let go between two wheel events of a touchpad gesture held with Ctrl counts for
+/// the rest of the gesture, whether it comes as a key event or as a change of the held modifiers.
+/// Between a mouse wheel's notches it does not.
+#[test]
+fn shift_tapped_between_touchpad_wheel_events_counts_for_the_gesture() {
+    let mut app = app();
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let ctrl = Modifiers { ctrl: true, command: true, ..Modifiers::NONE };
+    let both = Modifiers { shift: true, ..ctrl };
+    let at = app.canvas_rect.unwrap().center();
+    let line = ctx.options(|o| o.input_options.line_scroll_speed);
+    let pad = |phase, dy: f32| Event::MouseWheel {
+        unit: MouseWheelUnit::Point,
+        delta: vec2(0.0, dy),
+        phase,
+        modifiers: ctrl,
+        source: MouseWheelSource::Trackpad,
+    };
+    let shift_key = |pressed, modifiers| Event::Key { key: egui::Key::ShiftLeft, physical_key: None, pressed, repeat: false, modifiers };
+    let taps = [vec![shift_key(true, both), shift_key(false, ctrl)], vec![Event::ModifiersChanged(both), Event::ModifiersChanged(ctrl)]];
+    let mut t = 700.0;
+    for tap in taps {
+        let size = arc_size(&app);
+        frame_at(&mut app, &ctx, vec![Event::PointerMoved(at), pad(egui::TouchPhase::Start, 0.0), pad(egui::TouchPhase::Move, line)], Some(t));
+        assert_eq!(arc_size(&app), size + 15.0, "a line up with Ctrl");
+        frame_at(&mut app, &ctx, tap.clone(), Some(t + 0.1));
+        frame_at(&mut app, &ctx, vec![pad(egui::TouchPhase::Move, line)], Some(t + 0.2));
+        assert_eq!(arc_size(&app), size + 15.0, "Shift tapped mid-gesture: {tap:?}");
+        frame_at(&mut app, &ctx, vec![pad(egui::TouchPhase::End, 0.0)], Some(t + 0.3));
+        for k in 1..=40 {
+            frame_at(&mut app, &ctx, vec![], Some(t + 0.3 + f64::from(k) / 60.0));
+        }
+        t += 100.0;
+    }
+
+    let size = arc_size(&app);
+    let notch = Event::MouseWheel {
+        unit: MouseWheelUnit::Line,
+        delta: vec2(0.0, 1.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: ctrl,
+        source: MouseWheelSource::Wheel,
+    };
+    frame_at(&mut app, &ctx, vec![Event::PointerMoved(at), notch.clone()], Some(t));
+    frame_at(&mut app, &ctx, vec![shift_key(true, both), shift_key(false, ctrl)], Some(t + 0.05));
+    frame_at(&mut app, &ctx, vec![notch], Some(t + 0.1));
+    assert_eq!(arc_size(&app), size + 30.0, "two Ctrl notches around a Shift tap");
+}
+
 /// With another tool, Ctrl+wheel leaves the Quick Pen's arc size and moves the view as before.
 #[test]
 fn ctrl_wheel_with_another_tool_moves_the_view() {
