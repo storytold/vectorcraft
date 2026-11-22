@@ -526,7 +526,7 @@ fn read_property(p: &El, scope: &mut Scope, registry: &mut Registry) -> Result<P
         && text_of(p).trim().is_empty()
     {
         Value::Simple { text: (*v).to_string(), uri: true }
-    } else if let (Some(array), true) = (array_of(&children, scope), own.is_empty()) {
+    } else if let (Some(array), true) = (array_of(&children, scope), own.is_empty() && text_of(p).trim().is_empty()) {
         array
     } else {
         // A written packet puts a property 3 elements deep (`x:xmpmeta`, `rdf:RDF`,

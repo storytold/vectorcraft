@@ -368,6 +368,18 @@ fn namespaces_inside_kept_values_are_registered() {
     }
 }
 
+/// Text beside an array's container keeps the property as it was written.
+#[test]
+fn text_beside_an_array_is_kept() {
+    let packet = "<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:a='http://a/'>\
+                  <a:p>before<rdf:Bag><rdf:li>x</rdf:li></rdf:Bag>after</a:p></rdf:Description></rdf:RDF>";
+    let mut registry = Registry::default();
+    let meta = xmp::parse(packet, &mut registry).unwrap();
+    let out = xmp::serialize(&meta, &registry, false).unwrap();
+    assert!(out.contains("before") && out.contains("after"), "{out}");
+    assert_eq!(xmp::parse(&out, &mut registry), Ok(meta));
+}
+
 #[test]
 fn array_forms_follow_their_options() {
     assert_eq!(Form::from_options(0x200), Form::Bag);
