@@ -623,6 +623,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.functions.len()
             + code.params.len()
             + code.vars.len()
+            + code.annex_vars.len()
             + 2 * code.fun_decls.len()
             + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
             + code.templates.iter().map(|t| 2 + t.cooked.len() + t.raw.len()).sum::<usize>();
@@ -641,7 +642,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(pattern);
             strings.add(flags);
         }
-        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
+        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(&code.annex_vars).chain(code.fun_decls.iter().map(|(k, _)| k));
         for k in keys.chain(&code.self_name).chain(&code.decl_name).chain(&code.rest) {
             strings.add_key(k);
         }

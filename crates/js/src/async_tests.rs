@@ -85,6 +85,23 @@ fn async_functions_are_not_constructors_and_have_no_prototype() {
 }
 
 #[test]
+fn async_function_inherits_from_the_built_in_function_after_a_script_replaced_its_constructor() {
+    let mut r = Realm::new();
+    assert_eq!(r.run("Function.prototype.constructor = {}; 0"), Ok(JsValue::Number(0.0)));
+    r.add_es2015();
+    r.set_es2017(true);
+    let src = "var AF = Object.getPrototypeOf(async function () {}).constructor; Object.getPrototypeOf(AF) === Function && typeof AF.call";
+    assert_eq!(r.run(src), Ok(JsValue::String("function".into())));
+}
+
+#[test]
+fn with_e4x_async_before_a_double_colon_is_a_qualified_name() {
+    let options = Options { es2017: true, e4x: true, ..Options::default() };
+    assert!(parse("async::b", &options).is_ok());
+    assert!(parse("var x = <a/>; x.async::b", &options).is_ok());
+}
+
+#[test]
 fn await_is_an_identifier_outside_async_functions() {
     let src = "var await = 3; function f(await) { return await; } log.push(f(await));\n\
                var async = function (x) { return x; }; log.push(async(1));\n\
@@ -98,6 +115,9 @@ fn await_is_an_identifier_outside_async_functions() {
                   async function await() { return 1; }\n\
                   log.push(typeof g, typeof h, typeof await);";
     assert_eq!(log(nested), "function function function");
+    // An arrow function in an async arrow function's parameters reads `await` as its own body does.
+    let arrow = "var await = 7; var f = async (cb = () => await) => cb(); f().then(function (v) { log.push(v); });";
+    assert_eq!(log(arrow), "7");
     let mut r = realm();
     syntax_error(&mut r, "async function f() { var await; }");
     syntax_error(&mut r, "async function f(await) {}");

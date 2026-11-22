@@ -92,6 +92,9 @@ impl ErrorType {
 pub(crate) struct Intrinsics {
     pub(crate) object_proto: ObjId,
     pub(crate) function_proto: ObjId,
+    /// The built-in `Function`, which a script can replace as the global or as the prototype's
+    /// `constructor`.
+    pub(crate) function_ctor: ObjId,
     pub(crate) array_proto: ObjId,
     pub(crate) string_proto: ObjId,
     pub(crate) number_proto: ObjId,
@@ -115,6 +118,7 @@ impl Intrinsics {
         Self {
             object_proto: o,
             function_proto: o,
+            function_ctor: o,
             array_proto: o,
             string_proto: o,
             number_proto: o,
@@ -149,6 +153,7 @@ impl Intrinsics {
         let mut v = vec![
             self.object_proto,
             self.function_proto,
+            self.function_ctor,
             self.array_proto,
             self.string_proto,
             self.number_proto,
@@ -187,6 +192,9 @@ pub(crate) struct Frame {
     /// The promise of the async function the frame runs: a return resolves it, an exception
     /// that leaves the frame rejects it, and the call's value is the promise.
     async_promise: Option<ObjId>,
+    /// The block functions of script or eval code ([`Code::annex_vars`]) whose variable was not
+    /// declared: [`Op::AnnexB`] leaves them alone.
+    annex_off: Vec<Key>,
 }
 
 /// Where the exception being thrown was raised: the code and the instruction.
@@ -471,7 +479,13 @@ fn declaration_bytes(code: &Code) -> usize {
         let closure = code.functions.get(*fi as usize).map_or(0, |f| closure_bytes(f));
         total.saturating_add(binding_bytes(name.len()) + closure)
     });
-    code.vars.iter().fold(funs, |total, v| total.saturating_add(binding_bytes(v.len())))
+    code.vars.iter().chain(&code.annex_vars).fold(funs, |total, v| total.saturating_add(binding_bytes(v.len())))
+}
+
+/// The bytes the `let` and `const` names at the top of a script add to the global scope.
+fn global_lexical_bytes(code: &Code) -> usize {
+    let lets: &[(Key, bool)] = code.top_scope.and_then(|i| code.scopes.get(i as usize)).map_or(&[], |s| &s.lets);
+    lets.iter().fold(0usize, |total, (name, _)| total.saturating_add(binding_bytes(name.len())))
 }
 
 /// A call to a function written in JavaScript, ready to enter.
@@ -2396,9 +2410,13 @@ impl Interp {
         Ok(())
     }
 
-    /// Assigns a function declared in a block to the variable of the same name.
+    /// Assigns a function declared in a block to the variable of the same name, unless the
+    /// variable of script or eval code was not declared.
     fn op_annex_b(&mut self, n: u32) -> JsResult<()> {
         let name = self.name(n)?;
+        if self.frame()?.annex_off.contains(&name) {
+            return self.pop().map(drop);
+        }
         let v = self.peek(0)?;
         let var_env = self.frame()?.var_env;
         match self.heap.env(var_env) {
@@ -2952,6 +2970,7 @@ impl Interp {
             completion: Value::Undefined,
             boundary,
             async_promise: None,
+            annex_off: Vec::new(),
         });
         // An async function's call makes its promise first thing (section 25.5.5.2); the frame
         // keeps what the function holds reachable while it is made.
@@ -3278,14 +3297,16 @@ impl Interp {
             (caller_env, caller_var_env)
         };
         self.stack.truncate(start);
-        let env = self.instantiate_pending(&code, env, var_env, true)?;
-        self.push_code_frame(code, env, var_env, this, false)
+        let (env, annex_off) = self.instantiate_pending(&code, env, var_env, true)?;
+        self.push_code_frame(code, env, var_env, this, false)?;
+        self.frame_mut()?.annex_off = annex_off;
+        Ok(())
     }
 
     /// [`Self::instantiate_global`] with `code` and its environment `env` kept reachable, and the
     /// code counted against the heap, until its frame holds them: the scopes and functions it
     /// makes can collect.
-    fn instantiate_pending(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
+    fn instantiate_pending(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<(EnvId, Vec<Key>)> {
         let mark = self.temp_envs.len();
         self.temp_envs.push(env);
         self.temp_codes.push(code.clone());
@@ -3311,9 +3332,15 @@ impl Interp {
         r
     }
 
-    /// Declares `code`'s variables and functions and pushes its boundary frame, ready to run.
+    /// Declares `code`'s variables and functions and pushes its boundary frame, ready to run. The
+    /// frame limit and the heap, with a script's `let` and `const` names, are checked before
+    /// anything is declared.
     pub(crate) fn enter_global(&mut self, code: Rc<Code>, is_eval: bool) -> JsResult<()> {
-        self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
+        if self.frames.len() >= self.limits.frames {
+            return Err(Abrupt::Limit(LimitKind::Frames));
+        }
+        let lexical = if is_eval { 0 } else { global_lexical_bytes(&code) };
+        self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES).saturating_add(lexical))?;
         let (scope, global) = (self.global_scope(), self.global);
         let (env, var_env) = if code.strict && is_eval {
             let e = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(scope) });
@@ -3321,8 +3348,10 @@ impl Interp {
         } else {
             (scope, self.global_env)
         };
-        let env = self.instantiate_pending(&code, env, var_env, is_eval)?;
-        self.push_code_frame(code, env, var_env, Value::Object(global), true)
+        let (env, annex_off) = self.instantiate_pending(&code, env, var_env, is_eval)?;
+        self.push_code_frame(code, env, var_env, Value::Object(global), true)?;
+        self.frame_mut()?.annex_off = annex_off;
+        Ok(())
     }
 
     /// The environment global code runs in: the one that holds the scripts' `let` and `const`
@@ -3437,6 +3466,7 @@ impl Interp {
             completion: Value::Undefined,
             boundary,
             async_promise: None,
+            annex_off: Vec::new(),
         });
         Ok(())
     }
@@ -3446,8 +3476,9 @@ impl Interp {
     ///
     /// Gives the environment the code runs in: `env`, or with [`Options::es2015`] eval code's own
     /// environment of its `let` and `const` names. A script's `let` and `const` names go in the
-    /// global scope ([`Self::declare_global_lexical`]).
-    fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
+    /// global scope ([`Self::declare_global_lexical`]). Also gives the names of
+    /// [`Code::annex_vars`] that [`Self::annex_var_declarable`] did not declare.
+    fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<(EnvId, Vec<Key>)> {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
         if is_eval && !code.strict && self.options.es2015 {
             self.check_eval_vars(code, env, var_env)?;
@@ -3492,7 +3523,47 @@ impl Interp {
                 self.global_vars.insert(v.clone());
             }
         }
-        Ok(lex)
+        let mut annex_off = Vec::new();
+        for v in &code.annex_vars {
+            self.use_fuel()?;
+            if !self.annex_var_declarable(v, env, var_env)? {
+                annex_off.push(v.clone());
+                continue;
+            }
+            self.declare(var_env, v, None, configurable)?;
+            if on_global {
+                self.global_vars.insert(v.clone());
+            }
+        }
+        Ok((lex, annex_off))
+    }
+
+    /// A block function's variable in script or eval code can be declared (Annex B.3.3.2 and
+    /// B.3.3.3, <https://tc39.es/ecma262/#sec-web-compat-globaldeclarationinstantiation>): no
+    /// `let`, `const` or block function from `env` out to `var_env` has the name, a `catch`
+    /// parameter does not count, and on the global object the name is its own property or the
+    /// object is extensible. Each environment passed takes a unit of fuel.
+    fn annex_var_declarable(&mut self, name: &Key, env: EnvId, var_env: EnvId) -> JsResult<bool> {
+        let mut cur = Some(env).filter(|&e| e != var_env);
+        while let Some(e) = cur {
+            self.use_fuel()?;
+            cur = match self.heap.env(e) {
+                Some(Env::Decl { bindings, outer }) => {
+                    if bindings.get(name).is_some_and(|b| b.lexical) {
+                        return Ok(false);
+                    }
+                    *outer
+                }
+                Some(Env::Obj { outer, .. }) => *outer,
+                None => return internal("environment out of range"),
+            }
+            .filter(|&o| o != var_env);
+        }
+        if var_env != self.global_env {
+            return Ok(true);
+        }
+        let global = self.global;
+        Ok(self.get_own_property(global, name)?.is_some() || self.object(global)?.extensible)
     }
 
     /// A `var` or function that eval code outside strict mode code declares must not take the name

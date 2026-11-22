@@ -280,6 +280,11 @@ pub(crate) struct Code {
     pub(crate) vars: Vec<Key>,
     /// Function declarations to instantiate on entry: their names and indices in `functions`.
     pub(crate) fun_decls: Vec<(Key, u32)>,
+    /// In script and eval code, the variables of block functions (Annex B.3.3.2 and B.3.3.3) that
+    /// the code does not declare otherwise: each is declared, and its function assigned to it, only
+    /// when no `let`, `const` or block function between the code and its variable environment has
+    /// the name and the variable can be declared.
+    pub(crate) annex_vars: Vec<Key>,
     /// The body refers to `arguments` or calls `eval`.
     pub(crate) uses_arguments: bool,
     pub(crate) source: Rc<Source>,

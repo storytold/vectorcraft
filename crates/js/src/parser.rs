@@ -1130,6 +1130,8 @@ impl<'s> Parser<'s> {
         let outer_strict = self.ctx.strict;
         let inner = Context { strict: outer_strict, in_function: true, in_async: is_async, ..Context::default() };
         let outer = std::mem::replace(&mut self.ctx, inner);
+        // An `await` in the body does not count for an async arrow function's head around it.
+        let awaits = self.awaits;
         self.push_scope(true, names);
         let block = self.at(Punct::LBrace);
         let body = if block {
@@ -1138,6 +1140,7 @@ impl<'s> Parser<'s> {
             self.parse_assignment(no_in).map(|e| vec![self.ast.push_stmt(Stmt::Return(Some(e)), self.ast.expr_span(e))])
         };
         self.pop_scope();
+        self.awaits = awaits;
         let (strict, use_strict) = (self.ctx.strict, self.ctx.use_strict);
         self.ctx = outer;
         self.leave();
@@ -1553,7 +1556,8 @@ impl<'s> Parser<'s> {
                 if name == "await" {
                     self.awaits = self.awaits.saturating_add(1);
                 }
-                if self.at_async() {
+                // With E4X, `async::name` is a qualified name.
+                if self.at_async() && !(self.e4x && self.peek().is_some_and(|t| t.is_punct(Punct::ColonColon))) {
                     let token = self.bump()?;
                     let id = self.ast.push_expr(Expr::Ident(name), token.span);
                     self.async_ident = Some(id);

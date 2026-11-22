@@ -147,6 +147,7 @@ impl Interp {
             completion: a.completion,
             boundary: true,
             async_promise: Some(a.promise),
+            annex_off: Vec::new(),
         });
         Ok(())
     }

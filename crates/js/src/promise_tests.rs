@@ -78,7 +78,7 @@ fn a_promise_resolved_with_itself_rejects_with_a_type_error() {
 
 #[test]
 fn collections_while_a_promise_is_resolved_with_itself_keep_its_type_error() {
-    let src = "var bad = 0; function check(e) { if (!(e instanceof TypeError)) bad++; }\n\
+    let src = "var bad = 0, seen = 0; function check(e) { seen++; if (!(e instanceof TypeError)) bad++; }\n\
                for (var i = 0; i < 200; i++) { var res; var p = new Promise(function (r) { res = r; }); p.then(null, check); res(p); }";
     let mut finished = 0;
     for spare in (40_000..240_000).step_by(641) {
@@ -92,6 +92,7 @@ fn collections_while_a_promise_is_resolved_with_itself_keep_its_type_error() {
         }
         r.set_limits(Limits::default());
         assert_eq!(r.run("bad"), Ok(JsValue::Number(0.0)), "{spare}");
+        assert_eq!(r.run("seen"), Ok(JsValue::Number(200.0)), "{spare}");
     }
     assert!(finished > 0);
 }

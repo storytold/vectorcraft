@@ -972,6 +972,7 @@ fn code(ops: Vec<Op>) -> Code {
         params: Vec::new(),
         vars: Vec::new(),
         fun_decls: Vec::new(),
+        annex_vars: Vec::new(),
         uses_arguments: false,
         source,
         span: (0, 0),

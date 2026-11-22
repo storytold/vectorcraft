@@ -123,6 +123,7 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     method(interp, object_proto, "propertyIsEnumerable", property_is_enumerable, 1)?;
 
     let function = native(interp, "Function", function_ctor, 1, NativeKind::Plain, true)?;
+    interp.intrinsics.function_ctor = function;
     constructor(interp, "Function", function, function_proto)?;
     let call = native(interp, "call", unreachable_native, 1, NativeKind::Call, false)?;
     data(interp, function_proto, "call", Value::Object(call), HIDDEN)?;

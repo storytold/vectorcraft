@@ -106,6 +106,9 @@ struct FnCompiler<'a> {
 struct Hoisted {
     vars: Vec<Key>,
     fun_decls: Vec<(Key, u32)>,
+    /// The names of block functions (Annex B.3.3) that are neither a `var` nor a function at the
+    /// top of the body.
+    annex_vars: Vec<Key>,
 }
 
 fn key_of(name: &str) -> Key {
@@ -244,7 +247,8 @@ impl<'a> FnCompiler<'a> {
     /// hoisted; one in a block is instantiated when the block is entered, and outside strict mode
     /// code its name is also a variable (Annex B.3.3) unless that clashes with a parameter or with
     /// a `let` or a `const` of the body or of a block or loop around the declaration, or with a
-    /// function of a block around the one that holds it.
+    /// function of a block around the one that holds it. Such a name that the body does not also
+    /// declare with `var` or as a function at its top goes in [`Hoisted::annex_vars`].
     fn hoist(&mut self, body: &[StmtId], params: &[Key]) -> CResult<Hoisted> {
         let mut out = Hoisted::default();
         let mut seen = HashSet::new();
@@ -259,6 +263,7 @@ impl<'a> FnCompiler<'a> {
             }
         };
         let mut annex: Vec<(Key, usize, StmtId)> = Vec::new();
+        let mut annex_seen = HashSet::new();
         while let Some((id, nested, scope)) = work.pop() {
             let Some(stmt) = self.ast.stmt(id) else { return internal("statement out of range") };
             let inner = self.es2015;
@@ -366,7 +371,9 @@ impl<'a> FnCompiler<'a> {
             }
             if !clash {
                 self.annex.insert(id);
-                add_var(&mut out, k);
+                if !seen.contains(&k) && !out.fun_decls.iter().any(|(name, _)| *name == k) && annex_seen.insert(k.clone()) {
+                    out.annex_vars.push(k);
+                }
             }
         }
         Ok(out)
@@ -1800,6 +1807,7 @@ impl<'a> FnCompiler<'a> {
             params: meta.params,
             vars: hoisted.vars,
             fun_decls: hoisted.fun_decls,
+            annex_vars: hoisted.annex_vars,
             uses_arguments: self.uses_arguments,
             source: self.source.clone(),
             span: meta.span,
@@ -1848,7 +1856,10 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
     let params: Vec<Key> = f.params.iter().map(|p| key_of(&p.name)).collect();
     let rest = f.rest.as_ref().map(|r| key_of(&r.name));
     let all_params: Vec<Key> = params.iter().chain(&rest).cloned().collect();
-    let hoisted = c.hoist(&f.body, &all_params)?;
+    let mut hoisted = c.hoist(&f.body, &all_params)?;
+    // A function's block functions always have their variable (Annex B.3.3.1).
+    let annex = std::mem::take(&mut hoisted.annex_vars);
+    hoisted.vars.extend(annex);
     let top_scope = c.list_scope(&f.body, false)?;
     let param_init = !f.simple_params();
     if param_init {

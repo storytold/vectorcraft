@@ -4,7 +4,7 @@
 //! reaches through it. `AsyncFunction` is not a global.
 
 use super::{data, dynamic_function, native};
-use crate::heap::{CONFIGURABLE, Class, NativeKind, ObjId, Object};
+use crate::heap::{CONFIGURABLE, Class, NativeKind, Object};
 use crate::interp::{Interp, JsResult};
 use crate::value::Value;
 
@@ -16,23 +16,16 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     interp.promises.async_function_proto = Some(proto);
     let ctor = native(interp, "AsyncFunction", async_function_ctor, 1, NativeKind::Plain, true)?;
     interp.promises.async_function_ctor = Some(ctor);
-    // `Function` is the constructor's prototype (section 25.5.2).
-    let function_ctor = constructor_of(interp, function_proto);
+    // The built-in `Function` is the constructor's prototype (section 25.5.2), even after a
+    // script has replaced `Function.prototype.constructor`.
+    let function_ctor = interp.intrinsics.function_ctor;
     if let Some(o) = interp.heap.object_mut(ctor) {
-        o.proto = function_ctor.or(o.proto);
+        o.proto = Some(function_ctor);
     }
     data(interp, ctor, "prototype", Value::Object(proto), 0)?;
     // Configurable and not writable (section 25.5.3.1), unlike the `constructor` of the ordinary
     // built-in prototypes.
     data(interp, proto, "constructor", Value::Object(ctor), CONFIGURABLE)
-}
-
-/// The `constructor` property `proto` has from the built-ins, when it is an object.
-fn constructor_of(interp: &Interp, proto: ObjId) -> Option<ObjId> {
-    match interp.get_own_property(proto, &crate::heap::key("constructor")) {
-        Ok(Some(crate::heap::Prop::Data { value: Value::Object(o), .. })) => Some(o),
-        _ => None,
-    }
 }
 
 /// `AsyncFunction(p1, …, body)` and `new AsyncFunction(…)` (section 25.5.1.1).

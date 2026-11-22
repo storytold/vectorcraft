@@ -30,7 +30,8 @@
 //!
 //! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
 //! arrow functions, templates, default and rest parameters) without and with that option, and
-//! prints both counts; its failures with the option go to `es2015-failures.txt`.
+//! prints both counts; its failures with the option, and the runs without it that panicked, go to
+//! `es2015-failures.txt`.
 //!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
 //! test under `test/annexB/language/` without a feature tag the same way as the ES5 parse subset
@@ -42,8 +43,8 @@
 //! Another test runs the tests under `test/built-ins/Promise` in realms with `Options::es2015`:
 //! those whose feature tags name only `Promise`, `Promise.allSettled` and
 //! `Promise.prototype.finally`, whose code parses and uses only the built-ins present. `async` tests
-//! run with the suite's `doneprintHandle.js` and pass when they print the completion line. Its
-//! failures go to `promise-failures.txt`.
+//! run with the suite's `doneprintHandle.js` and pass when they print the completion line and no
+//! line that starts with the failure prefix. Its failures go to `promise-failures.txt`.
 //!
 //! The runner reads only regular files inside the suite: it does not follow symbolic links, refuses
 //! an `includes:` name that leaves the `harness/` folder, and refuses a file over
@@ -695,13 +696,25 @@ struct Es2015Counts {
     failures: String,
 }
 
+impl Es2015Counts {
+    /// The failures of the run with the option, then each run without it that panicked, marked
+    /// with `without`.
+    fn report(after: &Es2015Counts, before: &Es2015Counts, without: &str) -> String {
+        let mut report = after.failures.clone();
+        for line in before.failures.lines().filter(|l| l.ends_with(": PANIC")) {
+            report.push_str(&format!("{line} ({without})\n"));
+        }
+        report
+    }
+}
+
 /// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`] whose feature
 /// tags are all in [`ES2015_FEATURES`], and the tests elsewhere under `test/language/` with feature
 /// tags that are all in it. Negative parse tests must give a `SyntaxError`; the other tests run in a
 /// new realm after the harness, as [`run_tests`] runs them, skipping module and asynchronous tests
 /// and those that need a missing built-in. Each test is read twice, without and with
-/// [`Options::es2015`], and the counts of both are printed; the failures with it go to
-/// `es2015-failures.txt`.
+/// [`Options::es2015`], and the counts of both are printed; the failures with it, and the runs
+/// without it that panicked, go to `es2015-failures.txt`.
 fn run_es2015(dir: &Path) {
     let language = or_fail(inside(dir, "test/language"));
     assert!(language.is_dir(), "{} is not a test262 checkout", dir.display());
@@ -779,7 +792,7 @@ fn run_es2015(dir: &Path) {
     assert!(selected > 0, "no ES2015 tests under {}", language.display());
     let [before, after] = counts;
     let report = dir.join("es2015-failures.txt");
-    if let Err(e) = std::fs::write(&report, &after.failures) {
+    if let Err(e) = std::fs::write(&report, Es2015Counts::report(&after, &before, "without Options::es2015")) {
         println!("could not write {}: {e}", report.display());
     }
     let line = |c: &Es2015Counts| {
@@ -869,11 +882,12 @@ fn promise_builtins_run() {
 }
 
 /// Runs one test that may be asynchronous in a new realm made with `options` and a global `print`
-/// that collects its output; an `async` test without a runtime negative passes when it prints
-/// `Test262:AsyncTestComplete`, and one with a runtime negative must throw that error.
+/// that collects its output; an `async` test without a runtime negative passes when one `print`
+/// call gives exactly `Test262:AsyncTestComplete` and none gives a value that starts with
+/// `Test262:AsyncTestFailure:`, and one with a runtime negative must throw that error.
 fn run_promise_one(script: &str, negative_type: Option<&str>, asynchronous: bool, options: &Options) -> Result<(), String> {
     let mut realm = Realm::with_options(options.clone(), Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
-    let printed = std::rc::Rc::new(std::cell::RefCell::new(String::new()));
+    let printed = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let out = printed.clone();
     realm.define_function("print", move |args| {
         let line = match args.first() {
@@ -881,18 +895,15 @@ fn run_promise_one(script: &str, negative_type: Option<&str>, asynchronous: bool
             Some(other) => format!("{other:?}"),
             None => String::new(),
         };
-        out.borrow_mut().push_str(&line);
-        out.borrow_mut().push('\n');
+        out.borrow_mut().push(line);
         Ok(JsValue::Undefined)
     });
     let result = realm.run(script);
     if asynchronous && result.is_ok() && negative_type.is_none() {
         let printed = printed.borrow();
-        return if printed.contains("Test262:AsyncTestComplete") && !printed.contains("Test262:AsyncTestFailure") {
-            Ok(())
-        } else {
-            Err(format!("printed {:?}", printed.trim()))
-        };
+        let complete = printed.iter().any(|l| l == "Test262:AsyncTestComplete");
+        let failed = printed.iter().any(|l| l.starts_with("Test262:AsyncTestFailure:"));
+        return if complete && !failed { Ok(()) } else { Err(format!("printed {:?}", printed.join("\n"))) };
     }
     match (result, negative_type) {
         (Ok(_), None) => Ok(()),
@@ -1014,7 +1025,8 @@ fn async_functions_run() {
 /// [`ASYNC_FEATURES`], twice: with [`Options::es2015`] alone and with [`Options::es2017`]. Negative
 /// parse tests must not parse; the others run as [`run_promise`] runs them, `async` tests
 /// included, skipping module tests and those that need a missing built-in. Prints the counts of
-/// both and writes the failures with [`Options::es2017`] to `async-function-failures.txt`.
+/// both and writes the failures with [`Options::es2017`], and the runs with [`Options::es2015`]
+/// alone that panicked, to `async-function-failures.txt`.
 fn run_async_functions(dir: &Path) {
     let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
     let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
@@ -1092,7 +1104,7 @@ fn run_async_functions(dir: &Path) {
     assert!(selected > 0, "no async-function tests under {}", dir.display());
     let [before, after] = counts;
     let report = dir.join("async-function-failures.txt");
-    if let Err(e) = std::fs::write(&report, &after.failures) {
+    if let Err(e) = std::fs::write(&report, Es2015Counts::report(&after, &before, "with Options::es2015 alone")) {
         println!("could not write {}: {e}", report.display());
     }
     let line = |c: &Es2015Counts| {
