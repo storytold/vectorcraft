@@ -532,6 +532,25 @@ fn file_place_without_the_dialog_takes_the_pdf_text_preference() {
     assert_eq!(type_objects(&app), 2, "Editable: page 1's type object");
 }
 
+/// PDF bytes placed without a `name`, or under another extension, are a PDF by their content, as
+/// `file.place` reads them, and take the PDF Text preference; under a `.ai` name they are placed as
+/// the file says.
+#[test]
+fn pdf_bytes_without_a_pdf_name_take_the_pdf_text_preference() {
+    let mut app = app();
+    set_pdf_text(&mut app, "outlines");
+    let data = vectorcraft_format::base64_encode(&text_pages(1));
+    crate::place::run(&mut app, &json!({"dataBase64": data, "showImportOptions": false})).unwrap();
+    assert!(app.ui.dialog.is_none(), "no dialog");
+    assert_eq!(type_objects(&app), 0, "unnamed bytes: outlines");
+
+    crate::place::run(&mut app, &json!({"name": "page.bin", "dataBase64": data, "showImportOptions": false})).unwrap();
+    assert_eq!(type_objects(&app), 0, "another extension: outlines");
+
+    crate::place::run(&mut app, &json!({"name": "page.ai", "dataBase64": data, "showImportOptions": false})).unwrap();
+    assert_eq!(type_objects(&app), 1, "a .ai file: its own text");
+}
+
 /// With Show Import Options off, an encrypted PDF placed with an empty `password` asks for its
 /// password, as one placed without a `password` does.
 #[test]
