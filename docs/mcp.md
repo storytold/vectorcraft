@@ -7344,8 +7344,9 @@ With no path being drawn (after Escape or Enter, or before the first click), the
 describes. A drag on one of their anchors moves that anchor, and a drag that starts on one of several selected anchors
 moves them all; a drag on a segment moves that segment's two ends. The tool selects what it moves
 (`select.anchors` or `select.segments` with `mode: "set"`) and moves it with `path.moveAnchors {dx, dy, interpolate:
-true}`, one undo step per drag: a segment with one moved end is turned and scaled to its new ends, so a line stays a
-line and an arc stays an arc through the same angle, and at a smooth point the handles stay in line. A dragged anchor
+true}`, one undo step per drag: a segment with one moved end is turned and scaled to its new ends, so beside a corner
+anchor a line stays a line and an arc stays an arc through the same angle; at a smooth anchor the handles stay in line
+and the segments bend to meet, so an arc there need not stay circular. A dragged anchor
 snaps to Smart Guides; a dragged segment does not. Escape during the drag takes it back. A click on an anchor selects
 it alone and Shift-click adds it to the selected anchors or takes it out (`select.anchors` with `"set"` or
 `"toggle"`). A click on an end of an open path still goes on drawing from it, a drag there moves the end, and a click

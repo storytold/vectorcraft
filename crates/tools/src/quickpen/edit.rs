@@ -8,11 +8,13 @@
 //! of an open path goes on drawing from it, as before.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use serde_json::json;
-use vectorcraft_doc::{AnchorRef, NodeId, Selection};
+use vectorcraft_doc::{AnchorRef, Node, NodeId, Selection};
 use vectorcraft_geom::Point;
 
+use super::{same_node, shared_node};
 use crate::draw2::{anchor_in, segment_in, shown_paths};
 use crate::guides::{PointSnap, Targets};
 use crate::{Action, Cursor, Overlay, ToolContext};
@@ -79,22 +81,33 @@ pub(super) struct Edit {
     pub(super) shift: bool,
     /// Whether the press has dragged far enough to move what it holds (an undo step began).
     pub(super) began: bool,
+    /// The grabbed path as the document had it when the press went down.
+    pressed: Option<Arc<Node>>,
     snap: Option<PointSnap>,
     pub(super) guides: Vec<Overlay>,
 }
 
 impl Edit {
-    pub(super) fn new(grab: Grab, start: Point, shift: bool) -> Self {
-        Self { grab, start, shift, began: false, snap: None, guides: vec![] }
+    pub(super) fn new(cx: &ToolContext, grab: Grab, start: Point, shift: bool) -> Self {
+        let pressed = shared_node(cx.doc, grab.id()).cloned();
+        Self { grab, start, shift, began: false, pressed, snap: None, guides: vec![] }
     }
 
     /// Moves what the press holds by the drag to `p`. The first move selects the anchor, or the
     /// segment, unless it is already selected, and begins the undo step; a drag that starts on
-    /// one of several selected anchors moves them all.
+    /// one of several selected anchors moves them all. When the grabbed path changed after the
+    /// press went down, the drag does not begin.
     pub(super) fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
         let mut out = vec![];
         if !self.began {
             let id = self.grab.id();
+            let unchanged = match (cx.doc.node(id), self.pressed.as_ref()) {
+                (Some(now), Some(then)) => same_node(now, then),
+                _ => false,
+            };
+            if !unchanged {
+                return out;
+            }
             let Some(picked) = self.grab.anchors(cx) else { return out };
             let already = cx.selection.partial(id).is_some_and(|s| picked.iter().all(|a| s.contains(a)));
             let moving = if already {

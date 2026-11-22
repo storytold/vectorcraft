@@ -450,7 +450,7 @@ impl QuickPenTool {
             return vec![Action::Begin("Quick Pen".into()), Action::Preview(COMMAND.into(), self.params(false)), drawn()];
         }
         if let Some(grab) = edit::grab_at(cx, p, tol) {
-            self.edit = Some(Edit::new(grab, p, shift));
+            self.edit = Some(Edit::new(cx, grab, p, shift));
             return vec![];
         }
         if let Some((id, si, at_first)) = open_end_at(cx, p, tol, None)
@@ -496,14 +496,18 @@ impl QuickPenTool {
         }
     }
 
-    /// The release of a press on an anchor or a segment of a selected path: a drag moves what it
-    /// holds to `p` and ends its undo step. A click on an end of an open path goes on drawing from
-    /// it, a click on another anchor selects it alone (with Shift, adds it to the selected anchors
-    /// or takes it out), and a click on a segment starts a new path there.
+    /// The release of a press on an anchor or a segment of a selected path: a drag, also one let
+    /// go past the drag distance after shorter drag events, moves what it holds to `p` and ends
+    /// its undo step. A click on an end of an open path goes on drawing from it, a click on another
+    /// anchor selects it alone (with Shift, adds it to the selected anchors or takes it out), and a
+    /// click on a segment starts a new path there.
     fn release_edit(&mut self, cx: &ToolContext, mut e: Edit, p: Point) -> Vec<Action> {
-        if e.began {
+        if e.began || p.distance(e.start) >= cx.tol(DRAG_PX) {
             let mut out = e.drag(cx, p);
-            out.push(Action::Commit);
+            // A drag that could not begin (its path changed under the press) has no step to end.
+            if e.began {
+                out.push(Action::Commit);
+            }
             return out;
         }
         match e.grab {

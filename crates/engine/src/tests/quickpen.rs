@@ -644,6 +644,46 @@ fn a_drag_on_an_open_end_moves_it() {
     assert_eq!(points(&s), [pt(100.0, 300.0), pt(350.0, 350.0), pt(350.0, 450.0)]);
 }
 
+/// A press let go past the drag distance moves what it holds even when no drag event went that
+/// far: an inner anchor moves, and an open end moves instead of going on drawing.
+#[test]
+fn a_release_past_the_drag_distance_moves_the_anchor() {
+    let mut s = session();
+    selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 102.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 150.0), v).unwrap();
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 150.0), pt(300.0, 100.0)]);
+    assert_eq!(undo_steps(&s), undo + 1);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 200.0), v).unwrap();
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 150.0), pt(300.0, 200.0)]);
+    assert_eq!(undo_steps(&s), undo + 2);
+    assert_eq!(paths(&s).len(), 1, "no new path");
+}
+
+/// When another command edits the path while the press is down, neither a drag nor a release past
+/// the drag distance moves the anchor the press found.
+#[test]
+fn an_edit_during_an_edit_press_stops_the_move() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let v = view();
+    for (drag, x) in [(true, 90.0), (false, 80.0)] {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+        s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": x, "y": 90})).unwrap();
+        let undo = undo_steps(&s);
+        if drag {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 150.0), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 150.0), v).unwrap();
+        assert_eq!(points(&s), [pt(x, 90.0), pt(200.0, 100.0), pt(300.0, 100.0)], "drag: {drag}");
+        assert_eq!(undo_steps(&s), undo, "drag: {drag}");
+    }
+}
+
 /// A click on an anchor selects it alone, Shift-click adds another, and Delete (`edit.clear`, the
 /// context menu's Delete) then removes both.
 #[test]
