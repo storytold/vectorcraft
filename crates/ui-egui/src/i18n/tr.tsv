@@ -4670,6 +4670,7 @@ axis	Both	Her İkisi
 @msg	the script is no longer in the Scripts folder	betik artık Scripts klasöründe değil
 	Some scripts were not listed	Bazı komut dosyaları listelenmedi
 	The Scripts folder cannot be read	Scripts klasörü okunamıyor
+@msg	The Startup Scripts folder cannot be read	Startup Scripts klasörü okunamıyor
 	Loading scripts…	Betikler yükleniyor…
 	The Scripts folder is still being read	Scripts klasörü hâlâ okunuyor
 @msg	the script's run is no longer available	betiğin çalıştırması artık kullanılamıyor

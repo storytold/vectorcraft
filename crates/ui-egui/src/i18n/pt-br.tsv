@@ -6116,6 +6116,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	the script is no longer in the Scripts folder	o script não está mais na pasta Scripts
 	Some scripts were not listed	Alguns scripts não foram listados
 	The Scripts folder cannot be read	Não é possível ler a pasta Scripts
+@msg	The Startup Scripts folder cannot be read	Não é possível ler a pasta Startup Scripts
 	Loading scripts…	Carregando scripts…
 	The Scripts folder is still being read	A pasta Scripts ainda está sendo lida
 @msg	the script's run is no longer available	a execução do script não está mais disponível

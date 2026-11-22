@@ -601,6 +601,27 @@ fn with_run_startup_scripts_on_other_script_and_the_launch_run_the_startup_scrip
 }
 
 #[test]
+fn a_startup_scripts_folder_that_cannot_be_read_shows_in_the_status_bar_at_launch_and_a_missing_one_does_not() {
+    let dir = folder("startup-unreadable");
+    let mut app = app(&dir);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    let startup = dir.join("Startup Scripts");
+    app.session.attach_startup_scripts_dir(startup.clone());
+    app.status("before");
+    script_runs::run_at_launch(&mut app);
+    assert_eq!(app.ui.status, "before", "a missing folder runs nothing and says nothing");
+    // A file where the folder should be cannot be listed.
+    std::fs::write(&startup, "not a folder").unwrap();
+    script_runs::run_at_launch(&mut app);
+    assert!(!app.session.script_running());
+    // The message names the folder without its path, which automation replies would show.
+    assert_eq!(app.ui.status, "The Startup Scripts folder cannot be read");
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    assert_eq!(crate::i18n::message(de, &app.ui.status), "Der Ordner „Startup Scripts“ kann nicht gelesen werden");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn a_first_read_that_ends_without_a_listing_says_the_folder_cannot_be_read_and_the_next_read_tries_again() {
     let dir = folder("lost");
     let app = app(&dir);

@@ -4948,6 +4948,7 @@ axis	Both	Оба
 @msg	the script is no longer in the Scripts folder	скрипт больше не находится в папке Scripts
 	Some scripts were not listed	Некоторые сценарии не показаны
 	The Scripts folder cannot be read	Не удалось прочитать папку Scripts
+@msg	The Startup Scripts folder cannot be read	Не удалось прочитать папку Startup Scripts
 	Loading scripts…	Загрузка сценариев…
 	The Scripts folder is still being read	Папка Scripts ещё читается
 @msg	the script's run is no longer available	выполнение скрипта больше недоступно

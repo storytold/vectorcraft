@@ -5249,6 +5249,7 @@ imageTrace	Outline	Obrys
 @msg	the script is no longer in the Scripts folder	skript už není ve složce Scripts
 	Some scripts were not listed	Některé skripty nebyly uvedeny
 	The Scripts folder cannot be read	Složku Scripts nelze přečíst
+@msg	The Startup Scripts folder cannot be read	Složku Startup Scripts nelze přečíst
 	Loading scripts…	Načítání skriptů…
 	The Scripts folder is still being read	Složka Scripts se stále načítá
 @msg	the script's run is no longer available	běh skriptu již není k dispozici

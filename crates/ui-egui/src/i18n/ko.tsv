@@ -5727,6 +5727,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	the script is no longer in the Scripts folder	스크립트가 더 이상 Scripts 폴더에 없습니다
 	Some scripts were not listed	일부 스크립트가 나열되지 않았습니다
 	The Scripts folder cannot be read	Scripts 폴더를 읽을 수 없습니다
+@msg	The Startup Scripts folder cannot be read	Startup Scripts 폴더를 읽을 수 없습니다
 	Loading scripts…	스크립트 불러오는 중…
 	The Scripts folder is still being read	Scripts 폴더를 아직 읽는 중입니다
 @msg	the script's run is no longer available	스크립트 실행을 더 이상 사용할 수 없습니다

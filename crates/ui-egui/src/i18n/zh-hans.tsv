@@ -5463,6 +5463,7 @@ imageTrace	Outline	轮廓
 @msg	the script is no longer in the Scripts folder	脚本已不在 Scripts 文件夹中
 	Some scripts were not listed	部分脚本未列出
 	The Scripts folder cannot be read	无法读取 Scripts 文件夹
+@msg	The Startup Scripts folder cannot be read	无法读取 Startup Scripts 文件夹
 	Loading scripts…	正在载入脚本…
 	The Scripts folder is still being read	仍在读取 Scripts 文件夹
 @msg	the script's run is no longer available	脚本运行已不可用

@@ -4810,6 +4810,7 @@ axis	Both	Båda
 @msg	the script is no longer in the Scripts folder	skriptet finns inte längre i mappen Scripts
 	Some scripts were not listed	Vissa skript visas inte i listan
 	The Scripts folder cannot be read	Mappen Scripts kan inte läsas
+@msg	The Startup Scripts folder cannot be read	Mappen Startup Scripts kan inte läsas
 	Loading scripts…	Läser in skript…
 	The Scripts folder is still being read	Mappen Scripts läses fortfarande
 @msg	the script's run is no longer available	skriptets körning är inte längre tillgänglig

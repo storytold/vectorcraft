@@ -91,13 +91,16 @@ pub(crate) fn run_chosen(app: &mut VectorcraftApp, params: Value) -> Result<Valu
 }
 
 /// When the app has started, out of Safe Mode: the startup scripts run when General › Run Startup
-/// Scripts is on (`script.startup.run`). A failure to start them shows in the status bar.
+/// Scripts is on (`script.startup.run`). A failure to start them, or a Startup Scripts folder that
+/// is there and cannot be read, shows in the status bar.
 pub fn run_at_launch(app: &mut VectorcraftApp) {
     if app.session.startup_skip().is_some() {
         return;
     }
-    if let Err(e) = app.run("script.startup.run", json!({"reason": "launch"})) {
-        app.status(e);
+    match app.run("script.startup.run", json!({"reason": "launch"})) {
+        Ok(reply) if reply["unreadable"] == true => app.status("The Startup Scripts folder cannot be read"),
+        Ok(_) => {}
+        Err(e) => app.status(e),
     }
 }
 

@@ -5798,6 +5798,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	the script is no longer in the Scripts folder	スクリプトは Scripts フォルダーにもうありません
 	Some scripts were not listed	一部のスクリプトは一覧に表示されていません
 	The Scripts folder cannot be read	Scripts フォルダーを読み込めません
+@msg	The Startup Scripts folder cannot be read	Startup Scripts フォルダーを読み込めません
 	Loading scripts…	スクリプトを読み込み中…
 	The Scripts folder is still being read	Scripts フォルダーをまだ読み込んでいます
 @msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました

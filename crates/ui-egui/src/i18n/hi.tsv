@@ -7587,6 +7587,7 @@ arrowhead	Feather	पंख
 @msg	the script is no longer in the Scripts folder	स्क्रिप्ट अब Scripts फ़ोल्डर में नहीं है
 	Some scripts were not listed	कुछ स्क्रिप्ट सूचीबद्ध नहीं की गईं
 	The Scripts folder cannot be read	Scripts फ़ोल्डर पढ़ा नहीं जा सकता
+@msg	The Startup Scripts folder cannot be read	Startup Scripts फ़ोल्डर पढ़ा नहीं जा सकता
 	Loading scripts…	स्क्रिप्ट लोड हो रही हैं…
 	The Scripts folder is still being read	Scripts फ़ोल्डर अभी भी पढ़ा जा रहा है
 @msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है

@@ -3174,7 +3174,8 @@ The rest of this section is VectorCraft's own rules:
 
 - Only the folder's own `.jsx` files run, never its subfolders. Links, names that start with a dot, files Windows marks
   hidden or system, names longer than 255 bytes and other file types are left out. A listing stops at 2,048 folder
-  entries, 512 scripts or 250 ms. A folder that is missing runs nothing.
+  entries, 512 scripts or 250 ms. A folder that is missing runs nothing. At launch, when the folder is there and cannot
+  be read, or a file is where the folder should be, the status bar says that the folder cannot be read.
 - The scripts run one at a time, sorted by name without regard to case, then by name. Each runs as `script.run` runs a
   file, with the same limits, and each that changes a document adds its own Run Script undo step. The chosen script
   runs after the last of them.
@@ -3187,6 +3188,7 @@ The rest of this section is VectorCraft's own rules:
 - Running the startup scripts is itself a `script.*` command, which a script cannot run, so a startup script cannot
   start another round of them. `script.run` called from automation runs alone.
 - The web build has no Startup Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
+  `vectorcraft-cli` uses the same folder and runs it only through `script.startup.run`.
 
 `script.startup.run {reason: launch|menu, then?, maxFuel?}` runs the folder now. `then` holds `script.run`'s
 parameters for a script that runs after the startup scripts; `maxFuel` limits each startup script's instructions
