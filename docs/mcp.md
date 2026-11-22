@@ -8918,7 +8918,7 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
-rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
+rows, spacing, rightToLeft}` (`rows`, a whole number from 1 to 1000, gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
 an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are
 fewer artboards, until `columns` without `rows`, or another layout, is given; New Document's Columns shows the columns
 the rows give the current number of artboards, and New Document drops the rows when Columns or the layout changes),

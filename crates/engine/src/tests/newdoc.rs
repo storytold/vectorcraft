@@ -161,6 +161,8 @@ fn ppi_overprint_preview_and_bad_params() {
         json!({"artboardLayout": {"layout": "spiral"}}),
         json!({"artboardLayout": {"columns": 0}}),
         json!({"artboardLayout": {"rows": 0}}),
+        json!({"artboardLayout": {"layout": "gridByColumn", "rows": 1.5}}),
+        json!({"artboardLayout": {"layout": "gridByColumn", "rows": 1001}}),
         json!({"artboardLayout": {"tiles": 2}}),
         json!({"units": "furlongs"}),
         json!({"width": 160000, "artboards": 1000}),

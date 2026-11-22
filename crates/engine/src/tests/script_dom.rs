@@ -483,7 +483,7 @@ fn file_new_takes_the_rows_of_a_grid_by_column() {
         assert_eq!((by_row.rows, by_row.to_json()["artboardLayout"].get("rows")), (0, None), "{layout}");
     }
     let e = s.execute("file.new", &json!({"artboardLayout": {"layout": "gridByColumn", "rows": 0}})).unwrap_err().to_string();
-    assert!(e.contains("rows must be 1 or more"), "{e}");
+    assert!(e.contains("rows must be a whole number from 1 to 1000"), "{e}");
     for layout in ["gridByRow", "row", "column"] {
         let e = s.execute("file.new", &json!({"artboardLayout": {"layout": layout, "rows": 2}})).unwrap_err().to_string();
         assert!(e.contains("rows needs the gridByColumn layout"), "{layout}: {e}");
