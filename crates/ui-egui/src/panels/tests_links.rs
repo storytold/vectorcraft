@@ -6,12 +6,13 @@ use std::rc::Rc;
 
 use egui::vec2;
 use egui_kittest::Harness;
-use egui_kittest::kittest::{NodeT, Queryable};
+use egui_kittest::kittest::Queryable;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
 use crate::i18n::LangExt as _;
+use crate::tests::panel_harness::Panel;
 use crate::tests_labels::painted_text;
 
 /// A fresh folder for one test (removed when dropped).
@@ -110,33 +111,10 @@ fn count(h: &Rig, label: &str) -> usize {
     h.query_all_by_label(label).count()
 }
 
-/// The list row named `name`, by its access node.
-fn row_pos(h: &Rig, name: &str) -> egui::Pos2 {
-    let node = h.get_all_by_label(name).find(|n| n.accesskit_node().role() == egui::accesskit::Role::ListItem);
-    node.unwrap_or_else(|| panic!("no row `{name}`")).rect().center()
-}
-
-/// Click the row named `name` with `mods` held.
-fn click_row(h: &mut Rig, name: &str, mods: egui::Modifiers) {
-    let at = row_pos(h, name);
-    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: mods };
-    h.event(egui::Event::ModifiersChanged(mods));
-    h.event(egui::Event::PointerMoved(at));
-    h.event(button(true));
-    h.event(button(false));
-    h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
-    h.run_steps(2);
-}
-
 /// Runs the panel command `id` with `params` on the app in `h`, then a frame.
 fn command(h: &mut Rig, id: &str, params: serde_json::Value) {
     super::links::run(h.state_mut(), id, &params).expect("a panel command").unwrap();
     h.run_steps(2);
-}
-
-/// The menu item named `label` of an open row menu (the footer has buttons of the same names).
-fn menu_item<'h>(h: &'h Rig, label: &'h str) -> egui_kittest::Node<'h> {
-    h.get_all_by_label(label).find(|n| n.accesskit_node().role() == egui::accesskit::Role::MenuItem).unwrap_or_else(|| panic!("no item `{label}`"))
 }
 
 /// The selected objects' ids, in ascending order.
@@ -308,32 +286,32 @@ fn a_link_inside_a_symbol_is_listed_and_picked_in_the_panel() {
     let list = app.run("links.list", json!({})).unwrap();
     let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "inside.png").unwrap_or_else(|| panic!("{list}")).clone();
     assert_eq!(row["owner"]["kind"], "symbol", "{list}");
-    let mut h = rig(app);
-    assert!(shown(&h, "20 × 20 px"), "Link Info of the selected image in the layers");
-    click_row(&mut h, "inside.png", egui::Modifiers::NONE);
-    assert!(selected(h.state()).is_empty(), "the canvas can't select it");
-    assert!(shown(&h, "30 × 20 px"), "Link Info of the symbol's image");
+    let mut h = Panel::new(app, super::links::show);
+    assert!(h.shows("20 × 20 px"), "Link Info of the selected image in the layers");
+    h.click_with("inside.png", egui::Modifiers::NONE);
+    assert!(selected(&h.app()).is_empty(), "the canvas can't select it");
+    assert!(h.shows("30 × 20 px"), "Link Info of the symbol's image");
     // Copy Info without ids copies the row picked in the panel.
-    assert!(crate::menus::enabled(h.state(), "links.copyInfo"));
-    assert_eq!(h.state_mut().run("links.copyInfo", json!({})).unwrap()["text"], "inside.png");
-    assert_eq!(h.state_mut().clipboard_out.take().as_deref(), Some("inside.png"));
-    click_row(&mut h, "layer.png", egui::Modifiers::COMMAND);
-    assert_eq!(selected(h.state()), [layer]);
+    assert!(crate::menus::enabled(&h.app(), "links.copyInfo"));
+    assert_eq!(h.app().run("links.copyInfo", json!({})).unwrap()["text"], "inside.png");
+    assert_eq!(h.app().clipboard_out.take().as_deref(), Some("inside.png"));
+    h.click_with("layer.png", egui::Modifiers::COMMAND);
+    assert_eq!(selected(&h.app()), [layer]);
     // Both rows are selected until the canvas selection changes: then the panel's pick goes too.
-    click_row(&mut h, "layer.png", egui::Modifiers::COMMAND);
-    assert!(selected(h.state()).is_empty());
-    assert!(shown(&h, "30 × 20 px"), "the symbol's image is still picked");
-    h.state_mut().run("select.set", json!({"ids": [layer]})).unwrap();
-    h.run_steps(2);
-    assert!(shown(&h, "20 × 20 px"));
-    h.state_mut().run("select.set", json!({"ids": []})).unwrap();
-    h.run_steps(2);
-    assert!(!shown(&h, "30 × 20 px") && !shown(&h, "20 × 20 px"), "nothing is picked");
+    h.click_with("layer.png", egui::Modifiers::COMMAND);
+    assert!(selected(&h.app()).is_empty());
+    assert!(h.shows("30 × 20 px"), "the symbol's image is still picked");
+    h.app().run("select.set", json!({"ids": [layer]})).unwrap();
+    h.frame();
+    assert!(h.shows("20 × 20 px"));
+    h.app().run("select.set", json!({"ids": []})).unwrap();
+    h.frame();
+    assert!(!h.shows("30 × 20 px") && !h.shows("20 × 20 px"), "nothing is picked");
     // Go To clears the selection and says the link has no place on the canvas.
-    h.state_mut().run("select.set", json!({"ids": [layer]})).unwrap();
-    super::links::go_to(h.state_mut(), row["id"].as_u64().unwrap());
-    assert_eq!(h.state().ui.status, "The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas");
-    assert!(selected(h.state()).is_empty(), "the image in the layers is no longer selected");
+    h.app().run("select.set", json!({"ids": [layer]})).unwrap();
+    super::links::go_to(&mut h.app(), row["id"].as_u64().unwrap());
+    assert_eq!(h.app().ui.status, "The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas");
+    assert!(selected(&h.app()).is_empty(), "the image in the layers is no longer selected");
 }
 
 /// The tooltip of a row outside the layer tree says where the image is stored, so two rows of the
@@ -641,73 +619,47 @@ fn right_click_context_menu_in_links_panel() {
     // Initially embedded is selected, linked is unselected
     assert_eq!(selected(&app), vec![embedded]);
 
-    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
-        |ui, app: &mut VectorcraftApp| {
-            super::links::show(app, ui);
-        },
-        app,
-    );
-    h.run_steps(2);
-
-    let right_click = |h: &mut Harness<'static, VectorcraftApp>, label: &str| {
-        let node = h.get_all_by_label(label).find(|n| n.accesskit_node().role() == egui::accesskit::Role::ListItem).unwrap();
-        let pos = node.rect().center();
-        h.event(egui::Event::PointerMoved(pos));
-        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
-        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
-        h.run_steps(2);
-    };
+    let mut h = Panel::new(app, super::links::show);
 
     // 1. Right-click unselected "linked.png": selects it and opens context menu
-    right_click(&mut h, "linked.png");
-    assert_eq!(selected(h.state()), vec![linked], "right-clicking unselected row selects that row first");
-
-    let relink = menu_item(&h, "Relink…");
-    let go_to = menu_item(&h, "Go To Link");
-    let update = menu_item(&h, "Update Link");
-    let edit_orig = menu_item(&h, "Edit Original");
-    let show_folder = menu_item(&h, "Show in Folder");
-    let embed_img = menu_item(&h, "Embed Image");
+    h.secondary_click("linked.png");
+    assert_eq!(selected(&h.app()), vec![linked], "right-clicking unselected row selects that row first");
 
     // "Relink…" is enabled because the desktop can ask for a file
-    assert!(!relink.accesskit_node().is_disabled());
+    assert!(h.menu_item_enabled("Relink…"));
     // "Go To Link" is enabled because linked node is in canvas document
-    assert!(!go_to.accesskit_node().is_disabled());
+    assert!(h.menu_item_enabled("Go To Link"));
     // "Update Link" is disabled because linked file is not modified
-    assert!(update.accesskit_node().is_disabled());
+    assert!(!h.menu_item_enabled("Update Link"));
     // "Edit Original" and "Show in Folder" are enabled because linked file exists
-    assert!(!edit_orig.accesskit_node().is_disabled());
-    assert!(!show_folder.accesskit_node().is_disabled());
+    assert!(h.menu_item_enabled("Edit Original"));
+    assert!(h.menu_item_enabled("Show in Folder"));
     // "Embed Image" is enabled because it is a linked image
-    assert!(!embed_img.accesskit_node().is_disabled());
+    assert!(h.menu_item_enabled("Embed Image"));
 
     // 2. Click "Show in Folder" dispatches links.reveal
-    show_folder.click();
-    h.run_steps(2);
+    h.click_menu_item("Show in Folder");
     assert_eq!(revealed.borrow().len(), 1);
     assert!(revealed.borrow()[0].ends_with("linked.png"));
 
     // 3. Multi-selection: select both linked and embedded
-    h.state_mut().run("select.set", json!({"ids": [linked, embedded]})).unwrap();
-    assert_eq!(selected(h.state()), vec![linked, embedded]);
+    h.app().run("select.set", json!({"ids": [linked, embedded]})).unwrap();
+    assert_eq!(selected(&h.app()), vec![linked, embedded]);
 
     // Right-click "linked.png" while already selected in multi-selection: preserves selection
-    right_click(&mut h, "linked.png");
-    assert_eq!(selected(h.state()), vec![linked, embedded], "right-clicking selected row preserves multi-selection");
+    h.secondary_click("linked.png");
+    assert_eq!(selected(&h.app()), vec![linked, embedded], "right-clicking selected row preserves multi-selection");
 
     // 4. Click "Go To Link" focuses the art on canvas via go_to
-    let go_to_btn = menu_item(&h, "Go To Link");
-    assert!(!go_to_btn.accesskit_node().is_disabled());
-    go_to_btn.click();
-    h.run_steps(2);
-    assert_eq!(selected(h.state()), vec![linked]);
-    assert!(h.state().view().unwrap().fitted);
+    assert!(h.menu_item_enabled("Go To Link"));
+    h.click_menu_item("Go To Link");
+    assert_eq!(selected(&h.app()), vec![linked]);
+    assert!(h.app().view().unwrap().fitted);
 
     // 5. Right-click embedded image: displays "Unembed…" while "Edit Original" and "Show in Folder" are disabled
-    right_click(&mut h, "embedded.png");
-    assert_eq!(selected(h.state()), vec![embedded]);
-    let unembed_btn = menu_item(&h, "Unembed…");
-    assert!(!unembed_btn.accesskit_node().is_disabled());
-    assert!(menu_item(&h, "Edit Original").accesskit_node().is_disabled());
-    assert!(menu_item(&h, "Show in Folder").accesskit_node().is_disabled());
+    h.secondary_click("embedded.png");
+    assert_eq!(selected(&h.app()), vec![embedded]);
+    assert!(h.menu_item_enabled("Unembed…"));
+    assert!(!h.menu_item_enabled("Edit Original"));
+    assert!(!h.menu_item_enabled("Show in Folder"));
 }

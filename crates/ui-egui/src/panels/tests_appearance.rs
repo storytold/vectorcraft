@@ -777,8 +777,9 @@ fn transform_effect_preview_commit_cancel_and_undo_cover_artwork_targets() {
             app.run("effect.apply", json!({"effect": "distort.transform", "item": item})).unwrap();
             let baseline = render_artboard(&app.session.doc().unwrap().doc);
             let mut panel = Panel::new(app, appearance::show);
+            // The row's disclosure shows its effect rows.
             if let Some(i) = item {
-                panel.click(if i == 0 { "Fill:" } else { "Stroke:" });
+                panel.click(if i == 0 { "Expand Fill" } else { "Expand Stroke" });
             }
             panel.click("Transform");
             let mut app = panel.app();

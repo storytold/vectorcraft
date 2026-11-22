@@ -27,12 +27,15 @@ fn app(fill: &str, view: &str, gamut: bool) -> VectorcraftApp {
 #[test]
 fn uncalibrated_cmyk_marks_nothing() {
     let settings = ColorSettings { cmyk: cms::DEVICE_CMYK.into(), ..ColorSettings::default() };
-    assert!(Cms::new(&settings).is_ok());
+    let device = std::sync::Arc::new(Cms::new(&settings).unwrap());
     let app = app("#0000ff", "box", true);
     let gamut = super::color::gamut(&app);
-    for c in [Color::rgb(0.0, 0.0, 1.0), Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 0.0)] {
-        assert!(gamut.nearest(super::srgba(&c)).is_none(), "{c:?}");
-    }
+    // The map reads the active settings as it tests a color: uncalibrated CMYK on this thread.
+    cms::with_active(device, || {
+        for c in [Color::rgb(0.0, 0.0, 1.0), Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 0.0)] {
+            assert!(gamut.nearest(super::srgba(&c)).is_none(), "{c:?}");
+        }
+    });
 }
 
 /// A profile loaded again under the same name can change which colors are printable while the

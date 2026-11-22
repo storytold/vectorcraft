@@ -697,10 +697,8 @@ fn new_character_style_without_selection_uses_japanese_defaults() {
 
     let defaults = vectorcraft_engine::cmd::textstyles::default_new_style_attrs(&app.session, true);
     act(&mut app, Kind::Para, TextStyleAction::new_style(false, true));
-    let fields = fields_of(&app, "newTextStyle").unwrap();
-    for (key, value) in &defaults {
-        assert_eq!(fields.get(key), Some(value), "the dialog opens with the paragraph default {key}");
-    }
+    let edited = app.dialogs().unwrap().with(|host| host.get_mut::<crate::dialogs::new_text_style::NewTextStyle>().map(|d| d.edited()));
+    assert_eq!(edited, Some(Ok(defaults.clone())), "the dialog opens with the paragraph defaults");
     confirm_new(&mut app, "Lead");
     let style = app.session.doc().unwrap().doc.para_styles.iter().find(|style| style.name == "Lead").unwrap();
     assert_eq!(style.attrs, defaults, "the new style has the paragraph defaults for the interface language");

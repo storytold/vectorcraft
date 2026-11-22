@@ -42,8 +42,7 @@ fn the_color_panel_recolours_the_selected_point() {
     let shown = Rc::clone(&app);
     let mut fixture = Fixture::new(move |ui| color::show(&mut shown.borrow_mut(), ui));
     fixture.room(vec2(320.0, 700.0)).settle();
-    // PLAN: assumed color-w9's Color panel names its hex field "Hex" (co.A1).
-    let hex = fixture.by_label("Hex").unwrap_or_else(|| panic!("the Color panel's hex field"));
+    let hex = fixture.by_label("Hex color").unwrap_or_else(|| panic!("the Color panel's hex field"));
     fixture.click(&hex).key(Key::A, Modifiers::COMMAND).type_text("00FF00").key(Key::Enter, Modifiers::NONE).settle();
     assert_eq!(freeform(&app.borrow()).points[2].color.to_hex(), "#00ff00");
     assert!(matches!(current_paints(&app.borrow()).0, Paint::Gradient(_)), "still a gradient");

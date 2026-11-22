@@ -178,8 +178,8 @@ fn a_ramp_drag_is_one_undo_step() {
     let (app, id) = pathed();
     let (before, depth) = (spec(&app, id), undo_depth(&app));
     let mut p = Panel::new(app, show);
-    p.press("Ramp:");
-    p.frame();
+    // A drag along the slider from its middle to the right, the button held.
+    p.drag_hold_role("Ramp:", craft::ui::contract::Role::SLIDER, egui::vec2(60.0, 0.0));
     // While the button is down the blend shows the new value, and no undo step is recorded yet.
     assert!(p.app().session.in_interaction(), "the drag is in progress");
     assert_ne!(spec(&p.app(), id), before, "the drag previews on the blend");

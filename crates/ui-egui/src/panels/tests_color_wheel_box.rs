@@ -185,12 +185,13 @@ fn the_settings_are_kept_and_read_leniently() {
 /// A strip edit in an RGB channel's box that lands on a gray keeps the hue the panel showed.
 #[test]
 fn box_pick_inverts_box_pos_for_every_channel() {
-    let mut p = Panel::new(app(json!([0.3, 0.6, 0.3]), "red"));
+    // A cyan: the Red strip set to the green the Green box's strip shows lands on a gray.
+    let mut p = Panel::new(app(json!([0.3, 0.6, 0.6]), "green"));
     let green = p.number("Green").expect("the green strip has a value");
+    p.run("ui.colorWheel", json!({"channel": "red"}));
     p.set("Red", green);
-    p.set("Blue", green);
     assert_eq!(hsb(&fill(&p.app()))[1], 0.0, "a gray");
     p.run("ui.colorWheel", json!({"channel": "hue"}));
     let hue = p.number("Hue").expect("the hue strip has a value");
-    assert!((hue - 120.0).abs() < 2.0, "the hue the panel showed: {hue}");
+    assert!((hue - 180.0).abs() < 2.0, "the hue the panel showed: {hue}");
 }

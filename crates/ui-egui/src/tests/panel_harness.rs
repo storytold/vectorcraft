@@ -115,6 +115,14 @@ impl Panel {
         self.after();
     }
 
+    /// Whether the item named `name` of the open menu takes input, where a control of the panel may have the same name.
+    pub(crate) fn menu_item_enabled(&self, name: &str) -> bool {
+        let tree = self.fixture.tree();
+        let item = self.fixture.by_role(craft::ui::contract::Role::MENU_ITEM).into_iter().find(|t| tree.name_of(t.node) == Some(name));
+        let item = item.unwrap_or_else(|| panic!("no menu item {name:?} in {:?}", self.names()));
+        !tree.is_disabled_key(item.node)
+    }
+
     /// Clicks the control of `role` named `name`, where nodes of other roles share the name (a section's region,
     /// heading and disclosure button).
     pub(crate) fn click_role(&mut self, name: &str, role: craft::ui::contract::Role) {
@@ -149,6 +157,17 @@ impl Panel {
     /// Presses on the control named `name`, moves the pointer by `by` and keeps the button down until [`Panel::release`].
     pub(crate) fn drag_hold(&mut self, name: &str, by: Vec2) {
         let target = self.find(name);
+        self.fixture.drag_hold_at(target.center(), by);
+        self.after();
+    }
+
+    /// [`Panel::drag_hold`] on the control named `name` whose role is `role`, where controls of other roles share
+    /// the name (a slider beside its number box).
+    pub(crate) fn drag_hold_role(&mut self, name: &str, role: craft::ui::contract::Role, by: Vec2) {
+        self.frame();
+        let tree = self.fixture.tree();
+        let target = self.fixture.by_role(role).into_iter().find(|t| tree.name_of(t.node) == Some(name));
+        let target = target.unwrap_or_else(|| panic!("no {name:?} of the role in {:?}", self.names()));
         self.fixture.drag_hold_at(target.center(), by);
         self.after();
     }
