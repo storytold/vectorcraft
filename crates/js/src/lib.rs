@@ -56,6 +56,20 @@
 //! `new` (sections 12.2.5 and 12.3.6.1). Spread reads arrays, strings (by code point) and objects
 //! with a `length`, by index; other values are a `TypeError`. Destructuring, `for … of`, classes,
 //! generators and modules stay syntax errors.
+//!
+//! With [`Options::es2015`], the realm also has `Symbol` (ECMA-262 11th edition, section 19.4,
+//! <https://262.ecma-international.org/11.0/>): `Symbol.for` and `Symbol.keyFor` over a registry
+//! that lasts as long as the realm, the well-known Symbols `iterator`, `asyncIterator`,
+//! `hasInstance`, `toPrimitive` and `toStringTag` with the hooks ToPrimitive, `instanceof` and
+//! `Object.prototype.toString` read, Symbol-keyed properties with `Object.getOwnPropertySymbols`,
+//! and iterator objects with a `next` method from `Array.prototype.values`, `keys`, `entries` and
+//! `@@iterator`, `String.prototype[@@iterator]` (by code point) and every `arguments` object.
+//! `Date.prototype[@@toPrimitive]` converts a Date without a hint as with the String hint, and an
+//! object without an `@@toPrimitive` method, a Date included, converts without a hint as with the
+//! Number hint. A Symbol converted to a string or a number without `String(symbol)` or `toString` throws a
+//! `TypeError`. A string converts to a number in the `0b` and `0o` forms as well. Every iterator
+//! step and every prototype a Symbol-keyed lookup passes takes fuel, and every Symbol and registry
+//! entry counts against the heap limit.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -78,6 +92,7 @@ mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
 mod string_builtins;
+mod symbol;
 mod token;
 mod value;
 mod xml;
@@ -114,6 +129,10 @@ pub struct Options {
     /// template literals (tagged ones included), default and rest parameters, and spread in array
     /// literals, calls and `new`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
+    /// On, a realm also has the later editions' built-ins this engine has: `Symbol` with
+    /// Symbol-keyed properties and the iterators of arrays, strings and `arguments` objects, with
+    /// `0b` and `0o` strings converting to numbers. Off, a realm has the ES5.1 built-ins only, as
+    /// the app's scripts expect.
     pub es2015: bool,
 }
 
@@ -225,6 +244,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod symbol_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
