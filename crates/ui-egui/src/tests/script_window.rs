@@ -210,6 +210,53 @@ fn a_second_dialog_replaces_the_first() {
     assert_eq!(log(&app), json!([[1, "y"]]));
 }
 
+/// Draws one frame of the dialog layer for screen readers. → The role of the control with the
+/// keyboard focus.
+fn focused_role(app: &mut VectorcraftApp) -> Option<egui::accesskit::Role> {
+    let ctx = CTX.with(Clone::clone);
+    ctx.enable_accesskit();
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs::show(app, ui.ctx()));
+    out.textures_delta.clear();
+    let update = out.platform_output.accesskit_update?;
+    update.nodes.iter().find(|(id, _)| *id == update.focus).map(|(_, n)| n.role())
+}
+
+#[test]
+fn a_dialog_shown_in_place_of_another_gives_its_first_field_the_focus() {
+    use egui::accesskit::Role;
+    let mut app = app();
+    start(
+        &mut app,
+        "var a = new Window('dialog', 'A'); a.add('edittext', undefined, 'x'); a.add('button', undefined, 'OK'); a.show(); \
+        var b = new Window('dialog', 'B'); b.add('statictext', undefined, 'Name'); b.add('button', undefined, 'Back'); \
+        b.add('edittext', undefined, 'y'); b.add('button', undefined, 'OK'); vc.log(b.show());",
+    );
+    assert!(until_window(&mut app));
+    frame(&mut app, Vec::new());
+    frame(&mut app, Vec::new());
+    let role = focused_role(&mut app);
+    assert!(matches!(role, Some(Role::TextInput | Role::MultilineTextInput)), "the first dialog's field has the focus, not {role:?}");
+    let mut on_button = false;
+    for _ in 0..4 {
+        frame(&mut app, vec![key(egui::Key::Tab)]);
+        on_button = focused_role(&mut app) == Some(Role::Button);
+        if on_button {
+            break;
+        }
+    }
+    assert!(on_button, "Tab puts the focus on the first dialog's button");
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    assert!(until_window(&mut app));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("title"), "B");
+    frame(&mut app, Vec::new());
+    frame(&mut app, Vec::new());
+    let role = focused_role(&mut app);
+    assert!(matches!(role, Some(Role::TextInput | Role::MultilineTextInput)), "the second dialog's field has the focus, not {role:?}");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
 #[test]
 fn a_dialog_function_after_show_opens_its_own_dialog() {
     let mut app = app();

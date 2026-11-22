@@ -929,7 +929,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         revolve_gizmo::clear(ctx);
         app.ui.dialog_file = None;
         ctx.data_mut(|m| {
-            m.remove::<String>(shown_id);
+            m.remove::<(String, Option<u64>)>(shown_id);
             m.remove::<bool>(focus_id);
         });
         return;
@@ -937,13 +937,26 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !revolve_gizmo::active(&d) {
         revolve_gizmo::clear(ctx);
     }
-    let focus_first = ctx.data_mut(|m| {
-        if m.get_temp::<String>(shown_id).as_deref() != Some(d.kind.as_str()) {
-            m.insert_temp(shown_id, d.kind.clone());
+    // A ScriptUI dialog that a script showed in place of the one open is a new dialog too.
+    let shown_as = (d.kind.clone(), script_window::shown_of(&d));
+    let (focus_first, replaced) = ctx.data_mut(|m| {
+        let before = m.get_temp::<(String, Option<u64>)>(shown_id);
+        let replaced = before.as_ref().is_some_and(|b| b.0 == shown_as.0 && *b != shown_as);
+        if before.as_ref() != Some(&shown_as) {
+            m.insert_temp(shown_id, shown_as);
             m.insert_temp(focus_id, true);
         }
-        m.get_temp::<bool>(focus_id).unwrap_or(false)
+        (m.get_temp::<bool>(focus_id).unwrap_or(false), replaced)
     });
+    // It draws in the same window with the same control ids, so the control used in the dialog
+    // before it gives up the keyboard focus.
+    if replaced {
+        ctx.memory_mut(|m| {
+            if let Some(id) = m.focused() {
+                m.surrender_focus(id);
+            }
+        });
+    }
     // Not in the frame of a click (the one on the menu item that opened it): egui takes the focus
     // from a field the click missed, so the field takes it a frame later (#1367).
     let clicked = ctx.input(|i| i.pointer.any_click());

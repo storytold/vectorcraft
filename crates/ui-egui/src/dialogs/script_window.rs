@@ -54,6 +54,11 @@ pub(crate) fn is_open_for(d: &Dialog, w: &ScriptUiDialog) -> bool {
     d.kind == KIND && d.fields.get(SHOWN_KEY).and_then(Value::as_u64) == Some(w.shown)
 }
 
+/// Which `show()` of the run `d` is open for, when it is a ScriptUI dialog.
+pub(crate) fn shown_of(d: &Dialog) -> Option<u64> {
+    if d.kind == KIND { d.fields.get(SHOWN_KEY).and_then(Value::as_u64) } else { None }
+}
+
 fn heading(d: &Dialog) -> String {
     let title = d.str("title");
     if title.is_empty() { tl!("Script Alert").into() } else { vectorcraft_engine::script::dialogs::shown_text(&title, false) }
@@ -357,8 +362,13 @@ pub(crate) fn screen_reader_name(n: &UiNode, prompt: &str) -> String {
 fn edit(ui: &mut egui::Ui, d: &mut Dialog, rect: egui::Rect, (i, n, prompt): (usize, &UiNode, &str)) -> Option<UiEvent> {
     let key = draft_key(i);
     let mut text = d.fields.get(&key).and_then(Value::as_str).map_or_else(|| n.text.clone(), str::to_string);
+    let id = ui.make_persistent_id("edit");
+    // The first field that can be typed in takes the keyboard focus as the dialog opens.
+    if !n.readonly {
+        widgets::take_dialog_focus(ui, id, &text);
+    }
     let field = if n.multiline { egui::TextEdit::multiline(&mut text) } else { egui::TextEdit::singleline(&mut text) };
-    let r = ui.put(rect, field.interactive(!n.readonly).desired_width(rect.width()));
+    let r = ui.put(rect, field.id(id).interactive(!n.readonly).desired_width(rect.width()));
     name_for_screen_readers(ui, &r, n, prompt);
     if r.changed() {
         d.fields.insert(key.clone(), json!(text));
