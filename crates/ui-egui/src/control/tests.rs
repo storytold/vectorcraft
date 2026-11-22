@@ -755,8 +755,7 @@ fn the_method_table_routes_each_method_and_checks_its_params() {
         assert!(r["error"].as_str().is_some_and(|e| e.contains(&format!("`{key}`"))), "{method} {params}: {r}");
         assert_eq!((app.ui.view.rulers, app.ui.view.grid, app.ui.control_bar), before, "{method} {params}: nothing is set");
     }
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id]})).unwrap();
@@ -1025,8 +1024,7 @@ fn held_cmd_click(then: &str) {
 #[test]
 fn menu_dialogs_open_after_a_merge_on_another_thread() {
     for route in ["menu", "ui.menuDialog", "app dialog from the menu", "app dialog from a panel"] {
-        let mut app = VectorcraftApp::new(Session::new(), Services::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
         app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
         for k in 0..40 {
             app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
@@ -1115,7 +1113,7 @@ fn save_and_close_apply_a_merge_on_another_thread_first() {
     let dir = crate::tests_folder::Folder::adopt(vectorcraft_testkit::temp_dir("control-merge-save"));
     for then in ["file.saveAs", "file.exportAs", "file.close"] {
         let services = Services { write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))), ..Default::default() };
-        let mut app = VectorcraftApp::new(Session::new(), services);
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
         app.run("file.new", json!({"width": 800, "height": 200})).unwrap();
         for k in 0..40 {
             app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();

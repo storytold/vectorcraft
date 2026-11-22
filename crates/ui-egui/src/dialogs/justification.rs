@@ -219,8 +219,7 @@ mod tests {
 
     /// A selected area type object with two paragraphs.
     fn app() -> (VectorcraftApp, u64) {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        driver::install(&mut app);
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         let id = app.run("text.create", json!({"x": 10, "y": 10, "text": "One\nTwo", "area": {"width": 200, "height": 100}})).unwrap()["id"]
             .as_u64()
@@ -315,8 +314,7 @@ mod tests {
     /// A threaded story of three frames, first selected with the Type tool and Select All; a
     /// frame joined or left while the dialog is open is read at OK.
     fn threaded(frames: usize) -> (VectorcraftApp, Vec<u64>) {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        driver::install(&mut app);
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
         let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame.\n".repeat(6);
         let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
@@ -372,8 +370,7 @@ mod tests {
     /// of its own, and the first frame selected with the Selection tool → the app, the frames and
     /// the other type object.
     fn story_selected_in_its_first_frame() -> (VectorcraftApp, [u64; 3], u64) {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        driver::install(&mut app);
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
         let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
         let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});

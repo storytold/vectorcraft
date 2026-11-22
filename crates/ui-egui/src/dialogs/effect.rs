@@ -453,8 +453,7 @@ mod tests {
     use super::*;
 
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app
     }

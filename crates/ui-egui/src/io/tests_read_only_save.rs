@@ -48,8 +48,7 @@ fn app(format: &str, kind: ErrorKind) -> (VectorcraftApp, Arc<Mutex<Files>>) {
         })),
         ..Default::default()
     };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.run("file.new", json!({"width": 40, "height": 40})).unwrap();
     app.run("shape.rectangle", json!({"x": 1, "y": 1, "width": 10, "height": 10})).unwrap();
     let st = app.session.doc_mut().unwrap();

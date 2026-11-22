@@ -163,9 +163,7 @@ mod tests {
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
-        app
+        crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
     }
 
     /// The open dialog's id and fields.

@@ -836,6 +836,7 @@ fn click(app: &mut VectorcraftApp) {
 fn holding_escape_with_the_place_cursor_loaded_discards_one_file() {
     let mut app = app();
     let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![], &[], false);
     app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Escape", "force": true})).unwrap();
     let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [id]})).unwrap();
@@ -864,6 +865,7 @@ fn holding_escape_with_the_place_cursor_loaded_discards_one_file() {
 fn holding_a_chord_bound_to_a_command_repeats_it_with_the_place_cursor_loaded() {
     let mut app = app();
     let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![], &[], false);
     app.run("shortcuts.set", json!({"id": "view.zoomIn", "shortcut": "Shift+Escape", "force": true})).unwrap();
     let dir = Folder::new("ui-place-held-chord");
     let paths: Vec<String> = ["chord-a.png", "chord-b.png"].iter().map(|name| dir.file(name, &png(10, 10, 72.0))).collect();

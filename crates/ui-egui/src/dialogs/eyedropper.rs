@@ -146,8 +146,7 @@ mod tests {
 
     #[test]
     fn the_trees_set_the_options() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         open(&mut app);
         // A branch's box sets the flags under it; a mixed branch shows a dash.
         let mut apply = field_of(&app, KIND, "apply");

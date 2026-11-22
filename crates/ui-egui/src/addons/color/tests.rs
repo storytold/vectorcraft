@@ -4,13 +4,13 @@ use vectorcraft_engine::Session;
 use super::{ADJUSTMENTS, Picked};
 use crate::VectorcraftApp;
 
-/// An app with a selected red rectangle.
+/// An app in a window with a selected red rectangle.
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
     app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
-    app
+    crate::testing::windowed(app)
 }
 
 /// The fields of the hosted dialog open on top and its id.
@@ -62,7 +62,7 @@ fn every_adjustment_offered_is_a_colour_adjustment_with_its_defaults() {
 #[test]
 fn the_halftone_effect_dialog_has_the_command_fields_and_edits_the_effect() {
     let mut app = app();
-    let ctx = crate::testing::ui_context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     open(&mut app, &ctx, json!({"effect": "addon.color.halftone"}));
     let (_, fields) = top(&app);
     let shown: std::collections::BTreeSet<&str> = fields.as_object().unwrap().keys().map(String::as_str).collect();
@@ -84,7 +84,7 @@ fn the_halftone_effect_dialog_has_the_command_fields_and_edits_the_effect() {
 #[test]
 fn the_duotone_dialog_has_a_row_per_tone_and_the_curve_of_one() {
     let mut app = app();
-    let ctx = crate::testing::ui_context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.run("swatch.new", json!({"name": "Ink", "color": "#e07020", "spot": true})).unwrap();
     open(&mut app, &ctx, json!({"effect": "addon.color.duotone"}));
     assert!(app.session.in_interaction(), "the preview runs");

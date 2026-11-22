@@ -573,7 +573,7 @@ fn the_panel_menu_rows_run_their_commands_and_check_by_state() {
     use craft::ui::patterns::form_dialogs::HostedParamDialog;
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     // The settings rows open their dialogs on the window's host.
-    app.ui_ctx = Some(crate::testing::ui_context());
+    app = crate::testing::windowed(app);
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "ABC", "size": 13})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [id]})).unwrap();

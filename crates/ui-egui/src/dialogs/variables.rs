@@ -316,7 +316,7 @@ mod tests {
     fn app_with_variables() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         // PLAN: assumed `crate::testing::ui_context() -> egui::Context` (hub-w1, S-SH4) and `ui_ctx: Option<egui::Context>`
-        app.ui_ctx = Some(crate::testing::ui_context());
+        app = crate::testing::windowed(app);
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("variable.define", json!({"name": "Title", "kind": "text"})).unwrap();
         app.run("variable.define", json!({"name": "Badge", "kind": "visibility"})).unwrap();

@@ -653,9 +653,7 @@ mod tests {
 
     /// An app whose window has a dialog host (it has a context).
     fn new_app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
-        app
+        crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()))
     }
 
     /// Runs `f` on the open Find Font dialog.

@@ -86,8 +86,7 @@ mod tests {
 
     /// A window's app with a document and the closed path through `anchors` selected; the path's id.
     fn selected_path(anchors: serde_json::Value) -> (VectorcraftApp, u64) {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let id = app.run("path.create", json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [id]})).unwrap();

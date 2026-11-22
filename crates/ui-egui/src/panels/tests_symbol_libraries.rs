@@ -112,7 +112,7 @@ fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
 fn save_symbols_writes_a_user_library_that_reopens_and_adds_to_another_document() {
     let dir = std::env::temp_dir().join(format!("vc-symbol-libraries-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut app = app();
+    let mut app = crate::testing::windowed(app());
     app.session.symbol_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
     app.run("symbol.new", json!({"name": "Brick"})).unwrap();

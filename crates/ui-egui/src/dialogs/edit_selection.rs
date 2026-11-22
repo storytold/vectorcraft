@@ -35,8 +35,7 @@ mod tests {
     use crate::VectorcraftApp;
 
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
         app.run("file.new", json!({})).unwrap();
         app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
         for n in ["Logo", "Icons", "Text"] {
@@ -123,8 +122,7 @@ mod tests {
 
     #[test]
     fn it_needs_a_saved_selection() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
         app.run("file.new", json!({})).unwrap();
         assert!(super::open(&mut app).is_err());
         assert!(!app.any_dialog_open());

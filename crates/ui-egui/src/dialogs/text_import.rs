@@ -142,15 +142,9 @@ pub(super) mod test_support {
 
     use crate::VectorcraftApp;
 
-    /// `app` with a window to host dialogs in.
-    pub fn with_window(mut app: VectorcraftApp) -> VectorcraftApp {
-        app.ui_ctx = Some(crate::testing::ui_context());
-        app
-    }
-
     /// An empty app with a window.
     pub fn app() -> VectorcraftApp {
-        with_window(VectorcraftApp::new(Session::new(), Default::default()))
+        crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
     }
 
     fn ctx(app: &VectorcraftApp) -> egui::Context {

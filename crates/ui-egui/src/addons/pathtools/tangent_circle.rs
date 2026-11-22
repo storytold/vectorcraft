@@ -89,8 +89,7 @@ mod tests {
 
     #[test]
     fn tangent_circle_previews_picks_one_cancels_and_runs_on_ok() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let a = circle(&mut app, 100.0, 100.0, 10.0);
         let b = circle(&mut app, 130.0, 100.0, 10.0);

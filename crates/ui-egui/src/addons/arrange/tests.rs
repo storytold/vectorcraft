@@ -8,8 +8,7 @@ use crate::{VectorcraftApp, menus};
 
 /// An app with a window, where its dialogs open, and two rectangles without a stroke, both selected.
 fn app() -> (VectorcraftApp, NodeId, NodeId) {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("paint.setStroke", json!({"none": true})).unwrap();
     let mut rect = |x, y, w, h| NodeId(app.run("shape.rectangle", json!({"x": x, "y": y, "width": w, "height": h})).unwrap()["id"].as_u64().unwrap());

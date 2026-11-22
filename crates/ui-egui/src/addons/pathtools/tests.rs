@@ -15,9 +15,7 @@ fn app() -> VectorcraftApp {
 
 /// An app with a window, which the dialogs open in.
 fn app_with_window() -> VectorcraftApp {
-    let mut app = app();
-    app.ui_ctx = Some(crate::testing::ui_context());
-    app
+    crate::testing::windowed(app())
 }
 
 #[test]

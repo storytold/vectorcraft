@@ -8,9 +8,7 @@ use crate::{VectorcraftApp, menus};
 
 /// An app with the window the dialogs open in.
 pub(super) fn new_app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
-    app
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
 }
 
 /// The window context of `app`.

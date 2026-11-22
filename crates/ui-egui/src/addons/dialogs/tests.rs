@@ -68,8 +68,7 @@ fn x0(app: &VectorcraftApp, i: usize) -> f64 {
 }
 
 fn new_app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
     app
 }

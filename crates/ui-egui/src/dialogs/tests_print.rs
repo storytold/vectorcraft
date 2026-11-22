@@ -34,8 +34,7 @@ impl PrintService for MockPrint {
 fn app() -> (VectorcraftApp, Jobs) {
     let jobs = Jobs::default();
     let services = Services { print: Some(Box::new(MockPrint(jobs.clone()))), ..Default::default() };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.run("file.new", json!({"width": 120, "height": 90, "artboards": 3})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
     (app, jobs)
@@ -104,8 +103,11 @@ pub(super) fn call(app: &mut VectorcraftApp, method: &str, params: Value) -> Val
     r["result"].clone()
 }
 
-/// Presses the control named `name`, then runs the frame's dialog work.
+/// Presses the control named `name` in a frame drawn first, as a user presses what the window shows, then runs the
+/// frame's dialog work.
 pub(super) fn press(app: &mut VectorcraftApp, name: &str) {
+    let ctx = ctx(app);
+    crate::testing::app_frame(app, &ctx, Default::default());
     call(app, "ui.click", json!({"control": {"name": name}}));
     pump(app);
 }
@@ -213,8 +215,7 @@ fn a_landscape_job_goes_upright_to_a_queue_that_does_not_turn_it() {
 
 #[test]
 fn without_a_print_service_print_saves_a_pdf() {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
     let picker = crate::tests_picks::scripted(&mut app);
     let written: Written = Rc::default();
     let w = written.clone();

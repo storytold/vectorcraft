@@ -50,8 +50,7 @@ pub(super) fn app_saving(artboards: usize, pick: impl Fn(&PickRequest) -> String
         })),
         ..Default::default()
     };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     save_panel(&mut app, move |p| Some(pick(p)));
     app.run("file.new", json!({"width": 60, "height": 40, "artboards": artboards})).unwrap();
     app.run("paint.setStroke", json!({"none": true})).unwrap();

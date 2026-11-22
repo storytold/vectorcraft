@@ -565,7 +565,8 @@ fn edit_original_opens_image_and_document_files_only() {
 fn placement_options_dialog_sets_the_options() {
     use crate::tests::picks::{answer_dialog, open_dialogs};
     let dir = Folder::new("dialog");
-    let (mut app, linked, _) = app(&dir);
+    let (app, linked, _) = app(&dir);
+    let mut app = crate::testing::windowed(app);
     app.run("select.set", json!({"ids": [linked]})).unwrap();
     assert!(crate::menus::enabled(&app, "ui.placementOptionsDialog"));
     app.run("ui.placementOptionsDialog", json!({})).unwrap();

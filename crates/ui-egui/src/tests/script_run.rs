@@ -16,8 +16,7 @@ use crate::tests::picks::{Picker, scripted};
 use crate::{VectorcraftApp, menus, script_runs};
 
 fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app
 }

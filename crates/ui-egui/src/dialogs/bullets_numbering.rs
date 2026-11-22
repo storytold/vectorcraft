@@ -561,8 +561,7 @@ mod tests {
 
     /// A selected area type object with two paragraphs, in an app with a window for its dialogs.
     fn app() -> (VectorcraftApp, u64) {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         let id = app.run("text.create", json!({"x": 10, "y": 10, "text": "One\nTwo", "area": {"width": 200, "height": 100}})).unwrap()["id"]
             .as_u64()

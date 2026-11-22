@@ -65,8 +65,7 @@ fn cancel_of(app: &mut VectorcraftApp, kind: &str) {
 }
 
 fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
     app.select_tool(KIND);
     // Pointer-up persists tool settings even for a click. Seed them so opening/cancelling can

@@ -762,8 +762,8 @@ fn new_window_opens_a_numbered_view_with_its_own_zoom() {
 
 #[test]
 fn closing_a_view_leaves_the_document_open() {
-    let mut app = app_with(1);
-    let ctx = crate::testing::ui_context();
+    let mut app = crate::testing::windowed(app_with(1));
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
     app.run("window.newWindow", json!({})).unwrap();
     app.run("window.newWindow", json!({})).unwrap();

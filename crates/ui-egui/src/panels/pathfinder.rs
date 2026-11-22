@@ -359,8 +359,7 @@ mod tests {
 
     /// An app with a window, so its dialogs open, and a 200 pt document.
     fn windowed() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app
     }

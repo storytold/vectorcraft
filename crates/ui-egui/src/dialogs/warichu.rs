@@ -132,11 +132,6 @@ pub(super) mod driver {
 
     use crate::VectorcraftApp;
 
-    /// Gives the app a window context, so a dialog can open.
-    pub fn install(app: &mut VectorcraftApp) {
-        app.ui_ctx = Some(crate::testing::ui_context());
-    }
-
     fn ctx(app: &VectorcraftApp) -> egui::Context {
         app.ui_ctx.clone().expect("installed")
     }
@@ -193,8 +188,7 @@ mod tests {
 
     /// A selected point type object with four characters.
     fn app() -> (VectorcraftApp, u64) {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        driver::install(&mut app);
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         let id = app.run("text.create", json!({"x": 10, "y": 50, "text": "abcd"})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [id]})).unwrap();

@@ -430,7 +430,7 @@ fn names_in_menus_are_not_interface_labels() {
 
 #[test]
 fn last_effect_dialog_and_view_toggles() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     assert!(!enabled(&app, "effect.last"));

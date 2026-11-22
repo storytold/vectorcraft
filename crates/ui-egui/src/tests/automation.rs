@@ -41,8 +41,7 @@ fn confined_with(tag: &str, write_shared: Option<SharedWriteFn>) -> (Vectorcraft
     };
     let roots = AutomationRoots::new(&[&base.join("in")], &[&base.join("out")]).unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx).with_automation_roots(roots);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services).with_control(rx).with_automation_roots(roots));
     (app, tx, base)
 }
 
@@ -1573,8 +1572,7 @@ fn automation_cannot_approve_a_plugin_install() {
 /// An app with a control channel and a new document.
 fn controlled() -> (VectorcraftApp, std::sync::mpsc::Sender<ControlRequest>) {
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()).with_control(rx));
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     (app, tx)
 }
@@ -1850,8 +1848,7 @@ fn a_file_picked_in_a_dialog_automation_opened_stays_automations() {
 
     let (dropped, page) = <(crate::services::Inbox, crate::services::Inbox)>::default();
     let services = Services { inbox: Some(dropped.clone()), page_inbox: Some(page.clone()), ..Default::default() };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     for (inbox, id, origin) in
         [(&dropped, "test.ui.approval.picked.dropped", InstallOrigin::Person), (&page, "test.ui.approval.picked.page", InstallOrigin::Automation)]
     {
@@ -1874,8 +1871,7 @@ fn a_plugin_automation_opened_by_path_asks_a_question_no_one_approves() {
     std::fs::write(&wasm, approval_module(id).0).unwrap();
     let services = Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services).with_control(rx));
     let r = request(&mut app, &tx, "app.open", json!({"path": s(wasm.clone())}));
     assert!(r.get("error").is_none(), "{r}");
     assert!(super::plugins::waiting(&app, id));

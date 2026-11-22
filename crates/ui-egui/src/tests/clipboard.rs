@@ -39,8 +39,7 @@ fn swatch(app: &mut VectorcraftApp, name: &str, hex: &str) {
 /// A rectangle filled with global swatch Brand (red) and stroked with Ink (black) copied from one
 /// document, and a second document (active) whose Brand is blue and Ink green; in a window.
 fn conflicting() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     swatch(&mut app, "Brand", "#ff0000");
     swatch(&mut app, "Ink", "#000000");

@@ -75,9 +75,7 @@ mod tests {
 
     /// An app with `services` and a window context, where its dialogs open.
     fn windowed(services: Services) -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), services);
-        app.ui_ctx = Some(crate::testing::ui_context());
-        app
+        crate::testing::windowed(VectorcraftApp::new(Session::new(), services))
     }
 
     /// The message dialog open on the host, closed as its Close button closes it: its message and detail.

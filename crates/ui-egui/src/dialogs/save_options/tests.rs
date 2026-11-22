@@ -47,8 +47,7 @@ fn web() -> (VectorcraftApp, Written) {
 }
 
 fn with_art(services: Services) -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
     app

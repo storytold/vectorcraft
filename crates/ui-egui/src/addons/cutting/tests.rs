@@ -22,8 +22,7 @@ struct Row {
 }
 
 fn new_app(width: u32, height: u32) -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": width, "height": height})).unwrap();
     app
 }

@@ -21,9 +21,7 @@ fn press(app: &mut VectorcraftApp, act: ManagerAction) {
 }
 
 fn new_app(services: Services) -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
-    app
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), services))
 }
 
 #[test]

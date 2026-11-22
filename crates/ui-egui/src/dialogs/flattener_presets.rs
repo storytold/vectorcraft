@@ -119,9 +119,7 @@ mod tests {
 
     /// An app with a window, whose dialog host the manager opens on.
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
-        app
+        crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
     }
 
     fn ctx(app: &VectorcraftApp) -> egui::Context {

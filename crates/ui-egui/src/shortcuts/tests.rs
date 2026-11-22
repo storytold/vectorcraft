@@ -550,6 +550,7 @@ fn all_registered_shortcuts_parse() {
 fn a_single_key_shortcut_reports_what_its_chord_reports() {
     let status = |shortcut: &str, events: Vec<egui::Event>| {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        ready(&mut app);
         bind(&mut app, "view.screenMode", "");
         bind(&mut app, "paint.default", shortcut);
         app.ui.status.clear();
@@ -568,6 +569,7 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
     let chord = tap(Key::F9, cmd() | Modifiers::ALT | Modifiers::SHIFT);
     for id in ["object.path.cleanUp", "addon.color.printFixes", "edit.findReplace"] {
         let mut app = VectorcraftApp::new(vectorcraft_testkit::fixtures::Fixture::Single.session(), Default::default());
+        ready(&mut app);
         bind(&mut app, id, "Cmd+Alt+Shift+F9");
         app.ui.status.clear();
         frame(&mut app, chord.clone());
@@ -715,6 +717,7 @@ fn cmd_alt_shift_j_opens_average_and_join() {
 #[test]
 fn a_key_assigned_to_the_color_picker_opens_it_for_the_proxy_in_front() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    ready(&mut app);
     let listed = app.run("shortcuts.list", json!({"query": "ui.colorPicker"})).unwrap();
     let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| r["label"].clone()).collect();
     assert_eq!(rows, [json!("Color Picker…")], "Keyboard Shortcuts lists it");

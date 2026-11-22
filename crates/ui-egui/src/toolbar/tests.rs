@@ -104,7 +104,7 @@ fn answer(app: &mut VectorcraftApp, ok: bool) {
 /// (each with what it needs selected), the view fits for Hand and Zoom, and a tool without options refuses.
 #[test]
 fn tools_open_their_options() {
-    let mut app = app_with(300, 200);
+    let mut app = windowed(app_with(300, 200));
     let kind = |app: &mut VectorcraftApp, tool: &str| open_options(app, tool).unwrap()["dialog"].clone();
     // Without the Artboard tool, the window's artboard; with it, its active artboard.
     assert_eq!(kind(&mut app, "artboard"), "artboardOptions");

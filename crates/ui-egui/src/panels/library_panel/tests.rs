@@ -171,7 +171,7 @@ const SWATCH_IDS: [&str; 9] = [
 fn save_dialog_writes_user_libraries_that_the_window_menu_lists() {
     let dir = std::env::temp_dir().join(format!("vc-library-panel-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut app = app();
+    let mut app = crate::testing::windowed(app());
     app.session.swatch_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
     let user_items = |app: &VectorcraftApp| -> Vec<(String, String)> {
         crate::menus::menu_entries(app)

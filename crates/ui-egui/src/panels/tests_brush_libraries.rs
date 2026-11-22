@@ -225,7 +225,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
 fn save_brushes_writes_a_user_library_that_reopens_and_adds_to_another_document() {
     let dir = std::env::temp_dir().join(format!("vc-brush-libraries-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let mut app = app();
+    let mut app = crate::testing::windowed(app());
     app.session.brush_libraries.set_user_dir(Some(dir.to_string_lossy().to_string()));
     app.run("brush.new", json!({"type": "calligraphic", "name": "Quill", "params": {"angle": 60, "roundness": 30, "size": 5}})).unwrap();
     app.run("ui.saveBrushLibrary", json!({"names": ["Quill"]})).unwrap();

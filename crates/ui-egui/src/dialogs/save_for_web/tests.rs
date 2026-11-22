@@ -27,8 +27,7 @@ pub(super) fn app(dir: &std::path::Path, web: bool) -> (VectorcraftApp, Log) {
             Ok(())
         }));
     }
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     // The files go to disk, where the tests read them back.
     app.services.write = Some(Box::new(|path: &str, bytes: &[u8]| std::fs::write(path, bytes).map_err(|e| e.to_string())));
     let dir = dir.to_path_buf();

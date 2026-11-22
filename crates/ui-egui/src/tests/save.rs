@@ -19,9 +19,7 @@ fn app() -> VectorcraftApp {
         write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
         ..Default::default()
     };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
-    app
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), services))
 }
 
 /// A fresh folder for one test.

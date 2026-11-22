@@ -85,8 +85,7 @@ mod tests {
 
     #[test]
     fn constant_gap_shows_the_gap_and_bridges_many_circles_within_reach() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         // Three circles 4 apart in a row and one far off.
         let ids: Vec<u64> = [100.0, 124.0, 148.0, 300.0].iter().map(|&x| circle(&mut app, x, 10.0)).collect();

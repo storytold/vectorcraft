@@ -692,9 +692,7 @@ mod tests {
 
     /// An app with a window context, so New Document has a host to open on.
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
-        app
+        crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
     }
 
     fn ctx(app: &VectorcraftApp) -> egui::Context {

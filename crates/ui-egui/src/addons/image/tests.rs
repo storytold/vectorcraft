@@ -58,8 +58,7 @@ fn app() -> VectorcraftApp {
             .map(|__b| png.extend_from_slice(&__b))
     }
     .unwrap();
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("document.open", json!({"name": "art.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
     app.run("select.all", json!({})).unwrap();
     app

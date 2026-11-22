@@ -26,8 +26,7 @@ fn app(web: bool) -> (VectorcraftApp, Log, [u64; 2]) {
             Ok(())
         }));
     }
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.session.paint.stroke = vectorcraft_color::Paint::None;
     let mut rect = |x: f64| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();

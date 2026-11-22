@@ -421,8 +421,7 @@ mod tests {
 
     /// An app with one set holding `steps` as the action "Draw", and a window to show dialogs in.
     fn app_with(steps: Vec<ActionStep>) -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.ui.actions = Default::default();
         app.ui.actions.push(Action { set: Some("Test".into()), ..Action::new("Draw", steps) }).unwrap();
         app

@@ -322,8 +322,7 @@ mod tests {
 
     /// A document with a half-transparent red square over a blue one, both selected.
     fn scene() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         for (x, color) in [(10, "#0000ff"), (60, "#ff0000")] {
             let id = app.run("shape.rectangle", json!({"x": x, "y": x, "width": 100, "height": 100})).unwrap()["id"].clone();

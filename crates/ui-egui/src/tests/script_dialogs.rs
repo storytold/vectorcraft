@@ -11,8 +11,7 @@ use crate::dialogs::script_run::{self, CLOSE_KIND, CloseQuestion, NOTICE_KIND, S
 use crate::{VectorcraftApp, menus, script_runs};
 
 pub(super) fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app.session.prefs.show_external_script_warning = false;
     app

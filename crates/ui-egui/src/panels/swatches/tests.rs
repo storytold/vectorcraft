@@ -11,8 +11,7 @@ use vectorcraft_engine::Session;
 mod context_menu;
 
 fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app
 }

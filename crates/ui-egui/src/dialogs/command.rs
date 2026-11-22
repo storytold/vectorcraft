@@ -458,9 +458,7 @@ mod tests {
 
     /// An app with a window context, so a dialog can open.
     fn windowed() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
-        app
+        crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
     }
 
     fn id_of(app: &VectorcraftApp) -> DialogId {

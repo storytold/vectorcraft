@@ -305,7 +305,7 @@ mod tests {
     /// command flips the option or opens the options dialog.
     #[test]
     fn the_panel_menu_rows_check_and_open_what_they_name() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
         let states = |app: &VectorcraftApp| {
             let mut states = CommandStates::new();
             menu_states(app, &mut states);

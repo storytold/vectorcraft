@@ -164,6 +164,7 @@ fn right_click_on_a_locked_object_offers_unlock_by_its_name() {
 fn cmd_alt_shift_u_switches_to_the_next_unit() {
     use vectorcraft_doc::Unit;
     let mut app = app();
+    crate::tests_synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
     assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]), "no other default has the key");
     fn press(app: &mut VectorcraftApp) {
         let ctx = crate::testing::ui_context();

@@ -144,7 +144,7 @@ mod tests {
     /// A selected 100 pt live square at (100, 100).
     fn app() -> (VectorcraftApp, u64) {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context()); // PLAN: assumed path of sh.SH4
+        app = crate::testing::windowed(app); // PLAN: assumed path of sh.SH4
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         let id = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
         (app, id)

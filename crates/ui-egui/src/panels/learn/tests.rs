@@ -10,9 +10,10 @@ use crate::tests_labels::painted_text;
 
 const SCREEN: egui::Rect = egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1400.0, 800.0));
 
+/// An app in a window of its own.
 fn app() -> VectorcraftApp {
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    VectorcraftApp::new(Session::new(), Default::default())
+    crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
 }
 
 /// One frame of `draw` with screen-reader nodes on → the nodes.
@@ -45,13 +46,6 @@ fn click_with(app: &mut VectorcraftApp, name: &str, mut run: impl FnMut(&mut Vec
 /// Click the node labeled `name` in what `draw` draws.
 fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) {
     click_with(app, name, |app, events| frame(app, ctx, events, draw));
-}
-
-fn context() -> egui::Context {
-    let ctx = crate::testing::ui_context();
-    ctx.enable_accesskit();
-    crate::testing::install(&ctx);
-    ctx
 }
 
 /// One frame of the whole app with `events`: the shell draws the app bar and applies the panels' toggles.
@@ -113,7 +107,7 @@ fn the_catalog_is_valid() {
 #[test]
 fn explore_tutorials_on_the_app_bar_shows_and_hides_the_learn_panel() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     assert!(!shown(&app));
     click_with(&mut app, "Explore tutorials", |app, events| shell_frame(app, &ctx, events));
     assert!(shown(&app), "{}", app.ui.status);
@@ -150,7 +144,7 @@ fn window_learn_shows_and_hides_the_panel() {
 #[test]
 fn window_learn_shows_a_hidden_dock() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let (cmd, params) = window_learn(&app);
     assert_eq!(app.run("window.learn", json!({"show": true})).unwrap(), json!(true));
     hide_panels(&mut app, &ctx);
@@ -224,7 +218,7 @@ fn the_next_tutorial_is_the_next_one_in_the_same_skill() {
 #[test]
 fn view_more_opens_the_tutorial_s_sample_as_a_new_untitled_document() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
     let work = app.session.documents()[0].doc.node_count();
@@ -256,7 +250,7 @@ fn view_more_opens_the_tutorial_s_sample_as_a_new_untitled_document() {
 #[test]
 fn finishing_a_tutorial_offers_next_up_in_its_skill() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let (skill, tutorial) = catalog::tutorial("pen-paths").unwrap();
     app.ui.learn = View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) };
     let text = painted_text(&mut app, show);
@@ -281,7 +275,7 @@ fn finishing_a_tutorial_offers_next_up_in_its_skill() {
 #[test]
 fn the_last_tutorial_of_a_skill_offers_back_to_skills() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     for id in ["add-headline", "outline-type"] {
         app.run("learn.openSample", json!({"tutorial": id})).unwrap();
         assert_eq!(app.run("learn.finish", json!({"tutorial": id})).unwrap(), json!({"tutorial": id, "finished": true, "next": null}));
@@ -336,7 +330,7 @@ fn learn_skills_shows_the_list_of_skills() {
 
     // Back to skills, after a skill's last tutorial.
     let mut app = self::app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.run("learn.openSample", json!({"tutorial": "outline-type"})).unwrap();
     app.run("learn.finish", json!({"tutorial": "outline-type"})).unwrap();
     assert!(!shown(&app));
@@ -346,7 +340,7 @@ fn learn_skills_shows_the_list_of_skills() {
 
     // The Quick skill guide card on the For you tab.
     let mut app = self::app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     assert!(!shown(&app));
     click(&mut app, &ctx, "Quick skill guide", show);
     assert_eq!(app.ui.learn, skills);
@@ -399,7 +393,7 @@ fn the_tabs_rows_and_back_run_their_commands() {
         assert!(crate::menus::UI_COMMANDS.iter().any(|c| c.0 == cmd), "{cmd} is in the UI command catalog");
     }
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let (skill, tutorial) = catalog::tutorial("gradient").unwrap();
     let press = |app: &mut VectorcraftApp, name: &str, view: View| {
         app.run("window.learn", json!({"show": false})).unwrap();
@@ -473,7 +467,7 @@ fn pen_paths(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
 #[test]
 fn a_tool_name_in_a_step_is_a_link_that_locates_the_tool() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let nodes = frame(&mut app, &ctx, vec![], pen_paths);
     let link = nodes.iter().find(|n| n.label().is_some_and(|l| l == "Pen tool")).expect("the Pen tool link");
     assert_eq!(link.role(), egui::accesskit::Role::Link);
@@ -508,7 +502,7 @@ fn learn_locate_tool_rejects_a_missing_or_unknown_tool() {
 #[test]
 fn learn_locate_tool_is_unavailable_while_the_toolbars_are_hidden() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     app.ui.screen_mode = 3;
     let reply = app.run("learn.locateTool", json!({"tool": "pen"})).unwrap();
     assert_eq!((reply["location"].as_str(), reply["reason"].is_string()), (Some("unavailable"), true), "{reply}");
@@ -541,7 +535,7 @@ fn check_boxes(app: &mut VectorcraftApp, ctx: &egui::Context, draw: fn(&mut Vect
 #[test]
 fn a_step_s_check_box_marks_only_that_step() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(false, false); 3], "off before View more");
     click(&mut app, &ctx, &pen_step(1), pen_paths);
     assert!(app.ui.learn_progress.is_empty(), "a check box that is off changes nothing");
@@ -576,7 +570,7 @@ fn a_step_s_check_box_marks_only_that_step() {
 #[test]
 fn finishing_tutorials_fills_their_skill_s_ring_and_count() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     for id in ["pen-paths", "smooth-curves"] {
         app.run("learn.openSample", json!({"tutorial": id})).unwrap();
         for _ in 0..2 {
@@ -668,7 +662,7 @@ fn learn_mark_step_checks_its_params() {
 #[test]
 fn reset_progress_clears_only_the_progress() {
     let mut app = app();
-    let ctx = context();
+    let ctx = app.ui_ctx.clone().expect("a window");
     let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
     app.ui.learn = skills.clone();
     assert!(!painted_text(&mut app, show).contains("Reset progress"));

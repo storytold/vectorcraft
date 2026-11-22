@@ -127,8 +127,7 @@ mod tests {
 
     #[test]
     fn commits_the_chosen_palette_as_one_step() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         let img = craft_image_codecs::Image::from_raw(
             2,

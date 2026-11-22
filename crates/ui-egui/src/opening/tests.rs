@@ -78,8 +78,7 @@ fn open_with_runs_the_importer_off_the_ui_thread() {
     use vectorcraft_plugins::wat::{self as tpl, Given};
     let rect = r#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":true,"anchors":[{"p":[10,20]},{"p":[110,20]},{"p":[110,70]},{"p":[10,70]}]}]}}]}"#;
     let (_dir, file) = importer_file("with");
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
     let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
     install_importer(&mut app, &tpl::when_given(&tpl::importer("test.opening.with", r#"["tob"]"#, params), Given::Params, r#""density":7"#, rect));
@@ -370,8 +369,7 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
         .unwrap();
         out
     };
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     for (name, format) in [("a.tif", Tiff), ("b.bmp", Bmp), ("c.jpg", Jpeg), ("gone.png", Png), ("changed.png", Png)] {
         std::fs::write(file(&before, name), picture(format, [200, 40, 40])).unwrap();

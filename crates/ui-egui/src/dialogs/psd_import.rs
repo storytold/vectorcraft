@@ -560,7 +560,7 @@ mod tests {
             .collect();
         let files: Vec<Value> = paths.iter().map(|p| json!({ "path": p })).collect();
         let services = crate::Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
-        let mut app = host::with_window(VectorcraftApp::new(Session::new(), services));
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         // The choices made last would place the layers without asking with Show Import Options off.
         app.ui.psd_import = json!({"layers": true, "importSlices": true});

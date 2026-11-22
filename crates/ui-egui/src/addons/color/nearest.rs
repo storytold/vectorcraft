@@ -228,8 +228,7 @@ mod tests {
 
     #[test]
     fn find_nearest_swatch_lists_the_matches_and_applies_the_nearest() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         let ctx = app.ui_ctx.clone().expect("the test context");
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("swatch.new", json!({"name": "Brand", "color": "#ff8000", "global": true})).unwrap();

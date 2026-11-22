@@ -544,7 +544,7 @@ fn more_options_opens_bullets_and_numbering_on_its_tab() {
     use craft::ui::dialog::StackDialog as _;
     crate::i18n::set_current(crate::i18n::Lang::EN);
     let (mut app, _) = editing_text("One\nTwo");
-    app.ui_ctx = Some(crate::testing::ui_context());
+    app = crate::testing::windowed(app);
     select_range(&mut app, 0, 0);
     let shown_tab = |app: &VectorcraftApp| {
         app.dialogs().expect("a window").with(|host| host.get::<BulletsDialog>().map(|d| d.json_fields().unwrap_or_default()["tab"].clone()))

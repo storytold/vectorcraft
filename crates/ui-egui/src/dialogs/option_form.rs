@@ -393,8 +393,7 @@ pub(super) mod tests {
 
     /// An app with a window context for the dialog host and a blank document.
     pub(in crate::dialogs) fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app
     }

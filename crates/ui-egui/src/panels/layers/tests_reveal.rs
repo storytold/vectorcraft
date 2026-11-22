@@ -361,7 +361,8 @@ fn isolation_keeps_delete_to_the_rows_listed() {
 /// be outside the isolated art; a sublayer of an isolated sublayer is listed.
 #[test]
 fn isolation_keeps_new_layers_to_the_rows_listed() {
-    let (mut app, [_, sub, g, ..]) = nested();
+    let (app, [_, sub, g, ..]) = nested();
+    let mut app = crate::testing::windowed(app);
     app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!([(false, false), (true, false), (false, true)].map(|(s, t)| new_layer_unlisted(st, s, t)), [true; 3]);

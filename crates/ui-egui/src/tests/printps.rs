@@ -32,8 +32,7 @@ fn postscript_is_saved_not_printed() {
     let written: Written = Rc::default();
     let w = written.clone();
     let services = Services { print: Some(Box::new(Counting(sent.clone()))), ..Default::default() };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     let picker = crate::tests_picks::scripted(&mut app);
     app.services.write = Some(Box::new(move |p: &str, b: &[u8]| {
         w.borrow_mut().push((p.to_string(), b.to_vec()));

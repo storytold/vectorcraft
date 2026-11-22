@@ -164,7 +164,7 @@ mod tests {
 
     fn app() -> VectorcraftApp {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context()); // PLAN: assumed path of sh.SH4
+        app = crate::testing::windowed(app); // PLAN: assumed path of sh.SH4
         app
     }
 

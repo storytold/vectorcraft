@@ -26,8 +26,7 @@ fn app() -> (VectorcraftApp, Log) {
         })),
         ..Default::default()
     };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.run("file.new", json!({"width": 120, "height": 90, "artboards": 3})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
     (app, written)
@@ -309,8 +308,7 @@ fn save_summary_writes_files_on_disk_within_the_automation_roots() {
         write: Some(Box::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(std::path::Path::new(p), b).map_err(|e| e.to_string()))),
         ..Default::default()
     };
-    let mut app = VectorcraftApp::new(Session::new(), services).with_automation_roots(roots.clone());
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services).with_automation_roots(roots.clone()));
     app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
     app.run("file.export.pdf", json!({})).unwrap();
     let mut save = |path: &std::path::Path| {
@@ -483,8 +481,7 @@ fn a_page_of_the_arts_bounds_is_written_in_the_background() {
         })),
         ..Default::default()
     };
-    let mut app = VectorcraftApp::new(Session::new(), services);
-    app.ui_ctx = Some(crate::testing::ui_context());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
     app.session.prefs.background_export = true;
     app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();

@@ -1072,8 +1072,7 @@ mod tests {
     /// A 400 by 400 document with a selected graph of type `kind`: series a and b over Q1 (1, 2)
     /// and Q2 (3, 4). The app has a window to host the dialog.
     fn app_with_graph(kind: &str) -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui_ctx = Some(crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
         app.run("graph.create", json!({"type": kind, "x": 0, "y": 0, "width": 200, "height": 150, "csv": ",a,b\nQ1,1,2\nQ2,3,4"})).unwrap();
         app
