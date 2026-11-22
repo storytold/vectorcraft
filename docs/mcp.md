@@ -2661,9 +2661,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.args` gives a read-only copy of the `args` object each time it is read.
 - `vc.api.version` is `"1.0"`, and `vc.api.has(feature)` says whether the API has a feature.
 
-A script does not have `Symbol` or the iterators of arrays, strings and `arguments` objects: `typeof Symbol` is
-`"undefined"`, and `Array.prototype.values`, `keys` and `entries` are not defined. The JavaScript engine's ECMAScript
-2015 mode (`Options::es2015` in `vectorcraft-js`) adds them, as `docs/target-app-parity.md` describes.
+An engine that a `.js` script makes runs in the JavaScript engine's ECMAScript 2015 mode (`Options::es2015` in
+`vectorcraft-js`) and has `Symbol` and the iterators of arrays, strings and `arguments` objects, as
+`docs/target-app-parity.md` describes. An engine that a `.jsx` script or a `source` string makes does not have them:
+`typeof Symbol` is `"undefined"`, and `Array.prototype.values`, `keys` and `entries` are not defined. An engine that
+`#targetengine` keeps holds the built-ins of the run that made it, whichever kind of script runs in it later.
 
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and

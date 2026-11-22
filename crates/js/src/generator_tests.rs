@@ -100,7 +100,9 @@ fn throw_goes_into_a_suspended_generator() {
          e instanceof RangeError && it.next().done",
     );
     // A generator that has not started is completed by `throw`, which its body never sees.
-    truth("var ran = false; function* g() { ran = true; } var it = g(); try { it.throw(1); } catch (e) {} !ran && it.next().done");
+    truth(
+        "var ran = false; function* g() { ran = true; } var it = g(); var e; try { it.throw(1); } catch (x) { e = x; } e === 1 && !ran && it.next().done",
+    );
     throws("function* g() {} var it = g(); it.next(); it.throw(new TypeError('after the end'));", "TypeError: after the end");
 }
 
@@ -275,6 +277,40 @@ fn an_unreachable_suspended_generator_is_freed() {
     assert!(freed + 1_000_000 < held, "held {held}, after {freed}");
 }
 
+/// The smallest heap limit, to within 256 bytes, under which `script` runs after `setup`.
+fn smallest_heap_limit(setup: &str, script: &str) -> usize {
+    let fits = |limit: usize| {
+        let mut realm = es2015(Limits::default());
+        assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+        realm.collect_garbage();
+        realm.set_limits(Limits { heap_bytes: limit, ..Limits::default() });
+        realm.run(script).is_ok()
+    };
+    let (mut low, mut high) = (0, 64 << 20);
+    assert!(fits(high), "{script}");
+    while high - low > 256 {
+        let mid = low + (high - low) / 2;
+        if fits(mid) {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    high
+}
+
+#[test]
+fn a_yield_reserves_only_what_its_frame_keeps() {
+    // At the `yield` in `inside`, the 1,001 frames under the generator's are in `finally` blocks
+    // that a throw entered. Their entries stay with those frames, so the yield needs no more room
+    // than the one in `before`, which comes before those frames are pushed.
+    let setup = "function* g() { yield 1; } var it = g(); 0";
+    let inside = "function f(n) { try { throw 0; } finally { if (n) f(n - 1); else it.next(); } } try { f(1000); } catch (e) {} 0";
+    let before = "it.next(); function f(n) { try { throw 0; } finally { if (n) f(n - 1); } } try { f(1000); } catch (e) {} 0";
+    let (inside, before) = (smallest_heap_limit(setup, inside), smallest_heap_limit(setup, before));
+    assert!(inside < before + 4096, "inside {inside}, before {before}");
+}
+
 #[test]
 fn generators_stay_within_the_limits() {
     let mut realm = es2015(Limits { fuel: 20_000, ..Limits::default() });
@@ -282,12 +318,17 @@ fn generators_stay_within_the_limits() {
         Err(RunError { kind: RunErrorKind::Limit(LimitKind::Fuel), .. }) => {}
         other => panic!("{other:?}"),
     }
-    // Each resumption takes fuel even when the body does no work.
-    let mut realm = es2015(Limits { fuel: 20_000, ..Limits::default() });
-    match realm.run("var it = (function* () {})(); it.next(); while (true) it.next();") {
-        Err(RunError { kind: RunErrorKind::Limit(LimitKind::Fuel), .. }) => {}
-        other => panic!("{other:?}"),
+    // Each resumption takes fuel even when the generator has completed: 1,000 calls of its `next`
+    // take at least 1,000 more than the same calls of a native method that takes none.
+    let mut realm = es2015(Limits::default());
+    let setup = "var it = (function* () {})(); it.next(); var control = { next: Object.prototype.valueOf }; 0";
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    let mut used = Vec::new();
+    for callee in ["control", "it"] {
+        assert_eq!(realm.run(&format!("for (var i = 0; i < 1000; i++) {callee}.next(); 0")), Ok(JsValue::Number(0.0)));
+        used.push(Limits::default().fuel - realm.fuel_left());
     }
+    assert!(used[1] >= used[0] + 1000, "{used:?}");
     // A deep `yield*` chain stops at the frame limit, and the realm can run again.
     let mut realm = es2015(Limits { frames: 200, ..Limits::default() });
     match realm.run("function* d(n) { if (n) yield* d(n - 1); else yield 1; } d(1000).next();") {

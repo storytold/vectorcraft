@@ -200,8 +200,12 @@ impl Interp {
             let result = iter_result(self, v, false)?;
             self.replace(1, result)?;
         }
-        let frame = self.frame()?;
-        let held = (self.stack.len().saturating_sub(frame.base)).saturating_add(self.finally_sites.len()).saturating_add(self.finally_marks.len());
+        // What `save_frame` keeps: the frame's operands without the result, popped below, and its
+        // own `finally` entries, not those of the frames under it.
+        let base = self.frame()?.base;
+        let sites = self.finally_sites.len().saturating_sub(self.finally_sites.partition_point(|&(_, slot)| slot < base));
+        let marks = self.finally_marks.iter().filter(|&&(_, _, slot)| slot >= base).count();
+        let held = self.stack.len().saturating_sub(base.saturating_add(1)).saturating_add(sites).saturating_add(marks);
         let bytes = GENERATOR_BYTES.saturating_add(SLOT_BYTES.saturating_mul(held));
         self.reserve_heap(bytes)?;
         let result = self.pop()?;
