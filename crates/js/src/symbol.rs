@@ -127,6 +127,7 @@ impl SymProps {
         let (_, prop) = self.entries.get_mut(i)?.take()?;
         if self.entries.len() > 16 && self.index.len() * 2 < self.entries.len() {
             self.entries.retain(Option::is_some);
+            self.entries.shrink_to_fit();
             self.index = self.entries.iter().enumerate().filter_map(|(i, e)| e.as_ref().map(|(k, _)| (k.clone(), i))).collect();
         }
         Some(prop)
@@ -238,10 +239,10 @@ impl Interp {
             Value::Symbol(s) => f(self, PropKey::Sym(s.clone())),
             Value::Object(_) => {
                 let p = self.to_primitive(v, Hint::String)?;
-                if let Value::Symbol(s) = p {
-                    return f(self, PropKey::Sym(s));
-                }
-                self.rooted(std::slice::from_ref(&p), |i| i.with_key(&p, |i, k| f(i, PropKey::Str(k))))
+                self.rooted(std::slice::from_ref(&p), |i| match &p {
+                    Value::Symbol(s) => f(i, PropKey::Sym(s.clone())),
+                    _ => i.with_key(&p, |i, k| f(i, PropKey::Str(k))),
+                })
             }
             _ => self.with_key(v, |i, k| f(i, PropKey::Str(k))),
         }
@@ -304,8 +305,9 @@ impl Interp {
         Ok(self.object(id)?.syms.as_ref().and_then(|m| m.get(k)).cloned())
     }
 
-    /// The property `k` found on the object or its prototype chain.
-    pub(crate) fn find_sym(&self, id: ObjId, k: &Sym) -> JsResult<Option<Prop>> {
+    /// The property `k` found on the object or its prototype chain. Each step to a prototype takes
+    /// a unit of fuel.
+    pub(crate) fn find_sym(&mut self, id: ObjId, k: &Sym) -> JsResult<Option<Prop>> {
         let mut cur = Some(id);
         let mut steps = 0usize;
         while let Some(o) = cur {
@@ -313,6 +315,9 @@ impl Interp {
                 return Ok(Some(p));
             }
             cur = self.object(o)?.proto;
+            if cur.is_some() {
+                self.use_fuel()?;
+            }
             steps += 1;
             if steps > 1_000_000 {
                 return Err(crate::interp::Abrupt::Internal("prototype chain too long".into()));
@@ -464,7 +469,7 @@ impl Interp {
         }
     }
 
-    pub(crate) fn has_pk(&self, id: ObjId, k: &PropKey) -> JsResult<bool> {
+    pub(crate) fn has_pk(&mut self, id: ObjId, k: &PropKey) -> JsResult<bool> {
         match k {
             PropKey::Str(name) => self.has_property(id, name),
             PropKey::Sym(s) => Ok(self.find_sym(id, s)?.is_some()),
@@ -577,5 +582,26 @@ impl Interp {
             Value::String(s) => Ok(Some(s)),
             _ => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Sym, SymProps};
+    use crate::heap::{OPEN, Prop};
+    use crate::value::Value;
+
+    #[test]
+    fn removing_most_symbol_keys_gives_back_their_room_and_keeps_the_order() {
+        let mut m = SymProps::default();
+        let keys: Vec<Sym> = (0..100).map(|_| Sym::new(None, false)).collect();
+        for k in &keys {
+            m.insert(k.clone(), Prop::Data { value: Value::Undefined, flags: OPEN });
+        }
+        for k in &keys[..90] {
+            m.remove(k);
+        }
+        assert!(m.entries.capacity() < 64, "{}", m.entries.capacity());
+        assert_eq!(m.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>(), keys[90..]);
     }
 }

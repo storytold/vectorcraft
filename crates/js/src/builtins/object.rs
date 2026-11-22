@@ -198,7 +198,15 @@ fn define_all(interp: &mut Interp, o: ObjId, props: &Value) -> JsResult<()> {
     interp.temp_roots.push(Value::Object(p));
     let r = (|| {
         let mut descs = Vec::new();
-        for k in own_prop_keys(interp, p)? {
+        let keys = own_prop_keys(interp, p)?;
+        // A getter can delete a Symbol-keyed property already read, so the Symbols stay rooted
+        // until they are defined on `o`.
+        for k in &keys {
+            if let PropKey::Sym(s) = k {
+                interp.temp_roots.push(Value::Symbol(s.clone()));
+            }
+        }
+        for k in keys {
             interp.use_fuel()?;
             if !interp.get_own_pk(p, &k)?.is_some_and(|prop| prop.enumerable()) {
                 continue;

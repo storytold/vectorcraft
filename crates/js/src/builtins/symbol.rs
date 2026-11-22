@@ -1,12 +1,12 @@
 //! `Symbol` (ECMA-262 11th edition, section 19.4, <https://262.ecma-international.org/11.0/>):
 //! the constructor with `Symbol.for`, `Symbol.keyFor` and the well-known Symbols, the methods of
-//! `Symbol.prototype`, `Object.getOwnPropertySymbols` (section 19.1.2.10) and
-//! `Function.prototype[@@hasInstance]` (section 19.2.3.6). Installed in a realm with
-//! [`crate::Options::es2015`] only.
+//! `Symbol.prototype`, `Object.getOwnPropertySymbols` (section 19.1.2.10),
+//! `Function.prototype[@@hasInstance]` (section 19.2.3.6) and `Date.prototype[@@toPrimitive]`
+//! (section 20.4.4.45). Installed in a realm with [`crate::Options::es2015`] only.
 
 use super::{arg, constructor, create_at, data, method, native, new_array};
 use crate::heap::{CONFIGURABLE, Class, NativeFn, NativeKind, ObjId, Object, Prop, SYMBOL_BYTES, string_bytes};
-use crate::interp::{Interp, JsResult};
+use crate::interp::{Hint, Interp, JsResult};
 use crate::symbol::{Es2015Objects, REGISTRY_ENTRY_BYTES, Sym, WellKnown};
 use crate::value::{Str, Value};
 
@@ -37,7 +37,9 @@ pub(super) fn install(interp: &mut Interp, object_ctor: ObjId) -> JsResult<()> {
     let getter = native(interp, "get description", description, 0, NativeKind::Plain, false)?;
     interp.define(proto, crate::heap::key("description"), Prop::Accessor { get: Some(getter), set: None, flags: CONFIGURABLE })?;
     interp.define_sym(proto, to_string_tag, Prop::Data { value: Value::str("Symbol"), flags: CONFIGURABLE })?;
-    sym_method(interp, proto, to_primitive, "[Symbol.toPrimitive]", symbol_to_primitive, 1, CONFIGURABLE)?;
+    sym_method(interp, proto, to_primitive.clone(), "[Symbol.toPrimitive]", symbol_to_primitive, 1, CONFIGURABLE)?;
+    let date_proto = interp.intrinsics.date_proto;
+    sym_method(interp, date_proto, to_primitive, "[Symbol.toPrimitive]", date_to_primitive, 1, CONFIGURABLE)?;
 
     method(interp, object_ctor, "getOwnPropertySymbols", get_own_property_symbols, 1)?;
     let function_proto = interp.intrinsics.function_proto;
@@ -136,6 +138,26 @@ fn description(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResu
 /// `Symbol.prototype[@@toPrimitive](hint)` (section 19.4.3.5).
 fn symbol_to_primitive(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     this_symbol(interp, &this, "[Symbol.toPrimitive]").map(Value::Symbol)
+}
+
+/// `Date.prototype[@@toPrimitive](hint)` (section 20.4.4.45): OrdinaryToPrimitive of any object,
+/// `toString` first for the hints `"string"` and `"default"` and `valueOf` first for `"number"`.
+/// Any other hint, or a `this` that is not an object, throws a `TypeError`.
+fn date_to_primitive(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let Value::Object(o) = this else {
+        return Err(interp.type_error("Date.prototype[Symbol.toPrimitive] was called on a value that is not an object"));
+    };
+    // The longest hint has 7 units, so a longer string is refused before it is flattened.
+    let name = match arg(args, 0) {
+        Value::String(s) if s.len() <= 7 => String::from_utf16_lossy(&s.flat()),
+        _ => String::new(),
+    };
+    let hint = match name.as_str() {
+        "string" | "default" => Hint::String,
+        "number" => Hint::Number,
+        _ => return Err(interp.type_error("Date.prototype[Symbol.toPrimitive] was given a hint that is not \"string\", \"number\" or \"default\"")),
+    };
+    interp.ordinary_to_primitive(o, &this, hint)
 }
 
 /// `Object.getOwnPropertySymbols(o)` (section 19.1.2.10): the object's own Symbol keys in the
