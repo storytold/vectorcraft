@@ -535,9 +535,12 @@ fn row_menu(app: &mut VectorcraftApp, ui: &mut Ui, list: &egui::Response) {
 /// Run what the list reported, in order. `Activate` has no action: a row has no Enter action here.
 pub(crate) fn apply(app: &mut VectorcraftApp, events: Vec<PageListEvent>) {
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    // A Ctrl/Cmd-click toggles its row and goes to it: the toggle already chose the active artboard, which a
+    // plain go would make the only selected one.
+    let toggled = events.iter().any(|e| matches!(e, PageListEvent::Selection(SelectionChange::Toggle(_))));
     for event in events {
         match event {
-            PageListEvent::Go(row) => select(app, row),
+            PageListEvent::Go(row) if !toggled => select(app, row),
             PageListEvent::Selection(SelectionChange::Set(keys)) if keys.len() > 1 => select_several(app, keys, n),
             PageListEvent::Selection(SelectionChange::Set(keys)) => {
                 if let Some(&row) = keys.first() {
