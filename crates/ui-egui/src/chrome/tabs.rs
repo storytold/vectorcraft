@@ -1,5 +1,6 @@
 use super::{Ui, VectorcraftApp, json, zoom_label};
 use crate::doc_windows::{self, GRAB, Win};
+use crate::panel_drag::PanelDrag;
 use craft::ui::bars::{Bar, BarKind, BreadcrumbBar};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _};
@@ -93,7 +94,9 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The strip selects a tab on the press; the tab is shown once the press ends without moving it, as a drag along
     // the strip or off it is not a switch.
     let pressed = egui::Id::new("vectorcraft.tabPressed");
-    let held = ui.input(|i| i.pointer.primary_down());
+    // Art carried off the canvas that rests over a tab shows its document at once, for the art to drop in.
+    let carrying = craft::ui::runtime::drag::active::<PanelDrag>(ui.ctx()).is_some_and(|d| matches!(*d, PanelDrag::Art { .. }));
+    let held = !carrying && ui.input(|i| i.pointer.primary_down());
     for event in strip.show(ui).events {
         if matches!(event, DocumentTabsEvent::Reordered { .. } | DocumentTabsEvent::TornOff { .. }) {
             ui.data_mut(|d| d.remove::<Win>(pressed));

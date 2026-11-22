@@ -61,9 +61,11 @@ fn button(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() }
 }
 
-/// Hold the pointer at `pos` past the tab rest delay.
+/// Hold the pointer at `pos` from `time` past the tab rest delay. The move reaches `pos` a frame earlier: art carried
+/// off the canvas starts its drag after the tab strip drew, so the strip's wait begins the frame after.
 fn rest(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, pos: Pos2) {
-    frame(app, ctx, time, vec![Event::PointerMoved(pos)]);
+    frame(app, ctx, time - 0.04, vec![Event::PointerMoved(pos)]);
+    frame(app, ctx, time, vec![]);
     frame(app, ctx, time + 0.6, vec![]);
 }
 
