@@ -401,6 +401,11 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"tsume": 100.1}),
         json!({"diacriticHorizontal": -1000.1}),
         json!({"diacriticVertical": 1000.1}),
+        json!({"tracking": -1000.1}),
+        json!({"kerning": 10000.1}),
+        json!({"rotation": 360.1}),
+        json!({"stroke_miter_limit": 0.9}),
+        json!({"small_caps": 200.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -425,7 +430,9 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
             "akiLeft": 0.0, "akiRight": 1000.0,
             "tsume": 100.0,
-            "diacriticHorizontal": -1000.0, "diacriticVertical": 1000.0
+            "diacriticHorizontal": -1000.0, "diacriticVertical": 1000.0,
+            "tracking": 10000.0, "kerning": -1000.0, "rotation": -360.0,
+            "stroke_miter_limit": 500.0, "small_caps": 200.0
         }}),
     )
     .unwrap();

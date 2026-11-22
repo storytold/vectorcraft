@@ -1275,7 +1275,7 @@ fn bad_writes_are_refused_naming_the_object_and_the_field() {
             text,
             json!({"text": {"runs": styled(&|s| s["size"] = json!(5000))}}),
             &InputKind::ALL,
-            "text.runs[0].style.size: must be 0.1 to 1296 pt".into(),
+            "text.runs[0].style.size: `size` must be from 0.1 to 1296".into(),
         ),
         (text, json!({"text": {"runs": styled(&|s| s["size"] = json!("big"))}}), &InputKind::ALL, "text.runs[0].style:".into()),
         (
@@ -1442,6 +1442,86 @@ fn written_runs_without_paragraphs_keep_each_paragraph_s_style() {
     assert_eq!(justified("One\nTwo\nThree"), [Justify::Left, Justify::Center, Justify::Right]);
     assert_eq!(justified("AB\nC"), [Justify::Left, Justify::Right]);
     assert_eq!(justified("A\nB\nC\nD"), [Justify::Left, Justify::Center, Justify::Right, Justify::Right]);
+}
+
+/// Every number in the character and paragraph styles a filter writes is checked against the range
+/// the style commands keep it to, in a style of the filter's own and in one the type already has,
+/// and a custom Kinsoku set must be one of the document's. Each bad value is refused naming the
+/// object and the field, and the document stays as it was. A set of the document's, given by
+/// name, takes the document's characters.
+#[test]
+fn written_style_numbers_are_checked_even_in_a_style_the_type_has() {
+    use vectorcraft_doc::{CharStyle, KinsokuSet, ParaStyle, TabAlign, TabStop, TextObject};
+    let (mut d, _, layer, _) = mixed();
+    d.kinsoku_sets.push(KinsokuSet { name: "Mine".into(), cannot_start: vec!['、'], ..KinsokuSet::default() });
+    let stop = TabStop { position: 10.0, align: TabAlign::Left, leader: String::new(), align_on: '.' };
+    let outside = KinsokuSet { name: "Elsewhere".into(), ..KinsokuSet::default() };
+    let bad_chars: [(&str, CharStyle, &str); 5] = [
+        ("leading 1e9", CharStyle { leading: Some(1e9), ..CharStyle::default() }, "style.leading: `leading` must be from 0.1 to 5000"),
+        ("scale 0", CharStyle { h_scale: 0.0, ..CharStyle::default() }, "style.h_scale: `h_scale` must be from 1 to 10000"),
+        ("baseline shift", CharStyle { baseline_shift: 1e9, ..CharStyle::default() }, "style.baseline_shift: `baseline_shift` must be from"),
+        ("tracking", CharStyle { tracking: -5000.0, ..CharStyle::default() }, "style.tracking: `tracking` must be from -1000 to 10000"),
+        ("aki", CharStyle { aki_left: 2000.0, ..CharStyle::default() }, "style.akiLeft: `akiLeft` must be from 0 to 1000"),
+    ];
+    let hard = |set: KinsokuSet| ParaStyle { kinsoku: vectorcraft_doc::Kinsoku::Hard, kinsoku_set: Some(Arc::new(set)), ..ParaStyle::default() };
+    let bad_paras: [(&str, ParaStyle, &str); 4] = [
+        ("100000 tabs", ParaStyle { tabs: vec![stop.clone(); 100_000], ..ParaStyle::default() }, "paragraphs[0].tabs: at most 256 tab stops"),
+        ("indent", ParaStyle { left_indent: 1e9, ..ParaStyle::default() }, "paragraphs[0].left_indent: `left_indent` must be from -1296 to 1296"),
+        (
+            "hyphenation",
+            ParaStyle { hyphenation: vectorcraft_doc::HyphenationOptions { after_first: 0, ..Default::default() }, ..ParaStyle::default() },
+            "paragraphs[0].hyphenation.after_first",
+        ),
+        ("unknown kinsoku set", hard(outside.clone()), "paragraphs[0].kinsoku_set: the document has no Kinsoku set named 'Elsewhere'"),
+    ];
+    // `own`: the type already has the bad style, and the filter changes only its other run or
+    // paragraph; otherwise the bad style is the filter's own.
+    let run = |id: NodeId, own: bool, bad: &CharStyle| {
+        let mut t = TextObject::point(Point::new(0.0, 0.0), "A\nB", CharStyle::default());
+        if own {
+            t.runs = vec![vectorcraft_doc::TextRun::new("A\n", bad.clone()), vectorcraft_doc::TextRun::new("B", CharStyle::default())];
+        }
+        let mut doc = d.clone();
+        let n = Node::new(id, NodeKind::Text(Box::new(t)));
+        let id = doc.insert(Some(layer), usize::MAX, n).unwrap();
+        (doc, id)
+    };
+    let check = |doc: &Document, id: NodeId, entry: Value, says: &str, what: &str| {
+        let (bytes, read_only) = encode_input_with(doc, &[id], &[InputKind::Type], usize::MAX).unwrap();
+        let mut entry = entry;
+        entry["id"] = json!(id.0);
+        let mut changed = doc.clone();
+        let e = write_out(&mut changed, &[id], &bytes, &read_only, &[InputKind::Type], &json!({"objects": [entry]})).unwrap_err().to_string();
+        assert!(e.contains(&format!("(id {}).text.", id.0)) && e.contains(says), "{what}: {says}: {e}");
+        assert_eq!(&changed, doc, "{what}: nothing changed");
+    };
+    let fresh = d.clone().alloc_id();
+    for (what, bad, says) in &bad_chars {
+        let (doc, id) = run(fresh, false, bad);
+        let runs = json!([{"text": "A\n", "style": bad}, {"text": "B", "style": CharStyle::default()}]);
+        check(&doc, id, json!({"text": {"runs": runs}}), says, what);
+        let (doc, id) = run(fresh, true, bad);
+        let runs = json!([{"text": "A\n", "style": bad}, {"text": "Be", "style": CharStyle::default()}]);
+        check(&doc, id, json!({"text": {"runs": runs}}), says, &format!("{what}, a style the type has"));
+    }
+    let centered = ParaStyle { justify: vectorcraft_doc::Justify::Center, ..ParaStyle::default() };
+    for (what, bad, says) in &bad_paras {
+        let (doc, id) = run(fresh, false, &CharStyle::default());
+        check(&doc, id, json!({"text": {"paragraphs": [bad, ParaStyle::default()]}}), says, what);
+        let mut doc = doc;
+        if let Some(Node { kind: NodeKind::Text(t), .. }) = doc.node_mut(id) {
+            t.set_paragraph_styles(vec![bad.clone(), ParaStyle::default()]);
+        }
+        check(&doc, id, json!({"text": {"paragraphs": [bad, centered]}}), says, &format!("{what}, a style the type has"));
+    }
+    // A set the document has, by name, takes the document's characters.
+    let (mut doc, id) = run(fresh, false, &CharStyle::default());
+    let (bytes, read_only) = encode_input_with(&doc, &[id], &[InputKind::Type], usize::MAX).unwrap();
+    let named = hard(KinsokuSet { name: "Mine".into(), cannot_start: vec!['x'; 3], ..KinsokuSet::default() });
+    let out = json!({"objects": [{"id": id.0, "text": {"paragraphs": [named, ParaStyle::default()]}}]});
+    write_out(&mut doc, &[id], &bytes, &read_only, &[InputKind::Type], &out).unwrap();
+    let NodeKind::Text(t) = &doc.node(id).unwrap().kind else { panic!("type") };
+    assert_eq!(t.para_at(0).kinsoku_set.as_deref().map(|s| s.cannot_start.clone()), Some(vec!['、']));
 }
 
 /// A filter's `documentData`: absent keeps what the plug-in keeps, `null` forgets it, any other JSON

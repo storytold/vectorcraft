@@ -13126,8 +13126,10 @@ its features turned off, distinct from unset.
 not a global swatch of the document, a stroke weight outside 0 to 4000000, more than 256 feature tags and an
 OpenType feature tag the shaper does not know, unless the style or the text it is made from already has that value.
 They also reject a size outside 0.1 to 1296, explicit leading outside 0.1 to 5000, horizontal or vertical scale
-outside 1 to 10000, and baseline shift or Tate-chu-yoko offsets outside -1296 to 1296. `leading: null` keeps
-Auto leading. An invalid value leaves the style, its text, and Undo history unchanged.
+outside 1 to 10000, baseline shift or Tate-chu-yoko offsets outside -1296 to 1296, tracking or kerning
+outside -1000 to 10000, rotation outside -360 to 360, a stroke miter limit outside 1 to 500, a
+stroke dash length outside 0 to 4000000 or offset outside -4000000 to 4000000, Small Caps outside 1 to 200 and a
+variable font axis setting that is not a number. `leading: null` keeps Auto leading. An invalid value leaves the style, its text, and Undo history unchanged.
 The New Character Style dialog accepts the same character fields and starts with the selected text's
 captured attributes. Without selected text, it starts with the character defaults for the interface language
 (including `charAlign: "emBoxCenter"` in Japanese); changing a Basic field keeps other seeded attributes.

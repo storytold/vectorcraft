@@ -420,7 +420,7 @@ pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vector
 // ---------- text ----------
 
 /// Largest indent or paragraph spacing (points; Illustrator's limit).
-const MAX_PARA: f64 = 1296.0;
+const MAX_PARA: f64 = vectorcraft_doc::text::MAX_PARA_DISTANCE;
 
 /// `text.setFormat`'s `bullet` values and the bullets they pick.
 const BULLETS: [(&str, vectorcraft_doc::text::Bullet); 4] = [

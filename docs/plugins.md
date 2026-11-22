@@ -759,14 +759,21 @@ exactly as given, or with the fields it changes; a field it leaves out keeps its
   by the change from its given transform, so an image's distorted corners move with it.
 - `text.runs` replaces the type's runs: each is `{text, style, inline?}` with the character attributes as the native
   file stores them, and an attribute the host doesn't know is refused. There is at least one run, at most 4,096, and at
-  most 256 KiB of UTF-8 text; the runs written in one output take at most 16 MiB. A style that none of the type's runs
-  has needs a font family of 1 to 256 printable characters, a size from 0.1 to 1296 pt, and fills and strokes that a
-  path's appearance would take. Inline graphics stay where they were: the runs keep each `inline` run as it was given,
-  in the same order. The characters of threaded type, and of type with ruby, can't change, though their attributes can.
-  The runs and paragraphs of type given with `truncated: true` can't change.
-- `text.paragraphs` holds one paragraph style per paragraph of the new text. With `text.runs` alone, each paragraph
-  keeps its style when the number of paragraphs stays the same; runs that add or join paragraphs move the styles with
-  the text, as typing the same change does.
+  most 256 KiB of UTF-8 text; the runs written in one output take at most 16 MiB. Every number in every run's style is
+  checked against the range `charStyle.new` keeps it to, including a style one of the type's runs already has: size
+  0.1 to 1296 pt, leading 0.1 to 5000 pt, tracking and kerning -1000 to 10000, horizontal and vertical scale 1 to
+  10000 %, baseline shift -1296 to 1296 pt, rotation -360 to 360°, and the ranges `docs/mcp.md` gives for
+  `charStyle.new` for the East Asian, Warichu and stroke attributes. A style that none of the type's runs has also needs a font family of 1 to 256
+  printable characters, and fills and strokes that a path's appearance would take. Inline graphics stay where they
+  were: the runs keep each `inline` run as it was given, in the same order. The characters of threaded type, and of
+  type with ruby, can't change, though their attributes can. The runs and paragraphs of type given with
+  `truncated: true` can't change.
+- `text.paragraphs` holds one paragraph style per paragraph of the new text, each checked as `paraStyle.new` checks
+  its attributes: indents and space before and after within ±1296 pt, the Hyphenation and Justification options in
+  their ranges, at most 256 tab stops at 0 to 100,000 pt, and a custom Kinsoku set only by the name of one of the
+  document's sets, whose characters the paragraph takes. With `text.runs` alone, each paragraph keeps its style when
+  the number of paragraphs stays the same; runs that add or join paragraphs move the styles with the text, as typing
+  the same change does.
 - `opacity` is a number from 0 to 1.
 - `symbolId` names a symbol in the document. An instance that shows another symbol loses its overrides, as Replace
   Symbol does.

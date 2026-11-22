@@ -5,18 +5,16 @@
 
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
-use vectorcraft_doc::text::INLINE_CHAR;
-use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, ParaStyle, TextObject, TextRun};
+use vectorcraft_doc::text::{AttrRangeError, INLINE_CHAR};
+use vectorcraft_doc::{CharStyle, Document, JustificationOptions, KinsokuSet, Node, NodeKind, ParaStyle, TextObject, TextRun};
 use vectorcraft_geom::Affine;
 
 use super::{
     MAX_COORD, MAX_INPUT_RUNS, MAX_INPUT_TEXT, MAX_INPUT_TEXT_TOTAL, admit_paint, decode_name, decode_paint, first_difference, out_err,
     read_only_changed,
 };
-use crate::{InputKind, Result};
+use crate::{Error, InputKind, Result};
 
-/// The smallest and largest font size a filter may set, in points (as the Character panel's).
-const FONT_SIZE: std::ops::RangeInclusive<f64> = 0.1..=1296.0;
 /// The longest font family name a filter may set, in characters.
 const MAX_FAMILY: usize = 256;
 /// The smallest determinant a transform a filter sets may have: a smaller one flattens the object.
@@ -224,9 +222,10 @@ pub(super) fn apply(doc: &Document, n: &mut Node, changes: &Map<String, Value>, 
 /// it is a frame of a story that flows through others). Each run has `text`, `style` and, for an
 /// inline graphic, `inline`; each attribute is one the type reads. Inline graphics stay as they
 /// were, in the same order, and the characters of threaded type or type with ruby stay as they
-/// were. A run whose style isn't one of the type's own has a font family and a size in
-/// [`FONT_SIZE`], and its paints are checked as an object's are. Paragraph styles are one per
-/// paragraph. With runs alone, each paragraph keeps its style when the number of paragraphs stays
+/// were. Every number of every run's style is in the range the character style commands keep it
+/// to ([`CharStyle::check_ranges`]), and a run whose style isn't one of the type's own has a font
+/// family, and its paints are checked as an object's are. Paragraph styles are one per paragraph
+/// ([`para_style`]). With runs alone, each paragraph keeps its style when the number of paragraphs stays
 /// the same, and otherwise the styles move with the text as typing the change moves them.
 fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Value>, paragraphs: Option<&Value>, at: &str) -> Result<()> {
     if let Some(runs) = runs {
@@ -252,6 +251,8 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
                 if text.contains(INLINE_CHAR) {
                     return Err(out_err(&at, "`text` holds the character of an inline graphic"));
                 }
+                // Every number goes to the layout, so it is checked even in a style the type has.
+                style.check_ranges(|_| true).map_err(|e| range_err(&format!("{at}.style"), &e))?;
                 if !own.contains(style_v) {
                     check_style(doc, &mut style, t.runs.get(i).map(|r| &r.style), &format!("{at}.style"))?;
                 }
@@ -298,8 +299,7 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
             if list.len() != count {
                 return Err(out_err(&at, format!("expected {count} paragraph styles, one per paragraph")));
             }
-            let styles =
-                list.iter().enumerate().map(|(i, p)| strict::<ParaStyle>(p, &format!("{at}[{i}]"), "a paragraph style")).collect::<Result<_>>()?;
+            let styles = list.iter().enumerate().map(|(i, p)| para_style(doc, p, &format!("{at}[{i}]"))).collect::<Result<_>>()?;
             t.set_paragraph_styles(styles);
         }
         None => t.normalize_paras(),
@@ -320,16 +320,39 @@ fn changed_range(old: &str, new: &str) -> (usize, usize, usize) {
     (start, old.len() - same, new.len() - same)
 }
 
+/// An attribute of the style at `at` out of its range, naming the attribute.
+fn range_err(at: &str, e: &AttrRangeError) -> Error {
+    out_err(&format!("{at}.{}", e.key), &e.message)
+}
+
+/// Paragraph style `v` from a filter's output, at `at`: each attribute one a paragraph reads, each
+/// number in the range the paragraph style commands keep it to ([`ParaStyle::check_ranges`], the
+/// Justification options as given), and a custom Kinsoku set one of `doc`'s, by name, whose
+/// characters it takes.
+fn para_style(doc: &Document, v: &Value, at: &str) -> Result<ParaStyle> {
+    let mut st: ParaStyle = strict(v, at, "a paragraph style")?;
+    let justification = match v.get("justification") {
+        None | Some(Value::Null) => None,
+        Some(j) => Some(serde_json::from_value::<JustificationOptions>(j.clone()).map_err(|e| out_err(&format!("{at}.justification"), e))?),
+    };
+    st.check_ranges(justification.as_ref(), &[], |_, _| true).map_err(|e| range_err(at, &e))?;
+    if let Some(set) = &st.kinsoku_set {
+        let found = KinsokuSet::named(&doc.kinsoku_sets, &set.name).ok_or_else(|| {
+            let shown = crate::permissions::display_text(&set.name, crate::permissions::MAX_SHOWN_FIELD);
+            out_err(&format!("{at}.kinsoku_set"), format!("the document has no Kinsoku set named '{shown}'"))
+        })?;
+        st.kinsoku_set = Some(std::sync::Arc::new(found.clone()));
+    }
+    Ok(st)
+}
+
 /// Checks character style `s`, a filter's own (`was`: the style of the run in its place before):
-/// its font family is 1 to [`MAX_FAMILY`] printable characters, its size is in [`FONT_SIZE`], and
-/// its fill and stroke are admitted as an object's paints are.
+/// its font family is 1 to [`MAX_FAMILY`] printable characters, and its fill and stroke are
+/// admitted as an object's paints are. Its numbers are checked for every run ([`set_text`]).
 fn check_style(doc: &Document, s: &mut CharStyle, was: Option<&CharStyle>, at: &str) -> Result<()> {
     let family = s.font_family.trim();
     if family.is_empty() || family.chars().count() > MAX_FAMILY || s.font_family.chars().any(char::is_control) {
         return Err(out_err(&format!("{at}.font_family"), format!("must be 1-{MAX_FAMILY} printable characters")));
-    }
-    if !FONT_SIZE.contains(&s.size) {
-        return Err(out_err(&format!("{at}.size"), format!("must be {} to {} pt", FONT_SIZE.start(), FONT_SIZE.end())));
     }
     let paint = |p: &vectorcraft_color::Paint, was: Option<&vectorcraft_color::Paint>, key: &str| {
         let at = format!("{at}.{key}");
