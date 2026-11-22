@@ -33,11 +33,20 @@ files need revalidation.
   `vectorcraft-web-<hash>` `.wasm` and `.js` files, and `no-cache` on `index.html` and the
   `vectorcraft-plugin-worker` files. The page refuses a cached worker whose messages differ from
   its own, and plug-ins then fail to install and run until the browser fetches the new worker.
-- **Content Security Policy:** a site that sends one needs `worker-src 'self'` for the plug-in
-  worker. Without `worker-src`, the browser uses `child-src`, then `script-src`, then
-  `default-src` ([CSP Level 3](https://www.w3.org/TR/CSP3/)), so a `script-src` that allows the
-  site's own scripts is enough only when the policy sets neither `worker-src` nor `child-src`.
-  When the policy blocks the worker, the app runs, and plug-ins fail to install and run.
+- **Content Security Policy:** a site that sends one must allow three things
+  ([CSP Level 3](https://www.w3.org/TR/CSP3/)):
+  - The inline `<script type="module">` that Trunk writes into `index.html` to start the app.
+    `script-src 'self'` alone blocks it, and the app does not start. A hash of that script
+    allows it, but the script changes with each build, so the hash must be taken from the
+    build you deploy.
+  - WebAssembly compilation: a `script-src` needs `'wasm-unsafe-eval'`, on the page and on the
+    plug-in worker files. Without it the app does not start, and plug-ins fail to install and
+    run.
+  - The plug-in worker: `worker-src 'self'`. Without `worker-src`, the browser uses
+    `child-src`, then `script-src`, then `default-src`, so a `script-src` that allows the
+    site's own scripts is enough only when the policy sets neither `worker-src` nor
+    `child-src`. When the policy blocks the worker, the app runs, and plug-ins fail to install
+    and run.
 - **HTTPS:** WebGPU (and the clipboard) only work in a secure context, which means `https://`
   or `http://localhost`. Over plain HTTP elsewhere, the app falls back to WebGL2.
 - **No special isolation headers:** VectorCraft doesn't use `SharedArrayBuffer`, so it doesn't

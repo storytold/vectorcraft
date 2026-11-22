@@ -874,6 +874,27 @@ fn on_the_web_a_checked_install_waits_for_the_run_that_holds_the_documents() {
     registry::remove(id);
 }
 
+/// A check that fails while a run holds the documents ends at once: its worker is terminated and
+/// the status bar says why, while the run goes on holding them.
+#[test]
+fn on_the_web_a_failed_check_ends_while_a_run_holds_the_documents() {
+    let (mut app, fake) = web_app();
+    let (bad_id, caller) = ("test.ui.web.failswhileheld", "test.ui.web.failswhileheld.caller");
+    install_caller(&mut app, caller, TRIANGLE);
+    let traps = wat::parse_str(tpl::module(&tpl::manifest(bad_id, "filter", "{}"), tpl::ECHO, "(start $s) (func $s unreachable)", 1)).unwrap();
+    app.run("ui.installPlugin", json!({"dataBase64": vectorcraft_format::base64_encode(&traps)})).unwrap();
+    app.run("plugin.dialog", json!({"id": caller})).unwrap();
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    fake.serve(0);
+    plugin_runs::poll(&mut app);
+    assert!(fake.worker(0).terminated.get(), "the check's worker ends");
+    assert!(app.ui.status.contains("trapped"), "{}", app.ui.status);
+    assert!(app.session.plugin_calls_open(), "the run still holds the documents");
+    assert!(registry::get(bad_id).is_none());
+    app.run("plugin.cancelRuns", json!({})).unwrap();
+}
+
 /// The progress window shows the run that holds the documents at once, with Cancel only, also when
 /// a run that started before it is running.
 #[test]

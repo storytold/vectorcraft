@@ -593,7 +593,13 @@ fn poll_checks(app: &mut VectorcraftApp) {
         let dialog = app.ui.dialog.is_some() || app.session.plugin_calls_open() || app.session.script_running();
         let checked = loop {
             if dialog {
-                break c.worker.watch(t).map(Err);
+                if let Some(e) = c.worker.watch(t) {
+                    break Some(Err(e));
+                }
+                // A failed check ends at once; only a checked install waits.
+                if !matches!(c.worker.inbox.borrow().messages.front(), Some(FromWorker::Checked(Err(_)))) {
+                    break None;
+                }
             }
             match c.worker.next(t) {
                 Err(e) => break Some(Err(e)),
