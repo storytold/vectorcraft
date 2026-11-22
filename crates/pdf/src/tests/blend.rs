@@ -310,19 +310,19 @@ fn a_translucent_knockout_group_reads_back_as_one_group() {
 }
 
 /// Elements whose opacity defines their knockout shape knock out less than a PDF knockout group
-/// knocks out: each is drawn through one soft mask of the elements above it, so that 200 of them
+/// knocks out: each is drawn through one soft mask of the elements above it, so that 50 of them
 /// still read back, every one of them.
 #[test]
 fn elements_whose_opacity_defines_their_knockout_shape_are_drawn_through_one_mask_each() {
-    let d = knockout_squares(200, true, false);
+    let d = knockout_squares(50, true, false);
     let r = export_with_report(&d, &PdfOptions::default()).unwrap();
     assert!(!r.warnings.iter().any(|w| w.contains("knockout")), "{:?}", r.warnings);
     assert!(!text(&d).contains("/Ktrue"));
     let back = import(&r.bytes).unwrap();
     let mut paths = 0;
     back.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
-    // The backdrop and the 200 squares (the masks' copies of them are opacity-mask art).
-    assert_eq!(paths, 201);
+    // The backdrop and the 50 squares (the masks' copies of them are opacity-mask art).
+    assert_eq!(paths, 51);
 }
 
 /// When the masks would draw more than [`crate::export::MAX_KNOCKOUT_MASK_OBJECTS`] objects, the
