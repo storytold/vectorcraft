@@ -881,7 +881,7 @@ fn run_promise_one(script: &str, negative_type: Option<&str>, asynchronous: bool
         Ok(JsValue::Undefined)
     });
     let result = realm.run(script);
-    if asynchronous && negative_type.is_none() && result.is_ok() {
+    if asynchronous && result.is_ok() && negative_type.is_none() {
         let printed = printed.borrow();
         return if printed.contains("Test262:AsyncTestComplete") && !printed.contains("Test262:AsyncTestFailure") {
             Ok(())
