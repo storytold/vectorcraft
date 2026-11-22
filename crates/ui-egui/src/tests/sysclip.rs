@@ -312,6 +312,11 @@ pub(super) fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui:
     out
 }
 
+/// The paste egui sends for a clipboard with a picture and no text.
+fn picture_paste() -> egui::Event {
+    egui::Event::PasteImage(std::sync::Arc::new(egui::ColorImage::filled([1, 1], egui::Color32::WHITE)))
+}
+
 fn key(key: egui::Key, pressed: bool, modifiers: egui::Modifiers) -> egui::Event {
     egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers }
 }
@@ -643,7 +648,7 @@ fn the_menus_paste_into_a_field_waits_for_the_formats() {
 
 /// A paste chord into type being edited, before the formats are written: the formats are written
 /// first, and the paste pastes their text whether the host read another app's text for it or found
-/// no text, also when the chord's key comes up a frame after they were written; with no text in
+/// no text (a picture), also when that paste comes a frame after they were written; with no text in
 /// the formats (Include SVG Code off, a rectangle) it pastes nothing.
 #[test]
 fn a_paste_chord_into_type_waits_for_the_formats() {
@@ -654,9 +659,7 @@ fn a_paste_chord_into_type_waits_for_the_formats() {
         let layer = &app.session.active().unwrap().doc.layers[0];
         layer.children().unwrap().iter().filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t.plain_text()) } else { None }).collect()
     };
-    // The chord's release comes after the Paste event egui sends when the clipboard holds text.
-    let release = || key(egui::Key::V, false, egui::Modifiers::COMMAND);
-    let read = || vec![egui::Event::Paste("Words another app copied".into()), release()];
+    let read = || vec![egui::Event::Paste("Words another app copied".into())];
     let paste_into_new_type = |app: &mut VectorcraftApp, y: f64, frames: Vec<Vec<egui::Event>>| {
         app.select_tool("type");
         let view = app.view_info();
@@ -678,15 +681,14 @@ fn a_paste_chord_into_type_waits_for_the_formats() {
     run(&mut app, "select.set", json!({"ids": [t]}));
     copy_elsewhere(&board, vec![(PNG, blue_png())]);
     run(&mut app, "edit.copy", json!({}));
-    paste_into_new_type(&mut app, 130.0, vec![vec![release()]]);
+    paste_into_new_type(&mut app, 130.0, vec![vec![picture_paste()]]);
     assert_eq!(texts(&app), ["Words", "Words", "Words"], "the host found no text");
-    // The key goes down before the formats are written (the host finds no text) and comes up in
-    // the frame after the one that writes them.
+    // The paste with no text comes in the frame after the one that writes the formats.
     run(&mut app, "select.set", json!({"ids": [t]}));
     copy_elsewhere(&board, vec![(PNG, blue_png())]);
     run(&mut app, "edit.copy", json!({}));
-    paste_into_new_type(&mut app, 190.0, vec![vec![], vec![release()]]);
-    assert_eq!(texts(&app), ["Words", "Words", "Words", "Words"], "the key came up a frame later");
+    paste_into_new_type(&mut app, 190.0, vec![vec![], vec![picture_paste()]]);
+    assert_eq!(texts(&app), ["Words", "Words", "Words", "Words"], "the paste came a frame later");
     run(&mut app, "prefs.set", json!({"key": "copyAsSvg", "value": false}));
     copy_elsewhere(&board, vec![(TEXT, b"Words another app copied".to_vec())]);
     copy_rect(&mut app);
@@ -837,21 +839,18 @@ fn a_pdf_from_another_app_pastes_as_vectors_ahead_of_its_bitmap() {
 #[test]
 fn keyboard_paste_of_a_bitmap_without_a_paste_event() {
     let (mut app, board) = app();
-    let (cmd, none) = (egui::Modifiers::COMMAND, egui::Modifiers::NONE);
     copy_elsewhere(&board, vec![(PNG, blue_png())]);
     frame(&mut app, vec![]);
-    // Cmd+V: egui swallows the press and sends no Paste event (no text); only the release arrives.
-    frame(&mut app, vec![key(egui::Key::V, false, cmd)]);
+    // Cmd+V: egui sends no Paste event with text, only the paste of a picture.
+    frame(&mut app, vec![picture_paste()]);
     assert_eq!(count(&app), 1);
     assert!(matches!(pasted(&app)[0].kind, NodeKind::Image(_)));
-    // A V typed (its press reported) is no paste, whatever is released with it.
-    frame(&mut app, vec![key(egui::Key::V, true, none)]);
-    frame(&mut app, vec![key(egui::Key::V, false, cmd)]);
+    // A V typed is no paste.
+    frame(&mut app, vec![key(egui::Key::V, true, egui::Modifiers::NONE)]);
     assert_eq!(count(&app), 1);
-    // Text on the clipboard: egui's Paste event pastes once, its release adds nothing.
+    // Text on the clipboard: egui's Paste event pastes once.
     copy_elsewhere(&board, vec![(TEXT, b"words".to_vec())]);
     frame(&mut app, vec![egui::Event::Paste("words".into())]);
-    frame(&mut app, vec![key(egui::Key::V, false, cmd)]);
     assert_eq!(count(&app), 2);
 }
 

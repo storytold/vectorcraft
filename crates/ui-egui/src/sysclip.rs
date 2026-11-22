@@ -368,16 +368,15 @@ impl VectorcraftApp {
     /// Start of a frame, before the background results that arrived are applied: while a text
     /// field or type has the keyboard (egui's or the Type tool's), the formats a Copy or Cut is making
     /// are written first ([`Self::written_clipboard_text`]). A paste whose text the host read before
-    /// that pastes their text instead, or nothing when they have none. A paste chord the
-    /// host found no text for pastes their text, also when its key comes up after they were
-    /// written, while the system clipboard still holds them. On the canvas the app does not wait
+    /// that pastes their text instead, or nothing when they have none. A paste the host found no
+    /// text for pastes their text, while the system clipboard still holds them. On the canvas the app does not wait
     /// for them: Paste takes the internal clipboard ([`Self::adopt_system_clipboard`]).
     pub(crate) fn write_formats_before_text_input(&mut self, ctx: &egui::Context) {
         if !(ctx.egui_wants_keyboard_input() || self.session.tool_wants_text()) {
             return;
         }
-        // A paste chord egui sent no Paste event for: the clipboard held no text when it came.
-        let textless = ctx.input(|i| self.paste_chord.clone().textless_paste(&i.events).is_some());
+        // A paste with no text: the clipboard held none when the chord came.
+        let textless = craft::ui::runtime::keys::textless_paste(ctx);
         // Formats that waited when this host iteration began still own a paste event read while
         // they were pending, even if the worker wrote them during this iteration's tick.
         let waited = ctx.data(|d| d.get_temp::<bool>(egui::Id::unique("clipboard.pending-at-tick"))).unwrap_or(false);
