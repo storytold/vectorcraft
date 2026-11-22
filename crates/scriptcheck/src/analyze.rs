@@ -544,6 +544,8 @@ struct Analyzer<'s, 'a, 'l> {
     file: Option<&'a str>,
     /// The four significant tokens before this one, the latest first.
     h: [Option<Sig<'s>>; 4],
+    /// The significant token before the four in `h`.
+    h4: Option<Sig<'s>>,
     brackets: Brackets,
     /// Nesting too deep to follow was reported: it is reported once.
     deep: bool,
@@ -626,6 +628,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             acc,
             file,
             h: [None; 4],
+            h4: None,
             brackets: Brackets::default(),
             deep: false,
             active: None,
@@ -745,6 +748,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.features(&t);
         self.newer(&t);
         self.module_check(&t);
+        self.h4 = self.h[3];
         self.h = [Some(t), self.h[0], self.h[1], self.h[2]];
     }
 
@@ -1522,6 +1526,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.var_depth = None;
         self.conds.clear();
         self.h = [None; 4];
+        self.h4 = None;
         self.acc.steps = self.acc.steps.saturating_add(1);
         let d = directives::parse(t.text);
         let Some(name) = d.known else {

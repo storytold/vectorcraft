@@ -558,6 +558,25 @@ fn save_as_and_export_file_in_brackets_write_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
 }
 
+/// `app.open` reads the file it is given, called by name or with its name as a string literal in
+/// brackets; a document has no `open` method, and a property or a variable named `app` is not the
+/// application.
+#[test]
+fn app_open_reads_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = app.open(f);\n",
+        "app['open'](f);\n",
+        "app.activeDocument['open'](f);\n",
+        "x.app.open(f);\n",
+        "x.app['open'](f);\n",
+    ));
+    assert_eq!(feature(&r, "file.read").map(|f| f.lines.as_slice()), Some(&[2, 3][..]));
+    assert!(r.outside.is_empty());
+    let r = report("var app = {};\napp.open(f);\napp['open'](f);\n");
+    assert!(feature(&r, "file.read").is_none());
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]

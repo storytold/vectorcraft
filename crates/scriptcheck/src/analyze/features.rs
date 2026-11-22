@@ -289,14 +289,18 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// `(` after a name: a call.
     fn call(&mut self, line: Option<usize>) {
         let [h0, h1, h2, h3] = self.h;
-        // `doc['saveAs'](f)`: a document method named by a string literal in brackets.
+        // `doc['saveAs'](f)` and `app['open'](f)`: a method named by a string literal in brackets.
         if is(h0, "]")
             && is(h2, "[")
             && let Some(name) = h1.filter(|s| s.kind == T::Str)
-            && catalog::DOM_FILE_WRITES.contains(&unquote(name.text, 32).as_str())
         {
-            self.acc.feature(FeatureId::FileWrite, line);
-            self.acc.outside(OutsideId::FilesWritten, line, None);
+            let name = unquote(name.text, 32);
+            if catalog::DOM_FILE_WRITES.contains(&name.as_str()) {
+                self.acc.feature(FeatureId::FileWrite, line);
+                self.acc.outside(OutsideId::FilesWritten, line, None);
+            } else if catalog::DOM_FILE_READS.contains(&name.as_str()) && self.app_receiver(h3, self.h4) {
+                self.acc.feature(FeatureId::FileRead, line);
+            }
             return;
         }
         let Some(callee) = h0.filter(|s| s.kind == T::Ident) else { return };
@@ -311,7 +315,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::ScriptuiDrawing, line);
             } else if catalog::INSTANCE_DIALOGS.contains(&n) {
                 self.acc.feature(FeatureId::FileDialog, line);
-            } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
+            } else if catalog::FOLDER_READS.contains(&n)
+                || (file && catalog::FILE_READS.contains(&n))
+                || (catalog::DOM_FILE_READS.contains(&n) && self.app_receiver(h2, h3))
+            {
                 self.acc.feature(FeatureId::FileRead, line);
             } else if (file && catalog::FILE_WRITES.contains(&n)) || catalog::DOM_FILE_WRITES.contains(&n) {
                 self.acc.feature(FeatureId::FileWrite, line);
@@ -334,6 +341,12 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.outside(OutsideId::UnseenCode, line, None);
             }
         }
+    }
+
+    /// Whether `receiver`, which `before` comes before, is the application object: the name `app`
+    /// that no `.` comes before and that the script has not declared as its own.
+    fn app_receiver(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> bool {
+        word(receiver, catalog::DOM_ROOTS[0]) && !member_mark(before) && !self.shadowed.first().copied().unwrap_or(true)
     }
 
     /// Whether `receiver`, which `before` comes before, is a variable holding a File or Folder object
