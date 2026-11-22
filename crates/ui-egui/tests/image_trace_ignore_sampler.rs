@@ -106,6 +106,7 @@ fn fixture_with_transparent_edge(live_trace: bool, rgb: [u8; 3], preview: bool, 
     app.run("window.panel.dock", json!({"panel": "imageTrace", "side": "End", "collapsed": false})).unwrap();
     app.run("window.panel.activate", json!({"panel": "imageTrace"})).unwrap();
     let ctx = egui::Context::default();
+    craft::ui::shell::embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
     ctx.enable_accesskit();
     for _ in 0..8 {
         frame(&mut app, &ctx, vec![]).textures_delta.clear();

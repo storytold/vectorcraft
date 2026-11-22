@@ -5,6 +5,7 @@
 use std::sync::{Mutex, MutexGuard};
 
 use craft::ui::shell::embed;
+use egui_kittest::Harness;
 use serde_json::json;
 use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, ColorSettings, DISPLAY_P3, PROPHOTO_RGB, SRGB, WIDE_GAMUT_RGB};
@@ -73,25 +74,36 @@ fn rgb_edits_preserve_untouched_working_channels() {
     }
 }
 
-/// A test window of `size` that runs `pass` over `app` in the app's interface: the runtime and the
-/// app's fonts are installed in the first pass, and each later pass gets the frame input the app gives.
+/// A test window of `size` that runs `pass` over `app` in the app's interface: the runtime and the app's fonts are
+/// installed on its context, the app has the window as the hosts hand it, and the first frame had the app's input.
 fn harness(
     size: egui::Vec2,
-    app: VectorcraftApp,
+    mut app: VectorcraftApp,
     mut pass: impl FnMut(&mut egui::Ui, &mut VectorcraftApp) + 'static,
-) -> egui_kittest::Harness<'static, VectorcraftApp> {
-    let mut installed = false;
-    egui_kittest::Harness::builder().with_size(size).with_accessibility_check(false).build_ui_state(
-        move |ui, app: &mut VectorcraftApp| {
-            if !std::mem::replace(&mut installed, true) {
-                embed::install(ui.ctx(), craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
-                return;
-            }
-            embed::before_input(ui.ctx(), |out| app.frame_input(out));
-            pass(ui, app);
-        },
-        app,
-    )
+) -> Harness<'static, VectorcraftApp> {
+    let ctx = egui::Context::default();
+    embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
+    app.adopt_context(&ctx);
+    embed::before_input(&ctx, |out| app.frame_input(out));
+    let mut harness =
+        Harness::builder().with_size(size).with_accessibility_check(false).with_context(ctx).build_ui_state(move |ui, app| pass(ui, app), app);
+    input(&mut harness);
+    harness
+}
+
+/// Runs the commands the frames since the last call fired and gives the runtime the app's input for the next frame,
+/// as the hosts do before each frame.
+fn input(harness: &mut Harness<'static, VectorcraftApp>) {
+    let ctx = harness.ctx.clone();
+    embed::before_input(&ctx, |out| harness.state_mut().frame_input(out));
+}
+
+/// `n` frames of `harness`, each followed by the app's input.
+fn frames(harness: &mut Harness<'static, VectorcraftApp>, n: usize) {
+    for _ in 0..n {
+        harness.step();
+        input(harness);
+    }
 }
 
 /// The picker's R, G and B fields show the stored RGB components in every working profile.
@@ -103,18 +115,16 @@ fn picker_rgb_fields_show_working_values() {
         let _space = WorkingSpace::new(profile);
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
-        app.run("ui.colorPicker", json!({"color": [0.6, 0.4, 0.2]})).unwrap();
         let mut harness = harness(egui::vec2(1280.0, 900.0), app, |ui, app| {
             app.tick(ui.ctx());
             app.ui(ui);
         });
-        harness.run_steps(3);
-        // HSB's Brightness field is also labelled B, so the fields labelled B are read together.
-        for (label, expected) in [("R", "153"), ("G", "102"), ("B", "51")] {
-            let values: Vec<String> = harness
-                .query_all_by_role_and_label(egui::accesskit::Role::TextInput, label)
-                .filter_map(|field| field.value().map(|v| v.to_string()))
-                .collect();
+        // The picker opens in the window, once the window has drawn.
+        harness.state_mut().run("ui.colorPicker", json!({"color": [0.6, 0.4, 0.2]})).unwrap();
+        frames(&mut harness, 3);
+        // The channel fields are named by the channel's full name.
+        for (label, expected) in [("Red", "153"), ("Green", "102"), ("Blue", "51")] {
+            let values: Vec<String> = harness.query_all_by_label(label).filter_map(|field| field.value().map(|v| v.to_string())).collect();
             assert!(values.iter().any(|v| v == expected), "{profile}: {label} shows {values:?}");
         }
     }
@@ -131,9 +141,9 @@ fn color_panel_slider_preserves_native_channels_and_undo() {
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     app.run("paint.setFill", json!({"color": [0.5, 0.3, 0.2]})).unwrap();
     let mut harness = harness(egui::vec2(320.0, 400.0), app, |ui, app| show(app, ui));
-    harness.run_steps(3);
-    harness.get_by_role_and_label(egui::accesskit::Role::Slider, "R").click();
-    harness.run_steps(3);
+    frames(&mut harness, 3);
+    harness.get_by_role_and_label(egui::accesskit::Role::Slider, "Red").click();
+    frames(&mut harness, 3);
     let color = harness.state().session.proxy_paints().0.color().unwrap();
     let Color::Rgb { r, .. } = color else { panic!("expected RGB") };
     assert_ne!(r, 0.5, "the slider was edited");

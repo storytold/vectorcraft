@@ -7,8 +7,8 @@
 use std::sync::{Mutex, MutexGuard};
 
 use craft::ui::menu::bar::{is_focused, is_open};
-use craft::ui::runtime::overlay::{self, OpenFilter};
-use craft::ui::shell::embed;
+use craft::ui::runtime::env::WindowKey;
+use craft::ui::shell::{WindowDialogs, embed};
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
@@ -63,7 +63,8 @@ impl Scene {
         for _ in 0..4 {
             s.frame(vec![]);
         }
-        assert!(!overlay::any_open(&s.ctx, OpenFilter::Keys), "no dialog is open");
+        let dialogs = WindowDialogs::of(&s.ctx, &WindowKey::main()).with(|host| host.open_dialogs());
+        assert!(dialogs.is_empty(), "no dialog is open");
         assert!(!s.ctx.egui_wants_keyboard_input(), "the initial idle canvas owns input");
         s
     }
