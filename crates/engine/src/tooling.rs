@@ -1548,11 +1548,12 @@ impl Session {
     }
 
     /// Let the active tool finish work a command from outside it ended ([`vectorcraft_tools::Tool::after_command`]):
-    /// the Type tool and the Eyedropper clear a character range whose text is no longer selected.
+    /// the Type tool and the Eyedropper clear a character range whose text is no longer selected,
+    /// and the Curvature Circle tool lets the pointer reach its circles once none is selected.
     /// After `edit.undo` or `edit.redo` (`cmd`), the tool is told first, so the Type tool puts the
     /// caret where the step changed the text.
     pub(crate) fn after_command(&mut self, cmd: Option<&str>) {
-        if self.in_tool_actions || (!self.tool.wants_text() && self.tool.id() != "eyedropper") {
+        if self.in_tool_actions || (!self.tool.wants_text() && !matches!(self.tool.id(), "eyedropper" | vectorcraft_tools::curvature_circle::ID)) {
             return;
         }
         if let Some(cmd @ ("edit.undo" | "edit.redo")) = cmd {

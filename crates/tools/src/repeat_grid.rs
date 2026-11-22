@@ -90,13 +90,14 @@ impl GridHandles {
     /// bounding box the Selection tool shows; its geometric bounds without one) at `zoom`.
     pub fn of(doc: &Document, selection: &Selection, frame: Option<OrientedBox>, zoom: f64) -> Option<Self> {
         let [id] = selection.objects.as_slice() else { return None };
-        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !doc.is_editable(*id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(*id)?;
         let NodeKind::Repeat(spec) = &n.kind else { return None };
         let RepeatKind::Grid { h_spacing, v_spacing, rows, cols, grid_type, .. } = spec.kind else { return None };
-        if !h_spacing.is_finite() || !v_spacing.is_finite() {
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !h_spacing.is_finite() || !v_spacing.is_finite() || !doc.is_editable(*id) {
             return None;
         }
         let source = spec.source_bounds()?;
