@@ -375,7 +375,11 @@ impl Exporter<'_> {
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
         let alpha = match (&n.kind, mask) {
             // The mask's image shares the pixel grid only when it has the same corners (or none).
-            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => self.masked_image(im, m, !n.extras().pixelated),
+            // A color-masked image keeps the colors it hides hidden.
+            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => {
+                let shown = self.doc.shown_image(n, im);
+                self.masked_image(im, &shown, m, !n.extras().pixelated)
+            }
             _ => None,
         };
         if let Some(m) = mask

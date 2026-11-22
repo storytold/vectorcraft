@@ -494,6 +494,18 @@ impl Tool for WidthTool {
                         // Points moved together stay selected.
                         (true, _, Some((id, ts))) if d.mode == Mode::Move => Some((id, ts.into_iter().map(|t| (t + dt).clamp(0.0, 1.0)).collect())),
                         (true, _, sel) => sel,
+                        // An Alt-click without a drag copies nothing: like a plain click on one of
+                        // several selected points, it lets a double-click edit them all.
+                        (false, false, _) if d.mode == Mode::Copy && !ev.mods.shift => {
+                            if let Some(sel) = self
+                                .before_press
+                                .clone()
+                                .filter(|(owner, ts)| *owner == d.spot.owner && ts.len() > 1 && ts.iter().any(|t| (t - d.spot.t).abs() <= SAME_T))
+                            {
+                                self.before_click = Some((sel, false));
+                            }
+                            Some((d.spot.owner, vec![d.t]))
+                        }
                         (false, _, _) => Some((d.spot.owner, vec![d.t])),
                     };
                     vec![Action::Commit]
@@ -1107,6 +1119,21 @@ mod tests {
             assert!(v.get("indices").is_none());
             assert_eq!(t.selected_indices(&c, id), vec![2]);
         }
+        // With Alt held, a double-click without a drag edits every selected point too.
+        let alt = Mods { alt: true, ..Default::default() };
+        let mut t = WidthTool::default();
+        click(&mut t, 150.0, none);
+        click(&mut t, 250.0, shift);
+        let v = double_click(&mut t, 250.0, alt);
+        assert_eq!((&v["indices"], v.get("index")), (&json!([1, 3]), None));
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3], "the selection is kept");
+        // An Alt-drag still copies the one point under the pointer, and selects the copy alone.
+        t.pointer(&c, &ev(PointerKind::Down, 250.0, 200.0, alt));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 270.0, 200.0, alt));
+        let (cmd, v) = preview(&acts);
+        assert_eq!((cmd, &v["index"]), ("stroke.widthPoint.copy", &json!(3)));
+        t.pointer(&c, &ev(PointerKind::Up, 270.0, 200.0, alt));
+        assert_eq!(t.selected.as_ref().map(|(_, ts)| ts.len()), Some(1));
         // A discontinuous point among them keeps both halves, and double-clicking it keeps the others.
         let (mut d2, _) = doc_line();
         let points = vec![(0.0, 1.0, 1.0), (0.25, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5, 2.0, 2.0), (0.75, 1.0, 1.0), (1.0, 1.0, 1.0)];
