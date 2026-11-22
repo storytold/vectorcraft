@@ -176,7 +176,8 @@ fn rasterize_params(items: Option<&[(String, Data)]>) -> std::result::Result<Map
 }
 
 /// The ids of the source art `d` names for `rasterize` in the document `doc`: one page item, or a
-/// list of them. The command checks that none is listed twice, inside another or locked.
+/// list of them, none inside another listed one. The command checks that none is listed twice or
+/// locked.
 fn sources(h: &Host, doc: Doc, d: &Data) -> std::result::Result<Vec<u64>, HostError> {
     let list: Vec<&Data> = match d {
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("rasterize takes at most {MAX_LISTED} objects"))),
@@ -195,6 +196,16 @@ fn sources(h: &Host, doc: Doc, d: &Data) -> std::result::Result<Vec<u64>, HostEr
             return Err(HostError::Error(OTHER_DOCUMENT.into()));
         }
         ids.push(item.id.0);
+    }
+    let listed: std::collections::HashSet<u64> = ids.iter().copied().collect();
+    let inside = with_doc(h, doc, |_, st| {
+        ids.iter().find_map(|id| {
+            let up = st.doc.ancestry(crate::NodeId(*id))?;
+            up.iter().any(|a| a.0 != *id && listed.contains(&a.0)).then_some(())
+        })
+    });
+    if inside.is_some() {
+        return Err(HostError::Error("a source page item is inside another one, which is listed too".into()));
     }
     Ok(ids)
 }

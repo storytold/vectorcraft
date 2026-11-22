@@ -124,7 +124,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rasterize…",
             ["Object"],
             None,
-            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline), ids?: [object id…] (these objects instead of the selection, each directly in a layer or group, none inside another, each unlocked in unlocked layers and groups; the selection stays as it is, less the objects rasterized), clipBounds?: [x0, y0, x1, y1] (points, y down: only the part of the art's area inside this rectangle; a rectangle that misses it is refused)} replace the selection with an embedded image (PNG; grayscale makes a gray PNG, and bitmap a 1-bit TIFF or, where it has transparency, a black-and-white gray PNG with alpha; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; an image larger than 64 Mpx or 32,768 px a side is refused; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), imageId (the image), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
+            "{ppi?, background?: transparent|white|black|\"#rrggbb\" (#rrggbbaa and #rgba are refused), antiAlias?: none|art|type (text snapped to pixels)|bool, padding?|addAround?: pt (0–1000), colorModel?: \"rgb\"|\"cmyk\"|\"grayscale\"|\"bitmap\", clippingMask?: bool (a clip group with the art's outline), ids?: [object id…] (these objects instead of the selection, each directly in a layer or group, unlocked in unlocked layers and groups; an object inside another listed one is left out, as from a selection; the selection stays as it is, less the objects rasterized), clipBounds?: [x0, y0, x1, y1] (points, y down: only the part of the art's area inside this rectangle; a rectangle that misses it is refused)} replace the selection with an embedded image (PNG; grayscale makes a gray PNG, and bitmap a 1-bit TIFF or, where it has transparency, a black-and-white gray PNG with alpha; in a CMYK document with its own colour model, a CMYK image of the art's inks, its transparency as its opacity mask); each defaults to document.rasterEffectsSettings; an image larger than 64 Mpx or 32,768 px a side is refused; a frame of threaded text that is rasterized leaves its thread with the text it shows → {id (the image, or its clip group), imageId (the image), width, height, warning?: \"an image couldn't be decoded and is missing from the picture\" (as raster exports say)}",
             has_selection,
             rasterize
         ),
@@ -949,8 +949,8 @@ pub(crate) fn rasterize_art(doc: &vectorcraft_doc::Document, nodes: Vec<Node>, p
 }
 
 /// The objects `ids` names for Rasterize, in paint order: each an object of the active document,
-/// listed once, none inside another listed one, and neither it nor a layer or group it is in
-/// locked.
+/// listed once, and neither it nor a layer or group it is in locked. An object inside another
+/// listed one is left out, as `edit::roots_of` leaves it out of a selection.
 fn rasterize_sources(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
     let ids = super::checked_ids_param(s, p, "ids", cmd)?;
     let d = &s.doc()?.doc;
@@ -960,24 +960,26 @@ fn rasterize_sources(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
             return Err(bad(cmd, format!("id {} is listed twice", id.0)));
         }
     }
+    let mut roots = Vec::with_capacity(ids.len());
     for id in &ids {
         // The layers and groups from the top down to the object itself.
         let Some(up) = d.ancestry(*id) else { return Err(bad(cmd, format!("no such object id {}", id.0))) };
         if d.node(*id).is_some_and(|n| n.is_layer()) {
             return Err(bad(cmd, format!("id {} is a layer, not an object", id.0)));
         }
+        if up.iter().any(|a| a != id && listed.contains(a)) {
+            continue;
+        }
         let parent = up.len().checked_sub(2).and_then(|i| d.node(up[i]));
         if !parent.is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. })) {
             return Err(bad(cmd, format!("id {} is part of a compound path or another object; give that object's id", id.0)));
         }
-        if let Some(outer) = up.iter().find(|a| *a != id && listed.contains(*a)) {
-            return Err(bad(cmd, format!("id {} is inside id {}, which is listed too", id.0, outer.0)));
-        }
         if up.iter().any(|a| d.node(*a).is_some_and(|n| n.locked)) {
             return Err(bad(cmd, format!("id {} is locked, or in a locked layer or group", id.0)));
         }
+        roots.push(*id);
     }
-    Ok(vectorcraft_doc::Selection { objects: ids, ..Default::default() }.in_paint_order(d))
+    Ok(vectorcraft_doc::Selection { objects: roots, ..Default::default() }.in_paint_order(d))
 }
 
 /// The id of the image in `node`, the node Rasterize makes: the image itself, or the image in its

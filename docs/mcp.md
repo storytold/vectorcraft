@@ -9754,9 +9754,9 @@ of threaded text that it rasterizes out of its thread with the text it shows, as
 Threading text from the in and out ports), and the other frames keep the text they hold. `object.rasterize`
 refuses an image larger than 64 million pixels or longer than 32,768 pixels a side, and the art stays as it was.
 With `ids`, `object.rasterize` rasterizes those objects instead of the selection and leaves the selection as it was,
-without the objects it replaced. An id listed twice, an object inside another listed one, a layer, a path of a
-compound path or a part of another object that is not a group, and an object that is locked or in a locked layer or
-group are refused, and nothing changes. `clipBounds: [x0, y0, x1, y1]` (points, y down)
+without the objects it replaced. An object inside another listed one is left out, as it is from a selection. An id
+listed twice, a layer, a path of a compound path or a part of another object that is not a group, and an object that
+is locked or in a locked layer or group are refused, and nothing changes. `clipBounds: [x0, y0, x1, y1]` (points, y down)
 keeps only the part of the art's area inside that rectangle; a rectangle that misses the art is refused. The result's
 `imageId` is the image, which is `id` itself unless `clippingMask` put the image in a clip group.
 
