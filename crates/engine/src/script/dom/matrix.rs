@@ -2,8 +2,8 @@
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/Matrix/> and
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/Application/> describe them. A matrix is a plain
 //! record with `mValueA`, `mValueB`, `mValueC`, `mValueD`, `mValueTX` and `mValueTY` and the
-//! `typename` `"Matrix"`; each function gives a new record and leaves the records passed to it as
-//! they were.
+//! `typename` `"Matrix"`; each function other than `isEqualMatrix` and `isSingularMatrix` gives a
+//! new record, those two give a boolean, and none changes the records passed to it.
 //!
 //! The record maps a point `(x, y)` to `(a·x + c·y + tx, b·x + d·y + ty)`, as a PDF `cm` matrix
 //! does (ISO 32000-1, 8.3.4), in script coordinates with Y up.
@@ -81,11 +81,33 @@ fn number(d: &Data, what: &str, default: f64) -> std::result::Result<f64, HostEr
     }
 }
 
-/// The matrix that applies `m` and then `n`.
+/// The matrix that applies `m` and then `n`. Adding 0 turns -0 into 0.
 fn then(m: Matrix, n: Matrix) -> Matrix {
     let [a, b, c, d, e, f] = m;
     let [a2, b2, c2, d2, e2, f2] = n;
-    [a * a2 + b * c2, a * b2 + b * d2, c * a2 + d * c2, c * b2 + d * d2, e * a2 + f * c2 + e2, e * b2 + f * d2 + f2]
+    [
+        products_sum(a, a2, b, c2, 0.0) + 0.0,
+        products_sum(a, b2, b, d2, 0.0) + 0.0,
+        products_sum(c, a2, d, c2, 0.0) + 0.0,
+        products_sum(c, b2, d, d2, 0.0) + 0.0,
+        products_sum(e, a2, f, c2, e2) + 0.0,
+        products_sum(e, b2, f, d2, f2) + 0.0,
+    ]
+}
+
+/// `x·y + z·w + t`. When both products and their sum are finite, and a product below the range of
+/// normal numbers is the only one that is not 0, the sum is taken as numbers are. Otherwise the
+/// products are summed past the range of a number and rounded at the end, so a finite value is not
+/// lost to a product too large or too small for a number.
+fn products_sum(x: f64, y: f64, z: f64, w: f64, t: f64) -> f64 {
+    let (p, q) = (x * y, z * w);
+    let lost = |v: f64, a: f64, b: f64| a != 0.0 && b != 0.0 && v.abs() < f64::MIN_POSITIVE;
+    let alone = |a: f64, b: f64| a == 0.0 || b == 0.0;
+    let plain = p + q;
+    if plain.is_finite() && (!lost(p, x, y) || alone(z, w)) && (!lost(q, z, w) || alone(x, y)) {
+        return plain + t;
+    }
+    products_difference(x, y, 0.0 - z, w).add(Wide::of(t)).value()
 }
 
 fn translate(dx: f64, dy: f64) -> Matrix {
@@ -97,14 +119,15 @@ fn scaled(sx: f64, sy: f64) -> Matrix {
     [sx / 100.0, 0.0, 0.0, sy / 100.0, 0.0, 0.0]
 }
 
-/// A turn of `degrees` counterclockwise, exact at quarter turns.
+/// A turn of `degrees` counterclockwise, exact at quarter turns. The remainder keeps the sign of
+/// `degrees` and is exact, so an angle next to a quarter turn is not rounded onto it.
 fn rotate(degrees: f64) -> Matrix {
-    let turn = degrees.rem_euclid(360.0);
+    let turn = degrees % 360.0;
     let (sin, cos) = match turn {
         0.0 => (0.0, 1.0),
-        90.0 => (1.0, 0.0),
-        180.0 => (0.0, -1.0),
-        270.0 => (-1.0, 0.0),
+        90.0 | -270.0 => (1.0, 0.0),
+        180.0 | -180.0 => (0.0, -1.0),
+        270.0 | -90.0 => (-1.0, 0.0),
         _ => turn.to_radians().sin_cos(),
     };
     // `0.0 - sin` rather than `-sin`, so a turn of 0 gives 0 and not -0.
@@ -192,6 +215,19 @@ impl Wide {
 
     fn div(self, o: Self) -> Self {
         Self::new(self.m / o.m, self.e.saturating_sub(o.e))
+    }
+
+    /// The sum. A number more than 2^60 times smaller than the other is past its precision.
+    fn add(self, o: Self) -> Self {
+        let (big, small) = if self.m == 0.0 || (o.m != 0.0 && o.e > self.e) { (o, self) } else { (self, o) };
+        if small.m == 0.0 {
+            return big;
+        }
+        let gap = small.e.saturating_sub(big.e);
+        if gap < -60 {
+            return big;
+        }
+        Self::new(big.m + small.m * pow2(gap), big.e)
     }
 
     /// The nearest `f64`: infinite past its range, and 0 or a subnormal number below it.

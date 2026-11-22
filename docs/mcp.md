@@ -2715,7 +2715,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `concatenateRotationMatrix(matrix, angle?)`, `invertMatrix(matrix)`, `isEqualMatrix(matrix, secondMatrix)` and
   `isSingularMatrix(matrix)` work on `Matrix` records (https://ai-scripting.docsforadobe.dev/jsobjref/Matrix/): plain
   objects with `mValueA`, `mValueB`, `mValueC`, `mValueD`, `mValueTX`, `mValueTY` and `typename` `"Matrix"`. Each
-  function gives a new record and leaves the ones passed to it unchanged. A record maps `(x, y)` to
+  function other than `isEqualMatrix` and `isSingularMatrix` gives a new record; those two give `true` or `false`.
+  No function changes the records passed to it. A record maps `(x, y)` to
   `(a·x + c·y + tx, b·x + d·y + ty)`, as a PDF `cm` matrix does (ISO 32000-1, 8.3.4), with Y up. VectorCraft's own
   rules: `concatenateMatrix(m, n)` applies `m` and then `n`, and the other `concatenate…` functions apply the record
   and then the transformation they make; a left-out move or angle is 0, a left-out `scaleX` is 100 and a left-out

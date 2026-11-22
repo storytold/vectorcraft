@@ -372,6 +372,36 @@ fn concatenation_applies_the_first_matrix_first() {
 }
 
 #[test]
+fn concatenation_keeps_a_finite_result_whose_products_leave_the_range_of_a_number() {
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "function v(m) { return [m.mValueA, m.mValueB, m.mValueC, m.mValueD, m.mValueTX, m.mValueTY]; }\
+         function mat(v) { return {mValueA: v[0], mValueB: v[1], mValueC: v[2], mValueD: v[3], mValueTX: v[4], mValueTY: v[5]}; }\
+         var x = Math.pow(2, 600), y = Math.pow(2, -500), z = Math.pow(2, -575);\
+         var c = app.concatenateMatrix(mat([x, x, 0, 1, x, x]), mat([x, 0, -x, 1, 0, 0]));\
+         vc.log([c.mValueA, c.mValueB === x, c.mValueC === -x, c.mValueD, c.mValueTX, c.mValueTY === x]);\
+         vc.log(app.concatenateMatrix(mat([y, y, 0, 1, 0, 0]), mat([z, 0, z, 1, 0, 0])).mValueA === Number.MIN_VALUE);\
+         var p = 2.0543170765449965e-57, q = 6.201533916984909e-252;\
+         vc.log(app.concatenateMatrix(mat([p, 0, 0, 1, 0, 0]), mat([q, 0, 0, 1, 0, 0])).mValueA === p * q);\
+         vc.log(v(app.concatenateMatrix(mat([-2, 0, 0, -3, 0, 0]), mat([0, 1, -1, 0, 0, 0]))));",
+    );
+    assert_eq!(out, vec![json!([0, true, true, 1, 0, true]), json!(true), json!(true), json!([0, -2, 3, 0, 0, 0])]);
+}
+
+#[test]
+fn a_turn_just_short_of_a_negative_quarter_turn_is_not_rounded_to_it() {
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "function v(m) { return [m.mValueA, m.mValueB, m.mValueC, m.mValueD]; }\
+         var m = app.getRotationMatrix(-89.99999999999999); vc.log(m.mValueA > 0); vc.log(m.mValueB);\
+         vc.log(v(app.getRotationMatrix(-90))); vc.log(v(app.getRotationMatrix(-180))); vc.log(v(app.getRotationMatrix(-450)));",
+    );
+    assert_eq!(out, vec![json!(true), json!(-1), json!([0, -1, 1, 0]), json!([-1, 0, 0, -1]), json!([0, -1, 1, 0])]);
+}
+
+#[test]
 fn inverse_singular_and_equal_matrices() {
     let mut s = Session::new();
     let out = log(
@@ -475,4 +505,29 @@ fn only_copies_that_fill_the_clipboard_and_are_kept_are_counted() {
     assert!(s.execute("command.batch", &batch).is_err());
     assert_eq!(s.copies, 1);
     assert!(!s.clipboard_copied);
+}
+
+#[test]
+fn a_copy_or_cut_the_run_puts_back_is_not_reported() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let a = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [a]})).unwrap();
+    // The clipboard holds a copy from before the run.
+    s.execute("edit.copy", &json!({})).unwrap();
+    let copies = s.copies;
+    // No command result reaches the script, so each command below is put back.
+    crate::script::TEST_RESULT_BYTES.with(|b| b.set(Some(1)));
+    let r = run(
+        &mut s,
+        "try { vc.run('command.batch', {commands: [{command: 'edit.copy', params: {}}]}); } catch (e) { vc.log(e.name); }\
+         try { vc.run('edit.cut'); } catch (e) { vc.log(e.name); }",
+    );
+    crate::script::TEST_RESULT_BYTES.with(|b| b.set(None));
+    let r = r.unwrap();
+    assert_eq!(r["log"], json!(["RangeError", "RangeError"]), "{r}");
+    assert_eq!(r.get("copied"), None, "{r}");
+    assert_eq!(s.copies, copies);
+    assert!(s.clipboard_copied);
+    assert!(s.active().unwrap().doc.node(NodeId(a)).is_some());
 }

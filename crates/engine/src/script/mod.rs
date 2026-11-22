@@ -627,9 +627,10 @@ impl World {
     }
 }
 
-/// The commands that can change the clipboard and still fail, and that do not put it back
-/// themselves. The clipboard can hold a great deal, so a savepoint copies it only for these.
-const CAN_FAIL_AFTER_COPYING: &[&str] = &["action.batch", "edit.cut"];
+/// The commands that can change the clipboard and still fail, or still be put back because their
+/// result cannot reach the script, and that do not put it back themselves. The clipboard can hold
+/// a great deal, so a savepoint copies it only for these.
+const CAN_FAIL_AFTER_COPYING: &[&str] = &["action.batch", "command.batch", "edit.cut"];
 
 /// The commands that remove a document's undo history, or the document: a savepoint keeps a whole
 /// copy of the histories for these. Any other command that removes or changes a step under the
@@ -777,7 +778,8 @@ struct Host {
     log: RefCell<Vec<Value>>,
     log_bytes: Cell<usize>,
     written: RefCell<Written>,
-    /// A command ran a Copy or Cut ([`Session::copies`]), also inside a batch or an action.
+    /// A command ran a Copy or Cut ([`Session::copies`]), also inside a batch or an action, and
+    /// the run kept it.
     copied: Cell<bool>,
     /// The run's number in its session, and the script's name, which its console lines carry.
     run: u64,
@@ -1265,7 +1267,6 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
-    let copies = s.copies;
     crate::file_access::start_recording_writes();
     // The command reads and writes only where the script's own files may, and the open documents' files.
     let gate = host.disk.borrow().gate(s.docs.iter().filter_map(|d| d.path.clone()).collect());
@@ -1279,9 +1280,6 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     match r {
         Ok(v) => {
             note_ids(s);
-            if s.copies != copies {
-                host.copied.set(true);
-            }
             let (mut objects, mut bytes) = (0, 0);
             for st in &s.docs {
                 match before.iter().find(|(uid, ..)| *uid == st.uid) {
@@ -1341,9 +1339,9 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
     let params = params.clone();
     let session = host.session.clone();
     let started = clock();
-    let r = {
+    let (copies, r) = {
         let mut s = session.borrow_mut();
-        step(&mut s, host, &id, &params)
+        (s.copies, step(&mut s, host, &id, &params))
     };
     // Only commands that exist are timed, so the table holds at most one row per command.
     if let (Some(started), Some(spec)) = (started, crate::find_command(&id)) {
@@ -1366,14 +1364,19 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
         Ok(data)
     });
     // A command whose result does not reach the script is put back, like one that failed.
+    let mut s = session.borrow_mut();
     if let Some(save) = save {
-        let mut s = session.borrow_mut();
         if crossed.is_ok() {
             save.keep(&mut s);
         } else if !save.restore(&mut s) {
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
+    // A Copy or Cut counts for the run only once what it put on the clipboard is kept.
+    if s.copies != copies {
+        host.copied.set(true);
+    }
+    drop(s);
     crossed.map(|data| (data, value))
 }
 
