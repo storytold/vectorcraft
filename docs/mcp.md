@@ -5923,7 +5923,7 @@ left out.
 
 ## Symbol libraries
 
-Symbol libraries are read-only sets of symbols: seven generated in code (Basic Shapes, UI Frames, Map Markers,
+Symbol libraries are read-only sets of symbols: twenty-two generated in code (Basic Shapes through Tool Icons),
 Inventory Icons, Skill Icons, Weather Icons, Nature Icons with Leaf, Flower, Tree, Mountain and Wave, Media Controls), the `.vectorcraft` files in
 the user library folder of the desktop app (User Defined) and the symbols of any document loaded with
 `symbol.loadLibrary`. `symbol.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`)

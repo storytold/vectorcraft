@@ -84,7 +84,7 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     let mut s = Session::new();
     let list = run(&mut s, "symbol.libraries", json!({}));
     let libs = list["libraries"].as_array().unwrap();
-    assert_eq!(libs.len(), 8, "{libs:?}");
+    assert_eq!(libs.len(), 22, "{libs:?}");
     assert_eq!((libs[0]["id"].as_str(), libs[0]["category"].as_str()), (Some("basic-shapes"), Some("builtIn")));
     assert_eq!(
         (libs[1]["id"].as_str(), libs[1]["name"].as_str(), libs[1]["category"].as_str()),
@@ -113,6 +113,62 @@ fn the_builtin_library_is_original_art_generated_in_code() {
     assert_eq!(
         (libs[7]["id"].as_str(), libs[7]["name"].as_str(), libs[7]["category"].as_str()),
         (Some("media-controls"), Some("Media Controls"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[8]["id"].as_str(), libs[8]["name"].as_str(), libs[8]["category"].as_str()),
+        (Some("currency-tokens"), Some("Currency Tokens"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[9]["id"].as_str(), libs[9]["name"].as_str(), libs[9]["category"].as_str()),
+        (Some("world-props"), Some("World Props"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[10]["id"].as_str(), libs[10]["name"].as_str(), libs[10]["category"].as_str()),
+        (Some("party-roles"), Some("Party Roles"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[11]["id"].as_str(), libs[11]["name"].as_str(), libs[11]["category"].as_str()),
+        (Some("loot-chests"), Some("Loot Chests"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[12]["id"].as_str(), libs[12]["name"].as_str(), libs[12]["category"].as_str()),
+        (Some("resource-nodes"), Some("Resource Nodes"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[13]["id"].as_str(), libs[13]["name"].as_str(), libs[13]["category"].as_str()),
+        (Some("quest-marks"), Some("Quest Marks"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[14]["id"].as_str(), libs[14]["name"].as_str(), libs[14]["category"].as_str()),
+        (Some("status-pips"), Some("Status Pips"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[15]["id"].as_str(), libs[15]["name"].as_str(), libs[15]["category"].as_str()),
+        (Some("vehicle-icons"), Some("Vehicle Icons"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[16]["id"].as_str(), libs[16]["name"].as_str(), libs[16]["category"].as_str()),
+        (Some("dialogue-ui"), Some("Dialogue UI"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[17]["id"].as_str(), libs[17]["name"].as_str(), libs[17]["category"].as_str()),
+        (Some("crafting-stations"), Some("Crafting Stations"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[18]["id"].as_str(), libs[18]["name"].as_str(), libs[18]["category"].as_str()),
+        (Some("arrow-marks"), Some("Arrow Marks"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[19]["id"].as_str(), libs[19]["name"].as_str(), libs[19]["category"].as_str()),
+        (Some("ui-badges"), Some("UI Badges"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[20]["id"].as_str(), libs[20]["name"].as_str(), libs[20]["category"].as_str()),
+        (Some("hazard-signs"), Some("Hazard Signs"), Some("builtIn"))
+    );
+    assert_eq!(
+        (libs[21]["id"].as_str(), libs[21]["name"].as_str(), libs[21]["category"].as_str()),
+        (Some("tool-icons"), Some("Tool Icons"), Some("builtIn"))
     );
     let lib = run(&mut s, "symbol.library", json!({"library": "basic shapes"}));
     let names: Vec<&str> = lib["symbols"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
