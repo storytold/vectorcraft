@@ -76,7 +76,7 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPresetType \
+        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
          DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
          PageItems RulerUnits ZOrderMethod",
     ),
@@ -86,6 +86,14 @@ const INSIDE: &[(&str, &str)] = &[
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
          open PPDFileList printPresetsList printerList printerList= selection typename userInteractionLevel \
          userInteractionLevel=",
+    ),
+    ("DocumentPreset.", "prototype"),
+    (
+        "DocumentPreset.prototype.",
+        "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
+         colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
+         height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
+         transparencyGrid transparencyGrid= typename units units= width width=",
     ),
     ("Documents.", "prototype"),
     ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
@@ -221,9 +229,9 @@ const INSIDE: &[(&str, &str)] = &[
     ("PrintingBounds.", "ARTBOARDBOUNDS ARTWORKBOUNDS"),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`,
-/// the page item types and the save and export option classes.
-const BARE_CLASSES: &str = "BlendItem CompoundPathItem DocumentPreset EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// and the save and export option classes.
+const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
      PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
      ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
 
