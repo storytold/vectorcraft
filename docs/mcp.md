@@ -2675,6 +2675,18 @@ own rules:
   all of them, and the Script Console shows an error line for each, as in
   `tidy.js:12:5: unhandled promise rejection: Error: not found`. Both fields are left out when there are none.
 
+A `.js` script also reads async functions and `await` as ECMA-262 2017 section 25.5 defines them
+(https://262.ecma-international.org/8.0/#sec-async-function-objects): `async function` declarations and expressions,
+async arrow functions and async methods in object literals. A call returns a `Promise` that the function's `return`
+resolves and an uncaught exception rejects. `await` suspends the function until its operand settles, and the function
+goes on in a promise job with the value, or with the rejection thrown at the `await`, so `try`, `catch` and `finally`
+work around it. Async functions cannot be called with `new` and have no `prototype` property. `AsyncFunction` is
+reached through `Object.getPrototypeOf(async function () {}).constructor` and is not a global. Outside an async
+function `await` is an ordinary name, and in a `.jsx` file or a `source` string `async` and `await` are ordinary
+names and an async function is a syntax error. These are VectorCraft's own rules: each time a function resumes
+counts as a job and takes 1 unit of fuel, and a function still waiting when no job is left stays suspended, and the
+run ends.
+
 Before any of the script runs, its preprocessor lines are read. The help page
 https://extendscript.docsforadobe.dev/extendscript-tools-features/preprocessor-directives/ describes these lines, and
 https://extendscript.docsforadobe.dev/extendscript-tools-features/dollar-object/ describes `$.evalFile`, `$.fileName`

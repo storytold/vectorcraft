@@ -268,12 +268,14 @@ impl<'a> FnCompiler<'a> {
                 Stmt::Var(decls) => decls.iter().for_each(|d| add_var(&mut out, key_of(&d.name.name))),
                 Stmt::Lexical(..) => {}
                 Stmt::FunctionDecl(fid) => {
-                    let Some(name) = self.ast.function(*fid).and_then(|f| f.name.as_ref()) else {
+                    let Some(f) = self.ast.function(*fid) else { return internal("function out of range") };
+                    let Some(name) = f.name.as_ref() else {
                         return internal("function declaration without a name");
                     };
                     let k = key_of(&name.name);
                     if self.es2015 && nested {
-                        if !self.strict {
+                        // Annex B.3.3 gives plain function declarations a variable, not async ones.
+                        if !self.strict && !f.is_async {
                             annex.push((k, scope, id));
                         }
                     } else {
@@ -1158,6 +1160,11 @@ impl<'a> FnCompiler<'a> {
             Expr::Template { quasis, exprs } => self.template(quasis, exprs)?,
             Expr::TaggedTemplate { .. } => self.chain(id)?,
             Expr::Spread(_) => return internal("spread outside an array literal or argument list"),
+            Expr::Await(arg) => {
+                self.expr(*arg)?;
+                self.at(self.ast.expr_span(id).start);
+                self.emit(Op::Await);
+            }
             Expr::Update { op, prefix, target } => self.update(*op, *prefix, *target)?,
             Expr::Unary { .. } => self.unary(id)?,
             Expr::Binary { .. } | Expr::Logical { .. } => self.binary_chain(id)?,
@@ -1762,6 +1769,7 @@ impl<'a> FnCompiler<'a> {
             arrow: meta.arrow,
             uses_this: self.uses_this,
             param_init: meta.param_init,
+            is_async: meta.is_async,
         };
         code.max_stack = verify(&code).map_err(CompileFail::Internal)?;
         Ok(Rc::new(code))
@@ -1780,6 +1788,7 @@ struct Meta {
     length: u32,
     arrow: bool,
     param_init: bool,
+    is_async: bool,
 }
 
 fn len_u32(n: usize) -> u32 {
@@ -1844,6 +1853,7 @@ pub(crate) fn compile_function(ast: &Ast, fid: FunctionId, source: &Rc<Source>, 
         length: len_u32(length),
         arrow: f.kind == FunctionKind::Arrow,
         param_init,
+        is_async: f.is_async,
     };
     c.finish(hoisted, meta)
 }

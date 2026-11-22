@@ -1979,13 +1979,15 @@ impl Session {
         // A `.js` script's realm has the later editions' built-ins (`Promise`). A kept realm gets
         // them at the first `.js` run that names it, and keeps them as it keeps its globals.
         let es2015 = include::es2015_script(request.file.as_deref());
-        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, ..Options::default() };
+        // It also reads async functions and `await` (ECMAScript 2017).
+        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, es2017: es2015, ..Options::default() };
         let strict = options.strict;
         // A kept engine reads each run's code the way that run's script does.
         let mut realm = match realm {
             Some(mut realm) => {
                 realm.set_limits(limits);
                 realm.set_es2015(es2015);
+                realm.set_es2017(es2015);
                 if es2015 {
                     realm.add_es2015();
                 }

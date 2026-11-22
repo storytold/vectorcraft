@@ -142,6 +142,8 @@ enum Then {
     Settle(ObjId),
     /// An exception rejects through this resolving record.
     Reject(ObjId),
+    /// An async function goes on after `await`; its own promise takes its result.
+    Resume,
 }
 
 /// The built-in functions a promise operation's functions call, with their record.
@@ -156,9 +158,11 @@ enum Kind {
     CatchFinally,
     ValueThunk,
     Thrower,
+    AwaitFulfilled,
+    AwaitRejected,
 }
 
-const KINDS: [(Kind, NativeFn); 9] = [
+const KINDS: [(Kind, NativeFn); 11] = [
     (Kind::Resolve, resolve_function),
     (Kind::Reject, reject_function),
     (Kind::AllElement, all_element),
@@ -168,6 +172,8 @@ const KINDS: [(Kind, NativeFn); 9] = [
     (Kind::CatchFinally, catch_finally),
     (Kind::ValueThunk, value_thunk),
     (Kind::Thrower, thrower),
+    (Kind::AwaitFulfilled, await_continuation),
+    (Kind::AwaitRejected, await_continuation),
 ];
 
 /// `Promise`'s objects and the run's job queue.
@@ -186,11 +192,17 @@ pub(crate) struct Promises {
     rejected: Vec<ObjId>,
     /// The most jobs the queue may hold ([`MAX_JOBS`]; tests set it lower).
     pub(crate) max_jobs: usize,
+    /// `AsyncFunction.prototype` (ECMA-262 2017 section 25.5.3), the prototype of async functions.
+    pub(crate) async_function_proto: Option<ObjId>,
+    /// `AsyncFunction` (section 25.5.1), which is not a global.
+    pub(crate) async_function_ctor: Option<ObjId>,
 }
 
 impl Default for Promises {
     fn default() -> Self {
         Self {
+            async_function_proto: None,
+            async_function_ctor: None,
             proto: None,
             ctor: None,
             natives: Vec::new(),
@@ -208,10 +220,11 @@ impl Promises {
     /// Adds what the queue and the promise objects hold to the collector's roots.
     pub(crate) fn add_roots<'a>(&'a self, roots: &mut Roots<'a>) {
         roots.objects.extend(self.proto.iter().chain(&self.ctor).chain(&self.natives).chain(&self.rejected));
+        roots.objects.extend(self.async_function_proto.iter().chain(&self.async_function_ctor));
         roots.values.extend(self.completion.iter());
         match &self.running {
             Some(Then::Settle(o) | Then::Reject(o)) => roots.objects.push(*o),
-            None => {}
+            Some(Then::Resume) | None => {}
         }
         for job in &self.queue {
             match job {
@@ -259,7 +272,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
         let n = native(interp, "", f, 1, NativeKind::Plain, false)?;
         interp.promises.natives.push(n);
     }
-    Ok(())
+    super::async_function::install(interp)
 }
 
 /// Turns on [`crate::Options::es2015`] in a realm made without it and creates `Promise` there,
@@ -552,6 +565,120 @@ fn promise_resolve(interp: &mut Interp, c: &Value, x: Value) -> JsResult<Value> 
     })
 }
 
+// ---- async functions ----
+
+/// The built-in a suspended async function's reactions are bound to. The job queue resumes the
+/// function instead of calling it, and scripts cannot reach it.
+fn await_continuation(_: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    Err(Abrupt::Internal("an await continuation was called".into()))
+}
+
+impl Interp {
+    /// Settles the promise of an async function whose frame ends: its return value resolves it,
+    /// and the exception that leaves it rejects it.
+    pub(crate) fn settle_async(&mut self, p: ObjId, r: Result<Value, Value>) -> JsResult<()> {
+        match r {
+            Ok(v) => resolve_promise(self, p, v),
+            Err(e) => {
+                let site = caught(self);
+                reject_promise(self, p, e, site)
+            }
+        }
+    }
+
+    /// A new pending promise for the async function call whose frame is on top.
+    pub(crate) fn new_async_promise(&mut self) -> JsResult<ObjId> {
+        new_promise(self)
+    }
+
+    /// `await v` in the async function the top frame runs (Await, ECMA-262 2017 section 6.2.3.1,
+    /// with PromiseResolve as later editions have it): `v` becomes a built-in promise, the frame
+    /// is suspended until it settles, and the function's call gives its promise, `Some` when the
+    /// frame was the boundary frame. Throws at the `await` when reading `v`'s `constructor` throws.
+    pub(crate) fn await_value(&mut self, v: Value) -> JsResult<Option<Value>> {
+        if self.async_promise().is_none() {
+            return Err(Abrupt::Internal("await outside an async function".into()));
+        }
+        let ctor = self.promises.ctor.map_or(Value::Undefined, Value::Object);
+        scoped(self, |interp| {
+            let p = promise_resolve(interp, &ctor, v)?;
+            root(interp, &p);
+            let Value::Object(p) = p else { return Err(Abrupt::Internal("PromiseResolve gave a value that is not a promise".into())) };
+            let bytes = interp.suspend_bytes();
+            interp.reserve_heap(OBJECT_BYTES.saturating_add(bytes))?;
+            let act = interp.heap.alloc_object(Object::new(Class::Activation(None), None));
+            root(interp, &Value::Object(act));
+            let on_fulfilled = record_function(interp, Kind::AwaitFulfilled, act, 1)?;
+            root(interp, &on_fulfilled);
+            let on_rejected = record_function(interp, Kind::AwaitRejected, act, 1)?;
+            root(interp, &on_rejected);
+            // The reactions settle no promise of their own; this one stays pending and unseen.
+            let derived = new_promise(interp)?;
+            root(interp, &Value::Object(derived));
+            promise_data(interp, derived)?.handled = true;
+            perform_then(interp, p, on_fulfilled, on_rejected, derived)?;
+            let (a, boundary) = interp.suspend_frame()?;
+            let promise = a.promise;
+            let held = a.bytes();
+            if let Some(o) = interp.heap.object_mut(act) {
+                o.class = Class::Activation(Some(Box::new(a)));
+            }
+            interp.heap.bytes = interp.heap.bytes.saturating_add(held);
+            if boundary {
+                return Ok(Some(Value::Object(promise)));
+            }
+            interp.push(Value::Object(promise))?;
+            Ok(None)
+        })
+    }
+
+    /// The activation `handler` resumes when it is a suspended async function's reaction, and
+    /// whether it is the rejection's.
+    fn await_activation(&self, handler: &Value) -> Option<(ObjId, bool)> {
+        let Some(Class::Function(Func::Bound { target, args, .. })) = handler.as_object().and_then(|o| self.heap.object(o)).map(|o| &o.class) else {
+            return None;
+        };
+        let reject = if self.promises.natives.get(Kind::AwaitFulfilled as usize) == Some(target) {
+            false
+        } else if self.promises.natives.get(Kind::AwaitRejected as usize) == Some(target) {
+            true
+        } else {
+            return None;
+        };
+        match args.first() {
+            Some(Value::Object(act)) => Some((*act, reject)),
+            _ => None,
+        }
+    }
+
+    /// Resumes the async function `handler` belongs to with the settled value: its frame goes back
+    /// on top as a boundary frame the caller runs, and a rejection is thrown at its `await`. A job
+    /// that finds the frame already resumed does nothing.
+    fn resume_async(&mut self, handler: &Value, argument: Value, reject: bool, site: Option<Site>) -> JsResult<()> {
+        let Some((act, _)) = self.await_activation(handler) else { return Err(Abrupt::Internal("not an await reaction".into())) };
+        let taken = match self.heap.object_mut(act).map(|o| &mut o.class) {
+            Some(Class::Activation(slot)) => slot.take(),
+            _ => return Err(Abrupt::Internal("an await reaction lost its activation".into())),
+        };
+        let Some(a) = taken else { return Ok(()) };
+        self.heap.bytes = self.heap.bytes.saturating_sub(a.bytes());
+        self.restore_frame(*a)?;
+        self.promises.running = Some(Then::Resume);
+        if !reject {
+            return self.push(argument);
+        }
+        if site.is_some() {
+            self.throw_site = site;
+        }
+        match self.unwind_or_abort(argument) {
+            Ok(Some(v)) => self.finish_job(Ok(v)),
+            Ok(None) => Ok(()),
+            Err(Abrupt::Throw(e)) => self.finish_job(Err(e)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 // ---- the job queue ----
 
 impl Interp {
@@ -627,6 +754,10 @@ impl Interp {
         self.use_fuel()?;
         scoped(self, |interp| {
             let (f, this, args, then) = match job {
+                Job::Reaction { handler, argument, reject, site, .. } if interp.await_activation(&handler).is_some() => {
+                    root(interp, &argument);
+                    return interp.resume_async(&handler, argument, reject, site);
+                }
                 Job::Reaction { handler, argument, reject, derived, site } => {
                     if !interp.is_callable(&handler) {
                         return if reject { reject_promise(interp, derived, argument, site) } else { resolve_promise(interp, derived, argument) };
@@ -660,7 +791,7 @@ impl Interp {
         match (then, r) {
             (Then::Settle(d), Ok(v)) => resolve_promise(self, d, v),
             (Then::Settle(d), Err(e)) => reject_promise(self, d, e, site),
-            (Then::Reject(_), Ok(_)) => Ok(()),
+            (Then::Reject(_), Ok(_)) | (Then::Resume, _) => Ok(()),
             (Then::Reject(rec), Err(e)) => scoped(self, |interp| {
                 root(interp, &Value::Object(rec));
                 reject_through(interp, rec, e, site)
@@ -835,8 +966,8 @@ fn thrower(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<V
     Err(Abrupt::Throw(thunk_value(interp, args)?))
 }
 
-/// `v` is a constructor: a function written in JavaScript, a built-in constructor, or a bound
-/// function whose target is one.
+/// `v` is a constructor: a function written in JavaScript other than an arrow or async function,
+/// a built-in constructor, or a bound function whose target is one.
 fn is_constructor(interp: &mut Interp, v: &Value) -> JsResult<bool> {
     let mut v = v.clone();
     loop {
@@ -845,7 +976,7 @@ fn is_constructor(interp: &mut Interp, v: &Value) -> JsResult<bool> {
             _ => return Ok(false),
         };
         match func {
-            Func::Closure { .. } => return Ok(true),
+            Func::Closure { code, .. } => return Ok(!code.arrow && !code.is_async),
             Func::Native { constructor, .. } => return Ok(constructor),
             Func::Bound { target, .. } => {
                 interp.use_fuel()?;

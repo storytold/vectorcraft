@@ -205,6 +205,9 @@ pub(crate) enum Op {
     ToStr,
     /// Pushes the template object of `templates[i]`, the same object for each evaluation.
     TemplateObject(u32),
+    /// `value` → its awaited value: suspends the running async function until the value settles,
+    /// and goes on with its fulfillment value or throws its rejection reason here.
+    Await,
 }
 
 /// The names a block declares, entered with [`Op::PushBlock`].
@@ -299,6 +302,8 @@ pub(crate) struct Code {
     /// The function has default or rest parameters: its parameters start uninitialized, its
     /// code initializes them and then enters its body with [`Op::BodyEnv`].
     pub(crate) param_init: bool,
+    /// The code is an async function's: a call returns a promise, and it may run [`Op::Await`].
+    pub(crate) is_async: bool,
 }
 
 impl Code {
@@ -380,7 +385,7 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
         Op::ArraySpread | Op::NewSpread => e(2, 1),
         Op::CallSpread(_) => e(3, 1),
-        Op::ToStr => e(1, 1),
+        Op::ToStr | Op::Await => e(1, 1),
     })
 }
 

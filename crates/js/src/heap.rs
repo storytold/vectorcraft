@@ -250,6 +250,8 @@ pub(crate) enum Class {
     Promise(Box<crate::builtins::promise::PromiseData>),
     /// The state that the functions a promise operation makes share; scripts never see it.
     PromiseRecord(Box<crate::builtins::promise::Record>),
+    /// An async function's frame waiting at `await`, until it is resumed; scripts never see it.
+    Activation(Option<Box<crate::interp::async_function::Activation>>),
 }
 
 /// What an XML value is.
@@ -313,7 +315,7 @@ impl Class {
             Class::XmlList(_) => "XMLList",
             Class::Namespace(_) => "Namespace",
             Class::QName { .. } => "QName",
-            Class::XmlFilter(_) | Class::PromiseRecord(_) => "Object",
+            Class::XmlFilter(_) | Class::PromiseRecord(_) | Class::Activation(_) => "Object",
             Class::Promise(_) => "Promise",
             Class::Math => "Math",
             Class::Json => "JSON",
@@ -727,6 +729,16 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
                 mark_value(&v, work, strings);
             }
             extra = crate::builtins::promise::RECORD_BYTES;
+        }
+        Class::Activation(Some(a)) => {
+            for v in a.values() {
+                mark_value(v, work, strings);
+            }
+            work.extend(a.ids());
+            for code in a.codes() {
+                mark_code(code, strings);
+            }
+            extra = a.bytes();
         }
         _ => {}
     }

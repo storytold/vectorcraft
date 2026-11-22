@@ -240,6 +240,14 @@ impl Realm {
         self.interp.set_es2015(es2015);
     }
 
+    /// Sets [`Options::es2017`] for the next runs, and for the code they evaluate; on, it also
+    /// sets [`Options::es2015`]. Async functions an earlier run made keep running when it is
+    /// turned off. Call [`Realm::add_es2015`] too in a realm made without either option, since
+    /// an async function needs `Promise`.
+    pub fn set_es2017(&mut self, es2017: bool) {
+        self.interp.set_es2017(es2017);
+    }
+
     /// Gives a realm made without [`Options::es2015`] the built-ins that option adds (`Promise`),
     /// for its next runs; a realm that has them already is left as it is. It does not take them
     /// away again. Call it between runs.

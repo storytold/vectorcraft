@@ -184,10 +184,15 @@ pub(crate) struct Frame {
     completion: Value,
     /// Returning from this frame returns from the Rust call that pushed it.
     boundary: bool,
+    /// The promise of the async function the frame runs: a return resolves it, an exception
+    /// that leaves the frame rejects it, and the call's value is the promise.
+    async_promise: Option<ObjId>,
 }
 
 /// Where the exception being thrown was raised: the code and the instruction.
 type ThrowSite = (Rc<Code>, usize);
+
+pub(crate) mod async_function;
 
 /// What [`crate::Realm::observe_code`] calls with each source evaluated at run time.
 pub(crate) type CodeObserver = Rc<dyn Fn(&[u16])>;
@@ -502,7 +507,8 @@ fn is(k: &[u16], s: &str) -> bool {
 }
 
 impl Interp {
-    pub(crate) fn new(options: Options, limits: Limits) -> Self {
+    pub(crate) fn new(mut options: Options, limits: Limits) -> Self {
+        options.es2015 = options.modern();
         let mut heap = Heap::default();
         let global = heap.alloc_object(Object::new(Class::Ordinary, None));
         let global_env = heap.alloc_env(Env::Obj { object: global, with_this: false, outer: None });
@@ -787,7 +793,7 @@ impl Interp {
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
-            roots.objects.extend(f.callee.iter().chain(f.construct.iter()));
+            roots.objects.extend(f.callee.iter().chain(f.construct.iter()).chain(f.async_promise.iter()));
             roots.envs.push(f.env);
             roots.envs.push(f.var_env);
             roots.codes.push(&f.code);
@@ -816,7 +822,11 @@ impl Interp {
             match self.step() {
                 Ok(Some(v)) => return Ok(v),
                 Ok(None) => {}
-                Err(Abrupt::Throw(v)) => self.unwind(v)?,
+                Err(Abrupt::Throw(v)) => {
+                    if let Some(v) = self.unwind_or_abort(v)? {
+                        return Ok(v);
+                    }
+                }
                 Err(other) => {
                     self.note_site();
                     self.abort_to_boundary();
@@ -835,7 +845,11 @@ impl Interp {
             match self.step() {
                 Ok(Some(v)) => return Ok(Some(v)),
                 Ok(None) => {}
-                Err(Abrupt::Throw(v)) => self.unwind(v)?,
+                Err(Abrupt::Throw(v)) => {
+                    if let Some(v) = self.unwind_or_abort(v)? {
+                        return Ok(Some(v));
+                    }
+                }
                 Err(other) => {
                     self.note_site();
                     self.abort_to_boundary();
@@ -870,7 +884,23 @@ impl Interp {
                 let v = self.frame()?.completion.clone();
                 self.return_value(v)
             }
+            Op::Await => {
+                let v = self.pop()?;
+                self.await_value(v)
+            }
             _ => self.exec(op).map(|()| None),
+        }
+    }
+
+    /// [`Self::unwind`], ending the frames down to the boundary frame when it fails with a limit
+    /// or an internal error, which leaves the frame it was in on top.
+    pub(crate) fn unwind_or_abort(&mut self, v: Value) -> JsResult<Option<Value>> {
+        match self.unwind(v) {
+            Err(e @ (Abrupt::Limit(_) | Abrupt::Internal(_))) => {
+                self.abort_to_boundary();
+                Err(e)
+            }
+            r => r,
         }
     }
 
@@ -884,7 +914,10 @@ impl Interp {
 
     /// Finds the handler for an exception: in the top frame, or in the frames below it up to the
     /// boundary frame. Returns the exception when no handler takes it before the boundary frame.
-    fn unwind(&mut self, v: Value) -> JsResult<()> {
+    /// An async function's frame without a handler rejects its promise with the exception and
+    /// returns the promise as a `return` would: `Some` with it when that frame was the boundary
+    /// frame.
+    fn unwind(&mut self, v: Value) -> JsResult<Option<Value>> {
         self.note_site();
         let passed = matches!((&v, std::mem::replace(&mut self.passing, Value::Undefined)), (Value::Object(a), Value::Object(b)) if *a == b);
         if !passed
@@ -920,10 +953,25 @@ impl Interp {
                 if let (false, Some(site)) = (caught, site) {
                     self.finally_sites.push((site, target_len));
                 }
-                return Ok(());
+                return Ok(None);
+            }
+            // The promise is settled while the frame is still on top, so a limit reached doing it
+            // ends the frames the way any other limit does.
+            let promise = frame.async_promise;
+            if let Some(p) = promise {
+                self.settle_async(p, Err(v.clone()))?;
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
+            if let Some(p) = promise {
+                self.drop_left_finally_marks();
+                self.drop_left_finally_sites(frame.base);
+                if frame.boundary {
+                    return Ok(Some(Value::Object(p)));
+                }
+                self.push(Value::Object(p))?;
+                return Ok(None);
+            }
             if frame.boundary {
                 self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
@@ -947,6 +995,15 @@ impl Interp {
     }
 
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
+        // An async function's return resolves its promise, while the frame is still on top, and
+        // the call gives the promise.
+        let v = match self.async_promise() {
+            Some(p) => {
+                self.settle_async(p, Ok(v))?;
+                Value::Object(p)
+            }
+            None => v,
+        };
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
         // A `return` in a finally block leaves the block, and the value takes its exception's slot.
@@ -1100,7 +1157,7 @@ impl Interp {
                 self.replace(1, Value::String(s))
             }
             Op::TemplateObject(i) => self.op_template_object(i),
-            Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
+            Op::Return | Op::ReturnCompletion | Op::Await => internal("return reached the dispatcher"),
         }
     }
 
@@ -2095,15 +2152,28 @@ impl Interp {
             Some(_) => self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(env) }),
             None => env,
         };
-        let proto = self.intrinsics.function_proto;
+        let is_async = code.is_async;
+        let proto = match self.promises.async_function_proto {
+            Some(p) if is_async => p,
+            _ => self.intrinsics.function_proto,
+        };
         let length = code.length;
         let strict = code.strict;
         let arrow = code.arrow;
         let self_name = code.self_name.clone();
         let f = self.heap.alloc_object(Object::new(Class::Function(Func::Closure { code, env }), Some(proto)));
         self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: 0 })?;
-        // An arrow function has no `prototype` and cannot be constructed (section 14.2.16).
+        // An arrow function has no `prototype` and cannot be constructed (section 14.2.16), and
+        // neither has nor can an async function (ECMA-262 2017 section 25.5.4). An async function
+        // must not have own `caller` or `arguments` properties, restricted or not, in sloppy code
+        // too (section 16.2).
         if arrow {
+            return Ok(f);
+        }
+        if is_async {
+            if let Some(name) = self_name {
+                self.env_insert(env, name, Binding::new(Value::Object(f), false, false))?;
+            }
             return Ok(f);
         }
         let p = self.new_object();
@@ -2701,6 +2771,7 @@ impl Interp {
         }
         match self.func_of(&f) {
             Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
+            Some(Func::Closure { code, .. }) if code.is_async => Err(self.type_error("an async function is not a constructor")),
             Some(Func::Closure { code, env }) => {
                 let Some(callee) = f.as_object() else { return internal("callee is not an object") };
                 let proto = match self.get_from(callee, &key("prototype"), &f)? {
@@ -2764,6 +2835,7 @@ impl Interp {
             }
         };
         let (fenv, var_env) = self.instantiate_function(&code, env, &args, callee)?;
+        let code_is_async = code.is_async;
         let base = self.stack.len();
         self.frames.push(Frame {
             code,
@@ -2777,7 +2849,16 @@ impl Interp {
             construct,
             completion: Value::Undefined,
             boundary,
+            async_promise: None,
         });
+        // An async function's call makes its promise first thing (section 25.5.5.2); the frame
+        // keeps what the function holds reachable while it is made.
+        if code_is_async && let Err(e) = self.start_async_call() {
+            if let Some(frame) = self.frames.pop() {
+                self.stack.truncate(frame.base);
+            }
+            return Err(e);
+        }
         Ok(())
     }
 
@@ -3135,9 +3216,16 @@ impl Interp {
         self.global_lex
     }
 
-    /// Sets [`Options::es2015`] for the next runs.
+    /// Sets [`Options::es2015`] for the next runs; turning it off turns [`Options::es2017`] off too.
     pub(crate) fn set_es2015(&mut self, es2015: bool) {
         self.options.es2015 = es2015;
+        self.options.es2017 &= es2015;
+    }
+
+    /// Sets [`Options::es2017`] for the next runs; turning it on turns [`Options::es2015`] on too.
+    pub(crate) fn set_es2017(&mut self, es2017: bool) {
+        self.options.es2017 = es2017;
+        self.options.es2015 |= es2017;
     }
 
     /// Declares a script's top-level `let` and `const` names in the global scope, uninitialized
@@ -3213,6 +3301,7 @@ impl Interp {
             construct: None,
             completion: Value::Undefined,
             boundary,
+            async_promise: None,
         });
         Ok(())
     }

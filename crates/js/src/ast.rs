@@ -218,6 +218,8 @@ pub enum Expr {
     /// `...expression` in an array literal or an argument list, and as the last of an arrow
     /// function's parenthesized parameters while they are read.
     Spread(ExprId),
+    /// `await operand`, in an async function's body.
+    Await(ExprId),
 }
 
 /// A piece of a template literal's text between its substitutions.
@@ -393,6 +395,8 @@ pub struct Function {
     /// The function's code is strict mode code: its own directive prologue holds `"use strict"`,
     /// or the code around it is strict.
     pub strict: bool,
+    /// An async function (ECMAScript 2017): a call returns a promise, and its body may `await`.
+    pub is_async: bool,
     pub span: Span,
 }
 

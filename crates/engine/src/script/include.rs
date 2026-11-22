@@ -221,7 +221,8 @@ pub(crate) struct Files {
     es2015: bool,
 }
 
-/// A script at `path` runs with [`vectorcraft_js::Options::es2015`] when its file name ends in
+/// A script at `path` runs with [`vectorcraft_js::Options::es2015`] and
+/// [`vectorcraft_js::Options::es2017`] when its file name ends in
 /// `.js` (in any letter case); a `.jsx` script, any other file and a script given as text run as
 /// ECMAScript 5.1 with the ExtendScript extensions.
 pub(crate) fn es2015_script(path: Option<&str>) -> bool {
@@ -326,7 +327,7 @@ impl Files {
 
     /// The options a file of this run is parsed with, preprocessor lines aside.
     pub(crate) fn options(&self) -> Options {
-        Options { max_source_units: MAX_TOTAL_BYTES, es2015: self.es2015, ..Options::default() }
+        Options { max_source_units: MAX_TOTAL_BYTES, es2015: self.es2015, es2017: self.es2015, ..Options::default() }
     }
 
     /// The `JSINCLUDE` folders of this process: absolute folders separated by `;`.
