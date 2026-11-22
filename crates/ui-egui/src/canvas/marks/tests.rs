@@ -138,13 +138,17 @@ fn live_paint_gaps_follow_the_selected_groups() {
 #[test]
 fn draw_inside_marks_the_corners_of_its_object() {
     let mut app = app();
-    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 120, "height": 90})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 120, "height": 90})).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(id);
     assert!(marks_of(&mut app, &view()).arms.is_empty());
     app.run("view.drawMode", json!({"mode": "inside"})).unwrap();
     let arms = marks_of(&mut app, &view()).arms;
     assert_eq!(arms.len(), 8);
     assert!(arms.iter().all(|[a, b]| (a.distance(*b) - 16.0).abs() < 1e-3), "{arms:?}");
-    assert!(arms.iter().any(|[a, _]| a.distance(view().to_screen(Point::new(96.0, 96.0))) < 1e-3), "padded by 4 points");
+    // Outside the object with its stroke.
+    let outer = app.session.active().unwrap().doc.node(id).unwrap().visual_bounds().unwrap();
+    let corner = view().to_screen(Point::new(outer.x0 - 4.0, outer.y0 - 4.0));
+    assert!(arms.iter().any(|[a, _]| a.distance(corner) < 1e-3), "padded by 4 points");
     app.run("select.set", json!({"ids": []})).unwrap();
     assert_eq!(marks_of(&mut app, &view()).arms.len(), 8, "deselected, the object is still marked");
     let small = inside_arms(&view(), Rect::new(0.0, 0.0, 30.0, 30.0));

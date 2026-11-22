@@ -593,9 +593,10 @@ fn a_synchronous_paste_replaces_a_deferred_swatch_dialog() {
     app.run("edit.copy", json!({})).unwrap();
     app.session.set_active(1);
     app.sync_views();
+    let ctx = app.ui_ctx.clone().unwrap();
     let result = crate::control::handle(
         &mut app,
-        &crate::testing::ui_context(),
+        &ctx,
         &craft::automation::ControlRequest::new("engine.execute", json!({"command": "edit.pasteInPlace", "params": {}})).0,
     );
     let craft::automation::Reply::Done(result) = result else { panic!("expected command result") };

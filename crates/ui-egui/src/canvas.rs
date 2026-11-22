@@ -242,8 +242,8 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
         }
         crate::type_editing::show(app, ui);
         out.reply = pass.map(|pass| tool_adapter::run(app, ui, pass));
-        drops::show(app, ui, space, win, kind);
     }
+    drops::show(app, ui, space, win, kind);
     raster::picture(app, ui, space, win, kind);
     out
 }

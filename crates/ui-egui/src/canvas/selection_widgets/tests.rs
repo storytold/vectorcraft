@@ -128,9 +128,11 @@ fn mirror_axis_tracks_selection_options_and_view_without_editing_art() {
     let zoomed = layout(&mut app, ALL).mirror.unwrap();
     assert_ne!(zoomed.1, centre, "the axis follows the view");
     assert!(layout(&mut app, Show { selecting: false, ..ALL }).mirror.is_none(), "not with Edges hidden");
-    app.run("select.none", json!({})).unwrap();
-    assert!(layout(&mut app, ALL).mirror.is_none());
     assert_eq!(app.session.active().unwrap().revision, revision, "showing the axis edits nothing");
+    app.run("select.none", json!({})).unwrap();
+    let revision = app.session.active().unwrap().revision;
+    assert!(layout(&mut app, ALL).mirror.is_none());
+    assert_eq!(app.session.active().unwrap().revision, revision, "hiding the axis edits nothing");
 }
 
 #[test]
@@ -161,8 +163,13 @@ fn trace_split_divider_drag_in_a_zoomed_rotated_view_is_one_undo_step() {
     app.run("file.place", json!({"name": "blue.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
     app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
     app.run("imageTrace.setView", json!({"view": "split"})).unwrap();
-    app.view_mut().unwrap().zoom = 1.5;
-    app.view_mut().unwrap().rotation = 30.0;
+    // Zoomed in on the 4 × 2 pixel image, where its bounding-box handles leave the divider room.
+    let ends = {
+        let st = app.session.active().unwrap();
+        vectorcraft_tools::trace_split::TraceDivider::of(&st.doc, &st.selection, 1.0).unwrap().ends
+    };
+    let v = app.view_mut().unwrap();
+    (v.zoom, v.rotation, v.center) = (30.0, 30.0, ends[0].midpoint(ends[1]));
     let l = layout(&mut app, ALL);
     let [a, b] = l.trace.unwrap();
     let (from, along) = (a + (b - a) * 0.25, b - a);
@@ -249,6 +256,7 @@ fn the_edited_symbols_nine_slice_guides_are_drawn_and_dragged_on_the_canvas() {
     let mut app = app();
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
     app.run("symbol.new", json!({"name": "Box", "nineSlice": true})).unwrap();
+    app.run("symbol.edit", json!({})).unwrap();
     app.select_tool("directSelection");
     let l = layout(&mut app, Show { nine: true, selecting: false, shaper: false, trace: false });
     assert_eq!(l.nine.len(), 4, "the guides show with any tool");
@@ -320,6 +328,7 @@ fn a_nine_slice_guide_drag_reads_its_release() {
     let mut app = app();
     app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
     app.run("symbol.new", json!({"name": "Box", "nineSlice": true})).unwrap();
+    app.run("symbol.edit", json!({})).unwrap();
     let l = layout(&mut app, ALL);
     let from = l.nine[0][0] + (l.nine[0][1] - l.nine[0][0]) * 0.5;
     let unit = view(&app).zoom as f32;

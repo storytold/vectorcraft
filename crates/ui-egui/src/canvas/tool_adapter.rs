@@ -194,14 +194,17 @@ impl CanvasTool for SessionTool<'_> {
     }
 
     fn drag(&mut self, pointer: &ToolPointer, cx: &mut ToolContext<'_>) {
-        self.send(PointerKind::Drag, pointer, cx);
+        // Art carried off the canvas waits where it last moved; back on the canvas the move goes on.
         let carried = super::drops::carry_out(&mut self.app(), cx, pointer);
+        if !carried {
+            self.send(PointerKind::Drag, pointer, cx);
+        }
         self.carrying.set(carried);
     }
 
     fn release(&mut self, pointer: &ToolPointer, cx: &mut ToolContext<'_>) {
-        if cx.over_drop_target() {
-            // The art goes to the drop target: the move is given up where it started.
+        if cx.over_drop_target() || super::drops::carried(&self.app(), cx, pointer).is_some() {
+            // The art goes to the drop target, or nowhere off the canvas: the move is given up where it started.
             let _ = self.app().session.cancel_interaction();
         }
         self.app().canvas.grab = None;
@@ -356,7 +359,7 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
     }
     let view_info = app.view_info();
     let mut picked = ToolHostResponse::default();
-    let response = if crate::dialogs::recolor::edit_tab::with_theme_pick(app, |app, tool| picked = host_run(app, ui, pass, tool)) {
+    let mut response = if crate::dialogs::recolor::edit_tab::with_theme_pick(app, |app, tool| picked = host_run(app, ui, pass, tool)) {
         picked
     } else {
         let mut tool = SessionTool::new(app, view_info);
@@ -373,6 +376,8 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
     if let (Some(v), Some(step)) = (view.as_mut(), response.scroll) {
         if Autoscroll::scroll(v, step, super::document_size(app.content_bounds())).is_some() {
             ui.ctx().request_repaint();
+            // The body takes the reply's view as the one the canvas showed.
+            response.view = Some(*v);
         }
     }
     let scaling = app.ui_scaling();

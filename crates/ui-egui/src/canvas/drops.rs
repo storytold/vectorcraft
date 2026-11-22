@@ -197,22 +197,27 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, _space: &CanvasSpace, 
 /// Starts carrying the art of a Selection, Direct Selection or Group Selection move that left the canvas, handing it
 /// to the drag session. Moves of anchors or segments stay reshapes. → whether a carry runs.
 pub(crate) fn carry_out(app: &mut VectorcraftApp, cx: &mut ToolContext<'_>, pointer: &ToolPointer) -> bool {
-    let tool = app.session.tool_id();
-    if !matches!(tool, "selection" | "directSelection" | "groupSelection") || cx.rect.contains(pointer.pos) {
-        return false;
-    }
-    let Some(st) = app.session.active() else { return false };
-    let Some(it) = st.interaction.as_ref().filter(|i| i.label == "Move" || i.label == "Copy") else { return false };
-    if tool != "selection" && st.selection.objects.iter().any(|id| st.selection.partial(*id).is_some() || st.selection.segments.contains_key(id)) {
-        return false;
-    }
-    // The art the drag started with: an Alt-copy's copies, selected while it previews, are not carried.
-    let ids = it.selection.objects.clone();
-    let Some(grab) = app.canvas.grab else { return false };
-    let art = CarriedArt { document: st.uid, ids: ids.clone(), grab, revision: st.revision };
-    let panel = PanelDrag::Art { document: art.document, ids };
+    let Some(art) = carried(app, cx, pointer) else { return false };
+    let panel = PanelDrag::Art { document: art.document, ids: art.ids.clone() };
     cx.start_drag_also(art, Arc::new(panel), DragPreview::None);
     true
+}
+
+/// The art a Selection, Direct Selection or Group Selection move carries with the pointer at `pointer`, off the
+/// canvas; `None` on the canvas or for any other gesture.
+pub(crate) fn carried(app: &VectorcraftApp, cx: &ToolContext<'_>, pointer: &ToolPointer) -> Option<CarriedArt> {
+    let tool = app.session.tool_id();
+    if !matches!(tool, "selection" | "directSelection" | "groupSelection") || cx.rect.contains(pointer.pos) {
+        return None;
+    }
+    let st = app.session.active()?;
+    let it = st.interaction.as_ref().filter(|i| i.label == "Move" || i.label == "Copy")?;
+    if tool != "selection" && st.selection.objects.iter().any(|id| st.selection.partial(*id).is_some() || st.selection.segments.contains_key(id)) {
+        return None;
+    }
+    // The art the drag started with: an Alt-copy's copies, selected while it previews, are not carried.
+    let grab = app.canvas.grab?;
+    Some(CarriedArt { document: st.uid, ids: it.selection.objects.clone(), grab, revision: st.revision })
 }
 
 /// Runs the effect of `drop`, at the point it landed. Art of the canvas's own document resumes its move instead (a

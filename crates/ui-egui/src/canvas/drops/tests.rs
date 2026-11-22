@@ -68,9 +68,13 @@ fn a_drop_runs_the_effect_of_its_payload() {
     assert_eq!(app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint(), red);
     assert_eq!(app.session.active().unwrap().selection.objects, [a], "the selection stays");
     let name = app.session.active().unwrap().doc.graphic_styles[2].name.clone();
-    drop_at(&mut app, Payload::Style(name.clone()), on_b, Copy).unwrap();
+    drop_at(&mut app, Payload::Style(name.clone()), on_b, Move).unwrap();
     let st = app.session.active().unwrap();
     assert_eq!(st.doc.node(b).unwrap().extras().graphic_style, st.doc.graphic_style(&name).map(|g| g.id));
+    let items = st.doc.node(b).unwrap().appearance.items.len();
+    drop_at(&mut app, Payload::Style(name.clone()), on_b, Copy).unwrap();
+    let added = app.session.active().unwrap().doc.node(b).unwrap();
+    assert!(added.appearance.items.len() > items && added.extras().graphic_style.is_none(), "with Alt the style goes on top, unlinked");
     let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(b).unwrap().appearance.fill_paint();
     let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
     drop_at(&mut app, Payload::Panel(PanelDrag::paint(blue.clone())), on_b, Move).unwrap();

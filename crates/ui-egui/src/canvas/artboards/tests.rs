@@ -87,7 +87,8 @@ fn the_fade_follows_the_tool_presentation_mode_and_drag_state() {
 fn the_fade_covers_the_pasteboard_and_not_the_boards() {
     let app = app_with(2);
     let frames = frames_of(&app, false);
-    let view = app.canvas_view().unwrap();
+    // No canvas has shown the view: it is shown in an 800 × 600 point area.
+    let view = app.view().unwrap().canvas(app.ui_scaling(), egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
     let quads = fade_quads(&view, &frames);
     let covers = |p: Point| {
         let s = view.to_screen(p);

@@ -140,7 +140,8 @@ fn only_the_chosen_anchors_of_a_partial_selection_are_selected() {
     let (mut app, curve) = scene();
     app.select_tool("directSelection");
     app.run("select.set", json!({"ids": [curve.0]})).unwrap();
-    assert_eq!(marks(&app).selection.anchors.len(), 5, "selected whole: every anchor");
+    let NodeKind::Path { path, .. } = &app.session.active().unwrap().doc.node(curve).unwrap().kind else { panic!("a path") };
+    assert_eq!(marks(&app).selection.anchors.len(), path.anchor_count(), "selected whole: every anchor");
     app.run("select.anchors", json!({"id": curve.0, "anchors": [[0, 2]], "mode": "set"})).unwrap();
     assert_eq!(marks(&app).selection.anchors, vec![KnotRef::new(0, 2)], "partial: the chosen anchor");
 }
