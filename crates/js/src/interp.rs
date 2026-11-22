@@ -2534,11 +2534,15 @@ impl Interp {
     }
 
     /// Whether reading the elements of `o` by index can run code: `o` or an object it inherits
-    /// from has an accessor property with an index name. Each object takes a unit of fuel.
+    /// from has an accessor property with an index name, or a proxy, whose traps answer the reads
+    /// that reach it, is on its prototype chain. Each object takes a unit of fuel.
     fn has_index_getter(&mut self, o: ObjId) -> JsResult<bool> {
         let mut cur = Some(o);
         while let Some(id) = cur {
             self.use_fuel()?;
+            if self.is_proxy(id) {
+                return Ok(true);
+            }
             let object = self.object(id)?;
             if object.props.iter().any(|(k, p)| matches!(p, Prop::Accessor { .. }) && array_index(k).is_some()) {
                 return Ok(true);
@@ -2652,7 +2656,8 @@ impl Interp {
 
     /// [`Self::enumerable_keys`] after the XML case. A proxy on the chain gives its names with its
     /// `ownKeys` trap, whether each is enumerable with its `getOwnPropertyDescriptor` trap and the
-    /// next object with its `getPrototypeOf` trap, which `temp_roots[slot]` keeps reachable.
+    /// next object with its `getPrototypeOf` trap, which `temp_roots[slot]` keeps reachable. A name
+    /// whose descriptor trap gives `undefined` does not hide the same name further up the chain.
     fn enumerable_keys_from(&mut self, id: ObjId, slot: usize) -> JsResult<Vec<Key>> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
@@ -2661,10 +2666,12 @@ impl Interp {
             if self.is_proxy(o) {
                 for k in self.own_keys(o)? {
                     self.use_fuel()?;
-                    if !seen.insert(k.clone()) {
+                    if seen.contains(&k) {
                         continue;
                     }
-                    if self.get_own_property(o, &k)?.is_some_and(|p| p.enumerable()) {
+                    let Some(p) = self.get_own_property(o, &k)? else { continue };
+                    seen.insert(k.clone());
+                    if p.enumerable() {
                         out.push(k);
                     }
                 }
@@ -2744,11 +2751,11 @@ impl Interp {
     }
 
     /// Whether `for-in` over `o` still visits `k` (section 12.6.4; ECMA-262 2020 section
-    /// 13.7.5.15): an object on the chain before any proxy has the property, or a proxy's
-    /// `getOwnPropertyDescriptor` trap gives an enumerable one, or the objects after a proxy
-    /// without the property have it. A name deleted, or on a proxy made non-enumerable, after the
-    /// names were listed is skipped. A proxy's `has` trap is not asked. Each proxy on the chain
-    /// takes a unit of fuel.
+    /// 13.7.5.15): the property found first on the chain, on an ordinary object or through a
+    /// proxy's `getOwnPropertyDescriptor` trap, is enumerable. After a proxy without the property,
+    /// the objects that follow it are searched. A name deleted or made non-enumerable after the
+    /// names were listed is skipped, on an ordinary object as on a proxy. A proxy's `has` trap is
+    /// not asked. Each proxy on the chain takes a unit of fuel.
     fn for_in_still_has(&mut self, o: ObjId, k: &[u16]) -> JsResult<bool> {
         let mark = self.temp_roots.len();
         let r = self.for_in_still_has_rooted(o, k);
@@ -2759,7 +2766,7 @@ impl Interp {
     fn for_in_still_has_rooted(&mut self, mut cur: ObjId, k: &[u16]) -> JsResult<bool> {
         loop {
             let p = match self.lookup(cur, k)? {
-                Lookup::Found(_) => return Ok(true),
+                Lookup::Found(prop) => return Ok(prop.enumerable()),
                 Lookup::Missing => return Ok(false),
                 Lookup::Proxy(p) => p,
             };
@@ -3039,19 +3046,24 @@ impl Interp {
                     // With a different `newTarget` (`Reflect.construct`), the new object takes
                     // its `prototype` when that is an object (ECMA-262 2020 section 9.1.14). An
                     // argument given back and a proxy keep their own. `Object` makes a new object
-                    // instead of converting its argument (section 19.1.1.1).
-                    let proto = if same_value(&f, &new_target) {
-                        None
-                    } else {
-                        match self.get_value(&new_target, &key("prototype"))? {
-                            Value::Object(p) => {
-                                self.temp_roots.push(Value::Object(p));
-                                Some(p)
-                            }
-                            _ => None,
+                    // instead of converting its argument (section 19.1.1.1). `Number`, `String`,
+                    // `Date` and `Function` convert their arguments before `prototype` is read
+                    // (sections 20.1.1.1, 21.1.1.1, 20.4.2 and 19.2.1.1.1), so a conversion that
+                    // throws reads nothing from `newTarget`.
+                    let other_target = !same_value(&f, &new_target);
+                    let converts_first = other_target && {
+                        let i = &self.intrinsics;
+                        let own = [i.number_proto, i.string_proto, i.date_proto, i.function_proto];
+                        match f.as_object().map(|c| self.ordinary_own_property(c, &key("prototype"))).transpose()?.flatten() {
+                            Some(Prop::Data { value: Value::Object(p), .. }) => own.contains(&p),
+                            _ => false,
                         }
                     };
-                    if !same_value(&f, &new_target) && f.as_object() == Some(self.intrinsics.object_ctor) {
+                    let mut proto = None;
+                    if other_target && !converts_first {
+                        proto = self.prototype_of_new_target(&new_target)?;
+                    }
+                    if other_target && f.as_object() == Some(self.intrinsics.object_ctor) {
                         let proto = proto.unwrap_or(self.intrinsics.object_proto);
                         self.reserve_heap(OBJECT_BYTES)?;
                         let obj = self.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
@@ -3061,6 +3073,11 @@ impl Interp {
                     let r = native(self, Value::Undefined, &args, true);
                     self.held_bytes = held;
                     let v = r?;
+                    if converts_first {
+                        // The new object stays reachable while `prototype` is read.
+                        self.temp_roots.push(v.clone());
+                        proto = self.prototype_of_new_target(&new_target)?;
+                    }
                     if let (Some(p), Value::Object(o)) = (proto, &v)
                         && !self.is_proxy(*o)
                         && !args.iter().any(|a| same_value(a, &v))
@@ -3073,6 +3090,18 @@ impl Interp {
                 _ => return Err(self.type_error("the value is not a constructor")),
             }
         }
+    }
+
+    /// The `prototype` of `newTarget` when it is an object, kept reachable in `temp_roots`
+    /// (ECMA-262 2020 section 9.1.14).
+    fn prototype_of_new_target(&mut self, new_target: &Value) -> JsResult<Option<ObjId>> {
+        Ok(match self.get_value(new_target, &key("prototype"))? {
+            Value::Object(p) => {
+                self.temp_roots.push(Value::Object(p));
+                Some(p)
+            }
+            _ => None,
+        })
     }
 
     /// Construct (ECMA-262 2020 section 7.3.13) from Rust: runs a constructor written in
@@ -3618,12 +3647,14 @@ impl Interp {
     ///
     /// Gives the environment the code runs in: `env`, or with [`Options::es2015`] eval code's own
     /// environment of its `let` and `const` names. A script's `let` and `const` names go in the
-    /// global scope ([`Self::declare_global_lexical`]).
+    /// global scope ([`Self::declare_global_lexical`]). Eval code outside strict mode code is
+    /// checked against the `let` and `const` names around it ([`Self::check_eval_vars`]) with the
+    /// option on or off, so it also meets the names that earlier runs of a kept realm declared.
     fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
         let configurable = if is_eval { CONFIGURABLE } else { 0 };
-        if is_eval && !code.strict && self.options.es2015 {
+        if is_eval && !code.strict {
             self.check_eval_vars(code, env, var_env)?;
-            if var_env == self.global_env {
+            if self.options.es2015 && var_env == self.global_env {
                 self.check_global_functions(code)?;
                 self.check_global_vars(code)?;
             }

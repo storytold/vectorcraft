@@ -118,8 +118,9 @@ pub struct Options {
     /// template literals (tagged ones included), default and rest parameters, and spread in array
     /// literals, calls and `new`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
-    /// A realm made with it also has the globals `Proxy` and `Reflect`; turning it on later for a
-    /// realm made without it does not add them.
+    /// A realm made with it also has the globals `Proxy` and `Reflect`. A realm made without it
+    /// gets them at its first run with the option on, and keeps them when later runs turn it off.
+    /// A `Proxy` or `Reflect` global that an earlier run defined stays as it is.
     pub es2015: bool,
 }
 

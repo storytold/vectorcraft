@@ -324,6 +324,39 @@ fn reflect_construct_gives_a_built_in_object_the_prototype_of_new_target() {
     );
 }
 
+#[test]
+fn reflect_construct_reads_new_target_prototype_after_number_and_string_convert() {
+    // `Number`, `String`, `Date` and `Function` convert their arguments before they read
+    // `newTarget.prototype`; `Array` and the error types read it first.
+    let made = "var log = [];
+         var nt = new Proxy(function () {}, { get: function (t, k) { log.push(k); return t[k]; } });
+         var arg = { valueOf: function () { log.push('valueOf'); return 3; }, toString: function () { log.push('toString'); return 's'; } };
+         var n = Reflect.construct(Number, [arg], nt), numberLog = log.join(); log = [];
+         var s = Reflect.construct(String, [arg], nt), stringLog = log.join(); log = [];
+         var d = Reflect.construct(Date, [arg], nt), dateLog = log.join(); log = [];
+         var e = Reflect.construct(Error, [arg], nt), errorLog = log.join(); log = [];
+         var proto = nt.prototype;";
+    assert_eq!(
+        es().run(&format!("{made} [numberLog, stringLog, dateLog, errorLog].join(' | ')")),
+        Ok(JsValue::String("valueOf,prototype | toString,prototype | valueOf,prototype | prototype,toString".into()))
+    );
+    truth(&format!(
+        "{made} Object.getPrototypeOf(n) === proto && Number.prototype.valueOf.call(n) === 3
+             && Object.getPrototypeOf(s) === proto && String.prototype.toString.call(s) === 's'
+             && Object.getPrototypeOf(d) === proto && Date.prototype.getTime.call(d) === 3 && Object.getPrototypeOf(e) === proto"
+    ));
+    // A conversion that throws reads nothing from `newTarget`.
+    truth(
+        "var log = [];
+         var nt = new Proxy(function () {}, { get: function (t, k) { log.push(k); return t[k]; } });
+         var bad = { valueOf: function () { throw 1; }, toString: function () { throw 1; } };
+         var thrown = 0;
+         try { Reflect.construct(Number, [bad], nt); } catch (e) { thrown++; }
+         try { Reflect.construct(String, [bad], nt); } catch (e) { thrown++; }
+         thrown === 2 && log.length === 0",
+    );
+}
+
 /// Runs `src` with a collection at every heap reservation, and checks that it gives `true`.
 fn truth_collecting(src: &str) {
     let mut realm = es();
@@ -417,6 +450,47 @@ fn arrays_json_for_in_and_keys_read_a_proxy_through_its_traps() {
          a.forEach(function (v, i) { seen.push(i); if (i === 0) Reflect.setPrototypeOf(a, proto); });
          seen.join() === '0,19999'",
     );
+}
+
+#[test]
+fn for_in_reads_ordinary_and_proxy_names_by_the_same_rules() {
+    // A name made non-enumerable during the loop is skipped on an ordinary object, as on a proxy.
+    truth(
+        "var o = { a: 1, b: 2, c: 3 }, seen = [];
+         for (var k in o) { seen.push(k); if (k === 'a') Object.defineProperty(o, 'b', { enumerable: false }); }
+         var p = new Proxy({ a: 1, b: 2 }, {}), proxySeen = [];
+         for (var k in Object.create(p)) { proxySeen.push(k); if (k === 'a') Object.defineProperty(p, 'b', { enumerable: false }); }
+         seen.join() === 'a,c' && proxySeen.join() === 'a'",
+    );
+    // A name the `ownKeys` trap lists without a descriptor does not hide an enumerable one further
+    // up the chain; a non-enumerable own property does.
+    truth(
+        "var p = new Proxy(Object.create({ x: 1, y: 2 }), {
+             ownKeys: function () { return ['x', 'y']; },
+             getOwnPropertyDescriptor: function (t, k) { return k === 'y' ? { value: 0, enumerable: false, configurable: true } : undefined; }
+         });
+         var seen = [];
+         for (var k in p) seen.push(k);
+         seen.join() === 'x'",
+    );
+}
+
+#[test]
+fn spread_lets_a_proxy_on_the_prototype_chain_shrink_a_long_array() {
+    // A proxy's `get` trap answers for the indices the array does not hold, so the length is not
+    // refused before the elements are read.
+    truth(
+        "var a = []; a.length = 4294967295;
+         Reflect.setPrototypeOf(a, new Proxy({}, { get: function (t, k) { if (k === '0') a.length = 1; return 'v'; } }));
+         var r = [...a];
+         r.length === 1 && r[0] === 'v'",
+    );
+    // Without a proxy or a getter, the length is refused at once.
+    let src = "var a = []; a.length = 4294967295; [...a]";
+    match es().run(src) {
+        Err(RunError { kind: RunErrorKind::Thrown, message, .. }) => assert!(message.starts_with("RangeError"), "{src}: {message}"),
+        other => panic!("{src}: {other:?}"),
+    }
 }
 
 #[test]
