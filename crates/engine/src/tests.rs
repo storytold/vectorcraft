@@ -177,6 +177,7 @@ mod script_engines;
 mod script_folder;
 mod script_include;
 mod script_io;
+mod script_raster_capture;
 mod script_run;
 mod script_save_open;
 mod scripts;

@@ -194,6 +194,18 @@ pub(crate) fn linked_groups(d: &Document) -> Vec<(String, Vec<u64>)> {
     out
 }
 
+/// The link of every linked image and placed document of `d`, wherever it is stored, brush art
+/// included, with the plate files of an image placed from a DCS file.
+pub(crate) fn linked_files_with_plates(d: &Document) -> Vec<(LinkInfo, Vec<String>)> {
+    groups(d, None)
+        .into_iter()
+        .map(|g| {
+            let plates = g.plate_files.iter().filter_map(|f| super::place::dcs::plate_file_path(&g.link.path, &f.name)).collect();
+            (g.link, plates)
+        })
+        .collect()
+}
+
 /// The linked images and placed documents of `d` by file and content, wherever they are stored
 /// (only `ids` when given), in [`Document::visit_stored`] order. An object whose id an object
 /// visited before it has (art being edited on a layer and its definition) counts once, by its

@@ -2729,6 +2729,34 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`; properties the help
   pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
   keeps the preset's value. A bad value throws an error before anything is written.
+- `Document.rasterize(sourceArt, clipBounds?, options?)` runs `object.rasterize` with the source art's `ids` and gives
+  the new `RasterItem`; the source art is replaced in one undo step and its objects throw `Stale page item` after.
+  `Document.imageCapture(imageFile, clipBounds?, options?)` runs `document.export` of a PNG of the art inside
+  `clipBounds`, or of all the visible art when it is left out, and gives `undefined`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/). `new RasterizeOptions()` starts with
+  `antiAliasingMethod` `ARTOPTIMIZED`, `backgroundBlack`, `clippingMask`, `convertSpotColors`,
+  `convertTextToOutlines`, `includeLayers` and `transparency` false, `colorModel` `DEFAULTCOLORMODEL`, `padding` 0
+  and `resolution` 300 (https://ai-scripting.docsforadobe.dev/jsobjref/RasterizeOptions/); `new
+  ImageCaptureOptions()` starts with `antiAliasing`, `matte` and `transparency` false, `matteColor` white and
+  `resolution` 150 (https://ai-scripting.docsforadobe.dev/jsobjref/ImageCaptureOptions/). Both resolutions take 72 to
+  2400 pixels per inch. Every option goes to the command at that value when the script leaves it out, so the
+  document's raster effects settings do not change the result. The enumerations `AntiAliasingMethod` and
+  `RasterizationColorModel` (https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/) hold strings such
+  as `"AntiAliasingMethod.TYPEOPTIMIZED"`.
+  VectorCraft's own rules: `clipBounds` is `[left, top, right, bottom]` in the run's script coordinates, as
+  `geometricBounds` gives them, and bounds whose right edge is not right of the left one, or whose bottom edge is not
+  below the top one, throw an error. `rasterize` takes one page item or a list of at most 10,000; an object of another
+  document, one listed twice, one inside another listed one, a path of a compound path, and one that is locked or in
+  a locked layer or group throw an error, and nothing changes. It keeps the selection, less the art it replaces. With
+  `clippingMask` the `RasterItem` is the image inside its clip group. `transparency` wins over `backgroundBlack`, and
+  `padding` takes 0 to 1,000 points. `convertSpotColors`, `convertTextToOutlines` and `includeLayers` true throw an error that says
+  they are not available yet. `imageCapture` writes a PNG, and the file's name must end with `.png`. With
+  `transparency` the image keeps its transparency; otherwise it is drawn on `matteColor` with `matte`, and on white
+  without. `matteColor` is a record with `red`, `green` and `blue` from 0 to 255. The file is checked as a `File`
+  opened for writing is checked, and a path that is an open document's file or a file one of them links throws an
+  error. An image of more than 64 megapixels or 32,768 pixels a side throws an error before anything is drawn or
+  written, and the resolution is never lowered to make it fit. `Document.windowCapture` throws an error that says it
+  is not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -9707,6 +9735,12 @@ without it, and their results carry the `warning` that Flatten Transparency give
 of threaded text that it rasterizes out of its thread with the text it shows, as `type.createOutlines` does (see
 Threading text from the in and out ports), and the other frames keep the text they hold. `object.rasterize`
 refuses an image larger than 64 million pixels or longer than 32,768 pixels a side, and the art stays as it was.
+With `ids`, `object.rasterize` rasterizes those objects instead of the selection and leaves the selection as it was,
+without the objects it replaced. An id listed twice, an object inside another listed one, a layer, a path of a
+compound path or a part of another object that is not a group, and an object that is locked or in a locked layer or
+group are refused, and nothing changes. `clipBounds: [x0, y0, x1, y1]` (points, y down)
+keeps only the part of the art's area inside that rectangle; a rectangle that misses the art is refused. The result's
+`imageId` is the image, which is `id` itself unless `clippingMask` put the image in a clip group.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}

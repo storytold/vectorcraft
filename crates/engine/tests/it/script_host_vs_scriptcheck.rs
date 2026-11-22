@@ -145,6 +145,14 @@ const INSIDE: &[(&str, &str)] = &[
     ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
     ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
     ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
+    ("", "AntiAliasingMethod ImageCaptureOptions RasterizationColorModel RasterizeOptions"),
+    ("Document.prototype.", "rasterize windowCapture windowCapture="),
+    ("ImageCaptureOptions.", "prototype"),
+    ("ImageCaptureOptions.prototype.", "constructor"),
+    ("RasterizeOptions.", "prototype"),
+    ("RasterizeOptions.prototype.", "constructor"),
+    ("AntiAliasingMethod.", "ARTOPTIMIZED None TYPEOPTIMIZED"),
+    ("RasterizationColorModel.", "BITMAP DEFAULTCOLORMODEL GRAYSCALE"),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types
