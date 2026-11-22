@@ -425,6 +425,62 @@ fn image_file_getter_hides_a_link_to_an_open_document_out_of_scope() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Assigning `file` or `matrix` checks the item before the value: an `add()` result with no file
+/// throws `PlacedItem.file is required`, and one that was embedded throws `Stale page item`.
+#[test]
+fn assignments_check_the_item_before_the_value() {
+    let base = folder("receiver");
+    let a = base.join("main/a.png");
+    std::fs::write(&a, gray_png(4, 4)).unwrap();
+    let mut s = session();
+    let out = log(
+        &mut s,
+        &base,
+        &format!(
+            "var d = app.activeDocument, n = d.placedItems.add(), p = d.placedItems.add(), m = [];\
+             try {{ n.matrix = null; }} catch (e) {{ m.push(e.message); }}\
+             p.file = new File('{0}'); p.embed();\
+             try {{ p.file = new File('{0}'); }} catch (e) {{ m.push(e.message); }}\
+             try {{ p.matrix = null; }} catch (e) {{ m.push(e.message); }}\
+             try {{ d.rasterItems[0].matrix = null; }} catch (e) {{ m.push(e.name); }}\
+             vc.log(m);",
+            js_path(&a)
+        ),
+    );
+    assert_eq!(out, vec![json!(["PlacedItem.file is required", "Stale page item", "Stale page item", "TypeError"])]);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `removeAll()` deletes no image when one is on a locked artboard, in both collections.
+#[test]
+fn remove_all_keeps_images_on_a_locked_artboard() {
+    let base = folder("locked-board");
+    let a = base.join("main/a.png");
+    std::fs::write(&a, gray_png(4, 4)).unwrap();
+    let mut s = session();
+    let linked = place(&mut s, &a, true);
+    let embedded = place(&mut s, &a, false);
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, &base, "app.activeDocument.placedItems.removeAll();");
+    assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", linked.0)), "{e}");
+    let e = failure(&mut s, &base, "app.activeDocument.rasterItems.removeAll();");
+    assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", embedded.0)), "{e}");
+    assert_eq!(images(&s).len(), 2);
+    assert_eq!(undo_steps(&s), steps);
+    lock(&mut s, false);
+    let out = log(&mut s, &base, "var d = app.activeDocument; d.placedItems.removeAll(); d.rasterItems.removeAll(); vc.log(d.pageItems.length);");
+    assert_eq!(out, vec![json!(0)]);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn stale_and_foreign_placed_items_are_refused() {
     let base = folder("stale");

@@ -2564,9 +2564,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   (`app.executeMenuCommand('…')`), each with a count and its lines, and `menuCommands.dynamic` counts the calls
   whose argument isn't a string literal.
 - `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
-  File object's `length`, `hidden` or `readonly` counts too, on any object that may be a File object, and so does a
-  document's `saveAs` or `exportFile`; only `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than
-  `Folder.current`, are left out), `filesOpened` (files opened in other apps), `network`,
+  File object's `length`, `hidden` or `readonly` counts too, on any object that may be a File object; only
+  `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out; a
+  document's `saveAs` or `exportFile` counts too), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2755,8 +2755,13 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   that maps the image's pixels, row 0 at the top, to script coordinates, and a distorted image has none. Assigning
   `matrix` runs `object.transform`; a value that is not finite, a matrix with no area and one that puts a corner of
   the image outside the canvas throw an error with nothing changed. `boundingBox` is the pixel rectangle at one point
-  a pixel. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a file is dropped at the
-  end of the run. `contentVariable`, `colorants`, `colorize` and `overprint` are not available yet.
+  a pixel. `removeAll()` refuses images as `pageItems.removeAll()` refuses objects, and so throws `cannot delete
+  objects on a locked artboard` and deletes nothing when an image is on one. Assigning `file` or `matrix` checks the
+  item before the value, so a stale item throws `Stale page item` whatever the value. Assigning `matrix` to an `add()`
+  result without a file throws `PlacedItem.file is required` whatever the value, and assigning `file` to one checks
+  the file and places the image. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a
+  file is dropped at the end of the run. `contentVariable`, `colorants`, `colorize` and `overprint` are not available
+  yet.
 - `PlacedItem.trace()` and `RasterItem.trace()` trace the image with `imageTrace.make` and the Default preset and
   return the Image Trace object as a `PluginItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PluginItem/), whose
   `isTracing` is `true` and whose `tracing` is its `TracingObject`
