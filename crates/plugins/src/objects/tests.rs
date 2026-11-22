@@ -1415,9 +1415,10 @@ fn inline_graphics_in_written_type_stay_as_they_were() {
 }
 
 /// Runs written without `paragraphs` keep each paragraph's style when the number of paragraphs
-/// stays the same, and otherwise move the styles with the text as typing the same change would: a
-/// paragraph added before others takes the style of the one it splits and the others keep theirs,
-/// and joining two paragraphs keeps the first one's style.
+/// stays the same, and otherwise the styles follow the paragraphs' text: a paragraph whose text
+/// stays keeps its style, also when changes are made at two places, a paragraph added at the start
+/// takes the style of the next one and one added later the style of the one before it, and joining
+/// two paragraphs keeps the first one's style.
 #[test]
 fn written_runs_without_paragraphs_keep_each_paragraph_s_style() {
     use vectorcraft_doc::{CharStyle, Justify, ParaStyle, TextObject};
@@ -1442,6 +1443,57 @@ fn written_runs_without_paragraphs_keep_each_paragraph_s_style() {
     assert_eq!(justified("One\nTwo\nThree"), [Justify::Left, Justify::Center, Justify::Right]);
     assert_eq!(justified("AB\nC"), [Justify::Left, Justify::Right]);
     assert_eq!(justified("A\nB\nC\nD"), [Justify::Left, Justify::Center, Justify::Right, Justify::Right]);
+    // Two separate changes: B and C keep their styles.
+    assert_eq!(justified("X\nA\nB\nC\nY"), [Justify::Left, Justify::Left, Justify::Center, Justify::Right, Justify::Right]);
+    assert_eq!(justified("A\nX\nB\nC\nY"), [Justify::Left, Justify::Left, Justify::Center, Justify::Right, Justify::Right]);
+    // A changed paragraph takes the style of the one it replaces; the one added after it, that style.
+    assert_eq!(justified("A\nB2\nB3\nC"), [Justify::Left, Justify::Center, Justify::Center, Justify::Right]);
+    assert_eq!(justified("A2\nC"), [Justify::Left, Justify::Right]);
+}
+
+/// A paragraph that a change adds next to a numbered one takes its style without the number, and
+/// the numbered paragraph keeps it.
+#[test]
+fn written_runs_give_an_added_paragraph_no_list_number() {
+    use vectorcraft_doc::text::ParaList;
+    use vectorcraft_doc::{CharStyle, ParaStyle, TextObject};
+    let (mut d, _, layer, _) = mixed();
+    let mut t = TextObject::point(Point::new(0.0, 0.0), "A\nB", CharStyle::default());
+    let numbered = ParaStyle { list: Some(ParaList { start: Some(5), ..ParaList::default() }), ..ParaStyle::default() };
+    t.set_paragraph_styles(vec![ParaStyle::default(), numbered]);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    let targets = vec![id];
+    let (bytes, read_only) = encode_input_with(&d, &targets, &[InputKind::Type], usize::MAX).unwrap();
+    let out = json!({"objects": [{"id": id.0, "text": {"runs": [{"text": "X\nA\nB\nY", "style": CharStyle::default()}]}}]});
+    write_out(&mut d, &targets, &bytes, &read_only, &[InputKind::Type], &out).unwrap();
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("type") };
+    let starts: Vec<_> = (0..t.paragraph_count()).map(|i| t.para_at(i).list.map(|l| l.start)).collect();
+    assert_eq!(starts, [None, None, Some(Some(5)), Some(None)]);
+}
+
+/// Past 262,144 pairs of old and new paragraphs to compare, the paragraphs are paired in order.
+#[test]
+fn written_runs_pair_paragraphs_in_order_past_the_compare_limit() {
+    use vectorcraft_doc::{CharStyle, Justify, ParaStyle, TextObject};
+    let (mut d, _, layer, _) = mixed();
+    let paras: Vec<String> = (0..600).map(|i| format!("p{i}")).collect();
+    let mut t = TextObject::point(Point::new(0.0, 0.0), &paras.join("\n"), CharStyle::default());
+    let styled = |i: usize| ParaStyle { justify: if i.is_multiple_of(2) { Justify::Left } else { Justify::Right }, ..ParaStyle::default() };
+    t.set_paragraph_styles((0..600).map(styled).collect());
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    let targets = vec![id];
+    let (bytes, read_only) = encode_input_with(&d, &targets, &[InputKind::Type], usize::MAX).unwrap();
+    // 600 old paragraphs times 602 new ones: none starts or ends both texts.
+    let text = format!("X\n{}\nY", paras.join("\n"));
+    let out = json!({"objects": [{"id": id.0, "text": {"runs": [{"text": text, "style": CharStyle::default()}]}}]});
+    write_out(&mut d, &targets, &bytes, &read_only, &[InputKind::Type], &out).unwrap();
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("type") };
+    assert_eq!(t.paragraph_count(), 602);
+    let got: Vec<_> = (0..602).map(|i| t.para_at(i).justify).collect();
+    let want: Vec<_> = (0..602).map(|i| styled(i.min(599)).justify).collect();
+    assert_eq!(got, want);
 }
 
 /// Every number in the character and paragraph styles a filter writes is checked against the range

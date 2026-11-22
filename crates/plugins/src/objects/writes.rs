@@ -19,6 +19,9 @@ use crate::{Error, InputKind, Result};
 const MAX_FAMILY: usize = 256;
 /// The smallest determinant a transform a filter sets may have: a smaller one flattens the object.
 const MIN_DETERMINANT: f64 = 1e-12;
+/// The most pairs of an old and a new paragraph, past those both texts start and end with, that a
+/// change of the paragraph count compares by their text ([`moved_para_styles`]).
+const MAX_MATCHED_PAIRS: usize = 1 << 18;
 
 /// The fields of an object of `kind` a filter that lists the kind in `writes` may change.
 fn writable(kind: InputKind) -> &'static [&'static str] {
@@ -226,7 +229,7 @@ pub(super) fn apply(doc: &Document, n: &mut Node, changes: &Map<String, Value>, 
 /// to ([`CharStyle::check_ranges`]), and a run whose style isn't one of the type's own has a font
 /// family, and its paints are checked as an object's are. Paragraph styles are one per paragraph
 /// ([`para_style`]). With runs alone, each paragraph keeps its style when the number of paragraphs stays
-/// the same, and otherwise the styles move with the text as typing the change moves them.
+/// the same, and otherwise the styles follow the paragraphs' text ([`moved_para_styles`]).
 fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Value>, paragraphs: Option<&Value>, at: &str) -> Result<()> {
     if let Some(runs) = runs {
         let at = format!("{at}.text.runs");
@@ -274,6 +277,7 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
         }
         let plain: String = new.iter().map(|r| r.text.as_str()).collect();
         let old = t.plain_text();
+        let mut moved = None;
         if plain != old {
             if threaded {
                 return Err(out_err(&at, "the characters of threaded type can't be changed"));
@@ -283,13 +287,15 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
             }
             let breaks = |s: &str| s.bytes().filter(|&b| b == b'\n').count();
             if paragraphs.is_none() && breaks(&plain) != breaks(&old) {
-                // Paragraphs added or joined: the styles follow the text as typing the change would
-                // move them. With as many paragraphs as before, each keeps its style.
-                let (start, old_end, new_end) = changed_range(&old, &plain);
-                t.splice_paras(start, old_end, plain.get(start..new_end).unwrap_or_default());
+                // Paragraphs added or joined: the styles follow the paragraphs' text. With as many
+                // paragraphs as before, each keeps its style.
+                moved = Some(moved_para_styles(&t.paragraph_styles(), &old, &plain));
             }
         }
         t.runs = new;
+        if let Some(styles) = moved {
+            t.set_paragraph_styles(styles);
+        }
     }
     match paragraphs {
         Some(v) => {
@@ -311,13 +317,96 @@ fn set_text(doc: &Document, t: &mut TextObject, threaded: bool, runs: Option<&Va
     Ok(())
 }
 
-/// The bytes that differ between `old` and `new` once their common start and end are taken away,
-/// on character boundaries: `old[start..old_end]` became `new[start..new_end]`.
-fn changed_range(old: &str, new: &str) -> (usize, usize, usize) {
-    let start = old.char_indices().zip(new.chars()).find(|((_, a), b)| a != b).map_or(old.len().min(new.len()), |((i, _), _)| i);
-    let (old_rest, new_rest) = (old.get(start..).unwrap_or_default(), new.get(start..).unwrap_or_default());
-    let same: usize = old_rest.chars().rev().zip(new_rest.chars().rev()).take_while(|(a, b)| a == b).map(|(c, _)| c.len_utf8()).sum();
-    (start, old.len() - same, new.len() - same)
+/// The paragraph styles of text `new` that replaced `old`, whose paragraphs had `styles` (one per
+/// paragraph). The paragraphs, split at `\n`, are matched as a longest common subsequence of their
+/// texts after the paragraphs both start and end with are set aside; when the paragraphs left in
+/// the old text times those left in the new pass [`MAX_MATCHED_PAIRS`], they are paired in order
+/// instead. A
+/// matched paragraph keeps its style. Between two matched paragraphs, the changed ones take the
+/// styles of the old paragraphs there in order, and the last of those past their count; paragraphs
+/// added where there were none take the style of the paragraph before them, or of the next one at
+/// the start. A style copied to a paragraph that was not there loses its list number
+/// ([`vectorcraft_doc::text::ParaList::start`]).
+fn moved_para_styles(styles: &[ParaStyle], old: &str, new: &str) -> Vec<ParaStyle> {
+    let a: Vec<&str> = old.split('\n').collect();
+    let b: Vec<&str> = new.split('\n').collect();
+    let pre = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let (a_rest, b_rest) = (a.get(pre..).unwrap_or_default(), b.get(pre..).unwrap_or_default());
+    let suf = a_rest.iter().rev().zip(b_rest.iter().rev()).take_while(|(x, y)| x == y).count();
+    // `matched[j]`: the old paragraph that new paragraph `j` is, if any.
+    let mut matched: Vec<Option<usize>> = vec![None; b.len()];
+    for (j, m) in matched.iter_mut().enumerate().take(pre) {
+        *m = Some(j);
+    }
+    for k in 0..suf {
+        if let Some(m) = matched.get_mut(b.len() - 1 - k) {
+            *m = Some(a.len() - 1 - k);
+        }
+    }
+    let (am, bm) = (a_rest.get(..a_rest.len() - suf).unwrap_or_default(), b_rest.get(..b_rest.len() - suf).unwrap_or_default());
+    if !am.is_empty() && !bm.is_empty() && am.len().saturating_mul(bm.len()) <= MAX_MATCHED_PAIRS {
+        let mut ids = std::collections::HashMap::new();
+        let mut id = |s: &str| {
+            let next = ids.len();
+            *ids.entry(s.to_string()).or_insert(next)
+        };
+        let ai: Vec<usize> = am.iter().map(|s| id(s)).collect();
+        let bi: Vec<usize> = bm.iter().map(|s| id(s)).collect();
+        // `len[i * w + j]`: the length of the longest common subsequence of `ai[i..]` and `bi[j..]`.
+        let w = bi.len() + 1;
+        let mut len = vec![0u32; (ai.len() + 1) * w];
+        for i in (0..ai.len()).rev() {
+            for j in (0..bi.len()).rev() {
+                let at = |i: usize, j: usize| len.get(i * w + j).copied().unwrap_or(0);
+                let v = if ai.get(i) == bi.get(j) { at(i + 1, j + 1) + 1 } else { at(i + 1, j).max(at(i, j + 1)) };
+                if let Some(c) = len.get_mut(i * w + j) {
+                    *c = v;
+                }
+            }
+        }
+        let at = |i: usize, j: usize| len.get(i * w + j).copied().unwrap_or(0);
+        let (mut i, mut j) = (0, 0);
+        while i < ai.len() && j < bi.len() {
+            if ai.get(i) == bi.get(j) {
+                if let Some(m) = matched.get_mut(pre + j) {
+                    *m = Some(pre + i);
+                }
+                (i, j) = (i + 1, j + 1);
+            } else if at(i + 1, j) >= at(i, j + 1) {
+                i += 1;
+            } else {
+                j += 1;
+            }
+        }
+    }
+    let style = |i: usize, numbered: bool| {
+        let mut s = styles.get(i).or(styles.last()).cloned().unwrap_or_default();
+        if !numbered && let Some(l) = s.list.as_mut() {
+            l.start = None;
+        }
+        s
+    };
+    let mut out = Vec::with_capacity(b.len());
+    let (mut next_old, mut j) = (0, 0);
+    while j < b.len() {
+        if let Some(&Some(i)) = matched.get(j) {
+            out.push(style(i, true));
+            (next_old, j) = (i + 1, j + 1);
+            continue;
+        }
+        // New paragraphs `j..end` stand where old paragraphs `next_old..old_end` were.
+        let end = (j..b.len()).find(|&k| matched.get(k).is_some_and(Option::is_some)).unwrap_or(b.len());
+        let old_end = matched.get(end).copied().flatten().unwrap_or(a.len());
+        for g in 0..end - j {
+            out.push(if next_old < old_end {
+                style((next_old + g).min(old_end - 1), next_old + g < old_end)
+            } else {
+                style(next_old.checked_sub(1).unwrap_or(old_end), false)
+            });
+        }
+        j = end;
+    }
+    out
 }
 
 /// An attribute of the style at `at` out of its range, naming the attribute.

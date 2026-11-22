@@ -772,8 +772,11 @@ exactly as given, or with the fields it changes; a field it leaves out keeps its
   its attributes: indents and space before and after within ±1296 pt, the Hyphenation and Justification options in
   their ranges, at most 256 tab stops at 0 to 100,000 pt, and a custom Kinsoku set only by the name of one of the
   document's sets, whose characters the paragraph takes. With `text.runs` alone, each paragraph keeps its style when
-  the number of paragraphs stays the same; runs that add or join paragraphs move the styles with the text, as typing
-  the same change does.
+  the number of paragraphs stays the same. When runs add or join paragraphs, the host matches the old and new
+  paragraphs by their text: a paragraph whose text is unchanged keeps its style, changed paragraphs take the styles of
+  the paragraphs they replace in order, and a paragraph added between others takes the style of the one before it (of
+  the next one at the start), without a list number. Apart from the paragraphs both texts start and end with, when
+  the old paragraphs times the new ones pass 262,144, the host pairs them in order instead.
 - `opacity` is a number from 0 to 1.
 - `symbolId` names a symbol in the document. An instance that shows another symbol loses its overrides, as Replace
   Symbol does.
