@@ -364,14 +364,21 @@ pub(crate) fn recently_added_set(app: &mut VectorcraftApp, now: SystemTime) -> A
 pub(crate) fn paint_family_sample(cx: &ContentPainterCx, rect: Rect, family: &str, style: &str, text: Option<&str>, on_white: bool) {
     let db = FontDb::global();
     let catalog = db.catalog();
-    let Some((face, _)) = catalog.resolve(family, style) else { return };
-    let key = format!("font-sample/{}/{}", face.family, face.style);
-    let state = cx.document_face(&key, || {
-        let data = catalog.load(&face).ok()?;
-        Some(FaceBytes::new(data.bytes, data.index).coords(face.variations.iter().copied()))
-    });
-    let FaceState::Ready(font) = state else { return };
     let loaded = db.face(family, style);
+    let state = match catalog.resolve(family, style) {
+        Some((face, _)) => cx.document_face(&format!("font-sample/{}/{}", face.family, face.style), || {
+            let data = catalog.load(&face).ok()?;
+            Some(FaceBytes::new(data.bytes, data.index).coords(face.variations.iter().copied()))
+        }),
+        // The catalog finds the installed fonts only: a bundled family is drawn from the database's own face.
+        None => {
+            let Some(face) = loaded.as_ref() else { return };
+            cx.document_face(&format!("font-sample/{}/{}", face.family, face.style), || {
+                Some(FaceBytes::new(Arc::from(face.file_data()), face.face_index()).coords(face.variations().iter().copied()))
+            })
+        }
+    };
+    let FaceState::Ready(font) = state else { return };
     let covers = |s: &str| !s.trim().is_empty() && loaded.as_ref().is_some_and(|f| s.chars().filter(|c| !c.is_whitespace()).all(|c| f.covers(c)));
     let text = text.filter(|t| covers(t)).unwrap_or(FALLBACK_SAMPLE);
     let area = if on_white {
