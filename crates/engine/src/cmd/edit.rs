@@ -225,7 +225,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides), keepJoined?: bool (without ids: the direct-selected anchors of a path with no selected segment are removed as path.removeAnchors removes them, without opening the path, and the next anchor along is selected (the one before at an open path's end); default: prefs deleteKeepsPathsJoined)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -1221,6 +1221,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let guides = switch_or(p, "guides", false, "edit.clear")?;
+    switch_or(p, "keepJoined", false, "edit.clear")?;
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
     // An object of a symbol instance's art can't be removed from the instance alone.
     if explicit.is_none() && s.doc()?.selection.symbol_part.is_some() {
@@ -1228,7 +1229,8 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Direct-selected anchors or segments: remove those, and any objects selected whole with them.
     if explicit.is_none() && (!s.doc()?.selection.anchors.is_empty() || !s.doc()?.selection.segments.is_empty()) {
-        return super::path::delete_anchors(s, p);
+        let keep_joined = keeps_paths_joined(s, p)?;
+        return super::path::delete_anchors_joined(s, p, keep_joined);
     }
     // Selected ruler guides (selected on their own).
     if explicit.is_none() && s.doc()?.selection.is_empty() {
@@ -1273,6 +1275,17 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Does Clear remove direct-selected anchors without opening their paths (`keepJoined` param, else
+/// General › Delete Removes Anchor Points and Keeps Paths Joined)? Noted in the journal, so a
+/// replay removes them the same way whatever the preference is at the time. A saved step without `keepJoined`
+/// was recorded before the preference existed, so it opens the paths as it did then.
+fn keeps_paths_joined(s: &mut Session, p: &Value) -> Result<bool> {
+    let default = s.prefs.delete_keeps_paths_joined && !s.replaying();
+    let on = switch_or(p, "keepJoined", default, "edit.clear")?;
+    s.note_journal("keepJoined", json!(on));
+    Ok(on)
 }
 
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
