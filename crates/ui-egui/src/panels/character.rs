@@ -1538,6 +1538,12 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
 /// Runs the `ui.character.*` command `id`; `None` for any other id.
 pub(crate) fn run(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     let action = id.strip_prefix("ui.character.")?;
+    // A row the menu shows disabled does nothing, however it is run.
+    let mut states = CommandStates::new();
+    menu_states(app, &mut states);
+    if states.get(&CommandRef::with_params(id, params.clone())).is_some_and(|state| !state.is_enabled()) {
+        return Some(Err(format!("{id} is not available now")));
+    }
     Some(run_action(app, action, params))
 }
 

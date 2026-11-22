@@ -262,8 +262,10 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut Ui, highlight: egui::Color32,
     let FlattenerPreviewModel { shot, renderer, view, drawn, .. } = &mut app.flattener_preview;
     let Some(shot) = shot.as_ref() else { return };
     let w = ui.available_width();
-    // A dock resize renders again only when the width crosses a power of two.
-    let px = ((w * ui.ctx().pixels_per_point() * 4.0).ceil().max(1.0) as u32).next_power_of_two().min(4096);
+    // A dock resize renders again only when the width crosses a power of two; the picture stays within what the
+    // window's textures can hold.
+    let most = ui.ctx().input(|i| i.max_texture_side).min(4096) as u32;
+    let px = ((w * ui.ctx().pixels_per_point() * 4.0).ceil().max(1.0) as u32).next_power_of_two().min(most);
     let mut drawn = drawn.borrow_mut();
     let Drawn { key, tex } = &mut *drawn;
     let k = (shot.generation, h, overprints == Overprints::Simulate, px);

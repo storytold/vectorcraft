@@ -287,7 +287,7 @@ pub(crate) fn split_row(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The View select showing `current` → the view the user picked this pass.
 fn view_pick(ui: &mut Ui, current: TraceView) -> Option<TraceView> {
     let entries: Vec<Entry<String>> = TraceView::ALL.iter().map(|v| Entry::new(v.id().to_string(), view_label(*v))).collect();
-    let picked = Field::new(tl!("View:"))
+    let picked = Field::new(tl!("View"))
         .show(ui, |ui, _| Select::new(tl!("View"), Bind::given(current.id().to_string()), &entries).show(ui).events.committed().cloned())
         .inner
         .flatten()?;
@@ -576,7 +576,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let Some((preset, view)) = selected_trace(app) else { return false };
     Divider::vertical().show(ui);
     Row::new().fit_rank(rank::GROUP).show(ui, |ui, _| {
-        Field::new(tl!("Preset:")).show(ui, |ui, _| preset_dropdown(app, ui, &preset));
+        Field::new(tl!("Preset")).show(ui, |ui, _| preset_dropdown(app, ui, &preset));
     });
     Row::new().fit_rank(rank::GROUP).show(ui, |ui, _| view_row(app, ui, view));
     Row::new().fit_rank(rank::GROUP).show(ui, |ui, _| {
@@ -809,7 +809,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let source = PresetSource::listed(&list.rows);
     let taken = |name: &str| session.trace_preset_taken(name, None).then_some(PresetError::NameTaken);
     let preset_row = NamedPresetRow::new(
-        tl!("Preset:"),
+        tl!("Preset"),
         PresetPicker::new(tl!("Preset"), Bind::bound(&mut value), &source, Bind::bound(&mut app.ui.image_trace_panel.picker))
             .field(PickerField::Name),
     )

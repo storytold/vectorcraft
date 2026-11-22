@@ -278,6 +278,11 @@ fn selected_mid(app: &VectorcraftApp, stops: usize) -> Option<usize> {
     (app.session.selected_stop().is_none() && i + 1 < stops && owner == first_id(app)).then_some(i)
 }
 
+/// A stored fraction as the percent a field shows, without the `f32` noise (`0.3` is `30`, not `30.000001`).
+fn percent(v: f32) -> f64 {
+    (f64::from(v) * 1e6).round() / 1e4
+}
+
 fn first_id(app: &VectorcraftApp) -> Option<NodeId> {
     app.session.active().and_then(|d| d.selection.objects.first().copied())
 }
@@ -678,8 +683,8 @@ fn host_fields(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: boo
         });
         Text::new(tl!("Location:")).shade(Shade::Muted).show(ui);
         let loc = match (mid, stop) {
-            (Some(m), _) => stops.get(m).map_or(0.0, |s| f64::from(s.midpoint) * 100.0),
-            (None, Some(s)) => f64::from(s.offset) * 100.0,
+            (Some(m), _) => stops.get(m).map_or(0.0, |s| percent(s.midpoint)),
+            (None, Some(s)) => percent(s.offset),
             _ => 0.0,
         };
         let location =

@@ -551,6 +551,9 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     states.set(CommandRef::new("ui.align.hideOptions"), CommandState::new().title(if hidden { tl!("Show Options") } else { tl!("Hide Options") }));
     states.set(CommandRef::new("ui.align.usePreviewBounds"), CommandState::new().checked(prefs.use_preview_bounds));
     states.set(CommandRef::new("ui.align.cancelKeyObject"), CommandState::new().enabled(align_to(app) == AlignTo::Key));
+    // The key choice is named for what the key is: Align to Key Anchor while it is an anchor point.
+    let key = CommandState::new().enabled(can_choose(app, AlignTo::Key)).checked(shown_align_to(app) == AlignTo::Key);
+    states.set(CommandRef::new("align.toKeyObject"), key.title(align_to_icon_name(AlignTo::Key, key_is_anchor(app)).1));
     states.set(CommandRef::new("ui.align.glyphBoundsPoint"), CommandState::new().checked(prefs.align_glyph_bounds_point));
     states.set(CommandRef::new("ui.align.glyphBoundsArea"), CommandState::new().checked(prefs.align_glyph_bounds_area));
 }
