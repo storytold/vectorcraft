@@ -993,6 +993,122 @@ fn a_fix_is_drawn_at_the_same_opacity_and_none_passes_out_of_reach() {
     assert!((3.0..3.04).contains(&ratio(&back)), "{back}");
 }
 
+/// A square with a 50 % top fill row over locked orange, with and without a lower fill row and in a
+/// Screen group or not: isolating the object's blending leaves what a translucent Normal row draws
+/// as it is, on the canvas and in the answer, for each blend mode of the object.
+#[test]
+fn isolation_leaves_a_translucent_normal_row_as_it_draws() {
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    for blend in ["normal", "multiply", "screen", "difference", "overlay"] {
+        for fill in ["#808080", "#ffffff", "#2040a0"] {
+            for lower in [false, true] {
+                let mut s = session();
+                s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 160, "height": 160})).unwrap();
+                s.execute("paint.setFill", &json!({"color": "#ff8000"})).unwrap();
+                s.execute("object.lock", &json!({})).unwrap();
+                let n = id(s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap());
+                s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+                if lower {
+                    s.execute("appearance.addFill", &json!({})).unwrap();
+                }
+                let st = s.active().unwrap();
+                let items = &st.doc.node(vectorcraft_doc::NodeId(n)).unwrap().appearance.items;
+                let top = items.iter().rposition(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+                s.execute("appearance.setItem", &json!({"index": top, "color": fill, "opacity": 50})).unwrap();
+                s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+                s.execute("transparency.set", &json!({"item": null, "blend": blend})).unwrap();
+                if lower {
+                    s.execute("object.group", &json!({})).unwrap();
+                    s.execute("transparency.set", &json!({"blend": "screen"})).unwrap();
+                    s.execute("select.set", &json!({"ids": [n]})).unwrap();
+                }
+                let plain = s.execute("color.contrast", &json!({})).unwrap();
+                let (p, drawn) = canvas_ratio(&s, &plain);
+                s.execute("transparency.set", &json!({"item": null, "isolate": true})).unwrap();
+                let isolated = s.execute("color.contrast", &json!({})).unwrap();
+                let (q, _) = canvas_ratio(&s, &isolated);
+                let case = format!("{blend} {fill} lower row and group: {lower}");
+                assert_eq!(p, q, "the canvas draws the same: {case}");
+                assert!((ratio(&plain) - ratio(&isolated)).abs() < 1e-6, "{case}: {plain} {isolated}");
+                assert!((ratio(&plain) - drawn).abs() < 0.02, "{case}: {plain} against {drawn}");
+            }
+        }
+    }
+}
+
+/// A Difference square centered on the edge between locked black and white art: the art behind it
+/// is not one color where it is read, so no one color stands for it; a given background answers,
+/// and over one color the background is read as before.
+#[test]
+fn a_blend_mode_over_art_of_several_colors_has_no_one_answer() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 80, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 20, "width": 80, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    // Without the default stroke, which would cover the edge.
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("transparency.set", &json!({"blend": "difference"})).unwrap();
+    let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("is not one color where it is read") && e.contains("give `against`"), "{e}");
+    let given = s.execute("color.contrast", &json!({"against": "#ffffff"})).unwrap();
+    assert!((ratio(&given) - 21.0).abs() < 1e-6, "white minus white is black: {given}");
+    // In Normal mode the color is drawn as it is, over the background read as one color.
+    s.execute("transparency.set", &json!({"blend": "normal"})).unwrap();
+    s.execute("color.contrast", &json!({})).unwrap();
+    // Moved over the white art alone, the square blends with one color again.
+    s.execute("transparency.set", &json!({"blend": "difference"})).unwrap();
+    s.execute("object.move", &json!({"dx": 40, "dy": 0})).unwrap();
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    assert!((ratio(&r) - 21.0).abs() < 1e-3, "white minus white is black: {r}");
+}
+
+/// A Difference square over a white square in a 50 % group that isolates its blending, over the
+/// edge between black and white art: the square blends only with the white inside the group, so
+/// the art of two colors outside it, which the group draws over in Normal mode, leaves one answer.
+#[test]
+fn a_blend_mode_inside_an_isolating_group_answers_over_art_of_several_colors() {
+    let mut s = session();
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 80, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 20, "width": 80, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let back = id(s.execute("shape.rectangle", &json!({"x": 60, "y": 60, "width": 80, "height": 80})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    let square = id(s.execute("shape.rectangle", &json!({"x": 70, "y": 70, "width": 60, "height": 60})).unwrap());
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("transparency.set", &json!({"blend": "difference"})).unwrap();
+    s.execute("object.group", &json!({"ids": [back, square]})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50, "isolate": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [square]})).unwrap();
+    s.execute("color.contrast", &json!({})).unwrap();
+}
+
+/// With a fill of None, what a pick would be measured against is still read: the Color Wheel's
+/// contrast lines show where a solid color in its place passes.
+#[test]
+fn a_pick_for_a_fill_of_none_is_measured_against_the_background() {
+    let mut s = blended_over_red("normal");
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    assert!(s.execute("color.contrast", &json!({})).is_err(), "no color to measure");
+    let backdrop = crate::cmd::contrast_pick_backdrop(&s, &json!({})).unwrap();
+    let cms = vectorcraft_color::cms::active();
+    let black = backdrop.ratio(backdrop.shown(&cms, &vectorcraft_color::Color::rgb(0.0, 0.0, 0.0)));
+    let want = vectorcraft_color::wcag::contrast_ratio([0.0; 3], [1.0, 0.0, 0.0]);
+    assert!((black - want).abs() < 1e-3, "black over the red art: {black} against {want}");
+    assert_eq!(backdrop.against_hex(), "#ff0000");
+}
+
 #[test]
 fn for_takes_only_the_three_categories() {
     let mut s = Session::new();

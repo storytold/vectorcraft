@@ -141,7 +141,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Contrast",
             [],
             None,
-            "{color?: a color (#rrggbbaa and #rgba are refused; default the active Fill or Stroke proxy's color, or its selected gradient stop or freeform point, or a gradient mesh's first picked point; a picked object's solid color mixed towards the fill that stains its dynamic symbol instance), against?: a color or \"below\" (default: the color VectorCraft draws at the center of the selection's bounds with the selected objects hidden, as the canvas shows it without template layers and guides; a picked object of a dynamic symbol instance hides only itself and is measured at its own center; needs a selection), opacity?: 0..100 (default the opacity the proxy's color is drawn with: the object's opacity times that of its groups and layer (for a picked symbol object, also of its instance and the groups of the symbol's art around it), its fill's or stroke's row (not for type's character paint) and a stop's or point's own, a translucent group or layer drawing the art inside it, the art behind the object included, over what is outside it; 100 for a given `color`), for?: normalText|largeText|graphics (default normalText: the category `fix` answers for)} the WCAG 2 contrast ratio (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio) of the color, drawn at that opacity over the background with the blend modes the proxy's color is drawn with (its row's, the object's and those of its groups and layer, innermost first, each blending the result with the art below it inside the object, groups and layer around it, the object's rows below its row included (with `against` or `opacity` given, with the background); inside an object, group or layer that isolates its blending, the modes blend only with the art it holds; Normal for a given `color`), against the background, in display sRGB: normal text needs 4.5:1 for AA and 7:1 for AAA, large text 3:1 and 4.5:1, and graphics 3:1 for AA; the unrounded ratio is compared → {ratio, against: \"#rrggbb\" (the background in working RGB, as `against` takes it; the sampled one rounded to 8 bits, so giving it back answers the same ratio unless `opacity` is omitted and a group or layer around the object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over rows below it, since a given background stands for the art below each such level), normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}, for, fix: {aa, aaa (not for graphics)}: for each level of `for`, the closest color that meets it, drawn the same way, in the model of the measured color (as the Color Wheel stores a pick): the same OKLCH hue with the lightness raised or lowered, whichever takes the smaller step, and the chroma lowered where sRGB cannot show it, that also meets the level with the color, the background, the art below each group or layer, the opacities, and the color and alpha each level gives rounded to 8 bits per channel; null when the color already meets the level, or when no lightness of its hue does}",
+            "{color?: a color (#rrggbbaa and #rgba are refused; default the active Fill or Stroke proxy's color, or its selected gradient stop or freeform point, or a gradient mesh's first picked point; a picked object's solid color mixed towards the fill that stains its dynamic symbol instance), against?: a color or \"below\" (default: the color VectorCraft draws at the center of the selection's bounds with the selected objects hidden, as the canvas shows it without template layers and guides; a picked object of a dynamic symbol instance hides only itself and is measured at its own center; needs a selection), opacity?: 0..100 (default the opacity the proxy's color is drawn with: the object's opacity times that of its groups and layer (for a picked symbol object, also of its instance and the groups of the symbol's art around it), its fill's or stroke's row (not for type's character paint) and a stop's or point's own, a translucent group or layer drawing the art inside it, the art behind the object included, over what is outside it; 100 for a given `color`), for?: normalText|largeText|graphics (default normalText: the category `fix` answers for)} (with \"below\", a color drawn with a blend mode other than Normal over art that is not one color where it is read is an error) the WCAG 2 contrast ratio (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio) of the color, drawn at that opacity over the background with the blend modes the proxy's color is drawn with (its row's, the object's and those of its groups and layer, innermost first, each blending the result with the art below it inside the object, groups and layer around it, the object's rows below its row included (with `against` or `opacity` given, with the background); inside an object, group or layer that isolates its blending, the modes blend only with the art it holds; Normal for a given `color`), against the background, in display sRGB: normal text needs 4.5:1 for AA and 7:1 for AAA, large text 3:1 and 4.5:1, and graphics 3:1 for AA; the unrounded ratio is compared → {ratio, against: \"#rrggbb\" (the background in working RGB, as `against` takes it; the sampled one rounded to 8 bits, so giving it back answers the same ratio unless `opacity` is omitted and a group or layer around the object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over rows below it, since a given background stands for the art below each such level), normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}, for, fix: {aa, aaa (not for graphics)}: for each level of `for`, the closest color that meets it, drawn the same way, in the model of the measured color (as the Color Wheel stores a pick): the same OKLCH hue with the lightness raised or lowered, whichever takes the smaller step, and the chroma lowered where sRGB cannot show it, that also meets the level with the color, the background, the art below each group or layer, the opacities, and the color and alpha each level gives rounded to 8 bits per channel (16 lightnesses are tested on each side and the first that passes is narrowed down, so where the passing ones fall apart in more than one stretch, a nearer one between two tested can be missed); null when the color already meets the level, or when no lightness of its hue does}",
             always,
             contrast
         ),
@@ -1208,6 +1208,21 @@ pub fn contrast_measure(s: &Session, p: &Value) -> Result<(Value, Backdrop)> {
 /// The color `color.contrast` measures for params `p`, as stored (before a symbol's stain), and
 /// what it measures it against.
 fn contrast_backdrop(s: &Session, p: &Value) -> Result<(Color, Backdrop)> {
+    let (color, backdrop) = contrast_reading(s, p, true)?;
+    let color = color.ok_or_else(|| bad("color.contrast", no_color()))?;
+    Ok((color, backdrop))
+}
+
+/// What a color picked for the active proxy would be measured against by `color.contrast` with
+/// params `p` (without `color`), also when the proxy has no color to measure (None, a pattern): the
+/// Color Wheel's contrast lines show where a pick would pass.
+pub fn contrast_pick_backdrop(s: &Session, p: &Value) -> Result<Backdrop> {
+    contrast_reading(s, p, false).map(|(_, backdrop)| backdrop)
+}
+
+/// [`contrast_backdrop`], with None for the color when the proxy has none, which is an error when
+/// `need_color`.
+fn contrast_reading(s: &Session, p: &Value, need_color: bool) -> Result<(Option<Color>, Backdrop)> {
     const C: &str = "color.contrast";
     check_numbers(p, &["opacity"], C)?;
     let opacity = match p.get("opacity").and_then(Value::as_f64) {
@@ -1222,18 +1237,25 @@ fn contrast_backdrop(s: &Session, p: &Value) -> Result<(Color, Backdrop)> {
     let given = p.get("color").is_some_and(|v| !v.is_null());
     let (color, drawn) = match p.get("color") {
         None | Some(Value::Null) => proxy_color(s, opacity.is_some(), below).map_err(|e| bad(C, e))?,
-        Some(v) => (color_value(v).ok_or_else(|| bad(C, "invalid `color`"))?, Drawn::default()),
+        Some(v) => (Some(color_value(v).ok_or_else(|| bad(C, "invalid `color`"))?), Drawn::default()),
     };
+    if need_color && color.is_none() {
+        return Err(bad(C, no_color()));
+    }
     let rich_black = s.prefs.black_on_screen == "rich";
     let cms = vectorcraft_color::cms::active();
     let shown = |c: &Color| shown_rgb(&cms, rich_black, c);
     let to_8bit = |c: [f32; 3]| c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    // Whether the background read is one color across its pixels.
+    let mut uniform = true;
     // The background in display sRGB, and as the working RGB `#rrggbb` a given `against` reads as.
     let (against, written) = match p.get("against").filter(|_| !below) {
         None => {
             // The sample in working RGB, rounded to 8 bits: the background the answer writes is the
             // one the ratio uses, and giving it back answers the same ratio.
-            let working = to_8bit(cms.srgb_to_rgb(color_below(s, rich_black, None, &[], None).map_err(|e| bad(C, e))?.0));
+            let ((sample, _), one) = color_below(s, rich_black, None, &[], None).map_err(|e| bad(C, e))?;
+            uniform &= one;
+            let working = to_8bit(cms.srgb_to_rgb(sample));
             (cms.rgb_to_srgb(working.map(|v| f32::from(v) / 255.0)), working)
         }
         Some(v) => {
@@ -1275,6 +1297,8 @@ fn contrast_backdrop(s: &Session, p: &Value) -> Result<(Color, Backdrop)> {
     let mut passes = vec![];
     let mut alpha = 1.0f32;
     let mut alone = 1.0f32;
+    // Whether a level so far read art that is not one color.
+    let mut mixed = false;
     for (k, step) in steps.iter().enumerate() {
         if step.blend == BlendMode::Normal && step.opacity >= 1.0 && alpha >= 1.0 && alone >= 1.0 {
             continue;
@@ -1283,19 +1307,29 @@ fn contrast_backdrop(s: &Session, p: &Value) -> Result<(Color, Backdrop)> {
         let scope = above.iter().find(|a| a.isolate);
         let full = above.iter().filter(|a| a.blend != BlendMode::Normal || a.opacity < 1.0).map(|a| &a.within).collect::<Vec<_>>();
         let read = |scope: Option<&Part>| color_below(s, rich_black, step.hide.as_ref(), &full, scope).map_err(|e| bad(C, e));
-        let backdrop = match scope {
-            Some(_) if !sampled => ([0.0; 3], 0.0),
-            None if !sampled => (against, 1.0),
+        let (backdrop, one) = match scope {
+            Some(_) if !sampled => (([0.0; 3], 0.0), true),
+            None if !sampled => ((against, 1.0), uniform),
             // The background itself, as the answer writes it.
-            None if step.hide.is_none() && full.is_empty() => (against, 1.0),
+            None if step.hide.is_none() && full.is_empty() => ((against, 1.0), uniform),
             _ => read(scope.map(|a| &a.within))?,
         };
         // The alpha of the art below the level inside the level around it, while a blending level
         // lies further out (none for a given background).
-        let inner = match above.first() {
-            Some(around) if sampled && above.iter().take_while(|a| !a.isolate).any(blends) => read(Some(&around.within))?.1,
-            _ => 0.0,
+        let (inner, inner_one) = match above.first() {
+            Some(around) if sampled && above.iter().take_while(|a| !a.isolate).any(blends) => {
+                let ((_, a), one) = read(Some(&around.within))?;
+                (a, one)
+            }
+            _ => (0.0, true),
         };
+        // A blend mode mixes the color with the art below it pixel by pixel, which one color read for
+        // art of several colors does not stand for, also when that art reaches it through the levels
+        // inside it.
+        mixed |= !one || !inner_one;
+        if mixed && step.blend != BlendMode::Normal && step.opacity > 0.0 {
+            return Err(bad(C, "the art behind the selection is not one color where it is read, and the color blends with it: give `against`"));
+        }
         let pass = Pass { blend: step.blend, opacity: step.opacity, backdrop, blends: blends(step), isolate: step.isolate, inner };
         (_, alpha, alone) = pass.draw(([0.0; 3], alpha, alone));
         passes.push(pass);
@@ -1415,8 +1449,9 @@ fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
 /// it is drawn ([`Drawn`]). With `given_opacity`, the opacities of the selected objects are not
 /// compared, since the given opacity takes their place; with `below` (the background is sampled),
 /// objects in different translucent or blending groups or layers differ, since the art below each
-/// such level is read with it hidden.
-fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Result<(Color, Drawn), String> {
+/// such level is read with it hidden. The color is None when the proxy has none (None, a pattern),
+/// and the drawing is then the one a solid color in its place would have.
+fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Result<(Option<Color>, Drawn), String> {
     let stroke = !s.fill_active;
     let (fill_mixed, stroke_mixed) = s.proxy_mixed();
     if if stroke { stroke_mixed } else { fill_mixed } {
@@ -1471,20 +1506,28 @@ fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Re
     } else {
         drawing = source()?.unwrap_or_default();
     }
-    let no_color = || "the active fill or stroke has no color: give `color`".to_string();
-    match if stroke { stroke_paint } else { fill } {
-        Paint::Solid { color, .. } => Ok((color, drawing)),
+    let found = match if stroke { stroke_paint } else { fill } {
+        Paint::Solid { color, .. } => Some((color, drawing.clone())),
         Paint::Gradient(g) if g.gradient.kind == vectorcraft_color::GradientKind::Freeform => {
             let f = g.freeform_on(vectorcraft_geom::Rect::new(0.0, 0.0, 1.0, 1.0));
             let i = s.selected_freeform_point().filter(|i| *i < f.points.len()).unwrap_or(0);
-            f.points.get(i).map(|pt| (pt.color, at(&drawing, pt.opacity))).ok_or_else(no_color)
+            f.points.get(i).map(|pt| (pt.color, at(&drawing, pt.opacity)))
         }
         Paint::Gradient(g) => {
             let i = s.selected_stop().unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
-            g.gradient.stops.get(i).map(|st| (st.color, at(&drawing, st.opacity))).ok_or_else(no_color)
+            g.gradient.stops.get(i).map(|st| (st.color, at(&drawing, st.opacity)))
         }
-        Paint::None | Paint::Pattern { .. } => Err(no_color()),
-    }
+        Paint::None | Paint::Pattern { .. } => None,
+    };
+    Ok(match found {
+        Some((color, drawn)) => (Some(color), drawn),
+        None => (None, drawing),
+    })
+}
+
+/// The message for an active fill or stroke with no color to measure.
+fn no_color() -> String {
+    "the active fill or stroke has no color: give `color`".to_string()
 }
 
 /// `drawing` with a stop's or point's `opacity`, which applies where its paint is drawn: in its
@@ -1605,14 +1648,14 @@ fn enclosing(s: &Session, id: NodeId) -> Vec<Level> {
 /// hidden in place of the selection, or for [`Part::Rows`], the proxy's row and the rows above it;
 /// the objects of `full` draw at full opacity in Normal mode; and with `scope` (a group or layer
 /// around the selection, or the proxy's objects), only the art inside it is drawn, over nothing,
-/// without artboards.
+/// without artboards. Also whether the square's pixels are all one color.
 fn color_below(
     s: &Session,
     rich_black: bool,
     hide: Option<&Part>,
     full: &[&Part],
     scope: Option<&Part>,
-) -> std::result::Result<([f32; 3], f32), String> {
+) -> std::result::Result<(([f32; 3], f32), bool), String> {
     super::has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
     let ids = st.selection.objects.clone();
@@ -1741,8 +1784,10 @@ fn color_below(
     let img = vectorcraft_render::Renderer::new().render_region_with(copy.as_ref().unwrap_or(&st.doc), region, BELOW_SCALE, &opts);
     let px = img.pixels.as_chunks::<4>().0;
     if px.is_empty() {
-        return Ok(if scope.is_none() { ([1.0; 3], 1.0) } else { ([0.0; 3], 0.0) });
+        return Ok((if scope.is_none() { ([1.0; 3], 1.0) } else { ([0.0; 3], 0.0) }, true));
     }
+    // Whether the pixels are one color, to within one step of 255 per channel.
+    let uniform = px.first().is_none_or(|first| px.iter().all(|p| p.iter().zip(first).all(|(a, b)| a.abs_diff(*b) <= 1)));
     // The pixels are premultiplied: the average color is their sum over their alpha's.
     let mut sum = [0.0f64; 4];
     for p in px {
@@ -1752,10 +1797,10 @@ fn color_below(
     }
     let alpha = sum[3] / (px.len() as f64 * 255.0);
     if alpha <= 0.0 {
-        return Ok(([0.0; 3], 0.0));
+        return Ok((([0.0; 3], 0.0), uniform));
     }
     let rgb = [0, 1, 2].map(|i| (sum[i] / (px.len() as f64 * 255.0) / alpha).clamp(0.0, 1.0) as f32);
-    Ok((rgb, alpha as f32))
+    Ok(((rgb, alpha as f32), uniform))
 }
 
 /// Hides fill or stroke row `item` of `n` (else its topmost row of the kind) and every row above it.

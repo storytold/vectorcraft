@@ -124,7 +124,10 @@ pub fn peak_between(mut lo: f64, mut hi: f64, f: &dyn Fn(f64) -> f64) -> f64 {
 /// When no step passes, the highest ratio between the neighbors of the highest step is looked for,
 /// so a color that passes only in a narrow band between white and black (as under a Difference
 /// blend) is found too. `srgb` itself when it passes, and None when nothing passes. The work is
-/// bounded: at most 167 colors are tested.
+/// bounded: at most 167 colors are tested. The answer is the nearest passing color when the colors
+/// that pass on each side form one stretch up to white or black, as for a plain contrast ratio.
+/// When `ratio` lets colors pass in more than one stretch, a stretch that lies between two tested
+/// steps before the first passing one is missed, and a farther color can be returned.
 pub fn closest_passing(srgb: [f32; 3], minimum: f64, ratio: &dyn Fn([f32; 3]) -> f64) -> Option<[f32; 3]> {
     let passes = |c: [f32; 3]| ratio(c) >= minimum;
     let srgb = srgb.map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 });

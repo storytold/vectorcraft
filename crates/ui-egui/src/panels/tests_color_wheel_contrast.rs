@@ -125,6 +125,18 @@ fn the_background_is_the_art_behind_the_selection() {
     assert_eq!(chip.value().as_deref(), Some("FFFF00"));
 }
 
+/// A pinned 100 % K is measured as black with a rich black Appearance of Black, and the Background
+/// chip names the black the ratio uses.
+#[test]
+fn the_background_chip_shows_the_black_a_pinned_k_is_measured_as() {
+    let mut app = app("#ffffff");
+    app.run("ui.colorWheel", json!({"contrastBackground": {"c": 0, "m": 0, "y": 0, "k": 1}})).unwrap();
+    app.session.prefs.black_on_screen = "rich".into();
+    let h = harness(app);
+    assert!(shows(&h, "21.00:1"), "white on black");
+    assert_eq!(h.get_by_label("Background").value().as_deref(), Some("000000"));
+}
+
 #[test]
 fn nothing_selected_and_nothing_pinned_shows_no_ratio() {
     let mut app = app("#000000");
@@ -186,8 +198,8 @@ fn a_drag_on_the_wheel_reads_the_background_only_with_the_ratio() {
     assert_eq!(measured(&h).as_deref(), Some("#ffffff"));
 }
 
-/// With no color to measure the row has no ratio, and the chip still shows the background, read on
-/// its own, and read again for another selection during an interaction.
+/// With no color to measure the row has no ratio, and the chip still shows the background a pick
+/// would be measured against, read again for another selection during an interaction.
 #[test]
 fn a_paint_with_no_color_still_shows_the_background() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -203,12 +215,13 @@ fn a_paint_with_no_color_still_shows_the_background() {
     app.run("ui.colorWheel", json!({"contrast": true})).unwrap();
     let mut h = harness(app);
     assert!(shows(&h, "—"), "a fill of None has no ratio");
-    let hex = |h: &Harness<'static, VectorcraftApp>| behind(h).and_then(|(_, hex)| hex);
-    assert_eq!(hex(&h).as_deref(), Some("#ffff00"));
+    let hex = |h: &Harness<'static, VectorcraftApp>| h.get_by_label("Background").value();
+    assert_eq!(hex(&h).as_deref(), Some("FFFF00"));
+    assert!(behind(&h).is_none(), "the background a pick is measured against was not read again on its own");
     h.state_mut().run("select.set", json!({"ids": [b]})).unwrap();
     h.state_mut().session.begin_interaction("test").unwrap();
     h.run_steps(2);
-    assert_eq!(hex(&h).as_deref(), Some("#ffffff"), "the other selection's background is read during the interaction");
+    assert_eq!(hex(&h).as_deref(), Some("FFFFFF"), "the other selection's background is read during the interaction");
 }
 
 /// With no color to measure, a move during an interaction reads the background again at the
@@ -224,14 +237,14 @@ fn a_move_during_an_interaction_reads_the_background_again() {
     app.run("paint.setFill", json!({"none": true})).unwrap();
     app.run("ui.colorWheel", json!({"contrast": true})).unwrap();
     let mut h = harness(app);
-    let hex = |h: &Harness<'static, VectorcraftApp>| behind(h).and_then(|(_, hex)| hex);
+    let hex = |h: &Harness<'static, VectorcraftApp>| h.get_by_label("Background").value();
     h.state_mut().session.begin_interaction("test").unwrap();
     h.run_steps(2);
-    assert_eq!(hex(&h).as_deref(), Some("#ffff00"));
+    assert_eq!(hex(&h).as_deref(), Some("FFFF00"));
     h.state_mut().run("object.move", json!({"dx": 110, "dy": 0})).unwrap();
     assert!(h.state().session.in_interaction(), "the move is part of the interaction");
     h.run_steps(2);
-    assert_eq!(hex(&h).as_deref(), Some("#ffffff"), "the background at the new place");
+    assert_eq!(hex(&h).as_deref(), Some("FFFFFF"), "the background at the new place");
 }
 
 /// An interaction keeps no answer for another selection: the row asks again, and the chip shows

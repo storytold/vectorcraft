@@ -1,15 +1,15 @@
 //! The Color Wheel panel's contrast lines on the box's field and the wheel's square, and the chip of
 //! the closest passing color in the contrast row, drawn headless.
 
-use egui::vec2;
+use egui::{Event, Modifiers, vec2};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use serde_json::json;
 use vectorcraft_color::{Color, Paint, cms, hsb_to_rgb};
 use vectorcraft_engine::Session;
 
-use super::color_wheel::{LINES, Lines, LinesKey, box_pick, show};
-use super::pstate;
+use super::color_wheel::{LINES, Lines, LinesKey, box_pick, contrast_lines, show};
+use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::color_picker::Channel;
 
@@ -113,6 +113,54 @@ fn a_line_that_runs_up_the_field_is_found() {
     let (xs, ys): (Vec<f32>, Vec<f32>) = line.iter().copied().unzip();
     let spread = |v: &[f32]| v.iter().copied().fold(f32::NEG_INFINITY, f32::max) - v.iter().copied().fold(f32::INFINITY, f32::min);
     assert!(spread(&ys) > 0.9 && spread(&xs) < 0.05, "{line:?}");
+}
+
+/// A passing band around x = 0.515625 that is narrower than the samples near the top and wider
+/// below: every point of its center passes, so no line crosses it, and its two edges run on either
+/// side of it from the top to the bottom.
+#[test]
+fn a_band_that_widens_past_the_samples_is_not_cut_across() {
+    let center = 0.515625;
+    let ratio = |x: f32, y: f32| 4.5 + 0.009 + 0.013 * f64::from(y) - f64::from((x - center).abs());
+    let lines = contrast_lines(&ratio, &[4.5], 32, true);
+    let aa = lines.first().expect("one level");
+    for line in aa {
+        for pair in line.windows(2) {
+            let [p, q] = pair else { continue };
+            assert!((p.0 - center) * (q.0 - center) > 0.0, "{p:?} to {q:?} crosses the passing center");
+        }
+    }
+    let side = |left: bool| aa.iter().flatten().filter(|p| (p.0 < center) == left).map(|p| p.1).collect::<Vec<_>>();
+    for points in [side(true), side(false)] {
+        let low = points.iter().copied().fold(f32::INFINITY, f32::min);
+        let high = points.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        assert!(low < 0.05 && high > 0.95, "an edge runs from the top to the bottom: {low} to {high}");
+    }
+}
+
+/// With a fill of None the row shows a dash, and the field still marks where a pick there passes.
+#[test]
+fn a_fill_of_none_keeps_its_lines() {
+    let mut app = app("box", "hue");
+    app.run("paint.setFill", json!({"none": true})).unwrap();
+    let h = harness(app);
+    assert!(h.query_by_label("—").is_some(), "no color to measure");
+    let lines = lines(&h);
+    assert!(lines.first().is_some_and(|aa| !aa.is_empty()), "an AA line: {lines:?}");
+}
+
+/// While Alt is held a pick goes to the other proxy, so the field's lines, which measure the active
+/// one, are not drawn; they come back once Alt is let go.
+#[test]
+fn the_lines_are_hidden_while_alt_is_held() {
+    let mut h = harness(app("box", "hue"));
+    set_pstate(&h.ctx, LINES, None::<(LinesKey, Lines)>);
+    h.event(Event::ModifiersChanged(Modifiers::ALT));
+    h.run_steps(2);
+    assert!(pstate::<Option<(LinesKey, Lines)>>(&h.ctx, LINES).is_none(), "no lines with Alt held");
+    h.event(Event::ModifiersChanged(Modifiers::NONE));
+    h.run_steps(2);
+    assert!(pstate::<Option<(LinesKey, Lines)>>(&h.ctx, LINES).is_some(), "the lines are back");
 }
 
 #[test]

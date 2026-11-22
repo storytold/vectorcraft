@@ -66,7 +66,7 @@ use vectorcraft_color::oklab::{self, CHROMA_FULL};
 use vectorcraft_color::wcag::{self, Category};
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, hsl_to_rgb, rgb_to_hsb, rgb_to_hsl};
 use vectorcraft_doc::{ColorMode, NodeId};
-use vectorcraft_engine::cmd::{Backdrop, contrast_measure};
+use vectorcraft_engine::cmd::{Backdrop, contrast_measure, contrast_pick_backdrop};
 
 use super::color::{Target, apply, wheel_target};
 use super::{color_json, pstate, set_pstate};
@@ -812,14 +812,20 @@ type FieldPoint = (f32, f32);
 /// its two crossings.
 type Bands = Vec<(f32, FieldPoint, FieldPoint)>;
 
+/// The edge from sample (i, j) across (true) or down (false).
+type EdgeKey = (usize, usize, bool);
+
 /// Where the contrast `ratio_at` a field point crosses each of `minimums`: per minimum, polylines in
 /// field coordinates. The field is sampled on a grid of `n` + 1 columns and rows, and each cell
-/// whose corners fall on both sides gets a segment between the crossings on its edges, placed by
-/// bisection (marching squares; a cell with two opposite corners passing is split by its center).
+/// whose edges are crossed gets segments between the crossings on its edges, placed by bisection
+/// (marching squares; a cell crossed more than twice, as one with two opposite corners passing, is
+/// split by its center).
 /// With `narrow`, around a failing sample higher than its neighbors in a column or a row, the highest
 /// ratio is looked for, so a passing band narrower than the samples gets its two edges too, joined
-/// from column to column or from row to row. Segments that share an end are joined into one
-/// polyline.
+/// from column to column or from row to row. Where no band on the next or the previous line joins
+/// one, its two crossings count among the crossings of the cell on that side, so a band that widens
+/// past the samples or ends there is joined to the cell's other crossings instead of being cut
+/// across. Segments that share an end are joined into one polyline.
 pub(super) fn contrast_lines(ratio_at: &dyn Fn(f32, f32) -> f64, minimums: &[f64], n: usize, narrow: bool) -> Lines {
     let n = n.max(1);
     let at = |i: usize| i as f32 / n as f32;
@@ -850,28 +856,10 @@ pub(super) fn contrast_lines(ratio_at: &dyn Fn(f32, f32) -> f64, minimums: &[f64
                 })
             };
             let mut segments: Vec<[FieldPoint; 2]> = vec![];
-            for i in 0..n {
-                for j in 0..n {
-                    let (top, right, bottom, left) = (edge(i, j, true), edge(i + 1, j, false), edge(i, j + 1, true), edge(i, j, false));
-                    match (top, right, bottom, left) {
-                        (Some(t), Some(rt), Some(b), Some(l)) => {
-                            // Opposite corners pass: the center says which pair of them it joins.
-                            let half = 0.5 / n as f32;
-                            if pass((at(i) + half, at(j) + half)) == (r(i, j) >= min) {
-                                segments.extend([[t, rt], [b, l]]);
-                            } else {
-                                segments.extend([[t, l], [rt, b]]);
-                            }
-                        }
-                        _ => {
-                            let found: Vec<FieldPoint> = [top, right, bottom, left].into_iter().flatten().collect();
-                            if let &[p, q] = found.as_slice() {
-                                segments.push([p, q]);
-                            }
-                        }
-                    }
-                }
-            }
+            // The crossings of the bands narrower than the samples on each edge between samples, with
+            // whether no band on the next line (the column to the right, the row below) and no band on
+            // the line before joins the band on that side.
+            let mut loose: HashMap<EdgeKey, Vec<(FieldPoint, [bool; 2])>> = HashMap::new();
             // Bands narrower than the samples, along each column and then each row.
             for across in [false, true].into_iter().filter(|_| narrow) {
                 let point = |k: usize, t: f32| if across { (t, at(k)) } else { (at(k), t) };
@@ -900,11 +888,62 @@ pub(super) fn contrast_lines(ratio_at: &dyn Fn(f32, f32) -> f64, minimums: &[f64
                         found
                     })
                     .collect();
-                for pair in bands.windows(2) {
-                    let [this, next] = pair else { continue };
-                    for (peak, a, b) in this {
-                        if let Some((_, c, d)) = next.iter().find(|(p, ..)| (p - peak).abs() <= 1.5 / n as f32) {
-                            segments.extend([[*a, *c], [*b, *d]]);
+                // The band of `next` that the band peaking at `peak` joins.
+                let joins = |next: &Bands, peak: f32| next.iter().position(|(p, ..)| (p - peak).abs() <= 1.5 / n as f32);
+                for (k, this) in bands.iter().enumerate() {
+                    let next = bands.get(k + 1);
+                    let before = k.checked_sub(1).and_then(|k| bands.get(k));
+                    for (b, &(peak, p, q)) in this.iter().enumerate() {
+                        let joined = next.and_then(|next| joins(next, peak).and_then(|m| next.get(m)));
+                        if let Some(&(_, c, d)) = joined {
+                            segments.extend([[p, c], [q, d]]);
+                        }
+                        let joined_before = before.is_some_and(|before| before.iter().any(|(bp, ..)| joins(this, *bp) == Some(b)));
+                        let e = ((peak * n as f32).floor() as usize).min(n - 1);
+                        let key = if across { (e, k, true) } else { (k, e, false) };
+                        let open = [joined.is_none(), !joined_before];
+                        loose.entry(key).or_default().extend([(p, open), (q, open)]);
+                    }
+                }
+            }
+            for i in 0..n {
+                for j in 0..n {
+                    let (x0, y0, w) = (at(i), at(j), 1.0 / n as f32);
+                    // Where point `p` on edge `s` (0 to 3: top, right, bottom, left) lies going around
+                    // the cell clockwise from its top left corner.
+                    let place = |s: usize, p: FieldPoint| match s {
+                        0 => (p.0 - x0) / w,
+                        1 => 1.0 + (p.1 - y0) / w,
+                        2 => 2.0 + (x0 + w - p.0) / w,
+                        _ => 3.0 + (y0 + w - p.1) / w,
+                    };
+                    // The cell's edges, each with the side of the edge's line the cell is on: after
+                    // its top and left edges' lines (0) and before its right and bottom edges' (1).
+                    let sides = [((i, j, true), 0), ((i + 1, j, false), 1), ((i, j + 1, true), 1), ((i, j, false), 0)];
+                    let mut around: Vec<(f32, FieldPoint)> = vec![];
+                    for (s, (key, side)) in sides.into_iter().enumerate() {
+                        let (ei, ej, across) = key;
+                        around.extend(edge(ei, ej, across).map(|p| (place(s, p), p)));
+                        let band = loose.get(&key).into_iter().flatten().filter(|(_, open)| open.get(side).copied().unwrap_or(false));
+                        around.extend(band.map(|&(p, _)| (place(s, p), p)));
+                    }
+                    around.sort_by(|a, b| a.0.total_cmp(&b.0));
+                    let m = around.len();
+                    if m < 2 {
+                        continue;
+                    }
+                    // Going around from the top left corner, the side changes at each crossing. Where
+                    // the crossings leave more than one passing stretch of the edges, the center says
+                    // whether those stretches join inside the cell (the segments cut off the failing
+                    // stretches) or not (they cut off the passing ones).
+                    let corner = r(i, j) >= min;
+                    let half = 0.5 / n as f32;
+                    let cut = if m == 2 { !corner } else { !pass((x0 + half, y0 + half)) };
+                    // The stretch between crossings 0 and 1 is on the side the corner is not.
+                    let start = usize::from(corner == cut);
+                    for k in (start..m).step_by(2) {
+                        if let (Some(&(_, p)), Some(&(_, q))) = (around.get(k), around.get((k + 1) % m)) {
+                            segments.push([p, q]);
                         }
                     }
                 }
@@ -1071,8 +1110,12 @@ fn measure(app: &VectorcraftApp, ui: &Ui) -> Measured {
         (Some((k, answer)), Some((kb, backdrop))) if k == key && kb == key => Measured { answer, backdrop },
         _ => {
             let against = pinned.as_ref().map_or_else(|| json!("below"), color_json);
-            let m = contrast_measure(&app.session, &json!({ "against": against, "for": category.id() })).ok();
-            let (answer, backdrop) = m.map_or((None, None), |(r, b)| (Some(r), Some(b)));
+            let p = json!({ "against": against, "for": category.id() });
+            // With no color to measure (a fill of None, a pattern), a pick there is still measured.
+            let (answer, backdrop) = match contrast_measure(&app.session, &p) {
+                Ok((r, b)) => (Some(r), Some(b)),
+                Err(_) => (None, contrast_pick_backdrop(&app.session, &p).ok()),
+            };
             set_pstate(ui.ctx(), RATIO, Some((key.clone(), answer.clone())));
             set_pstate(ui.ctx(), BACKDROP, Some((key, backdrop.clone())));
             Measured { answer, backdrop }
@@ -1082,17 +1125,20 @@ fn measure(app: &VectorcraftApp, ui: &Ui) -> Measured {
 
 /// The contrast row: the background's chip, the ratio cut off at two decimals, the AA and AAA
 /// results for the chosen category, and a chip of the closest color that passes the first level the
-/// color fails; a dash when there is no background or no color to measure. Without a pinned
-/// background the first chip shows the background in the answer. Only when there is no answer is
-/// the background read on its own ([`background`]), so the chip still shows it. The fix chip keeps
-/// its space while hidden. Returns the fix color when its chip is clicked.
+/// color fails, when `color.contrast` finds one for that level; a dash when there is no background
+/// or no color to measure. The first chip shows the background the answer measured against, pinned
+/// or not, else the one a pick would be measured against. Only when there is neither is the
+/// background read on its own ([`background`]), so the chip still shows it. The fix chip keeps its
+/// space while hidden. Returns the fix color when its chip is clicked.
 fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui, m: &Measured) -> Option<Color> {
     let category = app.ui.color_wheel.contrast_for;
     let pinned = app.ui.color_wheel.contrast_background;
     let answer = m.answer.as_ref();
-    // The background the ratio was measured against.
-    let measured = answer.filter(|_| pinned.is_none()).and_then(|r| r["against"].as_str()).and_then(Color::from_hex);
-    let chip = match pinned.or(measured) {
+    // The background the ratio was measured against, or a pick would be (a pinned 100 % K shows
+    // as black with a rich black Appearance of Black).
+    let against = answer.and_then(|r| r["against"].as_str().map(str::to_string)).or_else(|| m.backdrop.as_ref().map(Backdrop::against_hex));
+    let measured = against.as_deref().and_then(Color::from_hex);
+    let chip = match measured.or(pinned) {
         Some(c) => Some(c),
         None => background(app, ui),
     };
@@ -1654,7 +1700,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         set_pstate(ui.ctx(), ROWS_LIVE, None::<Sliders>);
     }
     if let Some(m) = &measured {
-        if let Some(backdrop) = &m.backdrop {
+        // With Alt held a pick goes to the other proxy, which the lines do not measure.
+        if let Some(backdrop) = m.backdrop.as_ref().filter(|_| !super::alt_held(ui)) {
             let lines = lines_for(app, ui, backdrop, &tgt, hsb, cmyk_doc);
             draw_contrast_lines(ui, field_rect, &lines);
         }
