@@ -249,8 +249,7 @@ fn advance(app: &mut VectorcraftApp, mut closing: Closing, mut step: GuardStep<u
 #[cfg(test)]
 pub(crate) fn ready_for_test(app: &mut VectorcraftApp) -> egui::Context {
     let ctx = crate::testing::ui_context();
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.ui(ui));
-    out.textures_delta.clear();
+    crate::testing::app_frame(app, &ctx, egui::RawInput::default());
     ctx
 }
 

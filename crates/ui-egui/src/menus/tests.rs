@@ -892,7 +892,7 @@ fn edit_views_opens_its_dialog_on_the_saved_views() {
 }
 
 fn app_with_a_rectangle() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     app

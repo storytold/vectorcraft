@@ -14,8 +14,8 @@ fn app_with(n: usize) -> VectorcraftApp {
 }
 
 /// One headless frame of the canvas panel's body (the tabs and the canvas or panes) on a
-/// 1200 × 800 window, then the floating document windows, which egui draws inside the window →
-/// the shapes it drew, `Shape::Vec`s flattened.
+/// 1200 × 800 window, then the floating document windows, which egui draws inside the window, run
+/// as the hosts run a frame → the shapes it drew, `Shape::Vec`s flattened.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<Shape> {
     fn flat(s: Shape, out: &mut Vec<Shape>) {
         match s {
@@ -29,11 +29,10 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>
         events,
         ..Default::default()
     };
-    let mut out = ctx.run_ui(raw, |ui| {
+    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| {
         app.canvas_area(ui);
         show(app, ui);
     });
-    out.textures_delta.clear();
     let mut shapes = vec![];
     out.shapes.into_iter().for_each(|c| flat(c.shape, &mut shapes));
     shapes
@@ -868,11 +867,10 @@ fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Ev
         events,
         ..Default::default()
     };
-    let mut out = ctx.run_ui(raw, |ui| {
+    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| {
         app.canvas_area(ui);
         show(app, ui);
     });
-    out.textures_delta.clear();
     out.platform_output.cursor_icon
 }
 

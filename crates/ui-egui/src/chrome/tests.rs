@@ -34,6 +34,8 @@ impl Shown {
             (*draw)(&mut shown.borrow_mut(), ui);
         });
         fixture.room(room);
+        // The fixture's context is the app's window, as a host's is.
+        app.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
         Shown { fixture, app, draw }
     }
 
@@ -56,6 +58,7 @@ impl Shown {
 
     /// One frame with `events`, then the commands it fired.
     fn frame(&mut self, events: Vec<egui::Event>) -> &mut Self {
+        self.run_fired();
         self.fixture.frame(events);
         self.run_fired();
         self
@@ -63,19 +66,16 @@ impl Shown {
 
     /// Frames with no events until the chrome is at rest, then the commands they fired.
     fn settle(&mut self) -> &mut Self {
+        self.run_fired();
         self.fixture.settle();
         self.run_fired();
         self
     }
 
-    /// Runs the commands the frames since the last call fired, as the window runs them.
+    /// Runs the commands the frames since the last call fired, as the window runs them, and gives the fixture the
+    /// app's input for the next frame.
     fn run_fired(&mut self) {
-        let ctx = self.fixture.ctx().clone();
-        let fired = craft::ui::runtime::frame::take_output(&ctx).fired;
-        let mut app = self.app.borrow_mut();
-        for one in &fired {
-            crate::shortcuts::run_fired(&mut app, &ctx, one);
-        }
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fixture);
     }
 
     /// Moves the fixture's clock on by `seconds` before the next frame.

@@ -757,11 +757,12 @@ mod tests {
 
     use crate::i18n::LangExt as _;
 
-    /// An app over `session` with its menu model built, in English.
+    /// An app over `session` in a window of its own with its menu model built, in English.
     fn app_on(session: Session) -> VectorcraftApp {
         crate::i18n::set_current(Lang::EN);
-        let mut app = VectorcraftApp::new(session, crate::Services::default());
-        crate::menus::model::refresh(&mut app, &crate::testing::ui_context());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(session, crate::Services::default()));
+        let ctx = app.ui_ctx.clone().unwrap();
+        crate::menus::model::refresh(&mut app, &ctx);
         app
     }
 
@@ -774,7 +775,8 @@ mod tests {
     /// A pick of result `id`: the command its entry runs ([`crate::keymap::command_of`]), fired
     /// from the palette.
     fn pick(app: &mut VectorcraftApp, id: &str) {
-        fire(app, &crate::testing::ui_context(), crate::keymap::command_of(id), FireSource::Palette);
+        let ctx = app.ui_ctx.clone().unwrap();
+        fire(app, &ctx, crate::keymap::command_of(id), FireSource::Palette);
     }
 
     /// Cancels, or confirms, every open dialog.
@@ -1081,7 +1083,8 @@ mod tests {
                 let before = outcome(&picked);
                 pick(&mut picked, id);
                 if row.is_enabled() {
-                    fire(&mut clicked, &crate::testing::ui_context(), item.clone(), FireSource::Menu);
+                    let window = clicked.ui_ctx.clone().unwrap();
+                    fire(&mut clicked, &window, item.clone(), FireSource::Menu);
                     assert_eq!(outcome(&picked), outcome(&clicked), "{id} [state {n}]");
                     compared += 1;
                 } else {
@@ -1743,7 +1746,8 @@ mod tests {
         let before = outcome(&picked);
         pick(&mut picked, shadow);
         let click = CommandRef::with_params(item.command, json!({ "effect": item.effect }));
-        fire(&mut clicked, &crate::testing::ui_context(), click, FireSource::Menu);
+        let window = clicked.ui_ctx.clone().unwrap();
+        fire(&mut clicked, &window, click, FireSource::Menu);
         let after = outcome(&picked);
         assert!(after.0, "the dialog opens: {}", after.2);
         assert_eq!(after.1, before.1, "nothing changes yet");
