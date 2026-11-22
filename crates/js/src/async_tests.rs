@@ -157,3 +157,49 @@ fn es5_and_extendscript_realms_do_not_read_async_functions() {
     syntax_error(&mut Realm::with_options(Options::default(), Limits::default()), "async function f() {}");
     syntax_error(&mut Realm::new(), "var f = async () => 1;");
 }
+
+/// Starts `src` in a realm with `start`, calls `change` once the run has paused, runs it to its
+/// end, and gives the run's value and the realm's options after it.
+fn run_changing_language(src: &str, start: Options, change: impl FnOnce(&mut Realm)) -> (Result<JsValue, RunError>, Options) {
+    let mut realm = Realm::with_options(start, Limits::default());
+    if let Err(e) = realm.start(src) {
+        return (Err(e), realm.interp().options.clone());
+    }
+    match realm.advance(20) {
+        Ok(crate::Progress::Paused) => {}
+        other => panic!("{other:?}"),
+    }
+    change(&mut realm);
+    loop {
+        match realm.advance(1000) {
+            Ok(crate::Progress::Done(v)) => return (Ok(v), realm.interp().options.clone()),
+            Ok(_) => {}
+            Err(e) => return (Err(e), realm.interp().options.clone()),
+        }
+    }
+}
+
+#[test]
+fn language_changes_during_a_run_apply_after_it_in_the_order_they_were_made() {
+    let src = "for (var i = 0; i < 200; i++) {} eval('(async function () {})'); 1";
+    let es2017 = Options { es2017: true, ..Options::default() };
+    let es2015 = Options { es2015: true, ..Options::default() };
+    let (v, o) = run_changing_language(src, es2017.clone(), |r| r.set_es2017(false));
+    assert_eq!(v, Ok(JsValue::Number(1.0)), "the run keeps async functions for the code it evaluates");
+    assert!(o.es2015 && !o.es2017, "{o:?}");
+    let (v, o) = run_changing_language(src, es2017.clone(), |r| {
+        r.set_es2015(false);
+        r.set_es2017(true);
+    });
+    assert_eq!(v, Ok(JsValue::Number(1.0)));
+    assert!(o.es2015 && o.es2017, "the later call wins: {o:?}");
+    let (v, o) = run_changing_language(src, es2017, |r| {
+        r.set_es2017(true);
+        r.set_es2015(false);
+    });
+    assert_eq!(v, Ok(JsValue::Number(1.0)));
+    assert!(!o.es2015 && !o.es2017, "turning es2015 off turns es2017 off: {o:?}");
+    let (v, o) = run_changing_language("for (var i = 0; i < 200; i++) {} 1", es2015, |r| r.set_es2017(true));
+    assert_eq!(v, Ok(JsValue::Number(1.0)));
+    assert!(o.es2015 && o.es2017, "{o:?}");
+}

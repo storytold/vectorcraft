@@ -53,8 +53,9 @@
 //! loop, function declarations in blocks scoped to the block (Annex B.3.3 in sloppy code), arrow
 //! functions (section 14.2), template literals and tagged templates (sections 12.2.9 and
 //! 12.3.7), default and rest parameters (section 14.1) and spread in array literals, calls and
-//! `new` (sections 12.2.5 and 12.3.6.1). Spread reads arrays, strings (by code point) and objects
-//! with a `length`, by index; other values are a `TypeError`. Destructuring, `for … of`, classes,
+//! `new` (sections 12.2.5 and 12.3.6.1). Spread reads arrays by index, reading the length again
+//! before each element, strings and `String` objects by code point, and objects with a `length` by
+//! index; other values are a `TypeError`. Destructuring, `for … of`, classes,
 //! generators and modules stay syntax errors.
 //!
 //! With [`Options::es2015`], the realm also provides `Promise` (ECMA-262 11th edition, section

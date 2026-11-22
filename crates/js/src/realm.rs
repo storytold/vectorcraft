@@ -235,17 +235,38 @@ impl Realm {
     }
 
     /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
-    /// `const` names earlier runs declared stay visible when it is turned off.
+    /// `const` names earlier runs declared stay visible when it is turned off. A run begun with
+    /// [`Realm::start`] that is still going keeps the language it started with for the code it
+    /// evaluates; the new one applies once it ends.
     pub fn set_es2015(&mut self, es2015: bool) {
-        self.interp.set_es2015(es2015);
+        if self.is_running() || self.interp.waiting {
+            self.interp.next_es2015 = Some(es2015);
+            if !es2015 {
+                self.interp.next_es2017 = Some(false);
+            }
+        } else {
+            self.interp.next_es2015 = None;
+            self.interp.next_es2017 = None;
+            self.interp.set_es2015(es2015);
+        }
     }
 
     /// Sets [`Options::es2017`] for the next runs, and for the code they evaluate; on, it also
     /// sets [`Options::es2015`]. Async functions an earlier run made keep running when it is
     /// turned off. Call [`Realm::add_es2015`] too in a realm made without either option, since
-    /// an async function needs `Promise`.
+    /// an async function needs `Promise`. Like [`Realm::set_es2015`], it applies once a run that
+    /// is still going ends.
     pub fn set_es2017(&mut self, es2017: bool) {
-        self.interp.set_es2017(es2017);
+        if self.is_running() || self.interp.waiting {
+            self.interp.next_es2017 = Some(es2017);
+            if es2017 {
+                self.interp.next_es2015 = Some(true);
+            }
+        } else {
+            self.interp.next_es2015 = None;
+            self.interp.next_es2017 = None;
+            self.interp.set_es2017(es2017);
+        }
     }
 
     /// Gives a realm made without [`Options::es2015`] the built-ins that option adds (`Promise`),
@@ -336,6 +357,12 @@ impl Realm {
         interp.resuming = None;
         interp.passing = Value::Undefined;
         interp.end_jobs(result.is_ok());
+        if let Some(es2015) = interp.next_es2015.take() {
+            interp.set_es2015(es2015);
+        }
+        if let Some(es2017) = interp.next_es2017.take() {
+            interp.set_es2017(es2017);
+        }
         match result {
             Ok(v) => {
                 self.rejections = interp.take_unhandled();

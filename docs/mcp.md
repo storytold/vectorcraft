@@ -2620,8 +2620,9 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 `.js` (in any case) also reads these ECMAScript 2015 forms (https://262.ecma-international.org/6.0/): `let` and
 `const` with block scope and their temporal dead zone, a new `let` binding for each `for` loop iteration, function
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
-parameters, and spread in array literals, calls and `new`. Spread reads arrays, strings (by code point) and objects
-with a `length` property, by index, and throws a `TypeError` for any other value; that rule is VectorCraft's own
+parameters, and spread in array literals, calls and `new`. Spread reads arrays by index, reading the length again
+before each element, strings and `String` objects by code point, and objects with a `length` property by index, and
+throws a `TypeError` for any other value; that rule is VectorCraft's own
 until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
 `.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A script run from a
