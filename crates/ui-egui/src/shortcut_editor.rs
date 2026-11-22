@@ -1151,6 +1151,16 @@ pub fn entry(key: &str) -> Option<Entry> {
     entries().iter().find(|e| e.key == key).cloned()
 }
 
+/// The group and label of plug-in item `key` (`plugin:<id>` or `effect:<id>`) with the manifest's
+/// own text, when the item shows the plug-in's name in the UI language from its translations
+/// ([`Entry::english`]); `None` for every other entry.
+pub(crate) fn own_plugin_text_of(key: &str) -> Option<(String, String)> {
+    if !key.starts_with("plugin:") && !key.starts_with("effect:") {
+        return None;
+    }
+    entries().iter().find(|e| e.key == key).and_then(|e| e.english.clone())
+}
+
 /// Entries (other than `except`) whose effective shortcut equals `chord`.
 pub fn conflicts_with(overrides: &Overrides, chord: &str, except: &str) -> Vec<String> {
     let Some(c) = vc_chord(chord) else { return vec![] };
@@ -2788,7 +2798,7 @@ mod tests {
             let text = export_text("VectorCraft Defaults", &ov);
             let km = keymap_with(&ov);
             let names = |tools: bool| -> Vec<String> {
-                entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)).map(|e| format!("{}\t", english_name(e))).collect()
+                entries().iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)).map(|e| format!("{}\t", shown_name(e))).collect()
             };
             let rows = (names(true), names(false));
             (text, km, rows.0, rows.1)
