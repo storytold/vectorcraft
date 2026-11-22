@@ -237,6 +237,8 @@ pub(crate) struct Interp {
     pub(crate) temp_roots: Vec<Value>,
     /// Environments native code is still building.
     temp_envs: Vec<EnvId>,
+    /// Global and eval code whose declarations are being made, before its frame holds it.
+    temp_codes: Vec<Rc<Code>>,
     pub(crate) global: ObjId,
     pub(crate) global_env: EnvId,
     /// The declarative environment inside `global_env` that holds the `let` and `const` names of
@@ -525,6 +527,7 @@ impl Interp {
             frames: Vec::new(),
             temp_roots: Vec::new(),
             temp_envs: Vec::new(),
+            temp_codes: Vec::new(),
             global,
             global_env,
             global_lex,
@@ -809,6 +812,7 @@ impl Interp {
         roots.envs.push(self.global_env);
         roots.envs.push(self.global_lex);
         roots.envs.extend(self.temp_envs.iter().copied());
+        roots.codes.extend(self.temp_codes.iter().map(|c| &**c));
         // A template object stays while its code can still run: while something other than the
         // entries for its code's sites holds the code.
         let mut sites: std::collections::HashMap<*const Code, usize> = std::collections::HashMap::new();
@@ -3285,11 +3289,13 @@ impl Interp {
     /// environment of its `let` and `const` names. A script's `let` and `const` names go in the
     /// global scope ([`Self::declare_global_lexical`]).
     fn instantiate_global(&mut self, code: &Rc<Code>, env: EnvId, var_env: EnvId, is_eval: bool) -> JsResult<EnvId> {
-        // A strict eval's own environment is in no frame yet, so the environments stay reachable
-        // until the code's frame holds them.
+        // A strict eval's own environment and the code are in no frame yet, so they stay
+        // reachable, and the code's charge counted, until the code's frame holds them.
         let mark = self.temp_envs.len();
         self.temp_envs.extend([env, var_env]);
+        self.temp_codes.push(code.clone());
         let r = self.instantiate_global_in(code, env, var_env, is_eval);
+        self.temp_codes.pop();
         self.temp_envs.truncate(mark);
         r
     }

@@ -130,6 +130,9 @@ fn functions_declared_in_blocks_are_scoped_to_the_block() {
     // Only a `let` or `const` around the declaration, a function declared in a block around it, or
     // a parameter keeps the name from being a variable.
     truth("var f; { function f() { return 1; } { function f() { return 2; } } } f() === 1");
+    // A function standing alone as an `if` branch is in a block of its own.
+    truth("var f; { function f() { return 1; } if (true) function f() { return 2; } } f() === 1");
+    truth("var f; if (true) function f() { return 2; } else function f() { return 3; } f() === 2");
     // A labeled function in a block is made when the block is entered.
     truth("{ var result = typeof lf; L: function lf() {} } result === 'function'");
     truth("function f() { { let g; } { function g() {} } return typeof g; } f() === 'function'");

@@ -290,8 +290,13 @@ impl<'a> FnCompiler<'a> {
                     work.extend(list.iter().rev().map(|&st| (st, nested || inner, s)));
                 }
                 Stmt::If { consequent, alternate, .. } => {
-                    work.extend(alternate.iter().map(|&s| (s, nested || inner, scope)));
-                    work.push((*consequent, nested || inner, scope));
+                    // A function declaration standing alone as a branch is in a block of its own
+                    // (Annex B.3.4).
+                    for &branch in alternate.iter().chain([consequent]) {
+                        let s =
+                            if matches!(self.ast.stmt(branch), Some(Stmt::FunctionDecl(_))) { enter(HashSet::new(), HashSet::new()) } else { scope };
+                        work.push((branch, nested || inner, s));
+                    }
                 }
                 Stmt::Labeled { body, .. } => work.push((*body, nested, scope)),
                 Stmt::DoWhile { body, .. } | Stmt::While { body, .. } | Stmt::With { body, .. } => work.push((*body, nested || inner, scope)),
