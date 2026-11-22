@@ -457,8 +457,8 @@ fn members_not_available_yet_check_the_image_first() {
         &mut s,
         &base,
         "var d = app.activeDocument, p = d.placedItems[0], n = d.placedItems.add(), m = [];\
-         try { n.trace; } catch (e) { m.push(e.message); }\
-         p.embed(); try { p.trace; } catch (e) { m.push(e.message); }\
+         try { n.contentVariable; } catch (e) { m.push(e.message); }\
+         p.embed(); try { p.contentVariable; } catch (e) { m.push(e.message); }\
          var r = d.rasterItems[0]; try { r.colorize; } catch (e) { m.push(e.message); }\
          r.remove(); try { r.overprint; } catch (e) { m.push(e.message); }\
          vc.log(m);",

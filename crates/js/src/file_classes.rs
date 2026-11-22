@@ -518,7 +518,7 @@ fn set_hidden(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
     if outcome(i, o, &r)? {
         let fs = i.rooted(std::slice::from_ref(&r), |i| field(i, &r, "fs"))?;
         if matches!(fs, Value::String(_)) {
-            set_slot(i, o, PATH, fs)?;
+            set_path(i, o, fs)?;
         }
     }
     Ok(Value::Undefined)

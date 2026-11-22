@@ -40,11 +40,14 @@ use crate::{DocState, Document, NodeId, NodeKind, Session};
 
 mod images;
 mod save_open;
+mod tracing;
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
 pub const STALE_ITEM: &str = "Stale page item";
+/// The error for a new name given to a `PluginItem`.
+const TRACING_NAME: &str = "The name of a tracing cannot be changed";
 /// The error for a document that was closed, or that came from an earlier run.
 pub const STALE_DOCUMENT: &str = "Stale document";
 /// The error of `index` and `getByName` when nothing matches.
@@ -74,6 +77,7 @@ const ITEM_CLASSES: &[&str] = &[
     "RepeatItem",
     "PlacedDocumentItem",
     "IntertwineItem",
+    "PluginItem",
 ];
 
 /// `app.coordinateSystem`.
@@ -100,6 +104,8 @@ pub(super) struct State {
     presets: RefCell<Vec<Vec<(String, Data)>>>,
     /// What the placed and raster items keep ([`images::State`]).
     images: images::State,
+    /// What the tracings keep ([`tracing::State`]).
+    tracing: tracing::State,
 }
 
 impl State {
@@ -303,6 +309,7 @@ fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
     };
     let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let id = id.ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let id = if class == "PluginItem" { tracing::follow(h, doc.uid, id) } else { id };
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
     if st.doc.node(id).is_none_or(|n| typename(n) != Some(class)) {
@@ -316,6 +323,7 @@ fn typename(n: &crate::doc::Node) -> Option<&'static str> {
     Some(match &n.kind {
         NodeKind::Layer { .. } | NodeKind::RulerGuide { .. } => return None,
         NodeKind::Group { .. } if n.extras().graph.is_some() => "GraphItem",
+        NodeKind::Group { .. } if crate::cmd::is_trace_group(n) => "PluginItem",
         NodeKind::Group { .. } => "GroupItem",
         NodeKind::Path { .. } => "PathItem",
         NodeKind::Compound { .. } => "CompoundPathItem",
@@ -361,7 +369,10 @@ fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
                 NodeKind::RulerGuide { .. } => {}
                 NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
                     out.push(n.id);
-                    walk(children, out);
+                    // The source image an Image Trace object keeps hidden as its first child is
+                    // reached through that object's `tracing`.
+                    let source = usize::from(crate::cmd::is_trace_group(n));
+                    walk(children.get(source..).unwrap_or_default(), out);
                 }
                 _ => out.push(n.id),
             }
@@ -391,9 +402,11 @@ fn top_items(d: &Document) -> Vec<NodeId> {
     out
 }
 
-/// Whether `n` and every object inside it are shown and unlocked.
+/// Whether `n` and every object inside it are shown and unlocked. The source image an Image Trace
+/// object keeps hidden as its first child is part of that object and is not counted.
 fn all_editable(n: &crate::doc::Node) -> bool {
-    n.visible && !n.locked && n.children().is_none_or(|c| c.iter().all(|c| all_editable(c)))
+    let source = usize::from(crate::cmd::is_trace_group(n));
+    n.visible && !n.locked && n.children().is_none_or(|c| c.iter().skip(source).all(|c| all_editable(c)))
 }
 
 /// Whether the object and every layer and group it is in are shown and unlocked.
@@ -1336,6 +1349,13 @@ fn item_set_name(h: &Host, a: &[Data]) -> Answer {
     if name.len() > MAX_TEXT_BYTES {
         return Err(HostError::Range("the name is too long".into()));
     }
+    // An Image Trace object is known by its name, so renaming one would end the tracing.
+    let item = this_item(h, a)?;
+    let tracing =
+        with_doc(h, item.doc, |_, st| st.doc.node(item.id).is_some_and(|n| crate::cmd::is_trace_group(n) && n.name.as_deref() != Some(&**name)));
+    if tracing {
+        return Err(HostError::Error(TRACING_NAME.into()));
+    }
     set_props(h, a, |n| n.name.as_deref().unwrap_or("") == name, json!({"name": name}))
 }
 
@@ -1818,7 +1838,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
-    for (name, members) in ENUMS.iter().chain(save_open::ENUMS).chain(images::ENUMS) {
+    for (name, members) in ENUMS.iter().chain(save_open::ENUMS).chain(images::ENUMS).chain(tracing::ENUMS) {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
@@ -1945,8 +1965,11 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().filter(|c| !images::CLASSES.contains(c)).map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    let own = |c: &&&str| images::CLASSES.contains(c) || tracing::CLASSES.contains(c);
+    classes.extend(ITEM_CLASSES.iter().filter(|c| !own(c)).map(|c| class(c, Some("PageItem"), Vec::new(), None)));
     classes.extend(images::classes(l));
+    tracing::add_trace(&mut classes, l);
+    classes.extend(tracing::classes(l));
     classes.extend(save_open::classes(l));
     classes.push(class("Layer", None, named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name))]), None));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])

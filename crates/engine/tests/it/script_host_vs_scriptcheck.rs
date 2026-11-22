@@ -78,7 +78,7 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
          DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
-         PageItems PlacedItem PlacedItems RasterItem RasterItems RulerUnits ZOrderMethod",
+         PageItems PlacedItem PlacedItems PluginItem RasterItem RasterItems RulerUnits TracingObject TracingOptions ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -121,7 +121,9 @@ const INSIDE: &[(&str, &str)] = &[
     ("PlacedItems.", "prototype"),
     ("PlacedItems.prototype.", "add constructor getByName index length parent removeAll typename"),
     ("PlacedItem.", "prototype"),
-    ("PlacedItem.prototype.", "boundingBox constructor contentVariable contentVariable= embed file file= matrix matrix= relink trace trace="),
+    ("PlacedItem.prototype.", "boundingBox constructor contentVariable contentVariable= embed file file= matrix matrix= relink trace"),
+    ("PluginItem.", "prototype"),
+    ("PluginItem.prototype.", "constructor isTracing tracing"),
     ("RasterItems.", "prototype"),
     ("RasterItems.prototype.", "constructor getByName index length parent removeAll typename"),
     ("RasterItem.", "prototype"),
@@ -129,7 +131,23 @@ const INSIDE: &[(&str, &str)] = &[
         "RasterItem.prototype.",
         "bitsPerChannel boundingBox channels colorants colorants= colorize colorize= colorizedGrayscale constructor \
          contentVariable contentVariable= embedded embedded= file imageColorSpace matrix matrix= overprint overprint= status \
-         trace trace= transparent",
+         trace transparent",
+    ),
+    ("TracingObject.", "prototype"),
+    (
+        "TracingObject.prototype.",
+        "anchorCount areaCount constructor expandTracing imageResolution parent pathCount releaseTracing sourceArt \
+         tracingOptions typename usedColorCount",
+    ),
+    ("TracingOptions.", "prototype"),
+    (
+        "TracingOptions.prototype.",
+        "constructor cornerAngle cornerAngle= fills fills= ignoreWhite ignoreWhite= livePaintOutput livePaintOutput= \
+         loadFromPreset maxColors maxColors= maxStrokeWeight maxStrokeWeight= minArea minArea= minStrokeLength \
+         minStrokeLength= outputToSwatches outputToSwatches= palette palette= parent pathFitting pathFitting= \
+         preprocessBlur preprocessBlur= preset resample resample= resampleResolution resampleResolution= storeToPreset \
+         strokes strokes= threshold threshold= tracingMode tracingMode= typename viewRaster viewRaster= viewVector \
+         viewVector=",
     ),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
@@ -163,6 +181,15 @@ const INSIDE: &[(&str, &str)] = &[
     ("", "ImageColorSpace RasterLinkState"),
     ("ImageColorSpace.", "CMYK DeviceN Grayscale Indexed LAB RGB Separation"),
     ("RasterLinkState.", "DATAFROMFILE DATAMODIFIED NODATA"),
+    // The enumerations of tracings.
+    ("", "TracingModeType ViewRasterType ViewVectorType"),
+    ("TracingModeType.", "TRACINGMODEBLACKANDWHITE TRACINGMODECOLOR TRACINGMODEGRAY"),
+    ("ViewRasterType.", "TRACINGVIEWRASTERADJUSTEDIMAGE TRACINGVIEWRASTERNOIMAGE TRACINGVIEWRASTERORIGINALIMAGE TRACINGVIEWRASTERTRANSPARENTIMAGE"),
+    (
+        "ViewVectorType.",
+        "TRACINGVIEWVECTORNOTRACINGRESULT TRACINGVIEWVECTOROUTLINES TRACINGVIEWVECTOROUTLINESWITHTRACING \
+         TRACINGVIEWVECTORTRACINGRESULT",
+    ),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types

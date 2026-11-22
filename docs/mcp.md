@@ -2756,7 +2756,38 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `matrix` runs `object.transform`; a value that is not finite, a matrix with no area and one that puts a corner of
   the image outside the canvas throw an error with nothing changed. `boundingBox` is the pixel rectangle at one point
   a pixel. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a file is dropped at the
-  end of the run. `contentVariable`, `trace`, `colorants`, `colorize` and `overprint` are not available yet.
+  end of the run. `contentVariable`, `colorants`, `colorize` and `overprint` are not available yet.
+- `PlacedItem.trace()` and `RasterItem.trace()` trace the image with `imageTrace.make` and the Default preset and
+  return the Image Trace object as a `PluginItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PluginItem/), whose
+  `isTracing` is `true` and whose `tracing` is its `TracingObject`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TracingObject/). A `TracingObject` has `sourceArt` (the traced image),
+  `pathCount`, `anchorCount`, `usedColorCount`, `imageResolution`, `tracingOptions`, `parent`, `expandTracing()`
+  (`imageTrace.expand`, which returns the expanded group) and `releaseTracing()` (`imageTrace.release`, which returns
+  the image). `TracingOptions` (https://ai-scripting.docsforadobe.dev/jsobjref/TracingOptions/) has `tracingMode`,
+  `threshold`, `maxColors`, `palette`, `fills`, `strokes`, `ignoreWhite`, `minArea`, `viewRaster`, `viewVector`,
+  `preset`, `parent`, `loadFromPreset(name)` and `storeToPreset(name)`, and the enumerations `TracingModeType`,
+  `ViewRasterType` and `ViewVectorType` hold strings such as `"TracingModeType.TRACINGMODECOLOR"`. VectorCraft's own
+  rules: `trace()` returns once the trace is made. It throws `The image is the source art of a tracing` on an image an
+  Image Trace object holds, and `Linked image is missing` on a linked image whose file is missing. `pathCount` does not
+  count the seam fills of an Abutting trace, `usedColorCount` counts the different fill and stroke paints, and
+  `imageResolution` is the image's pixels per inch as placed, an error for an image placed at different resolutions
+  across and down. Assigning an option, or `loadFromPreset(name)`, traces again with `imageTrace.make`, keeps the
+  source image and the view, and a value the tracing already has runs no command. The `PluginItem`, `TracingObject`
+  and `TracingOptions` follow the new object, and a run traces again at most 10,000 times. `threshold` takes a whole
+  number from 0 to 255, `maxColors` from 2 to 256 and `minArea` (the Noise setting, in pixels) from 0 to the largest
+  image the tracer reads; `fills` and `strokes` cannot both be `false`; `palette` is `""` (automatic), `"Limited"`,
+  `"Full Tone"` or `"Document Library"`; `viewRaster` and `viewVector` take only the pairs that match an Image Trace
+  view. A value of the wrong type throws a `TypeError`, a number out of range a `RangeError`, and nothing changes.
+  `expandTracing(true)` throws `TracingObject.expandTracing(true) is not implemented` with nothing changed. A preset
+  name is a string of at most 256 bytes without `/`, `\`, `:` or control characters. `storeToPreset` returns `false`
+  for a built-in preset name and `Custom`, and throws for any other name, since a script cannot run
+  `imageTrace.presets.save`. A tracing that was expanded, released, deleted, traced again by a command, or whose
+  source image was deleted throws `Stale page item`. A script gets the source image from `sourceArt`, and `pageItems`,
+  `placedItems` and `rasterItems` do not list it. Assigning a different `name` to a `PluginItem` throws
+  `The name of a tracing cannot be changed`. `areaCount`, `cornerAngle`, `livePaintOutput`,
+  `maxStrokeWeight`, `minStrokeLength`, `outputToSwatches`, `pathFitting`, `preprocessBlur`, `resample` and
+  `resampleResolution` throw an error that says they are not implemented. With a script running, `imageTrace.make`
+  stops at the run's stop request and changes nothing.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global

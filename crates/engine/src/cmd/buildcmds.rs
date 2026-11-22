@@ -41,10 +41,10 @@ pub use live_paint::live_paint_gaps;
 pub(crate) use live_paint::{LivePaintMove, check_part_name, clear_part_name, isolated_live_paints, merge_drawn_in_isolation};
 use live_paint::{lp_expand, lp_fill, lp_gap_options, lp_info, lp_make, lp_merge, lp_release, lp_stroke_edge};
 use shape_builder::{sb_copy_region, sb_merge, sb_regions};
-pub(crate) use trace::TracePresetChanges;
 pub use trace::{
     TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES, TracePreset, TracePresetChange, TraceRun, Traced, image_trace_target,
 };
+pub(crate) use trace::{TracePresetChanges, is_seam_fills, is_trace_group, is_trace_source};
 use trace::{
     trace_expand, trace_make, trace_presets_delete, trace_presets_export, trace_presets_import, trace_presets_save, trace_release, trace_set_view,
 };
