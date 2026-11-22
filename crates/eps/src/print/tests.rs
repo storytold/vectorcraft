@@ -612,3 +612,55 @@ fn complete_large_font_fails_before_partial_output() {
     job.define(&used, &mut s).unwrap();
     assert_eq!(procs(&s), face.glyph_count() as usize);
 }
+
+#[test]
+fn type_left_out_for_the_page_limit_sends_none_of_its_glyphs() {
+    let family = vectorcraft_text::FALLBACK_FAMILY;
+    let face = face_of(family);
+    let kept = typed("A", family);
+    let mut both = kept.clone();
+    let layer = both.layers[0].id;
+    let style = CharStyle { font_family: family.into(), size: 24.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let n = Node::new(both.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 90.0), "BCDEFGH", style))));
+    both.insert(Some(layer), 1, n).unwrap();
+    let o = EpsOptions { region: kept.artboards[0].rect, ..EpsOptions::default() };
+    let walk = |d: &Document, max: usize| {
+        let job = RefCell::new(fonts::FontJob::new(PrintFonts::Subset));
+        crate::scene::Scene::new(d, &o).with_fonts(Some(&job)).with_max_body(max).run()
+    };
+    let alone = walk(&kept, usize::MAX);
+    assert_eq!(alone.fonts.values().map(|g| g.len()).sum::<usize>(), 1, "{:?}", alone.fonts);
+    // The second object passes the limit and is left out: only the glyph of the first is used.
+    let page = walk(&both, alone.body.len() + 10);
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert_eq!(page.body, alone.body);
+    assert_eq!(page.fonts, alone.fonts);
+    assert!(page.fonts.values().all(|g| g.contains(&face.glyph_for('A'))), "{:?}", page.fonts);
+}
+
+#[test]
+fn ruby_prints_as_outlines_where_the_canvas_draws_it() {
+    let family = vectorcraft_text::FALLBACK_FAMILY;
+    let mut d = Document::new(200.0, 100.0);
+    let layer = d.layers[0].id;
+    let style = CharStyle { font_family: family.into(), size: 24.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+    let mut t = TextObject::point(Point::new(20.0, 60.0), "AB", style);
+    t.ruby = vec![vectorcraft_doc::RubySpan::new(0, 2, "xy")];
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    d.insert(Some(layer), 0, n).unwrap();
+    let area = Rect::new(36.0, 36.0, 236.0, 136.0);
+    let drawn = |fonts| {
+        let out = print(&[page(&d, None)], &[0], &fonts_job(fonts)).unwrap();
+        (text(&out), render_region(&crate::import(&out.bytes).unwrap().document, area, 2.0))
+    };
+    let (_, outlined) = drawn(PrintFonts::Outlines);
+    for fonts in [PrintFonts::Subset, PrintFonts::Complete] {
+        let (ps, shown) = drawn(fonts);
+        // The base text shows through the font; its reading is drawn as outlines, in place.
+        assert_eq!(ps.matches("> show").count(), 2, "{fonts:?}: {ps}");
+        if fonts == PrintFonts::Subset {
+            assert_eq!(procs(&ps), 2, "{ps}");
+        }
+        vectorcraft_testkit::raster::assert_similar(&outlined, &shown, 24.0, 0.002);
+    }
+}

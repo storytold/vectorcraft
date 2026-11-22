@@ -296,6 +296,9 @@ pub(crate) struct Scene<'a> {
     fonts: Option<&'a RefCell<FontJob>>,
     /// The glyphs shown through `fonts`.
     used: UsedGlyphs,
+    /// The glyphs `used` gained, in the order it gained them: an object left out for the page
+    /// limit takes its own back out of `used` ([`Self::forget_glyphs`]).
+    used_order: Vec<(usize, u32)>,
 }
 
 impl<'a> Scene<'a> {
@@ -328,6 +331,7 @@ impl<'a> Scene<'a> {
             keep_below: false,
             fonts: None,
             used: UsedGlyphs::new(),
+            used_order: vec![],
         }
     }
 
@@ -561,7 +565,7 @@ impl<'a> Scene<'a> {
             _ => {}
         }
         self.note_losses(n);
-        let (was, placed, codes) = (self.body.len(), self.placements.len(), self.codes.len());
+        let (was, placed, codes, glyphs) = (self.body.len(), self.placements.len(), self.codes.len(), self.used_order.len());
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 children.iter().for_each(|c| self.node(c, false));
@@ -622,7 +626,20 @@ impl<'a> Scene<'a> {
             self.body.truncate(was);
             self.unplace(placed);
             self.forget_codes(codes);
+            self.forget_glyphs(glyphs);
             self.warn(TOO_LARGE);
+        }
+    }
+
+    /// Take the glyphs `used` gained after its first `n` back out of it.
+    fn forget_glyphs(&mut self, n: usize) {
+        for (face, gid) in self.used_order.drain(n.min(self.used_order.len())..) {
+            if let Some(gids) = self.used.get_mut(&face) {
+                gids.remove(&gid);
+                if gids.is_empty() {
+                    self.used.remove(&face);
+                }
+            }
         }
     }
 
@@ -993,7 +1010,9 @@ impl<'a> Scene<'a> {
             return None;
         }
         let (face, upem) = fonts.borrow_mut().glyph(g.font_id, g.gid, g.outline.elements().len())?;
-        self.used.entry(face).or_default().insert(g.gid);
+        if self.used.entry(face).or_default().insert(g.gid) {
+            self.used_order.push((face, g.gid));
+        }
         Some((face, upem))
     }
 
