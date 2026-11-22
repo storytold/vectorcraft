@@ -64,7 +64,7 @@ impl Exporter<'_> {
     /// [`vectorcraft_doc::MAX_RASTER_ALLOC`]; cached by key and paint (and size when images are
     /// resampled), image rejections too.
     /// With `interpolate` (and the export's own setting), viewers may smooth it. With `overprint`
-    /// a CMYK color is written as a DeviceN space of the process inks it holds, so the plates it
+    /// a gray or CMYK color is written as a DeviceN space of the process inks it holds, so the plates it
     /// leaves at zero keep the inks below: the nonzero overprint mode does not apply to an image's
     /// samples (ISO 32000-1 §8.6.7).
     pub(super) fn colorized_image(&mut self, im: &vectorcraft_doc::ImageObject, paint: &Paint, interpolate: bool, overprint: bool) -> Option<Image> {
@@ -114,6 +114,10 @@ impl Exporter<'_> {
             Some(d) => (vec![q(*tint)], ImageColorspace::DeviceN, Some(d.clone())),
             None if registration => (vec![q(*tint); 4], ImageColorspace::Cmyk, None),
             None => match self.page_color(color) {
+                // An overprinting gray: black ink only.
+                Color::Gray { k } if overprint && k > 0.0 => {
+                    (vec![q(k)], ImageColorspace::DeviceN, DeviceNSpace::new([Colorant::Process(Process::Black)]))
+                }
                 Color::Gray { k } => (vec![q(1.0 - k)], ImageColorspace::Luma, None),
                 // An overprinting CMYK color: the process inks it puts down.
                 Color::Cmyk { c, m, y, k } if overprint && [c, m, y, k].iter().any(|v| *v > 0.0) => {

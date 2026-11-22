@@ -751,6 +751,13 @@ fn overprint_fill_makes_a_colorized_images_color_overprint() {
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(!overprints(&s), "undo makes it knock out again");
     assert_eq!(s.execute("attributes.info", &json!({})).unwrap()["overprintFill"], false);
+
+    // Taking the color off drops its overprint, so a new color knocks out.
+    s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    assert!(!s.doc().unwrap().doc.node(id).unwrap().extras().colorize_overprint);
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    assert!(!overprints(&s), "a new color starts knocking out");
 }
 
 /// Overprint Black and Print Ink Fixes' Remove White Overprint treat a colorized image's color as

@@ -5087,10 +5087,10 @@ does not overprint, the whole image knocks out in the previews and on printed pl
 PDF export writes them with `advanced.overprint: "preserve"` (the default): each overprinting fill and stroke sets a
 graphics state with `/OP true /op true /OPM 1` (`/OPM 0` in PDF/A). With `discardWhiteOverprint` (`document.setup`, on by
 default) white ones knock out instead; `"discard"` writes none. EPS export (`overprints: "preserve"`, the default) turns
-overprinting on for each one, white ones aside with `discardWhiteOverprint`. Both exports write an overprinting
-colorized image in a CMYK color in only the process inks the color puts down (in EPS one DeviceN image at Level 3,
-one Separation image per ink at Level 2). The color of a spot swatch is an ink, so
-a white spot color keeps overprinting with `discardWhiteOverprint`, in both exports and in both previews.
+overprinting on for a colorized image's color as it does for fills and strokes. PDF export writes an overprinting
+colorized image in a gray or CMYK color in only the process inks the color puts down, and EPS export does so for a
+CMYK color (one DeviceN image at Level 3, one Separation image per ink at Level 2). The previews and printed
+separations show a colorized image with a visible drop shadow, outer glow or Gaussian blur of its own knocking out.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.setOverprint","params":{"ids":[12],"stroke":true}}}

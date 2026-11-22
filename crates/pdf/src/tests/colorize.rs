@@ -142,20 +142,17 @@ fn an_overprinting_colorized_image_sets_overprint() {
     let Some(id) = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id) else { panic!("the image") };
     d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
     assert!(images(&pdf(&d)).contains(&("DeviceN".into(), vec!["Black".into()], true)), "{:?}", images(&pdf(&d)));
+    // A gray color is black ink alone.
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::Gray { k: 0.6 })));
+    assert!(images(&pdf(&d)).contains(&("DeviceN".into(), vec!["Black".into()], true)), "{:?}", images(&pdf(&d)));
 
-    // Paper white knocks out with Discard White Overprint (the default); without it, overprinting
-    // white puts no ink down and paints nothing.
+    // White knocks out with Discard White Overprint (the default), as a white fill does; without
+    // it, an overprinting white process color puts no ink down and paints nothing.
     d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.0))));
     assert_eq!(images(&pdf(&d)).len(), 2, "the white image and its soft mask");
+    assert!(!text(&d).contains("/OP true"), "white knocks out");
     d.setup.discard_white_overprint = false;
     assert!(images(&pdf(&d)).is_empty(), "{:?}", images(&pdf(&d)));
-
-    // A white spot ink is an ink: it overprints with Discard White Overprint too.
-    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
-    d.swatches.push(Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
-    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 }));
-    d.setup.discard_white_overprint = true;
-    assert!(text(&d).contains("/OP true/op true"), "the white spot ink overprints");
 }
 
 /// Registration prints on every plate: the process inks and the document's spot inks.
@@ -361,6 +358,20 @@ fn separations_hide_an_overprinting_image_on_plates_without_its_ink() {
         for (name, visible) in shown(true, postscript) {
             assert_eq!(visible, name == "Ink", "{name}");
         }
+    }
+
+    // With a drop shadow of its own the image knocks out on every plate, so the PostScript
+    // writer draws it there.
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let id = d.layers[0].children().unwrap()[0].id;
+    let n = d.node_mut(id).unwrap();
+    n.extras_mut().colorize_overprint = true;
+    n.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({}), visible: true });
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let job = plan(&d, &PrintOptions { settings, postscript: true, ..Default::default() }).unwrap();
+    for p in &job.plates {
+        let image = &p.layers[0].children().unwrap()[0];
+        assert!(image.visible && !image.extras().colorize_overprint, "{:?}", image.extras());
     }
 }
 

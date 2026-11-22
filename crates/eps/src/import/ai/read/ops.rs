@@ -286,7 +286,10 @@ impl<'a> Reader<'a> {
             "p" | "P" => self.pattern_paint(w, &vals),
             // A pattern's definition ends.
             "E" if self.pattern.is_some() => self.done = true,
-            "O" => self.gs.overprint_fill = Self::nums(&vals).last() == Some(&1.0),
+            "O" => {
+                self.gs.overprint_fill = Self::nums(&vals).last() == Some(&1.0);
+                self.image_overprint = true;
+            }
             "R" => self.gs.overprint_stroke = Self::nums(&vals).last() == Some(&1.0),
             "XR" => self.gs.rule = if Self::nums(&vals).last() == Some(&1.0) { FillRule::EvenOdd } else { FillRule::NonZero },
             // Show Center (§12): 1 shows the center point of the paths that follow, and 0 leaves

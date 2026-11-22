@@ -212,8 +212,6 @@ fn flattening_cropped_art_keeps_the_art_under_its_hidden_part() {
 fn overprints_are_kept_or_discarded() {
     let mut s = session(100.0, 100.0, 1);
     let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
-    // Not white, which Discard White Overprint (on by default) knocks out.
-    s.execute("paint.setFill", &json!({"ids": [id], "color": {"c": 100, "m": 0, "y": 0, "k": 0}})).unwrap();
     s.execute("attributes.set", &json!({"ids": [id], "overprintFill": true})).unwrap();
     let kept = postscript(&b64(&s.execute("document.exportEps", &json!({"previewFormat": "none"})).unwrap()));
     assert!(kept.contains("true op\n"), "{kept}");

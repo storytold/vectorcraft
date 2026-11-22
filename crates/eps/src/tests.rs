@@ -446,26 +446,6 @@ fn spot_colours_are_separations_and_overprints_are_kept_or_dropped() {
     let page = checked_page(&ps);
     assert!(page.contains("true op\nVCsp0 setcolorspace 0.5 setcolor\n") && page.contains("false op"), "{page}");
     assert!(!page_of(&d, &EpsOptions { overprint: Overprint::Discard, ..opts(&d) }).contains("true op"));
-
-    // A white fill that overprints knocks out with Discard White Overprint (the default), and
-    // overprints without it.
-    let Some(id) = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id) else { panic!("the rectangle") };
-    if let Some(AppearanceItem::Fill(f)) = d.node_mut(id).unwrap().appearance.items.first_mut() {
-        f.paint = Paint::solid(Color::WHITE);
-    }
-    assert!(d.setup.discard_white_overprint);
-    assert!(!page_of(&d, &opts(&d)).contains("true op"));
-    // A white spot ink is ink: it still overprints.
-    d.swatches.push(vectorcraft_color::Swatch { name: "White Ink".into(), paint: Paint::solid(Color::WHITE), global: true, spot: true });
-    if let Some(AppearanceItem::Fill(f)) = d.node_mut(id).unwrap().appearance.items.first_mut() {
-        f.paint = Paint::Solid { color: Color::WHITE, swatch: Some("White Ink".into()), tint: 1.0 };
-    }
-    assert!(page_of(&d, &opts(&d)).contains("true op"));
-    if let Some(AppearanceItem::Fill(f)) = d.node_mut(id).unwrap().appearance.items.first_mut() {
-        f.paint = Paint::solid(Color::WHITE);
-    }
-    d.setup.discard_white_overprint = false;
-    assert!(page_of(&d, &opts(&d)).contains("true op"));
 }
 
 const GOLD: Color = Color::Cmyk { c: 0.0, m: 0.2, y: 0.8, k: 0.1 };
@@ -1258,6 +1238,20 @@ fn an_overprinting_colorized_image_writes_only_its_process_inks() {
     both.insert(both.default_layer(), usize::MAX, n).unwrap();
     let ps = text(&export(&both, &EpsOptions { level: Level::Three, ..opts(&both) }, None, None).unwrap());
     assert!(ps.contains("VCdn0 setcolorspace") && ps.contains("/DeviceCMYK setcolorspace"), "{ps}");
+}
+
+/// On a separation plate, an overprinting colorized image whose color puts none of the plate's ink
+/// down is drawn as nothing, so the ink below stays; one that knocks out is drawn as paper.
+#[test]
+fn a_plate_leaves_out_an_overprinting_image_without_its_ink() {
+    let body = |overprint: bool| {
+        let mut d = colorized_doc(vec![0, 128, 255], Some(Paint::solid(Color::WHITE)));
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
+        crate::scene::Scene::new(&d, &opts(&d)).on_plate(true).run().body
+    };
+    assert!(!body(true).contains("image"), "{}", body(true));
+    assert!(body(false).contains("image"), "{}", body(false));
 }
 
 #[test]

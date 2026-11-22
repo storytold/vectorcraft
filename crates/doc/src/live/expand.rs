@@ -231,6 +231,7 @@ pub(crate) fn mesh_warp_image_with(
     g.knockout = crate::Knockout::On;
     if let Some(e) = g.extras_if_any() {
         e.colorize = None;
+        e.colorize_overprint = false;
         e.image_quad = None;
     }
     if mesh_warp_cost(k) > MAX_GENERATED {

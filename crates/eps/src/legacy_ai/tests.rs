@@ -1067,6 +1067,44 @@ fn colorized_images_keep_their_color() {
     assert_eq!(out.warnings, [IMAGE_ALPHA]);
 }
 
+/// A colorized image mask overprints when an `O` written for it says so, and not because the
+/// path before it overprints.
+#[test]
+fn a_colorized_image_mask_takes_only_its_own_fill_overprint() {
+    let opened = |square_overprints: bool, image_overprints: bool, drop_own: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        doc.layers.clear();
+        let layer = doc.add_layer(Some("Art"));
+        let mut square = shape(&mut doc, shapes::rectangle(Rect::new(5.0, 5.0, 45.0, 30.0)), red(), Paint::None);
+        if let Some(f) = square.appearance.fill_mut() {
+            f.overprint = square_overprints;
+        }
+        doc.insert(Some(layer), usize::MAX, square).unwrap();
+        let paint = Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0));
+        let mask: Vec<u8> = "1001011001101001".bytes().map(|b| if b == b'1' { 0 } else { 255 }).collect();
+        let mut bitmap = colorized_image(&mut doc, (8, 2), mask, &paint, (10.0, 10.0));
+        bitmap.extras_mut().colorize_overprint = image_overprints;
+        doc.insert(Some(layer), usize::MAX, bitmap).unwrap();
+        let mut text = String::from_utf8(write(&doc).bytes).unwrap();
+        if drop_own {
+            let own = "0 0.5 1 0 k\n0 O\n";
+            assert!(text.contains(own), "{text}");
+            text = text.replace(own, "0 0.5 1 0 k\n");
+        }
+        let read = crate::import(text.as_bytes()).unwrap().document;
+        let mut found = vec![];
+        read.walk(|n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                found.push(n.colorize_overprints());
+            }
+        });
+        found
+    };
+    assert_eq!(opened(false, true, false), [true]);
+    assert_eq!(opened(true, false, false), [false]);
+    assert_eq!(opened(true, false, true), [false], "the square's overprint is left over");
+}
+
 /// The pieces of a colorized warped image work out the image's coverage once, and an image with
 /// other data works out its own: a black and white image's pieces are written as image masks
 /// in its color, and a gray image's pieces with its color in their pixels.
