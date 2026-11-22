@@ -84,6 +84,8 @@ fn print_writes_the_file_with_the_assigned_options_over_the_saved_settings() {
              j.file = new File(dir + '/c.ps'); doc.print(o);\n\
              o.postScriptOptions.postScriptLevel = PrinterPostScriptLevelEnum.PSLEVEL2; j.file = new File(dir + '/level2.prn');\n\
              doc.print(o);\n\
+             o.postScriptOptions.postScriptLevel = PrinterPostScriptLevelEnum.PSLEVEL3; j.file = new File(dir + '/level3.ps');\n\
+             doc.print(o);\n\
              vc.log([app.printPresetsList[0], app.PPDFileList.length]);"
         ),
     );
@@ -96,9 +98,11 @@ fn print_writes_the_file_with_the_assigned_options_over_the_saved_settings() {
     assert_eq!(pages(&dir.join("a.pdf")).len(), 6, "two artboards, three copies");
     assert_eq!(pages(&dir.join("b.pdf")), vec![(595.0, 842.0)], "artboard 2 only, on upright A4");
     let ps = std::fs::read_to_string(dir.join("c.ps")).unwrap();
-    assert!(ps.starts_with("%!PS") && !ps.contains("%%LanguageLevel: 2"), "a .ps name alone: {}", &ps[..ps.len().min(200)]);
+    assert!(ps.starts_with("%!PS") && ps.contains("%%LanguageLevel: 2"), "a .ps name alone prints at PSLEVEL2: {}", &ps[..ps.len().min(200)]);
     let ps = std::fs::read_to_string(dir.join("level2.prn")).unwrap();
     assert!(ps.starts_with("%!PS") && ps.contains("%%LanguageLevel: 2"), "a level alone: {}", &ps[..ps.len().min(200)]);
+    let ps = std::fs::read_to_string(dir.join("level3.ps")).unwrap();
+    assert!(ps.starts_with("%!PS") && ps.contains("%%LanguageLevel: 3"), "an assigned PSLEVEL3: {}", &ps[..ps.len().min(200)]);
     assert_eq!(s.execute("print.setup", &json!({})).unwrap()["settings"], saved, "printing leaves the saved settings as they are");
     assert_eq!(s.active().unwrap().history.undo.len(), undo, "and adds no undo step");
     // The commands stay closed to vc.run, before and after a print.
