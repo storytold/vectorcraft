@@ -2662,7 +2662,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
   document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
   group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
-  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  directly below it. `move` on an object on a locked artboard throws `cannot move objects on a locked artboard`, and a
+  move that leaves the object where it is runs no command. An object of another document throws `Cross-document
+  placement is not available`, and when
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws

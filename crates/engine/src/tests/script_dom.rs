@@ -1051,6 +1051,37 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
     assert_eq!(out, vec![json!(0)]);
 }
 
+/// `move` leaves art on a locked artboard where it is, and a move that leaves an object where it
+/// is runs no command, also in a layer whose ruler guides are above its art.
+#[test]
+fn move_refuses_art_on_a_locked_artboard_and_skips_a_move_to_the_same_place() {
+    let (mut s, a, b) = doc();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 120})).unwrap();
+    let steps = undo_steps(&s);
+    // The topmost art, moved to the top of its layer, stays where it is.
+    log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pageItems, top = p[0];\
+         for (var i = 1; i < p.length; i++) { if (p[i].zOrderPosition > top.zOrderPosition) top = p[i]; }\
+         top.move(top.parent);",
+    );
+    assert_eq!(undo_steps(&s), steps, "a move to the same place adds no step");
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let order = |s: &Session| format!("{:?}", (s.active().unwrap().doc.position(a), s.active().unwrap().doc.position(b)));
+    let before = order(&s);
+    let e = failure(&mut s, "var p = app.activeDocument.pageItems; p[0].move(p[0].parent, ElementPlacement.PLACEATBEGINNING);");
+    assert!(e.contains("cannot move objects on a locked artboard"), "{e}");
+    let e = failure(&mut s, "var p = app.activeDocument.pageItems; p[1].move(p[1].parent, ElementPlacement.PLACEATEND);");
+    assert!(e.contains("cannot move objects on a locked artboard"), "{e}");
+    assert_eq!(order(&s), before);
+    assert_eq!(undo_steps(&s), steps);
+}
+
 #[test]
 fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();

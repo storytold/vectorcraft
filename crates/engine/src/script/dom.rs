@@ -1588,6 +1588,9 @@ fn item_remove(h: &Host, a: &[Data]) -> Answer {
 /// The error of `remove()` and `removeAll()` for an object on a locked artboard.
 const ON_LOCKED_ARTBOARD: &str = "cannot delete objects on a locked artboard";
 
+/// The error of `move` for an object on a locked artboard.
+const ON_LOCKED_ARTBOARD_MOVE: &str = "cannot move objects on a locked artboard";
+
 /// The error of `move` and `duplicate` given an object of another document.
 pub const CROSS_DOCUMENT: &str = "Cross-document placement is not available";
 
@@ -1670,6 +1673,9 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data, copy: bool) -> s
             let name = d.node(item.id).and_then(typename).unwrap_or("page item");
             return Err(HostError::Error(format!("Cannot move {name} {}", item.id.0)));
         }
+        if !copy && d.on_locked_artboard(item.id) {
+            return Err(HostError::Error(format!("{ON_LOCKED_ARTBOARD_MOVE}: {}", item.id.0)));
+        }
         Ok(Destination { parent, beside, how })
     })
 }
@@ -1696,7 +1702,12 @@ fn place(h: &Host, doc: Doc, id: NodeId, to: &Destination) -> std::result::Resul
             }
             (_, None) => count,
         };
-        Ok::<_, HostError>(if clips { at.max(1) } else { at })
+        let at = if clips { at.max(1) } else { at };
+        // The index `node.move` puts the object at: art stays below the ruler guides.
+        let node = d.node(id).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+        let rest: Vec<Arc<crate::doc::Node>> =
+            d.children(Some(to.parent)).map(|c| c.iter().filter(|n| n.id != id).cloned().collect()).unwrap_or_default();
+        Ok::<_, HostError>(crate::doc::Node::insert_index(&rest, at, node))
     })?;
     let now = with_doc(h, doc, |_, st| st.doc.position(id));
     if now.is_some_and(|(p, i, _)| p == Some(to.parent) && i == index) {
