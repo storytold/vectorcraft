@@ -137,8 +137,8 @@ fn coalesce_takes_the_right_side_only_for_undefined_or_null() {
 
 #[test]
 fn coalesce_binds_looser_than_bitwise_and_tighter_than_the_conditional() {
-    truth("(null ?? 1 | 2) === 3");
-    truth("(null ?? 0 ? 'a' : 'b') === 'b'");
+    truth("(1 ?? 2 | 4) === 1");
+    truth("(1 ?? 0 ? 'a' : 'b') === 'a'");
     truth("var x = null ?? 7, y = 1 ?? 8; x === 7 && y === 1");
     truth("((null || 1) ?? 2) === 1 && (null ?? (0 && 1)) === 0 && ((0 ?? 1) || 2) === 2 && ((null && 1) ?? 2) === 2");
 }
