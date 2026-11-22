@@ -113,9 +113,10 @@ pub struct Session {
     /// triple-click that follows it. None when the press was not lent.
     pub(crate) press_lent: Option<&'static str>,
     /// The selection tool a Cmd press would borrow at the pointer, as [`Session::hover_tool_at`]
-    /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none). None when it was last asked
+    /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none), with
+    /// the document state, active tool and keys it was found for. None when it was last asked
     /// without Cmd.
-    pub(crate) hover_lent: Option<Option<&'static str>>,
+    pub(crate) hover_lent: Option<(tooling::HoverKey, Option<&'static str>)>,
     pub(crate) last_view: ViewInfo,
     /// The selection tools' measurements for the active document as it is: a pointer move or a
     /// cursor asked for again over an unchanged document and selection measures nothing again.

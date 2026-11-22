@@ -1653,7 +1653,17 @@ pub(super) fn guide_labels(doc: &vectorcraft_doc::Document) -> std::collections:
 /// the pointer is not hit-tested again (#2452), and the last answer stays.
 fn marks_tool(app: &mut VectorcraftApp, ctx: &egui::Context, hover_still: bool, view: vectorcraft_engine::ViewInfo) -> &'static str {
     let held = held_mods(app, ctx);
-    if hover_still { app.session.hover_tool_at(app.hover_doc, &held, view) } else { app.session.hover_tool_id(&held) }
+    if !hover_still {
+        return app.session.hover_tool_id(&held);
+    }
+    let named = app.session.shown_tool_id(&held);
+    let tool = app.session.hover_tool_at(app.hover_doc, &held, view);
+    // The status bar and the help bar are drawn before the canvas: when the tool they name changes
+    // with this frame's pointer, they are drawn again.
+    if app.session.shown_tool_id(&held) != named {
+        ctx.request_repaint();
+    }
+    tool
 }
 
 /// The selection's visuals and the tools' overlays, to be drawn. `tool` is the tool whose marks

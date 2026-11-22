@@ -7159,6 +7159,111 @@ fn blend_widgets_hide_while_cmd_lends_direct_selection() {
     assert_eq!(widgets(&mut app, egui::Modifiers::NONE), plain, "back when the key is let go");
 }
 
+/// One canvas frame with `modifiers` held and, when given, the pointer moved to `pointer` (in
+/// screen points) → the shapes drawn, with the ones in shape lists listed one by one.
+fn drawn_with(app: &mut VectorcraftApp, ctx: &egui::Context, modifiers: egui::Modifiers, pointer: Option<Pos2>) -> Vec<Shape> {
+    app.canvas.selection_marks = Default::default();
+    let mut events = vec![egui::Event::ModifiersChanged(modifiers)];
+    events.extend(pointer.map(egui::Event::PointerMoved));
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let mut drawn = vec![];
+    for c in out.shapes {
+        match c.shape {
+            Shape::Vec(v) => drawn.extend(v),
+            s => drawn.push(s),
+        }
+    }
+    drawn
+}
+
+/// The widgets only the Selection tool presses (a Shaper Group's mode widget, a mirror repeat's
+/// axis, a grid or radial repeat's handles) hide while Cmd lends Direct Selection.
+#[test]
+fn selection_tool_widgets_hide_while_cmd_lends_direct_selection() {
+    let ctx = egui::Context::default();
+    let count = |app: &mut VectorcraftApp, modifiers: egui::Modifiers, is_widget: &dyn Fn(&Shape) -> bool| {
+        drawn_with(app, &ctx, modifiers, None).iter().filter(|s| is_widget(s)).count()
+    };
+    // Each widget that does not draw, hide or come back as it should.
+    let mut wrong = vec![];
+    let mut check = |app: &mut VectorcraftApp, what: &str, is_widget: &dyn Fn(&Shape) -> bool| {
+        app.select_tool("selection");
+        let plain = count(app, egui::Modifiers::NONE, is_widget);
+        let held = count(app, egui::Modifiers::COMMAND, is_widget);
+        let back = count(app, egui::Modifiers::NONE, is_widget);
+        if plain == 0 || held != 0 || back != plain {
+            wrong.push(format!("{what}: {plain} drawn, {held} with Cmd held, {back} after"));
+        }
+    };
+    let new_app = || {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app
+    };
+    let circle_of = |r: f32| move |s: &Shape| matches!(s, Shape::Circle(c) if c.radius == r);
+
+    let mut app = new_app();
+    for x in [0, 50] {
+        app.run("shape.rectangle", json!({"x": x, "y": 0, "width": 100, "height": 100})).unwrap();
+    }
+    app.run("shaper.scribble", json!({"points": [[25, 20], [75, 35], [30, 50], [125, 65]]})).unwrap();
+    check(&mut app, "the Shaper Group's mode widget", &circle_of(vectorcraft_tools::shaperwidget::RADIUS_PX));
+
+    let mut app = new_app();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 80})).unwrap();
+    app.run("object.repeat.mirror", json!({})).unwrap();
+    let selection = Tokens::get(&ctx).selection;
+    check(
+        &mut app,
+        "the mirror axis",
+        &move |s: &Shape| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == selection && stroke.width == 2.0),
+    );
+
+    let mut app = new_app();
+    app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 40, "height": 40})).unwrap();
+    app.run("object.repeat.grid", json!({"hSpacing": 10, "vSpacing": 10})).unwrap();
+    check(&mut app, "the grid repeat's handles", &circle_of(vectorcraft_tools::repeat_grid::HANDLE_RADIUS));
+
+    let mut app = new_app();
+    app.run("shape.rectangle", json!({"x": 180, "y": 40, "width": 40, "height": 40})).unwrap();
+    app.run("object.repeat.radial", json!({"instances": 6, "radius": 60})).unwrap();
+    check(&mut app, "the radial repeat's handles", &circle_of(vectorcraft_tools::repeat_radial::HANDLE_RADIUS));
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The canvas decides which tool's widgets to draw for the pointer where it is in the same frame:
+/// over the selected blend a Cmd press selects behind, so the Selection tool's blend widgets stay;
+/// moved away in the next frame, where Cmd lends Direct Selection, they hide in that frame.
+#[test]
+fn the_widgets_follow_the_pointer_in_the_frame_it_moves() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    // Behind the blend, an object to select behind.
+    app.session.execute("shape.rectangle", &json!({"x": 20, "y": 120, "width": 360, "height": 160})).unwrap();
+    let a = id(app.session.execute("shape.rectangle", &json!({"x": 60, "y": 160, "width": 80, "height": 80})).unwrap());
+    let b = id(app.session.execute("shape.rectangle", &json!({"x": 260, "y": 160, "width": 80, "height": 80})).unwrap());
+    app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let blend = id(app.session.execute("object.blend.make", &json!({})).unwrap());
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
+    let ctx = egui::Context::default();
+    let r = vectorcraft_tools::blendwidget::RADIUS_PX;
+    let widgets = |app: &mut VectorcraftApp, modifiers: egui::Modifiers, at: Option<Point>| {
+        let pointer = at.map(|p| Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(p));
+        drawn_with(app, &ctx, modifiers, pointer).iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == r)).count()
+    };
+    let plain = widgets(&mut app, egui::Modifiers::NONE, None);
+    assert!(plain >= 2, "the Appearance and Easing widgets: {plain}");
+    // Inside the first key object, away from its anchors and the spine.
+    let over = widgets(&mut app, egui::Modifiers::COMMAND, Some(Point::new(80.0, 175.0)));
+    assert_eq!(over, plain, "over the selected blend, the press selects behind");
+    let away = widgets(&mut app, egui::Modifiers::COMMAND, Some(Point::new(200.0, 380.0)));
+    assert!(away + 2 <= plain, "away from it, hidden in the same frame: {away} of {plain}");
+}
+
 /// A selected Objects on Path group shows its Rotate All widget with the Selection and Objects on
 /// Path tools.
 #[test]

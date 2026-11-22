@@ -10,6 +10,14 @@ use vectorcraft_tools::{Action, Cursor, ImeSurrounding, Mods, Overlay, PointerEv
 
 use crate::{EngineError, Prefs, Result, Session};
 
+/// What a hover's lend decision holds for ([`Session::hover_tool_at`]): the active document's uid
+/// and revision, the active tool, the keys, the selection tools chosen last and the preferences a
+/// press's hit test reads (Command Click to Select Objects Behind, Object Selection by Path Only,
+/// Type Object Selection by Path Only, Selection Tolerance, anchor Size; Use Preview Bounds,
+/// Measure Type by Glyph Bounds, Show Handles When Multiple Anchors Are Selected).
+pub(crate) type HoverKey =
+    (Option<(u64, u64)>, &'static str, Mods, (Option<&'static str>, Option<&'static str>), ((bool, bool, bool, f64, u32), (bool, bool, bool)));
+
 /// The tool whose radius is General › Corner Radius.
 const ROUNDED_RECTANGLE: &str = "roundedRectangle";
 
@@ -290,9 +298,9 @@ impl Session {
     /// The tool the status bar and the help bar name with `mods` held: the selection tool Cmd
     /// lends ([`Self::lent_tool_id`]) while the button is up, Space does not lend a view tool and
     /// the active tool is not computing an edit, else the active tool. Over a selected object where
-    /// a Cmd press selects behind, it still names the tool Cmd lends elsewhere.
+    /// a Cmd press selects behind, as the cursor last found it, it names the active tool.
     pub fn shown_tool_id(&self, mods: &Mods) -> &'static str {
-        match self.lent_tool_id(mods) {
+        match self.hovered_lent(mods) {
             Some(id) if !mods.space && !self.tool_editing() && !self.pointer_held => id,
             _ => self.tool.id(),
         }
@@ -303,11 +311,38 @@ impl Session {
     /// (before either has, the one [`Self::lent_tool_id`] names), else the active tool. The canvas
     /// asks this while the view moves, when it does not hit-test the art under the pointer.
     pub fn hover_tool_id(&self, mods: &Mods) -> &'static str {
-        let lent = self.hover_lent.unwrap_or_else(|| self.lent_tool_id(mods));
-        match lent {
+        match self.hovered_lent(mods) {
             Some(id) if mods.cmd && !mods.space && self.lender.is_none() && !self.tool_editing() && !self.pointer_held => id,
             _ => self.tool.id(),
         }
+    }
+
+    /// The selection tool a Cmd press with `mods` would borrow at the pointer: the one
+    /// [`Self::hover_tool_at`] or [`Self::cursor`] last found, while the document, the selection,
+    /// the active tool and the keys are as they were then (none where the press selects behind),
+    /// else the one [`Self::lent_tool_id`] names.
+    fn hovered_lent(&self, mods: &Mods) -> Option<&'static str> {
+        match self.hover_lent {
+            Some((key, lent)) if key == self.hover_key(mods) => lent,
+            _ => self.lent_tool_id(mods),
+        }
+    }
+
+    /// What a hover's lend decision holds for: the active document's state (its uid and revision,
+    /// which moves with the selection), the active tool, the keys, the selection tools chosen last
+    /// and the preferences a press's hit test reads.
+    fn hover_key(&self, mods: &Mods) -> HoverKey {
+        let p = &self.prefs;
+        let picks =
+            (p.ctrl_click_selects_behind, p.object_selection_by_path_only, p.type_selection_by_path_only, p.selection_tolerance, p.anchor_size);
+        let bounds = (p.use_preview_bounds, p.type_glyph_bounds, p.show_handles_multiple_anchors);
+        (
+            self.active().map(|d| (d.uid, d.revision)),
+            self.tool.id(),
+            *mods,
+            (self.last_selection_tool, self.last_part_selection_tool),
+            (picks, bounds),
+        )
     }
 
     /// The tool whose marks and widgets the canvas draws this frame with `mods` held and the
@@ -321,7 +356,8 @@ impl Session {
             Some(p) => self.lent_tool_at(p, mods, view),
             None => self.lent_tool_id(mods),
         };
-        self.hover_lent = lends.then_some(lent);
+        let key = self.hover_key(mods);
+        self.hover_lent = lends.then_some((key, lent));
         lent.unwrap_or(self.tool.id())
     }
 
@@ -1404,7 +1440,8 @@ impl Session {
         // Cmd pressed once a drag is under way lends nothing, so the tool keeps its pointer.
         let lends = mods.cmd && self.lender.is_none() && !self.tool_editing() && !self.pointer_held;
         let lent = if lends { self.lent_tool_at(p, &mods, view) } else { None };
-        self.hover_lent = lends.then_some(lent);
+        let key = self.hover_key(&mods);
+        self.hover_lent = lends.then_some((key, lent));
         let c = match lent {
             Some(id) => {
                 let lent = self.make_tool(id);

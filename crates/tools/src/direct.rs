@@ -444,7 +444,12 @@ fn hit_spine_point(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usiz
 /// The segment of a selected blend's spine passing within `tol` of `p`: (blend, segment, t, whether
 /// it is straight).
 pub(crate) fn hit_spine_segment(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, f64, bool)> {
-    selected_spines(cx).into_iter().find_map(|(id, path)| {
+    spine_segment_in(&selected_spines(cx), p, tol)
+}
+
+/// [`hit_spine_segment`] over spines already built.
+fn spine_segment_in(spines: &[(NodeId, PathData)], p: Point, tol: f64) -> Option<(NodeId, usize, f64, bool)> {
+    spines.iter().find_map(|&(id, ref path)| {
         let (si, seg, t, _, dist) = path.nearest(p)?;
         (dist <= tol).then(|| (id, seg, t, path.subpaths.get(si).is_some_and(|sp| sp.segment_is_line(seg))))
     })
@@ -597,21 +602,23 @@ fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, us
     })
 }
 
-/// Is `p` on a part of a selected object that Direct Selection edits: a gradient mesh point, a
-/// blend's spine point or segment, an anchor, the end of a direction handle or a segment, within
-/// the selection tolerance? A selected group or compound path counts through the editable paths
-/// inside it.
+/// Is `p` on a point of a selected object that Direct Selection edits: a gradient mesh point, a
+/// blend's spine point or segment, an anchor or the end of a direction handle, within the
+/// selection tolerance? A selected group or compound path counts through the editable paths
+/// inside it. A path's segments do not count: a Cmd press there with Select Behind on selects
+/// the object behind, which a stroke-only path can only be pressed on.
 pub fn over_selected_part(cx: &ToolContext, p: Point) -> bool {
     if cx.selection.objects.is_empty() {
         return false;
     }
     let tol = cx.point_tol();
     let seg_tol = cx.pick_tol();
-    if hit_handle(cx, p, tol).is_some()
-        || MeshEdit::default().hit(cx, &cx.selection.objects, p).is_some()
-        || selected_spines(cx).iter().any(|(_, path)| path.anchors().any(|(_, _, a)| a.p.distance(p) <= tol))
-        || hit_spine_segment(cx, p, seg_tol).is_some()
-    {
+    if hit_handle(cx, p, tol).is_some() || MeshEdit::default().hit(cx, &cx.selection.objects, p).is_some() {
+        return true;
+    }
+    // The selected blends' spines are built once for both of their checks.
+    let spines = selected_spines(cx);
+    if spines.iter().any(|(_, path)| path.anchors().any(|(_, _, a)| a.p.distance(p) <= tol)) || spine_segment_in(&spines, p, seg_tol).is_some() {
         return true;
     }
     // The editable paths' control bounds are listed once per document state and selection; a
@@ -630,13 +637,12 @@ pub fn over_selected_part(cx: &ToolContext, p: Point) -> bool {
         }
         v.into()
     });
-    let reach = tol.max(seg_tol);
     boxes.iter().any(|&(id, b)| {
-        b.inflate(reach, reach).contains(p)
+        b.inflate(tol, tol).contains(p)
             && cx.doc.node(id).and_then(editable_path).is_some_and(|pd| {
                 #[cfg(test)]
                 MEASURED_PARTS.set(MEASURED_PARTS.get() + 1);
-                nearest_anchor(&pd, p, tol, None).is_some() || pd.nearest(p).is_some_and(|(.., d)| d <= seg_tol)
+                nearest_anchor(&pd, p, tol, None).is_some()
             })
     })
 }
