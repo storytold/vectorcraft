@@ -373,7 +373,7 @@ pub(super) fn picture(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace
         fill_uncovered(app, &ctx, &cx.painter, &key, &doc, at.rect, &at);
         reproject_frame(app, &cx.painter, &at, at.rect, (key.doc, at.rotation));
     });
-    RasterDisplay::painted(tl!("Artwork"), size, paint).picture().show(ui);
+    RasterDisplay::painted(tl!("Artwork"), size, paint).picture().show_at(ui, rect);
 }
 
 /// What the cached frame depends on.

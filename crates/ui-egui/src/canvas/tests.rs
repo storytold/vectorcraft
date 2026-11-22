@@ -543,20 +543,25 @@ fn shapes(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<Shape> {
     shapes
 }
 
-/// One headless canvas frame → the shapes drawn (`Shape::Vec`s flattened) and the textures
-/// uploaded by it (the art's raster among them, when it was re-rendered).
-fn frame_output(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Vec<Shape>, egui::TexturesDelta) {
+/// The shapes of a frame's output, `Shape::Vec`s flattened: the canvas's picture slot holds the art's.
+fn flat_shapes(clipped: Vec<egui::epaint::ClippedShape>) -> Vec<Shape> {
     fn flat(s: Shape, out: &mut Vec<Shape>) {
         match s {
             Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
             s => out.push(s),
         }
     }
+    let mut v = vec![];
+    clipped.into_iter().for_each(|c| flat(c.shape, &mut v));
+    v
+}
+
+/// One headless canvas frame → the shapes drawn ([`flat_shapes`]) and the textures uploaded by it
+/// (the art's raster among them, when it was re-rendered).
+fn frame_output(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Vec<Shape>, egui::TexturesDelta) {
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
     let out = ctx.run_ui(raw, |ui| show(app, ui));
-    let mut v = vec![];
-    out.shapes.into_iter().for_each(|c| flat(c.shape, &mut v));
-    (v, out.textures_delta)
+    (flat_shapes(out.shapes), out.textures_delta)
 }
 
 /// An edit of one object renders the canvas again only where it changed, into its texture; a
@@ -1544,9 +1549,9 @@ fn cached_frames_keep_their_scale() {
             assert!((out.pixels_per_point - ppp).abs() < 0.001);
             out.textures_delta.clear();
             let tex = app.canvas.texture.as_ref().expect("rendered canvas texture").id();
-            out.shapes
+            flat_shapes(out.shapes)
                 .into_iter()
-                .find_map(|s| match s.shape {
+                .find_map(|s| match s {
                     Shape::Mesh(m) if m.texture_id == tex => Some(m),
                     _ => None,
                 })
@@ -1827,13 +1832,17 @@ fn without_a_worker_a_heavy_canvas() {
     app.canvas.worker_started = true; // no worker, as in the web build
     app.canvas.waits_for_still = true;
     let ctx = crate::testing::ui_context();
+    // Frames at 60 fps: a frame's passes share its time.
+    let clock = std::cell::Cell::new(0.0);
     // One frame → (the bounds of the mesh that draws the art's texture, the repaint delay asked for).
     let frame = |app: &mut VectorcraftApp| {
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        clock.set(clock.get() + 1.0 / 60.0);
+        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+        let raw = egui::RawInput { screen_rect, time: Some(clock.get()), ..Default::default() };
         let mut out = ctx.run_ui(raw, |ui| show(app, ui));
         out.textures_delta.clear();
         let tex = app.canvas.texture.as_ref().unwrap().id();
-        let art = out.shapes.iter().find_map(|c| match &c.shape {
+        let art = flat_shapes(std::mem::take(&mut out.shapes)).into_iter().find_map(|s| match s {
             Shape::Mesh(m) if m.texture_id == tex => Some(m.calc_bounds()),
             _ => None,
         });
@@ -1862,8 +1871,8 @@ fn without_a_worker_a_heavy_canvas() {
         assert!((b.min - a).length() < 0.01 && (b.max - z).length() < 0.01, "{b:?}: the frame shown at {a:?} to {z:?}");
         assert!(delay <= std::time::Duration::from_secs_f64(STILL_SECS), "a frame within STILL_SECS: {delay:?}");
     }
-    // The view stays still: frames at 60 fps (egui's input time without a clock) wait until
-    // STILL_SECS has passed, and the next one renders.
+    // The view stays still: frames at 60 fps wait until STILL_SECS has passed, and the next one
+    // renders.
     let mut frames = 0;
     let b = loop {
         frames += 1;

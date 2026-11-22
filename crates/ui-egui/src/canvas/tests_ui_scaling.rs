@@ -34,6 +34,8 @@ fn shown(native: f32, ui_zoom: f32) -> (VectorcraftApp, egui::Context, std::sync
     app.run("file.new", json!({"width": 512, "height": 512})).unwrap();
     // The app's frames zoom the interface by the preference.
     app.session.prefs.ui_scaling = f64::from(ui_zoom);
+    // A view command eases under Animated Zoom; these tests read the view it lands on.
+    app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
     app.canvas.worker_started = true;
     let (worker, jobs, _done) = crate::render_worker::Worker::test_channel();
     app.canvas.worker = Some(worker);

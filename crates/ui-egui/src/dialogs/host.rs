@@ -94,7 +94,7 @@ pub(crate) fn open_held_with<D: HoldsOk>(
 }
 
 /// The dialog on top of the stack.
-fn top_dialog(app: &VectorcraftApp) -> Option<DialogId> {
+pub(crate) fn top_dialog(app: &VectorcraftApp) -> Option<DialogId> {
     // `open_dialogs` lists in opening order, the top one last.
     app.dialogs()?.with(|h| h.open_dialogs().last().map(|d| d.id))
 }

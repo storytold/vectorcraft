@@ -635,15 +635,27 @@ fn defer_question(app: &mut VectorcraftApp, chain: u64, insertion: &Insertion, s
 }
 
 /// Runs a deferred paste whose question was answered, and releases it when the question closed
-/// without an answer.
+/// without an answer or another dialog took the window over it.
 pub(crate) fn settle_swatch_paste(app: &mut VectorcraftApp) {
-    let (question, taken) = match app.placing.swatch_paste.as_ref().map(|waiting| waiting.asked) {
+    let asked = app.placing.swatch_paste.as_ref().map(|waiting| waiting.asked);
+    let (question, taken) = match asked {
         Some(asked) => take_question(app, asked),
         // A paste that ran at once (automation's) waits on nothing deferred: its Swatch Conflict answer runs it.
         None => (Question::SwatchConflict, crate::dialogs::swatch_conflict::take(app, dialog_id(crate::dialogs::swatch_conflict::KIND))),
     };
     let answer = match taken {
-        Taken::Open => return,
+        Taken::Open => {
+            // The question is the window's one dialog: another dialog opened over it replaces it.
+            if let Some(asked) = asked
+                && crate::dialogs::host::top_dialog(app).is_some_and(|top| top != asked)
+            {
+                if let (Some(host), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) {
+                    host.with(|h| h.cancel_by_id(&ctx, asked));
+                }
+                cancel_swatch_paste(app);
+            }
+            return;
+        }
         Taken::Cancelled => return cancel_swatch_paste(app),
         Taken::Answered(answer) => answer,
     };

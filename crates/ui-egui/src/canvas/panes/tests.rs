@@ -112,7 +112,9 @@ fn fits(app: &VectorcraftApp, w: Win) -> bool {
 /// The source of window `w`'s pane picture, as the pane body builds it.
 fn pane_source(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win) -> PaneSource {
     let view = pane_view(app, w);
-    PaneSource::new(app, ctx, w, &view).expect("the window's document is open")
+    // Through the document's own color settings, as `pane` draws it.
+    let cms = vectorcraft_engine::cmd::colormgmt::doc_cms(&app.session.documents()[w.0].doc);
+    vectorcraft_color::cms::with_active(cms, || PaneSource::new(app, ctx, w, &view)).expect("the window's document is open")
 }
 
 /// What the thumbnails hold for document `uid`'s picture in the pane of `w`, asked without
@@ -684,12 +686,14 @@ fn art_carried_through_a_tab_drops_into_a_third_documents_pane() {
 
 #[test]
 fn a_drag_released_off_a_panes_art_area_or_after_escape_changes_nothing() {
-    for (case, escape) in [("scroll bar", false), ("art area after Escape", true)] {
+    for (case, escape) in [("ruler", false), ("art area after Escape", true)] {
         let (mut app, ctx) = tiled_pair();
+        // A pane's vertical ruler runs down its left side, outside its art area.
+        app.ui.view.rulers = true;
         let docs: Vec<_> = app.session.documents().iter().map(|d| (d.doc.clone(), d.history.undo.len())).collect();
         grab(&mut app, &ctx, Point::new(100.0, 100.0));
         let (inside, cell) = in_pane(&app, &ctx, (1, 1), Point::new(200.0, 150.0));
-        let at = if escape { inside } else { pos2(cell.right() - 2.0, cell.center().y) };
+        let at = if escape { inside } else { pos2(cell.left() + 2.0, cell.center().y) };
         app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
         if escape {
             let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
@@ -950,12 +954,15 @@ fn other_panes_draw_through_their_documents_profiles() {
     assert_ne!(p3, srgb, "Display P3 draws the color differently");
     let (_, paper_p3) = in_p3(0xcc, 0x66, 0x33);
     let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 1);
-    // Whether `out` fills a shape with the RGB `rgb`, give or take one.
+    // Whether `out` fills a shape with the RGB `rgb`, give or take one. The pasteboard draws the
+    // paper as an untextured mesh.
     let fills = |out: &egui::FullOutput, rgb: [u8; 3]| {
         fn any(s: &Shape, f: &dyn Fn(Color32) -> bool) -> bool {
             match s {
                 Shape::Vec(v) => v.iter().any(|s| any(s, f)),
                 Shape::Path(p) => f(p.fill),
+                Shape::Rect(r) => f(r.fill),
+                Shape::Mesh(m) if m.texture_id == egui::TextureId::default() => m.vertices.iter().any(|v| f(v.color)),
                 _ => false,
             }
         }
