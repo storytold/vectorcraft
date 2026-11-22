@@ -423,9 +423,12 @@ pub(crate) fn sphere(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut Cust
     if let Some(index) = out.picked {
         select(fields, index);
     }
-    // What each event leaves in the lights, a cancel's restored start included.
+    // What each event leaves in the lights, a cancel's restored start included, each from where the one before left
+    // them (Down then Up in one pass lands back where it began).
+    let mut from = list.clone();
     for lights in out.edit.events.iter().filter_map(|event| event.landed()) {
-        write_moved(fields, &list, lights);
+        write_moved(fields, &from, lights);
+        from.clone_from(lights);
     }
     let current = selected(fields, list.len());
     let behind = list.get(current).is_some_and(|l| l.behind);

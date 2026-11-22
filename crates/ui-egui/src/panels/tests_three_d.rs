@@ -763,7 +763,11 @@ fn the_graphics_frame_is_built_once_for_each_revision() {
 }
 
 /// `app` with the graphics' handles over an 800 × 600 canvas, and the handle the trial reads the app through.
-fn handles_fixture(app: VectorcraftApp) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
+fn handles_fixture(mut app: VectorcraftApp) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
+    // The handles show while the 3D and Materials panel shows its Materials tab.
+    if !crate::panel_docking::visible(&app, super::ID) {
+        app.run("window.panel", json!({ "panel": super::ID })).unwrap();
+    }
     let app = Rc::new(RefCell::new(app));
     let drawn = Rc::clone(&app);
     let mut fixture = Fixture::new(move |ui| {

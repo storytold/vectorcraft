@@ -242,6 +242,8 @@ pub(crate) fn send(app: &mut VectorcraftApp, changed: Map<String, Value>, phase:
 /// document moved under the gesture, or the panel was removed (the gesture commits as one step).
 pub(crate) fn apply(app: &mut VectorcraftApp, params: &[Param], input: &DialogFields, events: &EditEvents<DialogFields>) {
     let settings = |fields: &DialogFields| Value::Object(form::json_of(params, fields));
+    // The one-step changes of a pass (several key presses in one frame) are one undo step, to where the last left them.
+    let mut set = None;
     for event in events {
         match event {
             EditEvent::Begin { id, .. } => {
@@ -259,7 +261,7 @@ pub(crate) fn apply(app: &mut VectorcraftApp, params: &[Param], input: &DialogFi
                 let changed = changed_settings(&app.three_d.before, &settings(after));
                 send(app, changed, Live::Released);
             }
-            EditEvent::Set { after, .. } => send(app, changed_settings(&settings(input), &settings(after)), Live::Released),
+            EditEvent::Set { after, .. } => set = Some(after),
             EditEvent::Cancel { reason, .. } => {
                 if matches!(reason, CancelReason::Removed) || reason.document_moved() {
                     send(app, Map::new(), Live::Released);
@@ -269,6 +271,9 @@ pub(crate) fn apply(app: &mut VectorcraftApp, params: &[Param], input: &DialogFi
             }
             _ => {}
         }
+    }
+    if let Some(after) = set {
+        send(app, changed_settings(&settings(input), &settings(after)), Live::Released);
     }
 }
 
