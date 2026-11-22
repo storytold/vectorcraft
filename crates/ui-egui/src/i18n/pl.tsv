@@ -7214,6 +7214,11 @@ axis	Y Axis	Oś Y
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` wskazuje `{other}`, który nie jest parametrem zadeklarowanym przed tym
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` wskazuje co najwyżej {MAX_CONDITIONS} parametrów
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` przyjmuje wartości `{other}`, czyli pola wyboru lub listy opcji
+@msg	`step` is only for a parameter with a slider	`step` dotyczy tylko parametru z suwakiem
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	suwak wymaga `min` mniejszego niż `max`, a suwak `int` zakresu w granicach ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	suwak jest tylko dla parametrów `number` i `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` musi być liczbą większą od 0 i co najwyżej równą `max` minus `min`
+@msg	an `int` parameter's `step` must be a whole number	`step` parametru `int` musi być liczbą całkowitą
 @msg	`visible` must be true or false	`visible` musi mieć wartość true lub false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` musi być liczbą od {_1} do {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` musi być tablicą o co najwyżej {MAX_ITEMS} elementach

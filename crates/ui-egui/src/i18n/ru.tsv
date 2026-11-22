@@ -6981,6 +6981,11 @@ axis	Y Axis	Ось Y
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` указывает `{other}`, но это не параметр, объявленный раньше этого
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` указывает не более {MAX_CONDITIONS} параметров
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` принимает значения `{other}`, флажка или списка вариантов
+@msg	`step` is only for a parameter with a slider	`step` допустим только для параметра с ползунком
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	ползунку нужен `min` меньше `max`, а ползунку `int` диапазон в пределах ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	ползунок допустим только для параметров `number` и `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` должен быть числом больше 0 и не больше `max` минус `min`
+@msg	an `int` parameter's `step` must be a whole number	`step` параметра `int` должен быть целым числом
 @msg	`visible` must be true or false	`visible` должно быть true или false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` должно быть числом от {_1} до {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` должно быть массивом не более чем из {MAX_ITEMS} элементов

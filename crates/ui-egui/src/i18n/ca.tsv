@@ -7749,6 +7749,11 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` anomena `{other}`, que no és un paràmetre declarat abans d’aquest
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` anomena com a màxim {MAX_CONDITIONS} paràmetres
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` pren els valors de `{other}`, d’una casella de selecció o d’una opció
+@msg	`step` is only for a parameter with a slider	`step` només s’aplica a un paràmetre amb control lliscant
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	un control lliscant necessita `min` inferior a `max`, i un de `int` un interval dins de ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	un control lliscant només s’aplica a paràmetres `number` i `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` ha de ser un nombre superior a 0 i com a màxim `max` menys `min`
+@msg	an `int` parameter's `step` must be a whole number	el `step` d’un paràmetre `int` ha de ser un nombre enter
 @msg	`visible` must be true or false	`visible` ha de ser true o false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` ha de ser un nombre de {_1} a {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` ha de ser una matriu de {MAX_ITEMS} entrades com a màxim

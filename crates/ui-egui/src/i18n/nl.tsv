@@ -436,6 +436,11 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` noemt `{other}`, dat geen parameter is die vóór deze is gedeclareerd
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` noemt maximaal {MAX_CONDITIONS} parameters
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` neemt de waarden van `{other}`, een selectievakje of een keuzelijst
+@msg	`step` is only for a parameter with a slider	`step` geldt alleen voor een parameter met een schuifregelaar
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	een schuifregelaar vereist dat `min` kleiner is dan `max`, en een `int`-schuifregelaar een bereik binnen ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	een schuifregelaar geldt alleen voor `number`- en `int`-parameters
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` moet een getal groter dan 0 zijn en hoogstens `max` min `min`
+@msg	an `int` parameter's `step` must be a whole number	de `step` van een `int`-parameter moet een geheel getal zijn
 @msg	`visible` must be true or false	`visible` moet true of false zijn
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` moet een getal van {_1} tot {_2} zijn
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` moet een array van maximaal {MAX_ITEMS} items zijn

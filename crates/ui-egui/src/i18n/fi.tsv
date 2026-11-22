@@ -7426,6 +7426,11 @@ axis	Y Axis	Y-akseli
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` nimeää parametrin `{other}`, jota ei ole esitelty ennen tätä parametria
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` nimeää enintään {MAX_CONDITIONS} parametria
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` ottaa parametrin `{other}` arvot, valintaruudun tai valinnan arvot
+@msg	`step` is only for a parameter with a slider	`step` on vain liukusäätimellä varustetulle parametrille
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	liukusäädin vaatii, että `min` on pienempi kuin `max`, ja `int`-liukusäädin alueen välillä ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	liukusäädin on vain `number`- ja `int`-parametreille
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step`-arvon on oltava 0:aa suurempi luku ja enintään `max` miinus `min`
+@msg	an `int` parameter's `step` must be a whole number	`int`-parametrin `step`-arvon on oltava kokonaisluku
 @msg	`visible` must be true or false	`visible` on oltava true tai false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` on oltava luku {_1} ja {_2} väliltä
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` on oltava enintään {MAX_ITEMS} kohteen taulukko

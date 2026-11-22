@@ -472,6 +472,11 @@
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` menyebut `{other}`, yang bukan parameter yang dideklarasikan sebelum parameter ini
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` menyebut paling banyak {MAX_CONDITIONS} parameter
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` menerima nilai `{other}`, dari kotak centang atau pilihan
+@msg	`step` is only for a parameter with a slider	`step` hanya untuk parameter dengan penggeser
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	penggeser memerlukan `min` di bawah `max`, dan penggeser `int` memerlukan rentang dalam ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	penggeser hanya untuk parameter `number` dan `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` harus berupa angka di atas 0 dan paling banyak `max` dikurangi `min`
+@msg	an `int` parameter's `step` must be a whole number	`step` parameter `int` harus berupa bilangan bulat
 @msg	`visible` must be true or false	`visible` harus true atau false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` harus berupa angka dari {_1} sampai {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` harus berupa larik berisi paling banyak {MAX_ITEMS} entri

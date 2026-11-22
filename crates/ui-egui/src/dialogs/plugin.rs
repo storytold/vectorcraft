@@ -230,8 +230,18 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if run_with.is_none() && !d.str("__command").is_empty() {
         return true;
     }
-    form::schema_fields(app, ui, d, run_with.as_ref().unwrap_or(plugin.manifest()));
+    let changed = form::schema_fields(app, ui, d, run_with.as_ref().unwrap_or(plugin.manifest()));
     match plugin.manifest().budget {
+        // While a slider is dragged, the preview catches up with it a few times a second. Turning
+        // Preview off during the drag still rolls the preview back at once.
+        Budget::Light if form::slide_preview(ui, d, changed).is_none() => {
+            ui.add_space(8.0);
+            form::preview_check(ui, d);
+            if !d.bool("preview") {
+                let (label, p) = (d.str("__label"), params(d));
+                form::preview_without_check(app, d, &label, &command(d), p);
+            }
+        }
         Budget::Light => {
             let (label, p) = (d.str("__label"), params(d));
             form::preview(app, ui, d, &label, &command(d), p);

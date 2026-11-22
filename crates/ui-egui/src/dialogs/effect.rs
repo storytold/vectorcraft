@@ -269,7 +269,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     }
     // Plug-in effects get fields from their parameter schema; colour adjustments their sliders.
     let changed = match vectorcraft_plugins::effect::installed(&id) {
-        Some(plugin) => form::schema_fields(app, ui, d, plugin.manifest()),
+        // While a slider is dragged, the preview catches up with it a few times a second.
+        Some(plugin) => {
+            let changed = form::schema_fields(app, ui, d, plugin.manifest());
+            form::slide_preview(ui, d, changed).unwrap_or(false)
+        }
         // The Color Effects add-on's take the plain form of their parameters.
         None if vectorcraft_effects::is_adjustment(&id) && !vectorcraft_effects::addons::color::is_color_effect(&id) => adjust_fields(ui, d),
         None if id == vectorcraft_effects::addons::halftone::HALFTONE => {

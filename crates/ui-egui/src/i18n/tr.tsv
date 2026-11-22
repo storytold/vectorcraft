@@ -7431,6 +7431,11 @@ axis	Y Axis	Y ekseni
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` `{other}` adını veriyor, ancak bu, bundan önce bildirilmiş bir parametre değil
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` en fazla {MAX_CONDITIONS} parametre adı verir
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen`, bir onay kutusu veya seçim olan `{other}` parametresinin değerlerini alır
+@msg	`step` is only for a parameter with a slider	`step` yalnızca kaydırıcısı olan bir parametre içindir
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	bir kaydırıcı için `min`, `max` değerinden küçük olmalı; bir `int` kaydırıcının aralığı ise ±{EXACT_INT} içinde olmalıdır
+@msg	a slider is only for `number` and `int` parameters	kaydırıcı yalnızca `number` ve `int` parametreleri içindir
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step`, 0'dan büyük ve en fazla `max` eksi `min` olan bir sayı olmalıdır
+@msg	an `int` parameter's `step` must be a whole number	bir `int` parametresinin `step` değeri tam sayı olmalıdır
 @msg	`visible` must be true or false	`visible` true veya false olmalıdır
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` {_1} ile {_2} arasında bir sayı olmalıdır
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` en fazla {MAX_ITEMS} öğeli bir dizi olmalıdır

@@ -7056,6 +7056,11 @@ axis	Y Axis	Y 軸
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` が指定した `{other}` は、このパラメーターより前に宣言されたパラメーターではありません
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` に指定できるパラメーターは {MAX_CONDITIONS} 個までです
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` が受け取るのは、チェックボックスか選択肢である `{other}` の値です
+@msg	`step` is only for a parameter with a slider	`step` はスライダーのあるパラメーターにのみ指定できます
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	スライダーには `max` より小さい `min` が必要で、`int` のスライダーの範囲は ±{EXACT_INT} 以内である必要があります
+@msg	a slider is only for `number` and `int` parameters	スライダーは `number` と `int` のパラメーターにのみ使えます
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` は 0 より大きく、`max` から `min` を引いた値以下の数値である必要があります
+@msg	an `int` parameter's `step` must be a whole number	`int` パラメーターの `step` は整数である必要があります
 @msg	`visible` must be true or false	`visible` は true または false にしてください
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` は {_1} から {_2} の数値にしてください
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` は {MAX_ITEMS} 項目以下の配列にしてください

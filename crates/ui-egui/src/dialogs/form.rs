@@ -610,7 +610,8 @@ fn typed_number(x: f64) -> Value {
 
 /// Editor for a plug-in's parameters from its manifest (the filter, live effect and exporter
 /// dialogs): numbers within their range, whole numbers, checkboxes, dropdowns, text and lists of
-/// numbers, a row each. A row is labelled as the manifest says (else from the parameter's name),
+/// numbers, a row each, with a slider before the number of a parameter that asks for one
+/// ([`plugin_slider`]). A row is labelled as the manifest says (else from the parameter's name),
 /// with its unit after the value and its help on the label and on a help button that opens its
 /// page. Parameters outside any group come first, then each group as a section that folds
 /// ([`Manifest::sections`]); a parameter whose `visibleWhen` the values don't meet is left out
@@ -634,6 +635,7 @@ pub(super) fn schema_fields(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, 
 pub(super) fn schema_rows(ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> (bool, Option<String>) {
     let mut changed = false;
     let mut help = None;
+    let mut sliding = false;
     let visible = m.visible(&d.fields);
     let sections = m.sections();
     // Every section's label column is as wide as the longest label shown, so the fields line up
@@ -653,8 +655,9 @@ pub(super) fn schema_rows(ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> (b
                 let grid = egui::Grid::new(("plugin-grid", section)).num_columns(2).spacing([12.0, 8.0]).min_col_width(label_width);
                 grid.show(ui, |ui| {
                     for (k, p) in shown {
-                        let (row_changed, opened) = param_row(ui, d, k, p);
+                        let (row_changed, opened, row_sliding) = param_row(ui, d, k, p);
                         changed |= row_changed;
+                        sliding |= row_sliding;
                         help = help.take().or(opened);
                         ui.end_row();
                     }
@@ -668,7 +671,87 @@ pub(super) fn schema_rows(ui: &mut egui::Ui, d: &mut Dialog, m: &Manifest) -> (b
             }
         }
     });
+    if sliding {
+        d.fields.insert(SLIDING.into(), json!(true));
+    } else {
+        d.fields.remove(SLIDING);
+    }
     (changed, help)
+}
+
+/// The field set while one of a plug-in dialog's sliders is being dragged ([`schema_rows`]).
+const SLIDING: &str = "__sliding";
+/// The fields holding the dialog's [`SlidePreview`]: its `at` and its `held`.
+const SLID_AT: &str = "__slidAt";
+const HELD: &str = "__held";
+
+/// How often, at most, dragging the slider of a plug-in's parameter runs the plug-in again for
+/// its preview (seconds).
+pub(crate) const SLIDE_PREVIEW_EVERY: f64 = 0.1;
+
+/// When a drag on a plug-in parameter's slider last previewed, and whether a value it reached
+/// has not previewed yet ([`SlidePreview::due`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct SlidePreview {
+    /// The time of the drag's last preview (seconds of the UI's clock).
+    pub at: Option<f64>,
+    /// A value changed since that preview.
+    pub held: bool,
+}
+
+impl SlidePreview {
+    /// Whether to preview on this frame at time `now`, given whether a value `changed` on it and
+    /// whether a slider is `sliding`: `Err(wait)` to wait `wait` seconds, else whether there is a
+    /// change to preview. While a slider is dragged, a change previews at once when the drag's
+    /// last preview is at least [`SLIDE_PREVIEW_EVERY`] old, and otherwise waits for that time,
+    /// so a plug-in runs about ten times a second during a drag, on the latest value, rather than
+    /// on every frame. A change still waiting when the drag ends previews then.
+    pub(crate) fn due(&mut self, now: f64, sliding: bool, changed: bool) -> Result<bool, f64> {
+        let pending = std::mem::take(&mut self.held) || changed;
+        if !sliding {
+            self.at = None;
+            return Ok(pending);
+        }
+        if !pending {
+            return Ok(false);
+        }
+        match self.at.map(|at| now - at) {
+            Some(since) if (0.0..SLIDE_PREVIEW_EVERY).contains(&since) => {
+                self.held = true;
+                Err(SLIDE_PREVIEW_EVERY - since)
+            }
+            _ => {
+                self.at = Some(now);
+                Ok(true)
+            }
+        }
+    }
+
+    /// [`SlidePreview::due`] at `ui`'s time, asking for a frame when a wait ends: `None` to wait.
+    pub(crate) fn due_now(&mut self, ui: &egui::Ui, sliding: bool, changed: bool) -> Option<bool> {
+        let due = self.due(ui.input(|i| i.time), sliding, changed);
+        if let Err(wait) = due {
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(wait));
+        }
+        due.ok()
+    }
+}
+
+/// Whether the plug-in dialog `d` previews its values on this frame, given whether one `changed`
+/// on it ([`schema_rows`]): `None` to wait while one of its sliders is dragged, else whether there
+/// is a change to preview ([`SlidePreview::due`]).
+pub(super) fn slide_preview(ui: &egui::Ui, d: &mut Dialog, changed: bool) -> Option<bool> {
+    let mut slide = SlidePreview { at: d.fields.get(SLID_AT).and_then(Value::as_f64), held: d.bool(HELD) };
+    let due = slide.due_now(ui, d.bool(SLIDING), changed);
+    match slide.at {
+        Some(at) => d.fields.insert(SLID_AT.into(), json!(at)),
+        None => d.fields.remove(SLID_AT),
+    };
+    match slide.held {
+        true => d.fields.insert(HELD.into(), json!(true)),
+        false => d.fields.remove(HELD),
+    };
+    due
 }
 
 /// The label of parameter `k`'s row: its manifest `label`, else its name spaced out.
@@ -677,8 +760,8 @@ fn param_label(k: &str, p: &Param) -> String {
 }
 
 /// One row of [`schema_fields`]: parameter `k`'s label and value field → whether the value changed,
-/// and the help page asked for.
-fn param_row(ui: &mut egui::Ui, d: &mut Dialog, k: &str, p: &Param) -> (bool, Option<String>) {
+/// the help page asked for, and whether its slider is being dragged.
+fn param_row(ui: &mut egui::Ui, d: &mut Dialog, k: &str, p: &Param) -> (bool, Option<String>, bool) {
     let t = Tokens::get(ui.ctx());
     let label = param_label(k, p);
     let shown_label = ui.label(egui::RichText::new(&label).color(t.text));
@@ -687,11 +770,17 @@ fn param_row(ui: &mut egui::Ui, d: &mut Dialog, k: &str, p: &Param) -> (bool, Op
     let unit = p.ui.unit.as_deref().unwrap_or_default();
     let suffix = unit_suffix(unit);
     let mut opened = None;
+    let mut sliding = false;
     let new = ui
         .horizontal(|ui| {
             // The row's painted label names every input in its value column (egui 0.37's strict
             // accessibility gate), not only the first one.
-            let (new, in_field) = ui.label_inputs_by(shown_label.id, |ui| value_field(ui, k, &label, &p.spec, &cur, &suffix));
+            let (new, in_field) = ui.label_inputs_by(shown_label.id, |ui| {
+                let slid = p.ui.slider_range(&p.spec).map(|range| plugin_slider(ui, k, &p.spec, &cur, range, p.ui.step, PARAM_SLIDER_WIDTH));
+                sliding = slid.as_ref().is_some_and(|(_, resp)| resp.dragged());
+                let (typed, in_field) = value_field(ui, k, &label, &p.spec, &cur, &suffix, field_places(p));
+                (slid.and_then(|(v, _)| v).or(typed), in_field)
+            });
             if !in_field && !unit.is_empty() {
                 ui.label(egui::RichText::new(unit).color(t.text_dim));
             }
@@ -704,17 +793,111 @@ fn param_row(ui: &mut egui::Ui, d: &mut Dialog, k: &str, p: &Param) -> (bool, Op
         })
         .inner;
     let changed = new.map(|v| d.fields.insert(k.to_string(), v)).is_some();
-    (changed, opened)
+    (changed, opened, sliding)
+}
+
+/// Width of the slider a plug-in parameter asks for (`"widget": "slider"`) in its dialog, and the
+/// most it takes in the Appearance panel.
+pub(crate) const PARAM_SLIDER_WIDTH: f32 = 140.0;
+
+/// The slider of a `number` or `int` parameter that asks for one, `width` wide, over `range` (its
+/// `min..max`), showing its value `cur`: dragging it or stepping it with the keys moves the value
+/// by `step` from `min` (an `int` without one by 1, a `number` without one to two decimal places,
+/// more when the range is under 1) → the value it moved to, and the slider's response. A value
+/// off the slider's grid is kept until the slider is used. Screen readers get it as a slider with
+/// the row's label as its name and the value as its number.
+pub(crate) fn plugin_slider(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    spec: &ParamSpec,
+    cur: &Value,
+    range: std::ops::RangeInclusive<f64>,
+    step: Option<f64>,
+    width: f32,
+) -> (Option<Value>, egui::Response) {
+    let int = matches!(spec, ParamSpec::Int { .. });
+    let (lo, hi) = (*range.start(), *range.end());
+    let before = cur.as_f64().unwrap_or(lo).clamp(lo, hi);
+    let mut v = before;
+    // `Edits` clamps and rounds only what the pointer, the keys or a screen reader set, so drawing
+    // the slider leaves a value off its grid as it is.
+    let slider = egui::Slider::new(&mut v, range).show_value(false).clamping(egui::SliderClamping::Edits);
+    let places = if int { None } else { slider_places(lo, hi, step) };
+    let slider = match step {
+        Some(step) => slider.step_by(step),
+        None if int => slider.integer(),
+        None => slider.fixed_decimals(places.unwrap_or(2)),
+    };
+    let resp = ui
+        .push_id(("plugin-slider", id), |ui| {
+            ui.spacing_mut().slider_width = width;
+            crate::widgets::slider(ui, slider)
+        })
+        .inner;
+    if v == before {
+        return (None, resp);
+    }
+    // Rounding onto the step's grid can pass `max`, which the plug-in would refuse, and a step
+    // such as 0.1 leaves binary noise (0.30000000000000004) that the plug-in would be given.
+    let v = match (step, places) {
+        (Some(_), Some(places)) => round_to(v, lo, places),
+        _ => v,
+    }
+    .clamp(lo, hi);
+    let new = (v != before).then(|| if int { json!(v.round() as i64) } else { json!(v) });
+    (new, resp)
+}
+
+/// The decimal places a `number` slider over `lo..=hi` moves its value to: with a `step`, the
+/// step's and `lo`'s own (`None` when either has more than 17); without one, two, and more when
+/// the range is under 1.
+fn slider_places(lo: f64, hi: f64, step: Option<f64>) -> Option<usize> {
+    match step {
+        Some(step) => Some(decimal_places(step)?.max(decimal_places(lo)?)),
+        None => Some(2 + (-(hi - lo).log10()).ceil().clamp(0.0, 330.0) as usize),
+    }
+}
+
+/// The decimal places the number field of plug-in parameter `p` shows and reads: those its slider
+/// moves to, from 2 to the field's limit of 6, when it has one, else 2.
+pub(crate) fn field_places(p: &Param) -> usize {
+    match (&p.spec, p.ui.slider_range(&p.spec)) {
+        (ParamSpec::Number { .. }, Some(range)) => slider_places(*range.start(), *range.end(), p.ui.step).unwrap_or(6).clamp(2, 6),
+        _ => 2,
+    }
+}
+
+/// How many decimal places `x` is written with, when that is at most 17.
+fn decimal_places(x: f64) -> Option<usize> {
+    (0..=17).find(|&d| {
+        let scaled = x * 10f64.powi(d as i32);
+        (scaled - scaled.round()).abs() <= ulp(scaled)
+    })
+}
+
+/// The gap between `x` and the next larger `f64` in magnitude.
+fn ulp(x: f64) -> f64 {
+    let x = x.abs();
+    f64::from_bits(x.to_bits() + 1) - x
+}
+
+/// `v`, a value on a slider's grid counted from `lo`, rounded to `places` decimal places when that
+/// moves it by no more than the binary noise of that count (four units in the last place of the
+/// larger of `v` and `lo`, as in 0.30000000000000004), else `v`.
+fn round_to(v: f64, lo: f64, places: usize) -> f64 {
+    let scale = 10f64.powi(places as i32);
+    let rounded = (v * scale).round() / scale;
+    if rounded.is_finite() && (rounded - v).abs() <= 4.0 * ulp(v.abs().max(lo.abs())) { rounded } else { v }
 }
 
 /// The field of parameter `k`'s value `cur` (a checkbox is called by the row's `label`) → the new
 /// value when it changed, and whether the field shows `suffix` (numbers do; the other fields leave
-/// the unit to a label after them).
-fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &Value, suffix: &str) -> (Option<Value>, bool) {
+/// the unit to a label after them). A number shows `places` decimal places ([`field_places`]).
+fn value_field(ui: &mut egui::Ui, k: &str, label: &str, spec: &ParamSpec, cur: &Value, suffix: &str, places: usize) -> (Option<Value>, bool) {
     match spec {
         ParamSpec::Number { min, max, .. } => {
             let x = cur.as_f64().unwrap_or(*min);
-            (crate::widgets::range_field_named(ui, ("plugin-num", k), Some(label), x, *min..=*max, suffix, 2, 100.0).map(|x| json!(x)), true)
+            (crate::widgets::range_field_named(ui, ("plugin-num", k), Some(label), x, *min..=*max, suffix, places, 100.0).map(|x| json!(x)), true)
         }
         ParamSpec::Int { min, max, .. } => {
             let x = cur.as_i64().unwrap_or(*min).clamp(*min, *max);

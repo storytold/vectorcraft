@@ -600,10 +600,18 @@ declares them still installs there:
 | `help` | Shows what the parameter does when the pointer rests on its label (1–1,000 characters; line breaks allowed). |
 | `helpUrl` | Opens this `https://` page (at most 512 bytes) from a button after the field. |
 | `visibleWhen` | `{"pattern": ["lines", "crosshatch"], "outline": [true]}` shows the parameter only while each parameter it names (a checkbox or a choice declared before it) has one of the values listed and is shown itself. |
+| `widget` | `"slider"` shows a slider over `min..max` before the number field of a `number` or `int` parameter. Its range needs `min` below `max`, and an `int`'s range lies within ±9,007,199,254,740,992. On any other parameter, or with another value, the manifest is refused at install. |
+| `step` | How far the slider moves the value at a time, counted from `min`: a number above 0 and at most `max` minus `min`, and a whole number for an `int`. Without it, a slider moves a `number` to two decimal places (more when `max` minus `min` is under 1) and an `int` by 1. The number field shows as many decimal places as the slider moves to, from 2 to 6. A value off the slider's steps, typed in the field or set by a script, is kept until the slider is moved. `step` without `"widget": "slider"` is refused. |
 
 A hidden parameter still goes to the plug-in with its value: what the dialog showed never changes a run. The
 filter, live-effect and exporter dialogs use all of these keys. The Appearance panel's editor of a plug-in effect's
-parameters uses `label`, `unit`, `help` and `visibleWhen`, and lists the parameters without sections or help buttons.
+parameters uses `label`, `unit`, `help`, `visibleWhen`, `widget` and `step`, and lists the parameters without
+sections or help buttons.
+
+The arrow keys move a slider by its `step`, or by 1 for an `int` without one, and screen readers read it as a slider
+named by the parameter's label. While a slider is dragged, the preview of a filter or live effect runs the plug-in
+at most about ten times a second, on the latest value, and the value the drag ends on always previews. In the
+Appearance panel, a drag is one undo step.
 
 ### Input
 

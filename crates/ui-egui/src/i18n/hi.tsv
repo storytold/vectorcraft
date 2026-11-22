@@ -6543,6 +6543,11 @@ arrowhead	Feather	पंख
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` में `{other}` दिया गया है, जो इससे पहले घोषित पैरामीटर नहीं है
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` में अधिकतम {MAX_CONDITIONS} पैरामीटर हो सकते हैं
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` `{other}` के मान लेता है, जो चेकबॉक्स या विकल्प होना चाहिए
+@msg	`step` is only for a parameter with a slider	`step` केवल स्लाइडर वाले पैरामीटर के लिए है
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	स्लाइडर के लिए `min` का `max` से कम होना ज़रूरी है, और `int` स्लाइडर की सीमा ±{EXACT_INT} के भीतर होनी चाहिए
+@msg	a slider is only for `number` and `int` parameters	स्लाइडर केवल `number` और `int` पैरामीटर के लिए है
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` 0 से बड़ी और अधिकतम `max` घटा `min` जितनी संख्या होनी चाहिए
+@msg	an `int` parameter's `step` must be a whole number	`int` पैरामीटर का `step` पूर्ण संख्या होना चाहिए
 @msg	`visible` must be true or false	`visible` true या false होना चाहिए
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` {_1} से {_2} तक की संख्या होना चाहिए
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` अधिकतम {MAX_ITEMS} प्रविष्टियों का ऐरे होना चाहिए

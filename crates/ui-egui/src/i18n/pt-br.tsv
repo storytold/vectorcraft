@@ -7258,6 +7258,11 @@ axis	Y Axis	Eixo Y
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` nomeia `{other}`, que não é um parâmetro declarado antes deste
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` nomeia no máximo {MAX_CONDITIONS} parâmetros
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` aceita os valores de `{other}`, de uma caixa de seleção ou de uma escolha
+@msg	`step` is only for a parameter with a slider	`step` só vale para um parâmetro com controle deslizante
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	um controle deslizante precisa de `min` menor que `max`, e um de `int` de um intervalo dentro de ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	um controle deslizante só vale para parâmetros `number` e `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` deve ser um número maior que 0 e no máximo `max` menos `min`
+@msg	an `int` parameter's `step` must be a whole number	o `step` de um parâmetro `int` deve ser um número inteiro
 @msg	`visible` must be true or false	`visible` deve ser true ou false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` deve ser um número de {_1} a {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` deve ser uma matriz de no máximo {MAX_ITEMS} entradas

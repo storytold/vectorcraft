@@ -7359,6 +7359,11 @@ axis	Y Axis	osa Y
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` uvádí `{other}`, což není parametr deklarovaný před tímto
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` smí uvádět nejvýše {MAX_CONDITIONS} parametrů
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` přebírá hodnoty `{other}`, a to zaškrtávacího políčka nebo volby
+@msg	`step` is only for a parameter with a slider	`step` je jen pro parametr s posuvníkem
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	posuvník potřebuje `min` menší než `max` a posuvník typu `int` rozsah v mezích ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	posuvník je jen pro parametry `number` a `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` musí být číslo větší než 0 a nejvýše `max` minus `min`
+@msg	an `int` parameter's `step` must be a whole number	`step` parametru `int` musí být celé číslo
 @msg	`visible` must be true or false	`visible` musí být true nebo false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` musí být číslo od {_1} do {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` musí být pole s nejvýše {MAX_ITEMS} položkami

@@ -9462,6 +9462,11 @@ axis	Y Axis	Y ღერძი
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` ასახელებს `{other}`-ს, რომელიც ამაზე ადრე გამოცხადებული პარამეტრი არ არის
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` ასახელებს არაუმეტეს {MAX_CONDITIONS} პარამეტრს
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` იღებს `{other}`-ის მნიშვნელობებს, მოსანიშნი ველის ან არჩევანისას
+@msg	`step` is only for a parameter with a slider	`step` მხოლოდ სლაიდერიანი პარამეტრისთვისაა
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	სლაიდერს სჭირდება `min`, რომელიც `max`-ზე ნაკლებია, ხოლო `int` სლაიდერს დიაპაზონი ±{EXACT_INT}-ის ფარგლებში
+@msg	a slider is only for `number` and `int` parameters	სლაიდერი მხოლოდ `number` და `int` პარამეტრებისთვისაა
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` უნდა იყოს 0-ზე მეტი რიცხვი და არაუმეტეს `max` მინუს `min`
+@msg	an `int` parameter's `step` must be a whole number	`int` პარამეტრის `step` მთელი რიცხვი უნდა იყოს
 @msg	`visible` must be true or false	`visible` უნდა იყოს true ან false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` უნდა იყოს რიცხვი {_1}-დან {_2}-მდე
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` უნდა იყოს მასივი, არაუმეტეს {MAX_ITEMS} ელემენტით

@@ -7349,6 +7349,11 @@ axis	Y Axis	Άξονας Y
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	το `visibleWhen` αναφέρει το `{other}`, που δεν είναι παράμετρος δηλωμένη πριν από αυτήν
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	το `visibleWhen` αναφέρει έως {MAX_CONDITIONS} παραμέτρους
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	το `visibleWhen` δέχεται τιμές του `{other}`, ενός πλαισίου ελέγχου ή μιας επιλογής
+@msg	`step` is only for a parameter with a slider	το `step` ισχύει μόνο για παράμετρο με ρυθμιστικό
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	ένα ρυθμιστικό χρειάζεται `min` μικρότερο από `max`, και ένα ρυθμιστικό `int` εύρος εντός ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	ένα ρυθμιστικό ισχύει μόνο για παραμέτρους `number` και `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	το `step` πρέπει να είναι αριθμός μεγαλύτερος από 0 και το πολύ `max` μείον `min`
+@msg	an `int` parameter's `step` must be a whole number	το `step` μιας παραμέτρου `int` πρέπει να είναι ακέραιος αριθμός
 @msg	`visible` must be true or false	το `visible` πρέπει να είναι true ή false
 @msg	`{key}` must be a number from {_1} to {_2}	το `{key}` πρέπει να είναι αριθμός από {_1} έως {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	το `{key}` πρέπει να είναι πίνακας έως {MAX_ITEMS} στοιχείων

@@ -179,7 +179,10 @@ pub(crate) use export_for_screens::{
     open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
     saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
-pub(crate) use form::{humanize, number_list_text, plugin_color_button, ppi_suffix, read_number_list, unit_suffix};
+pub(crate) use form::{
+    PARAM_SLIDER_WIDTH, SlidePreview, field_places, humanize, number_list_text, plugin_color_button, plugin_slider, ppi_suffix, read_number_list,
+    unit_suffix,
+};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;

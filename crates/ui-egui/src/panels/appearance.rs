@@ -1377,6 +1377,7 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     let t = Tokens::get(ui.ctx());
     let params = editor_params(e);
     let mut change: Option<(String, Value)> = None;
+    let mut slid: Option<(String, Value, widgets::Live)> = None;
     let mut edit = false;
     let built_in = built_in_effect(&e.id);
     // A plug-in effect's parameters are labelled, measured and shown as its manifest says.
@@ -1451,6 +1452,18 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                         }
                         return;
                     }
+                    // A plug-in's number that asks for a slider shows it before the number, as its
+                    // dialog does; the number shows the value a drag in progress reached.
+                    let dragged;
+                    let v = match manifest.and_then(|m| m.param(key)).and_then(|p| Some((p, p.ui.slider_range(&p.spec)?))) {
+                        Some((p, range)) => {
+                            let (shown, edit) = param_slider_edit(ui, (item, k, key.as_str()), p, v, range);
+                            slid = edit.map(|(value, phase)| (key.clone(), value, phase)).or(slid.take());
+                            dragged = shown;
+                            &dragged
+                        }
+                        None => v,
+                    };
                     match v {
                         Value::Bool(b) => {
                             if widgets::check_box(ui, &label, *b, true) {
@@ -1461,11 +1474,13 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
                             let (x, id) = (n.as_f64().unwrap_or(0.0), ("fx", item, k, key.as_str()));
                             let suffix = ui_keys.and_then(|u| u.unit.as_deref()).map(crate::dialogs::unit_suffix).unwrap_or_default();
                             let nx = if vectorcraft_effects::is_length(&e.id, key, relative) {
-                                widgets::num_field(ui, id, Some(x), unit, 70.0)
+                                widgets::num_field(ui, id, Some(x), unit, NUMBER_W)
                             } else if let Some(range) = vectorcraft_effects::raster_px_range(&e.id, key) {
-                                widgets::range_field_named(ui, id, None, x, range, &crate::dialogs::unit_suffix("px"), 2, 70.0)
+                                widgets::range_field_named(ui, id, None, x, range, &crate::dialogs::unit_suffix("px"), 2, NUMBER_W)
                             } else {
-                                widgets::plain_field(ui, id, x, &suffix, 2, 70.0)
+                                // A plug-in number with a slider shows the places its slider moves to.
+                                let places = manifest.and_then(|m| m.param(key)).map_or(2, crate::dialogs::field_places);
+                                widgets::plain_field(ui, id, x, &suffix, places, NUMBER_W)
                             };
                             if let Some(nx) = nx {
                                 change = Some((key.clone(), json!(nx)));
@@ -1496,9 +1511,69 @@ fn effect_editor(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: 
     if let Some((key, v)) = change {
         app.run("effect.setParams", aligned(app, json!({"item": item, "index": k, "params": {key: v}}))).ok();
     }
+    if let Some((key, v, phase)) = slid {
+        let p = aligned(app, json!({"item": item, "index": k, "params": {key: v}}));
+        super::live_run(app, "Effect Options", "effect.setParams", p, phase);
+    }
     if edit {
         app.run("effect.dialog", aligned(app, json!({"effect": e.id, "index": k, "item": item}))).ok();
     }
+}
+
+/// Width of a number field in [`effect_editor`].
+const NUMBER_W: f32 = 70.0;
+
+/// The narrowest a plug-in parameter's slider gets in [`effect_editor`].
+const SLIDER_MIN_W: f32 = 24.0;
+
+/// What a drag on the slider of a plug-in effect's parameter in [`effect_editor`] keeps between
+/// frames: the value it reached, and when it last previewed.
+#[derive(Clone, Debug, Default)]
+struct ParamSlide {
+    value: Option<Value>,
+    preview: crate::dialogs::SlidePreview,
+}
+
+/// The slider of plug-in parameter `p` with value `v`, which asks for one, over `range`, in the row
+/// `id` (appearance item, effect index and parameter name) → the value the row's number shows (a
+/// drag's in progress, else `v`) and the edit to run with its phase ([`super::live_run`]): a click
+/// or key as one undo step, and a drag previewed on the canvas about ten times a second
+/// ([`crate::dialogs::SlidePreview`]) and kept as one undo step when it ends.
+fn param_slider_edit(
+    ui: &mut Ui,
+    id: (Option<usize>, usize, &str),
+    p: &vectorcraft_plugins::Param,
+    v: &Value,
+    range: std::ops::RangeInclusive<f64>,
+) -> (Value, Option<(Value, widgets::Live)>) {
+    let memory = egui::Id::unique(("fx-slide", id));
+    let mut slide: ParamSlide = ui.data(|d| d.get_temp(memory)).unwrap_or_default();
+    let cur = slide.value.clone().unwrap_or_else(|| v.clone());
+    // The slider takes the room the row has left after the number field after it, so a narrow
+    // panel keeps both in view.
+    let room = ui.available_width() - NUMBER_W - 2.0 * ui.spacing().item_spacing.x;
+    let width = room.clamp(SLIDER_MIN_W, crate::dialogs::PARAM_SLIDER_WIDTH);
+    let (new, resp) = crate::dialogs::plugin_slider(ui, ("fx-slider", id), &p.spec, &cur, range, p.ui.step, width);
+    let edit = if resp.drag_stopped() {
+        // The value the drag ended on, kept even when its last preview waited.
+        new.or(std::mem::take(&mut slide).value).map(|value| (value, widgets::Live::Released))
+    } else if resp.dragged() {
+        let changed = new.is_some();
+        slide.value = new.or(slide.value.take());
+        let due = slide.preview.due_now(ui, true, changed) == Some(true);
+        slide.value.clone().filter(|_| due).map(|value| (value, widgets::Live::Dragging))
+    } else {
+        new.map(|value| (value, widgets::Live::Released))
+    };
+    let shown = slide.value.clone().unwrap_or(cur);
+    ui.data_mut(|d| {
+        if slide.value.is_some() {
+            d.insert_temp(memory, slide);
+        } else {
+            d.remove_temp::<ParamSlide>(memory);
+        }
+    });
+    (shown, edit)
 }
 
 /// The values [`effect_editor`] lists: the effect's own values over its defaults, with earlier keys

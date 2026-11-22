@@ -7012,6 +7012,11 @@ axis	Y Axis	Y 軸
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` 指定了 `{other}`，但它不是在此參數之前宣告的參數
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` 最多指定 {MAX_CONDITIONS} 個參數
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` 接受 `{other}` 的值，該參數須為核取方塊或選項
+@msg	`step` is only for a parameter with a slider	`step` 僅適用於帶滑桿的參數
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	滑桿需要 `min` 小於 `max`，`int` 滑桿的範圍須在 ±{EXACT_INT} 以內
+@msg	a slider is only for `number` and `int` parameters	滑桿僅適用於 `number` 和 `int` 參數
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` 必須是大於 0 且不超過 `max` 減 `min` 的數
+@msg	an `int` parameter's `step` must be a whole number	`int` 參數的 `step` 必須是整數
 @msg	`visible` must be true or false	`visible` 必須是 true 或 false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` 必須是介於 {_1} 到 {_2} 之間的數字
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` 必須是最多 {MAX_ITEMS} 項的陣列

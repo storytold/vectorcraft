@@ -7355,6 +7355,11 @@ axis	Y Axis	Axe Y
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` nomme `{other}`, qui n’est pas un paramètre déclaré avant celui-ci
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` nomme au plus {MAX_CONDITIONS} paramètres
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` prend les valeurs de `{other}`, celles d’une case à cocher ou d’un choix
+@msg	`step` is only for a parameter with a slider	`step` ne s’applique qu’à un paramètre avec un curseur
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	un curseur exige `min` inférieur à `max`, et un curseur `int` une plage comprise dans ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	un curseur ne s’applique qu’aux paramètres `number` et `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` doit être un nombre supérieur à 0 et au plus égal à `max` moins `min`
+@msg	an `int` parameter's `step` must be a whole number	le `step` d’un paramètre `int` doit être un nombre entier
 @msg	`visible` must be true or false	`visible` doit valoir true ou false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` doit être un nombre de {_1} à {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` doit être un tableau d’au plus {MAX_ITEMS} entrées

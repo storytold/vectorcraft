@@ -7371,6 +7371,11 @@ axis	Y Axis	Y-axel
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` anger `{other}`, som inte är en parameter som deklarerats före den här
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` anger högst {MAX_CONDITIONS} parametrar
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` tar värden från `{other}`, en kryssruta eller ett val
+@msg	`step` is only for a parameter with a slider	`step` gäller bara en parameter med skjutreglage
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	ett skjutreglage kräver att `min` är mindre än `max`, och ett `int`-skjutreglage ett intervall inom ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	ett skjutreglage gäller bara `number`- och `int`-parametrar
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` måste vara ett tal över 0 och högst `max` minus `min`
+@msg	an `int` parameter's `step` must be a whole number	`step` för en `int`-parameter måste vara ett heltal
 @msg	`visible` must be true or false	`visible` måste vara true eller false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` måste vara ett tal från {_1} till {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` måste vara en array med högst {MAX_ITEMS} poster

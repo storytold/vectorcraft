@@ -7010,6 +7010,11 @@ axis	Y Axis	Trục Y
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` nêu `{other}`, nhưng đó không phải là tham số được khai báo trước tham số này
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` nêu tối đa {MAX_CONDITIONS} tham số
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` nhận giá trị của `{other}`, là một hộp kiểm hoặc một lựa chọn
+@msg	`step` is only for a parameter with a slider	`step` chỉ dành cho tham số có thanh trượt
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	thanh trượt cần `min` nhỏ hơn `max`, và thanh trượt `int` cần phạm vi trong khoảng ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	thanh trượt chỉ dành cho tham số `number` và `int`
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` phải là số lớn hơn 0 và tối đa bằng `max` trừ `min`
+@msg	an `int` parameter's `step` must be a whole number	`step` của tham số `int` phải là số nguyên
 @msg	`visible` must be true or false	`visible` phải là true hoặc false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` phải là một số từ {_1} đến {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` phải là một mảng có tối đa {MAX_ITEMS} mục

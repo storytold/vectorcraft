@@ -7344,6 +7344,11 @@ axis	Y Axis	Y tengely
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	a `visibleWhen` ezt nevezi meg: `{other}`, de ez nem az ennél korábban megadott paraméterek egyike
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	a `visibleWhen` legfeljebb {MAX_CONDITIONS} paramétert nevezhet meg
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	a `visibleWhen` a(z) `{other}` értékeit veszi át, egy jelölőnégyzetét vagy egy választásét
+@msg	`step` is only for a parameter with a slider	a `step` csak csúszkás paraméterhez adható meg
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	a csúszkához a `min` értéknek kisebbnek kell lennie a `max` értéknél, egy `int` csúszka tartományának pedig ±{EXACT_INT} között kell lennie
+@msg	a slider is only for `number` and `int` parameters	csúszka csak `number` és `int` paraméterhez adható
+@msg	`step` must be a number above 0 and at most `max` minus `min`	a `step` értéke 0-nál nagyobb és legfeljebb `max` mínusz `min` lehet
+@msg	an `int` parameter's `step` must be a whole number	egy `int` paraméter `step` értékének egész számnak kell lennie
 @msg	`visible` must be true or false	`visible`: true vagy false kell
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}`: {_1} és {_2} közötti szám kell
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}`: legfeljebb {MAX_ITEMS} elemű tömb kell

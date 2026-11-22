@@ -6953,6 +6953,11 @@ axis	Y Axis	Y축
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen`이 지정한 `{other}`은(는) 이 매개변수보다 앞에 선언된 매개변수가 아닙니다
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen`에는 매개변수를 최대 {MAX_CONDITIONS}개까지 지정할 수 있습니다
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen`은 확인란 또는 선택 항목인 `{other}`의 값을 받습니다
+@msg	`step` is only for a parameter with a slider	`step`은 슬라이더가 있는 매개변수에만 쓸 수 있습니다
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	슬라이더에는 `max`보다 작은 `min`이 필요하며, `int` 슬라이더의 범위는 ±{EXACT_INT} 이내여야 합니다
+@msg	a slider is only for `number` and `int` parameters	슬라이더는 `number` 및 `int` 매개변수에만 쓸 수 있습니다
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step`은 0보다 크고 `max`에서 `min`을 뺀 값 이하인 숫자여야 합니다
+@msg	an `int` parameter's `step` must be a whole number	`int` 매개변수의 `step`은 정수여야 합니다
 @msg	`visible` must be true or false	`visible`은(는) true 또는 false여야 합니다
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}`은(는) {_1}에서 {_2} 사이의 숫자여야 합니다
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}`은(는) 항목이 최대 {MAX_ITEMS}개인 배열이어야 합니다

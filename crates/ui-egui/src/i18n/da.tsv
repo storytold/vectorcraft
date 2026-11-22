@@ -590,6 +590,11 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` angiver `{other}`, som ikke er en parameter, der er erklæret før denne
 @msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` angiver højst {MAX_CONDITIONS} parametre
 @msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` tager værdierne for `{other}`, fra et afkrydsningsfelt eller et valg
+@msg	`step` is only for a parameter with a slider	`step` gælder kun for en parameter med skyder
+@msg	a slider needs `min` below `max`, and an `int` slider a range within ±{EXACT_INT}	en skyder kræver, at `min` er mindre end `max`, og en `int`-skyder et interval inden for ±{EXACT_INT}
+@msg	a slider is only for `number` and `int` parameters	en skyder gælder kun for `number`- og `int`-parametre
+@msg	`step` must be a number above 0 and at most `max` minus `min`	`step` skal være et tal over 0 og højst `max` minus `min`
+@msg	an `int` parameter's `step` must be a whole number	`step` for en `int`-parameter skal være et heltal
 @msg	`visible` must be true or false	`visible` skal være true eller false
 @msg	`{key}` must be a number from {_1} to {_2}	`{key}` skal være et tal fra {_1} til {_2}
 @msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` skal være et array med højst {MAX_ITEMS} elementer

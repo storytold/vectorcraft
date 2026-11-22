@@ -461,6 +461,98 @@ fn a_plug_in_effect_s_editor_follows_its_manifest() {
     app.run("plugin.remove", json!({"id": "test.ui.inlinekeys"})).unwrap();
 }
 
+/// A plug-in effect's number that asks for a slider shows one in the editor. A drag previews on
+/// the canvas while it lasts, fewer times than it has frames, and ends as one undo step with the
+/// value it reached; an arrow key then moves the value by one step as another undo step.
+#[test]
+fn a_plug_in_slider_in_the_editor_previews_a_drag_and_keeps_it_as_one_step() {
+    use egui::accesskit::Role;
+    use vectorcraft_plugins::wat as tpl;
+    let params = r#"{"amount":{"type":"number","min":0,"max":100,"default":10,"label":"Amount","widget":"slider"},
+            "count":{"type":"int","min":0,"max":20,"default":4,"label":"Count","widget":"slider","step":2},
+            "odd":{"type":"number","min":0,"max":100,"default":12,"label":"Odd","widget":"slider","step":5}}"#;
+    let src = tpl::module(&tpl::manifest("test.ui.inlineslider", "effect", params), tpl::ECHO, "", 1);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wat::parse_str(src).unwrap())})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "plugin.test.ui.inlineslider"})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, "ap-fx-open-None-0", true);
+    // Frames a sixtieth of a second apart, which a drag's previews are coarser than.
+    let mut time = 0.0;
+    let mut frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 1.0 / 60.0;
+        let screen = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 700.0));
+        let mut out = ctx.run_ui(egui::RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
+    };
+    let params = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(NodeId(id)).unwrap().appearance.effects[0].params.clone();
+    let (undo, applied) = (app.session.doc().unwrap().history.undo.len(), params(&app));
+    frame(&mut app, vec![]);
+    let nodes = frame(&mut app, vec![]);
+    // Showing the sliders leaves the effect alone, its value off Odd's grid included.
+    assert_eq!((app.session.doc().unwrap().history.undo.len(), params(&app)), (undo, applied), "drawing the editor changed the effect");
+    let sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == Role::Slider).map(|(_, n)| n.clone()).collect();
+    assert_eq!(sliders.len(), 3, "every number that asks for one has a slider");
+    // Each slider is named by its row's label.
+    let label_of =
+        |l: &egui::accesskit::NodeId| nodes.iter().find(|(nid, _)| nid == l).and_then(|(_, n)| n.label().or(n.value())).unwrap_or_default();
+    for name in ["Amount", "Count", "Odd"] {
+        let named = sliders.iter().any(|n| n.labelled_by().iter().any(|l| label_of(l).starts_with(name)));
+        assert!(named, "no slider is named by {name}");
+    }
+    // The number fields after the sliders stay inside the 320-point panel.
+    let fields: Vec<_> = nodes.iter().filter(|(_, n)| n.role() != Role::Slider && matches!(n.value(), Some("10" | "4" | "12"))).collect();
+    assert!(fields.len() >= 3, "every number has a field");
+    for (_, n) in fields {
+        let right = n.bounds().expect("the field is laid out").x1;
+        assert!(right <= 320.0, "the {:?} field ends at {right}, past the panel", n.value());
+    }
+    let amount = sliders.iter().find(|n| n.numeric_value() == Some(10.0)).expect("Amount's slider shows its value");
+    let rail = amount.bounds().expect("the slider is laid out");
+    let at = |x: f64| egui::pos2((rail.x0 + x * (rail.x1 - rail.x0)) as f32, ((rail.y0 + rail.y1) / 2.0) as f32);
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, vec![egui::Event::PointerMoved(at(0.1))]);
+    frame(&mut app, vec![button(at(0.1), true)]);
+    // Thirty frames of dragging right, each to a new value.
+    let mut seen = vec![];
+    for i in 1..=30 {
+        frame(&mut app, vec![egui::Event::PointerMoved(at(0.1 + 0.025 * i as f64))]);
+        let shown = params(&app)["amount"].clone();
+        if seen.last() != Some(&shown) {
+            seen.push(shown);
+        }
+    }
+    assert!(seen.len() > 2 && seen.len() < 15, "the canvas showed {} values in 30 frames: {seen:?}", seen.len());
+    frame(&mut app, vec![button(at(0.85), false)]);
+    frame(&mut app, vec![]);
+    let kept = params(&app)["amount"].as_f64().unwrap();
+    assert!(kept > 70.0 && kept <= 100.0, "the value the drag ended on: {kept}");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "the drag is one undo step");
+    assert!(!app.session.in_interaction(), "the drag's interaction ended");
+    // Count's slider: focused, an arrow moves it by its step of 2, as one more undo step.
+    let nodes = frame(&mut app, vec![]);
+    let count = nodes.iter().find(|(_, n)| n.role() == Role::Slider && n.numeric_value() == Some(4.0)).map(|(nid, _)| *nid).unwrap();
+    let focus = egui::accesskit::ActionRequest {
+        action: egui::accesskit::Action::Focus,
+        target_tree: egui::accesskit::TreeId::ROOT,
+        target_node: count,
+        data: None,
+    };
+    frame(&mut app, vec![egui::Event::AccessKitActionRequest(focus)]);
+    frame(&mut app, vec![]);
+    let right = egui::Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(&mut app, vec![right]);
+    frame(&mut app, vec![]);
+    assert_eq!(params(&app)["count"], json!(6));
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2);
+    app.run("plugin.remove", json!({"id": "test.ui.inlineslider"})).unwrap();
+}
+
 /// Glass with a loaded texture lists Loaded Texture in its Texture menu, as its dialog does.
 #[test]
 fn the_effect_editor_lists_a_loaded_glass_texture() {
