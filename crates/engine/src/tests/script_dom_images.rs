@@ -522,3 +522,64 @@ fn members_not_available_yet_check_the_image_first() {
     assert_eq!(out, vec![json!(["PlacedItem.file is required", "Stale page item", "RasterItem.colorize is not available yet", "Stale page item"])]);
     let _ = std::fs::remove_dir_all(base);
 }
+
+/// The `file` of a `PlacedItems.add()` result with no file is null while its document is open, and
+/// the item is stale once that document is closed.
+#[test]
+fn a_pending_placed_items_file_is_stale_once_its_document_closes() {
+    let base = folder("pending-closed");
+    let mut s = session();
+    let out = log(
+        &mut s,
+        &base,
+        "var p = app.activeDocument.placedItems.add(); vc.log(p.file); vc.run('file.close', {});\
+         var m = ''; try { vc.log(p.file); } catch (e) { m = e.message; } vc.log(m);",
+    );
+    assert_eq!(out, vec![json!(null), json!("Stale page item")]);
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Assigning `file` binds the placed item to the image `file.place` made, by its exact id, also
+/// for an id above 2^53, which a script number does not hold exactly.
+#[test]
+fn a_placed_items_file_binds_the_exact_id_of_the_image_placed() {
+    let base = folder("big-id");
+    let png = base.join("main/a.png");
+    std::fs::write(&png, gray_png(4, 4)).unwrap();
+    let mut s = session();
+    let big = (1u64 << 53) + 1;
+    s.active_mut().unwrap().change_unsaved(|d| std::sync::Arc::make_mut(d).raise_next_id(big));
+    let out = log(
+        &mut s,
+        &base,
+        &format!("var p = app.activeDocument.placedItems.add(); p.file = new File('{}'); vc.log(p.file.name); vc.log(p.width);", js_path(&png)),
+    );
+    assert_eq!(out, vec![json!("a.png"), json!(4)]);
+    let imgs = images(&s);
+    assert_eq!(imgs.len(), 1, "{imgs:?}");
+    assert_eq!(imgs[0].0, NodeId(big));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A `PlacedItem` that was embedded is stale as the relative object of `move`: the raster item
+/// it became is named by a fresh wrapper.
+#[test]
+fn a_stale_placed_item_is_refused_as_the_relative_object_of_move() {
+    let base = folder("stale-relative");
+    let a = base.join("main/a.png");
+    std::fs::write(&a, gray_png(4, 4)).unwrap();
+    let mut s = session();
+    place(&mut s, &a, true);
+    let rect = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let out = log(
+        &mut s,
+        &base,
+        "var d = app.activeDocument, p = d.placedItems[0], x = null, m = '';\
+         for (var i = 0; i < d.pageItems.length; i++) { if (d.pageItems[i].typename == 'PathItem') x = d.pageItems[i]; }\
+         p.embed(); try { x.move(p, ElementPlacement.PLACEAFTER); } catch (e) { m = e.message; } vc.log(m);\
+         x.move(d.rasterItems[0], ElementPlacement.PLACEAFTER); vc.log(d.pageItems[0].typename);",
+    );
+    assert_eq!(out, vec![json!("Stale page item"), json!("PathItem")]);
+    assert!(s.active().unwrap().doc.node(NodeId(rect)).is_some());
+    let _ = std::fs::remove_dir_all(base);
+}

@@ -118,6 +118,20 @@ fn page_item_geometry_uses_document_coordinates_with_y_up() {
     assert_eq!(out[4], json!([20, 250, 80, 210]));
 }
 
+/// `controlBounds` takes in the Bézier handles of a path, which can reach past what it draws.
+#[test]
+fn page_item_control_bounds_take_in_the_handles() {
+    let (mut s, _, _) = doc();
+    let anchors = json!([{"x": 0, "y": 100, "out": [0, 0]}, {"x": 100, "y": 100, "in": [100, 0]}]);
+    s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let out = log(&mut s, "var p = app.activeDocument.pageItems, i = p[p.length - 1]; vc.log(i.visibleBounds); vc.log(i.controlBounds);");
+    let b = |v: &Value| -> Vec<f64> { v.as_array().unwrap().iter().map(|n| n.as_f64().unwrap()).collect() };
+    let (visible, control) = (b(&out[0]), b(&out[1]));
+    assert!(visible[1] < 290.0, "the curve stays well under its handles: {visible:?}");
+    assert!((control[1] - 300.0).abs() < 1e-9, "the handles reach the top of the page: {control:?}");
+    assert!(control[0] <= visible[0] && control[2] >= visible[2] && control[3] <= visible[3], "{visible:?} {control:?}");
+}
+
 #[test]
 fn page_item_size_setters_on_a_rotated_object_give_the_page_aligned_size() {
     let (mut s, a, b) = doc();
@@ -451,6 +465,14 @@ fn a_grid_by_column_takes_the_number_of_rows() {
         let tops = distinct(boards.iter().map(|b| b.rect.y0.round() as i64).collect());
         let lefts = distinct(boards.iter().map(|b| b.rect.x0.round() as i64).collect());
         assert_eq!((tops, lefts), (rows, cols), "{layout} {count}");
+        if layout.ends_with("GridByCol") {
+            // A column fills from the top before the next one starts, to the right of it (to the
+            // left from right to left).
+            let (first, second, next) = (boards[0].rect, boards[1].rect, boards[rows].rect);
+            assert!((second.x0 - first.x0).abs() < 1e-9 && second.y0 > first.y0, "{layout} {count}: {first:?} {second:?}");
+            let rightward = next.x0 > first.x0;
+            assert_eq!(rightward, layout == "GridByCol", "{layout} {count}: {first:?} {next:?}");
+        }
     }
 }
 
@@ -1003,8 +1025,10 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    // String literals of the script, whatever characters the temporary folder's path holds.
+    let literal = |p: String| serde_json::to_string(&p).unwrap();
+    let (p, other) = (literal(path.to_string_lossy().into_owned()), literal(format!("{}.other", path.to_string_lossy())));
+    let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.

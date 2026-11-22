@@ -118,26 +118,31 @@ pub(super) struct State {
 }
 
 /// `id` while the document `uid` holds it (a run never gives an id out twice, so an undo that put
-/// it back put back the same object), else the Image Trace object that replaced it when this run
-/// traced it again, else `id`.
+/// it back put back the same object), else the first object the document holds among those that
+/// replaced it, one after the other, when this run traced it again (an Undo can put back one of
+/// them), else the last of them, else `id`.
 pub(super) fn follow(h: &Host, uid: u64, id: NodeId) -> NodeId {
-    let held = h.session.borrow().documents().iter().find(|d| d.uid == uid).is_some_and(|d| d.doc.node(id).is_some());
-    if held {
-        return id;
-    }
-    h.dom.tracing.next.borrow().get(&(uid, id.0)).map_or(id, |n| NodeId(*n))
-}
-
-/// Records that `new` replaced `old` in the document `uid`: every object that led to `old` leads to
-/// `new` now.
-fn replaced(h: &Host, uid: u64, old: NodeId, new: NodeId) {
-    let mut next = h.dom.tracing.next.borrow_mut();
-    for ((u, _), to) in next.iter_mut() {
-        if *u == uid && *to == old.0 {
-            *to = new.0;
+    let s = h.session.borrow();
+    let doc = s.documents().iter().find(|d| d.uid == uid);
+    let held = |id: NodeId| doc.is_some_and(|d| d.doc.node(id).is_some());
+    let next = h.dom.tracing.next.borrow();
+    let mut id = id;
+    // Each object is replaced by one made later, so the steps end; the bound holds them anyway.
+    for _ in 0..=next.len() {
+        if held(id) {
+            return id;
+        }
+        match next.get(&(uid, id.0)) {
+            Some(n) => id = NodeId(*n),
+            None => return id,
         }
     }
-    next.insert((uid, old.0), new.0);
+    id
+}
+
+/// Records that `new` replaced `old` in the document `uid`.
+fn replaced(h: &Host, uid: u64, old: NodeId, new: NodeId) {
+    h.dom.tracing.next.borrow_mut().insert((uid, old.0), new.0);
 }
 
 /// The error of a member with no VectorCraft setting.

@@ -393,6 +393,26 @@ fn trace_external_retrace_undo_and_source_delete() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// After two option changes, an Undo puts back the tracing the first change made, and the objects
+/// of the first tracing follow it there.
+#[test]
+fn trace_undo_of_the_second_retrace_reaches_the_first() {
+    let base = folder("chain");
+    let (mut s, _) = session(&base, false);
+    let out = log(
+        &mut s,
+        &base,
+        "var p = app.activeDocument.rasterItems[0].trace(), o = p.tracing.tracingOptions;\
+         o.threshold = 90; o.threshold = 60; vc.log(o.threshold); vc.run('edit.undo');\
+         vc.log(o.threshold); vc.log(p.isTracing); vc.log(p.tracing.pathCount > 0);",
+    );
+    assert_eq!(out, [json!(60), json!(90), json!(true), json!(true)]);
+    let groups = traces(&s);
+    assert_eq!(groups.len(), 1);
+    assert_eq!(trace_of(&s, groups[0])["params"]["threshold"], json!(90));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn trace_deleted_plugin_is_stale() {
     let base = folder("deleted");
@@ -503,6 +523,32 @@ fn trace_of_another_image_inside_a_tracing() {
     let (a, b) = (d.parent_of(image).unwrap(), d.parent_of(other).unwrap());
     assert!(groups.contains(&a) && groups.contains(&b) && a != b, "each image is the source of its own tracing");
     assert!(d.parent_of(a) == Some(b) || d.parent_of(b) == Some(a), "one tracing is inside the other");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An object moved or duplicated to the end of a tracing goes directly above its source image,
+/// which stays the tracing's first child.
+#[test]
+fn an_object_placed_at_the_end_of_a_tracing_stays_above_its_source() {
+    let base = folder("at-end");
+    let (mut s, _) = session(&base, false);
+    let png = base.join("main/disc.png");
+    s.execute("file.place", &json!({"path": png.to_string_lossy(), "link": false})).unwrap();
+    let out = log(
+        &mut s,
+        &base,
+        "var d = app.activeDocument, a = d.rasterItems[1]; a.name = 'src'; var p = a.trace(), r = d.rasterItems[0]; r.name = 'moved';\
+         r.duplicate(p, ElementPlacement.PLACEATEND); r.move(p, ElementPlacement.PLACEATEND);\
+         var s = p.tracing.sourceArt; s.hidden = false; s.move(p, ElementPlacement.PLACEATEND);\
+         vc.log(p.tracing.sourceArt.name); vc.log(d.rasterItems.length); vc.log(p.isTracing);",
+    );
+    assert_eq!(out, [json!("src"), json!(2), json!(true)]);
+    let groups = traces(&s);
+    assert_eq!(groups.len(), 1);
+    let d = &s.active().unwrap().doc;
+    let names: Vec<Option<String>> = d.children(Some(groups[0])).unwrap().iter().map(|n| n.name.clone()).collect();
+    let name = |n: &str| Some(n.to_string());
+    assert_eq!(names[..3], [name("src"), name("moved"), name("moved")], "the source stays first: {names:?}");
     let _ = std::fs::remove_dir_all(base);
 }
 

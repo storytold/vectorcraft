@@ -2642,8 +2642,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
   the preset it is given holds one of them with a value other than `null`, and makes no document. A
-  `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
-  `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
+  `presetSettings` of `null` or `undefined` counts as omitted. Any other `presetSettings` that is not a
+  `DocumentPreset` (a plain object such as `{width: 500}` included) throws a `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
   automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
   profile and the reason, and makes no document.
   `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
@@ -2656,7 +2656,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  visible bounds with the anchors and Bézier handles of the object's paths, and of the shown paths in its groups and
+  compound paths; a clip group's come from its clipping path), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
@@ -2717,7 +2718,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
   `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
   each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
-  `EPSPostScriptLevelEnum`, `PDFOverprint` and `UserInteractionLevel` hold strings such as `"ExportType.PNG24"`.
+  `EPSPostScriptLevelEnum`, `PDFOverprint` and `UserInteractionLevel` hold strings such as `"ExportType.PNG24"`, as
+  do the enumerations of the other options' defaults (`CompressionQuality`, `DownsampleMethod`,
+  `SVGCSSPropertyLocation` and the like), with the members
+  https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/ lists.
   VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
   command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
   document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
@@ -2777,7 +2781,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   count the seam fills of an Abutting trace, `usedColorCount` counts the different fill and stroke paints, and
   `imageResolution` is the image's pixels per inch as placed, an error for an image placed at different resolutions
   across and down. Assigning an option, or `loadFromPreset(name)`, traces again with `imageTrace.make`, keeps the
-  source image and the view, and a value the tracing already has runs no command. The `PluginItem`, `TracingObject`
+  source image and the view, and a value the tracing already has runs no command. Assigning `viewRaster` or
+  `viewVector` does not trace again: it runs `imageTrace.setView`. The `PluginItem`, `TracingObject`
   and `TracingOptions` follow the new object, and a run traces again at most 10,000 times. `threshold` takes a whole
   number from 0 to 255, `maxColors` from 2 to 256 and `minArea` (the Noise setting, in pixels) from 0 to the largest
   image the tracer reads; `fills` and `strokes` cannot both be `false`; `palette` is `""` (automatic), `"Limited"`,

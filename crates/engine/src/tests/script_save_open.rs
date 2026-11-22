@@ -178,6 +178,36 @@ fn a_pdf_preset_keeps_its_settings_unless_an_option_changes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// The defaults of the options a save or export does not map are named through their
+/// enumerations, and an options object given them saves as one left as it was.
+#[test]
+fn option_defaults_are_named_through_their_enumerations() {
+    let base = folder("enum-defaults");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    let out = logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}});\n\
+             var o = new PDFSaveOptions(); o.colorDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;\n\
+             o.colorCompression = CompressionQuality.None; o.monochromeCompression = MonochromeCompression.None;\n\
+             o.flattenOutput = OutputFlattening.PRESERVEAPPEARANCE; o.pDFXStandard = PDFXStandard.PDFXNONE;\n\
+             d.saveAs(new File(dir + '/a.pdf'), o);\n\
+             var v = new ExportOptionsSVG(); v.cssProperties = SVGCSSPropertyLocation.STYLEATTRIBUTES;\n\
+             v.documentEncoding = SVGDocumentEncoding.ASCII; v.DTD = SVGDTDVersion.SVG1_1; v.fontType = SVGFontType.CEFFONT;\n\
+             v.fontSubsetting = SVGFontSubsetting.ALLGLYPHS; d.exportFile(new File(dir + '/s'), ExportType.SVG, v);\n\
+             vc.log([DownsampleMethod.BICUBICDOWNSAMPLE, CompressionQuality.ZIP8BIT, SVGCSSPropertyLocation.ENTITIES]);"
+        ),
+    );
+    assert_eq!(out, json!([["DownsampleMethod.BICUBICDOWNSAMPLE", "CompressionQuality.ZIP8BIT", "SVGCSSPropertyLocation.ENTITIES"]]));
+    assert!(std::fs::read(dir.join("a.pdf")).unwrap().starts_with(b"%PDF-"));
+    assert!(dir.join("s.svg").is_file());
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A save that writes several files, such as an EPS with a file per artboard, writes none of them
 /// when one may not be written.
 #[test]

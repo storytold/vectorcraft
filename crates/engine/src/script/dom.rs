@@ -1171,20 +1171,23 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         Data::Array(a) => a.iter().collect(),
         d => vec![d],
     };
-    let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
-    for d in list {
-        let item = item_of(h, d)?;
-        let ok = item.doc.uid == doc.uid
-            && with_doc(h, doc, |_, st| crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id));
-        if !ok {
-            let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
-            return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
+    // The locked artboards are worked out once for the whole list.
+    with_doc(h, doc, |_, st| {
+        let locked = st.doc.locked_artboards();
+        let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
+        let mut seen = std::collections::HashSet::with_capacity(list.len());
+        for d in list {
+            let item = item_of(h, d)?;
+            if item.doc.uid != doc.uid || !crate::cmd::select::is_selectable(&st.doc, st.isolation, &locked, item.id) {
+                let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
+                return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
+            }
+            if seen.insert(item.id) {
+                ids.push(item.id);
+            }
         }
-        if !ids.contains(&item.id) {
-            ids.push(item.id);
-        }
-    }
-    Ok(ids)
+        Ok(ids)
+    })
 }
 
 fn doc_set_selection(h: &Host, a: &[Data]) -> Answer {
@@ -1453,6 +1456,28 @@ fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
 }
 
+/// `controlBounds`: the visible bounds and the Bézier handles of the item's paths.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = item_rect(h, item, true)?;
+    let handles = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(handle_bounds));
+    Ok(f.bounds(h.dom.coords.get(), handles.map_or(r, |b| r.union(b))))
+}
+
+/// The bounds of the anchors and handles of `n`'s paths: a path's own, and those of the shown
+/// paths in a group or compound path (a clip group's from its clipping path). `None` for other
+/// objects.
+fn handle_bounds(n: &crate::doc::Node) -> Option<Rect> {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        NodeKind::Group { children, clip: true } => children.first().and_then(|c| handle_bounds(c)),
+        NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+            children.iter().filter(|c| c.visible).filter_map(|c| handle_bounds(c)).reduce(|a, b| a.union(b))
+        }
+        _ => None,
+    }
+}
+
 fn item_position(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     let (r, f) = item_rect(h, item, false)?;
@@ -1623,19 +1648,25 @@ struct Destination {
 fn destination(h: &Host, item: Item, target: &Data, how: &Data, copy: bool) -> std::result::Result<Destination, HostError> {
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
-    let pending = images::pending_as_item(h, target)?.map(|p| p.to_vec());
-    let handle = pending.or_else(|| handle_of(target, "PageItem")).or_else(|| handle_of(target, "Layer"));
-    let Some(&[run, uid, high, low]) = handle.as_deref() else {
-        if handle_of(target, "Document").is_some() {
-            return Err(HostError::Error("a document as the relative object is not available yet".into()));
-        }
-        return Err(HostError::Type("the relative object must be a page item or a layer".into()));
+    // A page item is looked up as its class names it (a wrapper whose object changed class is
+    // stale), a layer by its handle.
+    let (doc, target) = if handle_of(target, "PageItem").is_some() {
+        let t = item_of(h, target)?;
+        (t.doc, t.id)
+    } else {
+        let handle = handle_of(target, "Layer");
+        let Some(&[run, uid, high, low]) = handle.as_deref() else {
+            if handle_of(target, "Document").is_some() {
+                return Err(HostError::Error("a document as the relative object is not available yet".into()));
+            }
+            return Err(HostError::Type("the relative object must be a page item or a layer".into()));
+        };
+        let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+        (doc, id_of(high, low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?)
     };
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     if doc.uid != item.doc.uid {
         return Err(HostError::Error(CROSS_DOCUMENT.into()));
     }
-    let target = id_of(high, low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     with_doc(h, doc, |_, st| {
         let d = &st.doc;
         let t = d.node(target).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
@@ -1672,7 +1703,10 @@ fn place(h: &Host, doc: Doc, id: NodeId, to: &Destination) -> std::result::Resul
         let d = &st.doc;
         let from = d.position(id);
         let count = d.children(Some(to.parent)).map_or(0, Vec::len) - usize::from(from.is_some_and(|(p, ..)| p == Some(to.parent)));
-        let clips = d.node(to.parent).is_some_and(crate::doc::Node::clips) && count > 0;
+        // A clip group's first child is its clipping path, and an Image Trace object's its source
+        // image: both stay first (the source image itself may go to the end of its own tracing).
+        let source = crate::cmd::is_trace_source(d, id) && d.parent_of(id) == Some(to.parent);
+        let clips = d.node(to.parent).is_some_and(|n| n.clips() || (crate::cmd::is_trace_group(n) && !source)) && count > 0;
         let at = match (to.how, to.beside) {
             (Placement::Top, _) => count,
             (Placement::Bottom, _) => 0,
@@ -1932,7 +1966,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
+        ("controlBounds", get(l, item_control)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),

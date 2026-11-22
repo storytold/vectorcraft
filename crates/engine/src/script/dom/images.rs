@@ -40,9 +40,9 @@ use vectorcraft_geom::{Affine, Point};
 use vectorcraft_js::{Data, HostClass, HostError, HostMember, file_ref, file_ref_path, host_ref, host_ref_parts};
 
 use super::{
-    Answer, Coords, Doc, Host, Item, Link, NOT_FOUND, ON_LOCKED_ARTBOARD, STALE_ITEM, all_editable, arg, class, command, doc_of, doc_ref, edit_item,
-    editable, find_doc, float, frame, get, item_of, item_ref, later, method, named, num, on_doc, page_items, property, text, typename_of, whole,
-    with_doc,
+    Answer, Coords, Doc, Host, Item, Link, NOT_FOUND, ON_LOCKED_ARTBOARD, STALE_ITEM, all_editable, arg, class, command, command_value, doc_of,
+    doc_ref, edit_item, editable, find_doc, float, frame, get, item_of, item_ref, later, method, named, num, on_doc, page_items, property, text,
+    typename_of, whole, with_doc,
 };
 use crate::{DocState, Document, NodeId, NodeKind};
 
@@ -125,14 +125,6 @@ fn pending_handle(d: &Data) -> Option<[f64; 3]> {
         },
         _ => None,
     }
-}
-
-/// The page item handle (run, uid and the two halves of the id) of the image a
-/// `PlacedItems.add()` result `d` placed, or `None` when `d` is not such a result.
-pub(super) fn pending_as_item(h: &Host, d: &Data) -> Result<Option<[f64; 4]>, HostError> {
-    let Some([run, uid, slot]) = pending_handle(d) else { return Ok(None) };
-    let [high, low] = super::id_parts(pending_id(h, run, uid, slot)?);
-    Ok(Some([run, uid, high, low]))
 }
 
 /// The ids of a document's linked (`placed`) or embedded images in paint order.
@@ -360,6 +352,8 @@ fn placed_file(h: &Host, a: &[Data]) -> Answer {
     if let Some([run, uid, slot]) = pending_handle(arg(a, 0)) {
         let k = slot_of(h, run, uid, slot)?;
         if h.dom.images.pending.borrow().get(k).is_some_and(|p| p.bound.is_none()) {
+            // Null while its document is open; stale once that document is closed.
+            find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
             return Ok(Data::Null);
         }
     }
@@ -387,12 +381,12 @@ fn placed_set_file(h: &Host, a: &[Data]) -> Answer {
     }
     let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let path = image_path(h, arg(a, 1), "PlacedItem.file")?;
-    let placed = on_doc(h, doc.uid, true, |h| command(h, "file.place", &json!({"path": path, "link": true})))?;
-    let ids: Vec<u64> = match field(&placed, "ids") {
-        Some(Data::Array(ids)) => ids.iter().filter_map(|d| id_value(Some(d))).map(|i| i.0).collect(),
-        _ => Vec::new(),
-    };
-    let id = id_value(field(&placed, "image")).or_else(|| id_value(field(&placed, "ids")));
+    // The ids are read from the command's own result, where every id is exact (a script number
+    // holds integers exactly only up to 2^53).
+    let (_, placed) = on_doc(h, doc.uid, true, |h| command_value(h, "file.place", &json!({"path": path, "link": true})))?;
+    let ids: Vec<u64> = placed["ids"].as_array().map(|ids| ids.iter().filter_map(serde_json::Value::as_u64).collect()).unwrap_or_default();
+    let first = |v: &serde_json::Value| v.as_u64().or_else(|| v.as_array().and_then(|a| a.first()).and_then(serde_json::Value::as_u64));
+    let id = first(&placed["image"]).or_else(|| first(&placed["ids"])).map(NodeId);
     let linked = |id: NodeId| with_doc(h, doc, |_, st| matches!(st.doc.node(id).map(|n| &n.kind), Some(NodeKind::Image(im)) if im.link.is_some()));
     match id.filter(|id| linked(*id)) {
         Some(id) => {

@@ -253,9 +253,13 @@ fn layout(d: &Dialog) -> (ArtboardLayout, u64, f64, bool) {
 }
 
 /// Sets one artboard layout field. A new layout or column count replaces the rows of a preset
-/// made with `file.new`'s `rows`; a new layout keeps the column count those rows showed.
+/// made with `file.new`'s `rows`; a new layout keeps the column count those rows showed. The
+/// layout in force chosen again changes nothing.
 fn set_layout(d: &mut Dialog, key: &str, v: Value) {
     let (lay, shown, ..) = layout(d);
+    if key == "layout" && v.as_str().and_then(ArtboardLayout::parse) == Some(lay) {
+        return;
+    }
     let mut l = d.fields.get("artboardLayout").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
     if let ("layout" | "columns", Some(o)) = (key, l.as_object_mut())
         && o.remove("rows").and_then(|r| r.as_f64()).is_some_and(|r| r.is_finite() && r >= 1.0)
@@ -935,7 +939,10 @@ mod tests {
                 set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 2, "rows": rows}));
                 assert_eq!(columns(&app), 3, "9 artboards in rows {rows}");
                 super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!(to));
-                assert_eq!(field(&app, "artboardLayout"), json!({"layout": to, "columns": 3}), "{to}, rows {rows}");
+                // The layout in force chosen again keeps the rows, and the columns follow them.
+                let kept = if to == "gridByColumn" { json!({"layout": to, "columns": 2, "rows": rows}) } else { json!({"layout": to, "columns": 3}) };
+                assert_eq!(field(&app, "artboardLayout"), kept, "{to}, rows {rows}");
+                assert_eq!(columns(&app), 3, "{to}, rows {rows}");
             }
         }
         set(&mut app, "artboardLayout", json!({"layout": "gridByRow", "columns": 2, "rows": 4}));
