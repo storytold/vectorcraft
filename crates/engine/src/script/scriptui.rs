@@ -201,6 +201,33 @@ impl ScriptUiDialog {
         };
         by(true).or_else(|| by(false))
     }
+
+    /// Where control `i` sits: its position among its container's controls, after its container's
+    /// own position, and so on up to the dialog. `add` puts a new control after the others in its
+    /// container, so adding controls leaves the place of every other one as it was, while its index
+    /// in [`Self::nodes`] can move. Empty for the dialog and for an index it does not have.
+    pub fn place_of(&self, mut i: usize) -> Vec<usize> {
+        let mut place = Vec::new();
+        while i > 0 {
+            let Some(n) = self.nodes.get(i) else { return Vec::new() };
+            place.push(self.nodes.iter().take(i).skip(1).filter(|m| m.parent == n.parent).count());
+            if n.parent >= i {
+                return Vec::new();
+            }
+            i = n.parent;
+        }
+        place.reverse();
+        place
+    }
+
+    /// The index of the control at `place` ([`Self::place_of`]), if the dialog has one there.
+    pub fn control_at(&self, place: &[usize]) -> Option<usize> {
+        let mut at = 0;
+        for &k in place {
+            at = self.nodes.iter().enumerate().skip(1).filter(|(_, n)| n.parent == at).nth(k)?.0;
+        }
+        (at > 0).then_some(at)
+    }
 }
 
 /// A value a control takes in a change.

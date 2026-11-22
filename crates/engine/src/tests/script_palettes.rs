@@ -154,6 +154,27 @@ fn a_list_change_that_waited_while_the_list_changed_ends_its_run() {
 }
 
 #[test]
+fn a_click_that_waited_while_a_run_added_a_control_before_it_reaches_its_button() {
+    let mut s = one_doc();
+    run_in_app(
+        &mut s,
+        "#targetengine places\nvar p = new Window('palette'); var g = p.add('group'); g.add('button', undefined, 'First'); \
+         var last = p.add('button', undefined, 'Last'); last.onClick = function () { vc.log('last'); }; p.show();",
+    );
+    let id = only_palette(&s);
+    assert_eq!(s.script_palettes()[0].dialog.find("Last"), Some(3));
+    let added = "#targetengine places\nconfirm('Go?'); g.add('button', undefined, 'Added').onClick = function () { vc.log('added'); };";
+    assert_eq!(run(&mut s, added).unwrap()["running"], true);
+    assert!(pump(&mut s).is_none());
+    assert_eq!(s.script_palette_event(id, UiEvent::Click(3)), Ok(Waiting::Added));
+    assert!(s.script_answer(DialogAnswer::Confirm(true)));
+    pump(&mut s).unwrap().unwrap();
+    assert_eq!(s.script_palettes()[0].dialog.find("Last"), Some(4), "the added button comes before Last in the list of controls");
+    assert!(s.script_palette_start().expect("the click starts its run").is_ok());
+    assert_eq!(pump(&mut s).unwrap().unwrap()["log"], json!(["last"]));
+}
+
+#[test]
 fn a_palette_click_during_another_run_runs_after_it() {
     let mut s = one_doc();
     run_in_app(&mut s, TOOLS);

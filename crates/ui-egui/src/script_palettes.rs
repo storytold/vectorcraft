@@ -26,7 +26,7 @@ fn drafts_id(id: u64) -> egui::Id {
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let shown: Vec<ScriptPalette> = app.session.script_palettes().iter().filter(|p| p.visible).cloned().collect();
     for p in shown {
-        let mut drafts = ctx.data(|m| m.get_temp::<Dialog>(drafts_id(p.id))).unwrap_or_else(|| Dialog::new(script_window::KIND, json!({})));
+        let mut drafts = drafts(ctx, &p);
         let mut events = Vec::new();
         let mut open = true;
         let title = p.dialog.title();
@@ -49,9 +49,23 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             events.push(UiEvent::Close);
         }
         drafted(app, &p, &mut drafts, &mut events);
-        ctx.data_mut(|m| m.insert_temp(drafts_id(p.id), drafts));
+        keep_drafts(ctx, &p, drafts);
         give(app, ctx, p.id, events);
     }
+}
+
+/// The text typed in palette `p`'s fields, each under the index its field has in `p` now, which
+/// moves when a run adds controls before the field.
+pub(crate) fn drafts(ctx: &egui::Context, p: &ScriptPalette) -> Dialog {
+    let mut drafts = ctx.data(|m| m.get_temp::<Dialog>(drafts_id(p.id))).unwrap_or_else(|| Dialog::new(script_window::KIND, json!({})));
+    script_window::move_drafts(&p.dialog, &mut drafts);
+    drafts
+}
+
+/// Keeps the text typed in palette `p`'s fields for the next frame, with where each field sits.
+pub(crate) fn keep_drafts(ctx: &egui::Context, p: &ScriptPalette, mut drafts: Dialog) {
+    script_window::note_draft_places(&p.dialog, &mut drafts);
+    ctx.data_mut(|m| m.insert_temp(drafts_id(p.id), drafts));
 }
 
 /// Puts the text still typed in palette `p`'s fields (`drafts`) before a click or a close in

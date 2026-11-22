@@ -61,6 +61,10 @@ pub enum Waiting {
 pub(crate) struct Queued {
     pub(crate) palette: u64,
     pub(crate) event: UiEvent,
+    /// Where the control of a click or a change sits in the palette ([`ScriptUiDialog::place_of`]),
+    /// by which the event finds its control again when a run adds controls before it; empty for a
+    /// close.
+    place: Vec<usize>,
     /// For a list's change, the list's items as the palette showed them when the event was given and
     /// the list's revision then ([`super::scriptui::UiNode::revision`]), which the run checks the list
     /// still has.
@@ -80,12 +84,21 @@ pub(crate) struct Palettes {
     pub(crate) starting: Option<Queued>,
 }
 
-/// Do `a` and `b` share one place in line: a click on the same control, a change of it, or a close?
-fn same_place(a: &UiEvent, b: &UiEvent) -> bool {
-    match (a, b) {
-        (UiEvent::Click(x), UiEvent::Click(y)) | (UiEvent::Change(x, _), UiEvent::Change(y, _)) => x == y,
-        (UiEvent::Close, UiEvent::Close) => true,
-        _ => false,
+/// Does `event`, for the control at `place`, share the waiting `q`'s place in line: a click on the
+/// same control, a change of it, or a close?
+fn same_place(q: &Queued, event: &UiEvent, place: &[usize]) -> bool {
+    let same_kind = matches!(
+        (&q.event, event),
+        (UiEvent::Click(_), UiEvent::Click(_)) | (UiEvent::Change(..), UiEvent::Change(..)) | (UiEvent::Close, UiEvent::Close)
+    );
+    same_kind && q.place == place
+}
+
+/// The control of a click or a change.
+fn control_of(event: &mut UiEvent) -> Option<&mut usize> {
+    match event {
+        UiEvent::Click(c) | UiEvent::Change(c, _) => Some(c),
+        UiEvent::Close => None,
     }
 }
 
@@ -151,12 +164,13 @@ impl Palettes {
         if !p.visible {
             return Err(format!("the script palette {id} is hidden"));
         }
-        let event = scriptui::check_event(&p.dialog, event)?;
+        let mut event = scriptui::check_event(&p.dialog, event)?;
         let list = match &event {
             UiEvent::Change(c, UiValue::Index(_)) => p.dialog.nodes.get(*c).map(|n| (n.items.clone(), n.revision)),
             _ => None,
         };
-        if let Some(slot) = self.waiting.iter_mut().find(|q| q.palette == id && same_place(&q.event, &event)) {
+        let place = control_of(&mut event).map_or_else(Vec::new, |c| p.dialog.place_of(*c));
+        if let Some(slot) = self.waiting.iter_mut().find(|q| q.palette == id && same_place(q, &event, &place)) {
             slot.event = event;
             slot.list = list;
             return Ok(Waiting::Merged);
@@ -164,16 +178,21 @@ impl Palettes {
         if self.waiting.len() >= MAX_WAITING {
             return Err(format!("{MAX_WAITING} script palette events already wait; this one was not kept"));
         }
-        self.waiting.push_back(Queued { palette: id, event, list, grants: None });
+        self.waiting.push_back(Queued { palette: id, event, place, list, grants: None });
         Ok(Waiting::Added)
     }
 
-    /// The oldest waiting event whose palette is still shown, and that palette.
+    /// The oldest waiting event whose palette is still shown, given to the control at its place in
+    /// the palette as the runs since left it, and that palette. An event whose control the palette
+    /// no longer has is dropped.
     fn next(&mut self) -> Option<(ScriptPalette, Queued)> {
-        while let Some(q) = self.waiting.pop_front() {
-            if let Some(p) = self.list.iter().find(|p| p.id == q.palette && p.visible) {
-                return Some((p.clone(), q));
+        while let Some(mut q) = self.waiting.pop_front() {
+            let Some(p) = self.list.iter().find(|p| p.id == q.palette && p.visible) else { continue };
+            if let Some(c) = control_of(&mut q.event) {
+                let Some(at) = p.dialog.control_at(&q.place) else { continue };
+                *c = at;
             }
+            return Some((p.clone(), q));
         }
         None
     }

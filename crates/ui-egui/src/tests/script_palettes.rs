@@ -87,6 +87,29 @@ fn a_click_waiting_behind_a_run_at_its_dialog_asks_for_no_frames() {
 }
 
 #[test]
+fn a_typed_text_stays_in_its_field_when_a_run_adds_a_control_before_it() {
+    let mut app = app();
+    let source = "#targetengine places\nvar p = new Window('palette'); var g = p.add('group'); g.add('button', undefined, 'First'); \
+                  var t = p.add('edittext', undefined, ''); p.show();";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": source, "name": "p.js"})).unwrap().unwrap();
+    run_to_end(&mut app);
+    let before = app.session.script_palettes()[0].clone();
+    assert_eq!(before.dialog.nodes[3].kind, vectorcraft_engine::script::UiKind::EditText);
+    let ctx = egui::Context::default();
+    let mut drafts = script_palettes::drafts(&ctx, &before);
+    drafts.fields.insert("text3".into(), json!("typed"));
+    script_palettes::keep_drafts(&ctx, &before, drafts);
+    let added = "#targetengine places\ng.add('button', undefined, 'Added');";
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": added, "name": "a.js"})).unwrap().unwrap();
+    run_to_end(&mut app);
+    let after = app.session.script_palettes()[0].clone();
+    assert_eq!(after.dialog.nodes[4].kind, vectorcraft_engine::script::UiKind::EditText, "the added button comes before the field");
+    let drafts = script_palettes::drafts(&ctx, &after);
+    assert_eq!(drafts.fields.get("text4"), Some(&json!("typed")), "{:?}", drafts.fields);
+    assert!(!drafts.fields.contains_key("text3"));
+}
+
+#[test]
 fn a_typed_text_the_script_refuses_keeps_the_palette_click_out_of_line() {
     let mut app = app();
     let source = "#targetengine texts\nvar p = new Window('palette'); var t = p.add('edittext', undefined, 'a'); \
