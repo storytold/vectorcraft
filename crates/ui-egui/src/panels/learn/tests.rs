@@ -16,10 +16,9 @@ fn app() -> VectorcraftApp {
     crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
 }
 
-/// One frame of `draw` with screen-reader nodes on → the nodes.
+/// One frame of `draw` with screen-reader nodes on, given the app's frame input as the hosts give it → the nodes.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<Node> {
-    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(SCREEN), ..Default::default() }, |ui| draw(app, ui));
-    out.textures_delta.clear();
+    let out = crate::testing::part_frame(app, ctx, egui::RawInput { events, screen_rect: Some(SCREEN), ..Default::default() }, draw);
     out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
 }
 

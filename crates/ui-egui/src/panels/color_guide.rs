@@ -1564,7 +1564,7 @@ mod tests {
     #[test]
     fn edit_or_apply_without_art_saves_the_limited_colours_as_a_group() {
         let mut app = app();
-        let ctx = crate::testing::ui_context();
+        let ctx = app.ui_ctx.clone().expect("a window");
         app.run("paint.setFill", json!({"color": "#c04020"})).unwrap();
         app.run("select.none", json!({})).unwrap();
         app.run("ui.colorGuideLimit", json!({"library": "web-safe-216"})).unwrap();
@@ -1582,7 +1582,6 @@ mod tests {
         let g = guide(&mut app);
         assert_eq!(rows.len(), g.colors.len());
         assert!(g.colors.iter().all(|c| members.contains(&c.to_hex())), "the colors are the library's");
-        let ctx = crate::testing::ui_context();
         assert!(dialogs.with(|host| host.confirm_by_id(&ctx, recolor.id)), "OK confirms");
     }
 }

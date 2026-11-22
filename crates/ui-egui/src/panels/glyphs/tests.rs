@@ -314,9 +314,9 @@ fn alternates_for_current_selection_lists_and_replaces_the_selected_character() 
     assert_eq!(listed(&mut app, "Alternates for Selection").len(), 7, "the selected text's face still supplies alternates");
     app.ui.glyphs_font = None;
 
-    // A pick of the second cell draws the a with that glyph, as one undo step.
+    // A double-click on the second cell draws the a with that glyph, as one undo step.
     let undo = undo_len(&app);
-    pick(&mut app, GlyphCell::Char('a'), list[1]);
+    activate(&mut app, list[1]);
     assert_eq!(undo_len(&app), undo + 1, "status: {}", app.ui.status);
     assert_eq!(plain_of(&app, id.as_u64().unwrap()), "xay");
     assert_eq!(glyph_ids(&app, &id)[1], u1, "the a is drawn with the chosen glyph");

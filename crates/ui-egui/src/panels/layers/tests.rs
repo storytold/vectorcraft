@@ -128,7 +128,12 @@ fn column_events_reach_their_commands() {
             doc.layers.iter().map(|l| (l.visible, l.locked, !matches!(l.kind, NodeKind::Layer { preview: false, .. }))).collect()
         };
         let row = layer_key(app.session.active().unwrap().doc.layers[clicked].id);
-        let click = |app: &mut VectorcraftApp| feed(app, vec![LayersEvent::cell_click(row.clone(), column, mods(alt, cmd))]);
+        // Alt alone on an eye is the panel's own Show Only press; the other cases are the app's rule on a cell click.
+        let event = |row: LayerRowKey<RowId>| match (column, alt, cmd) {
+            (LayerColumn::Visibility, true, false) => LayersEvent::ShowOnly(row),
+            _ => LayersEvent::cell_click(row, column, mods(alt, cmd)),
+        };
+        let click = |app: &mut VectorcraftApp| feed(app, vec![event(row.clone())]);
         let before = undo_len(&app);
         click(&mut app);
         assert_eq!(state(&app), once, "{column:?} alt={alt} cmd={cmd}");
@@ -163,7 +168,7 @@ fn asked(app: &VectorcraftApp) -> Option<String> {
 /// one undo step; hidden and locked art counts.
 #[test]
 fn deleting_a_layer_that_holds_art_asks_first() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     let rect = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
@@ -172,7 +177,7 @@ fn deleting_a_layer_that_holds_art_asks_first() {
     let art = app.session.active().unwrap().doc.layers[0].id;
     run(&mut app, "layer.new", json!({}));
     let there = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(art).is_some();
-    let ctx = crate::testing::ui_context();
+    let ctx = app.ui_ctx.clone().unwrap();
     let question = Some("Delete this layer and its artwork?".to_string());
     feed(&mut app, vec![LayersEvent::Delete(vec![layer_key(art)])]);
     assert_eq!(asked(&app), question, "Delete asks");
@@ -194,8 +199,8 @@ fn deleting_a_layer_that_holds_art_asks_first() {
 /// guide, and objects alone go at once, and `layer.delete` itself never asks.
 #[test]
 fn delete_selection_asks_only_for_layers_with_art() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = crate::testing::ui_context();
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+    let ctx = app.ui_ctx.clone().unwrap();
     let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
     let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
@@ -239,8 +244,8 @@ fn delete_selection_asks_only_for_layers_with_art() {
 /// document is active.
 #[test]
 fn delete_selection_refusals_and_a_document_change() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    let ctx = crate::testing::ui_context();
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+    let ctx = app.ui_ctx.clone().unwrap();
     let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
     run(&mut app, "file.new", json!({"width": 200, "height": 200}));
     run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
@@ -348,9 +353,9 @@ pub(super) fn undo_len(app: &VectorcraftApp) -> usize {
 /// dialog.
 #[test]
 fn cmd_alt_l_opens_new_layer_options() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
-    let ctx = crate::testing::ui_context();
+    let ctx = app.ui_ctx.clone().unwrap();
     let layers = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.len();
     // PLAN: assumed `Chord::parse(&str) -> Option<Chord>` and `Chord::to_egui_shortcut() -> egui::KeyboardShortcut`.
     let press = |app: &mut VectorcraftApp, chord: &str| {
@@ -359,6 +364,8 @@ fn cmd_alt_l_opens_new_layer_options() {
         crate::tests::synthetic::key_frame(app, &ctx, vec![key]);
     };
     let open = |app: &VectorcraftApp| app.dialogs().map(|d| d.with(|host| host.open_dialogs())).unwrap_or_default();
+    // The window's first frame builds its keymap.
+    crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
     press(&mut app, "Cmd+Alt+L");
     let dialogs = open(&app);
     assert_eq!(dialogs.len(), 1, "one dialog opens");

@@ -264,8 +264,7 @@ mod tests {
         egui_extras::install_image_loaders(&ctx);
         let screen = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(240.0, 400.0)));
         let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-            let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: screen, ..Default::default() }, |ui| show(app, ui));
-            out.textures_delta.clear();
+            let out = crate::testing::part_frame(app, &ctx, egui::RawInput { events, screen_rect: screen, ..Default::default() }, show);
             out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default()
         };
         frame(&mut app, vec![]);

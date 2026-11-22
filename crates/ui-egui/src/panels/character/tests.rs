@@ -322,7 +322,8 @@ fn highlight_commands_ask_the_framework_to_focus_the_field_by_key() {
     for (field, name) in fields {
         assert!(highlight(&mut panel.app(), field).is_err(), "{field:?} without selected type");
         panel.frame();
-        assert!(!panel.focused(name), "{name} took the focus without selected type");
+        // Without selected type the panel shows its empty state, so the field may not be there at all.
+        assert!(!(panel.shows(name) && panel.focused(name)), "{name} took the focus without selected type");
         assert_eq!(panel.app().character_focus, None);
     }
     panel.app().run("select.set", json!({"ids": [id]})).unwrap();
@@ -482,7 +483,8 @@ fn superscript_and_underline_decide_from_the_text_with_the_typing_applied() {
         app.select_tool("type");
         app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
         app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
-        let ctx = crate::testing::ui_context();
+        let mut app = crate::testing::windowed(app);
+        let ctx = app.ui_ctx.clone().unwrap();
         let backspace =
             |pressed| egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
         // The keymap builds in the first pass.
@@ -583,8 +585,8 @@ fn the_panel_menu_rows_run_their_commands_and_check_by_state() {
     type On = fn(&VectorcraftApp, u64) -> bool;
     let rows: [(CommandRef, bool, On); 9] = [
         (toggle("smallCaps"), false, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.small_caps.is_some())),
-        (toggle("superscript"), false, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.position.id() == "superscript")),
-        (toggle("subscript"), false, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.position.id() == "subscript")),
+        (CommandRef::new("type.superscript"), false, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.position.id() == "superscript")),
+        (CommandRef::new("type.subscript"), false, |a, id| story_frame(a, id).runs.iter().all(|r| r.style.position.id() == "subscript")),
         (CommandRef::new("type.systemLayout"), false, |a, id| {
             a.session.active().unwrap().doc.setup.system_layout && story_frame(a, id).system_layout
         }),
