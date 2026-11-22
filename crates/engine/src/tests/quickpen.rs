@@ -550,6 +550,18 @@ fn continuous_arc_after_a_line(s: &mut Session, v: ViewInfo) {
     key(s, ToolKey::AltTap);
 }
 
+/// Whether the tool shows only the path's points and its length handles (a handle and the line to
+/// it from the path's end): no hover preview, label or Smart Guide.
+fn only_points(s: &mut Session, v: ViewInfo) -> bool {
+    let o = s.overlays(v);
+    let handles: Vec<Point> = o.iter().filter_map(|o| if let Overlay::Handle { p, .. } = o { Some(*p) } else { None }).collect();
+    o.iter().all(|o| match o {
+        Overlay::CurvePoint { .. } | Overlay::Handle { .. } => true,
+        Overlay::Line { b, .. } => handles.contains(b),
+        _ => false,
+    })
+}
+
 /// The last point of the path the tool drew (any other path is a two-point line).
 fn drawn_end(s: &Session) -> Point {
     let drawn = paths(s).into_iter().find(|(_, p)| p.subpaths[0].anchors.len() >= 3).unwrap();
@@ -710,9 +722,8 @@ fn a_hover_shows_nothing_after_smart_guides_change() {
     s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), on).unwrap();
     let off_anchor = label(&mut s, on).unwrap() - at;
     assert!(off_anchor.x > 0.0 && (off_anchor.x - off_anchor.y).abs() < 1e-9, "the label sits diagonally off the anchor: {off_anchor:?}");
-    let only_points = |s: &mut Session, v: ViewInfo| s.overlays(v).iter().all(|o| matches!(o, Overlay::CurvePoint { .. }));
     assert!(!only_points(&mut s, on));
-    assert!(only_points(&mut s, off), "only the path's points show");
+    assert!(only_points(&mut s, off), "only the path's points and length handles show");
     // A click before the pointer moves does not bring the stale hover back.
     press_in(&mut s, &[(400.0, 300.0)], off);
     assert_eq!(label(&mut s, off), None, "no label for the stale hover after the click");
@@ -746,7 +757,6 @@ fn a_click_that_adds_nothing_keeps_a_stale_hover_hidden() {
     s.execute("select.set", &json!({"ids": []})).unwrap();
     continuous_arc_after_a_line(&mut s, on);
     s.pointer(&PointerEvent::new(PointerKind::Move, 200.0, 100.0), on).unwrap();
-    let only_points = |s: &mut Session, v: ViewInfo| s.overlays(v).iter().all(|o| matches!(o, Overlay::CurvePoint { .. }));
     assert!(!only_points(&mut s, on), "the anchor's guide shows");
     assert!(only_points(&mut s, off));
     let steps = undo_steps(&s);
