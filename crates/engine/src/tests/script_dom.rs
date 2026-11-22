@@ -101,6 +101,21 @@ fn page_items_are_live_and_typed_for_all_node_kinds() {
 }
 
 #[test]
+fn page_items_list_the_art_inside_a_blend() {
+    let (mut s, a, b) = doc();
+    log(&mut s, "app.activeDocument.pageItems[0].name = 'first';");
+    s.execute("object.blend.make", &json!({"ids": [a.0, b.0], "steps": 2})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems, t = [];\
+         for (var i = 0; i < p.length; i++) t.push(p[i].typename);\
+         vc.log(t.join(','));\
+         vc.log(p.getByName('first').parent.typename); vc.log(p.index('first').typename);",
+    );
+    assert_eq!(out, vec![json!("BlendItem,PathItem,PathItem"), json!("BlendItem"), json!("PathItem")]);
+}
+
+#[test]
 fn page_item_geometry_uses_document_coordinates_with_y_up() {
     let (mut s, _, _) = doc();
     let out = log(

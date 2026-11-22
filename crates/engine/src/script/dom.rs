@@ -397,11 +397,12 @@ fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
             match &n.kind {
                 NodeKind::Layer { children, .. } => walk(children, out),
                 NodeKind::RulerGuide { .. } => {}
-                NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+                _ => {
                     out.push(n.id);
-                    walk(children, out);
+                    if let Some(children) = n.children() {
+                        walk(children, out);
+                    }
                 }
-                _ => out.push(n.id),
             }
         }
     }
