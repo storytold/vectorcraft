@@ -336,7 +336,7 @@ fn enter(interp: &mut Interp, holder: ObjId, name: Key) -> JsResult<Walk> {
     interp.temp_roots.push(val.clone());
     let mut keys = Vec::new();
     if let Value::Object(o) = val {
-        if interp.heap.object(o).is_some_and(|x| matches!(x.class, Class::Array { .. })) {
+        if interp.is_array(&val)? {
             let len = length_of(interp, o)?;
             interp.reserve_heap((len as usize).saturating_mul(crate::heap::PROP_BYTES))?;
             for i in 0..len {
@@ -464,7 +464,7 @@ fn settings(interp: &mut Interp, replacer: &Value, space: &Value) -> JsResult<Se
     if let Value::Object(r) = replacer {
         if interp.is_callable(replacer) {
             s.replacer = Some(replacer.clone());
-        } else if interp.heap.object(*r).is_some_and(|o| matches!(o.class, Class::Array { .. })) {
+        } else if interp.is_array(replacer)? {
             s.properties = Some(property_list(interp, *r)?);
         }
     }
@@ -589,6 +589,10 @@ fn reaches_prototype(interp: &mut Interp, o: ObjId, proto: ObjId, name: &str) ->
     let mut cur = Some(o);
     while let Some(id) = cur {
         interp.use_fuel()?;
+        // Past a proxy the answer is its traps'; the caller then converts the value the long way.
+        if interp.is_proxy(id) {
+            return Ok(false);
+        }
         if interp.get_own_property(id, &k)?.is_some() {
             return Ok(false);
         }
@@ -648,7 +652,8 @@ fn open(interp: &mut Interp, settings: &Settings, w: &mut Writer, o: ObjId) -> J
     if w.open.contains(&o) {
         return Err(interp.type_error("JSON.stringify cannot write a structure that contains itself"));
     }
-    let array = interp.heap.object(o).is_some_and(|x| matches!(x.class, Class::Array { .. }));
+    // A proxy whose target is an array is written as one (ECMA-262 2020 section 24.5.2.1).
+    let array = interp.is_array(&Value::Object(o))?;
     let keys = if array {
         let len = length_of(interp, o)?;
         // Every element is written as at least `null` and a comma, so a length that cannot fit

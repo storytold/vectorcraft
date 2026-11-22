@@ -331,6 +331,31 @@ fn a_js_script_reads_ecmascript_2015_and_a_jsx_script_does_not() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn a_js_script_has_proxy_and_reflect_and_a_jsx_script_does_not() {
+    let dir = fresh_folder("proxy");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        json!({"path": p.to_string_lossy()})
+    };
+    let mut s = two_docs();
+    let names = "vc.log(typeof Proxy + ' ' + typeof Reflect);";
+    let modern = s.execute("script.run", &write("names.js", names)).unwrap();
+    assert_eq!(modern["log"], json!(["function object"]), "{modern}");
+    let legacy = s.execute("script.run", &write("names.jsx", names)).unwrap();
+    assert_eq!(legacy["log"], json!(["undefined undefined"]), "{legacy}");
+    assert_eq!(run(&mut s, names).unwrap()["log"], json!(["undefined undefined"]));
+    // A proxy given to the app is refused by name, and its traps do not run.
+    let given = "var ran = false;\nvar p = new Proxy({}, { ownKeys: function () { ran = true; return []; } });\n\
+                 try { vc.run('document.list', p); } catch (e) { vc.log(e.name + ': ' + e.message); }\nvc.log(ran);";
+    let r = s.execute("script.run", &write("given.js", given)).unwrap();
+    let log = r["log"].as_array().unwrap();
+    assert!(log[0].as_str().is_some_and(|m| m.starts_with("TypeError") && m.contains("is a proxy")), "{r}");
+    assert_eq!(log[1], json!(false), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A new empty folder for test `name`.
 fn fresh_folder(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("vc-script-run-{name}-{}", std::process::id()));

@@ -84,9 +84,10 @@ fn field(i: &mut Interp, v: &Value, name: &str) -> JsResult<Value> {
     }
 }
 
-/// The value of the own data property `name` of `o`, `undefined` when it has none.
+/// The value of the own data property `name` of `o`, `undefined` when it has none. A proxy's
+/// traps do not run: a proxy has no such property.
 fn slot(i: &Interp, o: ObjId, name: &str) -> JsResult<Value> {
-    Ok(match i.get_own_property(o, &key(name))? {
+    Ok(match i.ordinary_own_property(o, &key(name))? {
         Some(Prop::Data { value, .. }) => value,
         _ => Value::Undefined,
     })
