@@ -44,11 +44,15 @@ impl SideWidget {
     /// segments of it selected.
     pub fn of(doc: &Document, selection: &Selection, bx: &OrientedBox, zoom: f64) -> Option<Self> {
         let [id] = selection.objects[..] else { return None };
-        if !selection.anchors.is_empty() || selection.segments.contains_key(&id) || !doc.is_editable(id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || selection.segments.contains_key(&id) || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let NodeKind::Path { live, .. } = &doc.node(id)?.kind else { return None };
         let Some(LiveShape::Polygon { sides, .. }) = live.as_deref() else { return None };
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !doc.is_editable(id) {
+            return None;
+        }
         let r = bx.rect;
         let at = bx.to_doc() * Point::new(r.x1 + OFFSET_PX / zoom, r.center().y);
         (at.x.is_finite() && at.y.is_finite()).then_some(Self { id, at, sides: *sides })

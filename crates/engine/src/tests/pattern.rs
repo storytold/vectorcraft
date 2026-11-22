@@ -334,7 +334,7 @@ fn replace_art_is_refused_without_changing_anything() {
     for (case, p, why) in [
         ("no name", json!({}), "missing name".to_string()),
         ("no pattern", json!({"name": "Stripes"}), "no pattern `Stripes`".into()),
-        ("no art", json!({"name": "Dots", "ids": [9999]}), "select the art for the pattern tile".into()),
+        ("no art", json!({"name": "Dots", "ids": []}), "select the art for the pattern tile".into()),
         ("painted with it", json!({"name": "Dots", "ids": [other.0]}), "art painted with `Dots` can't be its tile".into()),
         ("through a pattern", json!({"name": "Dots", "ids": [via.0]}), "art painted with `Dots` can't be its tile".into()),
         ("through a symbol", json!({"name": "Dots", "ids": [instance.0]}), "art painted with `Dots` can't be its tile".into()),
@@ -357,6 +357,28 @@ fn replace_art_is_refused_without_changing_anything() {
     let err = s.execute("object.pattern.replaceArt", &json!({"name": "Dots", "ids": [plain.0]})).unwrap_err();
     assert!(matches!(&err, EngineError::Disabled(_, w) if w == "finish editing the pattern first"), "while editing: {err}");
     unchanged(&s, &before, steps, "while editing");
+}
+
+/// Make, Replace Pattern Art and the Repeat commands return an error, changing nothing, when an
+/// `ids` entry names no object, also beside one that does: they never act on the rest alone.
+#[test]
+fn pattern_and_repeat_commands_refuse_an_unknown_id_without_changing_anything() {
+    let mut s = session();
+    make_dots(&mut s);
+    let blue = blue_rect(&mut s);
+    let (before, steps) = (doc(&s).clone(), s.doc().unwrap().history.undo.len());
+    for (cmd, p) in [
+        ("object.pattern.replaceArt", json!({"name": "Dots", "ids": [blue.0, 9999]})),
+        ("object.pattern.make", json!({"name": "P", "ids": [blue.0, 9999]})),
+        ("object.repeat.radial", json!({"ids": [blue.0, 9999]})),
+        ("object.repeat.grid", json!({"ids": [9999, blue.0]})),
+        ("object.repeat.mirror", json!({"ids": [9999]})),
+    ] {
+        let err = s.execute(cmd, &p).unwrap_err();
+        assert!(err.to_string().contains("no such object id 9999"), "{cmd}: {err}");
+        assert_eq!(doc(&s), &before, "{cmd}: the document stays");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}: no undo step");
+    }
 }
 
 fn doc_mut(s: &mut Session) -> &mut vectorcraft_doc::Document {
