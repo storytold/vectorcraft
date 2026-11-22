@@ -532,7 +532,8 @@ impl Realm {
     /// Adds the global constructor `UnitValue`, measurements with a magnitude and a unit, and has
     /// the arithmetic, comparison and unary operators calculate with its objects
     /// ([`crate::unit_value`]). A realm without it keeps the standard operators. A second call
-    /// changes nothing.
+    /// after one that succeeded changes nothing; after one that failed, it installs everything
+    /// again.
     pub fn add_unit_values(&mut self) -> Result<(), RunError> {
         match crate::unit_value::install(&mut self.interp) {
             Ok(()) => Ok(()),

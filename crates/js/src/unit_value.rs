@@ -452,15 +452,47 @@ fn accessor(i: &mut Interp, on: ObjId, name: &'static str, get: NativeFn, set: N
 }
 
 /// Adds the global constructor `UnitValue` ([`crate::Realm::add_unit_values`]). A second call
-/// changes nothing.
+/// after one that succeeded changes nothing; after one that failed, it installs everything again.
 pub(crate) fn install(i: &mut Interp) -> JsResult<()> {
+    install_with(i, define_members)
+}
+
+/// [`install`] with `define` defining the members on the new prototype. When `define` fails, the
+/// realm is left without the operators, and the global `UnitValue` as it was before the call.
+pub(crate) fn install_with(i: &mut Interp, define: impl FnOnce(&mut Interp, ObjId) -> JsResult<()>) -> JsResult<()> {
     if i.unit_values.is_some() {
         return Ok(());
     }
-    let object_proto = i.intrinsics.object_proto;
-    i.reserve_heap(OBJECT_BYTES)?;
-    let proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
-    i.unit_values = Some(Classes { proto, base: DEFAULT_BASE });
+    let global = i.global;
+    let name = key("UnitValue");
+    let previous = i.get_own_property(global, &name)?;
+    let held: Vec<Value> = match &previous {
+        Some(Prop::Data { value, .. }) => vec![value.clone()],
+        Some(Prop::Accessor { get, set, .. }) => get.iter().chain(set.iter()).map(|&o| Value::Object(o)).collect(),
+        None => Vec::new(),
+    };
+    i.rooted(&held, |i| {
+        let object_proto = i.intrinsics.object_proto;
+        i.reserve_heap(OBJECT_BYTES)?;
+        let proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
+        // `unit_values` roots the prototype while the members are defined, and turns the operators on.
+        i.unit_values = Some(Classes { proto, base: DEFAULT_BASE });
+        let defined = define(i, proto);
+        if defined.is_err() {
+            i.unit_values = None;
+            match previous {
+                Some(p) => i.define(global, name, p)?,
+                None => {
+                    i.object_mut(global)?.props.remove(&name);
+                }
+            }
+        }
+        defined
+    })
+}
+
+/// Defines the constructor, its `baseUnit` and the prototype's members.
+fn define_members(i: &mut Interp, proto: ObjId) -> JsResult<()> {
     let ctor = native(i, "UnitValue", unit_value_ctor, 2, NativeKind::Plain, true)?;
     constructor(i, "UnitValue", ctor, proto)?;
     accessor(i, ctor, "baseUnit", get_class_base, set_class_base)?;

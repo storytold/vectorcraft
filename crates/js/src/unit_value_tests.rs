@@ -386,6 +386,56 @@ fn each_measurement_counts_toward_the_heap() {
 }
 
 #[test]
+fn an_install_that_hits_the_heap_limit_installs_everything_on_the_next_call() {
+    let cost = {
+        let mut r = Realm::new();
+        let before = r.collect_garbage();
+        r.add_unit_values().unwrap();
+        r.collect_garbage() - before
+    };
+    let mut failed = 0;
+    for step in 0..=16 {
+        let mut r = Realm::new();
+        let live = r.collect_garbage();
+        r.set_limits(Limits { heap_bytes: live + cost * step / 16, ..Limits::default() });
+        let first = r.add_unit_values();
+        r.set_limits(Limits::default());
+        if first.is_err() {
+            failed += 1;
+            r.add_unit_values().unwrap();
+        }
+        assert_eq!(number(&mut r, "UnitValue(1, 'in').as('pt')"), 72.0, "limit at {step}/16 of the install");
+    }
+    assert!(failed >= 1, "no limit stopped the install");
+}
+
+/// Installs with members that stop after the global `UnitValue` is defined.
+fn stopped_install(r: &mut Realm) {
+    let stopped = crate::unit_value::install_with(r.interp(), |i, proto| {
+        crate::builtins::method(i, proto, "toString", |_, _, _, _| Ok(crate::value::Value::Undefined), 0)?;
+        let global = i.global;
+        crate::builtins::data(i, global, "UnitValue", crate::value::Value::Number(1.0), 0)?;
+        Err(crate::interp::Abrupt::Internal("stopped".into()))
+    });
+    assert!(stopped.is_err());
+}
+
+#[test]
+fn an_install_that_fails_part_way_installs_everything_on_the_next_call() {
+    let mut r = Realm::new();
+    stopped_install(&mut r);
+    assert_eq!(text(&mut r, "typeof UnitValue"), "undefined");
+    assert!(boolean(&mut r, "!('UnitValue' in this)"));
+    let mut kept = Realm::new();
+    kept.run("var UnitValue = 'mine';").unwrap();
+    stopped_install(&mut kept);
+    assert_eq!(text(&mut kept, "UnitValue"), "mine");
+    r.add_unit_values().unwrap();
+    assert_eq!(number(&mut r, "UnitValue(1, 'in').as('pt')"), 72.0);
+    assert_eq!(text(&mut r, "String(UnitValue(1, 'in') + UnitValue(72, 'pt'))"), "2 in");
+}
+
+#[test]
 fn a_second_install_changes_nothing() {
     let mut r = realm();
     r.run("UnitValue.baseUnit = UnitValue(1, 'mm'); var Kept = UnitValue;").unwrap();
