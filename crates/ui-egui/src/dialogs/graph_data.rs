@@ -134,11 +134,18 @@ struct Lines {
     key: Option<(usize, u64, Vec<Option<u64>>)>,
     rows: LineIndex,
     columns: LineIndex,
+    /// The own width of the column whose edge a drag holds, as it was when the drag began.
+    resize_from: Option<Option<u64>>,
 }
 
 impl Lines {
     fn new() -> Self {
-        Lines { key: None, rows: LineIndex::uniform(ROW_H, 0), columns: LineIndex::uniform(digits_px(DEFAULT_WIDTH), MAX_COLS as u32) }
+        Lines {
+            key: None,
+            rows: LineIndex::uniform(ROW_H, 0),
+            columns: LineIndex::uniform(digits_px(DEFAULT_WIDTH), MAX_COLS as u32),
+            resize_from: None,
+        }
     }
 
     /// Lays out `rows` rows and every column of `sheet` at its width.
@@ -508,10 +515,23 @@ fn px_digits(px: f32) -> u64 {
 }
 
 /// A column's edge dragged: the width the drag gives it in whole digits, on every update and at the commit; a
-/// cancel gives back the width it began with. A drag that stays where it began changes nothing.
-fn handle_edit(sheet: &mut Sheet, column: u32, width: &EditEvent<f32>) {
+/// cancel gives back the width it began with (`began`, kept at the begin). A drag that stays where it began changes
+/// nothing.
+fn handle_edit(sheet: &mut Sheet, began: &mut Option<Option<u64>>, column: u32, width: &EditEvent<f32>) {
+    let c = column as usize;
+    match width {
+        EditEvent::Begin { .. } => *began = Some(sheet.widths.get(c).copied().flatten()),
+        // The grid's cancel carries no starting width: the one kept at the begin goes back.
+        EditEvent::Cancel { .. } => {
+            if let (Some(own), Some(w)) = (began.take(), sheet.widths.get_mut(c)) {
+                *w = own;
+            }
+            return;
+        }
+        _ => {}
+    }
     let Some(px) = width.landed() else { return };
-    let (c, n) = (column as usize, px_digits(*px));
+    let n = px_digits(*px);
     if n != col_digits(sheet, c) {
         set_col_digits(sheet, c, n);
     }
@@ -606,7 +626,7 @@ fn body(ui: &mut egui::Ui, values: &mut Sheet, pane: &mut Pane<'_>) -> bool {
                 paste_block(values, active(state), &text);
                 load(values, state, entry);
             }
-            GridEdit::ResizeColumn { column, width, .. } => handle_edit(values, column, &width),
+            GridEdit::ResizeColumn { column, width, .. } => handle_edit(values, &mut lines.resize_from, column, &width),
             _ => {}
         }
     }
@@ -768,7 +788,7 @@ mod tests {
     use std::sync::Arc;
 
     use craft::host::ScriptedFiles;
-    use egui_kittest::kittest::Queryable;
+    use egui_kittest::kittest::{NodeT, Queryable};
     use serde_json::json;
 
     use super::*;
@@ -1038,16 +1058,20 @@ mod tests {
         let mut h = harness(app);
         h.run_steps(5);
         let digits = |h: &Harness, c: usize| read(h.state(), |d| col_digits(&d.sheet, c));
-        let grid = h.get_by_role_and_label(egui::accesskit::Role::Grid, "Graph Data").rect();
-        // Column `c`'s end edge, on the second data row.
+        let grid = h.get_by_role_and_label(egui::accesskit::Role::Grid, "Graph Data").accesskit_node().locate().0;
+        // Column `c`'s end edge over the cells, on the second data row: a pointer-only part, found by the rect the last
+        // pass sensed. It runs down every row shown, past the part of the sheet in view.
         let edge = |h: &Harness, c: usize| {
-            let x = (0..=c).map(|c| digits_px(digits(h, c))).sum::<f32>();
-            egui::pos2(grid.left() + x, grid.top() + ROW_H * 2.5)
+            let part = craft::behavior::PartKey::new("column_edge").at(c as u64);
+            let rect = craft::ui::testing::pointer::part_rect_of_node(&h.ctx, grid, part).unwrap_or_else(|| panic!("column {c}'s edge is sensed"));
+            egui::pos2(rect.center().x, rect.top() + ROW_H * 1.5)
         };
         let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         let drag = |h: &mut Harness, c: usize, dx: f32, release: bool| {
+            // The pointer comes over the edge before it presses, as a mouse's does.
             let at = edge(h, c);
             h.event(egui::Event::PointerMoved(at));
+            h.step();
             h.event(button(at, true));
             h.step();
             for step in 1..=4 {
@@ -1072,10 +1096,13 @@ mod tests {
         // The last move and the release in one frame.
         let at = edge(&h, 0);
         h.event(egui::Event::PointerMoved(at));
+        h.step();
         h.event(button(at, true));
         h.step();
         h.event(egui::Event::PointerMoved(at + egui::vec2(-35.0, 0.0)));
         h.event(button(at + egui::vec2(-35.0, 0.0), false));
+        // That frame reports the drag's start, the next one the release.
+        h.step();
         h.step();
         assert_eq!(digits(&h, 0), 2, "the width where the drag was released");
         // Column Width still shows 7: entering 7 there sets every column to 7.
