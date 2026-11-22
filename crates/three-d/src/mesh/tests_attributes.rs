@@ -322,6 +322,40 @@ fn a_rounded_or_custom_bevels_normals_turn_smoothly_across_its_bands() {
 }
 
 #[test]
+fn a_twisted_rounded_bevel_keeps_its_normals_smoothed_on_every_piece_of_a_cut_edge() {
+    let (p, r) = rectangle(0.0, 0.0, 200.0, 100.0);
+    // A twist small enough that the bevel's bands do not fold over one another.
+    let o = Extrude { twist: 10.0, bevel: Some(bevel(BevelShape::Rounded)), ..Extrude::default() };
+    let m = extrude_mesh(&p, FillRule::NonZero, r, o, front()).unwrap();
+    let mut at = HashMap::<[u64; 3], Vec<[f64; 3]>>::new();
+    for (t, part) in m.triangles.iter().zip(&m.parts) {
+        if *part == MeshPart::FrontBevel {
+            for &i in t {
+                let normal = m.normals[i as usize];
+                assert!((length(normal) - 1.0).abs() < 1e-12);
+                at.entry(m.positions[i as usize].map(f64::to_bits)).or_default().push(normal);
+            }
+        }
+    }
+    // The twist cuts each edge into pieces. Where two pieces of one band meet on a row between two
+    // bands, each band's two pieces would give four normals; smoothed, the two bands agree on each
+    // piece's normal, which leaves two.
+    let mut most = 0;
+    for (q, list) in &at {
+        let mut distinct: Vec<[f64; 3]> = vec![];
+        for n in list {
+            if !distinct.iter().any(|d| angle(*d, *n) < 1e-9) {
+                distinct.push(*n);
+            }
+        }
+        assert!(distinct.len() <= 2, "{q:?} {distinct:?}");
+        most = most.max(list.len());
+    }
+    // Some corners lie where the pieces of two bands meet.
+    assert!(most >= 4, "{most}");
+}
+
+#[test]
 fn a_steps_sharp_turns_and_a_classic_bevel_stay_hard_edges() {
     let (p, r) = rectangle(0.0, 0.0, 200.0, 100.0);
     let step = extrude_mesh(&p, FillRule::NonZero, r, Extrude { bevel: Some(bevel(BevelShape::Step)), ..Extrude::default() }, front()).unwrap();

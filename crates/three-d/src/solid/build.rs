@@ -163,8 +163,9 @@ pub(super) struct BandMesh<'a> {
     pub(super) normals: Option<RowNormals<'a>>,
 }
 
-/// The smoothed normals of the corners of each edge on a band's two rings ([`BandMesh`]).
-pub(super) type RowNormals<'a> = (&'a [Option<V3>], &'a [Option<V3>]);
+/// The smoothed normals of the corners of each piece of each edge on a band's two rings
+/// ([`BandMesh`]).
+pub(super) type RowNormals<'a> = (&'a [Vec<Option<V3>>], &'a [Vec<Option<V3>>]);
 
 /// What a solid's builder makes: its facets, its faces before projection when a mesh is asked for
 /// (an error when they pass [`MAX_SOLID_FACES`] while the facets are built too), and the
@@ -416,23 +417,13 @@ impl<'a> Builder<'a> {
         mesh: &BandMesh,
     ) -> Result<(), String> {
         let n = a.len().min(b.len());
-        // At 0 and 1, the corners themselves.
-        let lerp = |p: V3, q: V3, s: f64| {
-            if s <= 0.0 {
-                p
-            } else if s >= 1.0 {
-                q
-            } else {
-                V3(p.0 + (q.0 - p.0) * s, p.1 + (q.1 - p.1) * s, p.2 + (q.2 - p.2) * s)
-            }
-        };
         let order = if cuts.is_empty() { Order::Depth } else { Order::Twisted };
         for i in 0..n {
             let j = (i + 1) % n;
             let pieces = cuts.get(i).copied().unwrap_or(1).max(1);
             for k in 0..pieces {
                 let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
-                let quad = vec![lerp(a[i], a[j], s0), lerp(a[i], a[j], s1), lerp(b[i], b[j], s1), lerp(b[i], b[j], s0)];
+                let quad = vec![along_edge(a[i], a[j], s0), along_edge(a[i], a[j], s1), along_edge(b[i], b[j], s1), along_edge(b[i], b[j], s0)];
                 // A twist bends the strip between two slices into a saddle: its normal is the whole
                 // quad's average (Newell's), not one corner's triangle, which leans far to one side.
                 let mut normal = newell(std::slice::from_ref(&quad));
@@ -447,10 +438,9 @@ impl<'a> Builder<'a> {
                     let (u0, u1) = (mesh.u.get(i).copied().unwrap_or(0.5), mesh.u.get(i + 1).copied().unwrap_or(0.5));
                     let (ua, ub) = (u0 + (u1 - u0) * s0, u0 + (u1 - u0) * s1);
                     let [va, vb] = mesh.v;
-                    // A cut edge's pieces keep their own normals.
-                    let normals = mesh.normals.filter(|_| pieces == 1);
-                    let na = normals.and_then(|(na, _)| na.get(i).copied().flatten());
-                    let nb = normals.and_then(|(_, nb)| nb.get(i).copied().flatten());
+                    // Each piece of a cut edge takes the normals smoothed for that piece.
+                    let na = mesh.normals.and_then(|(na, _)| na.get(i)?.get(k).copied().flatten());
+                    let nb = mesh.normals.and_then(|(_, nb)| nb.get(i)?.get(k).copied().flatten());
                     Attrs::Corners(vec![vec![([ua, va], na), ([ub, va], na), ([ub, vb], nb), ([ua, vb], nb)]])
                 };
                 self.face(vec![quad], normal, order, mesh.part, attrs)?;
@@ -827,17 +817,20 @@ fn step_coordinates(steps: &[Step], depth: f64) -> Vec<f64> {
 /// are smoothed for a mesh. A sharper turn (a Step profile's) stays a hard edge.
 pub(crate) const BEVEL_CREASE: f64 = 60.0;
 
-/// For a mesh, the normal of each corner of each edge of `ring` at each step (one list per step,
-/// one entry per edge) where the bands on either side are smoothed: two bands of the same bevel,
-/// front or back, that turn by less than [`BEVEL_CREASE`], neither of them lying flat toward the
-/// front or back (as a cap does). Such a corner takes the mean of the two bands' unit normals;
-/// every other corner is `None` and takes its face's normal. `placed` holds the ring at each step
-/// in view space.
-fn smoothed_rows(camera: &Camera, ring: &[Point], steps: &[Step], placed: &[Vec<V3>]) -> Vec<Vec<Option<V3>>> {
+/// For a mesh, the normal of each corner of each piece of each edge of `ring` at each step (one
+/// list per step, one list per edge, one entry per piece: `cuts[i]` pieces along edge `i`, as
+/// [`Builder::curved_band`] cuts it, or one) where the bands on either side are smoothed: two
+/// bands of the same bevel, front or back, that turn by less than [`BEVEL_CREASE`], neither of
+/// them lying flat toward the front or back (as a cap does). Such a corner takes the mean of the
+/// two bands' unit normals at that piece; every other corner is `None` and takes its face's
+/// normal. `placed` holds the ring at each step in view space.
+fn smoothed_rows(camera: &Camera, ring: &[Point], steps: &[Step], placed: &[Vec<V3>], cuts: &[usize]) -> Vec<Vec<Vec<Option<V3>>>> {
     let n = ring.len();
+    let pieces = |i: usize| cuts.get(i).copied().unwrap_or(1).max(1);
     let front = camera.rotate(V3(0.0, 0.0, 1.0));
-    // Each band's unit outward normal at each edge, as [`Builder::curved_band`] orients it.
-    let bands: Vec<(MeshPart, Vec<V3>)> = placed
+    // Each band's unit outward normal at each piece of each edge, as [`Builder::curved_band`]
+    // cuts and orients it.
+    let bands: Vec<(MeshPart, Vec<Vec<V3>>)> = placed
         .windows(2)
         .zip(steps.windows(2))
         .map(|(pair, s)| {
@@ -845,10 +838,17 @@ fn smoothed_rows(camera: &Camera, ring: &[Point], steps: &[Step], placed: &[Vec<
             let normals = (0..n)
                 .map(|i| {
                     let j = (i + 1) % n;
-                    let (Some(a), Some(c)) = (pair.first(), pair.get(1)) else { return V3::default() };
-                    let quad = [a.get(i), a.get(j), c.get(j), c.get(i)].into_iter().flatten().copied().collect::<Vec<_>>();
-                    let normal = newell(std::slice::from_ref(&quad)).unit();
-                    if normal.dot(camera.rotate(outward(ring, i, face))) < 0.0 { V3(-normal.0, -normal.1, -normal.2) } else { normal }
+                    let pieces = pieces(i);
+                    (0..pieces)
+                        .map(|k| {
+                            let (Some(a), Some(c)) = (pair.first(), pair.get(1)) else { return V3::default() };
+                            let (Some((&ai, &aj)), Some((&ci, &cj))) = (a.get(i).zip(a.get(j)), c.get(i).zip(c.get(j))) else { return V3::default() };
+                            let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
+                            let quad = vec![along_edge(ai, aj, s0), along_edge(ai, aj, s1), along_edge(ci, cj, s1), along_edge(ci, cj, s0)];
+                            let normal = newell(std::slice::from_ref(&quad)).unit();
+                            if normal.dot(camera.rotate(outward(ring, i, face))) < 0.0 { V3(-normal.0, -normal.1, -normal.2) } else { normal }
+                        })
+                        .collect()
                 })
                 .collect();
             (band_part(face), normals)
@@ -859,16 +859,34 @@ fn smoothed_rows(camera: &Camera, ring: &[Point], steps: &[Step], placed: &[Vec<
     (0..steps.len())
         .map(|k| {
             let pair = k.checked_sub(1).and_then(|p| bands.get(p)).zip(bands.get(k));
-            let Some(((_, n0), (_, n1))) = pair.filter(|((p0, _), (p1, _))| p0 == p1 && *p0 != MeshPart::Side) else { return vec![None; n] };
+            let Some(((_, n0), (_, n1))) = pair.filter(|((p0, _), (p1, _))| p0 == p1 && *p0 != MeshPart::Side) else {
+                return (0..n).map(|i| vec![None; pieces(i)]).collect();
+            };
             n0.iter()
                 .zip(n1)
-                .map(|(a, b)| {
-                    let whole = a.dot(*a) > 0.5 && b.dot(*b) > 0.5;
-                    (whole && !flat(*a) && !flat(*b) && a.dot(*b) > crease).then(|| V3(a.0 + b.0, a.1 + b.1, a.2 + b.2).unit())
+                .map(|(e0, e1)| {
+                    e0.iter()
+                        .zip(e1)
+                        .map(|(a, b)| {
+                            let whole = a.dot(*a) > 0.5 && b.dot(*b) > 0.5;
+                            (whole && !flat(*a) && !flat(*b) && a.dot(*b) > crease).then(|| V3(a.0 + b.0, a.1 + b.1, a.2 + b.2).unit())
+                        })
+                        .collect()
                 })
                 .collect()
         })
         .collect()
+}
+
+/// The point a share `s` of the way from `p` to `q`: at 0 and 1, the corners themselves.
+fn along_edge(p: V3, q: V3, s: f64) -> V3 {
+    if s <= 0.0 {
+        p
+    } else if s >= 1.0 {
+        q
+    } else {
+        V3(p.0 + (q.0 - p.0) * s, p.1 + (q.1 - p.1) * s, p.2 + (q.2 - p.2) * s)
+    }
 }
 
 /// Extrude & Bevel: the shape's outline extruded backwards, with optional twist, taper, bevels
@@ -967,7 +985,7 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
         let unrolled = unrolled.as_ref().filter(|(k, ..)| *k == r);
         let placed: Vec<Vec<V3>> = steps.iter().map(|s| ring_at(ring, s)).collect();
         let u = along_ring(ring);
-        let rows = if b.keeps_mesh() { smoothed_rows(&camera, ring, &steps, &placed) } else { vec![] };
+        let rows = if b.keeps_mesh() { smoothed_rows(&camera, ring, &steps, &placed, pieces) } else { vec![] };
         for (k, pair) in placed.windows(2).enumerate() {
             let ([a, c], Some(s0), Some(s1)) = (pair, steps.get(k), steps.get(k + 1)) else { continue };
             b.cells = layout.as_ref().and_then(|(sides, spans)| {
