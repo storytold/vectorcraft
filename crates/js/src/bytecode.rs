@@ -207,6 +207,9 @@ pub(crate) enum Op {
     ToStr,
     /// Pushes the template object of `templates[i]`, the same object for each evaluation.
     TemplateObject(u32),
+    /// Starts (`true`) or ends (`false`) a class's heritage and computed keys in code that is not
+    /// strict mode code: the code between runs as strict mode code (ECMA-262 2015 section 10.2.1).
+    StrictClass(bool),
     /// `[superclass]` → `constructor prototype`: makes a class's prototype object and its
     /// constructor from `functions[ctor]`, the superclass on the stack when `heritage` is true
     /// (ECMA-262 2015 section 14.5.14).
@@ -443,7 +446,7 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::XmlScopeRef => e(1, 2),
         Op::ForEachValue(n) => e(n + 2, n + 3),
         Op::SetDefaultNamespace => e(1, 0),
-        Op::PushBlock(_) | Op::CopyEnv | Op::BodyEnv => e(0, 0),
+        Op::PushBlock(_) | Op::CopyEnv | Op::BodyEnv | Op::StrictClass(_) => e(0, 0),
         Op::InitVar(_) | Op::AnnexB(_) => e(1, 0),
         Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
         Op::ArraySpread | Op::NewSpread => e(2, 1),

@@ -244,14 +244,15 @@ impl<'a> FnCompiler<'a> {
     /// in source order, and compiles the functions.
     /// With [`crate::Options::es2015`], only the function declarations at the top of the body are
     /// hoisted; one in a block is instantiated when the block is entered, and outside strict mode
-    /// code its name is also a variable (Annex B.3.3) unless that clashes with a parameter or with
-    /// a `let` or a `const` of the body or of a block or loop around the declaration.
+    /// code its name is also a variable (Annex B.3.3) unless that clashes with a parameter, with
+    /// a `let` or a `const` of the body or of a block or loop around the declaration, or with a
+    /// function declared in a block around the one that holds the declaration.
     fn hoist(&mut self, body: &[StmtId], params: &[Key]) -> CResult<Hoisted> {
         let mut out = Hoisted::default();
         let mut seen = HashSet::new();
-        // The `let` and `const` names of each statement list and loop the walk enters, with the
-        // index of the one around it; the body's are first.
-        let mut scopes: Vec<(Option<usize>, HashSet<Key>)> = vec![(None, self.lexical_names(body))];
+        // The `let` and `const` names and the block's function names of each statement list and
+        // loop the walk enters, with the index of the one around it; the body's are first.
+        let mut scopes: Vec<(Option<usize>, HashSet<Key>, HashSet<Key>)> = vec![(None, self.lexical_names(body), HashSet::new())];
         let mut work: Vec<(StmtId, bool, usize)> = body.iter().rev().map(|&s| (s, false, 0)).collect();
         let mut add_var = |out: &mut Hoisted, k: Key| {
             if seen.insert(k.clone()) {
@@ -262,8 +263,8 @@ impl<'a> FnCompiler<'a> {
         while let Some((id, nested, scope)) = work.pop() {
             let Some(stmt) = self.ast.stmt(id) else { return internal("statement out of range") };
             let inner = self.es2015;
-            let mut enter = |names: HashSet<Key>| {
-                scopes.push((Some(scope), names));
+            let mut enter = |names: HashSet<Key>, funcs: HashSet<Key>| {
+                scopes.push((Some(scope), names, funcs));
                 scopes.len() - 1
             };
             match stmt {
@@ -285,7 +286,7 @@ impl<'a> FnCompiler<'a> {
                     }
                 }
                 Stmt::Block(list) => {
-                    let s = enter(self.lexical_names(list));
+                    let s = enter(self.lexical_names(list), self.block_function_names(list));
                     work.extend(list.iter().rev().map(|&st| (st, nested || inner, s)));
                 }
                 Stmt::If { consequent, alternate, .. } => {
@@ -300,7 +301,7 @@ impl<'a> FnCompiler<'a> {
                             decls.iter().for_each(|d| add_var(&mut out, key_of(&d.name.name)));
                             scope
                         }
-                        Some(ForInit::Lexical(_, decls)) => enter(decls.iter().map(|d| key_of(&d.name.name)).collect()),
+                        Some(ForInit::Lexical(_, decls)) => enter(decls.iter().map(|d| key_of(&d.name.name)).collect(), HashSet::new()),
                         _ => scope,
                     };
                     work.push((*body, nested || inner, s));
@@ -311,28 +312,29 @@ impl<'a> FnCompiler<'a> {
                             add_var(&mut out, key_of(&d.name.name));
                             scope
                         }
-                        ForInTarget::Lexical(_, name) => enter(HashSet::from([key_of(&name.name)])),
+                        ForInTarget::Lexical(_, name) => enter(HashSet::from([key_of(&name.name)]), HashSet::new()),
                         ForInTarget::Expr(_) => scope,
                     };
                     work.push((*body, nested || inner, s));
                 }
                 Stmt::Switch { cases, .. } => {
                     let names = cases.iter().flat_map(|c| self.lexical_names(&c.body)).collect();
-                    let s = enter(names);
+                    let funcs = cases.iter().flat_map(|c| self.block_function_names(&c.body)).collect();
+                    let s = enter(names, funcs);
                     for case in cases.iter().rev() {
                         work.extend(case.body.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
                 }
                 Stmt::Try { block, handler, finalizer } => {
                     if let Some(f) = finalizer {
-                        let s = enter(self.lexical_names(f));
+                        let s = enter(self.lexical_names(f), self.block_function_names(f));
                         work.extend(f.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
                     if let Some(h) = handler {
-                        let s = enter(self.lexical_names(&h.body));
+                        let s = enter(self.lexical_names(&h.body), self.block_function_names(&h.body));
                         work.extend(h.body.iter().rev().map(|&st| (st, nested || inner, s)));
                     }
-                    let s = enter(self.lexical_names(block));
+                    let s = enter(self.lexical_names(block), self.block_function_names(block));
                     work.extend(block.iter().rev().map(|&st| (st, nested || inner, s)));
                 }
                 Stmt::Expr(_)
@@ -348,8 +350,11 @@ impl<'a> FnCompiler<'a> {
         for (k, scope, id) in annex {
             let mut cur = Some(scope);
             let mut clash = params.contains(&k) || *k == *key_of("arguments");
-            while let Some((outer, names)) = cur.and_then(|i| scopes.get(i)).filter(|_| !clash) {
-                clash = names.contains(&k);
+            // The functions of the declaration's own block do not count: it is the one replaced.
+            let mut own = true;
+            while let Some((outer, names, funcs)) = cur.and_then(|i| scopes.get(i)).filter(|_| !clash) {
+                clash = names.contains(&k) || (!own && funcs.contains(&k));
+                own = false;
                 cur = *outer;
             }
             if !clash {
@@ -372,8 +377,31 @@ impl<'a> FnCompiler<'a> {
             .collect()
     }
 
+    /// The names of the function declarations a block's statement list declares, labeled ones
+    /// included.
+    fn block_function_names(&self, list: &[StmtId]) -> HashSet<Key> {
+        list.iter()
+            .filter_map(|&s| self.labeled_function(s))
+            .filter_map(|(_, fid)| self.ast.function(fid).and_then(|f| f.name.as_ref()))
+            .map(|n| key_of(&n.name))
+            .collect()
+    }
+
+    /// The function declaration the statement `s` is, alone or inside labels, and its statement.
+    fn labeled_function(&self, s: StmtId) -> Option<(StmtId, FunctionId)> {
+        let mut cur = s;
+        loop {
+            match self.ast.stmt(cur)? {
+                Stmt::FunctionDecl(fid) => return Some((cur, *fid)),
+                Stmt::Labeled { body, .. } => cur = *body,
+                _ => return None,
+            }
+        }
+    }
+
     /// The scope a statement list declares with [`crate::Options::es2015`]: its `let`, `const`
-    /// and class names, and (`functions`) its function declarations. `None` when it declares none.
+    /// and class names, and (`functions`) its function declarations, labeled ones included.
+    /// `None` when it declares none.
     fn list_scope(&mut self, list: &[StmtId], functions: bool) -> CResult<Option<u32>> {
         if !self.es2015 {
             return Ok(None);
@@ -383,12 +411,13 @@ impl<'a> FnCompiler<'a> {
             match self.ast.stmt(s) {
                 Some(Stmt::Lexical(kind, decls)) => scope.lets.extend(decls.iter().map(|d| (key_of(&d.name.name), *kind == LexKind::Const))),
                 Some(Stmt::Class(class)) => scope.lets.extend(class.name.iter().map(|n| (key_of(&n.name), false))),
-                Some(Stmt::FunctionDecl(fid)) if functions && !self.top_funcs.contains(&s) => {
-                    let Some(name) = self.ast.function(*fid).and_then(|f| f.name.as_ref()) else {
+                _ if functions => {
+                    let Some((s, fid)) = self.labeled_function(s).filter(|(s, _)| !self.top_funcs.contains(s)) else { continue };
+                    let Some(name) = self.ast.function(fid).and_then(|f| f.name.as_ref()) else {
                         return internal("function declaration without a name");
                     };
                     let k = key_of(&name.name);
-                    let i = self.function(*fid)?;
+                    let i = self.function(fid)?;
                     scope.funcs.push((k, i));
                     self.block_funcs.insert(s);
                 }
@@ -1385,7 +1414,8 @@ impl<'a> FnCompiler<'a> {
     /// A class definition (ECMA-262 2015 section 14.5.14), leaving its constructor on the stack. A
     /// named class binds its name, uninitialized and constant, in a scope of its own around the
     /// heritage and the methods, and initializes it only after every method is defined (steps 21
-    /// and 23), so a computed key that reads the name throws a `ReferenceError`.
+    /// and 23), so a computed key that reads the name throws a `ReferenceError`. The heritage and
+    /// the computed keys run as strict mode code (section 10.2.1).
     fn class(&mut self, class: &ClassDef) -> CResult<()> {
         self.at(class.span.start);
         let scope = class.name.as_ref().map(|n| self.push_scope(BlockScope { lets: vec![(key_of(&n.name), true)], funcs: Vec::new() }));
@@ -1393,6 +1423,30 @@ impl<'a> FnCompiler<'a> {
             self.emit(Op::PushBlock(s));
             self.env_depth += 1;
         }
+        // A class inside this one's heritage or keys is already in strict mode code.
+        let sloppy = !self.strict;
+        if sloppy {
+            self.emit(Op::StrictClass(true));
+            self.strict = true;
+        }
+        let r = self.class_body(class);
+        if sloppy {
+            self.strict = false;
+            self.emit(Op::StrictClass(false));
+        }
+        r?;
+        if let (Some(name), Some(_)) = (&class.name, scope) {
+            self.emit(Op::Dup);
+            let n = self.var_name(&name.name);
+            self.emit(Op::InitVar(n));
+            self.emit(Op::PopEnv);
+            self.env_depth -= 1;
+        }
+        Ok(())
+    }
+
+    /// A class's heritage, constructor and methods, leaving its constructor on the stack.
+    fn class_body(&mut self, class: &ClassDef) -> CResult<()> {
         if let Some(h) = class.heritage {
             self.expr(h)?;
         }
@@ -1417,13 +1471,6 @@ impl<'a> FnCompiler<'a> {
             self.emit(Op::ClassMethod { func, kind, is_static: element.is_static });
         }
         self.emit(Op::Pop);
-        if let (Some(name), Some(_)) = (&class.name, scope) {
-            self.emit(Op::Dup);
-            let n = self.var_name(&name.name);
-            self.emit(Op::InitVar(n));
-            self.emit(Op::PopEnv);
-            self.env_depth -= 1;
-        }
         Ok(())
     }
 

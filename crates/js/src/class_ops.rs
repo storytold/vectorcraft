@@ -98,11 +98,11 @@ impl Interp {
     }
 
     /// The value of `this` in the running code (ResolveThisBinding, section 8.3.2). In a derived
-    /// class constructor and the arrow functions inside it, reading it before `super(…)` returns
-    /// is a `ReferenceError`.
+    /// class constructor and the arrow functions and direct eval code inside it, reading it before
+    /// `super(…)` returns is a `ReferenceError`.
     pub(crate) fn this_value(&mut self) -> JsResult<Value> {
         let frame = self.frame()?;
-        if (frame.code.arrow || frame.code.derived)
+        if frame.this_in_env
             && let Some(e) = self.hidden_env(frame.env, ARROW_THIS)
         {
             if self.uninitialized(e, ARROW_THIS) {
@@ -399,10 +399,11 @@ impl Interp {
     }
 
     /// [[Set]] of `k` on `proto` with `receiver` as `this` (OrdinarySet, section 9.1.9). A write
-    /// that cannot be made throws a `TypeError` in strict mode code and does nothing otherwise
-    /// (PutValue, section 6.2.3.2).
+    /// that cannot be made throws a `TypeError` in strict mode code and in code from a source with
+    /// [`crate::bytecode::Source::strict_writes`], and does nothing otherwise (PutValue, section
+    /// 6.2.3.2).
     fn super_put(&mut self, proto: ObjId, k: Key, v: Value, receiver: &Value) -> JsResult<()> {
-        let throw = self.frame()?.code.strict;
+        let throw = self.strict_writes();
         let why = match self.find_property(proto, &k)? {
             Some(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), receiver, &[v]).map(drop),
             Some(Prop::Accessor { set: None, .. }) => Some("it has only a getter"),

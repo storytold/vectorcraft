@@ -100,6 +100,12 @@ fn redeclarations_and_bad_declarations_are_syntax_errors() {
     // Outside strict mode code `let` is still a name where no declaration can start.
     truth("var let = 3; let === 3");
     truth("{ function f() { return 1; } function f() { return 2; } } f() === 2");
+    // A labeled function in a block declares its name in the block.
+    syntax("{ let f; label: function f() {} }");
+    truth("function g() { var f; L: function f() {} return typeof f; } g() === 'function'");
+    // A method's parameter names are unique outside strict mode code too.
+    syntax("({ m(x, x) {} })");
+    truth("function f(x, x) { return x; } f(1, 2) === 2");
 }
 
 #[test]
@@ -121,7 +127,11 @@ fn functions_declared_in_blocks_are_scoped_to_the_block() {
     truth("var before = typeof f; { function f() { return 1; } } before === 'undefined' && f() === 1");
     truth("{ let x = 2; function g() { return x; } } g() === 2");
     truth("function h() { if (true) { function inner() { return 'i'; } } return inner(); } h() === 'i'");
-    // Only a `let` or `const` around the declaration, or a parameter, keeps the name from being a variable.
+    // Only a `let` or `const` around the declaration, a function declared in a block around it, or
+    // a parameter keeps the name from being a variable.
+    truth("var f; { function f() { return 1; } { function f() { return 2; } } } f() === 1");
+    // A labeled function in a block is made when the block is entered.
+    truth("{ var result = typeof lf; L: function lf() {} } result === 'function'");
     truth("function f() { { let g; } { function g() {} } return typeof g; } f() === 'function'");
     truth("function f() { let g = 1; { function g() {} } return g; } f() === 1");
     truth("function f() { { let g = 1; { function g() {} } } return typeof g; } f() === 'undefined'");
@@ -167,6 +177,23 @@ fn a_global_function_that_cannot_be_declared_declares_nothing() {
     assert!(matches!(&failed, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")), "{failed:?}");
     assert_eq!(realm.run("typeof retained"), Ok(JsValue::String("undefined".into())));
     assert_eq!(realm.run("let retained = 2; retained"), Ok(JsValue::Number(2.0)));
+}
+
+#[test]
+fn a_global_variable_that_cannot_be_declared_declares_nothing() {
+    // A global object that is not extensible takes no new variable (ECMA-262 2015 sections 15.1.8
+    // and 18.2.1.2, CanDeclareGlobalVar), and nothing else the code declares is declared.
+    let mut realm = es();
+    assert_eq!(realm.run("var kept = 1; Object.preventExtensions(this); 0"), Ok(JsValue::Number(0.0)));
+    for decl in ["let pending = 1; var missing;", "eval('var missing;')", "(0, eval)('var missing;')"] {
+        let failed = realm.run(decl);
+        assert!(
+            matches!(&failed, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")),
+            "{decl}: {failed:?}"
+        );
+    }
+    assert_eq!(realm.run("typeof pending === 'undefined' && !this.hasOwnProperty('missing')"), Ok(JsValue::Bool(true)));
+    assert_eq!(realm.run("var kept = 2; kept"), Ok(JsValue::Number(2.0)));
 }
 
 #[test]
@@ -452,6 +479,91 @@ fn new_scopes_survive_collections_while_they_are_made() {
 }
 
 #[test]
+fn calls_and_strict_eval_survive_collections_while_their_scopes_are_made() {
+    // Heaps just big enough make the collector run while a call's or a strict eval's scopes are
+    // made; the receiver, the arguments and eval's own environment stay reachable.
+    let src = "var total = 0; \
+        for (var i = 0; i < 300; i++) { \
+        total += (function () { 'use strict'; let x = i; return this.marker + x - i; }).call({ marker: 1 }); \
+        total += (function (a) { let y = a; return arguments.length + y.v; })({ v: 1 }, {}, {}); \
+        total += eval(\"'use strict'; var x = 7; let y = 1; function g() { return x; } x + y + g() + i - i\"); \
+        total += (0, eval)(\"'use strict'; var x = 2; let y = 1; function g() { return x; } x + y + g() + i - i\"); } total";
+    let mut completed = 0;
+    for kib in 16..400 {
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: kib << 10, ..Limits::default() });
+        match realm.run(src) {
+            Ok(v) => {
+                assert_eq!(v, JsValue::Number(7500.0), "{kib} KiB");
+                completed += 1;
+            }
+            Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{kib} KiB: {e:?}"),
+        }
+    }
+    assert!(completed > 0);
+}
+
+#[test]
+fn strict_eval_keeps_its_environment_through_a_collection_while_its_scope_is_made() {
+    // The scope of 500 names is the biggest piece eval code makes, so the collector runs while it
+    // is made at many heap sizes; eval's own environment, with `x` in it, stays.
+    let lets: Vec<String> = (0..500).map(|k| format!("l{k}")).collect();
+    let src = format!(
+        "var total = 0; var src = \"'use strict'; var x = 7; let {}; function g() {{ return x; }} x + g() + i - i\"; \
+         for (var i = 0; i < 10; i++) {{ total += eval(src) + (0, eval)(src); }} total",
+        lets.join(", ")
+    );
+    let mut completed = 0;
+    for kib in (64..1024).step_by(2) {
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: kib << 10, ..Limits::default() });
+        match realm.run(&src) {
+            Ok(v) => {
+                assert_eq!(v, JsValue::Number(280.0), "{kib} KiB");
+                completed += 1;
+            }
+            Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{kib} KiB: {e:?}"),
+        }
+    }
+    assert!(completed > 0);
+}
+
+#[test]
+fn spread_checks_the_heap_before_its_elements_are_added() {
+    // The list of 25,000 elements read fits in the room left over, and the array's 25,000 new
+    // properties do not, so the spread ends with the heap limit before the estimate passes it.
+    let setup = "var big = { length: 25000 }; 0";
+    let mut measure = Realm::with_options(es_options(), Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let heap_bytes = measure.interp().heap.bytes + (2 << 20);
+    let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("[...{ length: 10 }].length"), Ok(JsValue::Number(10.0)));
+    let e = realm.run("[...big].length").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
+    assert!(realm.interp().heap.bytes <= heap_bytes, "{} > {heap_bytes}", realm.interp().heap.bytes);
+}
+
+#[test]
+fn template_objects_go_when_their_code_does() {
+    // Two sites in one function share its code; both strings objects go once the function does.
+    let mut realm = es();
+    let src = "function tag(s) { return s; } (function () { tag`a`; tag`b`; })(); (function () { tag`c`; })(); 0";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(0.0)));
+    realm.interp().collect_garbage();
+    realm.interp().collect_garbage();
+    assert_eq!(realm.interp().template_objects.len(), 0);
+}
+
+#[test]
+fn a_directive_after_a_template_over_lines_must_start_its_line() {
+    let options = Options { preprocessor_lines: true, ..es_options() };
+    let p = crate::parse("var s = `${1}\nx` //@include \"missing.jsx\"\nvar t = `a\nb` //@include \"other.jsx\"", &options).unwrap();
+    assert!(p.directives.is_empty(), "{:?}", p.directives);
+    assert!(crate::parse("var s = `${1}\nx` #include x", &options).is_err());
+    assert_eq!(crate::parse("var s = `${1}\nx`\n//@include \"a.jsx\"", &options).unwrap().directives.len(), 1);
+}
+
+#[test]
 fn nested_arrows_and_templates_stay_within_the_depth_limit() {
     let deep = format!("{}0", "x => ".repeat(400));
     let e = es().run(&deep).unwrap_err();
@@ -558,6 +670,11 @@ fn object_literal_methods_are_enumerable_and_reach_super() {
     // A `super` write that cannot be made does nothing outside strict mode code.
     truth("var o = { m() { super.x = 1; Object.freeze(o); super.y = 2; return 1; } }; o.m() === 1 && o.x === 1 && !('y' in o)");
     throws("var o = { m() { 'use strict'; Object.freeze(o); super.y = 2; } }; o.m();", "TypeError");
+    // So does a realm's strict writes setting.
+    let mut realm = es();
+    realm.set_strict_writes(true);
+    let failed = realm.run("var o = { m() { Object.freeze(o); super.y = 2; } }; o.m();");
+    assert!(matches!(&failed, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")), "{failed:?}");
     syntax("var o = { m() { super(); } };");
     syntax("var o = { f: function () { return super.x; } };");
     let r = Realm::new().run("var o = { m() {} };");
@@ -575,6 +692,13 @@ fn this_before_super_is_a_reference_error() {
     truth("class A {} class B extends A { constructor() { var f = () => this; super(); this.f = f; } } var b = new B(); b.f() === b");
     // A handler in the constructor does not catch what its return throws.
     throws("class A {} class B extends A { constructor() { try { return; } catch (e) {} } } new B();", "ReferenceError");
+    // Direct eval reads the constructor's `this` binding when it runs.
+    throws("class A {} class B extends A { constructor() { eval('this'); super(); } } new B();", "ReferenceError");
+    truth("class A {} class B extends A { constructor() { eval('1'); super(); this.ok = eval('this') === this; } } new B().ok");
+    truth("class A {} class B extends A { constructor() { var f = eval('() => this'); super(); this.f = f; } } var b = new B(); b.f() === b");
+    truth(
+        "var seen; class A {} class B extends A { constructor() { var o = { g() { return eval('this'); } }; seen = o.g() === o; super(); } } new B(); seen",
+    );
 }
 
 #[test]
@@ -587,6 +711,17 @@ fn extends_null_and_bad_heritage() {
     throws("function F() {} F.prototype = 3; class B extends F {}", "TypeError");
     throws("class B extends B {}", "ReferenceError");
     throws("class A { m() {} } class B extends A.prototype.m {}", "TypeError");
+}
+
+#[test]
+fn class_heritage_and_computed_keys_run_as_strict_mode_code() {
+    throws("var o = {}; Object.defineProperty(o, 'x', { value: 1 }); class C { [(o.x = 2)]() {} }", "TypeError");
+    throws("class C extends (undeclared = Object) {}", "ReferenceError");
+    throws("var C = class { static [(undeclared = 'k')]() {} };", "ReferenceError");
+    // The code around the class stays sloppy, after the class and in a handler of what it throws.
+    truth("class C extends Object {} after = 1; after === 1");
+    truth("try { class C extends (function () { throw 1; })() {} } catch (e) { caught = e; } caught === 1");
+    truth("try { class C { [(function () { throw 2; })()]() {} } } catch (e) { caught = e; } caught === 2");
 }
 
 #[test]

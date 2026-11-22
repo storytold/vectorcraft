@@ -978,6 +978,11 @@ impl<'s> Parser<'s> {
             self.ctx.labels.remove(&label.name);
         }
         let mut body = body?;
+        // A labeled function declares its name in the statement list it stands in.
+        if let Some(Stmt::FunctionDecl(fid)) = self.ast.stmt(body) {
+            let fid = *fid;
+            self.declare_function(fid)?;
+        }
         for (label, label_start) in labels.into_iter().rev() {
             let span = Span::new(label_start.start, self.ast.stmt_span(body).end);
             body = self.ast.push_stmt(Stmt::Labeled { label, body }, span);
@@ -1155,13 +1160,14 @@ impl<'s> Parser<'s> {
     }
 
     /// The rules for a function's name and parameters. Strict mode code (Annex C): neither `eval`,
-    /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function
-    /// or a function with a default or rest parameter has no parameter name twice either (ECMA-262
-    /// 2015 sections 14.1.2 and 14.2.1), and its body cannot start with `"use strict"`
-    /// (`body_strict`; ECMA-262 2016 section 14.1.2).
+    /// `arguments` nor a strict-mode reserved word, and no parameter name twice. An arrow function,
+    /// a method or a function with a default or rest parameter has no parameter name twice either
+    /// (ECMA-262 2015 sections 14.1.2, 14.2.1 and 14.3.1), and a function with a default or rest
+    /// parameter cannot start its body with `"use strict"` (`body_strict`; ECMA-262 2016 section
+    /// 14.1.2).
     fn check_params(&self, function: &Function, body_strict: bool) -> Result<()> {
         let params = || function.params.iter().chain(&function.rest);
-        let simple = function.simple_params() && function.kind != FunctionKind::Arrow;
+        let simple = function.simple_params() && !matches!(function.kind, FunctionKind::Arrow | FunctionKind::Method);
         if body_strict && !function.simple_params() {
             let at = function.body.first().map_or(function.span.start, |&s| self.ast.stmt_span(s).start);
             return Err(self.error_at_offset(at, "\"use strict\" is not allowed in a function with default or rest parameters"));

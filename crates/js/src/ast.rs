@@ -429,7 +429,7 @@ pub enum FunctionKind {
     Setter,
     /// An arrow function; one with an expression body has a body of one `return` statement.
     Arrow,
-    /// A method in a class body.
+    /// A method in a class body or an object literal.
     Method,
     /// The constructor of a class without `extends`.
     ClassConstructor,
