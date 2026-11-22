@@ -82,6 +82,27 @@ proptest! {
         let _ = import(&format!("<svg xmlns=\"http://www.w3.org/2000/svg\">{s}</svg>"));
     }
 
+    /// Any `textLength` and `lengthAdjust`, on the text or a tspan (vertical too), imports to a
+    /// valid document without panicking.
+    #[test]
+    fn import_random_text_lengths(
+        len in "-?[0-9]{0,12}(\\.[0-9]{0,4})?(e[+-]?[0-9]{1,3})?(%|px|em|pt)?|[a-z ]{0,6}",
+        adjust in "spacing|spacingAndGlyphs|[a-zA-Z]{0,8}",
+        text in "[A-Za-z \u{5d0}-\u{5ea}]{0,12}",
+        on_span in any::<bool>(),
+        vertical in any::<bool>(),
+    ) {
+        let attrs = format!("textLength=\"{len}\" lengthAdjust=\"{adjust}\"");
+        let (outer, inner) = if on_span { ("", attrs.as_str()) } else { (attrs.as_str(), "") };
+        let wm = if vertical { " writing-mode=\"tb\"" } else { "" };
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"><text x=\"10\" y=\"50\"{wm} {outer}>a<tspan {inner}>{text}</tspan>b</text></svg>"
+        );
+        if let Ok(doc) = import(&svg) {
+            check_document(&doc).map_err(TestCaseError::fail)?;
+        }
+    }
+
     /// Importing random path data never panics and gives a valid document.
     #[test]
     fn import_random_path_data(d in "[MLCQZHVAmlcqzhva0-9 .,eE+-]{0,80}") {
@@ -90,6 +111,34 @@ proptest! {
             check_document(&doc).map_err(TestCaseError::fail)?;
         }
     }
+}
+
+#[test]
+fn filled_ellipse_on_the_artboard_edge_survives_visually() {
+    use vectorcraft_geom::Point;
+    use vectorcraft_geom::path::{Anchor, AnchorKind, SubPath};
+    let a = |p: (f64, f64), i: (f64, f64), o: (f64, f64)| Anchor {
+        p: Point::new(p.0, p.1),
+        h_in: Point::new(i.0, i.1),
+        h_out: Point::new(o.0, o.1),
+        kind: AnchorKind::Smooth,
+    };
+    let path = PathData::new(vec![SubPath::new(
+        vec![
+            a((0.0, 154.1183786634012), (0.0, 157.11240210742653), (0.0, 151.12435521937584)),
+            a((36.254761132097215, 148.69721965992943), (16.231809450081727, 148.69721965992943), (56.277712814112704, 148.69721965992943)),
+            a((72.50952226419443, 154.1183786634012), (72.50952226419443, 151.12435521937584), (72.50952226419443, 157.11240210742653)),
+            a((36.254761132097215, 159.53953766687295), (56.277712814112704, 159.53953766687295), (16.231809450081727, 159.53953766687295)),
+        ],
+        true,
+    )]);
+    let mut b = DocBuilder::new(200.0, 200.0);
+    b.path(path, Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0), |n| n.opacity = 0.983_042_96);
+    let d = b.build();
+    let svg = export(&d, &ExportOptions::default());
+    assert!(svg.contains("<ellipse "), "{svg}");
+    let back = import(&svg).unwrap();
+    assert_similar(&render_artboard(&d), &render_artboard(&back), 6.0, 0.002);
 }
 
 #[test]

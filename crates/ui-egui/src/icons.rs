@@ -28,20 +28,26 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-pen-add" => "pen-tool-add",
         "tool-pen-delete" => "pen-tool-delete",
         "tool-anchor" => "dc-anchor",
+        "tool-quick-pen" => "dc-quick-pen",
         "tool-curvature" => "spline",
-        "tool-type" => "type",
+        "tool-type" => "dc-type",
         "tool-type-area" => "dc-type-area",
         "tool-type-path" => "dc-type-path",
         "tool-type-vertical" => "dc-type-vertical",
+        "tool-type-vertical-area" => "dc-type-vertical-area",
+        "tool-type-vertical-path" => "dc-type-vertical-path",
         "tool-touch-type" => "dc-touch-type",
         "tool-line" => "dc-line",
         "tool-arc" => "dc-arc",
+        "tool-three-point-arc" => "dc-arc-three-point",
         "tool-spiral" => "tornado",
         "tool-rect-grid" => "dc-rect-grid",
         "tool-polar-grid" => "dc-polar-grid",
         "tool-rect" => "square",
         "tool-rounded-rect" => "dc-rounded-rect",
         "tool-ellipse" => "dc-ellipse",
+        "tool-circle" => "dc-circle-points",
+        "tool-curvature-circle" => "dc-curvature-circle",
         "tool-polygon" => "dc-polygon",
         "tool-star" => "star",
         "tool-flare" => "dc-flare",
@@ -75,6 +81,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-puppet" => "dc-puppet",
         "tool-shape-builder" => "dc-shape-builder",
         "tool-bucket" => "dc-live-bucket",
+        "tool-fill-area" => "dc-fill-area",
         "tool-live-select" => "dc-live-select",
         "tool-perspective" => "dc-perspective",
         "tool-perspective-select" => "dc-perspective",
@@ -83,6 +90,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-eyedropper" => "pipette",
         "tool-measure" => "dc-measure",
         "tool-dimension" => "dc-dimension",
+        "tool-contour" => "dc-contour",
         "tool-blend" => "dc-blend",
         "tool-objects-on-path" => "dc-objects-on-path",
         "tool-symbol" => "dc-symbol-sprayer",
@@ -210,6 +218,20 @@ mod tests {
             assert!(icon.len() > pen.len(), "{tool}'s icon has a badge of its own");
         }
         assert_ne!(add, delete, "plus and minus differ");
+    }
+
+    /// The seven type tools each have an icon of their own, drawn for VectorCraft (the vertical
+    /// Area and Path tools used to borrow the horizontal ones' icons).
+    #[test]
+    fn every_type_tool_has_its_own_icon_with_the_same_t() {
+        let tools = ["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath", "touchType"];
+        let names: Vec<&str> = tools.iter().map(|id| tool_icon(vectorcraft_tools::catalog::tool_info(id).unwrap().icon)).collect();
+        let unique: std::collections::BTreeSet<_> = names.iter().collect();
+        assert_eq!(unique.len(), tools.len(), "{names:?}");
+        for name in &names {
+            assert!(name.starts_with("dc-"), "{name} is drawn for VectorCraft");
+            assert!(exists(name), "{name}");
+        }
     }
 
     #[test]

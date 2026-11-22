@@ -67,7 +67,7 @@ fn curves_roundtrip() {
     let n = Node::path(id, shapes::ellipse(Rect::new(20.0, 30.0, 120.0, 90.0)), Appearance::default_art());
     let d = doc_with(vec![n]);
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains(" C"), "{s}");
+    assert!(s.contains("<ellipse cx=\"70\" cy=\"60\" rx=\"50\" ry=\"30\""), "{s}");
     let r = roundtrip(&d);
     let a = art(&r);
     assert!(close_rect(a[0].geometric_bounds().unwrap(), Rect::new(20.0, 30.0, 120.0, 90.0), 0.01));
@@ -295,7 +295,7 @@ fn multiple_fills_stack_in_paint_order() {
     let green = s.find("#00ff00").unwrap();
     let blue = s.find("#0000ff").unwrap();
     assert!(red < green && green < blue, "{s}");
-    assert_eq!(s.matches("<path").count(), 3);
+    assert_eq!(s.matches("<rect").count(), 3);
     let r = import(&s).unwrap();
     let a = art(&r);
     assert!(matches!(a[0].kind, NodeKind::Group { .. }));
@@ -324,16 +324,22 @@ fn hidden_and_guides_omitted() {
     a.visible = false;
     let b = rect_node(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0), Appearance::default_art());
     let s = export(&doc_with(vec![a, b]), &ExportOptions::default());
-    assert_eq!(s.matches("<path").count(), 1);
+    assert_eq!(s.matches("<rect").count(), 1);
     let r = import(&s).unwrap();
     assert_eq!(art(&r).len(), 1);
 }
 
 #[test]
 fn image_roundtrip() {
-    let mut png = Vec::new();
-    let img = image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255]));
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let img = craft_image_codecs::Image::from_raw(
+        4,
+        2,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        [255u8, 0, 0, 255].repeat(8),
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let mut d = Document::new(200.0, 200.0);
     let id = d.alloc_id();
     let n = Node::new(
@@ -444,6 +450,65 @@ fn text_on_path_roundtrip() {
     assert!(close_rect(doc_path, PathData::from_bezpath(&curve).bounds().unwrap(), 0.01), "{doc_path:?}");
 }
 
+/// Centred and right-aligned type on a path anchors where the layout aligns it: the middle or the
+/// end of its span, wrapped on a closed path. It reads back drawn where it was.
+#[test]
+fn aligned_text_on_path_anchors_within_its_span() {
+    use vectorcraft_doc::Justify;
+    use vectorcraft_geom::Shape;
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    let circle = vectorcraft_geom::kurbo::Circle::new((100.0, 100.0), 60.0).to_path(0.01);
+    let drawn = |t: &TextObject| t.xf.transform_rect_bbox(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds);
+    for (path, start, justify, offset) in [
+        (&curve, 0.25, Justify::Center, "62.5%"),
+        (&curve, 0.25, Justify::Right, "100%"),
+        (&curve, 0.25, Justify::Left, "25%"),
+        (&circle, 0.7, Justify::Center, "20%"),
+    ] {
+        let mut d = Document::new(200.0, 200.0);
+        let mut t = TextObject::point(Point::ZERO, "Aligned", CharStyle { size: 14.0, ..CharStyle::default() });
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(path), start, end: None };
+        t.para.justify = justify;
+        let before = drawn(&t);
+        let id = d.alloc_id();
+        let d = doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(svg.contains(&format!("startOffset=\"{offset}\"")), "{justify:?} at {start}: {svg}");
+        if path == &curve {
+            let r = import(&svg).unwrap();
+            let NodeKind::Text(t) = &art(&r)[0].kind else { panic!() };
+            assert!(close_rect(drawn(t), before, 0.5), "{justify:?}: {:?} {before:?}", drawn(t));
+        }
+    }
+}
+
+/// Type on an open path that starts before the path is written with a negative `startOffset` and
+/// reads back starting there, with the same characters drawn.
+#[test]
+fn text_on_an_open_path_starting_before_it_round_trips() {
+    let mut line = vectorcraft_geom::BezPath::new();
+    line.move_to((0.0, 100.0));
+    line.line_to((200.0, 100.0));
+    let mut d = Document::new(200.0, 200.0);
+    let mut t = TextObject::point(Point::ZERO, "Before", CharStyle { size: 14.0, ..CharStyle::default() });
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -0.1, end: None };
+    let shown = |t: &TextObject| {
+        vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).glyphs.iter().map(|g| !g.outline.elements().is_empty()).collect::<Vec<_>>()
+    };
+    let before = shown(&t);
+    assert!(before.contains(&true) && before.contains(&false), "{before:?}");
+    let id = d.alloc_id();
+    let svg = export(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
+    assert!(svg.contains("startOffset=\"-10%\""), "{svg}");
+    let r = import(&svg).unwrap();
+    let NodeKind::Text(t) = &art(&r)[0].kind else { panic!() };
+    let TextKind::OnPath { start, .. } = &t.kind else { panic!("not type on a path: {:?}", t.kind) };
+    assert!((start + 0.1).abs() < 1e-6, "start {start}");
+    assert_eq!(shown(t), before);
+}
+
 /// An end bracket, Align to Path or Spacing, which `<textPath>` can't express, keep their look as
 /// outlines (#429).
 #[test]
@@ -464,6 +529,92 @@ fn text_on_path_options_svg_cannot_express_are_outlined() {
         let id = d.alloc_id();
         let svg = export(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
         assert!(!svg.contains("<textPath"), "{set}: {svg}");
+    }
+}
+
+/// Type on a path with Skew, 3D Ribbon, Stair Step or Gravity, whose glyphs a `<textPath>` would
+/// turn with the path as Rainbow does, keeps its look as outlines, with spacing or without it;
+/// Rainbow stays a `<textPath>`.
+#[test]
+fn text_on_path_effects_svg_cannot_express_are_outlined() {
+    use vectorcraft_doc::PathEffect;
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    for effect in PathEffect::ALL {
+        for spacing in [0.0, 4.0] {
+            let mut d = Document::new(200.0, 200.0);
+            let mut t = TextObject::point(Point::ZERO, "On a curve", CharStyle { size: 14.0, ..CharStyle::default() });
+            t.kind = TextKind::OnPath { path: PathData::from_bezpath(&curve), start: 0.1, end: None };
+            t.path_effect = effect;
+            t.path_spacing = spacing;
+            let id = d.alloc_id();
+            let (svg, warnings) =
+                vectorcraft_svg::export_with_report(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &ExportOptions::default());
+            let live = effect == PathEffect::Rainbow && spacing == 0.0;
+            assert_eq!(svg.contains("<textPath"), live, "{effect:?} {spacing}: {svg}");
+            assert_eq!(warnings.iter().any(|w| w.contains("outlined")), !live, "{effect:?} {spacing}: {warnings:?}");
+        }
+    }
+}
+
+/// Type that SVG text can't draw is outlined with its text as the group's accessible name: type on
+/// a path with an effect other than Rainbow, vertical type, right-to-left text, and type on a path
+/// with inline graphics. With Convert to Outlines the paths carry no name, and empty type gets none
+/// either.
+#[test]
+fn text_outlined_for_svg_keeps_an_accessible_name() {
+    use vectorcraft_doc::PathEffect;
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((20.0, 150.0));
+    curve.curve_to((60.0, 40.0), (140.0, 40.0), (180.0, 150.0));
+    let style = || CharStyle { size: 14.0, ..CharStyle::default() };
+    let svg_of = |t: TextObject, outline_text: bool| {
+        let mut d = Document::new(200.0, 200.0);
+        let id = d.alloc_id();
+        let opts = ExportOptions { outline_text, ..ExportOptions::default() };
+        export(&doc_with(vec![Node::new(id, NodeKind::Text(Box::new(t)))]), &opts)
+    };
+    let mut skewed = TextObject::point(Point::ZERO, "On a curve", style());
+    skewed.kind = TextKind::OnPath { path: PathData::from_bezpath(&curve), start: 0.1, end: None };
+    skewed.path_effect = PathEffect::Skew;
+    let mut vertical = TextObject::point(Point::new(50.0, 20.0), "On a curve", style());
+    vertical.vertical = true;
+    let mut rtl = TextObject::point(Point::new(20.0, 50.0), "On a curve", style());
+    rtl.runs[0].style.char_direction = Some(vectorcraft_doc::ParaDirection::RightToLeft);
+    for (name, t) in [("skew", skewed), ("vertical", vertical), ("rtl", rtl)] {
+        let svg = svg_of(t.clone(), false);
+        assert!(!svg.contains("<text"), "{name}: {svg}");
+        assert!(svg.contains("role=\"img\" aria-label=\"On a curve\""), "{name}: {svg}");
+        assert!(!svg_of(t, true).contains("aria-label"), "{name} with Convert to Outlines");
+    }
+    let mut empty = TextObject::point(Point::new(50.0, 20.0), "", style());
+    empty.vertical = true;
+    assert!(!svg_of(empty, false).contains("aria-label"));
+    // An inline graphic's placeholder character stays out of the name; type on a path holding
+    // only inline graphics gets none.
+    let inline = || vectorcraft_doc::TextRun::inline(vectorcraft_doc::InlineArt::new("Mark"), style());
+    let mut mixed = TextObject::point(Point::ZERO, "On a curve", style());
+    mixed.kind = TextKind::OnPath { path: PathData::from_bezpath(&curve), start: 0.1, end: None };
+    mixed.runs.insert(0, inline());
+    let mut only = mixed.clone();
+    only.runs = vec![inline()];
+    let svg = svg_of(mixed, false);
+    assert!(svg.contains("aria-label=\"On a curve\""), "{svg}");
+    assert!(!svg.contains('\u{FFFC}'), "{svg}");
+    let svg = svg_of(only, false);
+    assert!(!svg.contains("aria-label"), "{svg}");
+    // A named object keeps its name when the file is opened again, whether the name is its id or not.
+    for name in ["Heading", "Main heading"] {
+        let mut t = TextObject::point(Point::new(50.0, 20.0), "Hello", style());
+        t.vertical = true;
+        let mut d = Document::new(200.0, 200.0);
+        let mut node = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        node.name = Some(name.to_string());
+        let svg = export(&doc_with(vec![node]), &ExportOptions::default());
+        assert!(svg.contains("aria-label=\"Hello\""), "{svg}");
+        let r = import(&svg).unwrap();
+        assert!(art(&r).iter().any(|n| n.name.as_deref() == Some(name)), "{name}: {svg}");
     }
 }
 
@@ -537,9 +688,9 @@ fn options_decimals_minify_responsive_artboard() {
     assert!(!s.contains("<?xml"));
     assert!(!s.contains(" width=\"200\""));
     assert!(s.contains("viewBox=\"0 0 200 100\""), "{s}");
-    assert!(s.contains("M10.12 20"), "{s}");
+    assert!(s.contains("<rect x=\"10.12\" y=\"20\""), "{s}");
     let s = export(&d, &ExportOptions::default());
-    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("M10.123 20"), "{s}");
+    assert!(s.contains("width=\"200\" height=\"100\"") && s.contains("<rect x=\"10.123\" y=\"20\""), "{s}");
     // All art bounds: the rectangle and half its 1 pt stroke (right-angle miters stay inside).
     let s = export(&d, &ExportOptions { artboard: None, ..Default::default() });
     assert!(s.contains("viewBox=\"0 0 40.877 31\""), "{s}");
@@ -787,6 +938,22 @@ fn import_tspan_far_below_is_bounded() {
     assert!(text.ends_with("far"), "{text:?}");
     let breaks = text.matches('\n').count();
     assert!(breaks <= 10_002, "{breaks} line breaks");
+}
+
+#[test]
+fn import_many_tspans_far_apart_are_bounded_together() {
+    // Each tspan 9,999 lines (auto leading 14.4 pt) below the last: each within the limit of one gap,
+    // two hundred of them were two million line breaks.
+    let spans: String = (1..=200).map(|i| format!(r#"<tspan x="5" y="{}">{i}</tspan>"#, 20.0 + 14.4 * 9_999.0 * i as f64)).collect();
+    let d = import_art(&format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="5" y="20" font-size="12">a{spans}</text></svg>"#
+    ));
+    let a = art(&d);
+    let NodeKind::Text(t) = &a[0].kind else { panic!() };
+    let text = t.plain_text();
+    assert!(text.ends_with("200"), "{}", &text[text.len().saturating_sub(20)..]);
+    let breaks = text.matches('\n').count();
+    assert!(breaks <= 10_200, "{breaks} line breaks");
 }
 
 #[test]

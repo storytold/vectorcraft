@@ -77,6 +77,77 @@ fn separate_sources_keep_their_planes() {
     assert_eq!(pixels(&r, 3, 2), [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [16, 64, 112, 255], [32, 80, 128, 255], [48, 96, 144, 255]]);
 }
 
+/// A program run from a file (`filter cvx exec`, as Ghostscript's `eps2write` runs each page's
+/// content) reads data through `currentfile` from that file, right after the operator that reads
+/// it (PLRM 3rd ed., `currentfile`, <https://www.adobe.com/jp/print/postscript/pdfs/PLRM.pdf>): an image's
+/// samples, kept after it as an inline image keeps them, plain or up to `~>` through
+/// `SubFileDecode` and `ASCII85Decode`.
+#[test]
+fn image_data_comes_from_the_file_being_run() {
+    let r = read(
+        "currentfile 0 (endstream) /SubFileDecode filter cvx exec\n\
+         30 20 scale 3 2 8 [3 0 0 -2 0 2] currentfile /ASCIIHexDecode filter false 3 colorimage\n\
+         ff0000 00ff00 0000ff 102030 405060 708090>\n\
+         endstream\n",
+    );
+    assert_eq!(pixels(&r, 3, 2), [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255], [16, 32, 48, 255], [64, 80, 96, 255], [112, 128, 144, 255]]);
+    let r = read(
+        "/ID { 3 1 8 [3 0 0 -1 0 1] currentfile 0 (~>) /SubFileDecode filter /ASCII85Decode filter false 3 colorimage } def\n\
+         currentfile 0 (endstream) /SubFileDecode filter cvx exec\n\
+         30 20 scale ID\n\
+         rr<$!rr<$!rr~>\n\
+         endstream\n",
+    );
+    assert_eq!(pixels(&r, 3, 1), [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]]);
+    super::tests::check(
+        "/ok false def currentfile 0 (endstream) /SubFileDecode filter cvx exec\n\
+         currentfile 4 string readstring WXYZ pop (WXYZ) eq /ok exch def\n\
+         endstream\nok",
+    );
+}
+
+/// An image whose procedure reads its rows with `readhexstring` comes out with the same pixels as
+/// the same samples given as one hexadecimal string, with the digits broken by CR LF, LF, tabs,
+/// spaces and characters that are not digits, read from the program's own file and from a file
+/// being run.
+#[test]
+fn hex_rows_read_by_a_procedure_match_a_hexadecimal_string() {
+    let rgb: Vec<u8> = (0..36u32).map(|i| (i * 37 % 256) as u8).collect();
+    let digits = hex(&rgb);
+    let breaks = ["\r\n", "\n", "\t", " z", "%"];
+    let broken: String = digits.as_bytes().chunks(5).zip(breaks.iter().cycle()).map(|(d, b)| format!("{}{b}", String::from_utf8_lossy(d))).collect();
+    let want = pixels(&read(&format!("10 10 scale 4 3 8 [4 0 0 -3 0 3] <{digits}> false 3 colorimage")), 4, 3);
+    assert_eq!(want, rgb.chunks(3).map(|p| [p[0], p[1], p[2], 255]).collect::<Vec<_>>());
+    let image = "10 10 scale 4 3 8 [4 0 0 -3 0 3] {currentfile 12 string readhexstring pop} false 3 colorimage";
+    assert_eq!(pixels(&read(&format!("{image}\r\n{broken}\n")), 4, 3), want);
+    assert_eq!(pixels(&read(&format!("currentfile 0 (endstream) /SubFileDecode filter cvx exec\n{image}\n{broken}\nendstream\n")), 4, 3), want);
+}
+
+/// A filter waits until it is first read, then reads the file it was made over, wherever the
+/// program runs by then: one over the program's own file, read in a file being run, and one over
+/// a file being run, read in a file that one runs.
+#[test]
+fn filters_read_the_file_they_were_made_over() {
+    super::tests::check(
+        "/f currentfile /ASCIIHexDecode filter def\n\
+         currentfile 0 (endstream) /SubFileDecode filter cvx exec\n\
+         /s f 3 string readstring pop def\n\
+         endstream\n\
+         616263>\n\
+         s (abc) eq",
+    );
+    super::tests::check(
+        "currentfile 0 (endstream) /SubFileDecode filter cvx exec\n\
+         /g currentfile /ASCIIHexDecode filter def\n\
+         currentfile 0 (endinner) /SubFileDecode filter cvx exec\n\
+         /t g 3 string readstring pop def\n\
+         endinner\n\
+         78797A>\n\
+         endstream\n\
+         t (xyz) eq",
+    );
+}
+
 /// CMYK samples keep their ink amounts in a CMYK TIFF: in the operand and dictionary forms, from
 /// hex and binary data, from one source or one a component, at 4, 8 and 16 bits, read through
 /// the Decode array. Gray and RGB images stay PNGs.
@@ -127,7 +198,24 @@ fn masked_cmyk_images_keep_their_inks_and_carry_the_mask_as_an_opacity_mask() {
         assert_eq!(inks(&r).data, [10, 20, 30, 40, 0, 102, 127, 8], "the inks as they were: {program}");
         let n = first_image(&r);
         let mask = n.extras().mask.as_ref().expect("an opacity mask");
-        let gray = image::load_from_memory(&blob(&r, &mask.art).bytes).unwrap().to_luma8();
+        let gray = craft_image_codecs::decode(&blob(&r, &mask.art).bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_luma8();
         assert_eq!(gray.into_raw(), alpha, "the mask's values: {program}");
         assert_eq!(n.geometric_bounds(), mask.art.geometric_bounds(), "the mask covers the image");
     }
@@ -288,6 +376,7 @@ fn ccitt_fax_data_in_the_program_ends_at_its_end_of_block() {
     for (k, eol, aligned, params) in [
         (-1, false, false, "/K -1 /Columns 70"),
         (0, true, false, "/Columns 70 /EndOfLine true"),
+        (0, true, true, "/Columns 70 /EndOfLine true /EncodedByteAlign true"),
         (2, true, false, "/K 2 /Columns 70 /Rows 7 /EndOfLine true"),
         (3, true, true, "/K 3 /Columns 70 /EndOfLine true /EncodedByteAlign true"),
     ] {
@@ -461,4 +550,55 @@ fn tiff_predicted_rows_at_every_depth() {
         }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// An image too large to read is left out, and its data is skipped, as reading it would leave
+/// the program: the art after it is read, not the data as PostScript. Here the data ends at its
+/// `~>` (an inline image of a content stream run as a file, as PDF-reading prologs write it), at
+/// a `SubFileDecode` end string, and at the end of compressed data that is read whole.
+#[test]
+fn the_data_of_an_image_too_large_to_read_is_skipped() {
+    let after = "0 0 1 setrgbcolor 10 10 80 80 rectfill";
+    for program in [
+        format!(
+            "/ID {{ << /ImageType 1 /Width 10000 /Height 10000 /BitsPerComponent 8 /Decode [0 1 0 1 0 1] /ImageMatrix [1 0 0 1 0 0] \
+             /DataSource currentfile 0 (~>) /SubFileDecode filter /ASCII85Decode filter /LZWDecode filter >> \
+             /DeviceRGB setcolorspace image }} def\n\
+             currentfile 0 (endstream) /SubFileDecode filter cvx exec\nID\nJ1_V7fG\"r'\"b]2#:hXAd)~>\n{after}\nendstream\n"
+        ),
+        format!("10000 10000 8 [1 0 0 1 0 0] currentfile /ASCIIHexDecode filter false 3 colorimage\n0a1b 2c3d 4e5f>\n{after}"),
+        format!(
+            "10000 10000 8 [1 0 0 1 0 0] currentfile 0 (%%EndData) /SubFileDecode filter /FlateDecode filter image\n\
+             x\u{9c}garbage\n%%EndData\n{after}"
+        ),
+        format!(
+            "10000 10000 true [1 0 0 1 0 0] currentfile /ASCII85Decode filter imagemask\n{}\n{after}",
+            crate::ps::ascii85(&crate::ps::deflate(&[0u8; 64]))
+        ),
+    ] {
+        let r = read(&program);
+        assert!(r.warnings.iter().any(|w| w.contains("too large to read")), "{program}: {:?}", r.warnings);
+        let o = super::tests::objects(&r.document);
+        assert_eq!(o.len(), 1, "{program}: {:?}", r.warnings);
+        assert_eq!(super::tests::fill(&o[0]), Some(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))), "{program}");
+    }
+}
+
+/// A JPEG whose header claims far more pixels than an image may have is refused before the decoder
+/// allocates for them.
+#[test]
+fn a_jpeg_with_a_huge_header_is_refused_before_it_is_decoded() {
+    let cimg = craft_image_codecs::Image::from_raw(8, 8, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![128; 64])
+        .unwrap();
+    let mut jpeg = craft_image_codecs::encode(&cimg, craft_image_codecs::Format::Jpeg, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    // The frame header (marker, length, precision, height, width) now says 65535 × 65535.
+    let sof = jpeg.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
+    jpeg[sof + 5..sof + 9].fill(0xFF);
+    let jpeg: String = jpeg.iter().map(|b| format!("{b:02x}")).collect();
+    let e = import(&eps(&format!(
+        "/DeviceGray setcolorspace << /ImageType 1 /Width 1 /Height 1 /BitsPerComponent 8 /ImageMatrix [1 0 0 1 0 0] \
+         /DataSource currentfile /ASCIIHexDecode filter /DCTDecode filter >> image\n{jpeg}>"
+    )))
+    .unwrap_err();
+    assert!(e.contains("too large"), "{e}");
 }

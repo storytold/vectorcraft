@@ -1,10 +1,22 @@
 use super::{ImeSurrounding, Range, ToolKey};
 
-/// Byte range in `s` of the characters `r` (IME ranges count characters; carets count bytes).
-/// `None` when `r` runs past the end of `s` or backwards.
-/// The `type.step` an Alt+arrow asks for, by one step: ←/→ kerning at a `caret`, else tracking;
-/// ↑/↓ leading (down opens it up); Shift+↑/↓ baseline shift.
-pub fn step_key(key: ToolKey, shift: bool, caret: bool) -> Option<(&'static str, f64)> {
+/// Map Alt+arrows to one type step. Horizontal ←/→ changes kerning at a caret or
+/// tracking on a range, ↑/↓ changes leading, and Shift+↑/↓ changes baseline shift.
+/// Vertical ↑/↓ (with or without Shift) changes kerning or tracking, ←/→ changes
+/// leading, and Shift+→/← changes baseline shift.
+pub fn step_key(key: ToolKey, shift: bool, caret: bool, vertical: bool) -> Option<(&'static str, f64)> {
+    let shift = shift && !(vertical && matches!(key, ToolKey::Up | ToolKey::Down));
+    let key = if vertical {
+        match key {
+            ToolKey::Up => ToolKey::Left,
+            ToolKey::Down => ToolKey::Right,
+            ToolKey::Right => ToolKey::Up,
+            ToolKey::Left => ToolKey::Down,
+            other => other,
+        }
+    } else {
+        key
+    };
     let sign = |up: bool| if up { 1.0 } else { -1.0 };
     Some(match (key, shift) {
         (ToolKey::Left | ToolKey::Right, false) => (if caret { "kerning" } else { "tracking" }, sign(key == ToolKey::Right)),
@@ -14,6 +26,8 @@ pub fn step_key(key: ToolKey, shift: bool, caret: bool) -> Option<(&'static str,
     })
 }
 
+/// Byte range in `s` of the characters `r` (IME ranges count characters; carets count bytes).
+/// `None` when `r` runs past the end of `s` or backwards.
 pub(super) fn char_range_to_bytes(s: &str, r: Range<usize>) -> Option<Range<usize>> {
     let byte = |c: usize| if c == s.chars().count() { Some(s.len()) } else { s.char_indices().nth(c).map(|(i, _)| i) };
     let (a, b) = (byte(r.start)?, byte(r.end)?);

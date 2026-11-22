@@ -1,8 +1,10 @@
 //! Linux: Preferences › Performance › Linux Display Server › X11 opens the window through XWayland
 //! on a Wayland session, where dropped files arrive (winit 0.30 has no Wayland drag and drop,
-//! #1151). X11 (XWayland) When a Pen Is Attached does so only when a pen is attached as the app
-//! starts: winit 0.30 doesn't bind the Wayland tablet protocol, and XWayland hands the pen to X11
-//! windows as a pointer (#2028). Only when XWayland can run the window: an X display is set and
+//! #1151). Automatic and X11 (XWayland) When a Pen Is Attached do so only when a pen is attached
+//! as the app starts, as PhotoCraft does: winit 0.30 doesn't bind the Wayland tablet protocol, so
+//! on native Wayland the pen moves only the compositor's cursor, and XWayland hands the pen to X11
+//! windows as a pointer (#2028, #4967). `VECTORCRAFT_NATIVE_WAYLAND=1` keeps a pen's window on
+//! Wayland. Only when XWayland can run the window: an X display is set and
 //! the X11 libraries winit loads at runtime are installed. Otherwise the window opens on Wayland,
 //! so a missing library never keeps the app from starting.
 //!
@@ -21,16 +23,17 @@ const X11_LIBS: &[&str] =
     &["libX11.so.6", "libX11-xcb.so.1", "libxcb.so.1", "libXcursor.so.1", "libXi.so.6", "libxkbcommon.so.0", "libxkbcommon-x11.so.0"];
 
 /// Whether the saved `linuxDisplayServer` and the environment ask for XWayland: `x11` chosen, or
-/// `x11WithPen` chosen and `pen` finding a pen; a Wayland session (winit picks Wayland whenever
-/// `WAYLAND_DISPLAY` or `WAYLAND_SOCKET` is set); and an X display to open. `pen` runs only for
-/// `x11WithPen`, after the session checks.
+/// any other choice (`automatic`, `x11WithPen`, none saved) with `pen` finding a pen and
+/// `VECTORCRAFT_NATIVE_WAYLAND` unset (or `0`); a Wayland session (winit picks Wayland whenever
+/// `WAYLAND_DISPLAY` or `WAYLAND_SOCKET` is set); and an X display to open. `pen` runs only after
+/// the other checks.
 pub fn wanted(pref: Option<&str>, var: impl Fn(&str) -> Option<OsString>, pen: impl FnOnce() -> bool) -> bool {
     let set = |name: &str| var(name).is_some_and(|v| !v.is_empty());
     let session = (set("WAYLAND_DISPLAY") || set("WAYLAND_SOCKET")) && set("DISPLAY");
+    let native_wayland = var("VECTORCRAFT_NATIVE_WAYLAND").is_some_and(|v| !v.is_empty() && v != "0");
     match pref {
         Some("x11") => session,
-        Some("x11WithPen") => session && pen(),
-        _ => false,
+        _ => session && !native_wayland && pen(),
     }
 }
 
@@ -149,27 +152,35 @@ mod tests {
         let wayland = env(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", ":0")]);
         assert!(wanted(Some("x11"), &wayland, no_probe));
         assert!(wanted(Some("x11"), env(&[("WAYLAND_SOCKET", "3"), ("DISPLAY", ":0")]), no_probe));
-        assert!(!wanted(Some("automatic"), &wayland, no_probe));
-        assert!(!wanted(None, &wayland, no_probe));
-        assert!(!wanted(Some("wayland"), &wayland, no_probe));
+        assert!(!wanted(Some("automatic"), &wayland, || false));
+        assert!(!wanted(None, &wayland, || false));
         // An X11 session already opens on X11; without an X display there is no XWayland to use.
         assert!(!wanted(Some("x11"), env(&[("DISPLAY", ":0")]), no_probe));
         assert!(!wanted(Some("x11"), env(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", "")]), no_probe));
         assert!(!wanted(Some("x11"), env(&[("WAYLAND_DISPLAY", "wayland-0")]), no_probe));
     }
 
-    /// X11 (XWayland) When a Pen Is Attached (#2028): XWayland on a Wayland session with an X
-    /// display when a pen is found, the session's own display server otherwise. The pen check
-    /// runs only on such a session.
+    /// Automatic and X11 (XWayland) When a Pen Is Attached (#2028, #4967): XWayland on a Wayland
+    /// session with an X display when a pen is found, where the pen reaches the window, the
+    /// session's own display server otherwise. The pen check runs only on such a session, and
+    /// `VECTORCRAFT_NATIVE_WAYLAND` keeps Wayland.
     #[test]
-    fn the_pen_choice_opens_xwayland_only_with_a_pen() {
+    fn a_pen_opens_xwayland_unless_native_wayland_is_asked_for() {
         let wayland = env(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", ":0")]);
-        assert!(wanted(Some("x11WithPen"), &wayland, || true));
-        assert!(wanted(Some("x11WithPen"), env(&[("WAYLAND_SOCKET", "3"), ("DISPLAY", ":0")]), || true));
-        assert!(!wanted(Some("x11WithPen"), &wayland, || false));
-        assert!(!wanted(Some("x11WithPen"), env(&[("DISPLAY", ":0")]), no_probe));
-        assert!(!wanted(Some("x11WithPen"), env(&[("WAYLAND_DISPLAY", "wayland-0")]), no_probe));
-        assert!(!wanted(Some("x11WithPen"), env(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", "")]), no_probe));
+        let native = env(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", ":0"), ("VECTORCRAFT_NATIVE_WAYLAND", "1")]);
+        let not_native = env(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", ":0"), ("VECTORCRAFT_NATIVE_WAYLAND", "0")]);
+        for pref in [Some("automatic"), None, Some("x11WithPen")] {
+            assert!(wanted(pref, &wayland, || true), "{pref:?}");
+            assert!(wanted(pref, env(&[("WAYLAND_SOCKET", "3"), ("DISPLAY", ":0")]), || true), "{pref:?}");
+            assert!(!wanted(pref, &wayland, || false), "{pref:?}");
+            assert!(!wanted(pref, env(&[("DISPLAY", ":0")]), no_probe), "{pref:?}");
+            assert!(!wanted(pref, env(&[("WAYLAND_DISPLAY", "wayland-0")]), no_probe), "{pref:?}");
+            assert!(!wanted(pref, env(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", "")]), no_probe), "{pref:?}");
+            assert!(!wanted(pref, &native, no_probe), "{pref:?}");
+            assert!(wanted(pref, &not_native, || true), "{pref:?}");
+        }
+        // The X11 choice opens XWayland with or without a pen; the opt-out is for the pen only.
+        assert!(wanted(Some("x11"), &native, no_probe));
     }
 
     /// `/proc/bus/input/devices` of a laptop with a Wacom Intuos Pro attached (64-bit longs: the

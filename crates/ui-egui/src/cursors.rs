@@ -1,9 +1,13 @@
 //! Tool cursors drawn as vector glyphs (egui only offers system cursors). Black shapes with a white
-//! halo, hotspot at `p`, Illustrator's visual grammar: solid arrow (Selection), hollow arrow (Direct
+//! halo, hotspot at `p`, one shape per tool: solid arrow (Selection), hollow arrow (Direct
 //! Selection), pen nib with state badges, crosshair for drawing tools, curved arrows for rotate.
 //!
 //! The desktop app shows them as OS cursors ([`Images`]): the system moves those itself, at once,
 //! while a cursor painted into the window follows the pointer a few frames late (#444).
+
+/// Platform-neutral bitmap requests for the interim macOS host adapter.
+#[cfg(any(target_os = "macos", test))]
+pub mod native_request;
 
 use egui::epaint::{Mesh, TessellationOptions, Tessellator, Vertex};
 use egui::{Color32, CustomCursorImage, Painter, Pos2, Shape, Stroke, Vec2, pos2, vec2};
@@ -306,6 +310,19 @@ fn loaded_text(p: &mut Ink, o: Pos2) {
     }
 }
 
+/// Loaded text over an object a click threads it into: the loaded text's block with a link
+/// badge (two chain rings) below right.
+fn loaded_text_link(p: &mut Ink, o: Pos2) {
+    loaded_text(p, o);
+    let rings = [o + vec2(13.0, 17.0), o + vec2(18.0, 17.0)];
+    for c in rings {
+        p.circle_stroke(c, 3.2, Stroke::new(3.2, HALO));
+    }
+    for c in rings {
+        p.circle_stroke(c, 3.2, Stroke::new(1.3, INK));
+    }
+}
+
 /// The gradient annotator's stop cursors: the arrow with a plus (add a stop) or minus (delete it)
 /// badge.
 fn stop_badge(p: &mut Ink, o: Pos2, add: bool) {
@@ -366,6 +383,42 @@ fn ibeam(p: &mut Ink, o: Pos2) {
     line(p, o + vec2(-2.0, 3.0), o + vec2(2.0, 3.0));
 }
 
+/// A type tool over a path: the Text I-beam (turned a quarter turn for vertical type) with a badge
+/// below right of it, as the Pen and the Blend tool mark what a click does: a small frame with
+/// lines of type in it for area type inside a closed path, a smooth curve with a point on it for
+/// type along a path.
+fn type_in_path(p: &mut Ink, o: Pos2, vertical: bool, on_path: bool) {
+    let at = |x: f32, y: f32| if vertical { o + vec2(-y, x) } else { o + vec2(x, y) };
+    line(p, at(0.0, -8.0), at(0.0, 8.0));
+    line(p, at(-3.0, -8.0), at(3.0, -8.0));
+    line(p, at(-3.0, 8.0), at(3.0, 8.0));
+    line(p, at(-2.0, 3.0), at(2.0, 3.0));
+    let b = o + if vertical { vec2(2.0, 6.0) } else { vec2(6.0, 2.0) };
+    if on_path {
+        // A quarter-wave rising to the right, smooth at this size.
+        let curve: Vec<Pos2> = (0..=16)
+            .map(|i| {
+                let t = i as f32 / 16.0;
+                b + vec2(10.0 * t, 8.0 - 8.0 * (t * std::f32::consts::FRAC_PI_2).sin().powf(1.6))
+            })
+            .collect();
+        strokes(p, &[curve]);
+        let dot = b + vec2(4.0, 8.0 - 8.0 * (0.4 * std::f32::consts::FRAC_PI_2).sin().powf(1.6));
+        p.circle_filled(dot, 2.4, HALO);
+        p.circle_filled(dot, 1.5, INK);
+    } else {
+        poly(p, vec![b, b + vec2(9.0, 0.0), b + vec2(9.0, 9.0), b + vec2(0.0, 9.0)], HALO, INK);
+        let rows: Vec<Vec<Pos2>> = if vertical {
+            [6.5, 4.5, 2.5].iter().map(|&x| vec![b + vec2(x, 2.5), b + vec2(x, 6.5)]).collect()
+        } else {
+            [2.5, 4.5, 6.5].iter().map(|&y| vec![b + vec2(2.5, y), b + vec2(6.5, y)]).collect()
+        };
+        for r in rows {
+            p.add(Shape::line(r, Stroke::new(1.0, INK)));
+        }
+    }
+}
+
 /// The Blend tool: a crosshair with a square below right of the hotspot, hollow away from art,
 /// filled over an object; over an anchor point a ringed dot (the blend starts there).
 fn blend(p: &mut Ink, o: Pos2, badge: Cursor) {
@@ -389,6 +442,80 @@ fn shape_builder(p: &mut Ink, o: Pos2, erase: bool) {
     line(p, c - vec2(3.5, 0.0), c + vec2(3.5, 0.0));
     if !erase {
         line(p, c - vec2(0.0, 3.5), c + vec2(0.0, 3.5));
+    }
+}
+
+/// The Live Paint Bucket: a paint bucket tipped toward the hotspot at its lower left, its mouth
+/// down-left with a rim across it, and a drop on the hotspot. Empty (white) with a small drop where
+/// a click paints nothing; filled, with a larger drop, where a click fills a face.
+fn paint_bucket(p: &mut Ink, o: Pos2, filled: bool) {
+    // `u` runs from the hotspot up-right into the bucket, `v` across it.
+    let (d, n) = (vec2(1.0, -1.0).normalized(), vec2(1.0, 1.0).normalized());
+    let at = |u: f32, v: f32| o + u * d + v * n;
+    poly(p, vec![at(5.5, -6.0), at(16.5, -4.5), at(16.5, 4.5), at(5.5, 6.0)], if filled { INK } else { HALO }, INK);
+    poly(p, vec![at(4.5, -7.0), at(6.5, -7.0), at(6.5, 7.0), at(4.5, 7.0)], INK, INK);
+    if filled {
+        p.circle_filled(o, 3.5, HALO);
+        p.circle_filled(o, 2.2, INK);
+    } else {
+        p.circle_filled(o, 2.5, HALO);
+        p.circle_filled(o, 1.25, INK);
+    }
+}
+
+/// The Live Paint Bucket over an edge it paints: a brush, its bristles' tip on the hotspot, the
+/// white ferrule and the black handle running up-right.
+fn paint_brush(p: &mut Ink, o: Pos2) {
+    let (d, n) = (vec2(1.0, -1.0).normalized(), vec2(1.0, 1.0).normalized());
+    let at = |u: f32, v: f32| o + u * d + v * n;
+    let bristles = vec![at(0.0, 0.0), at(4.0, -2.2), at(6.0, -2.2), at(6.0, 2.2), at(4.0, 2.2)];
+    let ferrule = vec![at(6.0, -2.0), at(9.0, -2.0), at(9.0, 2.0), at(6.0, 2.0)];
+    let handle = vec![at(9.0, -1.5), at(19.0, -1.2), at(19.0, 1.2), at(9.0, 1.5)];
+    // Every halo first, so no part's halo covers another's outline.
+    for part in [&bristles, &ferrule, &handle] {
+        p.add(Shape::closed_line(part.clone(), Stroke::new(3.0, HALO)));
+    }
+    for (part, fill) in [(bristles, INK), (ferrule, HALO), (handle, INK)] {
+        p.add(Shape::convex_polygon(part.clone(), fill, Stroke::NONE));
+        p.add(Shape::closed_line(part, Stroke::new(1.0, INK)));
+    }
+}
+
+/// The Knife and the Trim at Crossings Tool: a knife, the blade's point on the hotspot, the white
+/// blade with its straight back and curved edge, then the black handle running up-right.
+fn knife(p: &mut Ink, o: Pos2) {
+    let (d, n) = (vec2(1.0, -1.0).normalized(), vec2(1.0, 1.0).normalized());
+    let at = |u: f32, v: f32| o + u * d + v * n;
+    let blade = vec![at(0.0, 0.0), at(11.0, -2.5), at(11.0, 3.0), at(6.0, 2.8), at(2.5, 1.6)];
+    let handle = vec![at(11.0, -2.0), at(20.0, -1.8), at(21.0, 0.2), at(20.0, 2.2), at(11.0, 2.5)];
+    // Both halos first, so neither covers the other's outline.
+    for part in [&blade, &handle] {
+        p.add(Shape::closed_line(part.clone(), Stroke::new(3.0, HALO)));
+    }
+    for (part, fill) in [(blade, HALO), (handle, INK)] {
+        p.add(Shape::convex_polygon(part.clone(), fill, Stroke::NONE));
+        p.add(Shape::closed_line(part, Stroke::new(1.0, INK)));
+    }
+}
+
+/// Live Paint Selection: the solid arrow with a badge at its lower right saying what a click
+/// selects: a filled square over a face ([`Cursor::LivePaintSelectFace`]), a short line between two
+/// anchor marks over an edge ([`Cursor::LivePaintSelectEdge`]), an x where it selects nothing.
+fn live_paint_select(p: &mut Ink, o: Pos2, part: Cursor) {
+    arrow(p, o, false);
+    let b = o + vec2(12.0, 13.0);
+    match part {
+        Cursor::LivePaintSelectFace => {
+            poly(p, [(0.0, 0.0), (6.0, 0.0), (6.0, 6.0), (0.0, 6.0)].map(|(x, y)| b + vec2(x, y)).to_vec(), INK, INK);
+        }
+        Cursor::LivePaintSelectEdge => {
+            let (a, c) = (b + vec2(0.0, 7.0), b + vec2(7.0, 0.0));
+            strokes(p, &[vec![a, c]]);
+            for m in [a, c] {
+                poly(p, [(-1.5, -1.5), (1.5, -1.5), (1.5, 1.5), (-1.5, 1.5)].map(|(x, y)| m + vec2(x, y)).to_vec(), INK, INK);
+            }
+        }
+        _ => strokes(p, &[vec![b, b + vec2(6.0, 6.0)], vec![b + vec2(6.0, 0.0), b + vec2(0.0, 6.0)]]),
     }
 }
 
@@ -440,7 +567,7 @@ fn magnifier(p: &mut Ink, o: Pos2, out: bool) {
 
 /// Every cursor with a glyph: its own, drawn here, or the one it borrows.
 #[cfg(test)]
-const GLYPHS: [Cursor; 81] = [
+const GLYPHS: [Cursor; 99] = [
     Cursor::Hand,
     Cursor::HandGrab,
     Cursor::ZoomIn,
@@ -489,6 +616,7 @@ const GLYPHS: [Cursor; 81] = [
     Cursor::PathBracket,
     Cursor::TypeWidget,
     Cursor::LoadedText,
+    Cursor::LoadedTextLink,
     Cursor::ShapeBuilder,
     Cursor::ShapeBuilderErase,
     Cursor::Lasso,
@@ -508,6 +636,11 @@ const GLYPHS: [Cursor; 81] = [
     Cursor::Knife,
     Cursor::Shaper,
     Cursor::LivePaintBucket,
+    Cursor::LivePaintBucketFace,
+    Cursor::LivePaintBucketEdge,
+    Cursor::LivePaintSelectFace,
+    Cursor::LivePaintSelectEdge,
+    Cursor::LivePaintSelectOutside,
     Cursor::Measure,
     Cursor::PrintTiling,
     Cursor::SymbolSprayer,
@@ -519,9 +652,21 @@ const GLYPHS: [Cursor; 81] = [
     Cursor::SymbolScreener,
     Cursor::SymbolStyler,
     Cursor::TypeVertical,
+    Cursor::TypeArea,
+    Cursor::TypeAreaVertical,
+    Cursor::TypeOnPath,
+    Cursor::TypeOnPathVertical,
     Cursor::Scissors,
     Cursor::MeshAdd,
     Cursor::PuppetPin,
+    Cursor::AnchorEraser,
+    Cursor::ExtendPath,
+    Cursor::MeasureInspect,
+    Cursor::ParametricShape,
+    Cursor::CornerTool,
+    Cursor::SlideAnchor,
+    Cursor::SharedEdge,
+    Cursor::SmartPen,
 ];
 
 /// The shapes of cursor `c` with its hotspot at `p`; `None` for cursors that stay system cursors
@@ -546,6 +691,11 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             double_arrow(ink, p + vec2(15.0, 18.0), vec2(1.0, 0.0));
         }
         Cursor::Crosshair => crosshair(ink, p),
+        // Only the centre: the tool draws the tip's outline round it, at the zoom.
+        Cursor::BlobBrush | Cursor::Eraser => {
+            ink.circle_filled(p, 2.5, HALO);
+            ink.circle_filled(p, 1.25, INK);
+        }
         // The Pencil's crosshair with the Pen's star where the closing ring goes.
         Cursor::PencilNew => {
             crosshair(ink, p);
@@ -558,18 +708,16 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
             ink.circle_stroke(p + vec2(8.0, 8.0), 3.0, Stroke::new(3.0, HALO));
             ink.circle_stroke(p + vec2(8.0, 8.0), 3.0, Stroke::new(1.2, INK));
         }
-        // The Pencil's crosshair with a short straight line where the closing ring goes.
+        // The Pencil's crosshair with a short level line where the closing ring goes.
         Cursor::PencilStraight => {
             crosshair(ink, p);
-            line(ink, p + vec2(5.0, 12.0), p + vec2(12.0, 5.0));
+            line(ink, p + vec2(3.55, 8.5), p + vec2(13.45, 8.5));
         }
-        // The straight-line cursor's line leaving a filled square: the end point a line continues from.
+        // The Pencil's crosshair with a short line rising to the right where the closing ring goes:
+        // the stroke carries on from the path.
         Cursor::PencilContinue => {
             crosshair(ink, p);
-            // The square first, so its halo does not cover the line.
-            let end = p + vec2(5.0, 12.0);
-            poly(ink, [(-2.0, -2.0), (2.0, -2.0), (2.0, 2.0), (-2.0, 2.0)].map(|(x, y)| end + vec2(x, y)).to_vec(), INK, INK);
-            line(ink, end, p + vec2(12.0, 5.0));
+            line(ink, p + vec2(5.0, 12.0), p + vec2(12.0, 5.0));
         }
         Cursor::Eyedropper => eyedropper(ink, p),
         Cursor::ResizeH => double_arrow(ink, p, vec2(1.0, 0.0)),
@@ -592,6 +740,10 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PenJoin => pen(ink, p, "j"),
         Cursor::PenConvert => pen(ink, p, "^"),
         Cursor::Text => ibeam(ink, p),
+        Cursor::TypeArea => type_in_path(ink, p, false, false),
+        Cursor::TypeAreaVertical => type_in_path(ink, p, true, false),
+        Cursor::TypeOnPath => type_in_path(ink, p, false, true),
+        Cursor::TypeOnPathVertical => type_in_path(ink, p, true, true),
         Cursor::AddStop => stop_badge(ink, p, true),
         Cursor::RemoveStop => stop_badge(ink, p, false),
         Cursor::Slice => slice(ink, p),
@@ -606,8 +758,14 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::PathBracket => path_bracket(ink, p),
         Cursor::TypeWidget => type_widget(ink, p),
         Cursor::LoadedText => loaded_text(ink, p),
+        Cursor::LoadedTextLink => loaded_text_link(ink, p),
         Cursor::ShapeBuilder => shape_builder(ink, p, false),
         Cursor::ShapeBuilderErase => shape_builder(ink, p, true),
+        Cursor::LivePaintBucket => paint_bucket(ink, p, false),
+        Cursor::LivePaintBucketFace => paint_bucket(ink, p, true),
+        Cursor::LivePaintBucketEdge => paint_brush(ink, p),
+        Cursor::Knife => knife(ink, p),
+        Cursor::LivePaintSelectFace | Cursor::LivePaintSelectEdge | Cursor::LivePaintSelectOutside => live_paint_select(ink, p, c),
         Cursor::Hand => hand(ink, p, false),
         Cursor::HandGrab => hand(ink, p, true),
         Cursor::ZoomIn => magnifier(ink, p, false),
@@ -634,7 +792,8 @@ pub fn paint(painter: &Painter, c: Cursor, p: Pos2, scale: f32) -> bool {
 
 /// Does the window show the glyphs as OS cursors ([`Images`])? Not on macOS, which sizes a cursor
 /// bitmap in points (a Retina one would show twice as big, or blurred), nor on the web (eframe has no
-/// bitmap cursors there): those paint them into the window ([`paint`]).
+/// bitmap cursors there): the web paints them into the window ([`paint`]); the macOS desktop host
+/// uses its native request adapter instead.
 pub const OS_CURSORS: bool = !cfg!(any(target_os = "macos", target_arch = "wasm32"));
 
 /// Does this window show the glyphs as OS cursors, on a build that can ([`OS_CURSORS`])? Not on
@@ -645,11 +804,25 @@ pub fn os_cursors(build: bool, wayland: bool) -> bool {
     build && !wayland
 }
 
-/// Does the canvas hide the system pointer to show a painted tool glyph alone? Not when there is no
-/// cursor theme on Wayland ([`crate::Services::no_cursor_theme`]): winit sets no pointer then, and a
-/// hidden one would not come back over the panels (#2450). The system pointer stays beside the glyph.
-pub fn hide_system_pointer(no_cursor_theme: bool) -> bool {
-    !no_cursor_theme
+/// The cursor a panel shows where a click or a drop adds something, such as a stop under the
+/// Gradient panel's ramp or a copy of rows Alt-dragged in the Layers panel (#8217): the white arrow
+/// with a plus that Group Selection shows for a click that adds the next group. Windows has no system copy cursor (winit shows the plain arrow for
+/// `CursorIcon::Copy`), so where the window shows glyphs as OS cursors ([`os_cursors`]) the panel
+/// hands it this glyph; elsewhere (macOS, Wayland, the web, `VECTORCRAFT_SYSTEM_CURSORS`) the
+/// system's copy cursor shows (#8241). Set every frame it shows: the canvas and egui reset it.
+pub(crate) fn set_add_cursor(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
+    ctx.set_cursor_icon(egui::CursorIcon::Copy);
+    if add_cursor_is_a_glyph(app) {
+        // As the canvas sizes its glyphs (User Interface › Scale Cursor Proportional to UI).
+        let ui_scale = if app.session.prefs.scale_cursor_with_ui { 1.0 } else { ctx.zoom_factor() };
+        ctx.set_cursor_image(app.canvas.cursors.get(Cursor::GroupSelection, ctx.pixels_per_point() / ui_scale));
+    }
+}
+
+/// Does [`set_add_cursor`] hand the OS its glyph (rather than ask for the system copy cursor)?
+/// Where the window shows glyphs as OS cursors, unless `VECTORCRAFT_SYSTEM_CURSORS` opts out.
+pub(crate) fn add_cursor_is_a_glyph(app: &crate::VectorcraftApp) -> bool {
+    std::env::var_os("VECTORCRAFT_SYSTEM_CURSORS").is_none() && os_cursors(OS_CURSORS, app.services.wayland)
 }
 
 /// Does the window hide the pointer only while it is the key window? macOS does: winit hides it with
@@ -657,11 +830,12 @@ pub fn hide_system_pointer(no_cursor_theme: bool) -> bool {
 /// Over a window behind another app or under a sheet, the system pointer shows (#2020).
 pub const HIDES_ONLY_WHEN_KEY: bool = cfg!(target_os = "macos");
 
-/// Does the window paint the glyphs over a hidden pointer, `focused` or not? Not where the system
-/// shows its pointer over a window without the focus ([`HIDES_ONLY_WHEN_KEY`]): the system pointer
-/// shows alone there.
-pub fn paint_glyphs(hides_only_when_key: bool, focused: bool) -> bool {
-    focused || !hides_only_when_key
+/// Does the window paint a glyph over a hidden pointer? Not where it cannot hide the system pointer
+/// (no cursor theme on Wayland, [`crate::Services::no_cursor_theme`]: winit sets no pointer then,
+/// and a hidden one would not come back over the panels, #2450), or where the system shows its pointer without the focus
+/// ([`HIDES_ONLY_WHEN_KEY`]): the system pointer shows alone there.
+pub fn paint_glyphs(hides_only_when_key: bool, focused: bool, no_cursor_theme: bool) -> bool {
+    !no_cursor_theme && (focused || !hides_only_when_key)
 }
 
 /// The cursor bitmaps handed to the OS, by (cursor, pixels per point): each glyph is rasterized

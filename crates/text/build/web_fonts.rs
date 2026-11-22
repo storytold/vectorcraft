@@ -5,8 +5,11 @@
 /// One line of `web-fonts.txt`: `when | family | style`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Listed<'a> {
-    /// `startup` (fetched before the app starts) rather than `background`.
+    /// `startup` (fetched before the app starts).
     pub startup: bool,
+    /// `demand` (fetched when the interface needs a character of one of the face's scripts).
+    /// Neither this nor `startup`: `background`.
+    pub demand: bool,
     pub family: &'a str,
     pub style: &'a str,
 }
@@ -23,15 +26,16 @@ pub fn parse_list(text: &str) -> Result<Vec<Listed<'_>>, String> {
         let [when, family, style] = fields.as_slice() else {
             return Err(format!("web-fonts.txt line {}: expected `when | family | style`", i + 1));
         };
-        let startup = match *when {
-            "startup" => true,
-            "background" => false,
-            other => return Err(format!("web-fonts.txt line {}: `{other}` is neither startup nor background", i + 1)),
+        let (startup, demand) = match *when {
+            "startup" => (true, false),
+            "background" => (false, false),
+            "demand" => (false, true),
+            other => return Err(format!("web-fonts.txt line {}: `{other}` is not startup, background or demand", i + 1)),
         };
         if family.is_empty() || style.is_empty() {
             return Err(format!("web-fonts.txt line {}: empty family or style", i + 1));
         }
-        out.push(Listed { startup, family, style });
+        out.push(Listed { startup, demand, family, style });
     }
     Ok(out)
 }
@@ -69,7 +73,8 @@ pub fn sri(hex: &str) -> Option<String> {
 /// name>`. Relative, so the site works under any path; content-addressed, so it can be cached
 /// forever.
 pub fn url(sha256: &str, file: &str) -> String {
-    let name = file.rsplit('/').next().unwrap_or(file);
+    // Either separator: on Windows a backslash in supplier data would otherwise pick a folder.
+    let name = file.rsplit(['/', '\\']).next().unwrap_or(file);
     format!("fonts/{}/{name}", sha256.get(..16).unwrap_or(sha256))
 }
 
@@ -98,17 +103,20 @@ mod tests {
     fn url_is_relative_and_content_addressed() {
         let sha = "63111b5b2e074dd48cc67692e0a2726d86ee94c1c37fe8598257b7b4e87e869e";
         assert_eq!(url(sha, "fonts/noto-sans-arabic/NotoSansArabic.ttf"), "fonts/63111b5b2e074dd4/NotoSansArabic.ttf");
+        assert_eq!(url(sha, "fonts\\..\\..\\NotoSansArabic.ttf"), "fonts/63111b5b2e074dd4/NotoSansArabic.ttf");
         assert!(!url(sha, "x.ttf").starts_with('/'));
     }
 
     #[test]
     fn list_parsing() {
-        let l = parse_list("# c\n\nstartup | Noto Sans Arabic | Regular\nbackground | Amiri | Bold Italic\n").unwrap();
+        let l =
+            parse_list("# c\n\nstartup | Noto Sans Arabic | Regular\nbackground | Amiri | Bold Italic\ndemand | NanumGothic | Regular\n").unwrap();
         assert_eq!(
             l,
             [
-                Listed { startup: true, family: "Noto Sans Arabic", style: "Regular" },
-                Listed { startup: false, family: "Amiri", style: "Bold Italic" }
+                Listed { startup: true, demand: false, family: "Noto Sans Arabic", style: "Regular" },
+                Listed { startup: false, demand: false, family: "Amiri", style: "Bold Italic" },
+                Listed { startup: false, demand: true, family: "NanumGothic", style: "Regular" }
             ]
         );
         assert!(parse_list("soon | A | B").unwrap_err().contains("line 1"));

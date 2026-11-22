@@ -1,12 +1,29 @@
 use super::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, UNIX_EPOCH};
 
-fn temp_dir(tag: &str) -> PathBuf {
-    static N: AtomicUsize = AtomicUsize::new(0);
-    let d = std::env::temp_dir().join(format!("vectorcraft-logging-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
-    let _ = std::fs::remove_dir_all(&d);
-    d
+struct TestPath {
+    _parent: tempfile::TempDir,
+    path: PathBuf,
+}
+
+impl std::ops::Deref for TestPath {
+    type Target = Path;
+
+    fn deref(&self) -> &Self::Target {
+        &self.path
+    }
+}
+
+impl AsRef<Path> for TestPath {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
+}
+
+fn temp_dir(tag: &str) -> TestPath {
+    let parent = tempfile::Builder::new().prefix(&format!("vectorcraft-logging-{tag}-")).tempdir().unwrap();
+    let path = parent.path().join("log");
+    TestPath { _parent: parent, path }
 }
 
 fn read(path: &Path) -> String {

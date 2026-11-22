@@ -1,4 +1,4 @@
-use super::apply::{kept_work, opaque, plan, stroked};
+use super::apply::{opaque, plan, stroked};
 use super::options::FlattenOptions;
 use super::{
     Appearance, Color, Deserialize, Document, Node, NodeId, NodeKind, Paint, PathData, Rect, Result, Serialize, Session, Value, bad, isolated_doc,
@@ -12,7 +12,9 @@ pub(super) fn target_roots(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let mut ids = vec![];
     for id in targets(s, p)? {
         match d.node(id) {
-            Some(n) if n.is_layer() => ids.extend(n.children().into_iter().flatten().map(|c| c.id)),
+            // Ruler guides are not art: they stay where they are.
+            Some(n) if n.is_layer() => ids.extend(n.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).map(|c| c.id)),
+            Some(n) if n.is_ruler_guide() => {}
             Some(_) => ids.push(id),
             None => {}
         }
@@ -261,15 +263,10 @@ pub fn report(doc: &Document, roots: &[NodeId], o: &FlattenOptions) -> Result<Fl
             r.rasterized.push(a.outline());
         }
     }
-    for root in plan.kept.iter().filter_map(|id| doc.node(*id)).filter(|n| kept_work(n, o)) {
-        r.affected.push(root.id);
-        visit(root, &mut |n| {
-            if o.text_to_outlines && matches!(n.kind, NodeKind::Text(_)) {
-                r.text.push(n.id);
-            } else if o.strokes_to_outlines && stroked(n) {
-                r.strokes.push(n.id);
-            }
-        });
+    for k in plan.work.iter().filter(|k| k.changes) {
+        r.affected.push(k.id);
+        r.text.extend(&k.shown_text);
+        r.strokes.extend(&k.shown_strokes);
     }
     r.affected.sort_by_key(|id| doc.index_path(*id));
     Ok(r)

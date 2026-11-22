@@ -247,7 +247,7 @@ fn a_file_with_type_sizes_out_of_range_opens_with_them_in_range() {
     (h.size, h.h_scale, h.v_scale, h.baseline_shift, h.leading) = (f64::MAX, f64::MAX, f64::MAX, f64::MAX, Some(f64::MAX));
     (k.size, k.h_scale, k.v_scale, k.baseline_shift, k.leading) = (0.001, 0.5, 0.5, 5000.0, Some(0.0));
     let art = d.node(id).unwrap().clone();
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Lines".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Lines".into(), art: Arc::new(art) });
     let attrs = json!({"size": 0, "h_scale": 1e9, "v_scale": -1, "baseline_shift": -1e9, "leading": -1});
     d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Broken".into(), attrs: attrs.as_object().unwrap().clone() });
     let attrs = json!({"size": 40, "leading": null});
@@ -269,6 +269,30 @@ fn a_file_with_type_sizes_out_of_range_opens_with_them_in_range() {
     // With the sizes kept as saved, the type's bounds were infinite.
     let b = doc.bounds_of(&[id], false).unwrap();
     assert!(b.width().is_finite() && b.height().is_finite(), "{b:?}");
+}
+
+/// A file whose character styles hold a Tate-chu-yoko Up/Down or Left/Right offset past
+/// `MAX_COORD` either way opens with the nearer end, and text that takes the style gets it. An
+/// offset within range stays as saved.
+#[test]
+fn a_file_with_tate_chu_yoko_offsets_out_of_range_in_a_character_style_opens_with_them_in_range() {
+    let mut s = session();
+    let id = NodeId(s.execute("text.create", &json!({"x": 40, "y": 60, "size": 20, "text": "12"})).unwrap()["id"].as_u64().unwrap());
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let attrs = json!({"tateChuYoko": true, "tcyUpDown": 1e12, "tcyLeftRight": -1e12});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Far".into(), attrs: attrs.as_object().unwrap().clone() });
+    let attrs = json!({"tcyUpDown": 5000, "tcyLeftRight": -3.5});
+    d.char_styles.push(vectorcraft_doc::TextStyleDef { name: "Near".into(), attrs: attrs.as_object().unwrap().clone() });
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d));
+    s.execute("document.open", &json!({"name": "tcy.vectorcraft", "dataBase64": data})).unwrap();
+    let max = vectorcraft_doc::MAX_COORD;
+    let doc = &s.doc().unwrap().doc;
+    let fixed = json!({"tateChuYoko": true, "tcyUpDown": max, "tcyLeftRight": -max});
+    assert_eq!(doc.char_styles[0].attrs, *fixed.as_object().unwrap());
+    assert_eq!(doc.char_styles[1].attrs, *json!({"tcyUpDown": 5000, "tcyLeftRight": -3.5}).as_object().unwrap());
+    s.execute("charStyle.apply", &json!({"name": "Far", "id": id.0})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(t.runs.iter().map(|r| (r.style.tcy_up_down, r.style.tcy_left_right)).collect::<Vec<_>>(), [(max, -max)]);
 }
 
 /// SVG import keeps type sizes outside the Character panel's 0.1 to 1296 pt, and it gives a line
@@ -320,4 +344,154 @@ fn scale_text_attributes_bakes_group_scale_and_undoes() {
     near(text(&s, id).runs[0].style.size, 24.0);
     s.execute("edit.undo", &json!({})).unwrap();
     near(text(&s, id).runs[0].style.size, 12.0);
+}
+
+/// Scale Text Attributes bakes a horizontal stretch into the Horizontal Scale: tracked type stays
+/// where the stretch drew it, as tracking is measured in the em the Horizontal Scale draws
+/// (`vectorcraft_text::spacing_scale`). It used to lose the stretch's share of the tracking.
+#[test]
+fn scale_text_attributes_keeps_tracked_type_where_it_was() {
+    let mut s = session();
+    let id = create(&mut s, 20.0);
+    s.execute("text.setRangeStyle", &json!({"id": id.0, "tracking": 300})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100})).unwrap();
+    let pens = |s: &Session| {
+        let t = text(s, id);
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+        lay.glyphs.iter().map(|g| t.xf * (g.xf * Point::ZERO)).collect::<Vec<_>>()
+    };
+    let before = pens(&s);
+    s.execute("type.scaleTextAttributes", &json!({})).unwrap();
+    near(text(&s, id).runs[0].style.h_scale, 200.0);
+    let after = pens(&s);
+    assert_eq!(before.len(), after.len());
+    for (b, a) in before.iter().zip(&after) {
+        assert!((*a - *b).hypot() < 1e-6, "{before:?} {after:?}");
+    }
+}
+
+/// What Scale Text Attributes must leave as it was: the document-space bounds of an area's frame
+/// or a path type's path, each line's text, whether the text overflows, and where each glyph
+/// starts on the page.
+struct Placed {
+    outline: Option<vectorcraft_geom::Rect>,
+    lines: Vec<(usize, usize)>,
+    overflow: bool,
+    pens: Vec<Point>,
+}
+
+fn placed(s: &Session, id: NodeId) -> Placed {
+    let t = text(s, id);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
+    let outline = match &t.kind {
+        vectorcraft_doc::TextKind::Area { frame } => Some(frame),
+        vectorcraft_doc::TextKind::OnPath { path, .. } => Some(path),
+        vectorcraft_doc::TextKind::Point => None,
+    };
+    Placed {
+        outline: outline.and_then(|p| p.transformed(t.xf).bounds()),
+        lines: lay.lines.iter().map(|l| (l.start, l.end)).collect(),
+        overflow: lay.overflow,
+        pens: lay.glyphs.iter().map(|g| t.xf * (g.xf * Point::ZERO)).collect(),
+    }
+}
+
+fn same_place(before: &Placed, after: &Placed) {
+    let (Some(b), Some(a)) = (before.outline, after.outline) else { panic!("no frame or path: {:?} {:?}", before.outline, after.outline) };
+    for (x, y) in [(b.x0, a.x0), (b.y0, a.y0), (b.x1, a.x1), (b.y1, a.y1)] {
+        assert!((x - y).abs() < 1e-6, "frame {b:?} became {a:?}");
+    }
+    assert_eq!(after.lines, before.lines, "line breaks");
+    assert_eq!(after.overflow, before.overflow, "overflow");
+    assert_eq!(before.pens.len(), after.pens.len());
+    for (b, a) in before.pens.iter().zip(&after.pens) {
+        assert!((*a - *b).hypot() < 1e-6, "{:?} {:?}", before.pens, after.pens);
+    }
+}
+
+/// #8297: Scale Text Attributes on scaled area type keeps the frame the scale gave it, so the
+/// lines break where they did and no text becomes overset. It used to leave the frame at its
+/// unscaled size, which then held two lines of the larger type and hid the rest.
+#[test]
+fn scale_text_attributes_keeps_an_area_frame_and_its_lines() {
+    for (sx, sy, size) in [(200, 200, 24.0), (200, 100, 12.0), (50, 50, 6.0)] {
+        let mut s = session();
+        let id = NodeId(
+            s.execute(
+                "text.create",
+                &json!({"x": 40, "y": 60, "size": 12, "area": {"width": 120, "height": 80}, "text": "Bright river stones mark a gentle path past old trees."}),
+            )
+            .unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        s.execute("object.scale", &json!({"sx": sx, "sy": sy, "origin": [0, 0]})).unwrap();
+        let before = placed(&s, id);
+        assert!(before.lines.len() >= 3 && !before.overflow, "{sx}x{sy}: {:?}", before.lines);
+        s.execute("type.scaleTextAttributes", &json!({})).unwrap();
+        near(text(&s, id).runs[0].style.size, size);
+        same_place(&before, &placed(&s, id));
+        if (sx, sy) == (200, 200) {
+            let f = before.outline.unwrap();
+            assert_eq!((f.x0.round(), f.y0.round(), f.x1.round(), f.y1.round()), (80.0, 120.0, 320.0, 280.0));
+        }
+        s.execute("edit.undo", &json!({})).unwrap();
+        near(text(&s, id).runs[0].style.size, 12.0);
+        same_place(&before, &placed(&s, id));
+        s.execute("edit.redo", &json!({})).unwrap();
+        same_place(&before, &placed(&s, id));
+    }
+}
+
+/// Type on a path keeps its path: it used to shrink with the scale removed, so the type ran past
+/// its end.
+#[test]
+fn scale_text_attributes_keeps_a_path_types_path() {
+    let mut s = session();
+    let pid = s.execute("path.create", &json!({ "d": "M100 300 L300 300" })).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(
+        s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "Along the way", "size": 12, "at": [100, 300]})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "origin": [0, 0]})).unwrap();
+    let before = placed(&s, id);
+    assert!(!before.overflow);
+    s.execute("type.scaleTextAttributes", &json!({})).unwrap();
+    near(text(&s, id).runs[0].style.size, 24.0);
+    same_place(&before, &placed(&s, id));
+}
+
+/// A non-uniform scale on type on a path: only the uniform part is baked and the stretch stays in
+/// the transform, so the brackets, which sit at fractions of the path's length, stay where they
+/// were. Baking the stretch into the path would move them: on this path, scaled 3 × 2, the length
+/// grows from 200 to 500 and not in proportion, so the same fraction lands elsewhere.
+#[test]
+fn scale_text_attributes_keeps_path_type_on_a_stretched_path_where_it_was() {
+    let mut s = session();
+    let pid = s.execute("path.create", &json!({ "d": "M0 0 L100 0 L100 100" })).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(
+        s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "Corner", "size": 12, "at": [60, 0]})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 300, "sy": 200, "origin": [0, 0]})).unwrap();
+    let before = placed(&s, id);
+    let brackets = |s: &Session| match text(s, id).kind {
+        vectorcraft_doc::TextKind::OnPath { start, end, .. } => (start, end),
+        k => panic!("not path type: {k:?}"),
+    };
+    let before_brackets = brackets(&s);
+    s.execute("type.scaleTextAttributes", &json!({})).unwrap();
+    near(text(&s, id).runs[0].style.size, 24.0);
+    near(text(&s, id).runs[0].style.h_scale, 100.0);
+    let left = text(&s, id).style_scale().unwrap();
+    near(left.points, 1.0);
+    near(left.horizontal, 1.5);
+    assert_eq!(brackets(&s), before_brackets);
+    same_place(&before, &placed(&s, id));
+    // Only the stretch is left: there is nothing more to bake.
+    assert!(s.execute("type.scaleTextAttributes", &json!({})).is_err());
 }

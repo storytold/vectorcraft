@@ -19,11 +19,14 @@ impl Outlines {
         Self { segs: RectIndex::with_footprint(segs, |r, (s, _), cell| segment_footprint(r, s, cell)), tol: 16.0 * eps }
     }
 
-    /// The front-most input whose outline passes through `p`.
-    pub(super) fn source_at(&self, p: Point) -> Option<usize> {
+    /// The inputs whose outlines pass through `p`, back to front (none when no outline does).
+    pub(super) fn sources_at(&self, p: Point) -> Vec<usize> {
         use kurbo::ParamCurveNearest;
         let tol = self.tol;
-        self.segs.at(p, tol).filter(|(s, _)| s.nearest(p, 1e-9).distance_sq <= tol * tol).map(|(_, i)| *i).max()
+        let mut out: Vec<usize> = self.segs.at(p, tol).filter(|(s, _)| s.nearest(p, 1e-9).distance_sq <= tol * tol).map(|(_, i)| *i).collect();
+        out.sort_unstable();
+        out.dedup();
+        out
     }
 }
 
@@ -54,6 +57,8 @@ pub(super) struct Edge {
     pub(super) ends: [usize; 2],
     /// The input it came from (the front-most, where inputs share it).
     pub(super) source: usize,
+    /// Every input it lies on, back to front (`source` last).
+    pub(super) sources: Vec<usize>,
 }
 
 /// `segs` (a chain) moved to start at `a` and end at `b`, the handles next to each moving with it.

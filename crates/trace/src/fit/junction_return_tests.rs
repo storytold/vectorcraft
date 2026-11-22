@@ -35,7 +35,8 @@ fn returning_piece_keeps_its_junction_and_interior() {
                 let raw = Loop { pts: pts.clone(), area2: 2 * i64::from(width) };
                 let w = offset.0 as usize + 20;
                 let h = offset.1 as usize + 20;
-                let (path, _) = fit_loop(&raw, w, h, &|_| (0., 0), &at, &style).expect("a positive-area returning loop must be editable");
+                let (path, _) =
+                    fit_loop(&raw, w, h, &|_| (0., 0, subpixel::EDGE_STEP), &at, &style).expect("a positive-area returning loop must be editable");
                 assert_eq!(path.anchors[0].p, Point::new(junction.0 as f64, junction.1 as f64));
                 let mut local = path.clone();
                 let shift = Point::new(offset.0 as f64, offset.1 as f64).to_vec2();
@@ -46,7 +47,7 @@ fn returning_piece_keeps_its_junction_and_interior() {
                 }
                 assert!(local.area().abs() > 0.9 * width as f64, "{width}, {turns}, {offset:?}");
                 let reverse = Loop { pts: pts.into_iter().rev().collect(), area2: -raw.area2 };
-                let (back, _) = fit_loop(&reverse, w, h, &|_| (0., 0), &at, &style).unwrap();
+                let (back, _) = fit_loop(&reverse, w, h, &|_| (0., 0, subpixel::EDGE_STEP), &at, &style).unwrap();
                 let mut expected = path;
                 expected.reverse();
                 let start = expected.anchors.iter().position(|a| a.p == back.anchors[0].p).unwrap();
@@ -64,7 +65,7 @@ fn returning_piece_does_not_promote_a_zero_area_chain() {
     let style = crate::TraceParams { corners: 0., paths: 0., ..crate::TraceParams::default() }.outline_style();
     // All four subpixel corners coincide; the raw pixel has area but its
     // positioned boundary does not. The fallback must not invent ink.
-    assert!(fit_loop(&raw, 4, 4, &|_| (-0.5, 0), &junction, &style).is_none());
+    assert!(fit_loop(&raw, 4, 4, &|_| (-0.5, 0, subpixel::EDGE_STEP), &junction, &style).is_none());
 }
 
 #[test]

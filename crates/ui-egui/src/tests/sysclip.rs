@@ -22,6 +22,26 @@ pub(super) struct Board {
     ours: bool,
     /// How many times the app wrote it.
     writes: usize,
+    /// Another app has the clipboard open: the app's writes fail and change nothing, and reads
+    /// find nothing.
+    locked: bool,
+    /// Raised by every write and every copy elsewhere.
+    changes: u64,
+    /// The platform has no change count.
+    uncounted: bool,
+    /// The app's writes empty the clipboard and then fail.
+    partial: bool,
+    /// With `partial`, the formats other than text are written before the failure.
+    partial_keeps_others: bool,
+    /// Another app copies this while the app's write tries to open the clipboard, and the write
+    /// fails.
+    race: Option<Flavour>,
+    /// With `race`, the other app's copy also carries the app's formats other than text.
+    race_with_our_formats: bool,
+    /// The app's writes fail and change nothing; reads still work.
+    refuse: bool,
+    /// `has` finds text only, as the Linux clipboard's does.
+    text_only_has: bool,
 }
 
 struct Fake(Rc<RefCell<Board>>);
@@ -29,6 +49,9 @@ struct Fake(Rc<RefCell<Board>>);
 impl Fake {
     fn find(&self, mimes: &[&'static str]) -> Option<Flavour> {
         let b = self.0.borrow();
+        if b.locked {
+            return None;
+        }
         let matches = |m: &str, f: &Flavour| f.mime == m || (m == BITMAP && f.mime.starts_with("image/") && f.mime != SVG);
         mimes.iter().find_map(|m| b.flavours.iter().find(|f| matches(m, f)).cloned())
     }
@@ -37,8 +60,29 @@ impl Fake {
 impl SystemClipboard for Fake {
     fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
         let mut b = self.0.borrow_mut();
-        *b = Board { flavours: flavours.to_vec(), ours: true, writes: b.writes + 1 };
+        if b.locked || b.refuse {
+            return Err("another app has the clipboard open".into());
+        }
+        if let Some(copied) = b.race.take() {
+            b.flavours = vec![copied];
+            if b.race_with_our_formats {
+                b.flavours.extend(flavours.iter().filter(|f| f.mime != TEXT).cloned());
+            }
+            b.ours = false;
+            b.changes += 1;
+            return Err("another app has the clipboard open".into());
+        }
+        if b.partial {
+            b.flavours = if b.partial_keeps_others { flavours.iter().filter(|f| f.mime != TEXT).cloned().collect() } else { vec![] };
+            b.changes += 1;
+            return Err("a format could not be written".into());
+        }
+        *b = Board { flavours: flavours.to_vec(), ours: true, writes: b.writes + 1, changes: b.changes + 1, ..std::mem::take(&mut *b) };
         Ok(())
+    }
+    fn change_count(&mut self) -> Option<u64> {
+        let b = self.0.borrow();
+        (!b.uncounted).then_some(b.changes)
     }
     fn holds_ours(&mut self) -> bool {
         self.0.borrow().ours
@@ -47,6 +91,9 @@ impl SystemClipboard for Fake {
         self.find(mimes)
     }
     fn has(&mut self, mimes: &[&'static str]) -> bool {
+        if self.0.borrow().text_only_has {
+            return mimes.contains(&TEXT) && self.find(&[TEXT]).is_some();
+        }
         self.find(mimes).is_some()
     }
 }
@@ -66,7 +113,44 @@ pub(super) fn app() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 pub(super) fn copy_elsewhere(board: &Rc<RefCell<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
     let flavours = flavours.into_iter().map(|(mime, data)| Flavour { mime, data }).collect();
     let mut b = board.borrow_mut();
-    *b = Board { flavours, ours: false, writes: b.writes };
+    *b = Board { flavours, ours: false, changes: b.changes + 1, ..std::mem::take(&mut *b) };
+}
+
+/// Another app opens the clipboard (`true`) or closes it.
+pub(super) fn lock(board: &Rc<RefCell<Board>>, locked: bool) {
+    board.borrow_mut().locked = locked;
+}
+
+/// The fake clipboard reports no change count, as on platforms that have none.
+pub(super) fn without_change_count(board: &Rc<RefCell<Board>>) {
+    board.borrow_mut().uncounted = true;
+}
+
+/// The fake clipboard's `has` finds text only, as the Linux clipboard's does.
+pub(super) fn has_text_only(board: &Rc<RefCell<Board>>) {
+    board.borrow_mut().text_only_has = true;
+}
+
+/// The app's writes fail (`true`) and change nothing, while reads still work.
+pub(super) fn refuse_writes(board: &Rc<RefCell<Board>>, refuse: bool) {
+    board.borrow_mut().refuse = refuse;
+}
+
+/// The app's writes empty the clipboard and then fail, as when one format can't be written; with
+/// `keep_others`, the formats other than text are written.
+pub(super) fn fail_writes_after_emptying(board: &Rc<RefCell<Board>>, keep_others: bool) {
+    let mut b = board.borrow_mut();
+    b.partial = true;
+    b.partial_keeps_others = keep_others;
+}
+
+/// Another app copies `data` of type `mime` while the app's next write tries to open the
+/// clipboard, and that write fails. With `our_formats`, its copy also carries the app's formats
+/// other than text.
+pub(super) fn copy_during_next_write(board: &Rc<RefCell<Board>>, mime: &'static str, data: Vec<u8>, our_formats: bool) {
+    let mut b = board.borrow_mut();
+    b.race = Some(Flavour { mime, data });
+    b.race_with_our_formats = our_formats;
 }
 
 pub(super) fn run(app: &mut VectorcraftApp, id: &str, p: Value) -> Value {
@@ -80,7 +164,12 @@ pub(super) fn copy_rect(app: &mut VectorcraftApp) {
     run(app, "edit.copy", json!({}));
 }
 
-fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
+/// How many times the app wrote the clipboard.
+pub(super) fn writes(board: &Rc<RefCell<Board>>) -> usize {
+    board.borrow().writes
+}
+
+pub(super) fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
     board.borrow().flavours.iter().map(|f| f.mime).collect()
 }
 
@@ -90,8 +179,9 @@ pub(super) fn pasted(app: &VectorcraftApp) -> Vec<Node> {
     st.selection.objects.iter().map(|id| st.doc.node(*id).unwrap().clone()).collect()
 }
 
-fn count(app: &VectorcraftApp) -> usize {
-    app.session.active().unwrap().doc.layers[0].children().unwrap().len()
+/// The objects on the first layer (its ruler guides left out).
+pub(super) fn count(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().doc.layers[0].children().unwrap().iter().filter(|c| !c.is_ruler_guide()).count()
 }
 
 /// An egui `PasteImage` from the host is the signal to read the rich system clipboard: it must
@@ -146,13 +236,47 @@ fn text_and_image_paste_events_paste_once_as_text() {
 pub(crate) fn blue_png() -> Vec<u8> {
     let img = image::RgbaImage::from_pixel(4, 2, image::Rgba([0, 0, 255, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     png
 }
 
 /// One headless frame of app logic (shortcuts too, from the second frame on) delivering `events`,
 /// in the test's one context (in a new one the app starts its fonts over).
-fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+pub(super) fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
     thread_local! {
         static CTX: egui::Context = egui::Context::default();
     }
@@ -175,7 +299,7 @@ fn app_with_worker() -> (VectorcraftApp, Rc<RefCell<Board>>) {
 
 /// [`app_with_worker`], its worker busy with a job labeled `label` (none: another Copy's formats)
 /// until the sender is dropped, or for 10 s.
-fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Rc<RefCell<Board>>, Sender<()>) {
+pub(super) fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Rc<RefCell<Board>>, Sender<()>) {
     let (mut app, board) = app_with_worker();
     let hold = hold_worker(&mut app, label);
     (app, board, hold)
@@ -293,28 +417,151 @@ fn a_copy_while_the_worker_saves_writes_the_formats_at_once() {
     assert_eq!(board.borrow().writes, 1);
 }
 
+/// A PNG whose header reads but whose pixel data is cut short, which the renderer can't decode.
+pub(super) fn cut_short_png() -> Vec<u8> {
+    let mut png = Vec::new();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    png
+}
+
+/// The PNG's note on an image the renderer can't decode.
+pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+
 /// Copy of an image the renderer can't decode: the PNG leaves it out, and once the formats are
-/// written the status bar shows the PNG's note, made at once or on the worker.
+/// written the status bar says the Copy (or Cut) has 1 note and shows it, made at once or on the
+/// worker. The note is kept for the message's hover, and a Copy without notes leaves the message.
 #[test]
 fn copy_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
-    const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
-    // A PNG whose header reads but whose pixel data is cut short.
-    let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    let png = cut_short_png();
     for worker in [false, true] {
         let (mut app, board) = if worker { app_with_worker() } else { app() };
         app.status("Ready");
         copy_rect(&mut app);
         background::wait_all(&mut app);
-        assert_eq!(app.ui.status, "Ready", "worker {worker}: no note");
-        vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
-        app.status("Ready");
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Ready", &None), "worker {worker}: no note");
+        for (id, said) in [("edit.copy", "Copied"), ("artboard.copy", "Copied"), ("edit.cut", "Cut")] {
+            vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
+            app.status("Ready");
+            let p = if id == "artboard.copy" { json!({"index": 0}) } else { json!({}) };
+            run(&mut app, id, p);
+            background::wait_all(&mut app);
+            assert_eq!(written(&board), [TEXT, SVG, PNG], "worker {worker}: {id}");
+            let status = format!("{said} with 1 note: {UNDECODED}");
+            assert_eq!(app.ui.status, status, "worker {worker}: {id}");
+            assert_eq!(app.ui.status_notes, Some((status, vec![UNDECODED.to_string()])), "worker {worker}: {id}");
+        }
+    }
+}
+
+/// The status bar names how many notes a Copy's or Cut's formats have and the first of them, and
+/// keeps them all, in order, for the message's hover. Without notes it keeps its message.
+#[test]
+fn copy_notes_are_counted_and_kept_in_order() {
+    let (mut app, _) = app();
+    let notes: Vec<String> = ["first", "second", "third"].map(String::from).to_vec();
+    for (cut, said) in [(false, "Copied"), (true, "Cut")] {
+        crate::sysclip::show_copy_notes(&mut app, cut, notes.clone());
+        let status = format!("{said} with 3 notes: first");
+        assert_eq!(app.ui.status, status);
+        assert_eq!(app.ui.status_notes, Some((status, notes.clone())));
+    }
+    app.status("Ready");
+    app.ui.status_notes = None;
+    crate::sysclip::show_copy_notes(&mut app, false, vec![]);
+    assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Ready", &None));
+}
+
+/// A message shown while a Copy's formats are made on the worker stays: the formats are written
+/// once they are ready, and their note does not replace the newer message.
+#[test]
+fn a_copy_note_does_not_replace_a_newer_message() {
+    let (mut app, board, hold) = app_with_busy_worker("");
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+    app.status("Ready");
+    run(&mut app, "edit.copy", json!({}));
+    app.status("Saved /out/a.vectorcraft");
+    drop(hold);
+    background::wait_all(&mut app);
+    assert_eq!(written(&board), [TEXT, SVG, PNG]);
+    assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/a.vectorcraft", &None));
+}
+
+/// A message set while a Copy's formats are made on the worker stays even when its text is the
+/// Copy's: an empty status bar set again, or File › New clearing it.
+#[test]
+fn a_copy_note_does_not_replace_a_message_with_the_same_text() {
+    for then in ["status", "file.new"] {
+        let (mut app, board, hold) = app_with_busy_worker("");
+        vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+        app.status("");
         run(&mut app, "edit.copy", json!({}));
+        if then == "status" {
+            app.status("");
+        } else {
+            run(&mut app, "file.new", json!({}));
+        }
+        drop(hold);
         background::wait_all(&mut app);
-        assert_eq!(written(&board), [TEXT, SVG, PNG], "worker {worker}");
-        assert_eq!(app.ui.status, WARNING, "worker {worker}");
+        assert_eq!(written(&board), [TEXT, SVG, PNG], "{then}");
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("", &None), "{then}");
+    }
+}
+
+/// A Copy without notes clears the message an earlier Copy's notes left, with its hover notes,
+/// made at once or on the worker. It leaves any other message, one with the same text set since
+/// included.
+#[test]
+fn a_copy_without_notes_clears_an_earlier_copys_notes() {
+    let earlier = format!("Copied with 1 note: {UNDECODED}");
+    for worker in [false, true] {
+        for (then, kept) in [(None, ""), (Some("Ready"), "Ready"), (Some(earlier.as_str()), earlier.as_str())] {
+            let (mut app, _) = if worker { app_with_worker() } else { app() };
+            vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+            run(&mut app, "edit.copy", json!({}));
+            background::wait_all(&mut app);
+            assert_eq!(app.ui.status, earlier, "worker {worker}, {then:?}");
+            if let Some(then) = then {
+                app.status(then);
+                app.ui.status_notes = None;
+            }
+            copy_rect(&mut app);
+            background::wait_all(&mut app);
+            assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (kept, &None), "worker {worker}, {then:?}");
+        }
     }
 }
 
@@ -335,6 +582,21 @@ fn text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
     run(&mut app, "edit.paste", json!({}));
     let NodeKind::Text(t) = &pasted(&app)[0].kind else { panic!("not type: {:?}", pasted(&app)[0].kind) };
     assert_eq!(t.plain_text(), "Words copied in a field");
+}
+
+/// Text a floating panel's label copies after Copy, before the formats are written: its window
+/// keeps the Copy, the formats are not written, and the system clipboard keeps the text.
+#[test]
+fn label_text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
+    let (mut app, board, hold) = app_with_busy_worker("");
+    copy_rect(&mut app);
+    let ctx = egui::Context::default();
+    crate::shortcuts::note_copied_in_window(&ctx);
+    crate::panel_docking::forward_keys(&mut app, &ctx, vec![egui::Event::Copy], Some(egui::Modifiers::COMMAND));
+    assert!(app.forwarded.is_empty(), "the window's Copy stays there");
+    drop(hold);
+    background::wait_all(&mut app);
+    assert_eq!(board.borrow().writes, 0);
 }
 
 /// The Edit menu's Paste into a text field after Copy of type, before the formats are written: it

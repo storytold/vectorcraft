@@ -118,7 +118,9 @@ fn arabic_joining_forms_are_not_alternates() {
     assert_eq!(alternates(&t), 0);
 }
 
-/// #394: the lam-alef ligature is required (`rlig`), so it isn't highlighted either.
+/// #394: the lam-alef ligature is required (`rlig`), so it isn't highlighted either. With an
+/// older font that files it under `liga` (as the legacy Arial of Microsoft's core fonts does) it
+/// is still required: [`lam_alef_in_liga_is_not_an_alternate`] checks that without an OS font.
 #[test]
 fn lam_alef_is_not_an_alternate() {
     // Looking up an installed font loads it, which changes the fonts.
@@ -126,6 +128,95 @@ fn lam_alef_is_not_an_alternate() {
     let Some(style) = arabic_style("lam_alef_is_not_an_alternate") else { return };
     for s in ["لا", "سلام", "الاسم"] {
         assert_eq!(alternates(&text(s, style.clone())), 0, "{s}");
+    }
+}
+
+/// #394: a font whose lam-alef ligature is in `liga` (older Arabic fonts) or `rlig` gets no
+/// highlight on it: the ligature is required by the characters, not chosen by an optional
+/// feature. Built in code, so it runs whatever fonts the machine has.
+#[test]
+fn lam_alef_in_liga_is_not_an_alternate() {
+    use vectorcraft_text::test_fonts::{lam_alef_family, lam_alef_font, source_sans_gid};
+    let _adding = crate::tests_fontchange::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    let gid = |c| u32::from(source_sans_gid(c).unwrap());
+    // Text, the ligature glyph and its cluster (byte, length): lam + alef, lam + alef with hamza
+    // above, the pair after a beh, and the pair with a fatha on the lam (the ligature skips it).
+    let cases = [
+        ("\u{0644}\u{0627}", 'H', (0, 4)),
+        ("\u{0644}\u{0623}", 'K', (0, 4)),
+        ("\u{0628}\u{0644}\u{0627}", 'H', (2, 4)),
+        ("\u{0644}\u{064E}\u{0627}", 'H', (0, 6)),
+    ];
+    for feature in [b"liga", b"rlig"] {
+        db.add_font(lam_alef_font(feature).unwrap());
+        let family = lam_alef_family(feature);
+        let style = vectorcraft_doc::text::CharStyle { size: 36.0, font_family: family.into(), ..Default::default() };
+        for (s, ligature, (byte, len)) in cases {
+            let t = text(s, style.clone());
+            // The font's ligature glyph stands for the pair, its cluster lam to alef.
+            let shaped = glyphs(&t);
+            assert!(shaped.contains(&(byte, len, gid(ligature))), "{family}: {s} is shaped to {ligature} over {byte}..{}: {shaped:?}", byte + len);
+            assert_eq!(alternates(&t), 0, "{family}: {s}");
+        }
+    }
+}
+
+/// #394: an optional feature that changes the lam-alef ligature (here `salt`) is highlighted:
+/// only the required ligature itself is left clear, whichever feature the font files it under.
+#[test]
+fn an_optional_feature_on_the_lam_alef_ligature_is_an_alternate() {
+    use vectorcraft_text::test_fonts::{LAM_ALEF_SALT, lam_alef_family, lam_alef_font, source_sans_gid};
+    let _adding = crate::tests_fontchange::adding_fonts();
+    let db = vectorcraft_text::FontDb::global();
+    let salted = u32::from(source_sans_gid(LAM_ALEF_SALT).unwrap());
+    for feature in [b"liga", b"rlig"] {
+        db.add_font(lam_alef_font(feature).unwrap());
+        let family = lam_alef_family(feature);
+        let style = vectorcraft_doc::text::CharStyle { size: 36.0, font_family: family.into(), features: vec!["salt".into()], ..Default::default() };
+        for (s, byte) in [("\u{0644}\u{0627}", 0), ("\u{0628}\u{0644}\u{0627}", 2)] {
+            let t = text(s, style.clone());
+            let shaped = glyphs(&t);
+            assert!(shaped.contains(&(byte, 4, salted)), "{family}: salt turns the ligature into {LAM_ALEF_SALT}: {shaped:?}");
+            assert_eq!(alternates(&t), 1, "{family}: {s}: the salted ligature, and nothing else");
+        }
+    }
+}
+
+/// Only a lam followed by an alef (marks between or after allowed) is the required lam-alef.
+#[test]
+fn only_lam_alef_clusters_are_the_required_ligature() {
+    // Marks of the Arabic block, Arabic Extended-A (U+08E4, U+08F0), Extended-B (U+0898) and
+    // Extended-C (U+10EFD), and Quranic marks (U+0610, U+06ED).
+    for s in [
+        "\u{0644}\u{0627}",
+        "\u{0644}\u{0622}",
+        "\u{0644}\u{0623}",
+        "\u{0644}\u{0625}",
+        "\u{0644}\u{064E}\u{0627}",
+        "\u{0644}\u{0627}\u{064B}",
+        "\u{0644}\u{08E4}\u{0627}",
+        "\u{0644}\u{08F0}\u{0627}",
+        "\u{0644}\u{0898}\u{0627}",
+        "\u{0644}\u{0627}\u{10EFD}",
+        "\u{0644}\u{0610}\u{06ED}\u{0627}",
+    ] {
+        assert!(crate::text_geom::is_lam_alef(s), "{s:?}");
+    }
+    // Not marks: tatweel (U+0640) and the number mark above (U+08E2, a format character).
+    for s in [
+        "",
+        "\u{0644}",
+        "\u{0627}\u{0644}",
+        "\u{0644}\u{0628}",
+        "\u{0628}\u{0644}\u{0627}",
+        "\u{0644}\u{0627}\u{0627}",
+        "fi",
+        "\u{064E}",
+        "\u{0644}\u{0640}\u{0627}",
+        "\u{0644}\u{08E2}\u{0627}",
+    ] {
+        assert!(!crate::text_geom::is_lam_alef(s), "{s:?}");
     }
 }
 

@@ -5,21 +5,54 @@ use super::{Encoded, EngineError, Result, Session, Value, json};
 /// `-`, `Artboard-N` when unnamed, and `-2`, `-3`… after a name already used (compared without
 /// case: `Icon` and `icon` are one file on most desktop file systems).
 pub fn artboard_file_names(doc: &vectorcraft_doc::Document, boards: &[usize]) -> Vec<String> {
-    unique_file_names(boards.iter().map(|&b| (doc.artboards.get(b).map_or("", |a| a.name.as_str()), format!("Artboard-{}", b + 1))))
+    unique_file_names(artboard_names(doc, boards))
+}
+
+/// [`artboard_file_names`] with the dots of a name kept (`example.artboard`), for Export for Screens,
+/// which puts every stem through `safe_file_name` after this (trailing periods, device names).
+pub(crate) fn artboard_file_names_keeping_dots(doc: &vectorcraft_doc::Document, boards: &[usize]) -> Vec<String> {
+    unique_file_names_keeping_dots(artboard_names(doc, boards))
+}
+
+/// Each of `boards`' name, with the file name to use when it has none.
+fn artboard_names<'a>(doc: &'a vectorcraft_doc::Document, boards: &'a [usize]) -> impl Iterator<Item = (&'a str, String)> {
+    boards.iter().map(|&b| (doc.artboards.get(b).map_or("", |a| a.name.as_str()), format!("Artboard-{}", b + 1)))
 }
 
 /// File-name parts for `(name, fallback)` pairs (artboards, assets): the name with unsafe
 /// characters as `-`, the fallback when it is empty, and `-2`, `-3`… after a name already used
 /// (compared without case).
-pub(crate) fn unique_file_names<'a>(names: impl IntoIterator<Item = (&'a str, String)>) -> Vec<String> {
+fn unique_file_names<'a>(names: impl IntoIterator<Item = (&'a str, String)>) -> Vec<String> {
     distinct_names(names.into_iter().map(|(name, fallback)| {
         let base: String = name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
         if base.is_empty() { fallback } else { base }
     }))
 }
 
+/// [`unique_file_names`] keeping `.` in a name (an artboard called `example.artboard` exports as
+/// `example.artboard.png`, #6143). A name of only dots (`.` and `..` name other folders) takes the
+/// fallback, and leading dots are dashes (`.draft` would be a hidden file); the caller still runs
+/// each stem through `safe_file_name`, which drops trailing periods and guards Windows device names.
+pub(crate) fn unique_file_names_keeping_dots<'a>(names: impl IntoIterator<Item = (&'a str, String)>) -> Vec<String> {
+    distinct_names(names.into_iter().map(|(name, fallback)| {
+        let base: String = name.chars().map(|c| if c.is_alphanumeric() || matches!(c, '-' | '_' | '.') { c } else { '-' }).collect();
+        if base.trim_matches('.').is_empty() {
+            return fallback;
+        }
+        // A leading dot would hide the file or folder on Unix-like systems: it is a dash, as before.
+        let rest = base.trim_start_matches('.');
+        format!("{}{rest}", "-".repeat(base.len() - rest.len()))
+    }))
+}
+
 /// `names` with `-2`, `-3`… after a name already used (compared without case).
 pub(super) fn distinct_names(names: impl IntoIterator<Item = String>) -> Vec<String> {
+    distinct_names_by(names, str::to_lowercase)
+}
+
+/// `names` with `-2`, `-3`… after a name already used, two names matching when `key` gives the same
+/// key for them.
+pub(super) fn distinct_names_by(names: impl IntoIterator<Item = String>, key: impl Fn(&str) -> String) -> Vec<String> {
     let mut taken = std::collections::HashSet::new();
     // The next number to try for each base: a name repeated many times doesn't search the numbers
     // taken before it.
@@ -28,8 +61,8 @@ pub(super) fn distinct_names(names: impl IntoIterator<Item = String>) -> Vec<Str
         .into_iter()
         .map(|base| {
             let mut name = base.clone();
-            while !taken.insert(name.to_lowercase()) {
-                let n = next.entry(base.to_lowercase()).or_insert(1);
+            while !taken.insert(key(&name)) {
+                let n = next.entry(key(&base)).or_insert(1);
                 *n += 1;
                 name = format!("{base}-{n}");
             }

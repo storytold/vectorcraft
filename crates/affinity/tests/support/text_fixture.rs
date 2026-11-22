@@ -98,20 +98,26 @@ pub fn utf8(text: &str) -> F {
 }
 
 pub fn document(blocks: Vec<F>, frame: bool, dpi: f64, transform: [f64; 6]) -> Vec<u8> {
-    let text = F::Obj(
-        tag(if frame { b"TxtF" } else { b"TxtA" }),
-        vec![
-            (tag(b"StSt"), F::Obj(tag(b"Stry"), vec![(tag(b"Blok"), F::Shared(blocks))])),
-            (
-                tag(b"TxtH"),
-                F::Obj(
-                    tag(if frame { b"FrFr" } else { b"ArFr" }),
-                    vec![(tag(b"FrmB"), F::F64s(vec![10.0, 20.0, 210.0, 120.0])), (tag(b"ArtV"), F::F64(18.0))],
-                ),
+    document_with_children(blocks, frame, dpi, transform, vec![])
+}
+
+/// [`document`] whose text holds `children` (objects nested inside the text).
+pub fn document_with_children(blocks: Vec<F>, frame: bool, dpi: f64, transform: [f64; 6], children: Vec<F>) -> Vec<u8> {
+    let mut fields = vec![
+        (tag(b"StSt"), F::Obj(tag(b"Stry"), vec![(tag(b"Blok"), F::Shared(blocks))])),
+        (
+            tag(b"TxtH"),
+            F::Obj(
+                tag(if frame { b"FrFr" } else { b"ArFr" }),
+                vec![(tag(b"FrmB"), F::F64s(vec![10.0, 20.0, 210.0, 120.0])), (tag(b"ArtV"), F::F64(18.0))],
             ),
-            (tag(b"Xfrm"), F::F64s(transform.to_vec())),
-        ],
-    );
+        ),
+        (tag(b"Xfrm"), F::F64s(transform.to_vec())),
+    ];
+    if !children.is_empty() {
+        fields.push((tag(b"Chld"), F::Shared(children)));
+    }
+    let text = F::Obj(tag(if frame { b"TxtF" } else { b"TxtA" }), fields);
     let mut root = vec![
         (tag(b"UVCn"), F::Obj(tag(b"UVCn"), vec![(tag(b"UPPI"), F::F64(dpi))])),
         (

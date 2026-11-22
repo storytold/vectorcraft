@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, ImageObject, LinkInfo, NodeKind};
+use vectorcraft_doc::{Document, ImageObject, LinkInfo, NodeKind, StoredRoot};
 use vectorcraft_geom::Rect;
 
 use crate::*;
@@ -35,7 +35,41 @@ impl Drop for Folder {
 pub(crate) fn png(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
     let mut out = vec![];
     let [r, g, b] = rgb;
-    image::RgbaImage::from_pixel(w, h, image::Rgba([r, g, b, 255])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(w, h, image::Rgba([r, g, b, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -193,6 +227,68 @@ fn a_linked_targa_file_places_updates_and_relinks() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
+/// A BMP file named `.dib` placed linked shows its pixels, is listed as BMP and updates when it
+/// changes; relinked to a PNG named `.pns`, it is listed as PNG.
+#[test]
+fn linked_dib_and_pns_files_place_update_and_relink() {
+    let bmp = |w: u32, h: u32, rgb: [u8; 3]| {
+        let mut out = vec![];
+        let [r, g, b] = rgb;
+        {
+            let __dyn: image::DynamicImage = (image::RgbImage::from_pixel(w, h, image::Rgb([r, g, b]))).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Bmp, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| out.extend_from_slice(&__b))
+        }
+        .unwrap();
+        out
+    };
+    let dir = Folder::new("dib");
+    let pic = dir.file("art/scan.DIB");
+    write(&pic, &bmp(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+    assert_eq!(s.execute("links.info", &json!({"id": id.0})).unwrap()["format"], "BMP");
+    write(&pic, &bmp(400, 400, BLUE));
+    assert_eq!(s.execute("links.update", &json!({})).unwrap(), json!({"updated": [id.0], "missing": []}));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    let other = dir.file("other/red.pns");
+    write(&other, &png(300, 100, RED));
+    assert_eq!(s.execute("links.relink", &json!({"ids": [id.0], "path": other})).unwrap(), json!({"relinked": [id.0], "notFound": []}));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height, im.link.unwrap().path), (300, 100, other));
+    assert_eq!(s.execute("links.info", &json!({"id": id.0})).unwrap()["format"], "PNG");
+}
+
 #[test]
 fn the_relative_path_finds_the_file_after_the_folder_moves() {
     let a = Folder::new("move-a");
@@ -214,6 +310,1065 @@ fn the_relative_path_finds_the_file_after_the_folder_moves() {
     let c = s.execute("links.check", &json!({})).unwrap();
     assert_eq!((c["links"][0]["status"].as_str(), c["missing"].as_u64()), (Some("ok"), Some(0)), "{c}");
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+/// A document moved to another folder while its linked file is missing keeps the file's relative
+/// path when it is saved again, there or in a subfolder, so the file is found once it is back
+/// beside the document.
+#[test]
+fn a_missing_link_keeps_its_relative_path_when_the_moved_document_is_saved() {
+    let a = Folder::new("missing-save-a");
+    let b = Folder::new("missing-save-b");
+    let away = Folder::new("missing-save-away");
+    let pic = a.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    save(&mut s, &a.file("poster.vectorcraft"));
+    // Move the document and its links, then take the links away.
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::rename(b.0.join("art"), away.0.join("art")).unwrap();
+    let r = open(&mut s, &b.file("poster.vectorcraft"));
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("photo.png"), "{r}");
+    save(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::create_dir_all(b.0.join("copies")).unwrap();
+    save(&mut s, &b.file("copies/poster.vectorcraft"));
+    let relative = |path: &str| {
+        let mut saved: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        saved_image(&mut saved)["link"]["relative"].as_str().map(str::to_string)
+    };
+    assert_eq!(relative(&b.file("poster.vectorcraft")).as_deref(), Some("art/photo.png"));
+    assert_eq!(relative(&b.file("copies/poster.vectorcraft")).as_deref(), Some("../art/photo.png"));
+    // Saved again where the last save put it, the file is still named from the folder it was read from.
+    s.execute("document.save", &json!({})).unwrap();
+    assert_eq!(relative(&b.file("copies/poster.vectorcraft")).as_deref(), Some("../art/photo.png"));
+    // The links come back: both saved documents find the file.
+    std::fs::rename(away.0.join("art"), b.0.join("art")).unwrap();
+    let moved = b.file("art/photo.png");
+    for doc in [b.file("poster.vectorcraft"), b.file("copies/poster.vectorcraft")] {
+        let r = open(&mut s, &doc);
+        assert_eq!(&r["missingLinks"], &json!([]), "{doc}: {r}");
+        assert_eq!(Path::new(&image(&s, id).link.unwrap().path), Path::new(&moved), "{doc}");
+    }
+}
+
+/// A file found by name in the document's folder, then missing before the next save, keeps the
+/// place it was last found: the saved relative path names that place, not the folder its old
+/// relative path named.
+#[test]
+fn a_file_found_elsewhere_then_missing_keeps_the_place_it_was_found() {
+    let dir = Folder::new("found-then-missing");
+    let pic = dir.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    let doc = dir.file("poster.vectorcraft");
+    save(&mut s, &doc);
+    let beside = dir.file("photo.png");
+    std::fs::rename(&pic, &beside).unwrap();
+    let r = open(&mut s, &doc);
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+    assert_eq!(Path::new(&image(&s, id).link.unwrap().path), Path::new(&beside));
+    let away = dir.file("away.png");
+    std::fs::rename(&beside, &away).unwrap();
+    save(&mut s, &doc);
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&doc).unwrap()).unwrap();
+    assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("photo.png"));
+}
+
+/// After a save in another folder, a file Update Links finds by name beside the saved document,
+/// then missing before the next save, keeps the place it was found.
+#[test]
+fn a_file_update_links_finds_after_a_save_elsewhere_keeps_its_place() {
+    let a = Folder::new("update-after-save-as-a");
+    let b = Folder::new("update-after-save-as-b");
+    let pic = a.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    save(&mut s, &a.file("poster.vectorcraft"));
+    open(&mut s, &a.file("poster.vectorcraft"));
+    let doc = b.file("poster.vectorcraft");
+    save(&mut s, &doc);
+    let beside = b.file("photo.png");
+    std::fs::rename(&pic, &beside).unwrap();
+    let r = s.execute("links.update", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(&r["missing"], &json!([]), "{r}");
+    assert_eq!(Path::new(&image(&s, id).link.unwrap().path), Path::new(&beside));
+    std::fs::remove_file(&beside).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&doc).unwrap()).unwrap();
+    assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("photo.png"));
+}
+
+/// A file found at its relative path from the folder of the last save, away from its path and from
+/// the folder the document was read from, is written relative to where it was found.
+#[test]
+fn a_file_found_beside_the_last_save_is_written_where_it_was_found() {
+    let a = Folder::new("found-beside-save-a");
+    let b = Folder::new("found-beside-save-b");
+    let c = Folder::new("found-beside-save-c");
+    write(&a.file("art/photo.png"), &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &a.file("art/photo.png"));
+    save(&mut s, &a.file("poster.vectorcraft"));
+    open(&mut s, &a.file("poster.vectorcraft"));
+    save(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::rename(a.0.join("art"), b.0.join("art")).unwrap();
+    save(&mut s, &c.file("poster.vectorcraft"));
+    let r = open(&mut s, &c.file("poster.vectorcraft"));
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+}
+
+/// After a moved document with a missing link is saved in another folder, `links.check` finds the
+/// file once it is back at the place its relative path names from the folder the document was
+/// read from, which is where the saved file looks for it too.
+#[test]
+fn a_missing_link_comes_back_where_the_document_saved_elsewhere_looks_for_it() {
+    let a = Folder::new("check-after-save-as-a");
+    let b = Folder::new("check-after-save-as-b");
+    let c = Folder::new("check-after-save-as-c");
+    let away = Folder::new("check-after-save-as-away");
+    write(&a.file("art/photo.png"), &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &a.file("art/photo.png"));
+    save(&mut s, &a.file("poster.vectorcraft"));
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    std::fs::rename(b.0.join("art"), away.0.join("art")).unwrap();
+    open(&mut s, &b.file("poster.vectorcraft"));
+    save(&mut s, &c.file("poster.vectorcraft"));
+    std::fs::rename(away.0.join("art"), b.0.join("art")).unwrap();
+    let r = s.execute("links.check", &json!({})).unwrap();
+    let found = r["links"][0]["found"].as_str().map(Path::new);
+    assert_eq!((r["missing"].as_u64(), found), (Some(0), Some(Path::new(&b.file("art/photo.png")))), "{r}");
+    let r = open(&mut s, &c.file("poster.vectorcraft"));
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+}
+
+/// Links in symbols, graph designs, patterns and opacity masks are saved with their relative
+/// paths, as links in the layers are: after the folder moves, each file is found and its link takes
+/// the new path, which the next save writes relative to the document again.
+#[test]
+fn links_outside_the_layers_find_their_files_after_the_folder_moves() {
+    let a = Folder::new("nested-move-a");
+    let b = Folder::new("nested-move-b");
+    let c = Folder::new("nested-move-c");
+    let names = ["layer", "symbol", "design", "pattern", "mask"];
+    for (i, name) in (0u8..).zip(names) {
+        write(&a.file(&format!("art/{name}.png")), &png(20, 10, [20 + 40 * i, 90, 160]));
+    }
+    let mut s = session();
+    place(&mut s, &a.file("art/layer.png"));
+    let id = place(&mut s, &a.file("art/symbol.png"));
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let id = place(&mut s, &a.file("art/design.png"));
+    s.execute("graph.design", &json!({"new": "Bar"})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let id = place(&mut s, &a.file("art/pattern.png"));
+    s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &a.file("art/mask.png"));
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    let mut in_layers = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            in_layers.extend(im.link.as_ref().map(|l| l.name().to_string()));
+        }
+    });
+    assert_eq!(in_layers, ["layer.png"], "only one file is shown by an object in the layers");
+    // The links' paths, each image checked to show its file's pixels rather than the saved preview.
+    let paths = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let mut out = vec![];
+        d.visit_images(|_, im| {
+            let l = im.link.as_ref().unwrap();
+            assert!(!d.images[&im.key].is_proxy(), "{} shows its preview", l.name());
+            out.push(PathBuf::from(&l.path));
+        });
+        out.sort();
+        out
+    };
+    let files = |dir: &Folder| {
+        let mut out: Vec<PathBuf> = names.iter().map(|n| PathBuf::from(dir.file(&format!("art/{n}.png")))).collect();
+        out.sort();
+        out
+    };
+    assert_eq!(paths(&s), files(&a));
+    save(&mut s, &a.file("poster.vectorcraft"));
+    // Move the document with its links: the old folder is gone.
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    let r = open(&mut s, &b.file("poster.vectorcraft"));
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert_eq!(paths(&s), files(&b), "the links follow the files");
+    // Saved again and moved again.
+    save(&mut s, &b.file("poster.vectorcraft"));
+    std::fs::remove_dir_all(&c.0).unwrap();
+    std::fs::rename(&b.0, &c.0).unwrap();
+    let r = open(&mut s, &c.file("poster.vectorcraft"));
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert_eq!(paths(&s), files(&c));
+}
+
+/// With Update Links: Automatically, a file in a symbol and in the layers that changed and moved
+/// with the document is read again for the layers' image and for the symbol's, both are listed by
+/// their ids, and both links take its new path, size and hash.
+#[test]
+fn a_symbols_link_to_a_moved_and_modified_file_takes_its_new_path() {
+    let a = Folder::new("nested-modified-a");
+    let b = Folder::new("nested-modified-b");
+    let pic = a.file("art/photo.png");
+    write(&pic, &png(20, 10, RED));
+    let mut s = session();
+    s.execute("prefs.set", &json!({"key": "updateLinks", "value": "automatically"})).unwrap();
+    let id = place(&mut s, &pic);
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let in_symbol = stored_image_in(&s, StoredRoot::Symbol(0));
+    let id = place(&mut s, &pic);
+    save(&mut s, &a.file("poster.vectorcraft"));
+    write(&pic, &png(30, 30, BLUE));
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    let r = open(&mut s, &b.file("poster.vectorcraft"));
+    assert_eq!((r["modifiedLinks"].clone(), r["updatedLinks"][0]["ids"].clone()), (json!([]), json!([id.0, in_symbol.0])), "{r}");
+    let moved = PathBuf::from(b.file("art/photo.png"));
+    let blue = png(30, 30, BLUE);
+    let mut images = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| {
+        let l = im.link.as_ref().unwrap();
+        images.push((PathBuf::from(&l.path), l.size, l.hash.clone(), im.width, im.height, im.key.clone()));
+    });
+    let key = image(&s, id).key;
+    let new = (moved, Some(blue.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&blue)), 30, 30, key);
+    assert_eq!(images, [new.clone(), new], "the layers' image, then the symbol's");
+}
+
+/// A link inside a symbol that the document records without a relative path, beside a link in the
+/// layers to the same file that has one, takes the file's new path after the folder moves.
+#[test]
+fn a_symbols_link_without_a_relative_path_follows_the_moved_file() {
+    let a = Folder::new("nested-unrelative-a");
+    let b = Folder::new("nested-unrelative-b");
+    let pic = a.file("art/photo.png");
+    write(&pic, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &pic);
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    place(&mut s, &pic);
+    let doc_path = a.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    // Removes the relative path of every link under `v` → how many it removed.
+    fn unrelative(v: &mut Value) -> usize {
+        match v {
+            Value::Object(o) => {
+                let own = match o.get_mut("link") {
+                    Some(Value::Object(l)) => usize::from(l.remove("relative").is_some()),
+                    _ => 0,
+                };
+                own + o.values_mut().map(unrelative).sum::<usize>()
+            }
+            Value::Array(a) => a.iter_mut().map(unrelative).sum(),
+            _ => 0,
+        }
+    }
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&doc_path).unwrap()).unwrap();
+    assert_eq!(unrelative(&mut saved["document"]["symbols"]), 1, "the symbol's link");
+    assert_eq!(unrelative(&mut saved["document"]["layers"].clone()), 1, "the layers' link keeps its relative path");
+    std::fs::write(&doc_path, serde_json::to_vec(&saved).unwrap()).unwrap();
+    std::fs::remove_dir_all(&b.0).unwrap();
+    std::fs::rename(&a.0, &b.0).unwrap();
+    let r = open(&mut s, &b.file("poster.vectorcraft"));
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    let mut paths = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| paths.push(PathBuf::from(&im.link.as_ref().unwrap().path)));
+    let moved = PathBuf::from(b.file("art/photo.png"));
+    assert_eq!(paths, [moved.clone(), moved], "the layers' link, then the symbol's");
+}
+
+/// Update Links gives a distorted image its file's new pixels between the same corners: its
+/// Placement Options' fill and clip do not move or clip it. Its transform takes the new pixel size,
+/// and Link Info measures its scale at its middle.
+#[test]
+fn update_links_keeps_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-update");
+    let photo = dir.file("photo.png");
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[240, 300], [260, 300], [300, 400], [200, 400]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    // The far corner of the pixels as the transform alone places them.
+    let far = |s: &Session| {
+        let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("an image") };
+        im.xf * vectorcraft_geom::Point::new(f64::from(im.width), f64::from(im.height))
+    };
+    let far_before = far(&s);
+    // Link Info measures the scale where the effective resolution is measured: at the middle.
+    let scale_matches_ppi = |s: &mut Session| {
+        let info = s.execute("links.info", &json!({"id": id.0})).unwrap();
+        for i in 0..2 {
+            let (scale, ppi, eff) = (info["scale"][i].as_f64().unwrap(), info["ppi"][i].as_f64().unwrap(), info["effectivePpi"][i].as_f64().unwrap());
+            assert!((scale - ppi / eff * 100.0).abs() < 1e-6, "{info}");
+        }
+    };
+    scale_matches_ppi(&mut s);
+    // A copy in a symbol, distorted the same way, shows the same file.
+    let copy = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [copy.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [copy.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[240, 300], [260, 300], [300, 400], [200, 400]]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [copy.0]})).unwrap();
+    let in_symbol = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((n.is_distorted_image(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let symbol_corners = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| out.extend(n.image_corners()));
+        out
+    };
+    assert_eq!(in_symbol(&s), [(true, (20, 10))]);
+    let symbol_before = symbol_corners(&s);
+    assert_eq!(symbol_before.len(), 1);
+    write(&photo, &png(60, 20, BLUE));
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u["updated"].as_array().unwrap().len(), 2, "{u}");
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(id).unwrap();
+    assert!(n.is_distorted_image());
+    assert_eq!(corners(&s), before);
+    let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+    assert_eq!((im.width, im.height), (60, 20));
+    // The transform takes the new pixel size, so a placement by the transform keeps the old size.
+    assert!(far(&s).distance(far_before) < 1e-9, "{:?} vs {far_before:?}", far(&s));
+    let d = &s.doc().unwrap().doc;
+    assert!(!matches!(d.parent_of(id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Group { clip: true, .. })), "not clipped");
+    let mut clipped = false;
+    d.symbols[0].art.walk(&mut |n| clipped |= matches!(n.kind, NodeKind::Group { clip: true, .. }));
+    assert!(!clipped, "the symbol's image is not clipped");
+    assert_eq!(in_symbol(&s), [(true, (60, 20))]);
+    assert_eq!(symbol_corners(&s), symbol_before, "the symbol's image keeps its corners");
+    scale_matches_ppi(&mut s);
+}
+
+/// Relink with scope `all` puts the new file's pixels between the corners of the distorted images
+/// in symbols too, and scales each one's transform to the new pixel size, so a placement by the
+/// transform keeps the old size.
+#[test]
+fn relink_of_all_instances_keeps_the_corners_of_distorted_images_in_symbols() {
+    let dir = Folder::new("distorted-relink-all");
+    let (photo, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let before = s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    // The far corner of the pixels as the transform alone places them.
+    let far = |s: &Session| {
+        let NodeKind::Image(im) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("an image") };
+        im.xf * vectorcraft_geom::Point::new(f64::from(im.width), f64::from(im.height))
+    };
+    let far_before = far(&s);
+    // A distorted copy in a symbol shows the same file.
+    let copy = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [copy.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 10], [60, 15], [58, 50], [5, 45]]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [copy.0]})).unwrap();
+    let in_symbol = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((n.image_quad(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let [(Some(symbol_quad), (20, 10))] = in_symbol(&s)[..] else { panic!("one distorted image in the symbol: {:?}", in_symbol(&s)) };
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "scope": "all"})).unwrap();
+    let relinked = r["relinked"].as_array().unwrap();
+    assert!(relinked.len() == 2 && relinked.contains(&json!(id.0)), "the image and the symbol's: {r}");
+    assert!(r.get("warnings").is_none(), "no preserve was given: {r}");
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert_eq!((n.is_distorted_image(), n.image_corners().unwrap()), (true, before));
+    assert_eq!((image(&s, id).width, image(&s, id).height), (60, 20));
+    assert!(far(&s).distance(far_before) < 1e-9, "{:?} vs {far_before:?}", far(&s));
+    assert_eq!(in_symbol(&s), [(Some(symbol_quad), (60, 20))], "the symbol's image keeps its corners");
+}
+
+/// Relink with scope `all` puts the new file's pixels between the corners of a distorted image in
+/// an opacity mask's art.
+#[test]
+fn relink_of_all_instances_keeps_the_corners_of_a_distorted_image_in_an_opacity_mask() {
+    let dir = Folder::new("distorted-relink-mask");
+    let (photo, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [mask.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 10], [60, 15], [58, 50], [5, 45]]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    // The image in the art of `masked`'s opacity mask: (id, corners, pixel size).
+    let in_mask = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.visit_stored(|n, place| {
+            if let NodeKind::Image(im) = &n.kind
+                && place.mask_of == Some(masked)
+            {
+                out.push((n.id, n.image_quad(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let [(mask_id, Some(quad), (20, 10))] = in_mask(&s)[..] else { panic!("one distorted image in the mask: {:?}", in_mask(&s)) };
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "scope": "all"})).unwrap();
+    let relinked = r["relinked"].as_array().unwrap();
+    assert!(relinked.len() == 2 && relinked.contains(&json!(mask_id.0)), "the image and the mask's: {r}");
+    assert_eq!(in_mask(&s), [(mask_id, Some(quad), (60, 20))], "the mask's image keeps its corners");
+}
+
+/// Relink, Embed and Unembed keep a distorted image's corners, each in one undo step: Relink puts
+/// the new file's pixels between them whatever `preserve` and the Placement Options say, Embed
+/// keeps the pixels in the document, and Unembed links the image to the file it writes.
+#[test]
+fn relink_embed_and_unembed_keep_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-relink");
+    let (photo, other, written) = (dir.file("photo.png"), dir.file("other.png"), dir.file("written.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    // Around the artboard's center, where `centre_colour` looks.
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let distorted = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().is_distorted_image();
+    let clipped = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        matches!(d.parent_of(id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Group { clip: true, .. }))
+    };
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+
+    let undo = undo_len(&s);
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "preserve": "fileDimensions"})).unwrap();
+    // The given preserve is reported as not applied.
+    let warning = format!("preserve was not applied to image {}: an image changed by Perspective Distort or Free Distort keeps its corners", id.0);
+    assert_eq!(r, json!({"relinked": [id.0], "notFound": [], "warnings": [warning]}));
+    assert_eq!(undo_len(&s), undo + 1);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(!clipped(&s), "not clipped by its Placement Options");
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height), (60, 20));
+    assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some(other.as_str()));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(r["embedded"], json!([id.0]), "{r}");
+    assert_eq!(undo_len(&s), undo + 2);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(image(&s, id).link.is_none());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    let r = s.execute("links.unembed", &json!({"id": id.0, "path": written})).unwrap();
+    assert_eq!(r["id"], json!(id.0), "{r}");
+    assert_eq!(undo_len(&s), undo + 3);
+    assert!(distorted(&s));
+    assert_eq!(corners(&s), before);
+    assert!(!clipped(&s));
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height), (60, 20));
+    assert!(im.link.is_some());
+    assert!(Path::new(&written).exists());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    // Undo takes each back to the same corners, and the first file's pixels in the end.
+    for _ in 0..3 {
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(distorted(&s));
+        assert_eq!(corners(&s), before);
+    }
+    assert_eq!((image(&s, id).width, image(&s, id).height), (20, 10));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+/// Unembed into a folder keeps a distorted image's corners, in one undo step.
+#[test]
+fn unembed_to_a_folder_keeps_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-unembed-folder");
+    let (photo, out) = (dir.file("photo.png"), dir.file("out"));
+    std::fs::create_dir_all(&out).unwrap();
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("links.unembed", &json!({"ids": [id.0], "folder": out})).unwrap();
+    assert_eq!(r["unembedded"][0]["id"], json!(id.0), "{r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    assert_eq!(corners(&s), before);
+    assert!(image(&s, id).link.is_some());
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
+/// Embed reads the file of a distorted image that shows its saved preview and keeps the file's
+/// pixels in the document between the image's corners, in one undo step.
+#[test]
+fn embed_reads_a_distorted_images_file_between_its_corners() {
+    let dir = Folder::new("distorted-embed-preview");
+    let photo = dir.file("photo.png");
+    // Large enough that the document saves a smaller preview of it.
+    write(&photo, &png(600, 300, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&photo).unwrap();
+    open(&mut s, &doc_path);
+    assert!(s.doc().unwrap().doc.images[&image(&s, id).key].is_proxy(), "the preview stands in");
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    write(&photo, &png(400, 200, BLUE));
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("links.embed", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(r, json!({"embedded": [id.0], "missing": []}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(n.is_distorted_image());
+    assert_eq!(n.image_corners().unwrap(), before);
+    let im = image(&s, id);
+    assert_eq!((im.width, im.height, im.link.is_none()), (400, 200, true));
+    assert!(!s.doc().unwrap().doc.images[&im.key].is_proxy(), "the file's pixels are in the document");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+}
+
+/// Update Links reads a changed file again for the images inside symbols, patterns and opacity
+/// masks too: those showing the same content as an image in the layers, and those no object in the
+/// layers shows. Each takes the file's place as its own Placement Options say, in one undo step,
+/// and the reply lists each by its id.
+#[test]
+fn update_links_reads_files_again_inside_symbols_patterns_and_masks() {
+    let dir = Folder::new("nested-update");
+    let (photo, logo) = (dir.file("photo.png"), dir.file("logo.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&logo, &png(20, 10, [200, 200, 20]));
+    let mut s = session();
+    // photo.png in the layers, and in a symbol filling its bounds, clipped to them.
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let in_symbol = stored_image_in(&s, StoredRoot::Symbol(0));
+    let id = place(&mut s, &photo);
+    // logo.png only in a pattern and in an opacity mask.
+    let p = place(&mut s, &logo);
+    s.execute("object.pattern.make", &json!({"ids": [p.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [p.0]})).unwrap();
+    let p = stored_image_in(&s, StoredRoot::Pattern { pattern: 0, art: 0 });
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &logo);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    // photo.png wider than the symbol's image is: filling its bounds overflows them.
+    let (blue, green) = (png(60, 20, BLUE), png(40, 20, [20, 200, 20]));
+    write(&photo, &blue);
+    write(&logo, &green);
+    let u = s.execute("links.update", &json!({})).unwrap();
+    // By file: photo.png in the layers and the symbol, then logo.png in the mask and the pattern.
+    assert_eq!(u, json!({"updated": [id.0, in_symbol.0, mask.0, p.0], "missing": []}));
+    // (name, size, hash, pixel size) of each image, which shows its file's pixels.
+    let images = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let mut out = vec![];
+        d.visit_images(|_, im| {
+            let l = im.link.as_ref().unwrap();
+            assert!(!d.images[&im.key].is_proxy(), "{} shows its preview", l.name());
+            out.push((l.name().to_string(), l.size, l.hash.clone(), (im.width, im.height)));
+        });
+        out.sort();
+        out
+    };
+    let shown = |name: &str, bytes: &[u8], size| (name.to_string(), Some(bytes.len() as u64), Some(vectorcraft_doc::links::hash_bytes(bytes)), size);
+    let logo_now = shown("logo.png", &green, (40, 20));
+    let photo_now = shown("photo.png", &blue, (60, 20));
+    assert_eq!(images(&s), [logo_now.clone(), logo_now, photo_now.clone(), photo_now]);
+    // The symbol's image is clipped to its old bounds.
+    let mut clipped = false;
+    s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+        if let NodeKind::Group { children, clip: true } = &n.kind {
+            clipped |=
+                matches!(&children[..], [c, im] if matches!(c.kind, NodeKind::Path { clipping: true, .. }) && matches!(im.kind, NodeKind::Image(_)));
+        }
+    });
+    assert!(clipped, "{:?}", s.doc().unwrap().doc.symbols[0].art);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(images(&s).iter().all(|(_, _, _, size)| *size == (20, 10)), "{:?}", images(&s));
+}
+
+/// The files only art outside the layers shows: one in a symbol, a graph design, a pattern and an
+/// opacity mask each, no object in the layers linked to any of them.
+const NESTED: [&str; 4] = ["symbol.png", "design.png", "pattern.png", "mask.png"];
+
+/// A document whose only links are [`NESTED`]'s files in `dir`.
+fn nested_links(dir: &Folder) -> Session {
+    for (i, name) in (0u8..).zip(NESTED) {
+        write(&dir.file(name), &png(20, 10, [20 + 50 * i, 90, 160]));
+    }
+    let mut s = session();
+    let id = place(&mut s, &dir.file("symbol.png"));
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [s.doc().unwrap().selection.objects[0].0]})).unwrap();
+    let id = place(&mut s, &dir.file("design.png"));
+    s.execute("graph.design", &json!({"new": "Bar"})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let id = place(&mut s, &dir.file("pattern.png"));
+    s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &dir.file("mask.png"));
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s
+}
+
+/// The id of the `links.list` row of file `name`.
+fn row_id(s: &mut Session, name: &str) -> u64 {
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == name).unwrap_or_else(|| panic!("{name} in {list}"));
+    row["id"].as_u64().unwrap()
+}
+
+/// The link of stored object `id`.
+fn stored_link(s: &Session, id: u64) -> Option<LinkInfo> {
+    match &s.doc().unwrap().doc.stored_node(NodeId(id)).unwrap().0.kind {
+        NodeKind::Image(im) => im.link.clone(),
+        k => panic!("not an image: {k:?}"),
+    }
+}
+
+/// The id of the first image stored in the art of `root`.
+fn stored_image_in(s: &Session, root: StoredRoot) -> NodeId {
+    let mut found = None;
+    s.doc().unwrap().doc.visit_stored(|n, place| {
+        if found.is_none() && place.root == root && matches!(n.kind, NodeKind::Image(_)) {
+            found = Some(n.id);
+        }
+    });
+    found.unwrap_or_else(|| panic!("no image in {root:?}"))
+}
+
+/// Images in symbols, graph designs, patterns and opacity masks are listed and checked with ids of
+/// their own, one row each with what holds it, and the missing filter counts them.
+#[test]
+fn links_outside_the_layers_are_listed_and_checked_with_ids() {
+    let dir = Folder::new("nested-ids");
+    let mut s = nested_links(&dir);
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let rows = list["links"].as_array().unwrap();
+    let owners: Vec<(&str, &str)> = rows.iter().map(|r| (r["name"].as_str().unwrap(), r["owner"]["kind"].as_str().unwrap_or("-"))).collect();
+    assert_eq!(owners, [("mask.png", "layers"), ("symbol.png", "symbol"), ("design.png", "graphDesign"), ("pattern.png", "pattern")], "{list}");
+    assert_eq!(rows[1]["owner"]["name"], "Mark");
+    let masked = s.doc().unwrap().doc.layers[0].children().unwrap().iter().find(|n| n.extras().mask.is_some()).unwrap().id;
+    assert_eq!(rows[0]["owner"]["maskOf"], json!(masked.0));
+    let ids: std::collections::BTreeSet<u64> = rows.iter().map(|r| r["id"].as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 4, "{list}");
+    assert!(rows.iter().all(|r| r["status"] == "ok" && r["linked"] == true), "{list}");
+    let check = s.execute("links.check", &json!({})).unwrap();
+    let checked: Vec<(&str, &Value)> = check["links"].as_array().unwrap().iter().map(|l| (l["name"].as_str().unwrap(), &l["ids"])).collect();
+    assert_eq!(checked.len(), 4, "{check}");
+    for (name, ids) in checked {
+        assert_eq!(*ids, json!([row_id(&mut s, name)]), "{check}");
+    }
+    std::fs::remove_file(dir.file("design.png")).unwrap();
+    let check = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!((check["missing"].as_u64(), check["modified"].as_u64()), (Some(1), Some(0)), "{check}");
+    let design = row_id(&mut s, "design.png");
+    let missing = s.execute("links.list", &json!({"show": "missing"})).unwrap();
+    assert_eq!((missing["missing"].as_u64(), &missing["links"][0]["id"]), (Some(1), &json!(design)), "{missing}");
+    let one = s.execute("links.check", &json!({"ids": [design]})).unwrap();
+    assert_eq!(one["links"][0]["status"], "missing", "{one}");
+}
+
+/// Every links command takes the id of an image outside the layers and acts on that object: Link
+/// Info, Go To (which clears the selection and names the symbol), Placement Options, Relink, Update and
+/// Embed.
+#[test]
+fn links_commands_act_on_images_outside_the_layers_by_id() {
+    let dir = Folder::new("nested-act");
+    let mut s = nested_links(&dir);
+    let symbol = row_id(&mut s, "symbol.png");
+    let info = s.execute("links.info", &json!({"id": symbol})).unwrap();
+    assert_eq!((info["fileName"].as_str(), info["status"].as_str(), info["id"].as_u64()), (Some("symbol.png"), Some("ok"), Some(symbol)), "{info}");
+    let other = super::rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    let go = s.execute("links.goTo", &json!({"id": symbol})).unwrap();
+    assert_eq!(
+        (go["onCanvas"].clone(), go["owner"]["kind"].clone(), go["owner"]["name"].clone()),
+        (json!(false), json!("symbol"), json!("Mark")),
+        "{go}"
+    );
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "nothing on the canvas is selected");
+    s.execute("links.placementOptions", &json!({"ids": [symbol], "preserve": "fit"})).unwrap();
+    let placement = s.execute("links.placementOptions", &json!({"ids": [symbol]})).unwrap();
+    assert_eq!(placement["placement"]["preserve"], "fit");
+    // Relink: the symbol's image shows the new file.
+    let other = dir.file("other.png");
+    write(&other, &png(40, 20, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [symbol], "path": other})).unwrap();
+    assert_eq!(r["relinked"], json!([symbol]), "{r}");
+    assert_eq!(stored_link(&s, symbol).unwrap().path, other);
+    // Update: a changed pattern file is read again for the pattern's image.
+    let pattern = row_id(&mut s, "pattern.png");
+    let changed = png(30, 30, RED);
+    write(&dir.file("pattern.png"), &changed);
+    let r = s.execute("links.update", &json!({"ids": [pattern]})).unwrap();
+    assert_eq!(r["updated"], json!([pattern]), "{r}");
+    assert_eq!(stored_link(&s, pattern).unwrap().size, Some(changed.len() as u64));
+    // Embed: the design's image keeps its pixels and no longer links.
+    let design = row_id(&mut s, "design.png");
+    let r = s.execute("links.embed", &json!({"ids": [design]})).unwrap();
+    assert_eq!(r["embedded"], json!([design]), "{r}");
+    assert!(stored_link(&s, design).is_none());
+    let row = s.execute("links.list", &json!({"show": "embedded"})).unwrap();
+    assert_eq!(row["links"][0]["id"], json!(design), "{row}");
+    // Relink All Instances takes the other stored objects linked to the same file.
+    let mask = row_id(&mut s, "mask.png");
+    let r = s.execute("links.relink", &json!({"ids": [symbol], "path": dir.file("mask.png"), "scope": "all"})).unwrap();
+    assert_eq!(r["relinked"], json!([symbol]), "{r}");
+    let r = s.execute("links.relink", &json!({"ids": [mask], "path": other, "scope": "all"})).unwrap();
+    let mut relinked: Vec<u64> = r["relinked"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    relinked.sort();
+    let mut both = vec![symbol, mask];
+    both.sort();
+    assert_eq!(relinked, both, "{r}");
+}
+
+/// Opening a document reports missing and modified files that only art outside the layers shows,
+/// by their objects' ids, and those ids stay the same after the document is saved and opened again.
+#[test]
+fn open_reports_links_outside_the_layers_by_id() {
+    let dir = Folder::new("nested-open");
+    let mut s = nested_links(&dir);
+    let path = dir.file("poster.vectorcraft");
+    save(&mut s, &path);
+    let ids: Vec<u64> = NESTED.iter().map(|name| row_id(&mut s, name)).collect();
+    std::fs::remove_file(dir.file("symbol.png")).unwrap();
+    write(&dir.file("pattern.png"), &png(30, 30, RED));
+    let r = open(&mut s, &path);
+    let names = |k: &str| r[k].as_array().unwrap().iter().map(|l| (l["name"].as_str().unwrap().to_string(), l["ids"].clone())).collect::<Vec<_>>();
+    assert_eq!(names("missingLinks"), [("symbol.png".to_string(), json!([ids[0]]))], "{r}");
+    assert_eq!(names("modifiedLinks"), [("pattern.png".to_string(), json!([ids[2]]))], "{r}");
+    let again: Vec<u64> = NESTED.iter().map(|name| row_id(&mut s, name)).collect();
+    assert_eq!(again, ids, "the ids are saved");
+}
+
+/// A document whose symbol and mask art repeat the ids of objects in the layers (or have none)
+/// opens with ids of their own there, the layer tree's kept; the links commands then tell them apart.
+#[test]
+fn nested_objects_that_repeat_ids_open_with_ids_of_their_own() {
+    let dir = Folder::new("nested-repeat");
+    let mut s = nested_links(&dir);
+    let layer_image = place(&mut s, &dir.file("symbol.png"));
+    let path = dir.file("poster.vectorcraft");
+    save(&mut s, &path);
+    // The symbol's image takes the id of the image in the layers, the mask's image none.
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    saved["document"]["symbols"][0]["art"]["id"] = json!(layer_image.0);
+    let layer = &mut saved["document"]["layers"][0]["kind"]["children"];
+    let masked = layer.as_array_mut().unwrap().iter_mut().find(|n| n.get("mask").is_some() || n["extras"].get("mask").is_some()).unwrap();
+    let mask = if masked.get("mask").is_some() { &mut masked["mask"] } else { &mut masked["extras"]["mask"] };
+    mask["art"]["id"] = json!(0);
+    std::fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
+    open(&mut s, &path);
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let ids: Vec<u64> = list["links"].as_array().unwrap().iter().map(|r| r["id"].as_u64().unwrap()).collect();
+    let unique: std::collections::BTreeSet<u64> = ids.iter().copied().collect();
+    assert_eq!((ids.len(), unique.len()), (5, 5), "{list}");
+    assert!(!ids.contains(&0), "{list}");
+    assert_eq!(list["links"][0]["id"], json!(layer_image.0), "the layer tree keeps its ids: {list}");
+    let symbol = list["links"].as_array().unwrap().iter().find(|r| r["owner"]["kind"] == "symbol").unwrap()["id"].as_u64().unwrap();
+    s.execute("links.embed", &json!({"ids": [symbol]})).unwrap();
+    assert!(stored_link(&s, symbol).is_none());
+    assert!(image(&s, layer_image).link.is_some(), "the image in the layers stays linked");
+}
+
+/// The files of the linked images that the stored brushes of [`brush_links`] are made of: a scatter
+/// brush's, an art brush's and a pattern brush's side tile.
+const BRUSHED: [(&str, &str, &str); 3] = [("scatter.png", "scatter", "Specks"), ("art.png", "art", "Band"), ("side.png", "pattern", "Frame")];
+
+/// A document whose stored brushes are made of [`BRUSHED`]'s linked images in `dir`. The art
+/// brush's image is still in the layers too, so its brush art repeats that object's id; the other
+/// two images were cleared from the layers.
+fn brush_links(dir: &Folder) -> (Session, NodeId) {
+    for (i, (name, ..)) in (0u8..).zip(BRUSHED) {
+        write(&dir.file(name), &png(20, 10, [30 + 60 * i, 120, 90]));
+    }
+    let mut s = session();
+    let mut kept = NodeId(0);
+    for (name, kind, brush) in BRUSHED {
+        let id = place(&mut s, &dir.file(name));
+        s.execute("brush.new", &json!({"type": kind, "name": brush, "ids": [id.0]})).unwrap();
+        if kind == "art" {
+            kept = id;
+        } else {
+            s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+        }
+    }
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    (s, kept)
+}
+
+/// The image in the art of stored brush `name`, as the document stores it.
+fn brush_image(s: &Session, name: &str) -> ImageObject {
+    let b = vectorcraft_brush::find(&s.doc().unwrap().doc, name).unwrap_or_else(|| panic!("no brush {name}"));
+    let mut found = None;
+    b.art()[0].walk(&mut |n| {
+        if let (None, NodeKind::Image(im)) = (&found, &n.kind) {
+            found = Some((**im).clone());
+        }
+    });
+    found.unwrap_or_else(|| panic!("no image in brush {name}"))
+}
+
+/// The id of the image in the art of stored brush `name`, as the document stores it.
+fn brush_image_id(s: &Session, name: &str) -> u64 {
+    let b = vectorcraft_brush::find(&s.doc().unwrap().doc, name).unwrap();
+    let mut found = None;
+    b.art()[0].walk(&mut |n| {
+        if found.is_none() && matches!(n.kind, NodeKind::Image(_)) {
+            found = Some(n.id.0);
+        }
+    });
+    found.unwrap()
+}
+
+/// Images in the art of stored brushes are listed after the others, one row per image in each brush tile,
+/// each with an id no other object has (the layer tree keeps its own), the brush named as what holds it; Check
+/// Links and the missing filter count them, and the ids stay the same from one list to the next.
+#[test]
+fn links_in_stored_brush_art_are_listed_and_checked_with_ids() {
+    let dir = Folder::new("brush-ids");
+    let (mut s, kept) = brush_links(&dir);
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let rows = list["links"].as_array().unwrap();
+    let owners: Vec<(&str, &Value)> = rows.iter().map(|r| (r["name"].as_str().unwrap(), &r["owner"])).collect();
+    let library = vectorcraft_brush::library(&s.doc().unwrap().doc);
+    let index = |name: &str| library.iter().position(|b| b.name == name).unwrap();
+    assert_eq!(
+        owners,
+        [
+            ("art.png", &Value::Null),
+            ("scatter.png", &json!({"kind": "brush", "name": "Specks", "index": index("Specks")})),
+            ("art.png", &json!({"kind": "brush", "name": "Band", "index": index("Band")})),
+            ("side.png", &json!({"kind": "brush", "name": "Frame", "index": index("Frame"), "tile": "side"})),
+        ],
+        "{list}"
+    );
+    assert_eq!(rows[0]["id"], json!(kept.0), "the layer tree keeps its ids: {list}");
+    let ids: std::collections::BTreeSet<u64> = rows.iter().map(|r| r["id"].as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 4, "{list}");
+    assert!(!ids.contains(&0), "{list}");
+    assert!(rows.iter().all(|r| r["status"] == "ok" && r["linked"] == true), "{list}");
+    assert_eq!(s.execute("links.list", &json!({})).unwrap(), list, "the same ids each time");
+    let other = super::rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    s.execute("edit.clear", &json!({"ids": [other.0]})).unwrap();
+    assert_eq!(s.execute("links.list", &json!({})).unwrap(), list, "the same ids after other objects are made");
+    let check = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!(check["links"].as_array().unwrap().len(), 3, "{check}");
+    std::fs::remove_file(dir.file("side.png")).unwrap();
+    let check = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!(check["missing"].as_u64(), Some(1), "{check}");
+    let missing = s.execute("links.list", &json!({"show": "missing"})).unwrap();
+    assert_eq!(missing["links"][0]["id"], rows[3]["id"], "{missing}");
+}
+
+/// Every links command takes the id of an image in a stored brush's art and acts on that brush's art,
+/// never on the image in the layers whose id the art repeated: Link Info, Go To (which clears the
+/// selection and names the brush), Placement Options, Relink, Update and Embed. The ids each change
+/// gives the art are kept in the library, so the next list names the same rows.
+#[test]
+fn links_commands_act_on_images_in_stored_brush_art_by_id() {
+    let dir = Folder::new("brush-act");
+    let (mut s, kept) = brush_links(&dir);
+    let band = row_id_owned(&mut s, "art.png", "brush");
+    assert_ne!(band, kept.0);
+    let info = s.execute("links.info", &json!({"id": band})).unwrap();
+    assert_eq!((info["fileName"].as_str(), info["status"].as_str(), info["id"].as_u64()), (Some("art.png"), Some("ok"), Some(band)), "{info}");
+    s.execute("select.set", &json!({"ids": [kept.0]})).unwrap();
+    let go = s.execute("links.goTo", &json!({"id": band})).unwrap();
+    assert_eq!(
+        (go["onCanvas"].clone(), go["owner"]["kind"].clone(), go["owner"]["name"].clone()),
+        (json!(false), json!("brush"), json!("Band")),
+        "{go}"
+    );
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "nothing on the canvas is selected");
+    s.execute("links.placementOptions", &json!({"ids": [band], "preserve": "fit"})).unwrap();
+    assert_eq!(s.execute("links.placementOptions", &json!({"ids": [band]})).unwrap()["placement"]["preserve"], "fit");
+    assert_eq!(brush_image(&s, "Band").placement.preserve, vectorcraft_doc::links::Preserve::Fit);
+    assert_eq!(brush_image_id(&s, "Band"), band, "the brush keeps the id it is listed by");
+    assert_ne!(image(&s, kept).placement.preserve, vectorcraft_doc::links::Preserve::Fit, "the image in the layers is left as it was");
+    // Relink: the brush's image shows the new file; the image in the layers keeps its file.
+    let other = dir.file("other.png");
+    write(&other, &png(40, 20, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [band], "path": other})).unwrap();
+    assert_eq!(r["relinked"], json!([band]), "{r}");
+    assert_eq!(brush_image(&s, "Band").link.unwrap().path, other);
+    assert_eq!(image(&s, kept).link.unwrap().path, dir.file("art.png"));
+    assert_eq!(row_id_owned(&mut s, "other.png", "brush"), band, "{}", s.execute("links.list", &json!({})).unwrap());
+    // Update: a changed file is read again for the scatter brush's image.
+    let dots = row_id_owned(&mut s, "scatter.png", "brush");
+    let changed = png(30, 30, RED);
+    write(&dir.file("scatter.png"), &changed);
+    let r = s.execute("links.update", &json!({"ids": [dots]})).unwrap();
+    assert_eq!(r["updated"], json!([dots]), "{r}");
+    assert_eq!(brush_image(&s, "Specks").link.unwrap().size, Some(changed.len() as u64));
+    // Embed: the pattern brush's side tile keeps its pixels and no longer links.
+    let frame = row_id_owned(&mut s, "side.png", "brush");
+    let r = s.execute("links.embed", &json!({"ids": [frame]})).unwrap();
+    assert_eq!(r["embedded"], json!([frame]), "{r}");
+    assert!(brush_image(&s, "Frame").link.is_none());
+    let embedded = s.execute("links.list", &json!({"show": "embedded"})).unwrap();
+    assert_eq!(embedded["links"][0]["id"], json!(frame), "{embedded}");
+    // Relink All Instances takes the image in the layers and the brush's image of the same file.
+    let r = s.execute("links.relink", &json!({"ids": [kept.0], "path": dir.file("scatter.png"), "scope": "all"})).unwrap();
+    assert_eq!(r["relinked"], json!([kept.0]), "{r}");
+    let r = s.execute("links.relink", &json!({"ids": [dots], "path": other, "scope": "all"})).unwrap();
+    let mut relinked: Vec<u64> = r["relinked"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    relinked.sort();
+    let mut both = vec![kept.0, dots];
+    both.sort();
+    assert_eq!(relinked, both, "{r}");
+    assert_eq!(image(&s, kept).link.unwrap().path, other);
+    // One undo step puts the brushes back as they were.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_image(&s, "Specks").link.unwrap().path, dir.file("scatter.png"));
+}
+
+/// The id of the `links.list` row of file `name` whose owner is of `kind`.
+fn row_id_owned(s: &mut Session, name: &str, kind: &str) -> u64 {
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == name && r["owner"]["kind"] == kind);
+    row.unwrap_or_else(|| panic!("{name} in {kind}: {list}"))["id"].as_u64().unwrap()
+}
+
+/// A document saved with links in its stored brushes opens with them reported by the ids the list
+/// gives them, and a library entry that does not read as a brush is kept as it was.
+#[test]
+fn links_in_stored_brush_art_open_by_id_and_unreadable_entries_stay() {
+    let dir = Folder::new("brush-open");
+    let (mut s, _) = brush_links(&dir);
+    let odd = json!({"name": "Odd", "type": "unknown", "art": {"id": 3}});
+    s.edit("Odd brush", |d, _| {
+        if let Some(list) = d.unknown.get_mut(vectorcraft_brush::DOC_KEY).and_then(Value::as_array_mut) {
+            list.push(odd.clone());
+        }
+        Ok(())
+    })
+    .unwrap();
+    let path = dir.file("poster.vectorcraft");
+    save(&mut s, &path);
+    std::fs::remove_file(dir.file("scatter.png")).unwrap();
+    let r = open(&mut s, &path);
+    let dots = row_id_owned(&mut s, "scatter.png", "brush");
+    assert_eq!(r["missingLinks"][0]["ids"], json!([dots]), "{r}");
+    assert_eq!(brush_image_id(&s, "Specks"), dots, "the library keeps the ids opening gave");
+    let band = row_id_owned(&mut s, "art.png", "brush");
+    s.execute("links.embed", &json!({"ids": [band]})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let stored = doc.unknown[vectorcraft_brush::DOC_KEY].as_array().unwrap();
+    assert_eq!(stored.last(), Some(&odd), "the unreadable entry is left as it was");
+    assert!(doc.mounted_art.is_empty());
+}
+
+/// The Color Mask of an image in a stored brush's art is made again for the new pixels when Update
+/// reads the image's changed file.
+#[test]
+fn updating_an_image_in_stored_brush_art_makes_its_color_mask_again() {
+    let dir = Folder::new("brush-mask");
+    let path = dir.file("logo.png");
+    write(&path, &png(12, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &path);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let hide_white = json!({"background": "colors", "colors": "#ffffff", "contiguous": false, "tolerance": 0, "softness": 0});
+    s.execute("addon.image.colorMask", &hide_white).unwrap();
+    s.execute("brush.new", &json!({"type": "scatter", "name": "Masked", "ids": [id.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    write(&path, &png(14, 10, BLUE));
+    let row = row_id_owned(&mut s, "logo.png", "brush");
+    let r = s.execute("links.update", &json!({"ids": [row]})).unwrap();
+    assert_eq!(r["updated"], json!([row]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let brush = vectorcraft_brush::find(doc, "Masked").unwrap();
+    let mut masks = vec![];
+    brush.art()[0].walk(&mut |n| {
+        if let (NodeKind::Image(im), Some(m)) = (&n.kind, Document::color_mask_of(n)) {
+            masks.push((m.made_for(im), doc.images.contains_key(&m.key)));
+        }
+    });
+    assert_eq!(masks, [(true, true)], "the mask is made for the new pixels");
+}
+
+/// An image that Placement Options clip, alone in a group the user made, goes into a new clip group
+/// inside that group when its file grows, in the layers and in a symbol's art; the user's group
+/// stays a plain group.
+#[test]
+fn placement_options_clip_an_image_alone_in_a_group_inside_that_group() {
+    let dir = Folder::new("clip-in-group");
+    let photo = dir.file("photo.png");
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let mut groups = vec![];
+    for _ in 0..2 {
+        let id = place(&mut s, &photo);
+        s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+        let g = NodeId(s.execute("object.group", &json!({"ids": [id.0]})).unwrap()["id"].as_u64().unwrap());
+        groups.push((g, id));
+    }
+    let (in_symbol, _) = groups[1];
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+    write(&photo, &png(60, 20, BLUE));
+    s.execute("links.update", &json!({})).unwrap();
+    // A plain group holding just a clip group of a clipping path and an image.
+    let plain_of_clip = |n: &vectorcraft_doc::Node| match &n.kind {
+        NodeKind::Group { children, clip: false } => matches!(&children[..], [c] if matches!(&c.kind,
+            NodeKind::Group { children, clip: true } if matches!(&children[..], [p, im]
+                if matches!(p.kind, NodeKind::Path { clipping: true, .. }) && matches!(im.kind, NodeKind::Image(_))))),
+        _ => false,
+    };
+    let d = &s.doc().unwrap().doc;
+    let (g, id) = groups[0];
+    assert!(plain_of_clip(d.node(g).unwrap()), "{:?}", d.node(g));
+    assert_ne!(d.parent_of(id), Some(g), "the image is in a new clip group");
+    let mut found = false;
+    d.symbols[0].art.walk(&mut |n| found |= plain_of_clip(n));
+    assert!(found, "{:?}", d.symbols[0].art);
 }
 
 #[test]
@@ -255,6 +1410,239 @@ fn a_missing_link_renders_its_preview_and_relinks() {
     assert!(s.execute("links.relink", &json!({"ids": [id.0]})).is_err(), "path or folder");
 }
 
+/// The path of the file image `id` links to.
+fn link_path(s: &Session, id: NodeId) -> String {
+    image(s, id).link.map(|l| l.path).unwrap_or_default()
+}
+
+/// Replace: All Instances relinks every image linked to the same file as the one given, in one
+/// undo step; Selected Instances (the default) only the one given.
+#[test]
+fn relink_all_instances_takes_every_image_of_the_same_file() {
+    let dir = Folder::new("relink-all");
+    let (pic, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&pic, &png(60, 30, RED));
+    write(&other, &png(60, 30, RED));
+    let mut s = session();
+    let (a, b, c) = (place(&mut s, &pic), place(&mut s, &pic), place(&mut s, &other));
+    let blue = dir.file("new/blue.png");
+    write(&blue, &png(60, 30, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [a.0], "path": blue, "scope": "selected"})).unwrap();
+    assert_eq!(r, json!({"relinked": [a.0], "notFound": []}));
+    assert_eq!(link_path(&s, b), pic, "selected instances: the other copy keeps its file");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("links.relink", &json!({"ids": [a.0], "path": blue, "scope": "all"})).unwrap();
+    assert_eq!(r, json!({"relinked": [a.0, b.0], "notFound": []}));
+    assert_eq!((link_path(&s, a), link_path(&s, b), link_path(&s, c)), (blue.clone(), blue.clone(), other.clone()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((link_path(&s, a), link_path(&s, b)), (pic.clone(), pic.clone()), "one undo step");
+    // The selection stands in for ids.
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let r = s.execute("links.relink", &json!({"path": blue, "scope": "all"})).unwrap();
+    assert_eq!(r["relinked"], json!([b.0, a.0]));
+}
+
+/// Replace: Missing Links from This Folder relinks the given links to the chosen file, then every
+/// other missing link to the file of its name in that file's folder, in one undo step; names not
+/// there are listed in notFound and stay missing.
+#[test]
+fn relink_missing_links_from_this_folder_finds_the_others_by_name() {
+    let dir = Folder::new("relink-missing-folder");
+    let names = ["a.png", "b.png", "c.png", "d.png"];
+    let mut s = session();
+    let ids: Vec<NodeId> = names
+        .iter()
+        .map(|n| {
+            write(&dir.file(n), &png(60, 30, RED));
+            place(&mut s, &dir.file(n))
+        })
+        .collect();
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    // d.png stays where it was: it isn't missing.
+    for n in &names[..3] {
+        std::fs::remove_file(dir.file(n)).unwrap();
+    }
+    open(&mut s, &doc_path);
+    let found = dir.file("found/a new name.png");
+    write(&found, &png(60, 30, BLUE));
+    write(&dir.file("found/b.png"), &png(60, 30, BLUE));
+    write(&dir.file("found/d.png"), &png(60, 30, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [ids[0].0], "path": found, "scope": "missingInFolder"})).unwrap();
+    assert_eq!(r, json!({"relinked": [ids[0].0, ids[1].0], "notFound": ["c.png"]}));
+    let b_found = dir.0.join("found").join("b.png").to_string_lossy().into_owned();
+    assert_eq!((link_path(&s, ids[0]), link_path(&s, ids[1])), (found.clone(), b_found));
+    assert_eq!((link_path(&s, ids[2]), link_path(&s, ids[3])), (dir.file("c.png"), dir.file("d.png")));
+    let c = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!(c["missing"], 1, "{c}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.execute("links.check", &json!({})).unwrap()["missing"], 3, "one undo step");
+}
+
+/// Replace: Each Link Separately takes one file for each link, in one undo step.
+#[test]
+fn relink_each_link_separately_takes_a_file_for_each() {
+    let dir = Folder::new("relink-each");
+    let (one, two) = (dir.file("one.png"), dir.file("two.png"));
+    write(&one, &png(60, 30, RED));
+    write(&two, &png(60, 30, RED));
+    let mut s = session();
+    let (a, b, c) = (place(&mut s, &one), place(&mut s, &one), place(&mut s, &two));
+    let (x, y) = (dir.file("new/x.png"), dir.file("new/y.png"));
+    write(&x, &png(60, 30, BLUE));
+    write(&y, &png(30, 30, BLUE));
+    let paths = json!([{"ids": [a.0, b.0], "path": x}, {"ids": [c.0], "path": y}]);
+    let r = s.execute("links.relink", &json!({"scope": "each", "paths": paths})).unwrap();
+    assert_eq!(r, json!({"relinked": [a.0, b.0, c.0], "notFound": []}));
+    assert_eq!((link_path(&s, a), link_path(&s, b), link_path(&s, c)), (x.clone(), x.clone(), y.clone()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((link_path(&s, a), link_path(&s, c)), (one.clone(), two.clone()), "one undo step");
+    // Two entries naming the same file read it once.
+    let paths = json!([{"ids": [a.0], "path": y}, {"ids": [c.0], "path": y}]);
+    let r = s.execute("links.relink", &json!({"scope": "each", "paths": paths})).unwrap();
+    assert_eq!(r["relinked"], json!([a.0, c.0]));
+}
+
+/// With copy, a file that can't be shown stops the call before any file is copied into the
+/// document's folder.
+#[test]
+fn relink_each_with_copy_copies_nothing_when_a_file_cant_be_read() {
+    let dir = Folder::new("relink-each-copy");
+    let (one, two) = (dir.file("doc/one.png"), dir.file("doc/two.png"));
+    write(&one, &png(60, 30, RED));
+    write(&two, &png(60, 30, RED));
+    let mut s = session();
+    let (a, c) = (place(&mut s, &one), place(&mut s, &two));
+    save(&mut s, &dir.file("doc/poster.vectorcraft"));
+    let (x, bad) = (dir.file("new/x.png"), dir.file("new/broken.png"));
+    write(&x, &png(60, 30, BLUE));
+    write(&bad, b"not an image");
+    let paths = json!([{"ids": [a.0], "path": x}, {"ids": [c.0], "path": bad}]);
+    assert!(s.execute("links.relink", &json!({"scope": "each", "paths": paths, "copy": true})).is_err());
+    assert!(!Path::new(&dir.file("doc/x.png")).exists(), "no copy is left behind");
+    assert_eq!(link_path(&s, a), one);
+}
+
+/// With copy, for a client whose read roots don't hold the document's folder: the reply names the
+/// copy by its file name, and a copy refused there keeps the write root and names the folder and
+/// the file by their names.
+#[test]
+fn relink_with_copy_names_the_documents_folder_by_its_name_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let dir = Folder::new("relink-copy-roots");
+    let one = dir.file("doc/one.png");
+    write(&one, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &one);
+    save(&mut s, &dir.file("doc/poster.vectorcraft"));
+    let x = dir.file("new/x.png");
+    write(&x, &png(60, 30, BLUE));
+    let (new, doc) = (Path::new(&x).parent().unwrap().to_path_buf(), Path::new(&one).parent().unwrap().to_path_buf());
+    let hidden = doc.to_string_lossy().into_owned();
+    let p = json!({"ids": [a.0], "path": x, "copy": true});
+
+    let writes_there = AutomationRoots::new(&[new.as_path()], &[doc.as_path()]).unwrap();
+    let r = confine(writes_there.as_ref(), || s.execute("links.relink", &p)).unwrap();
+    assert_eq!(r["copied"], json!([{"from": x, "to": "x.png"}]), "{r}");
+    assert!(!r.to_string().contains(&hidden), "{r}");
+    std::fs::remove_file(dir.file("doc/x.png")).unwrap();
+
+    let elsewhere = AutomationRoots::new(&[new.as_path()], &[new.as_path()]).unwrap();
+    let root = crate::cmd::findfiles::plain(std::fs::canonicalize(&new).unwrap()).display().to_string();
+    let e = confine(elsewhere.as_ref(), || s.execute("links.relink", &p)).unwrap_err().to_string();
+    assert_eq!(e, format!("doc: automation path rejected: outside the write root {root}: x.png"));
+    assert!(!Path::new(&dir.file("doc/x.png")).exists());
+}
+
+/// With copy, for a document whose path has no folder: outside the read roots the error does not
+/// name the path, and without roots it names it whole.
+#[test]
+fn relink_with_copy_names_a_document_path_without_a_folder_as_the_request_may_see_it() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let dir = Folder::new("relink-copy-no-folder");
+    let mut s = session();
+    s.doc_mut().unwrap().path = Some("/".into());
+    let p = json!({"path": dir.file("x.png"), "copy": true});
+    let roots = AutomationRoots::new(&[dir.0.as_path()], &[dir.0.as_path()]).unwrap();
+    let e = confine(roots.as_ref(), || s.execute("links.relink", &p)).unwrap_err().to_string();
+    assert_eq!(e, "invalid parameters for `links.relink`: a file or folder outside the read roots has no folder");
+    let whole = s.execute("links.relink", &p).unwrap_err().to_string();
+    let doc = crate::cmd::fileio::absolute_path("/");
+    assert_eq!(whole, format!("invalid parameters for `links.relink`: {doc} has no folder"));
+}
+
+/// A scope or paths that doesn't fit is refused, and nothing is relinked.
+#[test]
+fn relink_refuses_scopes_and_paths_that_dont_fit() {
+    let dir = Folder::new("relink-bad-scope");
+    let pic = dir.file("photo.png");
+    write(&pic, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &pic);
+    let blue = dir.file("blue.png");
+    write(&blue, &png(60, 30, BLUE));
+    let bad = [
+        json!({"ids": [a.0], "path": blue, "scope": "everything"}),
+        json!({"ids": [a.0], "path": blue, "scope": 3}),
+        json!({"scope": "each"}),
+        json!({"scope": "each", "paths": []}),
+        json!({"scope": "each", "paths": [{"ids": [a.0]}]}),
+        json!({"scope": "each", "paths": [{"path": blue}]}),
+        json!({"scope": "each", "paths": [{"ids": ["one"], "path": blue}]}),
+        json!({"scope": "each", "paths": [{"ids": [a.0], "path": blue}, {"ids": [a.0], "path": pic}]}),
+        json!({"scope": "each", "paths": [{"ids": [a.0], "path": blue}], "path": blue}),
+        json!({"scope": "each", "paths": [{"ids": [a.0], "path": blue}], "ids": [a.0]}),
+        json!({"scope": "all", "paths": [{"ids": [a.0], "path": blue}]}),
+        json!({"ids": [a.0], "paths": [{"ids": [a.0], "path": blue}]}),
+        json!({"ids": [a.0], "folder": dir.0.to_string_lossy(), "scope": "missingInFolder"}),
+        json!({"ids": [a.0], "scope": "missingInFolder"}),
+    ];
+    for p in bad {
+        assert!(s.execute("links.relink", &p).is_err(), "{p}");
+        assert_eq!(link_path(&s, a), pic, "{p} relinks nothing");
+    }
+}
+
+/// A link stored as a classic Mac OS path (`Disk:Folder:file`, as older `.ai` files keep them) is
+/// named by its last component: the Links panel shows that name and its folder, Relink to Folder
+/// looks for that name, and the document's own folder is searched for it. The stored path is kept.
+#[test]
+fn a_classic_mac_path_is_found_by_its_file_name() {
+    const CLASSIC: &str = "Macintosh HD:Images:photo.png";
+    let dir = Folder::new("classic-mac");
+    let pic = dir.file("art/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut s = session();
+    place(&mut s, &pic);
+    let mut v: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    saved_image(&mut v)["link"] = json!({ "path": CLASSIC });
+    let doc_path = dir.file("poster.vectorcraft");
+    write(&doc_path, &serde_json::to_vec(&v).unwrap());
+    let r = open(&mut s, &doc_path);
+    let id = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id;
+    assert_eq!(r["missingLinks"], json!([{"name": "photo.png", "path": CLASSIC, "ids": [id.0]}]));
+    let i = s.execute("links.info", &json!({"id": id.0})).unwrap();
+    assert_eq!(
+        (i["fileName"].as_str(), i["location"].as_str(), i["path"].as_str()),
+        (Some("photo.png"), Some("Macintosh HD:Images"), Some(CLASSIC)),
+        "{i}"
+    );
+    // Relink to Folder: the file of the link's name there.
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "folder": dir.file("found")})).unwrap();
+    assert_eq!(r, json!({"relinked": [], "notFound": ["photo.png"]}));
+    write(&dir.file("found/photo.png"), &png(600, 300, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "folder": dir.file("found")})).unwrap();
+    assert_eq!(r, json!({"relinked": [id.0], "notFound": []}));
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+    // The document's folder: the file of the link's name beside the document.
+    write(&dir.file("photo.png"), &png(600, 300, RED));
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
 /// A `w`×`h` PNG of noise cut to half its length: its header reads, its pixels don't.
 pub(crate) fn cut_png(w: u32, h: u32) -> Vec<u8> {
     let img = image::RgbImage::from_fn(w, h, |x, y| {
@@ -262,7 +1650,41 @@ pub(crate) fn cut_png(w: u32, h: u32) -> Vec<u8> {
         image::Rgb([v as u8, (v >> 8) as u8, (v >> 16) as u8])
     });
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out.truncate(out.len() / 2);
     out
 }
@@ -373,17 +1795,89 @@ fn low_res_proxy_eps_export_uses_full_resolution_from_the_linked_file() {
     assert_eq!((r["modifiedLinks"].clone(), r["updatedLinks"].clone()), (json!([]), json!([])), "{r}");
     let key = image(&s, id).key;
     assert!(s.doc().unwrap().doc.images[&key].is_proxy());
-    let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, None);
+    let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, Default::default());
     assert!(warnings.is_empty(), "{warnings:?}");
     assert!(!full.images[&key].is_proxy());
-    let dim =
-        image::ImageReader::new(std::io::Cursor::new(full.images[&key].bytes.as_ref())).with_guessed_format().unwrap().into_dimensions().unwrap();
+    let dim = craft_image_codecs::decode(full.images[&key].bytes.as_ref()).unwrap().dimensions();
     assert_eq!(dim, (600, 300));
     let png_out = s.execute("document.export", &json!({"format": "png"})).unwrap();
     let bytes = vectorcraft_format::base64_decode(png_out["dataBase64"].as_str().unwrap()).unwrap();
-    let rendered = image::load_from_memory(&bytes).unwrap();
+    let rendered = craft_image_codecs::decode(&bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert!(rendered.width() >= 400 && rendered.height() >= 300);
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED), "canvas still shows the preview");
+}
+
+/// An SVG linking two missing files: once one of them is found, export reads its pixels into its
+/// own images only, and the other file's image keeps its placeholder.
+#[test]
+fn export_reads_a_found_svg_link_into_its_own_images_only() {
+    let dir = Folder::new("svg-missing-keys");
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><image href="a.png" width="20" height="20"/><image href="b.png" x="20" width="20" height="20"/></svg>"#;
+    let svg_path = dir.file("art.svg");
+    write(&svg_path, svg.as_bytes());
+    let mut s = session();
+    open(&mut s, &svg_path);
+    let mut found = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
+    let [a, b] = &found[..] else { panic!("two images: {found:?}") };
+    assert!(a.link.as_ref().unwrap().path.ends_with("a.png") && b.link.as_ref().unwrap().path.ends_with("b.png"));
+    let placeholder = s.doc().unwrap().doc.images[&b.key].bytes.clone();
+
+    let bytes = png(20, 20, RED);
+    write(&dir.file("a.png"), &bytes);
+    let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, Default::default());
+    assert_eq!(warnings.len(), 1, "b.png is still missing: {warnings:?}");
+    assert_eq!(*full.images[&a.key].bytes, bytes, "a.png's pixels");
+    assert_eq!(full.images[&b.key].bytes, placeholder, "b.png keeps its placeholder");
+}
+
+/// An SVG linking two files with the same pixels, saved with previews only: once one file is gone
+/// and the other has changed, export reads the changed file into its own images only.
+#[test]
+fn export_reads_a_changed_svg_link_into_its_own_images_only() {
+    let dir = Folder::new("svg-same-pixels");
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><image href="a.png" width="20" height="20"/><image href="b.png" x="20" width="20" height="20"/></svg>"#;
+    let svg_path = dir.file("art.svg");
+    write(&svg_path, svg.as_bytes());
+    write(&dir.file("a.png"), &png(600, 300, RED));
+    write(&dir.file("b.png"), &png(600, 300, RED));
+    let mut s = session();
+    open(&mut s, &svg_path);
+    let doc_path = dir.file("art.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(dir.file("a.png")).unwrap();
+    let blue = png(600, 300, BLUE);
+    write(&dir.file("b.png"), &blue);
+
+    open(&mut s, &doc_path);
+    let mut found = vec![];
+    s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
+    let [a, b] = &found[..] else { panic!("two images: {found:?}") };
+    assert!(a.link.as_ref().unwrap().path.ends_with("a.png") && b.link.as_ref().unwrap().path.ends_with("b.png"));
+    assert_ne!(a.key, b.key, "two files, two keys");
+    let doc = &s.doc().unwrap().doc;
+    assert!(doc.images[&a.key].is_proxy() && doc.images[&b.key].is_proxy(), "previews");
+    let preview = doc.images[&a.key].bytes.clone();
+    let (full, warnings) = cmd::links::full_linked_images(doc, Default::default());
+    assert_eq!(warnings.len(), 1, "a.png is missing: {warnings:?}");
+    assert_eq!(*full.images[&b.key].bytes, blue, "b.png's new pixels");
+    assert_eq!(full.images[&a.key].bytes, preview, "a.png keeps its preview");
 }
 
 /// The half of opening that the desktop app runs on a thread of its own (`read_for_open`) reads
@@ -394,7 +1888,41 @@ fn a_file_read_for_opening_has_its_links_read_and_its_type_laid_out() {
     let dir = Folder::new("read-for-open");
     let tif = dir.file("art/photo.tif");
     let mut tiff = vec![];
-    image::RgbImage::from_pixel(600, 300, image::Rgb(RED)).write_to(&mut std::io::Cursor::new(&mut tiff), image::ImageFormat::Tiff).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbImage::from_pixel(600, 300, image::Rgb(RED))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Tiff, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| tiff.extend_from_slice(&__b))
+    }
+    .unwrap();
     write(&tif, &tiff);
     let (gone, changed) = (dir.file("gone.png"), dir.file("changed.png"));
     write(&gone, &png(300, 100, BLUE));
@@ -434,6 +1962,38 @@ fn a_file_read_for_opening_has_its_links_read_and_its_type_laid_out() {
         assert!(*b.doc == *a.doc, "{update}: the same document");
         assert!(b.history.undo.is_empty() && !b.is_dirty(), "{update}");
     }
+}
+
+/// Opening lays out each type object with the plans the objects before it left on the font's
+/// face: its bounds and baselines are those of a layout in a font database of its own, which holds
+/// no plans. The objects share a script and direction and differ in features and language. Only
+/// bundled Latin glyphs are set, which every font database holds.
+#[test]
+fn type_read_for_opening_has_the_layout_of_a_font_database_with_no_plans() {
+    let dir = Folder::new("read-for-open-plans");
+    let style = vectorcraft_doc::CharStyle { size: 100.0, ..Default::default() };
+    let manual = vectorcraft_doc::CharStyle { kerning: Some(0.0), ..style.clone() };
+    let turkish = vectorcraft_doc::CharStyle { language: Some("tr".into()), ..style.clone() };
+    let mut doc = Document::new(800.0, 600.0);
+    let layer = doc.layers[0].id;
+    for (text, style) in [("AVAV", &style), ("AVAV", &manual), ("office", &turkish), ("To Wa", &style), ("To Wa", &manual)] {
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 120.0), text, style.clone());
+        let id = doc.alloc_id();
+        doc.insert(Some(layer), usize::MAX, vectorcraft_doc::Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    }
+    let doc_path = dir.file("type.vectorcraft");
+    let bytes = vectorcraft_format::save_file(&doc);
+    let file = cmd::fileio::read_for_open(&doc_path, &bytes, Some(doc_path.clone()), &Value::Null, false, false).unwrap();
+    let mut seen = 0;
+    file.document().walk(|node| {
+        if let NodeKind::Text(t) = &node.kind {
+            let fresh = vectorcraft_text::layout(&vectorcraft_text::FontDb::with_font_dirs(vec![]), t);
+            assert_eq!(t.cached_bounds, Some(fresh.bounds), "{:?}", t.plain_text());
+            assert_eq!(t.cached_baselines, fresh.baselines(), "{:?}", t.plain_text());
+            seen += 1;
+        }
+    });
+    assert_eq!(seen, 5);
 }
 
 #[test]
@@ -505,7 +2065,7 @@ fn relative_paths_are_written_against_the_saved_file() {
     };
     d.insert(Some(lid), 0, vectorcraft_doc::Node::new(nid, NodeKind::Image(Box::new(im)))).unwrap();
     let rel = |dest: String| {
-        let d = cmd::links::with_relative_paths(&d, &dest).unwrap_or_else(|| d.clone());
+        let d = cmd::links::with_relative_paths(&d, Default::default(), &dest).unwrap_or_else(|| d.clone());
         match &d.node(nid).unwrap().kind {
             NodeKind::Image(im) => im.link.as_ref().unwrap().relative.clone(),
             _ => None,
@@ -584,4 +2144,907 @@ fn links_of_an_imported_file_are_read_where_they_are_found() {
     s.execute("file.place", &json!({"path": alone, "link": false})).unwrap();
     let (_, im) = placed(&s);
     assert!((im.width, im.height) == (600, 300) && !s.doc().unwrap().doc.images[&im.key].is_proxy(), "{im:?}");
+}
+
+/// `poster.ai` in `dir`, a `.ai` file another app wrote, placing `src/photo.png` (relative to it)
+/// under a path that no longer exists → its path.
+fn imported_with_placed_file(dir: &Folder) -> String {
+    use vectorcraft_testkit::ai;
+    std::fs::create_dir_all(dir.0.join("src")).unwrap();
+    let place = "%AI5_BeginPlace\n%%FileType: 1\n[0.1 0 0 -0.1 20 80] 0 0 600 300 4 4 0\n(/no/such/folder/src/photo.png)`\n\
+         %%IncludeFile:/no/such/folder/src/photo.png\n%AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n\
+         %AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n%AI26_BeginPlacedObjectPreview\n\
+         2 1 8 32 17 \x7f\x10\x10\x60\x7f\x10\x10\x60\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n";
+    let doc_path = dir.file("poster.ai");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", place));
+    write(&doc_path, &ai::ai(data.as_bytes(), "0.56 0.56 0.87 rg 20 50 60 30 re f"));
+    doc_path
+}
+
+/// A placed file of a `.ai` file whose folder moved with the document is found by the folder the
+/// file keeps relative to the document's (`src/`), and its link takes the size, modification time
+/// and hash of the file found there. Not found, the link keeps no such details.
+#[test]
+fn links_of_an_imported_file_are_found_by_their_relative_folder() {
+    let dir = Folder::new("imported-relative");
+    let pic = dir.file("src/photo.png").replace('\\', "/");
+    let doc_path = imported_with_placed_file(&dir);
+    let link = |s: &Session| {
+        let mut found = vec![];
+        s.doc().unwrap().doc.visit_images(|_, im| found.push(im.clone()));
+        let [im] = &found[..] else { panic!("one image: {found:?}") };
+        (im.link.clone().unwrap(), s.doc().unwrap().doc.images[&im.key].is_proxy())
+    };
+    let mut s = session();
+
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("photo.png"), "{r}");
+    let (l, proxy) = link(&s);
+    assert_eq!((l.path.as_str(), l.relative.as_deref()), ("/no/such/folder/src/photo.png", Some("src/photo.png")));
+    assert!(proxy && l.size.is_none() && l.modified.is_none() && l.hash.is_none(), "{l:?}");
+    // Saved beside it while the file is missing, the document keeps the folder the file is in.
+    let native = dir.file("poster.vectorcraft");
+    save(&mut s, &native);
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&native).unwrap()).unwrap();
+    assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("src/photo.png"));
+
+    let bytes = png(600, 300, RED);
+    write(&pic, &bytes);
+    let r = open(&mut s, &native);
+    assert_eq!(&r["missingLinks"], &json!([]), "the native copy finds the file: {r}");
+    let r = open(&mut s, &doc_path);
+    assert_eq!(&r["missingLinks"], &json!([]), "{r}");
+    let (l, proxy) = link(&s);
+    assert!(!proxy, "the file's pixels, not the preview");
+    assert_eq!(l.path.replace('\\', "/"), pic);
+    assert_eq!((l.size, l.hash.clone()), (Some(bytes.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&bytes))));
+    assert!(l.modified.is_some(), "{l:?}");
+}
+
+/// A Data Recovery copy of such a document keeps the file its links' relative paths name places
+/// from: restored and saved beside the `.ai` file, it keeps the folder the placed file is in.
+#[test]
+fn a_recovered_copy_of_an_imported_file_keeps_its_links_folder() {
+    let dir = Folder::new("imported-recovered");
+    let doc_path = imported_with_placed_file(&dir);
+    let store = std::sync::Arc::new(crate::cmd::recovery::MemoryStore::default());
+    let mut s = session();
+    s.recovery.set_store(store.clone());
+    open(&mut s, &doc_path);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let r = s.execute("file.recovery.save", &json!({})).unwrap();
+    assert_eq!(r["saved"].as_array().map(Vec::len), Some(1), "{r}");
+    drop(s);
+    let mut s = Session::new();
+    s.recovery.set_store(store);
+    let r = s.execute("file.recovery.restore", &json!({})).unwrap();
+    assert_eq!(r["restored"].as_array().map(Vec::len), Some(1), "{r}");
+    let native = dir.file("poster.vectorcraft");
+    save(&mut s, &native);
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&native).unwrap()).unwrap();
+    assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("src/photo.png"));
+}
+
+/// Image `id` of the active document without pixels in the document, as a linked file that could
+/// not be read leaves it.
+fn without_pixels(s: &mut Session, id: NodeId) {
+    let key = image(s, id).key;
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.remove(&key);
+}
+
+/// The text of `document.serialize`'s reply `r` (an SVG, or the SVGZ it holds).
+fn svg_text(r: &Value) -> String {
+    match r["text"].as_str() {
+        Some(text) => text.to_string(),
+        None => {
+            let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+            vectorcraft_svg::text_of(&bytes).unwrap().into_owned()
+        }
+    }
+}
+
+/// A caller confined to read roots: every SVG and SVGZ output that would name a linked image's file
+/// outside them (Images: Link, Preserve Editing Capabilities, or Embed for an image without pixels
+/// in the document) is refused before a file or folder is written, with an error that names no
+/// file or folder, and the document keeps the link. Embed with the pixels names no file.
+#[test]
+fn confined_svg_output_refuses_a_linked_image_file_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-image-away");
+    let home = Folder::new("svg-image-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("assets.add", &json!({"ids": [a.0]})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned(), "photo.png".to_string()];
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute(cmd, &p)).expect_err(cmd).to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{cmd} {p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{cmd} {p} names {h}: {e}");
+        }
+    };
+    let out = home.file("out");
+    // Every SVG output, with the options `o` given flat.
+    let every = |s: &mut Session, o: &Value| {
+        for format in ["svg", "svgz"] {
+            let file = |name: &str| home.file(&format!("{name}.{format}"));
+            let with = |p: Value| {
+                let mut p = p;
+                if let (Some(m), Some(o)) = (p.as_object_mut(), o.as_object()) {
+                    m.extend(o.clone());
+                }
+                p
+            };
+            refused(s, "document.serialize", with(json!({"format": format})));
+            refused(s, "document.export", with(json!({"format": format})));
+            refused(s, "document.export", with(json!({"format": format, "path": file("export")})));
+            refused(s, "document.export", with(json!({"format": format, "selectedOnly": true})));
+            refused(s, "document.exportSelection", with(json!({"format": format, "path": file("selection")})));
+            refused(s, "document.save", with(json!({"path": file("save")})));
+            refused(s, "file.saveAs", with(json!({"format": format, "path": file("save-as")})));
+            refused(s, "file.saveCopy", with(json!({"format": format, "path": file("copy")})));
+            let row = with(json!({"format": format}));
+            refused(s, "document.exportForScreens", json!({"folder": out, "formats": [{"format": "png"}, row]}));
+            refused(s, "document.exportForScreens", json!({"zip": true, "formats": [row]}));
+            refused(s, "assets.export", json!({"folder": out, "formats": [row]}));
+        }
+    };
+    every(&mut s, &json!({"images": "link"}));
+    every(&mut s, &json!({"preserveEditing": true}));
+    refused(&mut s, "document.serialize", json!({"format": "svg", "svg": {"images": "link"}}));
+    // Embedded pixels name no file.
+    for format in ["svg", "svgz"] {
+        let r = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": format}))).unwrap();
+        let text = svg_text(&r);
+        assert!(text.contains("data:image/png;base64,") && !text.contains(&hidden[0]), "{format}: {text}");
+    }
+    // Without its pixels, an embedded image names its file.
+    without_pixels(&mut s, a);
+    let r = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    assert!(svg_text(&r).contains(&format!("xlink:href=\"{photo}\"")), "{r}");
+    every(&mut s, &json!({}));
+    let written: Vec<_> = std::fs::read_dir(&home.0).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert!(written.is_empty(), "{written:?}");
+    assert_eq!(image(&s, a).link.map(|l| l.path), Some(photo));
+}
+
+/// A confined caller's SVG leaves out hidden layers and objects, unless hidden layers are kept (as
+/// a save keeps them by default), and template layers always: a linked image file outside the read
+/// roots in art the file leaves out does not refuse it, and in art the file writes does.
+#[test]
+fn confined_svg_output_checks_only_the_linked_images_it_writes() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-image-unwritten-away");
+    let home = Folder::new("svg-image-unwritten-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    // A visible rectangle, and the linked image in a layer of its own.
+    let setup = || {
+        let mut s = session();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+        let layer = NodeId(s.execute("layer.new", &json!({"top": true})).unwrap()["id"].as_u64().unwrap());
+        s.execute("layer.setCurrent", &json!({"id": layer.0})).unwrap();
+        let a = place(&mut s, &photo);
+        assert!(s.doc().unwrap().doc.node(layer).unwrap().children().unwrap().iter().any(|c| c.id == a), "the image is in the new layer");
+        (s, layer, a)
+    };
+    let written = |s: &mut Session, cmd: &str, p: Value| {
+        let r = confine(roots.as_ref(), || s.execute(cmd, &p)).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        if cmd == "document.serialize" {
+            let text = svg_text(&r);
+            assert!(!text.contains(&photo) && !text.contains("photo.png"), "{cmd} {p}: {text}");
+        }
+    };
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute(cmd, &p)).expect_err(cmd).to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{cmd} {p}: {e}");
+    };
+    // Exports leave hidden art out; hidden layers kept, and a save, write it.
+    let hidden_art = |s: &mut Session, name: &str| {
+        for format in ["svg", "svgz"] {
+            written(s, "document.serialize", json!({"format": format, "images": "link"}));
+            written(s, "document.export", json!({"format": format, "images": "link", "path": home.file(&format!("{name}.{format}"))}));
+            written(s, "document.export", json!({"format": format, "images": "link", "svg": {"hiddenLayers": false}}));
+            refused(s, "document.serialize", json!({"format": format, "images": "link", "hiddenLayers": true}));
+            refused(s, "document.export", json!({"format": format, "svg": {"images": "link", "hiddenLayers": true}}));
+            refused(s, "document.save", json!({"path": home.file(&format!("{name}-save.{format}")), "images": "link"}));
+            refused(s, "file.saveCopy", json!({"format": format, "path": home.file(&format!("{name}-copy.{format}")), "images": "link"}));
+        }
+        // A save told to leave hidden layers out leaves the image out too.
+        let copy = home.file(&format!("{name}-copy.svg"));
+        written(s, "file.saveCopy", json!({"format": "svg", "path": copy, "images": "link", "hiddenLayers": false}));
+    };
+    let (mut s, layer, _) = setup();
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "visible": false})).unwrap();
+    hidden_art(&mut s, "hidden-layer");
+    let (mut s, _, a) = setup();
+    s.execute("object.hide", &json!({"ids": [a.0]})).unwrap();
+    hidden_art(&mut s, "hidden-object");
+    // A template layer is never written, not even with hidden layers kept.
+    let (mut s, layer, _) = setup();
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "template": true})).unwrap();
+    for format in ["svg", "svgz"] {
+        written(&mut s, "document.serialize", json!({"format": format, "images": "link"}));
+        written(&mut s, "document.serialize", json!({"format": format, "images": "link", "hiddenLayers": true}));
+        written(&mut s, "file.saveCopy", json!({"format": format, "path": home.file(&format!("template-copy.{format}")), "images": "link"}));
+    }
+    // Back to an ordinary layer, the image is written and refuses the file.
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "template": false})).unwrap();
+    refused(&mut s, "document.serialize", json!({"format": "svg", "images": "link"}));
+    // The layer of symbol editing mode is never written: editing a symbol no art uses leaves its
+    // image out of the file.
+    let (mut s, _, a) = setup();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Away"})).unwrap()["id"].clone();
+    s.execute("edit.clear", &json!({"ids": [instance]})).unwrap();
+    s.execute("symbol.edit", &json!({"name": "Away"})).unwrap();
+    assert!(s.doc().unwrap().doc.symbol_edit.is_some(), "in symbol editing mode");
+    for format in ["svg", "svgz"] {
+        written(&mut s, "document.serialize", json!({"format": format, "images": "link", "hiddenLayers": true}));
+        written(&mut s, "file.saveCopy", json!({"format": format, "path": home.file(&format!("symbol-edit-copy.{format}")), "images": "link"}));
+    }
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    s.execute("symbol.place", &json!({"name": "Away"})).unwrap();
+    refused(&mut s, "document.serialize", json!({"format": "svg", "images": "link"}));
+}
+
+/// A confined caller's SVG of a grayscale linked image outside the read roots that a solid fill
+/// colorizes: the file gets the colorized pixels, or leaves the image out without pixels, and names
+/// no file with Link or Embed. With Preserve Editing Capabilities the document the SVG carries
+/// keeps the link, and the SVG is refused.
+#[test]
+fn confined_svg_output_writes_a_colorized_gray_image_without_its_file() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-image-colorized-away");
+    let home = Folder::new("svg-image-colorized-home");
+    let photo = away.file("gray.png");
+    let mut bytes = vec![];
+    image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap().write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    write(&photo, &bytes);
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#ff0000"})).unwrap();
+    let colorized = s.doc().unwrap().doc.node(a).unwrap().extras().colorize.clone();
+    assert!(matches!(colorized.as_deref(), Some(vectorcraft_color::Paint::Solid { .. })), "{colorized:?}");
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let written = |s: &mut Session, cmd: &str, p: Value| {
+        let r = confine(roots.as_ref(), || s.execute(cmd, &p)).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        if cmd == "document.serialize" {
+            let text = svg_text(&r);
+            assert!(!text.contains(&away.0.to_string_lossy().into_owned()) && !text.contains("href=\"gray.png"), "{cmd} {p}: {text}");
+        }
+    };
+    let refused = |s: &mut Session, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &p)).expect_err("preserveEditing").to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{p}: {e}");
+    };
+    let every = |s: &mut Session, name: &str| {
+        for format in ["svg", "svgz"] {
+            for images in ["link", "embed"] {
+                written(s, "document.serialize", json!({"format": format, "images": images}));
+                written(s, "document.export", json!({"format": format, "images": images, "path": home.file(&format!("{name}-{images}.{format}"))}));
+                let copy = home.file(&format!("{name}-{images}-copy.{format}"));
+                written(s, "file.saveCopy", json!({"format": format, "images": images, "path": copy}));
+            }
+            refused(s, json!({"format": format, "preserveEditing": true}));
+        }
+    };
+    let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap());
+    assert!(text.contains("data:image/png;base64,"), "{text}");
+    every(&mut s, "pixels");
+    without_pixels(&mut s, a);
+    every(&mut s, "missing");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let svg = confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap()["svg"].as_str().unwrap().to_string();
+    assert!(!svg.contains(&photo), "{svg}");
+    assert_eq!(image(&s, a).link.map(|l| l.path), Some(photo));
+}
+
+/// A confined caller's SVG names each linked image file it may read, as stored: a file inside the
+/// read roots, a path relative to the document's folder that leads inside them, and a URL. The
+/// selected objects alone are exported when the image outside them is not selected, and a caller
+/// without roots gets a file outside them named too.
+#[test]
+fn svg_output_names_linked_image_files_a_caller_may_read() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-image-kept-away");
+    let home = Folder::new("svg-image-kept-home");
+    let inside = home.file("photo.png");
+    let (nested, web) = (home.file("lib/photo.png"), home.file("web.png"));
+    for f in [&inside, &nested, &web] {
+        write(f, &png(60, 30, RED));
+    }
+    let url = "https://example.com/images/photo.png";
+    let mut s = session();
+    place(&mut s, &inside);
+    place(&mut s, &nested);
+    place(&mut s, &web);
+    save(&mut s, &home.file("doc.vectorcraft"));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.update_links_where(|l| l.path == nested, |l| l.path = "lib/photo.png".into());
+    doc.update_links_where(|l| l.path == web, |l| l.path = url.into());
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let link = json!({"format": "svg", "images": "link"});
+    for format in ["svg", "svgz"] {
+        let p = json!({"format": format, "images": "link"});
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+        for file in [inside.as_str(), "lib/photo.png", url] {
+            assert!(text.contains(&format!("xlink:href=\"{file}\"")), "{format} {file}: {text}");
+        }
+    }
+    // An image outside them in a symbol no art uses is not written.
+    let unused = away.file("unused.png");
+    write(&unused, &png(60, 30, BLUE));
+    let u = place(&mut s, &unused);
+    s.execute("select.set", &json!({"ids": [u.0]})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Away"})).unwrap()["id"].clone();
+    s.execute("edit.clear", &json!({"ids": [instance]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.symbols.len(), 1);
+    for format in ["svg", "svgz"] {
+        let p = json!({"format": format, "images": "link"});
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+        assert!(!text.contains(&unused), "{format}: {text}");
+    }
+    let outside = away.file("photo.png");
+    write(&outside, &png(60, 30, BLUE));
+    place(&mut s, &outside);
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    s.execute("select.set", &json!({"ids": [r["id"].clone()]})).unwrap();
+    let p = json!({"format": "svg", "images": "link"});
+    let r = confine(roots.as_ref(), || s.execute("document.exportSelection", &p)).unwrap();
+    assert!(!r.to_string().contains(&outside), "{r}");
+    let p = json!({"format": "svg", "images": "link", "selectedOnly": true});
+    for cmd in ["document.serialize", "document.export"] {
+        let r = confine(roots.as_ref(), || s.execute(cmd, &p)).unwrap();
+        assert!(!r.to_string().contains(&outside), "{cmd}: {r}");
+    }
+    // The file of an artboard the image is not over.
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    let p = json!({"format": "svg", "images": "link", "range": "2"});
+    let r = confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap();
+    assert!(!r.to_string().contains(&outside), "{r}");
+    let p = json!({"folder": home.file("screens"), "formats": [{"format": "svg", "images": "link"}], "range": "2"});
+    confine(roots.as_ref(), || s.execute("document.exportForScreens", &p)).unwrap();
+    // Without roots, a file outside them is named as stored.
+    let text = svg_text(&s.execute("document.serialize", &link).unwrap());
+    assert!(text.contains(&format!("xlink:href=\"{outside}\"")), "{text}");
+}
+
+/// The clipboard's SVG for a confined caller: embedded pixels name no file; an image whose pixels
+/// the clipboard doesn't hold makes `clipboard.exportSvg` refuse with an error that names no file
+/// or folder, and the system clipboard gets no SVG. A caller without roots gets the file named.
+#[test]
+fn confined_clipboard_svg_refuses_a_linked_image_file_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("clip-image-away");
+    let home = Folder::new("clip-image-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let r = confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap();
+    let svg = r["svg"].as_str().unwrap();
+    assert!(svg.contains("data:image/png;base64,") && !svg.contains(&photo), "{svg}");
+
+    without_pixels(&mut s, a);
+    s.execute("edit.copy", &json!({})).unwrap();
+    let e = confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap_err().to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
+    assert!(!e.contains(&away.0.to_string_lossy().into_owned()) && !e.contains("photo.png"), "{e}");
+    assert!(confine(roots.as_ref(), || s.clipboard_svg()).is_none());
+    let svg = s.execute("clipboard.exportSvg", &json!({})).unwrap()["svg"].as_str().unwrap().to_string();
+    assert!(svg.contains(&format!("xlink:href=\"{photo}\"")), "{svg}");
+}
+
+/// `clipboard.flavours` and the session's flavors leave out the SVG, and its markup as text, that
+/// `clipboard.exportSvg` withholds from a confined caller; the PNG is still listed. The SVG is listed
+/// while its image's pixels are held, and for a caller with no read roots.
+#[test]
+fn confined_clipboard_flavours_leave_out_a_withheld_svg() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("clip-flavours-away");
+    let home = Folder::new("clip-flavours-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let (text, svg, png) = ("text/plain", "image/svg+xml", "image/png");
+    let listed = |s: &mut Session| confine(roots.as_ref(), || s.execute("clipboard.flavours", &json!({}))).unwrap()["flavours"].clone();
+    assert_eq!(listed(&mut s), json!([text, svg, png]));
+
+    without_pixels(&mut s, a);
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(listed(&mut s), json!([png]));
+    let made = confine(roots.as_ref(), || s.clipboard_flavours());
+    assert!(made.iter().all(|f| f.mime != svg && f.mime != text), "{:?}", made.iter().map(|f| f.mime).collect::<Vec<_>>());
+    assert_eq!(confine(roots.as_ref(), || s.clipboard_flavour_types()), [png]);
+    assert_eq!(s.execute("clipboard.flavours", &json!({})).unwrap()["flavours"], json!([text, svg, png]));
+}
+
+/// A confined caller's SVG with Preserve Editing Capabilities is refused while the stored brush
+/// library holds an entry that does not read as a brush, or is not a list: the native document
+/// carries it as it is, and its links cannot be checked. Without Preserve Editing the SVG is written.
+#[test]
+fn confined_preserve_editing_svg_refuses_a_brush_library_entry_it_cannot_read() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let home = Folder::new("svg-brush-entry-home");
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let preserve = json!({"format": "svg", "preserveEditing": true});
+    confine(roots.as_ref(), || s.execute("document.serialize", &preserve)).unwrap();
+    for stored in [json!(["not a brush"]), json!({"link": "/away/photo.png"})] {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.unknown.insert(vectorcraft_brush::DOC_KEY.into(), stored.clone());
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &preserve)).unwrap_err().to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{stored}: {e}");
+        confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap();
+    }
+}
+
+/// A confined caller's SVG and SVGZ with Preserve Editing Capabilities carry a native document
+/// without the Export for Screens folder when it is outside the read roots, with the other export
+/// settings and the art; the open document keeps the folder. A folder inside the roots, and any
+/// folder without roots, stays in the attachment.
+#[test]
+fn confined_preserve_editing_svg_leaves_out_an_export_folder_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-export-folder-away");
+    let home = Folder::new("svg-export-folder-home");
+    let outside = away.0.to_string_lossy().into_owned();
+    let inside = home.file("screens");
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    let set_folder = |s: &mut Session, folder: &str| {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.export_settings = serde_json::from_value(json!({"folder": folder, "prefix": "web-"})).unwrap();
+    };
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    // The native document an SVG's text carries.
+    let attached = |text: &str| {
+        let data = vectorcraft_svg::editing_data(text).expect("editing data");
+        vectorcraft_format::load(&vectorcraft_format::base64_decode(&data).unwrap()).unwrap()
+    };
+    let check = |d: &Document, folder: Option<&str>, what: &str| {
+        assert_eq!(d.export_settings.get("folder").and_then(Value::as_str), folder, "{what}");
+        assert_eq!(d.export_settings.get("prefix").and_then(Value::as_str), Some("web-"), "{what}");
+        assert!(d.node(rect).is_some(), "{what}: no art");
+    };
+    // Every way an SVG is asked for with Preserve Editing, its text and its native document.
+    let every = |s: &mut Session, confined: bool, folder: Option<&str>| {
+        let run = |s: &mut Session, cmd: &str, p: Value| {
+            let r = if confined { confine(roots.as_ref(), || s.execute(cmd, &p)) } else { s.execute(cmd, &p) };
+            r.unwrap()
+        };
+        for format in ["svg", "svgz"] {
+            let r = run(s, "document.serialize", json!({"format": format, "preserveEditing": true}));
+            check(&attached(&svg_text(&r)), folder, &format!("{format} serialize"));
+            let r = run(s, "document.serialize", json!({"format": format, "svg": {"preserveEditing": true}}));
+            check(&attached(&svg_text(&r)), folder, &format!("{format} options object"));
+            let path = home.file(&format!("export.{format}"));
+            run(s, "document.export", json!({"format": format, "path": path, "preserveEditing": true}));
+            let bytes = std::fs::read(&path).unwrap();
+            check(&attached(&vectorcraft_svg::text_of(&bytes).unwrap()), folder, &format!("{format} export"));
+        }
+    };
+    set_folder(&mut s, &outside);
+    every(&mut s, true, None);
+    assert_eq!(s.doc().unwrap().doc.export_settings.get("folder").and_then(Value::as_str), Some(outside.as_str()));
+    every(&mut s, false, Some(&outside));
+    // Without Preserve Editing the SVG carries no native document.
+    let r = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap();
+    assert!(vectorcraft_svg::editing_data(&svg_text(&r)).is_none(), "{r}");
+    set_folder(&mut s, &inside);
+    every(&mut s, true, Some(&inside));
+}
+
+/// The native document a file of `format` carries: the file itself, a PDF's or `.ai` file's
+/// editing data, or an EPS file's.
+fn carried_document(format: &str, bytes: &[u8]) -> Document {
+    let native = if bytes.starts_with(b"%PDF") {
+        vectorcraft_pdf::editing(bytes).expect("editing data").data
+    } else if format == "eps" {
+        vectorcraft_eps::native(bytes).expect("native document")
+    } else {
+        bytes.to_vec()
+    };
+    vectorcraft_format::load(&native).unwrap()
+}
+
+/// A confined caller: every output that carries the native document (a native file or template, a
+/// `.ai` or EPS file, a PDF with Preserve Editing) of a document that links an image
+/// file outside the read roots is refused before a file or folder is written, with an error that
+/// names no file or folder, and the document keeps the link.
+#[test]
+fn confined_native_output_refuses_a_linked_image_file_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("native-image-away");
+    let home = Folder::new("native-image-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("assets.add", &json!({"ids": [a.0]})).unwrap();
+    let own = home.file("own.vectorcraft");
+    s.execute("file.saveAs", &json!({"path": own})).unwrap();
+    let before = std::fs::read(&own).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned(), "photo.png".to_string()];
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute(cmd, &p)).expect_err(cmd);
+        assert!(matches!(e, EngineError::BadParams { .. }), "{cmd} {p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{cmd} {p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{cmd} {p} names {h}: {e}");
+        }
+    };
+    let file = |name: &str| home.file(name);
+    let out = file("out");
+    refused(&mut s, "document.serialize", json!({}));
+    for format in ["vectorcraft", "template", "pdf", "ai", "eps"] {
+        refused(&mut s, "document.serialize", json!({"format": format}));
+        refused(&mut s, "document.export", json!({"format": format}));
+        refused(&mut s, "document.export", json!({"format": format, "selectedOnly": true}));
+        refused(&mut s, "document.exportSelection", json!({"format": format}));
+    }
+    refused(&mut s, "document.export", json!({"format": "pdf", "path": file("export.pdf")}));
+    refused(&mut s, "document.export", json!({"format": "ai", "path": file("export.ai")}));
+    refused(&mut s, "document.export", json!({"format": "eps", "path": file("export.eps")}));
+    refused(&mut s, "document.export", json!({"format": "vectorcraft", "path": file("export.vectorcraft")}));
+    refused(&mut s, "document.exportPdf", json!({}));
+    refused(&mut s, "document.exportPdf", json!({"path": file("direct.pdf")}));
+    refused(&mut s, "document.exportEps", json!({"path": file("direct.eps")}));
+    refused(&mut s, "document.save", json!({}));
+    refused(&mut s, "document.save", json!({"path": file("save.pdf")}));
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as.ai")}));
+    // A saved `.ai` file has the artboards as its pages, whatever `useArtboards` says.
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as-art.ai"), "useArtboards": false}));
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as.eps")}));
+    refused(&mut s, "file.saveCopy", json!({"path": file("copy.vectorcraft")}));
+    refused(&mut s, "file.saveAsTemplate", json!({}));
+    refused(&mut s, "file.saveAsTemplate", json!({"format": "ait"}));
+    refused(&mut s, "document.exportForScreens", json!({"folder": out, "formats": [{"format": "png"}, {"format": "vectorcraft"}]}));
+    refused(&mut s, "document.exportForScreens", json!({"zip": true, "formats": [{"format": "pdf", "preserveEditing": true}]}));
+    refused(&mut s, "assets.export", json!({"folder": out, "formats": [{"format": "ai"}]}));
+    refused(&mut s, "assets.export", json!({"folder": out, "formats": [{"format": "eps"}]}));
+    assert_eq!(std::fs::read(&own).unwrap(), before, "the document's own file is left as it was");
+    let written: Vec<_> = std::fs::read_dir(&home.0).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(written, ["own.vectorcraft"]);
+    assert_eq!(image(&s, a).link.map(|l| l.path), Some(photo));
+}
+
+/// A confined caller's native outputs are refused when the document they carry names a file
+/// outside the read roots only as a data set's image, or holds stored brushes that cannot be read.
+/// Outputs that carry no native document (a PDF without Preserve Editing, a PDF or `.ai` file of
+/// some artboards or of the art's bounds, a legacy `.ai` file, an image, an SVG without Preserve
+/// Editing) are written, and so is a native file whose data set image is inside the read roots, or
+/// any data set image without roots.
+#[test]
+fn confined_native_output_refuses_a_data_set_image_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("native-dataset-away");
+    let home = Folder::new("native-dataset-home");
+    let outside = away.file("photo.png");
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    s.execute("artboard.new", &json!({"x": 500, "y": 0, "width": 100, "height": 100})).unwrap();
+    let set_image = |s: &mut Session, path: &str| {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let values = [("Photo".to_string(), vectorcraft_doc::DataValue::Image(path.into()))].into_iter().collect();
+        doc.variables.datasets = vec![vectorcraft_doc::DataSet { name: "Row 1".into(), values }];
+    };
+    set_image(&mut s, &outside);
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute(cmd, &p)).expect_err(cmd).to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{cmd} {p}: {e}");
+        assert!(!e.contains(&away.0.to_string_lossy().into_owned()) && !e.contains("photo.png"), "{cmd} {p}: {e}");
+    };
+    let written = |s: &mut Session, p: Value| {
+        confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap_or_else(|e| panic!("{p}: {e}"));
+    };
+    for format in ["vectorcraft", "template", "pdf", "ai", "eps"] {
+        refused(&mut s, "document.serialize", json!({"format": format}));
+    }
+    refused(&mut s, "document.serialize", json!({"format": "svg", "preserveEditing": true}));
+    refused(&mut s, "document.exportPdf", json!({}));
+    for p in [
+        json!({"format": "pdf", "preserveEditing": false}),
+        json!({"format": "pdf", "useArtboards": false}),
+        json!({"format": "pdf", "range": "2"}),
+        json!({"format": "ai", "artboards": [1]}),
+        json!({"format": "ai", "useArtboards": false}),
+        json!({"format": "ai", "aiVersion": "7"}),
+        json!({"format": "png"}),
+        json!({"format": "svg"}),
+    ] {
+        written(&mut s, p);
+    }
+    // Without roots, the native document keeps the data set's image as stored.
+    let r = s.execute("document.serialize", &json!({})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let carried = carried_document("vectorcraft", &bytes);
+    assert_eq!(carried.variables.datasets[0].values["Photo"], vectorcraft_doc::DataValue::Image(outside.clone()));
+    // An image inside the read roots.
+    set_image(&mut s, &home.file("photo.png"));
+    written(&mut s, json!({"format": "vectorcraft"}));
+    // Stored brushes that cannot be read: their links cannot be checked.
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.insert(vectorcraft_brush::DOC_KEY.into(), json!(["not a brush"]));
+    refused(&mut s, "document.serialize", json!({"format": "vectorcraft"}));
+    written(&mut s, json!({"format": "png"}));
+}
+
+/// A confined caller's Export for Screens rows that write an artboard alone (native, `.ai` and EPS
+/// files) are checked against that artboard's document: an image linked outside the read roots
+/// on another artboard does not refuse them, and one on the artboard does.
+#[test]
+fn confined_screens_rows_check_the_artboard_each_file_holds() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("screens-board-away");
+    let home = Folder::new("screens-board-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    place(&mut s, &photo);
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 2010, "y": 10, "width": 50, "height": 20})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for format in ["vectorcraft", "ai", "eps"] {
+        let p = |range: &str| json!({"range": range, "formats": [{"format": format}]});
+        let r = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("2"))).unwrap_or_else(|e| panic!("{format}: {e}"));
+        assert_eq!(r["files"].as_array().map(Vec::len), Some(1), "{format}: {r}");
+        let e = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("1"))).expect_err(format).to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{format}: {e}");
+    }
+}
+
+/// A confined caller's single-file PDF with Preserve Editing of several artboards carries the art
+/// of every artboard on its pages: an image linked outside the read roots on the second artboard
+/// alone refuses it. A single-file PDF of assets is refused before any link is checked.
+#[test]
+fn confined_single_file_pdf_checks_every_artboard_it_carries() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("single-pdf-away");
+    let home = Folder::new("single-pdf-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    s.execute("artboard.new", &json!({"x": 2000, "y": 0, "width": 200, "height": 200})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let p = |folder: &str| json!({"range": "1-2", "folder": home.file(folder), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let r = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("plain"))).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r["files"].as_array().map(Vec::len), Some(1), "{r}");
+    let r = s.execute("file.place", &json!({"path": photo, "at": [2100, 100]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    let e = confine(roots.as_ref(), || s.execute("document.exportForScreens", &p("linked"))).expect_err("second artboard links outside").to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
+    assert!(!Path::new(&home.file("linked")).exists(), "the refused export writes no folder");
+    let asset = s.execute("assets.add", &json!({"ids": [rect.0]})).unwrap()["assets"][0].as_u64().unwrap();
+    let assets = json!({"assets": [asset], "folder": home.file("assets"), "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]});
+    let e = confine(roots.as_ref(), || s.execute("assets.export", &assets)).expect_err("single-file PDF of assets").to_string();
+    assert!(e.contains("pdfs `single` writes artboards as the pages of one PDF"), "{e}");
+    assert!(!Path::new(&home.file("assets")).exists(), "the refused export writes no folder");
+}
+
+/// A confined caller's native outputs (a native file or template, an EPS or `.ai` file, a PDF with
+/// Preserve Editing, a package's document) carry the document without the Export for Screens
+/// folder when it is outside the read roots, with the other export settings and the art; the open
+/// document keeps the folder. A folder inside the roots, and any folder without roots, stays.
+#[test]
+fn confined_native_output_leaves_out_an_export_folder_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("native-export-folder-away");
+    let home = Folder::new("native-export-folder-home");
+    let outside = away.0.to_string_lossy().into_owned();
+    let inside = home.file("screens");
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    s.execute("file.saveAs", &json!({"path": home.file("own.vectorcraft")})).unwrap();
+    let set_folder = |s: &mut Session, folder: &str| {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.export_settings = serde_json::from_value(json!({"folder": folder, "prefix": "web-"})).unwrap();
+    };
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let check = |d: &Document, folder: Option<&str>, what: &str| {
+        assert_eq!(d.export_settings.get("folder").and_then(Value::as_str), folder, "{what}");
+        assert_eq!(d.export_settings.get("prefix").and_then(Value::as_str), Some("web-"), "{what}");
+        assert!(d.node(rect).is_some(), "{what}: no art");
+    };
+    let package = home.file("package");
+    let every = |s: &mut Session, confined: bool, folder: Option<&str>| {
+        let run = |s: &mut Session, cmd: &str, p: Value| {
+            let r = if confined { confine(roots.as_ref(), || s.execute(cmd, &p)) } else { s.execute(cmd, &p) };
+            r.unwrap_or_else(|e| panic!("{cmd} {p}: {e}"))
+        };
+        for format in ["vectorcraft", "template", "pdf", "ai", "eps"] {
+            let r = run(s, "document.serialize", json!({"format": format}));
+            let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+            check(&carried_document(format, &bytes), folder, &format!("{format} serialize"));
+        }
+        let pdf = home.file("direct.pdf");
+        run(s, "document.exportPdf", json!({"path": pdf}));
+        check(&carried_document("pdf", &std::fs::read(&pdf).unwrap()), folder, "exportPdf");
+        let eps = home.file("copy.eps");
+        run(s, "file.saveCopy", json!({"path": eps}));
+        check(&carried_document("eps", &std::fs::read(&eps).unwrap()), folder, "eps copy");
+        let _ = std::fs::remove_dir_all(&package);
+        run(s, "file.package", json!({"folder": package, "report": false, "copyFonts": false}));
+        let packaged = std::fs::read(Path::new(&package).join("own Folder").join("own.vectorcraft")).unwrap();
+        check(&vectorcraft_format::load_file(&packaged).unwrap().doc, folder, "package");
+    };
+    set_folder(&mut s, &outside);
+    every(&mut s, true, None);
+    assert_eq!(s.doc().unwrap().doc.export_settings.get("folder").and_then(Value::as_str), Some(outside.as_str()));
+    every(&mut s, false, Some(&outside));
+    set_folder(&mut s, &inside);
+    every(&mut s, true, Some(&inside));
+}
+
+/// A confined caller's SVG of a placed document whose art links an image: the file draws that art
+/// and names the image's file, so a file outside the read roots refuses it and one inside them is
+/// written. Any output that names no file is written.
+#[test]
+fn confined_svg_output_checks_the_images_of_placed_documents() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-placed-away");
+    let home = Folder::new("svg-placed-home");
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for (photo, outside) in [(away.file("photo.png"), true), (home.file("photo.png"), false)] {
+        write(&photo, &png(60, 30, RED));
+        let src = home.file("src.vectorcraft");
+        let mut inner = session();
+        place(&mut inner, &photo);
+        save(&mut inner, &src);
+        let mut s = session();
+        place(&mut s, &src);
+        let link = json!({"format": "svg", "images": "link"});
+        assert!(svg_text(&s.execute("document.serialize", &link).unwrap()).contains(&photo), "the file names the placed art's image");
+        for format in ["svg", "svgz"] {
+            for images in ["link", "embed"] {
+                let p = json!({"format": format, "images": images});
+                // Embed writes the pixels the placed file holds.
+                let names = svg_text(&s.execute("document.serialize", &p).unwrap()).contains(&photo);
+                assert_eq!(names, images == "link", "{p}");
+                match confine(roots.as_ref(), || s.execute("document.serialize", &p)) {
+                    Ok(r) => assert!(!outside || !svg_text(&r).contains(&photo), "{p}: {}", svg_text(&r)),
+                    Err(e) => {
+                        assert!(outside && names, "{p}: {e}");
+                        assert!(e.to_string().contains("a linked image file is outside the read roots"), "{p}: {e}");
+                    }
+                }
+            }
+        }
+        if outside {
+            let e = confine(roots.as_ref(), || s.execute("document.serialize", &link)).unwrap_err().to_string();
+            assert!(e.contains("a linked image file is outside the read roots") && !e.contains("photo.png"), "{e}");
+        }
+    }
+}
+
+/// A confined caller's SVG of a symbol holding a visible rectangle and a hidden linked image outside
+/// the read roots: the file leaves the hidden image out of the symbol and is written, unless hidden
+/// layers are kept, which writes the image and refuses the file.
+#[test]
+fn confined_svg_output_leaves_hidden_symbol_art_unchecked() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-symbol-hidden-away");
+    let home = Folder::new("svg-symbol-hidden-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap()["id"].clone();
+    let a = place(&mut s, &photo);
+    s.execute("object.hide", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r, a.0]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mixed"})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for format in ["svg", "svgz"] {
+        let p = json!({"format": format, "images": "link"});
+        assert!(!svg_text(&s.execute("document.serialize", &p).unwrap()).contains(&photo), "{p}");
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+        assert!(!text.contains(&photo), "{p}: {text}");
+        let kept = json!({"format": format, "images": "link", "hiddenLayers": true});
+        assert!(svg_text(&s.execute("document.serialize", &kept).unwrap()).contains(&photo), "{kept}");
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &kept)).unwrap_err().to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{kept}: {e}");
+    }
+}
+
+/// A confined caller's SVG Tiny 1.2 of an object whose opacity mask is a linked image outside the
+/// read roots: the Tiny file leaves the mask out and is written; SVG 1.1 writes the mask and is
+/// refused.
+#[test]
+fn confined_svg_tiny_output_leaves_opacity_mask_images_unchecked() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-tiny-mask-away");
+    let home = Folder::new("svg-tiny-mask-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap()["id"].clone();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [r, a.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for format in ["svg", "svgz"] {
+        let tiny = json!({"format": format, "images": "link", "profile": "tiny12"});
+        assert!(!svg_text(&s.execute("document.serialize", &tiny).unwrap()).contains(&photo), "{tiny}");
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &tiny)).unwrap());
+        assert!(!text.contains(&photo), "{tiny}: {text}");
+        let full = json!({"format": format, "images": "link"});
+        assert!(svg_text(&s.execute("document.serialize", &full).unwrap()).contains(&photo), "{full}");
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &full)).unwrap_err().to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{full}: {e}");
+    }
+}
+
+/// A confined caller's SVG of a linked image outside the read roots, without pixels in the
+/// document, under Radial Blur: the file and the clipboard draw the rendered image in its place,
+/// name no file, and are written.
+#[test]
+fn confined_svg_output_checks_the_images_drawn_for_pixel_effects() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-flat-away");
+    let home = Folder::new("svg-flat-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("effect.apply", &json!({"effect": "blur.radial", "ids": [a.0], "params": {"amount": 30, "quality": "draft"}})).unwrap();
+    without_pixels(&mut s, a);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let clip =
+        |s: &mut Session| confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap()["svg"].as_str().unwrap().to_string();
+    assert!(!clip(&mut s).contains(&photo));
+    assert!(confine(roots.as_ref(), || s.clipboard_svg()).is_some_and(|svg| !svg.contains(&photo)));
+    for format in ["svg", "svgz"] {
+        for images in ["link", "embed"] {
+            let p = json!({"format": format, "images": images});
+            let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+            assert!(!text.contains(&photo), "{p}: {text}");
+        }
+    }
+    // Without the effect, the image names its file.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("effect.remove", &json!({"index": 0})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+    let e = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap_err().to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
 }

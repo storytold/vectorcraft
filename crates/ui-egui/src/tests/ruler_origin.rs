@@ -24,7 +24,7 @@ fn context() -> egui::Context {
 
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Vec<(String, Rect)> {
     let raw = egui::RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0))),
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1700.0, 900.0))),
         time: Some(ctx.input(|i| i.time) + 0.05),
         events,
         ..Default::default()
@@ -80,12 +80,33 @@ fn ruler_origin_drag_uses_the_rotated_zoomed_view_and_commits_only_on_release() 
     assert!(st.doc.ruler_origin_for(0).distance(goal) < 1e-4, "{:?}", st.doc.ruler_origin_for(0));
     assert_eq!(st.history.undo.len(), undo + 1);
     assert_eq!(st.doc.art_bounds(), None, "the drawing tool never receives the corner drag");
-    assert!(st.doc.guides.is_empty());
+    assert!(st.doc.ruler_guides().is_empty());
     let origin = st.doc.ruler_origin_for(0);
     app.run("edit.undo", json!({})).unwrap();
     assert_eq!(&*app.session.doc().unwrap().doc, &*before);
     app.run("edit.redo", json!({})).unwrap();
     assert_eq!(app.ruler_origin(), origin);
+}
+
+/// The origin snaps as a drawn point does: dragged next to a rectangle's corner, it is set on it.
+#[test]
+fn ruler_origin_drag_snaps_onto_the_art() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    // The Hand tool shows no smart guides of its own as the pointer passes over the corner.
+    app.select_tool("hand");
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], canvas::show);
+    let to = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.4, 99.6));
+    frame(&mut app, &ctx, vec![Event::PointerMoved(to)], canvas::show);
+    assert!(app.session.overlays(app.view_info()).is_empty());
+    start_drag(&mut app, &ctx, to);
+    frame(&mut app, &ctx, vec![], canvas::show);
+    assert!(!app.session.overlays(app.view_info()).is_empty(), "the guide showing what it snapped to");
+    frame(&mut app, &ctx, vec![press(to, false)], canvas::show);
+    assert_eq!(app.ruler_origin(), Point::new(100.0, 100.0));
+    assert!(app.session.overlays(app.view_info()).is_empty());
 }
 
 #[test]
@@ -110,6 +131,20 @@ fn ruler_origin_double_click_resets_to_the_active_artboard() {
     assert_eq!(app.ruler_origin(), Point::new(125.0, 90.0));
 }
 
+/// Tab does not stop on the rulers or on the box where they meet, which only the pointer uses.
+#[test]
+fn tab_skips_the_rulers_and_their_origin_box() {
+    let mut app = app();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], canvas::show);
+    let rulers = ["ruler-top", "ruler-left", "ruler-corner"].map(egui::Id::unique);
+    assert!(rulers.iter().all(|&id| ctx.read_response(id).is_some()), "the rulers are drawn");
+    let stops = crate::widgets::accessibility_tests::tab_stops(&ctx, 20, |events| {
+        frame(&mut app, &ctx, events, canvas::show);
+    });
+    assert!(!stops.iter().any(|id| rulers.contains(id)), "{stops:?}");
+}
+
 #[test]
 fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
     #[derive(Debug, PartialEq)]
@@ -118,8 +153,9 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
         Escape,
         Focus,
         Document,
+        HideRulers,
     }
-    for cancel in [Cancel::Outside, Cancel::Escape, Cancel::Focus, Cancel::Document] {
+    for cancel in [Cancel::Outside, Cancel::Escape, Cancel::Focus, Cancel::Document, Cancel::HideRulers] {
         let mut app = app();
         app.run("document.setRulerOrigin", json!({"x": 25, "y": 30})).unwrap();
         let ctx = context();
@@ -132,6 +168,7 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
             Cancel::Outside => pos2(4.0, 4.0),
             Cancel::Escape => {
                 frame(&mut app, &ctx, vec![key(Key::Escape)], canvas::show);
+                assert!(app.session.overlays(app.view_info()).is_empty(), "the snapping guides go too");
                 to
             }
             Cancel::Focus => {
@@ -141,6 +178,14 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
             }
             Cancel::Document => {
                 app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+                to
+            }
+            Cancel::HideRulers => {
+                assert!(!app.session.overlays(app.view_info()).is_empty(), "the snapping guides show");
+                app.ui.view.rulers = false;
+                frame(&mut app, &ctx, vec![], canvas::show);
+                assert!(app.session.overlays(app.view_info()).is_empty(), "the snapping guides go with the rulers");
+                assert!(!canvas::ruler_origin_dragging(&ctx));
                 to
             }
         };

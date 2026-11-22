@@ -51,7 +51,8 @@ fn copy(list_path: &Path, dir: &Path, site: &Path) -> Result<(usize, Vec<String>
         let (Some(file), Some(licence), Some(sha)) = (row.get(2), row.get(5), row.get(6)) else {
             return Err(format!("malformed manifest row for {} {}", e.family, e.style));
         };
-        let bytes = std::fs::read(dir.join(file)).map_err(|err| format!("{file}: {err}"))?;
+        let root = std::fs::canonicalize(dir).map_err(|err| format!("{}: {err}", dir.display()))?;
+        let bytes = std::fs::read(inside(&root, file)?).map_err(|err| format!("{file}: {err}"))?;
         let got = sha256::hex(&bytes);
         if got != *sha {
             return Err(format!("{file}: sha256 {got}, manifest says {sha}"));
@@ -60,17 +61,27 @@ fn copy(list_path: &Path, dir: &Path, site: &Path) -> Result<(usize, Vec<String>
         let folder = dest.parent().ok_or_else(|| format!("{}: no parent folder", dest.display()))?;
         std::fs::create_dir_all(folder).map_err(|err| format!("{}: {err}", folder.display()))?;
         std::fs::write(&dest, &bytes).map_err(|err| format!("{}: {err}", dest.display()))?;
-        let licence_name = Path::new(licence).file_name().ok_or_else(|| format!("{licence}: not a file"))?;
-        // The manifest is supplier data: the licence must be a file inside the checkout.
-        let root = std::fs::canonicalize(dir).map_err(|err| format!("{}: {err}", dir.display()))?;
-        let src = std::fs::canonicalize(dir.join(licence)).map_err(|err| format!("{licence}: {err}"))?;
-        if !src.starts_with(&root) || !src.is_file() {
-            return Err(format!("{licence}: not a file inside the font checkout"));
-        }
-        std::fs::copy(&src, folder.join(licence_name)).map_err(|err| format!("{licence}: {err}"))?;
+        let src = inside(&root, licence)?;
+        // Served as plain text whatever the supplier named it: a `.html` licence would be a page.
+        let stem = src.file_stem().ok_or_else(|| format!("{licence}: not a file"))?.to_string_lossy();
+        std::fs::copy(&src, folder.join(format!("{stem}.txt"))).map_err(|err| format!("{licence}: {err}"))?;
         copied += 1;
     }
     Ok((copied, skipped))
+}
+
+/// The biggest font or licence file copied (bytes).
+const MAX_FILE: u64 = 64 << 20;
+
+/// Manifest path `file` (supplier data) as a regular file of at most [`MAX_FILE`] bytes inside the
+/// canonical checkout `root`: no `..`, absolute path or symlink out of it, and no device or FIFO.
+fn inside(root: &Path, file: &str) -> Result<PathBuf, String> {
+    let src = std::fs::canonicalize(root.join(file)).map_err(|err| format!("{file}: {err}"))?;
+    let meta = std::fs::metadata(&src).map_err(|err| format!("{file}: {err}"))?;
+    if !src.starts_with(root) || !meta.is_file() || meta.len() > MAX_FILE {
+        return Err(format!("{file}: not a file of at most {MAX_FILE} bytes inside the font checkout"));
+    }
+    Ok(src)
 }
 
 #[cfg(test)]
@@ -125,6 +136,31 @@ mod tests {
         std::fs::write(&m, text).unwrap();
         let e = copy(&list, &dir, &site).unwrap_err();
         assert!(e.contains("inside the font checkout"), "{e}");
+    }
+
+    #[test]
+    fn a_font_path_that_leaves_the_checkout_or_is_no_file_is_refused() {
+        let (list, dir, site, _) = fixture("font-escape", None);
+        let m = dir.join("fonts/manifest.txt");
+        let manifest = std::fs::read_to_string(&m).unwrap();
+        let outside = dir.parent().unwrap().join("secret.ttf");
+        std::fs::write(&outside, b"secret").unwrap();
+        for path in ["../secret.ttf", outside.to_str().unwrap(), "fonts/a"] {
+            std::fs::write(&m, manifest.replace("fonts/a/A-Regular.ttf", path)).unwrap();
+            let e = copy(&list, &dir, &site).unwrap_err();
+            assert!(e.contains("inside the font checkout"), "{path}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_licence_is_published_as_text() {
+        let (list, dir, site, sha) = fixture("html-licence", None);
+        std::fs::write(dir.join("fonts/a/LICENSE.html"), b"<script>").unwrap();
+        let m = dir.join("fonts/manifest.txt");
+        std::fs::write(&m, std::fs::read_to_string(&m).unwrap().replace("fonts/a/OFL.txt", "fonts/a/LICENSE.html")).unwrap();
+        copy(&list, &dir, &site).unwrap();
+        let at = site.join("fonts").join(&sha[..16]);
+        assert!(at.join("LICENSE.txt").exists() && !at.join("LICENSE.html").exists());
     }
 
     #[test]

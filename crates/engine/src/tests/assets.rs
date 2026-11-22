@@ -140,7 +140,24 @@ fn an_asset_exports_its_art_alone() {
     run(&mut s, "assets.add", json!({"ids": [red]}));
     let out = files(&run(&mut s, "assets.export", json!({"formats": [{"format": "png", "scale": "2x"}]})));
     assert_eq!(out[0].0, "Asset-1@2x.png");
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 40));
     assert!(img.pixels().all(|p| p.0 == [255, 0, 0, 255]), "only the red square");
     // Vector formats crop to it too.
@@ -163,7 +180,24 @@ fn an_assets_crop_takes_in_its_drop_shadow() {
     // The shadow's reach (10 pt) on every side.
     assert_eq!(assets(&mut s)[0]["bounds"], json!([40.0, 40.0, 40.0, 40.0]));
     let out = files(&run(&mut s, "assets.export", json!({"formats": [{"format": "png", "scale": "1x"}]})));
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 40));
     // The shadow's right half, x 70 to 80.
     assert!(img.get_pixel(35, 20)[3] > 0, "the shadow is in the image");
@@ -268,6 +302,163 @@ fn the_shared_settings_drive_the_export_and_arent_an_undo_step() {
     assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"]["formats"][0]["format"], "jpg");
 }
 
+/// The shared settings are not an undo step, so undo and redo of the steps before them leave them
+/// as they are.
+#[test]
+fn undo_and_redo_keep_the_shared_settings() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    run(&mut s, "assets.settings.set", json!({"formats": [{"format": "svg"}], "prefix": "ic_"}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"], settings);
+    run(&mut s, "assets.settings.set", json!({"formats": [{"format": "jpg"}], "prefix": ""}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"], settings);
+}
+
+/// An export preset sets the shared settings as the Asset Export panel applies one: its rows (or
+/// mobile/density), its format settings over the saved ones, its prefix and its sub-folders.
+#[test]
+fn an_export_preset_sets_the_shared_settings() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    run(
+        &mut s,
+        "assets.settings.set",
+        json!({"preset": "mobile", "prefix": "old_", "settings": {"png": {"background": "white"}, "jpg": {"quality": 30}}}),
+    );
+    let pack =
+        json!({"formats": [{"format": "png"}, {"format": "svg"}], "folders": "rows", "settings": {"png": {"antiAlias": "type"}}, "name": "x-<name>"});
+    run(&mut s, "document.exportPresets.save", json!({"name": "Pack", "settings": pack}));
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Pack"}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    assert!(settings.get("preset").is_none() && settings.get("prefix").is_none(), "{settings}");
+    assert_eq!(settings["formats"], pack["formats"]);
+    assert_eq!(settings["subfolders"], true);
+    assert_eq!(settings["settings"], json!({"png": {"background": "white", "antiAlias": "type"}, "jpg": {"quality": 30}}));
+    let out = files(&run(&mut s, "assets.export", json!({})));
+    assert_eq!(out.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(), ["1x/Asset-1.png", "SVG/Asset-1.svg"]);
+    // A built-in preset; the call's own keys go over it.
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Print-Ready PDF", "prefix": "p_"}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    assert_eq!((settings["formats"][0]["format"].as_str(), settings["prefix"].as_str()), (Some("pdf"), Some("p_")));
+    for bad in [json!({"exportPreset": "Never saved"}), json!({"exportPreset": 3})] {
+        assert!(s.execute("assets.settings.set", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"]["prefix"], "p_");
+}
+
+/// `openLocation` (Open Location after Export) is remembered in the document's export settings,
+/// outside presets; null removes it, and only true or false is taken.
+#[test]
+fn open_location_is_remembered_in_the_export_settings() {
+    let mut s = session();
+    let open = |s: &mut Session| run(s, "document.exportSettings", json!({}))["settings"]["openLocation"].clone();
+    let r = run(&mut s, "assets.settings.set", json!({"openLocation": false}));
+    assert_eq!(open(&mut s), false);
+    assert!(r["settings"].get("openLocation").is_none(), "{r}");
+    // Create Sub-folders, on for a document without settings, stays on.
+    assert_eq!(r["settings"]["subfolders"], true, "{r}");
+    run(&mut s, "document.exportPresets.save", json!({"name": "Kept", "settings": {"formats": [{"format": "svg"}]}}));
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Kept"}));
+    assert_eq!(open(&mut s), false, "a preset leaves it as it is");
+    run(&mut s, "assets.settings.set", json!({"openLocation": null}));
+    assert_eq!(open(&mut s), Value::Null);
+    for bad in [json!({"openLocation": "yes"}), json!({"openLocation": 1}), json!({"subfolders": "no"})] {
+        assert!(s.execute("assets.settings.set", &bad).is_err(), "{bad}");
+    }
+}
+
+/// Create Sub-folders turned off on its own ends a remembered folder per format or item, so Export
+/// for Screens opens with it off too; given with an export preset, the preset's folders stay.
+#[test]
+fn create_sub_folders_off_alone_ends_a_folder_per_format_or_item() {
+    let mut s = session();
+    let folders = |s: &mut Session| run(s, "document.exportSettings", json!({}))["settings"]["folders"].clone();
+    run(&mut s, "document.exportPresets.save", json!({"name": "Items", "settings": {"formats": [{"format": "svg"}], "folders": "item"}}));
+    for preset in ["Logo Package", "Items"] {
+        run(&mut s, "assets.settings.set", json!({"exportPreset": preset, "subfolders": false}));
+        assert_ne!(folders(&mut s), "none", "{preset}");
+        run(&mut s, "assets.settings.set", json!({"subfolders": false}));
+        assert_eq!(folders(&mut s), "none", "{preset}");
+    }
+}
+
+/// An export preset applied to the shared settings keeps its folders, with Create Sub-folders on
+/// for a folder per row; with Create Sub-folders off every file goes into the folder itself,
+/// mobile and density rows too.
+#[test]
+fn create_sub_folders_off_puts_every_asset_file_in_the_folder() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    let saved = [("None", json!({"folders": "none"})), ("Items", json!({"folders": "itemFormat"})), ("Panel", json!({"subfolders": true}))];
+    for (name, mut settings) in saved {
+        settings["formats"] = json!([{"format": "svg"}]);
+        run(&mut s, "document.exportPresets.save", json!({"name": name, "settings": settings}));
+    }
+    // (preset, the folders and Create Sub-folders it leaves).
+    let want = [("Logo Package", "format", false), ("None", "none", false), ("Items", "itemFormat", false), ("Panel", "rows", true)];
+    for (preset, folders, sub) in want {
+        run(&mut s, "assets.settings.set", json!({"exportPreset": preset}));
+        let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+        assert_eq!((settings["folders"].as_str(), settings["subfolders"].as_bool()), (Some(folders), Some(sub)), "{preset}: {settings}");
+    }
+    let paths = |s: &mut Session, p: Value| -> Vec<String> { files(&run(s, "assets.export", p)).into_iter().map(|f| f.0).collect() };
+    assert_eq!(paths(&mut s, json!({})), ["SVG/Asset-1.svg"]);
+    assert_eq!(paths(&mut s, json!({"subfolders": false})), ["Asset-1.svg"]);
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Logo Package"}));
+    let out = paths(&mut s, json!({}));
+    assert_eq!(out.len(), 5, "{out:?}");
+    assert!(out.iter().all(|f| !f.contains('/')), "{out:?}");
+    // Create Sub-folders set in the panel is the dialog's folder per row, on and off.
+    let folders = |s: &mut Session| run(s, "document.exportSettings", json!({}))["settings"]["folders"].clone();
+    run(&mut s, "assets.settings.set", json!({"subfolders": true}));
+    assert_eq!(folders(&mut s), "rows");
+    run(&mut s, "assets.settings.set", json!({"subfolders": false}));
+    assert_eq!(folders(&mut s), "none");
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Items", "subfolders": false}));
+    assert_eq!(folders(&mut s), "itemFormat");
+    // A mobile preset saved with no sub-folders exports its rows into the folder itself.
+    run(&mut s, "document.exportPresets.save", json!({"name": "Flat Mobile", "settings": {"preset": "mobile", "folders": "none"}}));
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Flat Mobile"}));
+    let out = paths(&mut s, json!({}));
+    assert_eq!(out.len(), 3, "{out:?}");
+    assert!(out.iter().all(|f| !f.contains('/')), "{out:?}");
+    // Create Sub-folders turned off keeps mobile rows in the folder, set or given to the export.
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Flat Mobile", "subfolders": false}));
+    assert!(paths(&mut s, json!({})).iter().all(|f| !f.contains('/')));
+    run(&mut s, "assets.settings.set", json!({"subfolders": true}));
+    assert_eq!(paths(&mut s, json!({})).iter().filter(|f| f.starts_with("3x/")).count(), 1);
+    assert!(paths(&mut s, json!({"subfolders": false})).iter().all(|f| !f.contains('/')));
+    run(&mut s, "assets.settings.set", json!({"subfolders": false}));
+    assert!(paths(&mut s, json!({})).iter().all(|f| !f.contains('/')));
+}
+
+/// An export preset whose `folders` is empty puts every file in the folder itself, whatever its
+/// `subfolders`: exported with `document.exportForScreens` and applied to the shared settings.
+#[test]
+fn an_export_preset_with_empty_folders_exports_into_the_folder() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    let ids = run(&mut s, "assets.add", json!({"ids": [a]}))["assets"].clone();
+    let settings = json!({"formats": [{"format": "svg"}, {"format": "png", "scale": "2x"}], "folders": "", "subfolders": true});
+    run(&mut s, "document.exportPresets.save", json!({"name": "Flat", "settings": settings}));
+    let names = |r: &Value| -> Vec<String> { files(r).into_iter().map(|f| f.0).collect() };
+    let direct = names(&run(&mut s, "document.exportForScreens", json!({"assets": ids, "exportPreset": "Flat"})));
+    assert_eq!(direct.len(), 2, "{direct:?}");
+    assert!(direct.iter().all(|f| !f.contains('/')), "{direct:?}");
+    run(&mut s, "assets.settings.set", json!({"exportPreset": "Flat"}));
+    let shared = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    assert_eq!((shared["folders"].as_str(), shared["subfolders"].as_bool()), (Some("none"), Some(false)), "{shared}");
+    let panel = names(&run(&mut s, "assets.export", json!({})));
+    assert_eq!(panel, direct);
+}
+
 #[test]
 fn export_for_screens_writes_chosen_assets_and_keeps_its_rules() {
     let mut s = session();
@@ -277,7 +468,29 @@ fn export_for_screens_writes_chosen_assets_and_keeps_its_rules() {
     let out = files(&r);
     assert_eq!(out.len(), 1);
     assert_eq!(out[0].0, "Asset-2@60w.png");
-    assert_eq!(image::load_from_memory(&out[0].1).unwrap().to_rgba8().dimensions(), (60, 40), "the width of the asset, not the artboard");
+    assert_eq!(
+        craft_image_codecs::decode(&out[0].1)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .dimensions(),
+        (60, 40),
+        "the width of the asset, not the artboard"
+    );
     // The choice of art isn't remembered; the formats are.
     let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
     assert!(settings.get("assets").is_none() && settings["formats"][0]["scale"] == "60w");
@@ -326,7 +539,24 @@ fn assets_export_leaves_no_seam_between_abutting_shapes() {
         }),
     ));
     assert_eq!(out[0].0, "Asset-1.png");
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 20));
     // Column 20 is the shared edge in crop space; green must stay red (no white bleed).
     let palest_g = (2..18).map(|y| img.get_pixel(20, y).0[1].max(img.get_pixel(19, y).0[1])).max().unwrap();
@@ -349,4 +579,22 @@ fn collecting_explicit_assets_rejects_invalid_ids_without_adding_anything() {
     // Valid ids still collect art in document paint order.
     assert_eq!(run(&mut s, "assets.add", json!({"ids": [b, a]}))["added"], 2);
     assert_eq!(assets(&mut s).len(), 2);
+}
+
+/// Settings saved without the PDF passwords they were given export only once a password is given
+/// again, never as an unprotected PDF; security given without `passwordRequired` exports as given.
+#[test]
+fn settings_saved_without_their_pdf_passwords_refuse_to_export_until_given_again() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    let row = |security: Value| json!({"formats": [{"format": "pdf", "security": security}]});
+    run(&mut s, "assets.settings.set", row(json!({"openPassword": "open sesame"})));
+    let err = s.execute("assets.export", &json!({})).unwrap_err().to_string();
+    assert!(err.contains("without their passwords"), "{err}");
+    let encrypted = |r: &Value| files(r)[0].1.windows(8).any(|w| w == b"/Encrypt");
+    let r = run(&mut s, "assets.export", row(json!({"openPassword": "open sesame", "passwordRequired": true})));
+    assert!(encrypted(&r), "given again: protected");
+    let r = run(&mut s, "assets.export", row(json!({})));
+    assert!(!encrypted(&r), "left out on purpose: unprotected");
 }

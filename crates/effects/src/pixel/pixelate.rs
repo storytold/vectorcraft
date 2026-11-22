@@ -436,11 +436,12 @@ impl Screen {
 }
 
 /// Color Halftone: each channel screened at its angle in square cells sized so that a dot of
-/// `max_radius` fills one; each cell's dot covers the share of it that is the channel's mean
-/// there (white stays white, black black). Coverage stays as it is.
+/// `max_radius` (pixels of the document's raster grid, `space.line` each) fills one; each cell's
+/// dot covers the share of it that is the channel's mean there (white stays white, black black).
+/// Coverage stays as it is.
 pub(super) fn color_halftone(px: &mut [[u8; 4]], w: usize, h: usize, space: &PixelSpace, max_radius: f64, angles: [f64; 4]) {
     let Some(place) = Place::new(space, w, h) else { return };
-    let side = max_radius * std::f64::consts::SQRT_2;
+    let side = max_radius * space.line * std::f64::consts::SQRT_2;
     // Cells under 3 pixels can't show their dots: on average a screen is the image itself.
     if !(side.is_finite() && side / place.px >= 3.0) {
         return;

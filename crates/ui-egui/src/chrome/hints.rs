@@ -1,4 +1,4 @@
-use super::status_bar::ANIMATED_ZOOM_HINT;
+use super::status_bar::{ANIMATED_ZOOM_HINT, clipped_label};
 use super::{Cow, Sense, Stroke, Tokens, Ui, VectorcraftApp, menus, theme, vec2, widgets};
 
 fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
@@ -6,6 +6,8 @@ fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
         "dimension" => &[
             ("Drag", true),
             (" out from a highlighted edge to place its dimension  |  ", false),
+            ("Click", true),
+            (" two points, then move and click to place an aligned, horizontal or vertical dimension  |  ", false),
             ("Esc", true),
             (" cancels  |  Double-click the tool for options", false),
         ],
@@ -204,6 +206,17 @@ pub(super) fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
             &search
         }
     };
+    shown_segments(segments)
+}
+
+/// The hint bar's segments for `tool` as [`hint_segments`] shows them, the Zoom tool's for animated
+/// zoom when `animated_zoom` is on; none for a tool without a hint of its own.
+pub(crate) fn tool_hint(tool: &str, animated_zoom: bool) -> Option<Vec<(Cow<'static, str>, bool)>> {
+    let tool = if tool == "zoom" && animated_zoom { ANIMATED_ZOOM_HINT } else { tool };
+    hint_for(tool).map(shown_segments)
+}
+
+fn shown_segments(segments: &[(&'static str, bool)]) -> Vec<(Cow<'static, str>, bool)> {
     segments
         .iter()
         .map(|&(text, bold)| {
@@ -214,11 +227,11 @@ pub(super) fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
             }
             match text.rsplit_once('+') {
                 Some((_, key)) if !key.is_empty() => {
-                    let pretty = menus::pretty_shortcut(text);
+                    let pretty = menus::shown_shortcut(text);
                     let shown = pretty.strip_suffix(key).map_or(pretty.clone(), |m| format!("{m}{}", tl!(key)));
                     (Cow::Owned(shown), bold)
                 }
-                _ => (Cow::Owned(menus::pretty_shortcut(tl!(text))), bold),
+                _ => (Cow::Owned(menus::shown_shortcut(tl!(text))), bold),
             }
         })
         .collect()
@@ -247,7 +260,7 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     let font = if bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
                     job.append(&txt, 0.0, egui::TextFormat { font_id: font, color: if bold { t.text_strong } else { t.text }, ..Default::default() });
                 }
-                ui.label(job);
+                clipped_label(ui, job);
             });
         });
     widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());

@@ -1,6 +1,6 @@
-//! Commands that remove, insert or copy many objects, and an Alt-drag that copies them, each finish
-//! within 20 s on one layer of 25,000 to 100,000 objects, and objects in two layers and inside a
-//! group keep their order and ids.
+//! Commands that remove, insert or copy many objects, and an Alt-drag that copies them, each walk
+//! the document's tree a few times on one layer of 25,000 to 100,000 objects, and objects in two
+//! layers and inside a group keep their order and ids.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,14 +65,22 @@ fn in_turn(a: &[NodeId], b: &[NodeId]) -> Vec<NodeId> {
     a.iter().zip(b).flat_map(|(a, b)| [*a, *b]).collect()
 }
 
-/// Runs `f` on `s` on a thread of its own and fails the test when it takes more than 20 s.
+/// Most walks of the document's tree ([`vectorcraft_doc::tree_walks`]) that [`soon`] allows, however
+/// many objects the document holds. A command that looks its objects up one at a time walks the tree
+/// about once per object.
+const MOST_TREE_WALKS: u64 = 64;
+
+/// Runs `f` on `s` on a thread of its own and fails the test when it walks the document's tree more
+/// than [`MOST_TREE_WALKS`] times or has not ended after 300 s.
 pub(crate) fn soon<T: Send + 'static>(mut s: Session, what: &'static str, f: impl FnOnce(&mut Session) -> T + Send + 'static) -> (Session, T) {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let r = f(&mut s);
-        tx.send((s, r)).ok();
+        tx.send((s, r, vectorcraft_doc::tree_walks())).ok();
     });
-    rx.recv_timeout(Duration::from_secs(20)).unwrap_or_else(|_| panic!("{what} did not finish within 20 s"))
+    let (s, r, walks) = rx.recv_timeout(Duration::from_secs(300)).unwrap_or_else(|_| panic!("{what} did not finish within 300 s"));
+    assert!(walks <= MOST_TREE_WALKS, "{what} walked the document's tree {walks} times");
+    (s, r)
 }
 
 /// Runs command `cmd` with `params` through [`soon`] and returns its result.
@@ -103,7 +111,7 @@ fn bounds(s: &Session, id: NodeId) -> Rect {
 }
 
 #[test]
-fn delete_of_100000_objects_finishes_within_20_s() {
+fn delete_of_100000_objects_takes_few_tree_walks() {
     let s = session(100_000, square);
     let before = s.doc().unwrap().doc.clone();
     let (mut s, _) = run_soon(s, "edit.clear", json!({}));
@@ -113,7 +121,7 @@ fn delete_of_100000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn delete_selection_of_100000_rows_finishes_within_20_s() {
+fn delete_selection_of_100000_rows_takes_few_tree_walks() {
     let s = session(100_000, square);
     let (before, ids) = (s.doc().unwrap().doc.clone(), layer(&s, 0));
     let (mut s, r) = run_soon(s, "layer.delete", json!({"ids": ids}));
@@ -124,7 +132,7 @@ fn delete_selection_of_100000_rows_finishes_within_20_s() {
 }
 
 #[test]
-fn clean_up_of_100000_unpainted_paths_finishes_within_20_s() {
+fn clean_up_of_100000_unpainted_paths_takes_few_tree_walks() {
     let s = session(100_000, |d, k| Node::path(d.alloc_id(), shapes::rectangle(square_at(k)), Appearance::default()));
     let before = s.doc().unwrap().doc.clone();
     let (mut s, r) = run_soon(s, "object.path.cleanUp", json!({}));
@@ -135,7 +143,7 @@ fn clean_up_of_100000_unpainted_paths_finishes_within_20_s() {
 }
 
 #[test]
-fn group_of_50000_objects_finishes_within_20_s() {
+fn group_of_50000_objects_takes_few_tree_walks() {
     let s = session(50_000, square);
     let (before, ids) = (s.doc().unwrap().doc.clone(), layer(&s, 0));
     let (mut s, r) = run_soon(s, "object.group", json!({}));
@@ -147,7 +155,7 @@ fn group_of_50000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn clipping_mask_of_50000_objects_finishes_within_20_s() {
+fn clipping_mask_of_50000_objects_takes_few_tree_walks() {
     let s = session(50_000, square);
     let (before, ids) = (s.doc().unwrap().doc.clone(), layer(&s, 0));
     let (mut s, r) = run_soon(s, "object.clippingMask.make", json!({}));
@@ -165,7 +173,7 @@ fn clipping_mask_of_50000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn duplicate_of_50000_objects_finishes_within_20_s() {
+fn duplicate_of_50000_objects_takes_few_tree_walks() {
     let s = session(50_000, square);
     let (before, ids, first) = (s.doc().unwrap().doc.clone(), layer(&s, 0), s.doc().unwrap().doc.peek_next_id());
     let (mut s, r) = run_soon(s, "edit.duplicate", json!({"dx": 5}));
@@ -179,7 +187,7 @@ fn duplicate_of_50000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn transform_with_copy_of_50000_objects_finishes_within_20_s() {
+fn transform_with_copy_of_50000_objects_takes_few_tree_walks() {
     let s = session(50_000, square);
     let (before, ids, first) = (s.doc().unwrap().doc.clone(), layer(&s, 0), s.doc().unwrap().doc.peek_next_id());
     let (mut s, r) = run_soon(s, "object.transform", json!({"matrix": [1, 0, 0, 1, 5, 0], "copy": true}));
@@ -194,7 +202,7 @@ fn transform_with_copy_of_50000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn transform_each_with_copy_of_50000_objects_finishes_within_20_s() {
+fn transform_each_with_copy_of_50000_objects_takes_few_tree_walks() {
     let s = session(50_000, square);
     let (before, ids, first) = (s.doc().unwrap().doc.clone(), layer(&s, 0), s.doc().unwrap().doc.peek_next_id());
     let (mut s, r) = run_soon(s, "object.transformEach", json!({"moveH": 5, "copy": true}));
@@ -207,7 +215,7 @@ fn transform_each_with_copy_of_50000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn offset_path_of_50000_objects_finishes_within_20_s() {
+fn offset_path_of_50000_objects_takes_few_tree_walks() {
     let s = session(50_000, square);
     let (before, ids, first) = (s.doc().unwrap().doc.clone(), layer(&s, 0), s.doc().unwrap().doc.peek_next_id());
     let (mut s, r) = run_soon(s, "object.path.offsetPath", json!({"offset": 1}));
@@ -222,7 +230,7 @@ fn offset_path_of_50000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn compound_path_of_100000_objects_finishes_within_20_s() {
+fn compound_path_of_100000_objects_takes_few_tree_walks() {
     let s = session(100_000, square);
     let (before, ids) = (s.doc().unwrap().doc.clone(), layer(&s, 0));
     let (mut s, r) = run_soon(s, "object.compoundPath.make", json!({}));
@@ -234,7 +242,7 @@ fn compound_path_of_100000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn send_to_current_layer_of_100000_objects_finishes_within_20_s() {
+fn send_to_current_layer_of_100000_objects_takes_few_tree_walks() {
     let mut s = session(100_000, square);
     let ids = layer(&s, 0);
     let to = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
@@ -249,7 +257,7 @@ fn send_to_current_layer_of_100000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn row_drag_of_100000_rows_finishes_within_20_s() {
+fn row_drag_of_100000_rows_takes_few_tree_walks() {
     let mut s = session(100_000, square);
     let ids = layer(&s, 0);
     let to = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
@@ -263,7 +271,7 @@ fn row_drag_of_100000_rows_finishes_within_20_s() {
 }
 
 #[test]
-fn merge_selected_of_100000_objects_finishes_within_20_s() {
+fn merge_selected_of_100000_objects_takes_few_tree_walks() {
     let mut s = session(100_000, square);
     let (from, ids) = (s.doc().unwrap().doc.layers[0].id, layer(&s, 0));
     let into = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
@@ -277,7 +285,7 @@ fn merge_selected_of_100000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn ungroup_of_25000_groups_finishes_within_20_s() {
+fn ungroup_of_25000_groups_takes_few_tree_walks() {
     // Each group holds two squares, and ungrouping one adds an object to the layer.
     let s = session(25_000, |d, k| {
         let pair = [square(d, 2 * k), square(d, 2 * k + 1)].map(Arc::new);
@@ -292,7 +300,7 @@ fn ungroup_of_25000_groups_finishes_within_20_s() {
 }
 
 #[test]
-fn compound_path_release_of_25000_compound_paths_finishes_within_20_s() {
+fn compound_path_release_of_25000_compound_paths_takes_few_tree_walks() {
     let s = session(25_000, |d, k| {
         let pair = [square(d, 2 * k), square(d, 2 * k + 1)].map(Arc::new);
         Node::new(d.alloc_id(), NodeKind::Compound { children: pair.to_vec(), rule: FillRule::NonZero })
@@ -306,7 +314,7 @@ fn compound_path_release_of_25000_compound_paths_finishes_within_20_s() {
 }
 
 #[test]
-fn release_to_layers_of_100000_objects_finishes_within_20_s() {
+fn release_to_layers_of_100000_objects_takes_few_tree_walks() {
     let s = session(100_000, square);
     let doc = &s.doc().unwrap().doc;
     let (before, l, ids, first) = (doc.clone(), doc.layers[0].id, layer(&s, 0), doc.peek_next_id());
@@ -329,7 +337,7 @@ fn release_to_layers_of_100000_objects_finishes_within_20_s() {
 }
 
 #[test]
-fn outline_stroke_of_25000_objects_finishes_within_20_s() {
+fn outline_stroke_of_25000_objects_takes_few_tree_walks() {
     let s = session(25_000, square);
     let (before, first) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().doc.peek_next_id());
     let (mut s, r) = run_soon(s, "object.path.outlineStroke", json!({}));
@@ -347,7 +355,7 @@ fn outline_stroke_of_25000_objects_finishes_within_20_s() {
 /// With Alt held, a Selection tool press on one of 30,000 selected squares, four moves of 20 pt
 /// and the release copy the squares once, as one undo step.
 #[test]
-fn alt_drag_of_30000_objects_finishes_within_20_s() {
+fn alt_drag_of_30000_objects_takes_few_tree_walks() {
     let s = session(30_000, square);
     let (before, ids, first) = (s.doc().unwrap().doc.clone(), layer(&s, 0), s.doc().unwrap().doc.peek_next_id());
     // The press lands on a square in the middle of the art, away from the handles of the

@@ -1,11 +1,12 @@
 //! PostScript writing primitives: numbers, strings, paths, the prolog's short operator names, and
 //! the data encodings images and embedded data use (ASCII85, run-length, Flate).
 
-use std::fmt::Write;
-use std::io::{Read, Write as _};
+use vectorcraft_geom::{BezPath, FillRule};
 
-use kurbo::PathEl;
-use vectorcraft_geom::{Affine, BezPath, FillRule};
+pub(crate) use craft_ps::write::{
+    LineCap, LineJoin, ShadingKind, bytes, deflate, inflate, matrix, num, push_image_array_ref, push_inline_image, push_line_style, push_num,
+    push_num_places, push_nums, push_reusable_image_ref, push_reusable_image_resource, push_shading, string, written,
+};
 
 /// The procedures the page uses, in `VCdict`.
 pub(crate) const PROLOG: &str = "/VCdict 64 dict def
@@ -21,132 +22,9 @@ VCdict begin
 end
 ";
 
-/// Longest line of encoded data (DSC readers take up to 255 characters).
-const LINE: usize = 76;
-
-/// `v` as PostScript writes it: at most four decimals, no trailing zeros (0 when not finite).
-pub(crate) fn num(v: f64) -> String {
-    let mut s = String::new();
-    push_num(&mut s, v);
-    s
-}
-
-/// Append [`num`]`(v)` to `s`.
-pub(crate) fn push_num(s: &mut String, v: f64) {
-    // Beyond ~1.8e304 the scaling overflows; such values have no fractional digits to round.
-    let v = if !v.is_finite() {
-        0.0
-    } else if (v * 10_000.0).is_finite() {
-        (v * 10_000.0).round() / 10_000.0
-    } else {
-        v
-    };
-    if v == v.trunc() && v.abs() < 1e15 {
-        let _ = write!(s, "{}", v as i64);
-        return;
-    }
-    let start = s.len();
-    let _ = write!(s, "{v:.4}");
-    let keep = s[start..].trim_end_matches('0').trim_end_matches('.').len();
-    s.truncate(start + keep);
-}
-
-/// `vs` as numbers separated by spaces, then a space.
-pub(crate) fn push_nums(s: &mut String, vs: &[f64]) {
-    for v in vs {
-        push_num(s, *v);
-        s.push(' ');
-    }
-}
-
-/// `text` as a PostScript string: `(` `)` `\` escaped, anything outside printable ASCII as octal
-/// escapes of its UTF-8 bytes.
-pub(crate) fn string(text: &str) -> String {
-    let mut s = String::with_capacity(text.len() + 2);
-    s.push('(');
-    for b in text.bytes() {
-        match b {
-            b'(' | b')' | b'\\' => {
-                s.push('\\');
-                s.push(char::from(b));
-            }
-            0x20..=0x7e => s.push(char::from(b)),
-            _ => {
-                let _ = write!(s, "\\{b:03o}");
-            }
-        }
-    }
-    s.push(')');
-    s
-}
-
-/// `bytes` as a PostScript string: `(` `)` `\` escaped, carriage returns, line feeds and tabs as
-/// `\r` `\n` `\t`, other bytes outside printable ASCII as octal escapes.
-pub(crate) fn bytes(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() + 2);
-    s.push('(');
-    for &b in bytes {
-        match b {
-            b'(' | b')' | b'\\' => {
-                s.push('\\');
-                s.push(char::from(b));
-            }
-            b'\r' => s.push_str("\\r"),
-            b'\n' => s.push_str("\\n"),
-            b'\t' => s.push_str("\\t"),
-            0x20..=0x7e => s.push(char::from(b)),
-            _ => {
-                let _ = write!(s, "\\{b:03o}");
-            }
-        }
-    }
-    s.push(')');
-    s
-}
-
-/// A matrix operand `[a b c d e f]`.
-pub(crate) fn matrix(a: Affine) -> String {
-    let mut s = String::from("[");
-    push_nums(&mut s, &a.as_coeffs());
-    s.pop();
-    s.push(']');
-    s
-}
-
-/// Append path `bp` (`m`, `l`, `c`, `h`; quadratics raised to cubics), one segment a line.
+/// Append path `bp` using the short operators defined by our `VCdict` prolog.
 pub(crate) fn push_path(s: &mut String, bp: &BezPath) {
-    let mut last = kurbo::Point::ZERO;
-    let mut start = kurbo::Point::ZERO;
-    for el in bp.elements() {
-        match *el {
-            PathEl::MoveTo(p) => {
-                push_nums(s, &[p.x, p.y]);
-                s.push_str("m\n");
-                (last, start) = (p, p);
-            }
-            PathEl::LineTo(p) => {
-                push_nums(s, &[p.x, p.y]);
-                s.push_str("l\n");
-                last = p;
-            }
-            PathEl::QuadTo(a, p) => {
-                let c1 = last + (a - last) * (2.0 / 3.0);
-                let c2 = p + (a - p) * (2.0 / 3.0);
-                push_nums(s, &[c1.x, c1.y, c2.x, c2.y, p.x, p.y]);
-                s.push_str("c\n");
-                last = p;
-            }
-            PathEl::CurveTo(a, b, p) => {
-                push_nums(s, &[a.x, a.y, b.x, b.y, p.x, p.y]);
-                s.push_str("c\n");
-                last = p;
-            }
-            PathEl::ClosePath => {
-                s.push_str("h\n");
-                last = start;
-            }
-        }
-    }
+    craft_ps::write::push_path(s, bp, craft_ps::write::PathOps::SHORT);
 }
 
 /// The fill operator for `rule`.
@@ -167,54 +45,7 @@ pub(crate) fn clip_op(rule: FillRule) -> &'static str {
 
 /// `bytes` in ASCII85 with its `~>` end, in lines of about [`LINE`] characters, none starting
 /// with `%` (DSC readers would take it for a comment).
-pub(crate) fn ascii85(bytes: &[u8]) -> String {
-    let mut raw = String::with_capacity(bytes.len() * 5 / 4 + 8);
-    let (chunks, rest) = bytes.as_chunks::<4>();
-    for c in chunks {
-        let v = u32::from_be_bytes(*c);
-        if v == 0 {
-            raw.push('z');
-        } else {
-            push85(&mut raw, v, 5);
-        }
-    }
-    if !rest.is_empty() {
-        let mut c = [0u8; 4];
-        for (d, s) in c.iter_mut().zip(rest) {
-            *d = *s;
-        }
-        push85(&mut raw, u32::from_be_bytes(c), rest.len() + 1);
-    }
-    raw.push_str("~>");
-    let mut out = String::with_capacity(raw.len() + raw.len() / LINE + 2);
-    if raw.starts_with('%') {
-        // Whitespace is ignored by readers, and keeps the first line from starting with `%`.
-        out.push(' ');
-    }
-    let mut col = 0;
-    for ch in raw.chars() {
-        if col >= LINE && ch != '%' {
-            out.push('\n');
-            col = 0;
-        }
-        out.push(ch);
-        col += 1;
-    }
-    out.push('\n');
-    out
-}
-
-/// The first `n` base-85 digits of `v`.
-fn push85(s: &mut String, mut v: u32, n: usize) {
-    let mut d = [0u8; 5];
-    for slot in d.iter_mut().rev() {
-        *slot = (v % 85) as u8 + b'!';
-        v /= 85;
-    }
-    for b in d.iter().take(n) {
-        s.push(char::from(*b));
-    }
-}
+pub(crate) use craft_eps::ascii85::encode as ascii85;
 
 /// Most bytes [`ascii85_decode`] makes: what one filter or data section may hold.
 pub(crate) const MAX_ASCII85: usize = 1 << 28;
@@ -228,70 +59,41 @@ pub(crate) fn ascii85_decode(text: &str) -> Option<Vec<u8>> {
 /// [`ascii85_decode`] of at most `max` bytes: `z` is four bytes for one, so the length of the
 /// text doesn't bound what it becomes (#1715).
 pub(crate) fn ascii85_decode_within(text: &str, max: usize) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity((text.len() / 5 * 4).min(max));
-    let mut group = [0u8; 5];
-    let mut n = 0;
-    let mut chars = text.bytes().filter(|b| !b.is_ascii_whitespace()).peekable();
-    while let Some(b) = chars.next() {
-        if out.len() > max {
-            return None;
-        }
-        match b {
-            b'~' => {
-                if chars.next() != Some(b'>') {
-                    return None;
-                }
-                if n == 1 {
-                    return None;
-                }
-                if n > 1 {
-                    let padded: Vec<u8> = group.iter().take(n).copied().chain(std::iter::repeat(b'u')).take(5).collect();
-                    let v = value85(&padded)?;
-                    out.extend(v.to_be_bytes().iter().take(n - 1));
-                }
-                return (out.len() <= max).then_some(out);
-            }
-            b'z' if n == 0 => out.extend([0; 4]),
-            b'!'..=b'u' => {
-                *group.get_mut(n)? = b;
-                n += 1;
-                if n == 5 {
-                    out.extend(value85(&group)?.to_be_bytes());
-                    n = 0;
-                }
-            }
-            _ => return None,
-        }
-    }
-    None
-}
-
-/// The value of five base-85 digits; `None` past `u32::MAX`.
-fn value85(digits: &[u8]) -> Option<u32> {
-    digits.iter().try_fold(0u32, |acc, d| acc.checked_mul(85)?.checked_add(u32::from(d.checked_sub(b'!')?)))
+    craft_eps::ascii85::decode(text.as_bytes(), max)
 }
 
 /// Run-length encoding (PackBits: what PostScript's `RunLengthDecode` reads), shared with TIFF.
 pub(crate) use vectorcraft_render::encode::tiff::packbits;
 
-/// `data` compressed for `FlateDecode` (zlib).
-pub(crate) fn deflate(data: &[u8]) -> Vec<u8> {
-    let mut e = flate2::write::ZlibEncoder::new(Vec::with_capacity(data.len() / 2), flate2::Compression::default());
-    // Writing to a Vec doesn't fail.
-    let _ = e.write_all(data);
-    e.finish().unwrap_or_default()
-}
-
-/// zlib `data` inflated, when it is valid and at most `max` bytes.
-pub(crate) fn inflate(data: &[u8], max: u64) -> Option<Vec<u8>> {
-    let mut out = vec![];
-    flate2::read::ZlibDecoder::new(data).take(max + 1).read_to_end(&mut out).ok()?;
-    (out.len() as u64 <= max).then_some(out)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{ascii85, ascii85_decode, num};
+    use super::{ascii85, ascii85_decode, num, push_num_places};
+
+    #[test]
+    fn shared_writer_preserves_vcdict_path_and_operands() {
+        let mut path = vectorcraft_geom::BezPath::new();
+        path.move_to((1.0, 2.0));
+        path.line_to((3.0, 4.0));
+        path.close_path();
+        let mut output = String::new();
+        super::push_path(&mut output, &path);
+        assert_eq!(output, "1 2 m\n3 4 l\nh\n");
+        assert_eq!(super::matrix(vectorcraft_geom::Affine::IDENTITY), "[1 0 0 1 0 0]");
+        assert_eq!(super::fill_op(vectorcraft_geom::FillRule::EvenOdd), "f*\n");
+        assert_eq!(super::clip_op(vectorcraft_geom::FillRule::NonZero), "W\n");
+    }
+
+    #[test]
+    fn shared_writer_keeps_large_integer_zeroes_and_bounded_flate() {
+        let mut output = String::new();
+        push_num_places(&mut output, 1e15, 0);
+        assert_eq!(output, "1000000000000000");
+        let packed = super::deflate(b"EPS payload");
+        assert_eq!(super::inflate(&packed, 11).as_deref(), Some(&b"EPS payload"[..]));
+        assert!(super::inflate(&packed, 10).is_none());
+        assert_eq!(super::inflate(&packed, u64::MAX).as_deref(), Some(&b"EPS payload"[..]));
+        assert!(super::inflate(&packed[..packed.len() - 1], 11).is_none());
+    }
 
     #[test]
     fn ascii85_first_line_never_starts_with_percent() {
@@ -307,5 +109,45 @@ mod tests {
             let s = num(v);
             assert!(!s.is_empty() && s.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '.'), "{v}: got {s:?}");
         }
+    }
+
+    #[test]
+    fn numbers_keep_the_decimals_asked_for() {
+        let places = |v: f64, n: u32| {
+            let mut s = String::new();
+            push_num_places(&mut s, v, n);
+            s
+        };
+        assert_eq!(num(0.123_456_78), "0.1235");
+        assert_eq!(places(0.123_456_78, 7), "0.1234568");
+        assert_eq!(places(f64::from(0.4f32), 7), "0.4");
+        assert_eq!(places(2.5, 7), "2.5");
+        assert_eq!(places(f64::NAN, 7), "0");
+    }
+
+    #[test]
+    fn shared_scene_syntax_preserves_vc_names_and_shading() {
+        let mut line = String::new();
+        super::push_line_style(&mut line, 3.0, super::LineCap::Square, super::LineJoin::Round, 4.0, Some((&[5.0, 1.5], 0.5)));
+        assert_eq!(line, "3 w 2 J 1 j 4 M [5 1.5] 0.5 d\n");
+
+        let mut shading = String::new();
+        super::push_shading(
+            &mut shading,
+            super::ShadingKind::Axial,
+            "/DeviceCMYK",
+            &[0.0, 0.0, 100.0, 0.0],
+            4,
+            &[(0.0, vec![0.0, 1.0, 1.0, 0.0]), (1.0, vec![1.0, 0.0, 1.0, 0.0])],
+        );
+        assert!(shading.contains("/ShadingType 2 /ColorSpace /DeviceCMYK"));
+        assert!(shading.ends_with(">> shfill\n"));
+
+        let mut inline = String::new();
+        super::push_inline_image(&mut inline, "VCsrc", "", "<< /ImageType 1", "/FlateDecode", "image", "~>\n");
+        assert_eq!(
+            inline,
+            "{ /VCsrc currentfile /ASCII85Decode filter def\n<< /ImageType 1\n/DataSource VCsrc /FlateDecode filter >> image\nVCsrc flushfile } exec\n~>\n"
+        );
     }
 }

@@ -7,6 +7,94 @@ fn app() -> VectorcraftApp {
     app
 }
 
+#[test]
+fn blob_tip_fields_confirm_and_cancel() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let text = painted(&mut app);
+    assert!(text.contains("Angle:") && text.contains("Roundness:"), "{text}");
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!((d.f64("angle", -1.0), d.f64("roundness", -1.0)), (0.0, 100.0));
+    d.fields.insert("angle".into(), json!(45));
+    d.fields.insert("roundness".into(), json!(0));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(
+        (app.session.tool_options_of("blobBrush")["angle"].as_f64(), app.session.tool_options_of("blobBrush")["roundness"].as_f64()),
+        (Some(45.0), Some(0.0))
+    );
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("roundness".into(), json!(75));
+    app.ui.dialog = None;
+    assert_eq!(app.session.tool_options_of("blobBrush")["roundness"], json!(0.0));
+}
+
+/// OK with a Fidelity the Smooth tool refuses shows the error and keeps the dialog open, with
+/// nothing set; a Fidelity it takes then closes it.
+#[test]
+fn a_refused_fidelity_keeps_the_dialog_open() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "smooth"})).unwrap();
+    let before = app.session.tool_options_of("smooth");
+    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(0.01));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert_eq!(e, "tool `smooth`: `fidelity` must be a number from 0.05 to 100");
+    assert!(app.ui.dialog.is_some(), "the dialog stays open");
+    assert_eq!(app.session.tool_options_of("smooth"), before);
+    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(5));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options_of("smooth")["fidelity"], json!(5.0));
+}
+
+#[test]
+fn the_tip_preview_is_as_flat_as_the_tip_the_brush_draws() {
+    for roundness in [-5.0, 0.0, 0.05, 0.1, 1.0, 50.0, 100.0, 120.0] {
+        let drawn = vectorcraft_tools::draw2::blob_tip(0.0, roundness).as_coeffs()[3] as f32;
+        assert!((tip_short_ratio(roundness) - drawn).abs() < 1e-6, "roundness {roundness}: drawn {drawn}");
+    }
+    // The Eraser's Roundness runs from 1% to 100%, where its tip and the Blob Brush's are the same.
+    for roundness in [1.0, 2.0, 50.0, 100.0] {
+        let drawn = vectorcraft_tools::draw2::eraser_tip(0.0, roundness).as_coeffs()[3] as f32;
+        assert!((tip_short_ratio(roundness) - drawn).abs() < 1e-6, "Eraser roundness {roundness}: drawn {drawn}");
+    }
+}
+
+/// A Roundness dot of the tip preview gives its distance from the center along the tip's short
+/// axis as a percentage of half the tip's length, on either side and at any Angle: 0% at the
+/// center, 100% at half the length and past it. A move along the long axis leaves it as it is, and
+/// the dots drawn for a Roundness give that Roundness back.
+#[test]
+fn a_roundness_dot_sets_its_distance_along_the_short_axis() {
+    for angle in [0.0, 30.0, 90.0, -135.0, 180.0] {
+        let (u, v) = tip_axes(angle);
+        for (along, want) in [(0.0, 0.0), (4.5, 25.0), (-9.0, 50.0), (18.0, 100.0), (-18.0, 100.0), (40.0, 100.0), (-400.0, 100.0)] {
+            for sideways in [0.0, 7.0, -30.0] {
+                assert_eq!(tip_roundness_at(v * along + u * sideways, angle, 0.0), want, "angle {angle}, {along} along, {sideways} sideways");
+            }
+        }
+        let center = egui::pos2(32.0, 32.0);
+        for roundness in [0.0, 1.0, 37.0, 50.0, 99.0, 100.0] {
+            let [a, b] = tip_dots(center, angle, roundness);
+            assert!(((a - center) + (b - center)).length() < 1e-4, "the dots face each other across the center");
+            for dot in [a, b] {
+                assert_eq!(tip_roundness_at(dot - center, angle, 0.0), roundness, "angle {angle}");
+            }
+        }
+    }
+}
+
+/// With the Eraser's 1% minimum, a Roundness dot dragged to the center or near it gives 1%, and
+/// any farther distance gives the same Roundness as with no minimum.
+#[test]
+fn a_roundness_dot_keeps_the_eraser_at_one_percent_or_more() {
+    for angle in [0.0, 45.0, -90.0] {
+        let (u, v) = tip_axes(angle);
+        for (along, want) in [(0.0, 1.0), (0.05, 1.0), (-0.1, 1.0), (0.18, 1.0), (0.36, 2.0), (-9.0, 50.0), (30.0, 100.0)] {
+            assert_eq!(tip_roundness_at(v * along + u * 5.0, angle, 1.0), want, "angle {angle}, {along} along");
+        }
+    }
+}
+
 /// The labels the open dialog paints.
 fn painted(app: &mut VectorcraftApp) -> String {
     crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
@@ -118,8 +206,8 @@ fn each_tool_shows_its_options_and_ok_sets_them() {
         assert!(text.contains("Size:"), "{tool}: {text}");
         assert_eq!(text.contains("Fidelity:"), blob, "{tool}: {text}");
         assert_eq!((text.contains("Keep selected"), text.contains("Merge only with selection")), (blob, blob), "{tool}: {text}");
-        // The Eraser also has Angle and Roundness.
-        assert_eq!((text.contains("Angle:"), text.contains("Roundness:")), (!blob, !blob), "{tool}: {text}");
+        // Both tools have Angle and Roundness.
+        assert!(text.contains("Angle:") && text.contains("Roundness:"), "{tool}: {text}");
         app.ui.dialog.as_mut().unwrap().fields.insert("size".into(), json!(24));
         super::super::confirm(&mut app).unwrap();
         assert_eq!(app.session.tool_options_of(tool)["size"].as_f64(), Some(24.0), "{tool}");
@@ -143,7 +231,7 @@ fn live_curve_fitting_off_shows_the_points_until_the_release_fits_them() {
         let pointer = |kind, (x, y)| vectorcraft_tools::PointerEvent::new(kind, x, y);
         let newest = |app: &VectorcraftApp| {
             let doc = &app.session.doc().unwrap().doc;
-            doc.layers[0].children().unwrap().last().unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+            doc.layers[0].children().unwrap().last().unwrap().path_data().unwrap().subpaths[0].anchors.to_vec()
         };
         crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Down, pts[0]), view);
         for p in &pts[1..] {
@@ -261,7 +349,7 @@ fn the_new_path_is_selected_only_with_keep_selected_on() {
         super::super::confirm(&mut app).unwrap();
         let (selected, id) = stroke(&mut app, tool, 100.0);
         assert_eq!(selected, vec![id], "{tool}");
-        // Off: the next stroke leaves the selection as it was.
+        // Off: the next stroke leaves nothing selected, the earlier path included (#5752).
         app.run("tool.options", json!({"tool": tool})).unwrap();
         app.ui.dialog.as_mut().unwrap().fields.insert("keepSelected".into(), json!(false));
         super::super::confirm(&mut app).unwrap();
@@ -270,7 +358,7 @@ fn the_new_path_is_selected_only_with_keep_selected_on() {
         assert_eq!(app.session.tool_options_of(tool)["keepSelected"].as_bool(), Some(false), "{tool}");
         let (selected, new) = stroke(&mut app, tool, 200.0);
         assert_ne!(new, id, "{tool} drew a new path");
-        assert_eq!(selected, vec![id], "{tool}");
+        assert!(selected.is_empty(), "{tool}: the earlier path is no longer selected either");
     }
 }
 
@@ -335,6 +423,38 @@ fn the_blob_brush_and_eraser_size_can_follow_the_pen_pressure() {
     app.run("tool.options", json!({"tool": "pencil"})).unwrap();
     let text = painted(&mut app);
     assert!(!text.contains("Variation:") && !text.contains("Fixed"), "{text}");
+}
+
+/// Eraser Tool Options gives Angle, Roundness and Size each a variation menu with a Variation
+/// field; OK sets the modes and Variations. The Blob Brush keeps one menu, on Size.
+#[test]
+fn the_eraser_angle_roundness_and_size_each_have_a_variation_menu() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "eraser"})).unwrap();
+    let text = painted(&mut app);
+    assert_eq!((text.matches("Variation:").count(), text.matches("Fixed").count()), (3, 3), "{text}");
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (k, v) in [
+        ("angleMode", json!("bearing")),
+        ("angleVariation", json!(30)),
+        ("roundnessMode", json!("random")),
+        ("roundnessVariation", json!(20)),
+        ("sizeMode", json!("rotation")),
+        ("sizeVariation", json!(5)),
+    ] {
+        d.fields.insert(k.into(), v);
+    }
+    let text = painted(&mut app);
+    assert!(text.contains("Bearing") && text.contains("Random") && text.contains("Rotation") && !text.contains("Fixed"), "{text}");
+    super::super::confirm(&mut app).unwrap();
+    let o = app.session.tool_options_of("eraser");
+    assert_eq!(
+        [&o["angleMode"], &o["angleVariation"], &o["roundnessMode"], &o["roundnessVariation"], &o["sizeMode"], &o["sizeVariation"]],
+        [&json!("bearing"), &json!(30.0), &json!("random"), &json!(20.0), &json!("rotation"), &json!(5.0)]
+    );
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let text = painted(&mut app);
+    assert_eq!(text.matches("Variation:").count(), 1, "{text}");
 }
 
 #[test]

@@ -1,15 +1,122 @@
 use super::{Sense, Stroke, Tokens, Ui, VectorcraftApp, icons, json, theme, vec2, widgets, zoom_label};
 
-/// A document tab's title: "Name* @ 66.67 % (RGB/Preview)", or while an opacity mask is edited
-/// "Name* @ 66.67 % (<Opacity Mask>/Opacity Mask)".
+/// [`view_tab_title`] for a document with one view.
+#[cfg(test)]
 pub(super) fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool, display_print_size: bool) -> String {
+    view_tab_title(d, None, zoom, outline, display_print_size)
+}
+
+/// A document tab's title: "Name* @ 66.67 % (RGB/Preview)", or while an opacity mask is edited
+/// "Name* @ 66.67 % (<Opacity Mask>/Opacity Mask)". For a view of a document with more than one
+/// view, the view's `number` follows the name: "Name:2* @ 66.67 % (RGB/Preview)".
+fn view_tab_title(d: &vectorcraft_engine::DocState, number: Option<u32>, zoom: f64, outline: bool, display_print_size: bool) -> String {
     let mode = if d.doc.mask_edit.is_some() {
         format!("<{0}>/{0}", tl!("Opacity Mask"))
     } else {
         let color = if d.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk { "CMYK" } else { "RGB" };
         format!("{color}/{}", if outline { tl!("Outline") } else { tl!("Preview") })
     };
-    format!("{}{} @ {} ({mode})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom, display_print_size).replace('%', " %"))
+    format!("{} @ {} ({mode})", view_tab_name(d, number), zoom_label(zoom, display_print_size).replace('%', " %"))
+}
+
+/// The start of [`view_tab_title`], which an inactive document tab shows alone (#8582): "Name*",
+/// or for a view of a document with more than one view, "Name:2*".
+fn view_tab_name(d: &vectorcraft_engine::DocState, number: Option<u32>) -> String {
+    let number = number.map(|n| format!(":{n}")).unwrap_or_default();
+    format!("{}{number}{}", d.title(), if d.is_dirty() { "*" } else { "" })
+}
+
+/// The title of window `w`, a view of document `d`: with the view's zoom and Outline or Preview,
+/// and the view's number while the document has more than one view.
+fn window_tab_title(app: &VectorcraftApp, w: crate::doc_windows::Win, d: &vectorcraft_engine::DocState) -> String {
+    let view = crate::doc_windows::view(app, w);
+    let zoom = view.map_or(1.0, |v| v.zoom);
+    view_tab_title(d, crate::doc_windows::label(app, w), zoom, view.is_some_and(|v| v.outline), app.session.prefs.display_print_size)
+}
+
+/// The title of window `w`'s tab and floating window ([`crate::doc_windows`]).
+pub(crate) fn document_window_title(app: &VectorcraftApp, w: crate::doc_windows::Win) -> Option<String> {
+    let d = app.session.documents().get(w.0)?;
+    Some(window_tab_title(app, w, d))
+}
+
+/// The height of the tab strip and the size of a tab's title, in points: larger with User
+/// Interface › Large Tabs.
+fn tab_size(app: &VectorcraftApp) -> (f32, f32) {
+    if app.session.prefs.large_tabs { (44.0, 14.0) } else { (35.0, 12.5) }
+}
+
+/// The tab at the top of window `w`'s floating OS window ([`crate::doc_windows`]): a strip with the
+/// window's tab, as the main window's strip draws it but without its ×. → the tab's response,
+/// which senses clicks and drags.
+pub(crate) fn window_tab(app: &VectorcraftApp, ui: &mut Ui, w: crate::doc_windows::Win) -> egui::Response {
+    let t = Tokens::get(ui.ctx());
+    let (height, title_size) = tab_size(app);
+    let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    ui.painter().rect_filled(strip, 0.0, t.tab_strip);
+    ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
+    let title = document_window_title(app, w).unwrap_or_default();
+    let galley = ui.painter().layout_no_wrap(title, theme::semibold(title_size), t.text_strong);
+    let r = egui::Rect::from_min_size(strip.min, vec2((galley.size().x + 28.0).min(strip.width()), strip.height() - 1.0));
+    ui.painter().rect_filled(r, 0.0, t.panel);
+    ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.5, t.border));
+    ui.painter().galley(egui::pos2(r.left() + 14.0, r.center().y - galley.size().y / 2.0), galley, t.text);
+    ui.interact(r, ui.scope_id().with("window-tab"), Sense::click_and_drag())
+}
+
+/// While document tab `r` is dragged off the tab `strip` far enough to float its document, an
+/// outline under the pointer where its window will open; → the window's top-left corner when the
+/// drag ends there.
+fn tear_off(ui: &Ui, resp: &egui::Response, strip: egui::Rect) -> Option<egui::Pos2> {
+    use crate::doc_windows::{GRAB, torn_off};
+    if resp.dragged()
+        && let Some(p) = resp.interact_pointer_pos().filter(|p| torn_off(strip, *p))
+    {
+        let t = Tokens::get(ui.ctx());
+        let ghost = egui::Rect::from_min_size(p - GRAB, vec2(240.0, 160.0));
+        let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, ui.scope_id().with("tab-tear-off")));
+        painter.rect_filled(ghost, 0.0, t.accent.gamma_multiply(0.12));
+        painter.rect_stroke(ghost, 0.0, Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+    }
+    if !resp.drag_stopped() {
+        return None;
+    }
+    let p = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.latest_pos()))?;
+    torn_off(strip, p).then_some(p - GRAB)
+}
+
+/// The documents of the tabs the strip shows, from `slots` (each tab's document index and rect,
+/// left to right): one entry per document, spanning the tabs of all its views (Window › New
+/// Window), which sit side by side and move together.
+pub(super) fn tab_groups(slots: &[(usize, egui::Rect)]) -> Vec<(usize, egui::Rangef)> {
+    let mut groups: Vec<(usize, egui::Rangef)> = vec![];
+    for &(i, r) in slots {
+        match groups.last_mut() {
+            Some((d, span)) if *d == i => span.max = span.max.max(r.right()),
+            _ => groups.push((i, egui::Rangef::new(r.left(), r.right()))),
+        }
+    }
+    groups
+}
+
+/// Where document `from`'s tabs, dragged along the strip to `x`, go among the other documents'
+/// tabs in `groups` ([`tab_groups`]): before the first whose middle is right of `x`, else after
+/// the last. → the document's new index among all the open documents (floating ones and those
+/// whose tabs don't fit included) and the x of the gap the drop goes in; `None` when the drop
+/// leaves the document where it is, or there is no other tab to drop beside.
+pub(super) fn tab_drop(groups: &[(usize, egui::Rangef)], from: usize, x: f32) -> Option<(usize, f32)> {
+    let others: Vec<&(usize, egui::Rangef)> = groups.iter().filter(|(d, _)| *d != from).collect();
+    let slot = others.iter().filter(|(_, span)| span.center() < x).count();
+    let (to, gap) = match others.get(slot) {
+        // Before document `d`: it shifts left by one when `from` was before it.
+        Some(&&(d, span)) => (if from < d { d - 1 } else { d }, span.min),
+        // After the last tab shown.
+        None => {
+            let &&(d, span) = others.last()?;
+            (if from < d { d } else { d + 1 }, span.max)
+        }
+    };
+    (to != from).then_some((to, gap))
 }
 
 /// Whether a document tab's × comes before its title (macOS) rather than after it (Windows,
@@ -27,46 +134,144 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
     first
 }
 
-/// Document tab strip: "Name* @ 66.67% (RGB/Preview)". User Interface › Large Tabs makes the tabs
-/// taller, with larger titles. Tabs that don't fit are reached from a » button at the strip's
-/// right end, which lists every open document, and the active tab is always in view (#746).
+/// When the tabs `widths` wide from `first` to the last one leave at least `least` of `room` before
+/// the » button, the tab before `first` fills that room with its title shortened (#8584). → the
+/// first tab the strip shows and, when it is that tab, the width it gets.
+pub(super) fn leading_tab(widths: &[f32], first: usize, room: f32, least: f32) -> (usize, Option<f32>) {
+    let rest: f32 = widths.get(first..).map_or(0.0, |w| w.iter().sum());
+    if first > 0 && room - rest >= least { (first - 1, Some(room - rest)) } else { (first, None) }
+}
+
+/// The room a tab `w` wide has: `left` of the strip, or with a leading tab `lead` wide
+/// ([`leading_tab`]), `lead` for it (`leading`) and its whole width for each tab after it.
+pub(super) fn tab_room(lead: Option<f32>, leading: bool, w: f32, left: f32) -> f32 {
+    match lead {
+        Some(l) if leading => l,
+        Some(_) => w,
+        None => left,
+    }
+}
+
+/// `title` in one line at most `max_width` wide, ending in "…" when it is cut short, and whether
+/// it fits in `max_width`. egui rounds a wrap width to the nearest point, so the width is rounded
+/// down first.
+pub(super) fn shortened_title(
+    ctx: &egui::Context,
+    title: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+    max_width: f32,
+) -> (std::sync::Arc<egui::Galley>, bool) {
+    let max_width = max_width.max(0.0);
+    let mut job = egui::text::LayoutJob::simple_singleline(title.to_owned(), font, color);
+    job.wrap = egui::text::TextWrapping { max_width: max_width.floor(), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    let galley = ctx.fonts_mut(|f| f.layout_job(job));
+    let fits = galley.size().x <= max_width;
+    (galley, fits)
+}
+
+/// The × of a document tab `w` wide, drawn in `xr` and clicked within 3 pt of it, or `None` for a
+/// tab shortened narrower than the × and its click area.
+fn tab_close_box(ui: &Ui, t: &Tokens, xr: egui::Rect, w: f32, id: egui::Id) -> Option<egui::Response> {
+    /// The least width of a tab that holds its × and the ×'s click area.
+    const CLOSE_ROOM: f32 = 25.0;
+    if w < CLOSE_ROOM {
+        return None;
+    }
+    let xresp = ui.interact(xr.expand(3.0), id, Sense::click());
+    icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
+    Some(xresp)
+}
+
+/// Document tab strip: the active tab's title is "Name* @ 66.67 % (RGB/Preview)", and each other
+/// tab shows "Name*" alone, with the whole title in its tooltip (#8582). User Interface › Large
+/// Tabs makes the tabs taller, with larger titles. Tabs that don't fit are reached from a » button
+/// at the strip's right end, which lists every open document, and the active tab is always in view
+/// (#746). The first tab that doesn't fit whole fills the room left before the » button with its
+/// title shortened, when that room holds some of the title (#8584). When the active tab is among
+/// the last ones and the tabs from it to the end leave room, the tab before them fills that room
+/// instead. An active tab wider than the whole strip is shortened to it.
+/// Each view Window › New Window opened has a tab of its own. Windows floating have no tab
+/// ([`crate::doc_windows`]); while the current window is a floating one, the tab of the window the
+/// strip shows is the highlighted one. A tab dragged more than [`crate::doc_windows::TEAR_OFF`]
+/// above or below the strip floats its view in a window under the pointer; one dragged along the
+/// strip moves its document among the others (`document.move`, #5663), a line marking where it
+/// will go. A middle-click on a tab closes it, as its × does (#6506).
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     /// The width of the » button.
     const MORE: f32 = 30.0;
+    /// A tab's width beyond its title's: the margins and the ×.
+    const TAB_PADDING: f32 = 50.0;
+    /// The least width of title a tab shortened to fit the strip shows.
+    const MIN_TITLE: f32 = 40.0;
     let t = Tokens::get(ui.ctx());
-    let (height, title_size) = if app.session.prefs.large_tabs { (44.0, 14.0) } else { (35.0, 12.5) };
+    let (height, title_size) = tab_size(app);
     let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    app.canvas.windows.strip = Some(strip);
     ui.painter().rect_filled(strip, 0.0, t.tab_strip);
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
     // On the Home screen no tab is the current one.
-    let active = app.session.active_index().filter(|_| app.ui.home.is_none());
-    let tabs: Vec<(String, std::sync::Arc<egui::Galley>)> = app
-        .session
-        .documents()
-        .iter()
-        .enumerate()
-        .map(|(i, d)| {
-            let zoom = app.views.get(i).map(|v| v.zoom).unwrap_or(1.0);
-            let title = tab_title(d, zoom, app.ui.view.outline, app.session.prefs.display_print_size);
-            let color = if Some(i) == active { t.text_strong } else { t.text_dim };
-            (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
+    let shown = crate::doc_windows::tab_window(app).filter(|_| app.ui.home.is_none());
+    // The windows under the tabs, with the text each tab shows, its whole title and the text laid
+    // out; `active` is the position of the highlighted one. An inactive tab shows the name alone,
+    // without the zoom and the mode in parentheses (color mode and view, or the opacity mask being
+    // edited) (#8582), and its tooltip shows the whole title.
+    type Tab = (crate::doc_windows::Win, String, String, std::sync::Arc<egui::Galley>);
+    let tabs: Vec<Tab> = crate::doc_windows::docked_windows(app)
+        .into_iter()
+        .filter_map(|w| Some((w, app.session.documents().get(w.0)?)))
+        .map(|(w, d)| {
+            let title = window_tab_title(app, w, d);
+            let (text, color) =
+                if Some(w) == shown { (title.clone(), t.text_strong) } else { (view_tab_name(d, crate::doc_windows::label(app, w)), t.text_dim) };
+            let galley = ui.painter().layout_no_wrap(text.clone(), theme::semibold(title_size), color);
+            (w, text, title, galley)
         })
         .collect();
-    let widths: Vec<f32> = tabs.iter().map(|(_, g)| g.size().x + 50.0).collect();
+    let active = tabs.iter().position(|(w, ..)| Some(*w) == shown);
+    let widths: Vec<f32> = tabs.iter().map(|(.., g)| g.size().x + TAB_PADDING).collect();
     let overflow = widths.iter().sum::<f32>() > strip.width();
     let room = strip.width() - if overflow { MORE } else { 0.0 };
     let first = if overflow { first_tab_shown(&widths, active, room) } else { 0 };
+    let (first, lead) = leading_tab(&widths, first, room, TAB_PADDING + MIN_TITLE);
     let mut x = strip.left();
     let mut activate = None;
     let mut close = None;
+    let mut float = None;
     let mut hovering_art = false;
-    for (i, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
-        if x + w > strip.left() + room && Some(i) != active {
-            break;
+    // The tabs shown, by document and rect, and the document whose tab is dragged (and whether
+    // the drag just ended), for moving it along the strip.
+    let mut slots: Vec<(usize, egui::Rect)> = vec![];
+    let mut dragged = None;
+    for (k, ((win, text, title, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
+        // A tab that doesn't fit whole takes the rest of the strip with its title shortened, as
+        // long as some of the title fits (#8584); its tooltip shows the whole title. The active
+        // tab always shows, shortened to the strip when it is wider than the whole strip. The
+        // leading tab before the ones that fit whole takes only the room they leave, and the tabs
+        // after it are drawn whole.
+        let left = tab_room(lead, k == first, *w, strip.left() + room - x);
+        let is_active = Some(k) == active;
+        // A shortened title too wide for its room even as "…" is not drawn, so it stays clear of
+        // the ×.
+        let (galley, w, shortened, title_fits) = if *w > left {
+            if left < TAB_PADDING + MIN_TITLE && !is_active {
+                break;
+            }
+            let color = if Some(*win) == shown { t.text_strong } else { t.text_dim };
+            let (galley, fits) = shortened_title(ui.ctx(), text, theme::semibold(title_size), color, left - TAB_PADDING);
+            (galley, left.max(0.0), true, fits)
+        } else {
+            (galley.clone(), *w, false, true)
+        };
+        let win = *win;
+        let i = win.0;
+        let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
+        let resp = ui.interact(r, ui.scope_id().with(("tab", i, win.1)), Sense::click_and_drag());
+        let resp = if shortened || text != title { super::status_bar::full_text_tooltip(resp, title.as_str()) } else { resp };
+        slots.push((i, r));
+        if resp.dragged() || resp.drag_stopped() {
+            dragged = Some((i, resp.drag_stopped()));
         }
-        let is_active = Some(i) == active;
-        let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(*w, strip.height() - 1.0));
-        let resp = ui.interact(r, ui.scope_id().with(("tab", i)), Sense::click());
         if is_active {
             ui.painter().rect_filled(r, 0.0, t.panel);
         } else if resp.hovered() {
@@ -77,22 +282,51 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         // (#673).
         let (x_center, title_left) = if CLOSE_BEFORE_TITLE { (r.left() + 16.0, r.left() + 32.0) } else { (r.right() - 16.0, r.left() + 14.0) };
         let xr = egui::Rect::from_center_size(egui::pos2(x_center, r.center().y), vec2(12.0, 12.0));
-        let xresp = ui.interact(xr.expand(3.0), ui.scope_id().with(("tabx", i)), Sense::click());
-        icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
-        ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley.clone(), t.text);
-        hovering_art |= crate::document_drag::hover_tab(app, &resp, i, xr.expand(3.0));
-        if xresp.clicked() {
-            close = Some(i);
+        let xresp = tab_close_box(ui, &t, xr, w, ui.scope_id().with(("tabx", i, win.1)));
+        if title_fits {
+            ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley, t.text);
+        }
+        let x_area = if xresp.is_some() { xr.expand(3.0) } else { egui::Rect::NOTHING };
+        hovering_art |= crate::document_drag::hover_tab(app, &resp, win, x_area);
+        // A middle-click anywhere on the tab closes it as the × does (#6506), so closing a
+        // modified document's last view still asks to save first.
+        let x_clicked = xresp.as_ref().is_some_and(|x| x.clicked() || x.middle_clicked());
+        if x_clicked || resp.middle_clicked() {
+            close = Some(win);
         } else if resp.clicked() {
-            activate = Some(i);
+            activate = Some(win);
+        } else if let Some(at) = tear_off(ui, &resp, strip) {
+            float = Some((win, at));
         }
         x += w;
     }
     crate::document_drag::finish_tabs(ui.ctx(), hovering_art);
-    // The » button: every open document, the active one checked. The list scrolls once it
-    // reaches the bottom of the window, so every document of a large session stays reachable
-    // (#4017).
+    // A tab dragged along the strip (not off it, which floats it) moves its document: a line marks
+    // the gap it goes in, and the release moves it there. Artwork dragged over the tabs never does.
+    let mut reorder = None;
+    if let Some((from, released)) = dragged
+        && !crate::document_drag::carrying_artwork(ui.ctx())
+        && let Some(p) = ui.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()))
+        && !crate::doc_windows::torn_off(strip, p)
+    {
+        let drop = tab_drop(&tab_groups(&slots), from, p.x);
+        if released {
+            reorder = drop.map(|(to, _)| (from, to));
+        } else {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            if let Some((_, gap)) = drop {
+                let gap = gap.clamp(strip.left() + 1.0, strip.right() - 1.0);
+                ui.painter().vline(gap, strip.y_range().shrink(4.0), Stroke::new(2.0, t.accent));
+            }
+        }
+    }
+    // The » button: every window, floating ones included, the current one checked. The list
+    // scrolls once it reaches the bottom of the window, so every document of a large session stays
+    // reachable (#4017).
     if overflow {
+        let current = crate::doc_windows::current(app).filter(|_| app.ui.home.is_none());
+        let all = crate::doc_windows::windows(app);
+        let titles: Vec<(crate::doc_windows::Win, String)> = all.iter().map(|w| (*w, document_window_title(app, *w).unwrap_or_default())).collect();
         let more = egui::Rect::from_min_max(egui::pos2(strip.right() - MORE, strip.top()), egui::pos2(strip.right(), strip.bottom() - 1.0));
         let resp = ui.interact(more, ui.scope_id().with("tabs-more"), Sense::click());
         ui.painter().rect_filled(more, 0.0, if resp.hovered() { t.hover.gamma_multiply(0.4) } else { t.tab_strip });
@@ -100,27 +334,35 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         let resp = resp.on_hover_text(tl!("Show all open documents"));
         egui::Popup::menu(&resp).show(|ui| {
             widgets::menu_scroll(ui, |ui| {
-                for (i, (title, _)) in tabs.iter().enumerate() {
-                    if widgets::menu_item_name(ui, title, true, Some(i) == active) {
-                        activate = Some(i);
+                for (w, title) in &titles {
+                    if widgets::menu_item_name(ui, title, true, Some(*w) == current) {
+                        activate = Some(*w);
                         ui.close();
                     }
                 }
             });
         });
     }
-    if let Some(i) = close {
-        if let Err(e) = crate::unsaved::close(app, i) {
+    if let Some(w) = close {
+        if let Err(e) = crate::doc_windows::close_window(app, w) {
             app.status(e);
         }
-    } else if let Some(i) = activate {
-        show_document(app, i);
+    } else if let Some(((i, n), at)) = float {
+        if let Err(e) = app.run("window.arrange.floatInWindow", json!({"index": i, "view": n, "at": [at.x, at.y]})) {
+            app.status(e);
+        }
+    } else if let Some((from, to)) = reorder {
+        if let Err(e) = app.run("document.move", json!({"from": from, "to": to})) {
+            app.status(e);
+        }
+    } else if let Some(w) = activate {
+        crate::doc_windows::show_window(app, w);
     }
 }
 
 /// Makes document `i` the current one, as a click on its tab does: the Home screen closes, and
 /// with the Artboard tool the artboard the document shows becomes the tool's target.
-fn show_document(app: &mut VectorcraftApp, i: usize) {
+pub(crate) fn show_document(app: &mut VectorcraftApp, i: usize) {
     app.ui.home = None;
     let changed = app.session.active_index() != Some(i);
     if app.session.set_active(i)
@@ -139,20 +381,27 @@ fn show_document(app: &mut VectorcraftApp, i: usize) {
 /// the current one in tab order (before it) the current one, as a click on its tab does. After the
 /// last document comes the first, and before the first document comes the last. On the Home
 /// screen, where no tab is the current one, the next document is the first and the previous
-/// document is the last. Returns `{index}`.
+/// document is the last. Each view Window › New Window opened is a step of its own. Returns
+/// `{index}`, with the view's number as `view` while the document has more than one view.
 pub fn step_document(app: &mut VectorcraftApp, forward: bool) -> Result<serde_json::Value, String> {
-    let n = app.session.documents().len();
+    let all = crate::doc_windows::windows(app);
+    let n = all.len();
     if n == 0 {
         return Err("no document open".into());
     }
-    let i = match (app.session.active_index().filter(|_| app.ui.home.is_none()), forward) {
+    let current = crate::doc_windows::current(app).filter(|_| app.ui.home.is_none()).and_then(|c| all.iter().position(|w| *w == c));
+    let k = match (current, forward) {
         (Some(a), true) => (a + 1) % n,
         (Some(a), false) => (a + n - 1) % n,
         (None, true) => 0,
         (None, false) => n - 1,
     };
-    show_document(app, i);
-    Ok(json!({ "index": i }))
+    let Some(&w) = all.get(k) else { return Err("no document open".into()) };
+    crate::doc_windows::show_window(app, w);
+    Ok(match crate::doc_windows::label(app, w) {
+        Some(view) => json!({ "index": w.0, "view": view }),
+        None => json!({ "index": w.0 }),
+    })
 }
 
 /// The isolation mode breadcrumb bar. It is drawn over the top of `area` (the canvas), after the
@@ -178,7 +427,10 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
             crumbs.push(Crumb { id: None, is_layer: false, name: pn.clone() });
         }
         let bar = egui::Rect::from_min_size(area.min, vec2(area.width(), 24.0));
-        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::click_and_drag());
+        // Keeps the pointer off the canvas; not focusable (`click_and_drag` is), so Tab skips it.
+        // A click on it, the current object's name included, outside the back arrow, the crumbs of
+        // the levels above and the pattern buttons leaves isolation mode.
+        let background = ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
         ui.painter().rect_filled(bar, 0.0, t.panel);
         let back = egui::Rect::from_min_size(bar.min + vec2(6.0, 3.0), vec2(18.0, 18.0));
         let bresp = ui.interact(back, ui.scope_id().with("iso-back"), Sense::click());
@@ -201,8 +453,10 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
                     ui.painter().rect_filled(crumb_rect, 3.0, t.hover);
                 }
                 if resp.clicked() {
-                    if crumb.is_layer {
-                        nav_cmd = Some(("object.exitIsolation", json!({})));
+                    // The top-level layer's crumb leaves isolation mode; a sublayer's or a group's
+                    // crumb isolates that level.
+                    if crumb.is_layer && i == 0 {
+                        nav_cmd = Some(("object.exitIsolation", json!({ "all": true })));
                     } else if let Some(target) = crumb.id {
                         nav_cmd = Some(("object.isolate", json!({ "id": target.0 })));
                     }
@@ -238,18 +492,45 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         if bresp.clicked() {
             pattern_cmd = pattern_cmd.or(pattern_edit.as_ref().map(|_| "object.pattern.done"));
             if pattern_cmd.is_none() {
-                // Up one level: the isolated object's parent, or out of isolation mode from a layer.
+                // Up one level: the isolated object's parent group, or `object.exitIsolation`, which
+                // goes from an isolated sublayer to its parent layer and otherwise leaves isolation mode.
                 nav_cmd = Some(match ancestry.iter().rev().nth(1).filter(|p| st.doc.node(**p).is_some_and(|n| !n.is_layer())) {
                     Some(parent) => ("object.isolate", json!({ "id": parent.0 })),
                     None => ("object.exitIsolation", json!({})),
                 });
             }
         }
+        // A click on the background leaves isolation mode altogether, symbol editing mode included.
+        // While a pattern is edited it does nothing: Save a Copy, Done and Cancel end pattern editing.
+        let leave = background.clicked() && nav_cmd.is_none() && pattern_cmd.is_none() && pattern_edit.is_none();
         if let Some((cmd, params)) = nav_cmd {
             app.run(cmd, params).ok();
         }
         if let Some(cmd) = pattern_cmd {
             app.run(cmd, json!({})).ok();
+        }
+        if leave {
+            leave_isolation(app);
+        }
+    }
+}
+
+/// Runs `object.exitIsolation` until the current document is out of isolation mode. Leaving symbol
+/// editing mode from a group isolated inside the symbol's art first goes back to the art, and leaving
+/// the mode restores the isolation it was entered from; each of these is left in turn. It stops at
+/// pattern editing, which only its own buttons end, and when a step fails or changes nothing.
+fn leave_isolation(app: &mut VectorcraftApp) {
+    // Each step leaves one level; a document has far fewer levels than this.
+    const MAX_STEPS: usize = 64;
+    let state = |app: &VectorcraftApp| {
+        app.session
+            .active()
+            .map(|d| (d.isolation, d.doc.symbol_edit.as_ref().map(|e| e.layer), d.doc.mask_edit.is_some(), d.doc.pattern_edit.is_some()))
+    };
+    for _ in 0..MAX_STEPS {
+        let Some(before) = state(app) else { return };
+        if before.0.is_none() || before.3 || app.run("object.exitIsolation", json!({})).is_err() || state(app) == Some(before) {
+            return;
         }
     }
 }
@@ -293,10 +574,12 @@ pub(super) fn artboard_list(app: &VectorcraftApp, ui: &mut Ui, cur: usize) -> Op
                     }
                     // Every number ends where the widest one ends.
                     let numbers = ui.painter().layout_no_wrap(boards.len().to_string(), egui::FontId::proportional(12.0), t.text_dim).size().x;
-                    let width = ui.available_width().max(LIST_W);
                     let mut chosen = None;
                     ui.spacing_mut().item_spacing.y = 0.0;
                     area.show_rows(ui, ROW_H, boards.len(), |ui, range| {
+                        // The width beside the scroll bar's column: rows as wide as the list
+                        // itself would widen it by the bar on every pass.
+                        let width = ui.available_width().max(LIST_W);
                         for i in range {
                             let Some(board) = boards.get(i) else { continue };
                             let (r, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());

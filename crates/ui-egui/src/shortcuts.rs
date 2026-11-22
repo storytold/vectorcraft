@@ -11,18 +11,45 @@ use vectorcraft_tools::{Mods, SurroundingUnit, ToolKey};
 
 use crate::VectorcraftApp;
 
+mod alt_tap;
+mod held_tool;
+mod hold_keys;
+mod labels;
 mod paste;
 mod presentation;
 mod typing;
 
+pub(crate) use alt_tap::AltTap;
+pub(crate) use held_tool::{HeldTool, note_tool_use};
+pub(crate) use hold_keys::HoldKeys;
+#[cfg(test)]
+pub(crate) use labels::note_copied_in_window;
+pub(crate) use labels::{leave_to_labels, take_copied_in_window};
+use labels::{left_to_labels, note_copies_before_labels, run_after_labels, take_command_after_labels, watch_label_copies};
 use paste::unclip_chords;
 pub(crate) use paste::{PasteChord, paste_command};
 pub(crate) use presentation::presentation_step;
-use presentation::{escape_pair_id, escape_press, escape_resets_rotation, presentation_keys};
+use presentation::{escape_resets_rotation, presentation_keys};
 #[cfg(test)]
 use typing::is_shortcut_chord;
 pub(crate) use typing::keep_marked_text;
 use typing::{drop_typing_presses, type_text};
+
+fn text_focus_frame_id() -> egui::Id {
+    egui::Id::unique("shortcut-text-focus-frame")
+}
+
+pub(crate) fn remember_text_focus(ctx: &egui::Context) {
+    if ctx.egui_wants_keyboard_input() {
+        let frame = ctx.cumulative_frame_nr_for(ctx.viewport_id());
+        ctx.data_mut(|d| d.insert_temp(text_focus_frame_id(), frame));
+    }
+}
+
+fn text_focused_in_previous_frame(ctx: &egui::Context) -> bool {
+    let previous = ctx.cumulative_frame_nr_for(ctx.viewport_id()).checked_sub(1);
+    ctx.data(|d| d.get_temp::<u64>(text_focus_frame_id())) == previous
+}
 
 /// Parse "Cmd+Shift+]" into an egui shortcut. `Cmd` is Command on macOS and Ctrl elsewhere.
 /// `+` and `=` name one chord key ([`Key::Equals`]): `+` is Shift+`=` on many layouts, so a
@@ -81,7 +108,7 @@ pub(crate) fn is_modifier(key: Key) -> bool {
 /// command's params: `{}`, or `{panel}` for the panel shortcuts (`window.panel`).
 pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json::Value)> {
     let mut v = vec![];
-    for c in vectorcraft_engine::command_specs() {
+    for c in vectorcraft_engine::command_specs().iter().chain(vectorcraft_engine::cmd::plugin::command_specs()) {
         if let Some(sc) = crate::menus::shortcut_of(c.id).and_then(parse) {
             v.push((sc, c.id, json!({})));
         }
@@ -94,6 +121,19 @@ pub(crate) fn all_shortcuts() -> Vec<(KeyboardShortcut, &'static str, serde_json
     for (panel, _) in crate::state::all_panels() {
         if let Some(sc) = crate::shortcut_editor::panel_shortcut(panel).and_then(parse) {
             v.push((sc, "window.panel", json!({ "panel": panel })));
+        }
+    }
+    // Effect menu items with shortcuts of their own (#3296): a chord bound to one is a command's
+    // too, so the tool doesn't take Cmd+Enter bound to an effect before the keymap runs it.
+    for e in crate::shortcut_editor::effect_items().iter() {
+        if let Some(sc) = crate::shortcut_editor::effect_shortcut(&e.effect).and_then(parse) {
+            v.push((sc, e.command, json!({ "effect": e.effect })));
+        }
+    }
+    // Object › Plug-ins' filter items with shortcuts, for the same reason.
+    for f in crate::shortcut_editor::filter_items().iter() {
+        if let Some(sc) = crate::shortcut_editor::filter_shortcut(&f.id).and_then(parse) {
+            v.push((sc, "plugin.dialog", json!({ "id": f.id })));
         }
     }
     // Most specific (most modifiers) first: `paste_command` takes the first V chord the held keys
@@ -116,13 +156,15 @@ fn runs_a_command(i: &egui::InputState, key: Key, cmd_only: bool) -> bool {
             _ => None,
         })
         .collect();
-    let shortcuts = all_shortcuts();
-    let bound = |m: &Modifiers| {
-        shortcuts
-            .iter()
-            .any(|(sc, ..)| sc.logical_key == key && (sc.modifiers.command || (!cmd_only && sc.modifiers.any())) && m.matches_logically(sc.modifiers))
-    };
-    !presses.is_empty() && presses.iter().all(bound)
+    !presses.is_empty() && presses.iter().all(|m| chord_runs_a_command(key, *m, cmd_only))
+}
+
+/// Is a command shortcut bound to `key` held with `m`, matched logically?
+/// `cmd_only`: only chords with Cmd count.
+fn chord_runs_a_command(key: Key, m: Modifiers, cmd_only: bool) -> bool {
+    all_shortcuts()
+        .iter()
+        .any(|(sc, ..)| sc.logical_key == key && (sc.modifiers.command || (!cmd_only && sc.modifiers.any())) && m.matches_logically(sc.modifiers))
 }
 
 /// Whether a key press runs a shortcut of the keymap in effect, the user's own included. The web
@@ -131,18 +173,24 @@ fn runs_a_command(i: &egui::InputState, key: Key, cmd_only: bool) -> bool {
 /// `key` and `code` are the browser's names for the character typed and the key's position, which
 /// egui reads with [`Key::from_name`]; `modifiers` as egui reports them. The press is matched as
 /// the dispatcher matches it ([`dispatch`]) on a layout about which nothing is known: what typing
-/// has shown of the layout is left out, and so are double presses.
+/// has shown of the layout is left out, and so are double presses. An action's function key runs
+/// a shortcut too.
 pub fn runs_a_shortcut(key: &str, code: &str, modifiers: Modifiers) -> bool {
     let physical_key = Key::from_name(code);
     let Some(key) = Key::from_name(key).or(physical_key) else { return false };
     let press = egui::Event::Key { key, physical_key, pressed: true, repeat: false, modifiers };
     let Some(input) = craft_keymap::KeyInput::from_egui(&press, crate::keymap::platform()) else { return false };
     let mirror = crate::shortcut_editor::current();
-    craft_keymap::Layout::default().candidates(&input).iter().any(|c| mirror.keymap.lookup(c, false, &Active::NONE) != craft_keymap::Lookup::None)
+    craft_keymap::Layout::default()
+        .candidates(&input)
+        .iter()
+        .any(|c| mirror.keymap.lookup(c, false, &Active::NONE) != craft_keymap::Lookup::None || crate::panels::actions::plays_an_action(c))
 }
 
 /// Process one frame's events against the keymap at most once per context, viewport and frame, so
-/// reruns cannot fire a shortcut or tool key twice.
+/// reruns cannot fire a shortcut or tool key twice: keymap commands, tools and panels, nudges,
+/// Delete/Backspace (left to a Layers or Appearance row that has the keys) and single-key tool
+/// shortcuts.
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // One UI pass takes a frame's events. A discarded rerun and a test helper that also calls
     // `logic` see the same events again; they must not fire a shortcut or tool key twice. The
@@ -153,16 +201,36 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if !crate::take_frame_once(&mut app.shortcuts_frames, frame) {
         return;
     }
-    if !(ctx.input(|input| input.focused) || app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT) {
+    ctx.input(|i| crate::shortcut_editor::note_backtick_text(&i.events));
+    // A Copy or Cut the last pass left to labels that copied nothing runs now, whatever this
+    // frame's keys do. The text it copies goes out now, so it is not taken for a label's copy.
+    watch_label_copies(ctx);
+    if let Some(c) = take_command_after_labels(ctx) {
+        run_after_labels(app, c);
+        app.flush_clipboard_out(ctx);
+    }
+    note_copies_before_labels(ctx);
+    note_key_surfaces(app, ctx);
+    forget_opening_key(ctx);
+    let focused = ctx.input(|input| input.focused) || app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT;
+    // The repeats of a key with a hold shortcut stay out of every frame until it is let go.
+    hold_keys::guard(app, ctx, focused);
+    // A held tool shortcut that is let go returns to the tool active before it.
+    held_tool::follow(app, ctx, focused);
+    let alt_tapped = alt_tap::follow(&mut app.alt_tap, ctx, focused);
+    if !focused {
         crate::ime::controls_without_editor(app, ctx);
         return;
     }
-    // Taken before anything returns, so a press in a field or a dialog ends a pair of Escapes.
-    let mut escape_pair = escape_press(ctx);
     // Followed before anything returns, so a key typed in a field isn't taken for a paste.
     let textless_paste = ctx.input(|i| app.paste_chord.textless_paste(&i.events));
     // A numeric field being scrubbed has the keyboard: Escape cancels the drag.
     if crate::scrub::phase(ctx) != crate::scrub::Phase::Idle {
+        crate::ime::controls_without_editor(app, ctx);
+        return;
+    }
+    // The update prompt and the modal result window draw over everything and read Escape themselves.
+    if crate::updates_ui::blocks_input(app) {
         crate::ime::controls_without_editor(app, ctx);
         return;
     }
@@ -175,10 +243,24 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         if crate::shortcut_editor::is_recording(app) {
             return;
         }
-        // Escape closes a dropdown list or popover open in the dialog (each closes itself on it) and
-        // leaves the dialog open.
-        let popup = app.ui.dialog.as_ref().is_some_and(|d| egui::Popup::is_any_open(ctx) || crate::dialogs::brush_options::tips_open(d));
-        if !popup && ctx.input(|i| i.key_pressed(Key::Escape)) {
+        // Escape closes a dropdown list or popover open in the dialog, or the palette's Recent
+        // Commands list (each closes itself on it), and leaves the dialog or the palette open.
+        let popup = app.ui.dialog.as_ref().map_or(crate::palette::recent_list_open(ctx), |d| {
+            egui::Popup::is_any_open(ctx)
+                || crate::dialogs::brush_options::tips_open(d)
+                || crate::dialogs::new_document_popup_open(d)
+                || crate::dialogs::export_artboard_name_editing(app, d)
+        });
+        // Escape ends Brush Options' Key Color pick and leaves the dialog open: the Eyedropper
+        // switches back to the tool that armed it.
+        if !popup && pressed_anew(ctx, Key::Escape) && key_color_pick_armed(app) {
+            let view = app.view_info();
+            let r = app.session.tool_key(ToolKey::Escape, Mods::default(), view);
+            crate::canvas::apply_requests(app, r);
+            return;
+        }
+        // Escape in Preferences' search field with text clears the field first.
+        if !popup && pressed_anew(ctx, Key::Escape) && !crate::prefs_dialog::clear_search_on_escape(app, ctx) {
             crate::dialogs::cancel(app);
             app.ui.palette_open = false;
         }
@@ -186,12 +268,21 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     if app.ui.screen_mode == 3 {
         crate::ime::controls_without_editor(app, ctx);
-        presentation_keys(app, ctx, escape_pair);
+        presentation_keys(app, ctx);
         return;
     }
+    // Keys with a hold shortcut wait before anything else reads the frame's keys, so a key pressed
+    // after one acts after it.
+    if hold_keys::intake(app, ctx) {
+        return;
+    }
+    // Escape that cancels a ruler-origin drag or floating Tools move skips the tool and later Escape actions,
+    // and so do its repeats while it is held.
+    let escape_ended_gesture = escape_ended_gesture(ctx);
+    let escape_held_by_drag = crate::canvas::dragging(ctx) || escape_ended_gesture;
     let typing = ctx.egui_wants_keyboard_input();
     // Escape closes Edit Toolbar's drawer first (egui drops a drag from it on Escape already).
-    if app.ui.tools_drawer && !typing && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+    if app.ui.tools_drawer && !typing && !escape_held_by_drag && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
         app.ui.tools_drawer = false;
     }
     let view = app.view_info();
@@ -199,13 +290,19 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let composing = app.session.tool_composing();
     // Tool keys first (Enter/Escape end paths; arrows change polygon sides while dragging).
     let busy = app.session.tool_busy();
-    for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)] {
-        if !typing && !composing && ctx.input(|i| i.key_pressed(k)) {
+    // Enter in the Type tool types a line break (Cmd+Enter ends editing), so it goes to the tool
+    // with the frame's text, below: the loop then skips Enter, the first key.
+    let enter_types = app.session.tool_wants_text();
+    for (k, tk) in [(Key::Enter, ToolKey::Enter), (Key::Escape, ToolKey::Escape)].into_iter().skip(usize::from(enter_types)) {
+        if !typing && !composing && !take_claimed_repeat(app, ctx, k, tk, view) && pressed_anew(ctx, k) {
             // A chord a command is bound to (Cmd+Enter) runs only that command, in the shortcuts
             // below, also when the tool claims the key. While the Type tool edits text only Cmd
             // chords run one, and while another tool is busy none does.
             let text = app.session.tool_wants_text();
             if (text || !busy) && ctx.input(|i| runs_a_command(i, k, text)) {
+                continue;
+            }
+            if k == Key::Escape && escape_ended_gesture {
                 continue;
             }
             // A key the tool claims (Esc with a loaded place cursor) is only the tool's.
@@ -222,7 +319,12 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     .unwrap_or(i.modifiers);
                 crate::canvas::mods(m, false)
             });
+            let ends = k == Key::Escape && app.session.tool_ends_on_escape(view);
+            let before = (k == Key::Escape && !ends).then(|| document_revision(app));
             let r = app.session.tool_key(tk, mods, view);
+            // An Escape that ended something in the tool (a path being drawn, a selected point) ends
+            // nothing else. A hover highlight it clears does not count.
+            let tool_took = ends || before.is_some_and(|b| b != document_revision(app));
             // Enter also takes what the tool asks of the UI: Rotate, Scale, Reflect and Shear open
             // their dialog with it.
             if claimed || (k == Key::Enter && !busy) {
@@ -232,25 +334,8 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k));
                 ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, k));
             }
-            if k == Key::Escape && !busy && !claimed {
-                if app.session.active().is_some_and(|d| d.doc.pattern_edit.is_some()) {
-                    let _ = app.run("object.pattern.done", json!({}));
-                } else if app.session.active().is_some_and(|d| d.isolation.is_some()) {
-                    let _ = app.run("object.exitIsolation", json!({}));
-                } else if app.session.active().is_some_and(|d| d.global_edit.is_some()) {
-                    let _ = app.run("select.globalEdit", json!({}));
-                } else if app.ui.flyout.is_some() {
-                    app.ui.flyout = None;
-                } else if escape_pair.is_some_and(|second| escape_resets_rotation(app, ctx, second)) {
-                    // Escape pressed twice resets a rotated view (with the Rotate View tool, once).
-                    let _ = app.run("view.rotateReset", json!({}));
-                    escape_pair = None;
-                }
-            }
-            // An Escape that ended something can start a pair too. One that closed a popup cannot.
-            if k == Key::Escape && escape_pair.is_some() && !egui::Popup::is_any_open(ctx) {
-                let now = ctx.input(|i| i.time);
-                ctx.data_mut(|d| d.insert_temp(escape_pair_id(), now));
+            if k == Key::Escape && !busy && !claimed && !escape_held_by_drag && !tool_took {
+                escape_ends_one_thing(app, ctx);
             }
             if k == Key::Enter && !busy && !claimed {
                 // Enter with a selection tool opens the Move dialog, as a double-click on its button
@@ -265,13 +350,18 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
                 }
             }
+            held_tool::note_enter_dialog(app, k);
         }
     }
     if typing {
         crate::ime::controls_without_editor(app, ctx);
         return;
     }
-    ctx.input_mut(unclip_chords);
+    // The Copy or Cut the menu bar left to the labels came from no key: unclipped, the menu's Cut
+    // would become a plain X press (Toggle Fill/Stroke Focus).
+    if left_to_labels(ctx).is_none() {
+        ctx.input_mut(unclip_chords);
+    }
     // Tab is ours when no field has the keyboard (it shows and hides the panels, or goes to the
     // Type tool): left to egui, it would also move the focus on to a field, and every key after it
     // would count as typing.
@@ -287,20 +377,45 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     crate::ime::controls_without_editor(app, ctx);
-    handle_clipboard(app, ctx, textless_paste);
+    let to_labels = handle_clipboard(app, ctx, textless_paste);
+    // Alt tapped on its own: the Quick Pen tool's next action.
+    if alt_tapped && app.session.tool_claims_key(ToolKey::AltTap, view) {
+        let r = app.session.tool_key(ToolKey::AltTap, Mods::default(), view);
+        crate::canvas::apply_requests(app, r);
+    }
     if busy {
         busy_tool_keys(app, ctx, view);
         return;
     }
-    if claimed_tool_keys(app, ctx, view) {
+    // A plain Delete or Backspace after a click on a Layers or Appearance row is that panel's (it
+    // removes the highlighted rows), not a tool's (the Artboard tool's) or Edit › Clear's.
+    let rows_keys = crate::panels::rows_take_delete(ctx);
+    if claimed_tool_keys(app, ctx, view, rows_keys) {
         return;
     }
-    // Command, panel and tool shortcuts. Keys that type a character without Cmd/Alt/Ctrl are
-    // handled below as text (tool shortcuts, X, D, /, `,` and `.`).
-    let hits = dispatch(app, ctx, |hit| !(hit.trigger.chord.is_plain() && types_text(hit.trigger.chord.key)));
+    // An action's function key plays the action, also when a command has the same shortcut.
+    crate::panels::actions::play_function_key(app, ctx);
+    // Command, panel and tool shortcuts. A bound shifted punctuation chord uses its key press;
+    // other text keys use the typed character below.
+    let row_key = |chord: &craft_keymap::Chord| {
+        rows_keys && chord.is_plain() && !chord.mods.shift && matches!(chord.key, craft_keymap::Key::Delete | craft_keymap::Key::Backspace)
+    };
+    // An Escape that ended a ruler-origin drag or floating Tools move runs no command bound to it.
+    let gesture_escape = |chord: &craft_keymap::Chord| escape_ended_gesture && chord.is_plain() && chord.key == craft_keymap::Key::Escape;
+    // A Copy or Cut left to the labels runs neither command from the keymap.
+    let labels_clip = |hit: &Hit| to_labels && matches!(hit.command.id.as_str(), "edit.copy" | "edit.cut");
+    let hits = dispatch(app, ctx, |hit| {
+        let chord = &hit.trigger.chord;
+        let shifted_punctuation = chord.mods.shift && chord.key.name().chars().all(|c| !c.is_alphanumeric());
+        !(chord.is_plain() && types_text(chord.key) && !shifted_punctuation || row_key(chord) || gesture_escape(chord) || labels_clip(hit))
+    });
     let ran = !hits.is_empty();
-    for c in hits {
+    for hit in hits {
+        let c = unshifted_when_dimmed(app, hit);
         run_hit(app, ctx, &c);
+        if dialog_or_palette_open(app) {
+            break;
+        }
     }
     if settings_on_a_mac(app, ctx, mac(ctx)) || ran {
         return;
@@ -308,72 +423,305 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if alt_type_arrows(app, ctx) {
         return;
     }
-    nudge_and_clear(app, ctx);
+    nudge_and_clear(app, ctx, rows_keys);
     single_key_shortcuts(app, ctx);
+}
+
+/// Did `key` go down in this frame? The key repeats of a held key do not count.
+pub(crate) fn pressed_anew(ctx: &egui::Context, key: Key) -> bool {
+    ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: k, pressed: true, repeat: false, .. } if *k == key)))
+}
+
+/// Is Brush Options open with its Key Color eyedropper armed, waiting for a click on the art?
+fn key_color_pick_armed(app: &VectorcraftApp) -> bool {
+    let open = app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::brush_options::KIND);
+    open && app.session.tool_id() == "eyedropper" && app.session.tool_options()["brushKeyColor"] == true
+}
+
+/// Takes this frame's repeats of `key` when the tool claims it: a press acts once, and they stay out
+/// of the shortcuts. A chord a command is bound to keeps its repeats.
+fn take_claimed_repeat(app: &mut VectorcraftApp, ctx: &egui::Context, key: Key, tool_key: ToolKey, view: ViewInfo) -> bool {
+    let text = app.session.tool_wants_text();
+    let runs_a_command = (text || !app.session.tool_busy()) && ctx.input(|i| runs_a_command(i, key, text));
+    if runs_a_command || pressed_anew(ctx, key) || !ctx.input(|i| i.key_pressed(key)) || !app.session.tool_claims_key(tool_key, view) {
+        return false;
+    }
+    ctx.input_mut(|i| i.consume_key(Modifiers::NONE, key));
+    ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, key));
+    true
+}
+
+/// What Enter and Escape act on: the open dialog, the command search, Edit Toolbar's drawer and
+/// Presentation Mode.
+type KeySurface = (Option<String>, bool, bool, bool);
+
+fn key_surface(app: &VectorcraftApp) -> KeySurface {
+    (app.ui.dialog.as_ref().map(|d| d.kind.clone()), app.ui.palette_open, app.ui.tools_drawer, app.ui.screen_mode == 3)
+}
+
+/// The mark of what `key` went down on; `None` once that has changed.
+fn key_surface_id(ctx: &egui::Context, key: Key) -> egui::Id {
+    egui::Id::unique("key-surface").with(key).with(ctx.viewport_id())
+}
+
+/// Notes what a new press of Enter or Escape lands on, and forgets it once the key is up.
+fn note_key_surfaces(app: &VectorcraftApp, ctx: &egui::Context) {
+    for key in [Key::Enter, Key::Escape] {
+        let id = key_surface_id(ctx, key);
+        if pressed_anew(ctx, key) {
+            ctx.data_mut(|m| m.insert_temp(id, Some(key_surface(app))));
+        } else {
+            hold_back_key(app, ctx, key);
+            if !ctx.input(|i| i.key_down(key)) {
+                ctx.data_mut(|m| m.remove::<Option<KeySurface>>(id));
+            }
+        }
+    }
+}
+
+/// Removes this frame's presses of Enter and Escape when the key went down on something that has
+/// since changed: the press that opened or closed a dialog, and its repeats until the key is let
+/// go, reach neither the new dialog nor what is under the old one. Also removes the repeats of a
+/// key without a modifier that opened a dialog or the palette ([`hold_back_opening_key`]).
+pub(crate) fn hold_back_keys(app: &VectorcraftApp, ctx: &egui::Context) {
+    hold_back_key(app, ctx, Key::Enter);
+    hold_back_key(app, ctx, Key::Escape);
+    hold_back_opening_key(ctx);
+}
+
+/// The key of the mark of a key without a modifier whose command opened a dialog or the palette.
+fn opening_key_id(ctx: &egui::Context) -> egui::Id {
+    egui::Id::unique("opening-key").with(ctx.viewport_id())
+}
+
+/// Removes this frame's repeats of the key without a modifier that opened a dialog or the
+/// palette, and the text they type, until that key is let go: a held key does not type into the
+/// field that takes the keyboard.
+fn hold_back_opening_key(ctx: &egui::Context) {
+    let id = opening_key_id(ctx);
+    let Some(key) = ctx.data(|m| m.get_temp::<Key>(id)) else { return };
+    let repeat_of = |e: Option<&egui::Event>| matches!(e, Some(egui::Event::Key { key: k, pressed: true, repeat: true, .. }) if *k == key);
+    ctx.input_mut(|i| {
+        let typed_by = typing_presses(&i.events);
+        let held: Vec<bool> = i
+            .events
+            .iter()
+            .zip(typed_by)
+            .map(|(e, by)| repeat_of(Some(e)) || matches!(e, egui::Event::Text(_)) && repeat_of(by.and_then(|k| i.events.get(k))))
+            .collect();
+        let mut held = held.into_iter();
+        i.events.retain(|_| !held.next().unwrap_or(false));
+    });
+    // A repeat that comes in the same frame as the release is held back above; later presses are new.
+    let released =
+        ctx.input(|i| !i.key_down(key) || i.events.iter().any(|e| matches!(e, egui::Event::Key { key: k, pressed: false, .. } if *k == key)));
+    if released {
+        ctx.data_mut(|m| m.remove::<Key>(id));
+    }
+}
+
+/// Forgets the key that opened a dialog or the palette ([`hold_back_opening_key`]) once it is up
+/// and this frame has none of its events.
+fn forget_opening_key(ctx: &egui::Context) {
+    let id = opening_key_id(ctx);
+    if let Some(key) = ctx.data(|m| m.get_temp::<Key>(id))
+        && ctx.input(|i| !i.key_down(key) && !i.events.iter().any(|e| matches!(e, egui::Event::Key { key: k, .. } if *k == key)))
+    {
+        ctx.data_mut(|m| m.remove::<Key>(id));
+    }
+}
+
+fn hold_back_key(app: &VectorcraftApp, ctx: &egui::Context, key: Key) {
+    let id = key_surface_id(ctx, key);
+    let Some(pressed_on) = ctx.data(|m| m.get_temp::<Option<KeySurface>>(id)) else { return };
+    if pressed_on.as_ref() == Some(&key_surface(app)) {
+        return;
+    }
+    ctx.data_mut(|m| m.insert_temp(id, None::<KeySurface>));
+    ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key: k, pressed: true, .. } if *k == key)));
+}
+
+/// The key of the mark that the Escape held down ended a ruler-origin drag, a floating Tools move
+/// or a Control bar gripper drag.
+fn escape_ended_gesture_id() -> egui::Id {
+    egui::Id::unique("escape-ended-gesture")
+}
+
+/// Does this frame's Escape end a ruler-origin drag, a floating Tools move or a Control bar gripper
+/// drag? The repeats of an Escape that ended one do too, up to the frame that releases Escape or
+/// presses it again.
+fn escape_ended_gesture(ctx: &egui::Context) -> bool {
+    let (down, pressed, repeated) = ctx.input(|i| {
+        let escape =
+            |repeat: bool| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: r, .. } if *r == repeat));
+        (i.key_down(Key::Escape), escape(false), escape(true))
+    });
+    if crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx) || crate::chrome::control_bar_moving(ctx) {
+        if down {
+            ctx.data_mut(|d| d.insert_temp(escape_ended_gesture_id(), true));
+        }
+        return true;
+    }
+    // A release in the same frame as a repeat still holds that repeat back.
+    let held = (down || repeated) && !pressed && ctx.data(|d| d.get_temp::<bool>(escape_ended_gesture_id())).is_some();
+    if !(held && down) {
+        ctx.data_mut(|d| d.remove::<bool>(escape_ended_gesture_id()));
+    }
+    held
+}
+
+/// An Escape that no tool, field, popup or drag took ends the first of these that is on: pattern
+/// editing, isolation mode, Global Edit, a tool flyout, a full screen mode and a rotated view.
+fn escape_ends_one_thing(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if app.session.active().is_some_and(|d| d.doc.pattern_edit.is_some()) {
+        let _ = app.run("object.pattern.done", json!({}));
+    } else if app.session.active().is_some_and(|d| d.isolation.is_some()) {
+        // From an isolated sublayer, Escape leaves isolation mode rather than going up one layer.
+        let _ = app.run("object.exitIsolation", json!({ "all": true }));
+    } else if app.session.active().is_some_and(|d| d.global_edit.is_some()) {
+        let _ = app.run("select.globalEdit", json!({}));
+    } else if app.ui.flyout.is_some() {
+        app.ui.flyout = None;
+    } else if app.session.tool_id() == "rotateView" && escape_resets_rotation(app, ctx) {
+        // With the Rotate View tool, the view resets before a full screen mode ends.
+        let _ = app.run("view.rotateReset", json!({}));
+    } else if matches!(app.ui.screen_mode, 1 | 2)
+        && !egui::Popup::is_any_open(ctx)
+        && !text_focused_in_previous_frame(ctx)
+        && ctx.input(|i| {
+            i.events.iter().any(
+                |e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: false, modifiers, .. } if *modifiers == Modifiers::NONE),
+            )
+        })
+    {
+        let _ = app.run("view.screenMode", json!({ "mode": 0 }));
+    } else if escape_resets_rotation(app, ctx) {
+        // An Escape that has nothing else to end resets a rotated view. After one that ended
+        // something, the next one does, however long after it comes. A modified Escape does not
+        // leave a full screen mode, so it resets the view there.
+        let _ = app.run("view.rotateReset", json!({}));
+    }
+}
+
+/// What a tool's Escape can change besides what [`vectorcraft_engine::Session::tool_ends_on_escape`]
+/// reports: the document's revision (edits and selection changes, such as the Curvature tool
+/// letting go of a selected path's current point).
+fn document_revision(app: &VectorcraftApp) -> Option<u64> {
+    app.session.active().map(|d| d.revision)
 }
 
 /// Dispatch unmodified text keys to command bindings or tools.
 fn single_key_shortcuts(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // Single-key tool shortcuts (no Cmd/Ctrl/Alt). With a layout without Latin letters (Persian,
     // Arabic, Russian, Greek…) the key's position stands in for what it types (#793).
-    let events: Vec<(String, Modifiers)> = ctx.input(|i| {
-        let mut physical = None;
+    // A text's key is the press that typed it ([`typing_presses`]), and the text repeats with it.
+    let events: Vec<(String, Modifiers, Option<Key>, bool)> = ctx.input(|i| {
+        let typed_by = typing_presses(&i.events);
         i.events
             .iter()
-            .filter_map(|e| match e {
-                egui::Event::Key { physical_key, pressed: true, .. } => {
-                    physical = *physical_key;
-                    None
+            .zip(typed_by)
+            .filter_map(|(e, by)| match e {
+                egui::Event::Text(t) => {
+                    let (physical, key, repeat) = match by.and_then(|k| i.events.get(k)) {
+                        Some(egui::Event::Key { key, physical_key, repeat, .. }) => (*physical_key, Some(*key), *repeat),
+                        _ => (None, None, false),
+                    };
+                    Some((latin(t, physical), i.modifiers, key, repeat))
                 }
-                egui::Event::Text(t) => Some((latin(t, physical), i.modifiers)),
                 _ => None,
             })
             .collect()
     });
-    let keymap = crate::shortcut_editor::current();
-    for (text, m) in events {
+    for (text, m, pressed, repeat) in events {
         if m.command || m.alt || m.ctrl {
             continue;
         }
-        let upper = text.to_uppercase();
-        let key = if m.shift && text.chars().all(|c| c.is_alphabetic()) { format!("Shift+{upper}") } else { upper.clone() };
-        // A shifted punctuation character can also be written with its Shift (the Curvature tool's
-        // Shift+~ arrives as `~`).
-        let shifted = m.shift.then(|| format!("Shift+{text}"));
-        let hits: Vec<CommandRef> = [Some(key), Some(text), shifted]
-            .into_iter()
-            .flatten()
-            .filter_map(|t| crate::keymap::vc_chord(&t).and_then(|c| crate::keymap::lookup(&keymap.keymap, &c)))
-            .collect();
-        // Single-key command shortcuts (X, Shift+X, D, /, Shift+D, F, Shift+F by default) before
-        // tools.
-        let Some(hit) = hits.iter().find(|c| !c.id.starts_with("tool:")).or(hits.first()) else { continue };
-        match hit.id.strip_prefix("tool:") {
-            Some(tool) => app.select_tool(tool),
-            None if hit.params.is_null() => {
-                let _ = app.run(&hit.id, json!({}));
-            }
-            None => crate::menus::invoke(app, &hit.id, hit.params.clone()),
+        let chords = text_chords(&text, m, pressed);
+        if run_single_key(app, ctx, &chords, pressed, repeat) {
+            break;
         }
     }
 }
 
+/// The chords a single-key shortcut reads for `text`, typed with `m` by the key `pressed`.
+fn text_chords(text: &str, m: Modifiers, pressed: Option<Key>) -> Vec<craft_keymap::Chord> {
+    let upper = text.to_uppercase();
+    let key = if m.shift && text.chars().all(|c| c.is_alphabetic()) { format!("Shift+{upper}") } else { upper.clone() };
+    // A shifted punctuation character can also be written with its Shift (the Curvature tool's
+    // Shift+~ arrives as `~`).
+    let shifted = m.shift.then(|| format!("Shift+{text}"));
+    let mut chords: Vec<craft_keymap::Chord> =
+        [Some(key), Some(text.to_string()), shifted].into_iter().flatten().filter_map(|t| crate::keymap::vc_chord(&t)).collect();
+    // A character no chord names (`"`, which the backtick key types on Turkish Q) is read as
+    // the key that typed it, as the Keyboard Shortcuts editor records that press.
+    if chords.is_empty() {
+        let typed_by = pressed.and_then(|k| crate::shortcut_editor::chord_from_event(k, Modifiers { shift: m.shift, ..Modifiers::NONE }));
+        chords.extend(typed_by.and_then(|t| crate::keymap::vc_chord(&t)));
+    }
+    chords
+}
+
+/// Runs the single-key shortcut of `chords`, typed by the key `pressed`. True when it opened a
+/// dialog or the palette: the shortcuts after it in the frame do not run.
+fn run_single_key(app: &mut VectorcraftApp, ctx: &egui::Context, chords: &[craft_keymap::Chord], pressed: Option<Key>, repeat: bool) -> bool {
+    let keymap = crate::shortcut_editor::current();
+    let hits: Vec<CommandRef> = chords.iter().filter_map(|c| crate::keymap::lookup(&keymap.keymap, c)).collect();
+    // Single-key command shortcuts (X, Shift+X, D, /, Shift+D, F, Shift+F by default) before
+    // tools.
+    let Some(hit) = hits.iter().find(|c| !c.id.starts_with("tool:")).or(hits.first()) else { return false };
+    // A command runs as it does on a chord ([`run_hit`]): what its menu item runs. Smooth opens
+    // its slider, and Move opens its dialog.
+    match hit.id.strip_prefix("tool:") {
+        Some(tool) => {
+            held_tool::choose(app, ctx, tool, pressed, repeat);
+            false
+        }
+        None => {
+            run_hit(app, ctx, hit);
+            if !dialog_or_palette_open(app) {
+                return false;
+            }
+            if let Some(key) = pressed {
+                let id = opening_key_id(ctx);
+                ctx.data_mut(|m| m.insert_temp(id, key));
+            }
+            true
+        }
+    }
+}
+
+/// Is a dialog or the palette open? A shortcut that opens one stops the shortcuts after it in the
+/// same frame.
+fn dialog_or_palette_open(app: &VectorcraftApp) -> bool {
+    app.ui.dialog.is_some() || app.ui.palette_open
+}
+
 /// Route Alt+arrows to spacing controls when text objects are selected.
 fn alt_type_arrows(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
-    let m = ctx.input(|i| i.modifiers);
-    if !m.alt
-        || !app.session.active().is_some_and(|st| {
-            st.selection.guides.is_empty()
-                && !st.selection.objects.is_empty()
-                && st.selection.objects.iter().all(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Text(_))))
-        })
-    {
+    let keys = [(Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right), (Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down)];
+    // The modifiers held when each arrow went down, as `nudge_and_clear` reads them.
+    let pressed = keys.map(|(key, tool_key)| (key, tool_key, ctx.input(|i| press_modifiers(i, key))));
+    if !pressed.iter().any(|(.., m)| m.alt) {
         return false;
     }
-    let keys = [(Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right), (Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down)];
-    for (key, tool_key) in keys {
-        if ctx.input_mut(|i| i.consume_key(m, key)) {
-            if let Some((attribute, by)) = vectorcraft_tools::text::step_key(tool_key, m.shift, false) {
+    let orientation = app.session.active().and_then(|st| {
+        if !st.selection.guides.is_empty() || st.selection.objects.is_empty() {
+            return None;
+        }
+        let mut all_vertical = true;
+        for id in &st.selection.objects {
+            let node = st.doc.node(*id)?;
+            let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { return None };
+            all_vertical &= t.vertical;
+        }
+        Some(all_vertical)
+    });
+    let Some(vertical) = orientation else {
+        return false;
+    };
+    for (key, tool_key, m) in pressed {
+        if m.alt && ctx.input_mut(|i| i.consume_key(m, key)) {
+            if let Some((attribute, by)) = vectorcraft_tools::text::step_key(tool_key, m.shift, false, vertical) {
                 let by = if m.command { by * 5.0 } else { by };
                 let _ = app.run("type.step", json!({"attribute": attribute, "by": by}));
             }
@@ -396,52 +744,77 @@ fn type_tool_input(app: &mut VectorcraftApp, ctx: &egui::Context, composing: boo
         ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { .. } | egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_))));
         return;
     }
-    // A deferred pointer/navigation notice has not established its destination yet. Its
-    // clipboard suffix must not cut or paste at the old caret; only the notice's own actual
-    // handler (kept in the raw vector) may run.
-    if crate::ime::deferred(app, ctx) {
-        ctx.input_mut(|input| {
-            input.events.retain(|event| match event {
-                egui::Event::Cut | egui::Event::Paste(_) => false,
-                egui::Event::Key { key: egui::Key::X | egui::Key::V, pressed: true, modifiers, .. }
-                    if modifiers.command && !modifiers.shift && !modifiers.alt =>
-                {
-                    false
-                }
-                _ => true,
-            })
-        });
-    }
-    // Editing keys with modifiers and the clipboard (Cmd+A is Select All's, below: the text).
-    crate::panels::character::route_type_input(app, ctx);
-    // Enter was already delivered above as ToolKey::Enter (newline). Only chords with the
-    // command key run commands: the rest type or edit.
+    crate::panels::actions::play_function_key(app, ctx);
+    // Cmd+A is Select All's, below: the text. Enter went to the tool in `type_text`, unless a
+    // command is bound to its chord, and so did the editing keys and the clipboard events (a
+    // cut or paste after a deferred pointer or navigation notice is dropped there). Only chords
+    // with the command key run commands: the rest type or edit.
     let hits = dispatch(app, ctx, |hit| hit.trigger.chord.mods.cmd);
-    for c in hits {
+    for hit in hits {
+        let c = unshifted_when_dimmed(app, hit);
         run_hit(app, ctx, &c);
+        if dialog_or_palette_open(app) {
+            break;
+        }
     }
     settings_on_a_mac(app, ctx, mac(ctx));
 }
 
-/// Apply arrow-key movement and clear selected art when no text editor owns input.
-fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// The modifiers held when `key` last went down in this frame, which can differ from the frame's
+/// at its end; the frame's when the key did not go down.
+fn press_modifiers(i: &egui::InputState, key: Key) -> Modifiers {
+    i.events
+        .iter()
+        .rev()
+        .find_map(|e| match e {
+            egui::Event::Key { key: k, pressed: true, modifiers, .. } if *k == key => Some(*modifiers),
+            _ => None,
+        })
+        .unwrap_or(i.modifiers)
+}
+
+/// Backquote held when `key` last went down, before any later transitions in the frame.
+fn backquote_at_press(i: &egui::InputState, key: Key) -> bool {
+    let mut held = i.key_down(Key::Backtick);
+    for event in i.events.iter().rev() {
+        match event {
+            egui::Event::Key { key: k, pressed: true, .. } if *k == key => return held,
+            egui::Event::Key { key: Key::Backtick, pressed, repeat: false, .. } => held = !*pressed,
+            _ => {}
+        }
+    }
+    i.key_down(Key::Backtick)
+}
+
+/// Apply arrow-key movement and clear selected art when no text editor owns input, unless a Layers
+/// or Appearance row has Delete/Backspace (`rows_keys`).
+fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context, rows_keys: bool) {
     // Arrow nudges (Shift = ×10, Alt = copy).
     let arrows = [(Key::ArrowLeft, -1.0, 0.0), (Key::ArrowRight, 1.0, 0.0), (Key::ArrowUp, 0.0, -1.0), (Key::ArrowDown, 0.0, 1.0)];
     for (k, dx, dy) in arrows {
-        let m = ctx.input(|i| i.modifiers);
+        // The modifiers held when the key went down, as `claimed_tool_keys` reads them.
+        let (m, patterns_only) = ctx.input(|i| (press_modifiers(i, k), backquote_at_press(i, k)));
         if ctx.input_mut(|i| i.consume_key(m, k)) && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
-            let _ = app.run("object.nudge", json!({"dx": dx, "dy": dy, "big": m.shift, "copy": m.alt}));
+            let mut params = json!({"dx": dx, "dy": dy, "big": m.shift, "copy": m.alt});
+            if patterns_only {
+                params["objects"] = json!(false);
+                params["patterns"] = json!(true);
+            }
+            let _ = app.run("object.nudge", params);
         }
     }
     // Delete / Backspace clear the selection.
-    if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Backspace)) && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides())
+    if !rows_keys
+        && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Backspace))
+        && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides())
     {
         let _ = app.run("edit.clear", json!({}));
     }
 }
 
-/// Route clipboard events to the system clipboard or the app's rich-format paste path.
-fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_paste: Option<Modifiers>) {
+/// Route clipboard events to the system clipboard or the app's rich-format paste path. → whether
+/// a Copy or Cut is left to the labels, so no shortcut runs it.
+fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_paste: Option<Modifiers>) -> bool {
     // A clipboard image (eframe's `clipboard` feature, 0.37): the host's text paste path never
     // carries it. With the app's rich-format `SystemClipboard`, it is only the signal that the
     // clipboard holds no text — the next tick invokes Paste, whose `adopt_system_clipboard` reads
@@ -490,14 +863,30 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
         let held = ctx.input(|i| i.modifiers);
         app.clipboard_in = Some(Flavour { mime: vectorcraft_engine::cmd::clipboard::PNG, data: png });
         crate::menus::invoke(app, paste_command(held), json!({}));
-        return;
+        return false;
     }
-    // Clipboard keys arrive as events, not key presses; the chord held says which paste.
+    // Clipboard keys arrive as events, not key presses; the chord held says which paste. Copy and
+    // Cut with text selected in a label copy that text ([`leave_to_labels`]), unless another window
+    // sent them on (a floating document's): those copy the art. The menu bar's Copy and Cut have
+    // left theirs to the labels already and dropped the unwritten formats; dropping them again
+    // here does nothing more.
     let mut clip = vec![];
+    let forwarded = app.forwarded_clipboard && ctx.viewport_id() == egui::ViewportId::ROOT;
+    let to_labels = |e: egui::Event, id| {
+        ctx.input(|i| i.events.contains(&e)) && (left_to_labels(ctx) == Some(id) || (!forwarded && leave_to_labels(app, ctx, id)))
+    };
+    let (labels_copy, labels_cut) = (to_labels(egui::Event::Copy, "edit.copy"), to_labels(egui::Event::Cut, "edit.cut"));
+    // The labels' text, or the art copied in the next pass when they copy nothing, replaces what an
+    // earlier Copy or Cut has not written yet.
+    if labels_copy || labels_cut {
+        app.drop_unwritten_formats();
+    }
     ctx.input_mut(|i| {
         let held = i.modifiers;
         i.events.retain(|e| {
             let (id, text) = match e {
+                egui::Event::Copy if labels_copy => return true,
+                egui::Event::Cut if labels_cut => return true,
                 egui::Event::Copy => ("edit.copy", None),
                 egui::Event::Cut => ("edit.cut", None),
                 egui::Event::Paste(t) => (paste_command(held), Some(t.clone())),
@@ -517,6 +906,34 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
         app.clipboard_in = text.map(|t| Flavour { mime: TEXT, data: t.into_bytes() });
         crate::menus::invoke(app, id, json!({}));
     }
+    labels_copy || labels_cut
+}
+
+/// Copy or Cut (`id`) on a key that egui does not send as a Copy or Cut event (F3 and F2 off
+/// macOS, a key of the user's own): with text selected in a label, the labels copy it, as they do
+/// for Cmd/Ctrl+C and X ([`leave_to_labels`]) (→ true). When a key another window sent on in this
+/// frame (a floating document's) runs `id`, the art is copied.
+fn clipboard_key_to_labels(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str) -> bool {
+    let (command, event) = match id {
+        "edit.copy" => ("edit.copy", egui::Event::Copy),
+        "edit.cut" => ("edit.cut", egui::Event::Cut),
+        _ => return false,
+    };
+    if ctx.viewport_id() == egui::ViewportId::ROOT && forwarded_key_runs(app, command) || !leave_to_labels(app, ctx, command) {
+        return false;
+    }
+    ctx.input_mut(|i| i.events.push(event));
+    app.drop_unwritten_formats();
+    true
+}
+
+/// Does a key press another window sent on in this frame run command `id`?
+fn forwarded_key_runs(app: &VectorcraftApp, id: &str) -> bool {
+    let mirror = crate::shortcut_editor::current();
+    let platform = crate::keymap::platform();
+    app.forwarded_presses.iter().filter_map(|e| craft_keymap::KeyInput::from_egui(e, platform)).any(|input| {
+        app.dispatcher.layout().candidates(&input).iter().any(|chord| crate::keymap::lookup(&mirror.keymap, chord).is_some_and(|c| c.id == id))
+    })
 }
 
 /// Route arrows, digits and letters to a tool while a gesture is active.
@@ -524,8 +941,20 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     // The arrows while dragging: a polygon's sides, a grid's rows (↑/↓) and columns (←/→)…
     let arrows = [(Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down), (Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right)];
     for (k, tk) in arrows {
+        // The press's Shift and Alt (the consume below takes those presses too) go to a tool that
+        // claims the arrow (Shift steps a blend widget by ten); other tools get the plain arrow.
+        let pressed = ctx.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Key { key, pressed: true, modifiers, .. } if *key == k && !(modifiers.command || modifiers.ctrl) => Some(*modifiers),
+                _ => None,
+            })
+        });
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k)) {
-            let _ = app.session.tool_key(tk, Mods::default(), view);
+            let mods = match pressed {
+                Some(m) if app.session.tool_claims_key(tk, view) => crate::canvas::mods(m, false),
+                _ => Mods::default(),
+            };
+            let _ = app.session.tool_key(tk, mods, view);
         }
     }
     // Digits (5 while dragging with the Perspective Selection tool), once per press.
@@ -540,6 +969,16 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     });
     for d in digits {
         let _ = app.session.tool_key(ToolKey::Digit(d), Mods::default(), view);
+    }
+    // `[` and `]` while the Quick Pen tool draws a piece: the arc being dragged takes the new size.
+    // The Blob Brush, Eraser and Symbolism tools do not get them during a press, so their size and
+    // intensity stay as they were when the press began.
+    if app.session.tool_id() == vectorcraft_tools::quickpen::ID {
+        tool_brackets(app, ctx, view);
+    }
+    // Tab, when the tool takes it (the Smart Pen Tool placing an anchor).
+    if app.session.tool_claims_key(ToolKey::Tab, view) && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab)) {
+        let _ = app.session.tool_key(ToolKey::Tab, Mods::default(), view);
     }
     // The tool gets each letter it takes (E while dragging a selection marquee) once per press,
     // without Cmd, Ctrl or Alt. The key is the one egui reports, which on a layout without Latin
@@ -582,9 +1021,11 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     }
 }
 
-/// Give keys claimed by the active tool precedence over their command shortcuts.
-fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo) -> bool {
+/// Give keys claimed by the active tool precedence over their command shortcuts, except a plain
+/// Delete or Backspace while a panel's rows have them (`rows_keys`).
+fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo, rows_keys: bool) -> bool {
     let m = ctx.input(|i| i.modifiers);
+    let rows_take = |k: Key| rows_keys && m.is_none() && matches!(k, Key::Delete | Key::Backspace);
     for (k, tk) in [
         (Key::Delete, ToolKey::Delete),
         (Key::Backspace, ToolKey::Backspace),
@@ -592,9 +1033,16 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
         (Key::ArrowRight, ToolKey::Right),
         (Key::ArrowUp, ToolKey::Up),
         (Key::ArrowDown, ToolKey::Down),
+        // The Smart Pen Tool's Tab while it draws a path (the key otherwise hides the panels).
+        (Key::Tab, ToolKey::Tab),
     ] {
-        if ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
-            let r = app.session.tool_key(tk, crate::canvas::mods(m, false), view);
+        let pm = ctx.input(|i| press_modifiers(i, k));
+        if !rows_take(k)
+            && ctx.input(|i| i.key_pressed(k))
+            && app.session.tool_claims_key_with(tk, crate::canvas::mods(pm, false), view)
+            && ctx.input_mut(|i| i.consume_key(pm, k))
+        {
+            let r = app.session.tool_key(tk, crate::canvas::mods(pm, false), view);
             // Keyboard actions can change the Artboard tool's active board too. Keep the
             // navigator aligned with its valid survivor, as pointer dispatch does.
             if r.is_ok()
@@ -631,9 +1079,14 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
             }
         }
     }
-    // `[` and `]` the active tool takes (the Blob Brush's and the Eraser's size, the Symbolism
-    // tools' diameter, with Shift their intensity). Read as typed, so
-    // layouts where a bracket takes Option or AltGr count too; `{` and `}` are Shift's.
+    tool_brackets(app, ctx, view)
+}
+
+/// `[` and `]` the active tool takes (the Blob Brush's and the Eraser's size, the Symbolism tools'
+/// diameter, with Shift their intensity). Read as typed, so layouts where a bracket takes Option or
+/// AltGr count too; `{` and `}` are Shift's. Did the tool take one?
+fn tool_brackets(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo) -> bool {
+    let m = ctx.input(|i| i.modifiers);
     if !(m.command || m.ctrl) {
         let typed: Vec<(String, ToolKey, bool)> = ctx.input(|i| {
             i.events
@@ -667,13 +1120,41 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
 }
 
 /// Runs this frame's key presses against the keymap in effect; `accept` declines a hit, leaving
-/// its press (and the text it typed) to what follows.
-fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&Hit) -> bool) -> Vec<CommandRef> {
+/// its press (and the text it typed) to what follows. Each hit's command is worked out with
+/// [`unshifted_when_dimmed`] just before it runs, after the commands of the presses before it.
+fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&Hit) -> bool) -> Vec<Hit> {
     let mirror = crate::shortcut_editor::current();
     let dispatcher = &mut app.dispatcher;
     ctx.input_mut(|i| {
+        // An explicit shifted logical binding takes precedence. Otherwise, Shift+Comma and
+        // Shift+Period follow their key positions when no chord for the press is bound.
+        for e in &mut i.events {
+            let input = craft_keymap::KeyInput::from_egui(e, crate::keymap::platform());
+            if let egui::Event::Key { key, physical_key: Some(physical), modifiers, pressed: true, .. } = e
+                && modifiers.shift
+                && !modifiers.command
+                && !modifiers.ctrl
+                && !modifiers.alt
+                && !modifiers.mac_cmd
+                && matches!(*physical, Key::Comma | Key::Period)
+                && *key != *physical
+                && let (Some(logical), Some(position)) = (craft_keymap::Key::from_egui(*key), craft_keymap::Key::from_egui(*physical))
+                && let Some(input) = input
+            {
+                let mods = craft_keymap::Mods::from_egui(modifiers, crate::keymap::platform());
+                let logical_chord = craft_keymap::Chord::new(mods, logical);
+                let position_chord = craft_keymap::Chord::new(mods, position);
+                if crate::keymap::lookup(&mirror.keymap, &logical_chord).is_some() {
+                    *physical = *key;
+                } else if crate::keymap::lookup(&mirror.keymap, &position_chord).is_some()
+                    && !dispatcher.layout().candidates(&input).iter().any(|chord| crate::keymap::lookup(&mirror.keymap, chord).is_some())
+                {
+                    *key = *physical;
+                }
+            }
+        }
         // Shift+`=` types `+`: as the Plus key it also reaches a `=` chord held with Shift
-        // (Cmd+Shift+= zooms in as Cmd+= does).
+        // (Cmd+Shift+= zooms in as Cmd+= does while Superscript is dimmed: [`unshifted_when_dimmed`]).
         for e in &mut i.events {
             if let egui::Event::Key { key, modifiers, .. } = e
                 && *key == Key::Equals
@@ -682,8 +1163,64 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&H
                 *key = Key::Plus;
             }
         }
-        dispatcher.dispatch_filtered(i, &mirror.keymap, &Active::NONE, accept).into_iter().map(|h| h.command).collect()
+        dispatcher.dispatch_filtered(i, &mirror.keymap, &Active::NONE, accept)
     })
+}
+
+/// The command a hit runs. A Shift+`=` chord whose command is dimmed runs what the same chord
+/// without Shift runs, when that is bound: Cmd+Shift+= (Superscript) zooms in, as Cmd+= does,
+/// while no type is selected.
+fn unshifted_when_dimmed(app: &VectorcraftApp, hit: Hit) -> CommandRef {
+    let mirror = crate::shortcut_editor::current();
+    let chord = hit.trigger.chord;
+    if chord.key == craft_keymap::Key::Equals
+        && chord.mods.shift
+        && !hit.trigger.double
+        && !crate::menus::enabled(app, &hit.command.id)
+        && let Some(unshifted) =
+            crate::keymap::lookup(&mirror.keymap, &craft_keymap::Chord::new(craft_keymap::Mods { shift: false, ..chord.mods }, chord.key))
+    {
+        return unshifted;
+    }
+    hit.command
+}
+
+/// What a shortcut without params runs when its command's menu bar item gives params
+/// ([`crate::shortcut_editor::menu_target_now`]): what a click on that item runs, or while the item
+/// is dimmed, why the command can't run.
+fn menu_target(app: &VectorcraftApp, c: &CommandRef) -> Option<Result<(String, serde_json::Value), String>> {
+    c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target_now(app, &c.id)).flatten()
+}
+
+/// Params used when a shortcut invokes its command. The named panel function keys retain their
+/// toggle action when their bindings are reassigned.
+fn shortcut_params(c: &CommandRef) -> serde_json::Value {
+    let mut params = if c.params.is_null() { json!({}) } else { c.params.clone() };
+    if c.id == "window.panel"
+        && matches!(
+            params.get("panel").and_then(serde_json::Value::as_str),
+            Some(
+                "brushes"
+                    | "color"
+                    | "layers"
+                    | "info"
+                    | "gradient"
+                    | "stroke"
+                    | "attributes"
+                    | "graphicStyles"
+                    | "appearance"
+                    | "align"
+                    | "transform"
+                    | "pathfinder"
+                    | "transparency"
+                    | "symbols"
+            )
+        )
+    {
+        params["toggle"] = json!(true);
+        params["toggleGroup"] = json!(true);
+    }
+    params
 }
 
 /// Runs what a shortcut is bound to: a tool, a panel (`window.panel {panel}`) or a command.
@@ -694,14 +1231,19 @@ fn run_hit(app: &mut VectorcraftApp, ctx: &egui::Context, c: &CommandRef) {
         // With the Artboard tool, Select All's keys after a click on an Artboards panel row select
         // every artboard instead of the art.
         crate::panels::artboards::select_all(app);
+    } else if clipboard_key_to_labels(app, ctx, &c.id) {
+        // The labels copy their selected text at the end of the pass.
     } else {
-        let p = if c.params.is_null() { json!({}) } else { c.params.clone() };
-        crate::menus::invoke(app, &c.id, p);
+        match menu_target(app, c) {
+            Some(Ok((id, p))) => crate::menus::invoke(app, &id, p),
+            Some(Err(why)) => app.status(why),
+            None => crate::menus::invoke(app, &c.id, shortcut_params(c)),
+        }
     }
 }
 
 /// Keys that type a character: letters, digits and punctuation (not Space).
-fn types_text(key: craft_keymap::Key) -> bool {
+pub(crate) fn types_text(key: craft_keymap::Key) -> bool {
     key.name().chars().count() == 1
 }
 
@@ -738,18 +1280,54 @@ fn latin(text: &str, physical: Option<Key>) -> String {
     }
 }
 
+/// For each event, the index of the key press that typed it when it is text: the press right
+/// before it (egui-winit) unless an earlier text took that press, or else the press right after it
+/// (eframe's web build with no text field focused). Modifier key presses type no text. Each press
+/// types at most one text. A text takes the press after it only when every later text in the same
+/// run of alternating texts and presses has a press after it too; otherwise the text after that
+/// press takes it as the press before it, and this text has none.
+pub(crate) fn typing_presses(events: &[egui::Event]) -> Vec<Option<usize>> {
+    let is_press = |k: usize| matches!(events.get(k), Some(egui::Event::Key { key, pressed: true, .. }) if !is_modifier(*key));
+    let is_text = |k: usize| matches!(events.get(k), Some(egui::Event::Text(_)));
+    // Whether the run of alternating texts and presses that starts with the text at `j` ends
+    // with a press.
+    let ends_with_press = |mut j: usize| loop {
+        if !is_press(j + 1) {
+            break false;
+        }
+        if !is_text(j + 2) {
+            break true;
+        }
+        j += 2;
+    };
+    let mut taken = None;
+    events
+        .iter()
+        .enumerate()
+        .map(|(j, e)| {
+            if !matches!(e, egui::Event::Text(_)) {
+                return None;
+            }
+            let before = j.checked_sub(1).filter(|&k| is_press(k) && taken != Some(k));
+            let by = before.or_else(|| ends_with_press(j).then_some(j + 1));
+            taken = by.or(taken);
+            by
+        })
+        .collect()
+}
+
 /// Each new press's shortcut names, first match first, and the letter it types, without Cmd, Ctrl
 /// or Alt. A text-only press counts as well (Shift+~ arrives as the text `~` with Shift), unless
-/// the key that typed it repeated. A text's key is the press right before it (egui-winit) or,
-/// failing that, right after it (eframe's web build with no text field focused). Text reads its
-/// key's modifiers, or the latest modifier change (`held` before any), and tries its key's own
-/// name first.
+/// the key that typed it repeated. A text's key is the one `typing_presses` pairs it with. Text
+/// reads its key's modifiers, or the latest modifier change (`held` before any), and tries its
+/// key's own name first.
 fn shortcut_presses(events: &[egui::Event], held: Modifiers) -> Vec<(Vec<String>, Option<char>)> {
     let key_name = |key: &Key, m: &Modifiers| if m.shift { format!("Shift+{}", key.name()) } else { key.name().to_string() };
     let press_at = |j: Option<usize>| match j.and_then(|j| events.get(j)) {
         Some(egui::Event::Key { key, pressed: true, repeat, modifiers, .. }) => Some((*repeat, *modifiers, key_name(key, modifiers))),
         _ => None,
     };
+    let typed_by = typing_presses(events);
     let mut latest = held;
     events
         .iter()
@@ -763,8 +1341,8 @@ fn shortcut_presses(events: &[egui::Event], held: Modifiers) -> Vec<(Vec<String>
                 Some((vec![key_name(key, modifiers)], letter_of(*key)))
             }
             egui::Event::Text(t) => {
-                let typed_by = press_at(j.checked_sub(1)).or_else(|| press_at(Some(j + 1)));
-                let (repeated, mods, key_name) = typed_by.map_or((false, latest, None), |(r, m, n)| (r, m, Some(n)));
+                let (repeated, mods, key_name) =
+                    press_at(typed_by.get(j).copied().flatten()).map_or((false, latest, None), |(r, m, n)| (r, m, Some(n)));
                 if repeated || mods.command || mods.alt || mods.ctrl {
                     return None;
                 }

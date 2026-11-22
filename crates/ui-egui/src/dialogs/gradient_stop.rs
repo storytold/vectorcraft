@@ -92,9 +92,8 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let chip = Point::new(d.f64("x", 0.0), d.f64("y", 0.0));
     let area = egui::Id::unique("gradient-stop-popover");
     let size = ctx.memory(|m| m.area_rect(area)).map_or(POPOVER_SIZE, |r| r.size());
-    let pos = screen.unwrap_or_else(|| match app.canvas_rect.zip(app.view().copied()) {
-        Some((canvas, v)) => {
-            let xf = Xf::new(canvas, &v);
+    let pos = screen.unwrap_or_else(|| match app.canvas_rect.zip(app.canvas_xf()) {
+        Some((canvas, xf)) => {
             let at = xf.to_screen(chip);
             selection_on_screen(app, &xf).map_or(at + vec2(14.0, 14.0), |art| beside_art(at, art, size, canvas))
         }
@@ -102,6 +101,7 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     let swatches = d.str("tab") == "swatches";
     let mut tab = None;
+    let mut eyedropper = false;
     let resp = egui::Area::new(area)
         .order(egui::Order::Foreground)
         .fixed_pos(pos)
@@ -114,6 +114,12 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         if widgets::icon_button(ui, icon, tip, on, 24.0).clicked() {
                             tab = Some(if icon == "palette" { "color" } else { "swatches" });
                         }
+                    }
+                    // A stop's colour can come from the art, as from the Gradient panel's eyedropper.
+                    if matches!(target, Target::Stop(..))
+                        && widgets::icon_button(ui, "pipette", tl!("Eyedropper: click the art to sample the stop's colour"), false, 24.0).clicked()
+                    {
+                        eyedropper = true;
                     }
                 });
                 ui.add_space(6.0);
@@ -141,6 +147,11 @@ fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             });
         })
         .response;
+    if eyedropper {
+        app.ui.dialog = None;
+        crate::panels::gradient::stop_eyedropper(app);
+        return;
+    }
     // The frame it opened in (its first drawn).
     let frame = ctx.cumulative_frame_nr();
     let opened = d.fields.get(OPENED).and_then(Value::as_u64).unwrap_or(frame);
@@ -341,7 +352,11 @@ mod tests {
         let mut app = app();
         let view = app.view_info();
         let chip = Point::new(150.0, 150.0 + 10.0 / view.zoom);
-        crate::canvas::dispatch(&mut app, &PointerEvent { kind: PointerKind::DoubleClick, pos: chip, mods: Default::default(), pressure: 1.0 }, view);
+        crate::canvas::dispatch(
+            &mut app,
+            &PointerEvent { kind: PointerKind::DoubleClick, pos: chip, mods: Default::default(), backquote: false, pressure: 1.0, pen: None },
+            view,
+        );
         let d = app.ui.dialog.clone().expect("the popover opened");
         assert_eq!((d.kind.as_str(), d.fields["index"].clone(), d.str("tab")), ("gradientStop", json!(1), "color".into()));
         assert_eq!(app.session.selected_stop(), Some(1));
@@ -441,7 +456,11 @@ mod tests {
         let (p, i) = point(&app);
         // Double-clicking the point opens the popover beside it.
         let view = app.view_info();
-        crate::canvas::dispatch(&mut app, &PointerEvent { kind: PointerKind::DoubleClick, pos: p.at, mods: Default::default(), pressure: 1.0 }, view);
+        crate::canvas::dispatch(
+            &mut app,
+            &PointerEvent { kind: PointerKind::DoubleClick, pos: p.at, mods: Default::default(), backquote: false, pressure: 1.0, pen: None },
+            view,
+        );
         let d = app.ui.dialog.clone().expect("the popover opened");
         assert_eq!((d.kind.as_str(), d.fields["index"].clone()), ("gradientStop", json!(i)));
         frame(&mut app, vec![]);

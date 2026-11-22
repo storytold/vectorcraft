@@ -9,6 +9,8 @@ description = "VectorCraft SVG import and export"
 workspace = true
 
 [dependencies]
+craft-svg = { workspace = true }
+craft-mime = { workspace = true }
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
 vectorcraft-geom = { workspace = true }
@@ -17,7 +19,9 @@ vectorcraft-doc = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-brush = { workspace = true }
 vectorcraft-text = { workspace = true }
+vectorcraft-pathops = { workspace = true }
 kurbo = { workspace = true }
+# Image elements still go through usvg's image href resolution (src/import/files.rs, src/import/budget.rs).
 usvg = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
@@ -26,17 +30,22 @@ serde_json = { workspace = true }
 # SVGZ (gzip, pure-Rust backend: builds for wasm).
 flate2 = { workspace = true }
 image = { workspace = true }
+craft-image-codecs = { workspace = true }
+# Image data URLs decoded as usvg decodes them, within a byte limit (MIT OR Apache-2.0; already used by usvg).
+data-url = "0.3.2"
 # Colour / transform / length parsing for the <text> fallback (MIT OR Apache-2.0; already used by usvg).
 svgtypes = "0.16"
+simplecss = "0.2.2"
+# Bidi classes for the first strong character of `unicode-bidi: plaintext` text (MIT OR Apache-2.0; already used by vectorcraft-text).
+unicode-bidi = "0.3.18"
 
 [dev-dependencies]
 # Reading embedded font subsets back.
 skrifa = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
-resvg = { version = "0.45", default-features = false }
-# usvg as a reference viewer that lays text out in a font (text_layout.rs).
-usvg = { workspace = true, features = ["text"] }
+craft-svg = { workspace = true, features = ["tree-render", "tree-text"] }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }
-image = { workspace = true }
+# How many times the symbol list is read to find symbols by name.
+vectorcraft-doc = { workspace = true, features = ["symbol-read-count"] }

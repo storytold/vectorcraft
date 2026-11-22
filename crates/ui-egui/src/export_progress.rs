@@ -1,16 +1,23 @@
 //! The export progress dialog: while an export runs in the background (Background Export) a modal
 //! window shows what is being exported, how far it has got (artboard by artboard for raster
-//! exports of several artboards, file by file for Export for Screens; busy for one artboard and for
-//! formats made in one go, which report no steps) and two buttons: Cancel (`file.cancelExport`, also
+//! exports of several artboards, file by file for Export for Screens, as a share for an exporter
+//! plug-in that reports its progress; busy for one artboard and for formats made in one go, which
+//! report no steps) and two buttons: Cancel (`file.cancelExport`, also
 //! Esc) stops it and writes nothing (Export for Screens keeps the files it wrote before the
 //! Cancel), Continue in Background (`file.exportInBackground`) closes the
 //! dialog and leaves the export to the status bar.
+//!
+//! A save running in the background (Background Save) shows in the same window, with a moving bar
+//! (a save counts no steps) and how many more saves wait: Cancel (`file.cancelSave`, also Esc)
+//! stops it before it replaces its file, and Continue in Background (`file.saveInBackground`)
+//! leaves it to the status bar.
 //!
 //! It opens after [`DELAY`] so a quick export doesn't flash it, and waits while another dialog is
 //! open (the overwrite question, an options dialog): never two modals at once.
 
 use serde_json::json;
 
+use crate::background::Kind;
 use crate::dialogs::modal;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -23,11 +30,12 @@ fn seen_id() -> egui::Id {
     egui::Id::unique("export-progress-seen")
 }
 
-/// What the dialog shows: (label, steps done, steps in all, share done, exports after this one,
-/// whether the steps are files).
-fn shown(app: &VectorcraftApp, now: f64, ctx: &egui::Context) -> Option<(String, u64, u64, f32, usize, bool)> {
+/// What the dialog shows: (label, steps done, steps in all, share done, jobs of its kind after this
+/// one, what the steps are).
+fn shown(app: &VectorcraftApp, now: f64, ctx: &egui::Context) -> Option<(String, u64, u64, f32, usize, Steps)> {
     let jobs: Vec<_> = app.background.jobs.iter().filter(|j| !j.hidden && !j.cancelled()).filter(|j| j.progress.is_some()).collect();
     let first = jobs.first()?;
+    let more = jobs.iter().filter(|j| j.kind == first.kind).count() - 1;
     let since = ctx.data_mut(|m| {
         let seen = m.get_temp_mut_or_insert_with(seen_id(), || (first.id(), now));
         if seen.0 != first.id() {
@@ -40,8 +48,25 @@ fn shown(app: &VectorcraftApp, now: f64, ctx: &egui::Context) -> Option<(String,
     }
     let (done, total) = first.progress.as_ref().map(|p| p.counts()).unwrap_or_default();
     let frac = first.progress.as_ref().and_then(|p| p.fraction()).unwrap_or(0.0) as f32;
-    let files = first.progress.as_ref().is_some_and(|p| p.counts_files());
-    Some((first.label.clone(), done, total, frac, jobs.len() - 1, files))
+    let steps = match &first.progress {
+        _ if first.kind == Kind::Save => Steps::Save,
+        Some(p) if p.counts_share() => Steps::Share,
+        Some(p) if p.counts_files() => Steps::Files,
+        _ => Steps::Artboards,
+    };
+    Some((first.label.clone(), done, total, frac, more, steps))
+}
+
+/// What an export's steps are.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Steps {
+    Artboards,
+    /// Files (Export for Screens).
+    Files,
+    /// An exporter plug-in's own steps, shown as a share of the work.
+    Share,
+    /// A save, which counts no steps: a moving bar.
+    Save,
 }
 
 /// Draws the window for the first export running in the background that wasn't hidden or
@@ -49,16 +74,27 @@ fn shown(app: &VectorcraftApp, now: f64, ctx: &egui::Context) -> Option<(String,
 /// of the button pressed.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);
-    let Some((label, done, total, frac, more, files)) = shown(app, now, ctx) else { return };
+    let Some((label, done, total, frac, more, steps)) = shown(app, now, ctx) else { return };
     if app.ui.dialog.is_some() {
         return;
     }
     let t = Tokens::get(ctx);
     let heading = format!("{}…", crate::i18n::msg(&label));
     let pressed = window(ctx, "export-progress", &heading, |ui| {
+        if steps == Steps::Save {
+            indeterminate(ui, tl!("Encoding and writing the file…"));
+            if more > 0 {
+                ui.add_space(6.0);
+                let queued = crate::i18n::tn(more as u64, "{n} more save waiting", "{n} more saves waiting");
+                ui.label(egui::RichText::new(queued).size(11.5).color(t.text_dim));
+            }
+            return;
+        }
         // One step says nothing a spinner doesn't: the bar would sit at 0 % until the file is written.
-        if total > 1 {
-            let step = if files { tl!("File {n} of {total}") } else { tl!("Artboard {n} of {total}") };
+        if steps == Steps::Share && total > 0 {
+            share(ui, tl!("Encoding and writing the file…"), frac);
+        } else if total > 1 {
+            let step = if steps == Steps::Files { tl!("File {n} of {total}") } else { tl!("Artboard {n} of {total}") };
             let step = crate::i18n::fmt(step, &[("n", &(done + 1).min(total).to_string()), ("total", &total.to_string())]);
             // The count on its own line: drawn over the bar it would straddle the fill's edge.
             ui.horizontal(|ui| {
@@ -78,10 +114,12 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             ui.label(egui::RichText::new(queued).size(11.5).color(t.text_dim));
         }
     });
-    let id = match pressed {
-        Some(Pressed::Cancel) => "file.cancelExport",
-        Some(Pressed::Hide) => "file.exportInBackground",
-        None => return,
+    let id = match (pressed, steps == Steps::Save) {
+        (Some(Pressed::Cancel), false) => "file.cancelExport",
+        (Some(Pressed::Hide), false) => "file.exportInBackground",
+        (Some(Pressed::Cancel), true) => "file.cancelSave",
+        (Some(Pressed::Hide), true) => "file.saveInBackground",
+        (None, _) => return,
     };
     if let Err(e) = app.run(id, json!({})) {
         app.status(e);
@@ -97,11 +135,20 @@ pub enum Pressed {
     Hide,
 }
 
+/// A modal progress window with only a Cancel button (and bound to Esc).
+pub fn window_cancel(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
+    window_impl(ctx, id, heading, false, body)
+}
+
 /// A modal window (`id`) headed `heading`, in the UI language: `body` draws how far the work has
 /// got, then come Cancel (also Esc) and Continue in Background → the one pressed. Work that may
 /// take a while in the background shows it: exports, and heavy plug-in filters
 /// ([`crate::plugin_runs`]).
 pub fn window(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
+    window_impl(ctx, id, heading, true, body)
+}
+
+fn window_impl(ctx: &egui::Context, id: &str, heading: &str, allow_hide: bool, body: impl FnOnce(&mut egui::Ui)) -> Option<Pressed> {
     let mut pressed = None;
     modal::show(ctx, heading, egui::Id::unique(id), -40.0, 20, |ui| {
         ui.set_width(360.0);
@@ -114,9 +161,11 @@ pub fn window(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&m
             if widgets::secondary_button(ui, "Cancel").clicked() {
                 pressed = Some(Pressed::Cancel);
             }
-            ui.add_space(8.0);
-            if widgets::secondary_button(ui, "Continue in Background").clicked() {
-                pressed = Some(Pressed::Hide);
+            if allow_hide {
+                ui.add_space(8.0);
+                if widgets::secondary_button(ui, "Continue in Background").clicked() {
+                    pressed = Some(Pressed::Hide);
+                }
             }
         });
     });
@@ -126,6 +175,24 @@ pub fn window(ctx: &egui::Context, id: &str, heading: &str, body: impl FnOnce(&m
     pressed
 }
 
+/// Work that reports the share it has done (0 to 1), in a [`window`]: `what` it does, in the UI
+/// language, and the share as a percentage, over a bar filled that far. A plug-in's own steps are
+/// shown this way.
+pub fn share(ui: &mut egui::Ui, what: &str, done: f32) {
+    let t = Tokens::get(ui.ctx());
+    let done = if done.is_finite() { done.clamp(0.0, 1.0) } else { 0.0 };
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(what).color(t.text_dim));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(egui::RichText::new(format!("{:.0} %", done * 100.0)).color(t.text_dim));
+        });
+    });
+    ui.add_space(4.0);
+    ui.add(egui::ProgressBar::new(done).desired_width(360.0).desired_height(6.0).fill(t.accent));
+    // The work reports from another thread: draw what it reports next.
+    ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+}
+
 /// Work that counts no steps, in a [`window`]: a spinner and `what` it does, in the UI language.
 pub fn busy(ui: &mut egui::Ui, what: &str) {
     let t = Tokens::get(ui.ctx());
@@ -133,6 +200,39 @@ pub fn busy(ui: &mut egui::Ui, what: &str) {
         ui.add(egui::Spinner::new().size(14.0).color(t.accent));
         ui.label(egui::RichText::new(what).color(t.text_dim));
     });
+}
+
+/// Seconds the moving segment of an [`indeterminate`] bar takes to cross the track once.
+const SWEEP: f64 = 1.6;
+
+/// The share of the track an [`indeterminate`] bar's segment covers.
+const SEGMENT: f32 = 0.3;
+
+/// Where the segment of an [`indeterminate`] bar is at `time` seconds: its left and right ends as
+/// shares of the track, clipped to it (it enters at the left and leaves at the right).
+pub fn sweep_at(time: f64) -> (f32, f32) {
+    let phase = if time.is_finite() { (time / SWEEP).rem_euclid(1.0) as f32 } else { 0.0 };
+    let left = phase * (1.0 + SEGMENT) - SEGMENT;
+    (left.max(0.0), (left + SEGMENT).min(1.0))
+}
+
+/// Work whose progress isn't known, in a [`window`]: `what` it does, in the UI language, over a
+/// bar whose segment keeps sweeping across it while the window shows.
+pub fn indeterminate(ui: &mut egui::Ui, what: &str) {
+    let t = Tokens::get(ui.ctx());
+    ui.label(egui::RichText::new(what).color(t.text_dim));
+    ui.add_space(4.0);
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(360.0, 6.0), egui::Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ProgressIndicator, true, what));
+    let radius = egui::CornerRadius::same(3);
+    ui.painter().rect_filled(rect, radius, ui.visuals().extreme_bg_color);
+    let (from, to) = sweep_at(ui.input(|i| i.time));
+    if to > from {
+        let x = |share: f32| rect.left() + rect.width() * share;
+        let segment = egui::Rect::from_min_max(egui::pos2(x(from), rect.top()), egui::pos2(x(to), rect.bottom()));
+        ui.painter().rect_filled(segment, radius, t.accent);
+    }
+    ui.ctx().request_repaint();
 }
 
 #[cfg(test)]
@@ -228,6 +328,45 @@ mod tests {
         go.store(true, std::sync::atomic::Ordering::SeqCst);
         background::wait_all(&mut app);
         assert!(app.background.jobs.is_empty());
+    }
+
+    /// A Background Save shows in the window after the delay, with a moving bar and how many more
+    /// saves wait, never over another dialog; Continue in Background hides it and the saves go on.
+    /// With Background Save off the save is written at once and no window shows.
+    #[test]
+    fn a_background_save_shows_in_the_window_and_continue_hides_it() {
+        let go = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut app = app(go.clone());
+        for name in ["a", "b"] {
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            let r = app.run("file.save", json!({"path": format!("/docs/{name}.vectorcraft")})).unwrap();
+            assert_eq!(r["background"], true, "{r}");
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        assert!(!frame(&mut app, &ctx, 0.0).contains("Saving a.vectorcraft"), "not before the delay");
+        // Another dialog is open: the window waits.
+        app.ui.dialog = Some(crate::state::Dialog::new("about", json!({})));
+        frame(&mut app, &ctx, 1.0);
+        assert!(!frame(&mut app, &ctx, 1.1).contains("Saving a.vectorcraft"), "never over another dialog");
+        app.ui.dialog = None;
+        frame(&mut app, &ctx, 1.2);
+        let shown = frame(&mut app, &ctx, 1.3);
+        assert!(shown.contains("Saving a.vectorcraft…") && shown.contains("1 more save waiting"), "{shown}");
+        assert!(shown.contains("Cancel") && shown.contains("Continue in Background") && !shown.contains("export"), "{shown}");
+        assert_eq!(app.run("file.saveInBackground", json!({})).unwrap()["hidden"], 2);
+        assert!(!frame(&mut app, &ctx, 2.0).contains("Saving"), "hidden saves aren't shown");
+        assert!(crate::menus::enabled(&app, "file.cancelSave"), "they can still be canceled");
+        go.store(true, std::sync::atomic::Ordering::SeqCst);
+        background::wait_all(&mut app);
+        assert!(app.background.jobs.is_empty());
+        assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/docs/b.vectorcraft"));
+        app.session.execute("prefs.set", &json!({"values": {"backgroundSave": false}})).unwrap();
+        app.services.write = Some(Box::new(|_: &str, _: &[u8]| Ok(())));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let r = app.run("file.save", json!({"path": "/docs/c.vectorcraft"}));
+        assert!(r.as_ref().is_ok_and(|r| r.get("background").is_none()), "{r:?}");
+        assert!(app.background.jobs.is_empty() && !frame(&mut app, &ctx, 3.0).contains("Saving"));
     }
 
     #[test]

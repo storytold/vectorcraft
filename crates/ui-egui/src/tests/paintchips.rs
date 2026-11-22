@@ -312,8 +312,15 @@ fn the_popover_swatch_libraries_button_opens_the_libraries_menu() {
     click(&mut app, &ctx, fill.center(), Modifiers::NONE, control_bar);
     let libraries = *popover_bottom_buttons(&ctx).first().expect("the popover has a bottom bar");
     click(&mut app, &ctx, libraries.center(), Modifiers::NONE, control_bar);
-    let shapes = frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
-    assert!(text_rect(&shapes, "Swatch Tiles").is_some(), "the popover stays open");
+    // The popover's swatch list has no visible heading; screen readers find it as "Swatch Tiles".
+    ctx.enable_accesskit();
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 1000.0)));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| control_bar(&mut app, ui));
+    out.textures_delta.clear();
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    let list = nodes.iter().any(|(_, n)| n.label() == Some("Swatch Tiles") && n.role() == egui::accesskit::Role::List);
+    assert!(list, "the popover stays open");
+    let shapes: Vec<Shape> = out.shapes.into_iter().map(|c| c.shape).collect();
     let defaults = menu_item_rect(&shapes, "Default Swatches").expect("the libraries menu is open");
     assert!(menu_item_rect(&shapes, "Other Library…").is_some());
     let earth = menu_item_rect(&shapes, "Earth Tones").expect("the menu lists the built-in libraries");
@@ -321,4 +328,37 @@ fn the_popover_swatch_libraries_button_opens_the_libraries_menu() {
     click(&mut app, &ctx, earth.center(), Modifiers::NONE, control_bar);
     let open = crate::panels::library_panel::last_open(&app.ui).map(|o| (o.kind.clone(), o.id.clone()));
     assert_eq!(open, Some(("swatches".into(), "earth-tones".into())));
+}
+
+/// #4249: the Color Mixer a Shift-click on a Fill chip opens has the Color panel's menu, whose
+/// color modes (Grayscale, RGB, HSB, CMYK, Web Safe RGB) switch the color it shows and edits.
+#[test]
+fn the_mixer_popover_has_the_color_panels_menu() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
+    let (fill, _) = chips(&ctx);
+    click(&mut app, &ctx, fill.center(), Modifiers::SHIFT, control_bar);
+    let menu = ctx.viewport(|vp| {
+        vp.prev_pass
+            .widgets
+            .layers()
+            .filter(|(l, _)| l.order != egui::Order::Background)
+            .flat_map(|(_, w)| w.iter())
+            .find_map(|w| (w.rect.size() == vec2(18.0, 18.0)).then_some(w.rect))
+    });
+    let menu = menu.expect("the mixer has a panel menu button");
+    click(&mut app, &ctx, menu.center(), Modifiers::NONE, control_bar);
+    let shapes = frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
+    // The fill is RGB, so RGB is checked.
+    assert!(menu_item_rect(&shapes, "✓ RGB").is_some(), "RGB is the checked mode");
+    for mode in ["Grayscale", "HSB", "Web Safe RGB", "Invert", "Complement"] {
+        assert!(menu_item_rect(&shapes, mode).is_some(), "{mode} in the mixer's menu");
+    }
+    let cmyk = menu_item_rect(&shapes, "CMYK").expect("CMYK in the mixer's menu");
+    click(&mut app, &ctx, cmyk.center(), Modifiers::NONE, control_bar);
+    let fill = panels::current_paints(&app).0.color();
+    assert!(matches!(fill, Some(vectorcraft_color::Color::Cmyk { .. })), "the fill is CMYK now: {fill:?}");
 }

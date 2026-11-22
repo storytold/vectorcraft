@@ -1,8 +1,8 @@
 //! Transform panel: reference point, X/Y/W/H with the constrain link, rotate and shear, flips,
-//! live-shape properties and the Scale Corners / Scale Strokes & Effects options. While the
-//! Artboard tool is in use it shows and edits the active artboard's X/Y/W/H instead (a new W or H
-//! resizes every selected artboard), and with only ruler guides selected their X (vertical guides)
-//! and Y (horizontal ones).
+//! live-shape properties and the Scale Corners / Scale Strokes & Effects / Align to Pixel Grid
+//! options. While the Artboard tool is in use it shows and edits the active artboard's X/Y/W/H
+//! instead (a new W or H resizes every selected artboard), and with only ruler guides selected
+//! their X (vertical guides) and Y (horizontal ones).
 
 use egui::Ui;
 use serde_json::json;
@@ -11,6 +11,7 @@ use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Point, Rect, Vec2};
 
 use super::{corner_radius_row, first_selected, pstate, set_pstate};
+use crate::caches::PixelAligned;
 use crate::dialogs::corners::kind_label as corner_kind;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
@@ -125,7 +126,18 @@ const PATTERN_MODES: [(&str, &str); 3] = [("object", "Transform Object Only"), (
 /// Only (the pattern tiles alone) or Transform Both. Until one is chosen (`default`, or any other
 /// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
 /// dropped, as the panels' fields have always done.
-pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) {
+pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) {
+    try_transform(app, cmd, params).ok();
+}
+
+/// [`run_transform`] that returns the command's result, for a field that shows its error.
+fn try_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
+    let params = with_pattern_switches(app, params);
+    app.run(cmd, params)
+}
+
+/// `params` with the `objects` and `patterns` switches [`run_transform`] adds.
+pub fn with_pattern_switches(app: &VectorcraftApp, mut params: serde_json::Value) -> serde_json::Value {
     let switches = match app.session.prefs.transform_panel_patterns.as_str() {
         "object" => Some((true, false)),
         "pattern" => Some((false, true)),
@@ -136,7 +148,7 @@ pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json
         params["objects"] = json!(objects);
         params["patterns"] = json!(patterns);
     }
-    app.run(cmd, params).ok();
+    params
 }
 
 /// The panel menu's checked choice of [`PATTERN_MODES`]: the one chosen, else (`default`) what
@@ -178,8 +190,10 @@ pub fn set_artboard(app: &mut VectorcraftApp, index: usize, refi: usize, xywh: [
     }
 }
 
-/// The Artboard tool's view of the panel: the active artboard's position and size ([`set_artboard`]).
-fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect) {
+/// The Artboard tool's view of the panel, and the Properties panel's Transform section in Edit
+/// Artboards: the reference point, artboard `index`'s position and size at `r` in fields
+/// `fw` wide ([`set_artboard`]), and the Constrain Width and Height Proportions link.
+pub(crate) fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect, fw: f32) {
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
     let refi = reference_index(ui);
@@ -193,24 +207,24 @@ fn artboard_fields(app: &mut VectorcraftApp, ui: &mut Ui, index: usize, r: Rect)
             ui.spacing_mut().item_spacing.x = 4.0;
             egui::Grid::new("xfp-ab-grid-pos").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
                 widgets::dim_label(ui, "X:");
-                if let Some(v) = widgets::num_field_named(ui, "xfp-ab-x", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, 80.0) {
+                if let Some(v) = widgets::num_field_named(ui, "xfp-ab-x", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, fw) {
                     set(app, Some(v + origin.x), None, None, None);
                 }
                 ui.end_row();
                 widgets::dim_label(ui, "Y:");
-                if let Some(v) = widgets::num_field_named(ui, "xfp-ab-y", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, 80.0) {
+                if let Some(v) = widgets::num_field_named(ui, "xfp-ab-y", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, fw) {
                     set(app, None, Some(v + origin.y), None, None);
                 }
                 ui.end_row();
             });
             egui::Grid::new("xfp-ab-grid-size").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
                 widgets::dim_label(ui, "W:");
-                if let Some(v) = widgets::size_field_named(ui, "xfp-ab-w", Some(tl!("W:")), Some(r.width()), units, 80.0) {
+                if let Some(v) = widgets::size_field_named(ui, "xfp-ab-w", Some(tl!("W:")), Some(r.width()), units, fw) {
                     set(app, None, None, Some(v), None);
                 }
                 ui.end_row();
                 widgets::dim_label(ui, "H:");
-                if let Some(v) = widgets::size_field_named(ui, "xfp-ab-h", Some(tl!("H:")), Some(r.height()), units, 80.0) {
+                if let Some(v) = widgets::size_field_named(ui, "xfp-ab-h", Some(tl!("H:")), Some(r.height()), units, fw) {
                     set(app, None, None, None, Some(v));
                 }
                 ui.end_row();
@@ -228,7 +242,7 @@ pub(crate) fn selected_guides(app: &VectorcraftApp) -> Option<(Option<f64>, Opti
         return None;
     }
     let least = |vertical: bool| {
-        st.selection.guides.iter().filter_map(|i| st.doc.guides.get(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
+        st.selection.guides.iter().filter_map(|i| st.doc.ruler_guide(*i)).filter(|g| g.vertical == vertical).map(|g| g.pos).min_by(f64::total_cmp)
     };
     Some((least(true), least(false)))
 }
@@ -261,7 +275,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     if let Some((i, r)) = tool_artboard(app) {
-        artboard_fields(app, ui, i, r);
+        artboard_fields(app, ui, i, r, 80.0);
         return;
     }
     if let Some(guides) = selected_guides(app) {
@@ -334,12 +348,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.add_space(4.0);
             let icon = icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text(tl!("Shear"));
             crate::scrub::note_label(ui, icon.rect);
-            // Shear is relative: the field rests at 0° and a new value shears by it.
-            if let Some(a) = widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, -89.0, &SHEAR_PRESETS)
+            // Shear is relative: the field rests at 0° and a new value from -359° to 359° shears
+            // by it. The field has no minimum, so `object.shear` checks every value: it refuses
+            // ±90°, ±270° and a value outside -359° to 359°, and the status bar shows its error.
+            if let Some(a) =
+                widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, f64::NEG_INFINITY, &SHEAR_PRESETS)
                 && a != 0.0
-                && a.abs() < 90.0
+                && let Err(e) = try_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}))
             {
-                run_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}));
+                app.status(e);
             }
         });
     });
@@ -359,23 +376,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && !matches!(**live, vectorcraft_doc::LiveShape::Path { .. })
     {
         widgets::divider(ui);
-        match &**live {
-            vectorcraft_doc::LiveShape::Rectangle { .. } => {
-                widgets::subheader(ui, tl!("Rectangle Properties:"));
-                corner_radius_row(app, ui, &n, "xfp-radius");
-            }
-            vectorcraft_doc::LiveShape::Polygon { .. } => {
-                widgets::subheader(ui, tl!("Polygon Properties:"));
-                polygon_rows(app, ui, &n, live, "xfp-polygon");
-            }
-            vectorcraft_doc::LiveShape::Ellipse { pie, .. } => {
-                widgets::subheader(ui, tl!("Ellipse Properties:"));
-                pie_rows(app, ui, *pie, "xfp-pie");
-            }
-            _ => {
-                widgets::subheader(ui, tl!("Shape Properties:"));
-                widgets::dim_label(ui, tl!(n.kind_label()));
-            }
+        if !live_shape_rows(app, ui, &n, live, "xfp", true) {
+            widgets::subheader(ui, tl!("Shape Properties:"));
+            widgets::dim_label(ui, tl!(n.kind_label()));
         }
     }
     if pstate::<bool>(ui.ctx(), "xf-hide-options") {
@@ -389,21 +392,213 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Scale Strokes & Effects"), ss, true) {
         set_pref(app, "scaleStrokes", !ss);
     }
+    pixel_grid_check(app, ui);
+}
+
+/// The selected objects' Align to Pixel Grid: on or off when they agree, `None` when they differ,
+/// with whether every one can be aligned (a path that is not a guide and not inside a compound path,
+/// or a compound path). `None` with nothing selected.
+fn pixel_aligned_state(app: &VectorcraftApp) -> Option<PixelAligned> {
+    let st = app.session.active()?;
+    let nodes: Vec<&Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
+    let first = nodes.first()?.extras().pixel_aligned;
+    let value = nodes.iter().all(|n| n.extras().pixel_aligned == first).then_some(first);
+    let in_compound = |n: &Node| st.doc.parent_of(n.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    let alignable = nodes.iter().all(|n| matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }) && !in_compound(n));
+    Some((value, alignable))
+}
+
+/// [`pixel_aligned_state`], measured once per (document uid, revision)
+/// ([`crate::caches::CanvasCache::pixel_aligned`]): the panel reads it every frame, and Select All
+/// can select hundreds of thousands of paths.
+fn pixel_aligned_shown(app: &mut VectorcraftApp) -> Option<PixelAligned> {
+    let st = app.session.active()?;
+    let key = (st.uid, st.revision);
+    if let Some((k, state)) = app.canvas.pixel_aligned
+        && k == key
+    {
+        return state;
+    }
+    let state = pixel_aligned_state(app);
+    app.canvas.pixel_aligned = Some((key, state));
+    state
+}
+
+/// The Align to Pixel Grid checkbox (`object.setPixelAligned`): a dash when the selected objects
+/// differ, and unavailable unless every selected object can be aligned. A click turns it on for
+/// them all, or off when it is on for them all.
+fn pixel_grid_check(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (value, alignable) = pixel_aligned_shown(app).unwrap_or((Some(false), false));
+    if !widgets::check3(ui, tl!("Align to Pixel Grid"), value, alignable) {
+        return;
+    }
+    let ids = pixel_aligned_ids(app);
+    if let Err(e) = app.run("object.setPixelAligned", json!({"ids": ids, "on": value != Some(true)})) {
+        app.status(e);
+    }
+}
+
+/// The ids of the selected objects that are in the document, for `object.setPixelAligned`: read
+/// when the Align to Pixel Grid checkbox is clicked.
+fn pixel_aligned_ids(app: &VectorcraftApp) -> Vec<u64> {
+    app.session.active().map(|st| st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some()).map(|id| id.0).collect()).unwrap_or_default()
+}
+
+/// A live rectangle's, polygon's, ellipse's or line's properties (Transform and Properties panels,
+/// and for the first three the Contextual Task Bar), their widget ids under `id`. `headed` adds
+/// the Rectangle and Polygon Properties headings; an ellipse's and a line's heading always show.
+/// Returns false, drawing nothing, for other live shapes, and for a line unless every selected
+/// object is one.
+pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape, id: &str, headed: bool) -> bool {
+    match live {
+        LiveShape::Rectangle { .. } => {
+            if headed {
+                widgets::subheader(ui, tl!("Rectangle Properties:"));
+            }
+            let fw = super::field_width(ui);
+            shape_angle_row(app, ui, live, &format!("{id}-rectangle"), "rectangleAngle", fw);
+            corner_radius_row(app, ui, n, &format!("{id}-radius"));
+        }
+        LiveShape::Polygon { .. } => {
+            if headed {
+                widgets::subheader(ui, tl!("Polygon Properties:"));
+            }
+            polygon_rows(app, ui, n, live, &format!("{id}-polygon"));
+        }
+        LiveShape::Ellipse { pie, .. } => {
+            widgets::subheader(ui, tl!("Ellipse Properties:"));
+            shape_angle_row(app, ui, live, &format!("{id}-ellipse"), "ellipseAngle", 60.0);
+            pie_rows(app, ui, *pie, &format!("{id}-pie"));
+        }
+        LiveShape::Line { .. } => return line_rows(app, ui, live, &format!("{id}-line")),
+        _ => return false,
+    }
+    true
+}
+
+/// A live rectangle's or ellipse's Angle row (Rectangle and Ellipse Angle, counterclockwise): the
+/// angle the selected shapes of its kind share, blank when they differ. `key` is the
+/// `object.setLiveShape` param an edit sets, which turns each of them about its own center.
+fn shape_angle_row(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape, id: &str, key: &str, width: f32) {
+    let angle = shared_shape_angle(app, ui.ctx(), live);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Angle:"));
+        if let Some(a) = widgets::mixed_field_named(ui, (id, "angle"), Some(tl!("Angle:")), angle, "°", 1, width) {
+            app.run("object.setLiveShape", json!({ key: a })).ok();
+        }
+    });
+}
+
+/// The selected live shapes of `live`'s kind, the document uid and revision they were read at, and
+/// the angle they share.
+type SharedAngle = Option<((u64, u64, std::mem::Discriminant<LiveShape>), Option<f64>)>;
+
+/// The angle ([`LiveShape::shape_angle`]) every selected live shape of `live`'s kind shares, `None`
+/// when they differ or none is selected. Measured once per (document uid, revision) and kind: the
+/// panels read it every frame, and Select All can select hundreds of thousands of shapes.
+fn shared_shape_angle(app: &VectorcraftApp, ctx: &egui::Context, live: &LiveShape) -> Option<f64> {
+    let st = app.session.active()?;
+    let key = (st.uid, st.revision, std::mem::discriminant(live));
+    if let Some((k, angle)) = pstate::<SharedAngle>(ctx, "shape-angle")
+        && k == key
+    {
+        return angle;
+    }
+    let mut angles = st
+        .selection
+        .objects
+        .iter()
+        .filter_map(|id| st.doc.node(*id)?.live_shape())
+        .filter(|l| std::mem::discriminant(*l) == key.2)
+        .filter_map(LiveShape::shape_angle);
+    // With no shape of its kind selected, the panel shows `live`'s own angle.
+    let angle = match angles.next() {
+        None => live.shape_angle(),
+        Some(first) => angles
+            .all(|a| {
+                let d = (a - first).rem_euclid(360.0);
+                d.min(360.0 - d) < 1e-9
+            })
+            .then_some(first),
+    };
+    set_pstate::<SharedAngle>(ctx, "shape-angle", Some((key, angle)));
+    angle
+}
+
+/// Whether every selected object is a live line (and one is selected).
+fn only_lines_selected(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let line = |n: &Node| matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Line { .. }));
+    !st.selection.objects.is_empty() && st.selection.objects.iter().all(|o| st.doc.node(*o).is_some_and(line))
+}
+
+/// A live line's Line Properties (Transform and Properties panels), under its heading: its length,
+/// end to end, and its angle (counterclockwise from 3 o'clock, from its first end to its second). A new length keeps each selected line's first end in place, and a
+/// new angle turns each one about its midpoint. Returns false, drawing nothing, unless every
+/// selected object is a live line.
+pub(crate) fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape, id: &str) -> bool {
+    if !only_lines_selected(app) {
+        return false;
+    }
+    let (units, fw) = (app.session.general_unit(), super::field_width(ui));
+    widgets::subheader(ui, tl!("Line Properties:"));
+    // The `object.setLiveShape` params the edited fields set, all sent in one call.
+    let mut set = serde_json::Map::new();
+    egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
+        widgets::dim_label(ui, tl!("Line Length:"));
+        if let Some(l) = widgets::num_field_named(ui, (id, "length"), Some(tl!("Line Length:")), live.line_length(), units, fw) {
+            set.insert("lineLength".into(), json!(l));
+        }
+        ui.end_row();
+        widgets::dim_label(ui, tl!("Line Angle:"));
+        if let Some(a) = widgets::plain_field_named(ui, (id, "angle"), Some(tl!("Line Angle:")), live.line_angle().unwrap_or(0.0), "°", 1, fw) {
+            set.insert("lineAngle".into(), json!(a));
+        }
+        ui.end_row();
+    });
+    if !set.is_empty()
+        && let Err(e) = app.run("object.setLiveShape", serde_json::Value::Object(set))
+    {
+        app.status(e);
+    }
+    true
 }
 
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the
-/// whole ellipse) and Invert Pie, which shows the other part of it (Transform and Properties panels).
+/// whole ellipse), the Constrain Pie Angle link beside them, and Invert Pie, which shows the other
+/// part of it (Transform and Properties panels). With the link on, a typed angle moves the other
+/// one by as much, so each selected ellipse keeps its span.
 pub(crate) fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64), id: &str) {
-    for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, label);
-            if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
-                app.run("object.setLiveShape", json!({ key: a })).ok();
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            for (label, key, v) in [(tl!("Pie Start Angle:"), "pieStart", pie.0), (tl!("Pie End Angle:"), "pieEnd", pie.1)] {
+                ui.horizontal(|ui| {
+                    widgets::dim_label(ui, label);
+                    if let Some(a) = widgets::plain_field(ui, (id, key), v, "°", 1, 60.0) {
+                        let params = if app.ui.constrain_pie_angle { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) };
+                        app.run("object.setLiveShape", params).ok();
+                    }
+                });
             }
         });
-    }
+        pie_link(app, ui);
+    });
     if widgets::flat_button(ui, tl!("Invert Pie"), 90.0).clicked() {
         app.run("object.setLiveShape", json!({"invertPie": true})).ok();
+    }
+}
+
+/// The Constrain Pie Angle link between Pie Start and End Angle: one toggle for the Transform and
+/// Properties panels, kept while the app runs and off at launch. It is drawn after the fields, so
+/// Tab reaches them first; with the keyboard on it, Space or Enter toggles it.
+fn pie_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, at) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    let on = app.ui.constrain_pie_angle;
+    let tip = tl!("Constrain Pie Angle");
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
+        app.ui.constrain_pie_angle = !on;
     }
 }
 
@@ -417,16 +612,17 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
     let side = radius.map(|r| 2.0 * r * (std::f64::consts::PI / f64::from((*sides).max(3))).sin());
     let kind = super::corner_style(app, n).1;
     let kinds: Vec<&str> = CornerKind::ALL.iter().map(|k| corner_kind(*k)).collect();
+    let angle = shared_shape_angle(app, ui.ctx(), live);
     // The `object.setLiveShape` param an edited field sets.
     let mut set = None;
     egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         widgets::dim_label(ui, tl!("Sides:"));
-        if let Some(s) = widgets::range_field_named(ui, (id, "sides"), Some(tl!("Sides:")), f64::from(*sides), 3.0..=f64::INFINITY, "", 0, fw) {
+        if let Some(s) = widgets::range_field_named(ui, (id, "sides"), Some(tl!("Sides:")), f64::from(*sides), 3.0..=1000.0, "", 0, fw) {
             set = Some(("sides", json!(s as u64)));
         }
         ui.end_row();
         widgets::dim_label(ui, tl!("Angle:"));
-        if let Some(a) = widgets::plain_field_named(ui, (id, "angle"), Some(tl!("Angle:")), live.polygon_angle().unwrap_or(0.0), "°", 1, fw) {
+        if let Some(a) = widgets::mixed_field_named(ui, (id, "angle"), Some(tl!("Angle:")), angle, "°", 1, fw) {
             set = Some(("polygonAngle", json!(a)));
         }
         ui.end_row();
@@ -462,21 +658,57 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let resp = ui.link(egui::RichText::new(tl!("Transform")).size(12.0).color(t.text).underline()).on_hover_text(tl!("Transform options"));
-    widgets::popover(&resp, resp.clicked(), |ui| {
+    let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
+    popover(app, &resp);
+}
+
+/// The Transform panel in a popover under `resp`, which a click on it toggles: the Control bar's
+/// Transform [`link`], and its X:, Y:, W: and H: labels.
+pub fn popover(app: &mut VectorcraftApp, resp: &egui::Response) {
+    widgets::popover(resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });
 }
 
+/// The Transform link's text, as [`link`] draws it and [`link_width`] measures it.
+fn link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Transform")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The width of the Transform [`link`] in `ui`: its text, and the point that the underline's stroke
+/// and the text's placement on the pixel grid can add at its right end.
+pub fn link_width(ui: &Ui) -> f32 {
+    widgets::text_width(ui, link_text(ui)) + 1.0
+}
+
+/// The width and height of [`constrain_link`]'s button.
+pub const CONSTRAIN_LINK_SIZE: f32 = 22.0;
+
 /// The link between W and H (Transform panel, Properties panel, Control bar): one toggle, the
-/// `constrainProportions` preference, which the size fields pass on as `proportional`.
+/// `constrainProportions` preference, which the size fields pass on as `proportional`. It is drawn
+/// after the fields it sits between, so Tab reaches the fields first and the link after them.
 pub fn constrain_link(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let (_, resp) = ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::click());
+    constrain_link_at(app, ui, resp);
+}
+
+/// [`constrain_link`]'s toggle, made over `at`: the Control bar keeps the link's place between W
+/// and H but makes it after H, so Tab goes from W straight to H and finds the link after it. With
+/// the keyboard on it, Space or Enter toggles it, as a dialog's button takes them.
+pub fn constrain_link_at(app: &mut VectorcraftApp, ui: &mut Ui, at: egui::Response) {
     let on = app.session.prefs.constrain_proportions;
-    if widgets::icon_button(ui, if on { "link" } else { "link-2-off" }, tl!("Constrain Width and Height Proportions"), on, 22.0).clicked() {
+    let tip = tl!("Constrain Width and Height Proportions");
+    let keyed = at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    if widgets::paint_icon_button(ui, at, if on { "link" } else { "link-2-off" }, tip, on).clicked() || keyed {
         set_pref(app, "constrainProportions", !on);
     }
+}
+
+/// The room the Control bar keeps for [`constrain_link_at`] between its W and H fields.
+pub fn constrain_link_room(ui: &mut Ui) -> egui::Rect {
+    ui.allocate_exact_size(egui::Vec2::splat(CONSTRAIN_LINK_SIZE), egui::Sense::hover()).0
 }
 
 /// The `copy` param of a command that a field of the Transform panel, the Properties panel's
@@ -500,6 +732,22 @@ pub fn set_pref(app: &mut VectorcraftApp, key: &str, on: bool) {
     }
 }
 
+/// Show on Shape Creation (`showOnShapeCreation`): after a shape was drawn
+/// ([`vectorcraft_engine::Session::take_shape_drawn`]), the Transform panel shows as Window ›
+/// Transform shows it, unless it can be seen already. In Presentation Mode, or with the option off,
+/// the panels stay as they are. Called once per frame, after the canvas and the dialogs; a frame
+/// that shows the panel asks `ctx` for another, which draws it.
+pub fn show_on_shape_creation(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let drawn = app.session.take_shape_drawn();
+    if !drawn || !app.session.prefs.show_on_shape_creation || app.ui.screen_mode >= 3 || crate::panel_docking::visible(&app.ui, "transform") {
+        return;
+    }
+    match app.run("window.panel", json!({ "panel": "transform" })) {
+        Ok(_) => ctx.request_repaint(),
+        Err(e) => app.status(e),
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "xf-hide-options");
     let has = super::selection_len(app) > 0;
@@ -507,6 +755,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let origin = app.selection_box().map(|b| panel_reference(app, ui, &b).origin());
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "xf-hide-options", !hidden);
+    }
+    let on_creation = app.session.prefs.show_on_shape_creation;
+    if menu_item(ui, tl!("Show on Shape Creation"), true, on_creation) {
+        set_pref(app, "showOnShapeCreation", !on_creation);
     }
     ui.separator();
     if menu_item(ui, tl!("Flip Horizontal"), has, false) {
@@ -519,6 +771,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let ss = app.session.prefs.scale_strokes;
     if menu_item(ui, tl!("Scale Strokes & Effects"), true, ss) {
         set_pref(app, "scaleStrokes", !ss);
+    }
+    // The panel's values and the bounding box measure point type by its glyphs' ink.
+    let glyphs = app.session.prefs.type_glyph_bounds;
+    if menu_item(ui, tl!("Measure Type by Glyph Bounds"), true, glyphs) {
+        set_pref(app, "typeGlyphBounds", !glyphs);
+    }
+    // The active document's Align New Objects to Pixel Grid (`document.setup`).
+    let align_new = app.session.active().map(|st| st.doc.setup.align_new_objects_to_pixel_grid);
+    if menu_item(ui, tl!("Align New Objects to Pixel Grid"), align_new.is_some(), align_new == Some(true))
+        && let Err(e) = app.run("document.setup", json!({"alignNewObjectsToPixelGrid": align_new != Some(true)}))
+    {
+        app.status(e);
     }
     ui.separator();
     // What the panel transforms (Transform Object Only / Pattern Only / Both), one checked.

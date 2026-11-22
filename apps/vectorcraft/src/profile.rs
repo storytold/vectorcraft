@@ -149,6 +149,15 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     }
 }
 
+/// Make folder `dir`, owner-only on Unix.
+fn private_dir(dir: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    builder.create(dir)
+}
+
 fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
     let entries = match std::fs::read_dir(from) {
         Ok(entries) => entries,
@@ -165,7 +174,12 @@ fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
         let (src, dst) = (entry.path(), to.join(entry.file_name()));
         // A symbolic link is copied as what it points to, or skipped when that is a folder.
         let copied = match entry.file_type() {
-            Ok(kind) if kind.is_dir() => std::fs::create_dir_all(&dst).map(|()| copy_dir_into(&src, &dst, skip)),
+            // The copy keeps the folder's permissions (a private recovery folder stays private):
+            // owner-only while it fills, then the source's.
+            Ok(kind) if kind.is_dir() => private_dir(&dst).and_then(|()| {
+                copy_dir_into(&src, &dst, skip);
+                std::fs::set_permissions(&dst, std::fs::metadata(&src)?.permissions())
+            }),
             Ok(_) => std::fs::copy(&src, &dst).map(|_| ()),
             Err(e) => Err(e),
         };
@@ -178,7 +192,22 @@ fn copy_dir_into(from: &Path, to: &Path, skip: &mut impl FnMut(String)) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct TestDir(tempfile::TempDir);
+
+    impl std::ops::Deref for TestDir {
+        type Target = Path;
+
+        fn deref(&self) -> &Self::Target {
+            self.0.path()
+        }
+    }
+
+    impl AsRef<Path> for TestDir {
+        fn as_ref(&self) -> &Path {
+            self.0.path()
+        }
+    }
 
     fn environment(key: &str) -> Option<OsString> {
         match key {
@@ -273,12 +302,8 @@ mod tests {
         assert_eq!(install_dir("macos", mounted, &appimage), Some("/tmp/.mount_vc/usr/bin".into()));
     }
 
-    fn temp(tag: &str) -> PathBuf {
-        static N: AtomicUsize = AtomicUsize::new(0);
-        let d = std::env::temp_dir().join(format!("vectorcraft-profile-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn temp(tag: &str) -> TestDir {
+        TestDir(tempfile::Builder::new().prefix(&format!("vectorcraft-profile-{tag}-")).tempdir().unwrap())
     }
 
     #[test]
@@ -384,6 +409,21 @@ mod tests {
         assert!(error.starts_with("1 skipped"), "{error}");
         assert!(error.contains("blocked"), "{error}");
         assert_eq!(std::fs::read(to.join("kept.txt")).unwrap(), b"kept");
+        let _ = std::fs::remove_dir_all(&from);
+        let _ = std::fs::remove_dir_all(&to);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_copied_folder_keeps_its_permissions() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let from = temp("copy-mode-from");
+        let to = temp("copy-mode-to");
+        std::fs::create_dir_all(from.join("recovery")).unwrap();
+        std::fs::write(from.join("recovery/copy.vectorcraft"), b"unsaved").unwrap();
+        std::fs::set_permissions(from.join("recovery"), std::fs::Permissions::from_mode(0o700)).unwrap();
+        copy_dir(&from, &to).unwrap();
+        assert_eq!(std::fs::metadata(to.join("recovery")).unwrap().permissions().mode() & 0o777, 0o700);
         let _ = std::fs::remove_dir_all(&from);
         let _ = std::fs::remove_dir_all(&to);
     }

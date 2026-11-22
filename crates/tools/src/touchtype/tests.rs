@@ -140,6 +140,118 @@ fn dragging_the_box_moves_the_character_along_its_line_and_up() {
     assert!(close(p3.get("dx").and_then(|v| v.as_f64()).unwrap_or(0.0), 0.0) && close(p3["dy"].as_f64().unwrap(), 4.0), "{p3}");
 }
 
+/// 40 pt point type "Type" at (100, 200) whose "y" is rotated by `rotation` degrees, selected.
+fn doc_with_rotated_y(rotation: f64) -> (Document, NodeId, Selection) {
+    let (mut d, id, s) = doc_with_type();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        edit::style_range(&mut t.runs, 1, 2, |st| st.rotation = rotation);
+    }
+    (d, id, s)
+}
+
+/// Near and at a quarter turn, a drag still splits into kerning along the line and baseline shift
+/// across it: right 10 pt and up 4 pt is `dx` 10 and `dy` 4 at every rotation, and a drag straight
+/// across the line is all `dy`. Arrow keys nudge the same way.
+#[test]
+fn a_character_rotated_near_a_quarter_turn_moves_across_its_line() {
+    for rotation in [45.0, 85.0, 90.0, 95.0, -90.0] {
+        let (d, id, s) = doc_with_rotated_y(rotation);
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let mut t = TouchTypeTool { target: Some((id, 1)), ..Default::default() };
+        let q = quad(&t, &cx);
+        let at = q[0].midpoint(q[2]);
+        let acts = drag(&mut t, &cx, at, at + Vec2::new(10.0, -4.0));
+        let p1 = preview(&acts[1]);
+        assert!(close(p1["dx"].as_f64().unwrap(), 10.0) && close(p1["dy"].as_f64().unwrap(), 4.0), "{rotation}°: {p1}");
+        let acts = drag(&mut t, &cx, at, at + Vec2::new(0.0, -6.0));
+        let p2 = preview(&acts[1]);
+        assert!(p2.get("dx").is_none_or(|v| close(v.as_f64().unwrap(), 0.0)) && close(p2["dy"].as_f64().unwrap(), 6.0), "{rotation}°: {p2}");
+        let acts = t.key(&cx, ToolKey::Up, Mods::default());
+        let p3 = match &acts[0] {
+            Action::Exec(c, v) if c == "text.touchType" => v,
+            other => panic!("{other:?}"),
+        };
+        assert!(close(p3["dy"].as_f64().unwrap(), 1.0) && p3.get("dx").is_none_or(|v| close(v.as_f64().unwrap(), 0.0)), "{rotation}°: {p3}");
+    }
+}
+
+/// In vertical type, a character standing upright (§) still splits a drag into kerning down its
+/// column and baseline shift across it: down 10 pt and right 4 pt is `dx` 10 and `dy` 4. Every
+/// arrow key nudges it.
+#[test]
+fn an_upright_character_in_vertical_type_moves_down_and_across_its_column() {
+    let (mut d, id, s) = doc_with_type();
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        **t = TextObject::point(Point::new(100.0, 200.0), "l§", CharStyle { size: 40.0, ..Default::default() });
+        t.vertical = true;
+    }
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = TouchTypeTool { target: Some((id, 1)), ..Default::default() };
+    let q = quad(&t, &cx);
+    let at = q[0].midpoint(q[2]);
+    let acts = drag(&mut t, &cx, at, at + Vec2::new(4.0, 10.0));
+    let p1 = preview(&acts[1]);
+    assert!(close(p1["dx"].as_f64().unwrap_or(0.0), 10.0) && close(p1["dy"].as_f64().unwrap_or(0.0), 4.0), "{p1}");
+    for key in [ToolKey::Up, ToolKey::Down, ToolKey::Left, ToolKey::Right] {
+        let acts = t.key(&cx, key, Mods::default());
+        let moved = match acts.first() {
+            Some(Action::Exec(c, v)) if c == "text.touchType" => v,
+            other => panic!("{key:?}: {other:?}"),
+        };
+        let parts = [&moved["dx"], &moved["dy"]].map(|v| v.as_f64().unwrap_or(0.0).abs());
+        assert!(close(parts[0] + parts[1], 1.0) && (close(parts[0], 0.0) || close(parts[1], 0.0)), "{key:?}: {moved}");
+    }
+}
+
+/// In type scaled unevenly, a drag's parts are measured in document points: right 10 pt and up 4
+/// pt of a quarter-turned character is `dx` 10 and `dy` 4.
+#[test]
+fn a_quarter_turned_character_in_unevenly_scaled_type_follows_the_pointer() {
+    let (mut d, id, s) = doc_with_rotated_y(90.0);
+    if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+        t.xf = Affine::scale_non_uniform(2.0, 0.5) * t.xf;
+    }
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = TouchTypeTool { target: Some((id, 1)), ..Default::default() };
+    let q = quad(&t, &cx);
+    let at = q[0].midpoint(q[2]);
+    let acts = drag(&mut t, &cx, at, at + Vec2::new(10.0, -4.0));
+    let p1 = preview(&acts[1]);
+    assert!(close(p1["dx"].as_f64().unwrap(), 10.0) && close(p1["dy"].as_f64().unwrap(), 4.0), "{p1}");
+}
+
+/// A character with a baseline shift turns about its pen position moved up by the shift, rotated
+/// or not, and the rotate handle measures its turn about that point.
+#[test]
+fn a_shifted_character_turns_about_its_shifted_pen_position() {
+    for rotation in [0.0, 30.0, 90.0] {
+        let (mut d, id, s) = doc_with_rotated_y(rotation);
+        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
+            edit::style_range(&mut t.runs, 1, 2, |st| st.baseline_shift = 10.0);
+        }
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let t = TouchTypeTool { target: Some((id, 1)), ..Default::default() };
+        let (_, text, b) = t.current(&cx).expect("a character is selected");
+        let lay = vectorcraft_text::layout(FontDb::global(), text);
+        let y = lay.glyphs.iter().find(|g| g.byte == 1).unwrap();
+        let want = y.origin + Vec2::new(0.0, -10.0);
+        assert!((b.pivot - want).hypot() < 1e-6, "{rotation}°: {:?}, want {want:?}", b.pivot);
+        // The rotate handle turned a quarter turn about that point is a quarter turn more.
+        let mut t = t;
+        let top = text.xf * b.handle(Part::Rotate);
+        let centre = text.xf * want;
+        let r = top - centre;
+        let acts = drag(&mut t, &cx, top, centre + Vec2::new(r.y, -r.x));
+        let ps = preview(&acts[1]);
+        let turned = (ps["rotation"].as_f64().unwrap() - rotation - 90.0).rem_euclid(360.0);
+        assert!(turned.min(360.0 - turned) < 1e-6, "{rotation}°: {ps}");
+    }
+}
+
 #[test]
 fn arrow_keys_nudge_the_selected_character() {
     let (d, id, s) = doc_with_type();
@@ -276,6 +388,60 @@ fn the_box_of_a_character_drawn_with_two_glyphs_holds_both() {
     }
 }
 
+/// A character of type on an open path that is not drawn, because it falls before the path's
+/// start, has no box, so the tool shows no handles for it; a drawn character of the same type has
+/// one.
+#[test]
+fn a_character_before_an_open_paths_start_has_no_box() {
+    let mut d = Document::new(600.0, 500.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut text = TextObject::point(Point::ZERO, "Type", CharStyle { size: 40.0, ..Default::default() });
+    let line =
+        vectorcraft_geom::PathData::new(vec![vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 200.0), Point::new(500.0, 200.0)], false)]);
+    text.kind = vectorcraft_doc::TextKind::OnPath { path: line, start: -0.05, end: None };
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let lay = vectorcraft_text::layout(FontDb::global(), &text);
+    assert!(lay.glyphs[0].off_path && !lay.glyphs[1].off_path, "the T is before the path's start, the y is on it");
+    assert!(char_box(&text, &lay, 0).is_none());
+    assert!(TouchTypeTool { target: Some((id, 0)), ..Default::default() }.current(&cx).is_none());
+    assert!(TouchTypeTool { target: Some((id, 1)), ..Default::default() }.current(&cx).is_some());
+    // An All Caps ß is two glyphs: with the first before the path's start and the second drawn, the
+    // character has the second's box.
+    let mut caps = text.clone();
+    caps.runs = vec![vectorcraft_doc::TextRun::new("ße", CharStyle { size: 40.0, all_caps: true, ..Default::default() })];
+    if let vectorcraft_doc::TextKind::OnPath { start, .. } = &mut caps.kind {
+        *start = 0.0;
+    }
+    let adv = vectorcraft_text::layout(FontDb::global(), &caps).glyphs[0].advance;
+    if let vectorcraft_doc::TextKind::OnPath { start, .. } = &mut caps.kind {
+        *start = -1.2 * adv / 400.0;
+    }
+    let mut d = Document::new(600.0, 500.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(caps.clone())))).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let cx = crate::testutil::cx(&d, &s, &p);
+    let lay = vectorcraft_text::layout(FontDb::global(), &caps);
+    assert!(lay.glyphs[0].byte == 0 && lay.glyphs[1].byte == 0 && lay.glyphs[0].off_path && !lay.glyphs[1].off_path);
+    let t = TouchTypeTool { target: Some((id, 0)), ..Default::default() };
+    let (_, _, b) = t.current(&cx).expect("the ß has a box");
+    assert!((b.pen - lay.glyphs[1].xf * Point::ZERO).hypot() < 1e-9, "{:?}", b.pen);
+    // A press on its drawn glyph, on the path, starts a drag of it.
+    let q = glyph_quad(&lay.glyphs[1]).unwrap();
+    let at = Point::new(q[0].midpoint(q[2]).x, 200.0);
+    assert!(in_quad(&q, at), "{at:?} {q:?}");
+    let mut t = TouchTypeTool::default();
+    let acts = drag(&mut t, &cx, at, at + Vec2::new(0.0, -5.0));
+    assert_eq!(preview(&acts[1])["start"], 0, "{:?}", acts[1]);
+}
+
 /// A glyph skewed by its transform (the Skew effect of type on a path) keeps its own box.
 #[test]
 fn a_skewed_glyph_keeps_its_own_box() {
@@ -300,4 +466,50 @@ fn the_tool_is_made_by_its_id() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x, at.y));
     assert_eq!(t.options(), json!({"id": id.0, "start": 0}));
+}
+
+#[test]
+fn touch_type_rtl_middle_character_can_drag_and_nudge_along_its_line() {
+    let _inputs = crate::testutil::changing_layout_inputs();
+    use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
+
+    // The process-wide database deduplicates the same synthetic face across tests.
+    FontDb::global().add_font(right_to_left_optical_font().unwrap());
+    let mut d = Document::new(500.0, 500.0);
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let style = CharStyle { font_family: RIGHT_TO_LEFT_OPTICAL_FAMILY.into(), size: 100.0, ..Default::default() };
+    let text = TextObject::point(Point::new(300.0, 250.0), "אבא", style);
+    let lay = vectorcraft_text::layout(FontDb::global(), &text);
+    assert_eq!(lay.glyphs.len(), 3);
+    assert!(lay.glyphs.iter().all(|g| g.rtl));
+    d.insert(Some(layer), 0, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut tool = TouchTypeTool { target: Some((id, 2)), ..Default::default() };
+    let q = quad(&tool, &cx);
+    let acts = drag(&mut tool, &cx, q[3], q[3] + Vec2::new(-5.0, -3.0));
+    let params = preview(&acts[1]);
+    assert!(close(params["dx"].as_f64().unwrap(), 5.0) && close(params["dy"].as_f64().unwrap(), 3.0), "{params}");
+    let acts = tool.key(&cx, ToolKey::Left, Mods::default());
+    assert_eq!(acts.len(), 1);
+    let Action::Exec(command, params) = &acts[0] else { panic!("{acts:?}") };
+    assert_eq!(command, "text.touchType");
+    assert!(close(params["dx"].as_f64().unwrap(), 1.0), "left is forward in reading order: {params}");
+    tool.target = Some((id, 0));
+    assert!(tool.key(&cx, ToolKey::Left, Mods::default()).is_empty(), "the first logical character has no preceding character to kern");
+}
+
+#[test]
+fn touch_type_direction_boundary_offers_only_vertical_movement() {
+    let text = TextObject::point(Point::new(100.0, 200.0), "abc אבג", CharStyle { size: 40.0, ..Default::default() });
+    let lay = vectorcraft_text::layout(FontDb::global(), &text);
+    let at = lay.glyphs.iter().position(|g| g.byte == 4).unwrap();
+    let b = char_box(&text, &lay, at).unwrap();
+    assert!(!b.kerned, "the previous logical character has a different reading direction");
+    let params = TouchTypeTool::nudge_params(NodeId(1), &text, &b, -5.0, -3.0);
+    assert!(params.get("dx").is_none(), "{params}");
+    assert!(params.get("dy").is_some(), "{params}");
 }

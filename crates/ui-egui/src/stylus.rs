@@ -1,15 +1,19 @@
-//! Pen pressure that the host reads from the system itself (#764).
+//! Pen pressure, tilt and barrel rotation that the host reads from the system itself (#764).
 //!
 //! winit 0.30 hands a pen's pressure to egui only on Windows, as the force of a touch event; the
-//! web build makes the same touch events from the browser's Pointer Events. On Linux under X11
-//! (XWayland included), winit reports a pen as a mouse, so the desktop app reads the pressure
-//! from XInput2 on a connection of its own and writes it into a [`StylusFeed`]
-//! ([`crate::Services::stylus`]). On macOS, where winit reports none either, the app reads each
-//! event's pressure from AppKit before the window handles it, and also keeps it for that event's
-//! pointer move ([`StylusFeed::set_move`]), so the moves of a fast stroke each get their own. On
-//! Windows, where winit drops which end of the pen is down, the app reads the pressure and the end
-//! from each pointer message of a pen before winit handles it. The canvas uses the feed when a
-//! frame's events carry no touch force.
+//! web build makes the same touch events from the browser's Pointer Events. No platform gets the
+//! pen's tilt or rotation through winit. On Linux under X11 (XWayland included), winit reports a
+//! pen as a mouse, so the desktop app reads the pressure, tilt and rotation from XInput2 on a
+//! connection of its own and writes them into a [`StylusFeed`] ([`crate::Services::stylus`]). On
+//! macOS, where winit reports none of them either, the app reads each event's pressure, tilt and
+//! rotation from AppKit before the window handles it, and also keeps them for that event's pointer
+//! move ([`StylusFeed::set_move`]), so the moves of a fast stroke each get their own. On Windows,
+//! where winit drops which end of the pen is down, the app reads the pressure and the end from
+//! each pointer message of a pen before winit handles it. The canvas uses the pressure when a
+//! frame's events carry no touch force, and the tilt and rotation for each press, drag and release.
+//! An airbrush pen's finger wheel comes with the tilt and rotation ([`PenPose::wheel`]) where the
+//! host reads it: from XInput2 on X11 and from AppKit on macOS. The app does not read it on
+//! Windows, whose pointer messages have no field for it, or in the web build.
 //!
 //! The feed also says which end of the pen moved. Turning the pen to its eraser end selects the
 //! Eraser tool, and turning it back to the tip selects the tool used before
@@ -23,8 +27,10 @@
 //! the tip selects the tool used before.
 
 use std::collections::VecDeque;
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
+
+pub use vectorcraft_tools::PenPose;
 
 use crate::VectorcraftApp;
 
@@ -45,6 +51,8 @@ pub struct PenSample {
     pub pressure: f32,
     /// The pen is turned to its eraser end.
     pub eraser: bool,
+    /// The tilt, rotation and finger wheel the pen read, if any.
+    pub pose: PenPose,
 }
 
 /// What the feed holds.
@@ -60,8 +68,11 @@ struct Pen {
     /// The last pressure above 0 set since a pen was the last pointer to move, with the same end
     /// (0 when that end has not touched).
     touched: f32,
-    /// The pressure of each pointer move set since the UI last took them, oldest first.
-    moves: VecDeque<f32>,
+    /// The pressure, tilt and rotation of each pointer move set since the UI last took them,
+    /// oldest first.
+    moves: VecDeque<(f32, PenPose)>,
+    /// The pen's latest tilt and rotation (none when a mouse moved last).
+    pose: PenPose,
 }
 
 impl Pen {
@@ -74,14 +85,16 @@ impl Pen {
 #[derive(Default)]
 struct Shared {
     pen: Mutex<Pen>,
+    /// Wake the canvas for a pen that turns without a new window pointer event.
+    repaint: OnceLock<egui::Context>,
     /// Signaled on every [`StylusFeed::set_sample`] ([`StylusFeed::set`] included).
     set: Condvar,
     /// Written on the UI thread itself ([`StylusFeed::on_ui_thread`]): a press never waits.
     ui_thread: bool,
 }
 
-/// The pen pressure and pen end the host last read, written from any thread and read on the UI
-/// thread. Cheap to clone; the clones share the value.
+/// The pen pressure, pen end, tilt and rotation the host last read, written from any thread and
+/// read on the UI thread. Cheap to clone; the clones share the value.
 #[derive(Clone, Default)]
 pub struct StylusFeed(Arc<Shared>);
 
@@ -96,24 +109,31 @@ impl StylusFeed {
         self.0.pen.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    pub(crate) fn bind_repaint(&self, ctx: &egui::Context) {
+        self.0.repaint.get_or_init(|| ctx.clone());
+    }
+
     /// A pen turned to its tip moved with `pressure`, or `None`: another pointer moved
     /// ([`Self::set_sample`]).
     pub fn set(&self, pressure: Option<f32>) {
-        self.set_sample(pressure.map(|pressure| PenSample { pressure, eraser: false }));
+        self.set_sample(pressure.map(|pressure| PenSample { pressure, ..PenSample::default() }));
     }
 
-    /// A pen moved with `sample`'s pressure (0..1; 0 while it hovers) and end, or `None`: another
-    /// pointer, such as a mouse, moved. A pressure outside 0..1 is clamped, and one that is not a
-    /// number is a mouse's, 1. A sample of the other end starts afresh: the touches of the end
+    /// A pen moved with `sample`'s pressure (0..1; 0 while it hovers), end, tilt and rotation, or
+    /// `None`: another pointer, such as a mouse, moved. A pressure outside 0..1 is clamped, and one
+    /// that is not a number is a mouse's, 1. The tilt and rotation are kept within their ranges by
+    /// [`PenPose::sanitized`]. A sample of the other end starts afresh: the touches of the end
     /// before it don't count for its presses.
     pub fn set_sample(&self, sample: Option<PenSample>) {
         let pressure = sample.map(|s| if s.pressure.is_finite() { s.pressure.clamp(0.0, 1.0) } else { 1.0 });
         let eraser = sample.is_some_and(|s| s.eraser);
         let mut pen = self.lock();
+        let before_pose = pen.pose;
         if eraser != pen.eraser {
             *pen = Pen::default();
         }
         pen.eraser = eraser;
+        pen.pose = sample.map_or(PenPose::default(), |s| s.pose.sanitized());
         match pressure {
             Some(p) if p > 0.0 => {
                 let touching = pen.latest.is_some_and(|l| l > 0.0);
@@ -128,13 +148,17 @@ impl StylusFeed {
             }
         }
         pen.latest = pressure;
+        let pose_changed = pen.pose != before_pose;
         drop(pen);
         self.0.set.notify_all();
+        if pose_changed && let Some(ctx) = self.0.repaint.get() {
+            ctx.request_repaint();
+        }
     }
 
     /// Like [`Self::set_sample`], for a pen sample that comes with one pointer move of the window,
-    /// read before the window handles the move (macOS): its pressure is also kept for that move
-    /// ([`Self::take_moves`]).
+    /// read before the window handles the move (macOS): its pressure, tilt and rotation are also
+    /// kept for that move ([`Self::take_moves`]).
     pub fn set_move(&self, sample: PenSample) {
         self.set_sample(Some(sample));
         let mut pen = self.lock();
@@ -142,12 +166,13 @@ impl StylusFeed {
             pen.moves.pop_front();
         }
         let pressure = pen.latest.unwrap_or(1.0);
-        pen.moves.push_back(pressure);
+        let pose = pen.pose;
+        pen.moves.push_back((pressure, pose));
     }
 
-    /// The pressures of the pointer moves set with [`Self::set_move`] since the last call, oldest
-    /// first (256 at most): the last one is the latest move's.
-    pub fn take_moves(&self) -> Vec<f32> {
+    /// The pressures, tilts and rotations of the pointer moves set with [`Self::set_move`] since
+    /// the last call, oldest first (256 at most): the last one is the latest move's.
+    pub fn take_moves(&self) -> Vec<(f32, PenPose)> {
         self.lock().moves.drain(..).collect()
     }
 
@@ -171,6 +196,13 @@ impl StylusFeed {
     /// for it, and gets 0 if none comes.
     pub fn press(&self) -> Option<f32> {
         self.press_within(PRESS_WAIT)
+    }
+
+    /// The tilt (in screen axes) and rotation of the pen when a pen was the last pointer to move
+    /// and it read either, otherwise `None`.
+    pub fn pose(&self) -> Option<PenPose> {
+        let pen = self.lock();
+        pen.latest.map(|_| pen.pose).filter(|q| *q != PenPose::default())
     }
 
     fn press_within(&self, wait: Duration) -> Option<f32> {
@@ -264,6 +296,30 @@ pub(crate) fn sync_eraser_tool(app: &mut VectorcraftApp) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn changing_a_still_pens_pose_wakes_the_canvas() {
+        let feed = StylusFeed::default();
+        let ctx = egui::Context::default();
+        let repaints = Arc::new(AtomicUsize::new(0));
+        let count = repaints.clone();
+        ctx.set_repaint_observer(move |_| {
+            count.fetch_add(1, Ordering::Relaxed);
+        });
+        feed.bind_repaint(&ctx);
+        let pose = PenPose { rotation: Some(0.0), ..Default::default() };
+        let sample = PenSample { pressure: 0.0, pose, ..Default::default() };
+        let writer = feed.clone();
+        std::thread::spawn(move || writer.set_sample(Some(sample))).join().unwrap();
+        assert_eq!(repaints.load(Ordering::Relaxed), 1);
+        feed.set_sample(Some(sample));
+        assert_eq!(repaints.load(Ordering::Relaxed), 1, "an unchanged pose needs no new frame");
+        feed.set_sample(Some(PenSample { pose: PenPose { rotation: Some(90.0), ..pose }, ..sample }));
+        assert_eq!(repaints.load(Ordering::Relaxed), 2);
+        feed.set_sample(None);
+        assert_eq!(repaints.load(Ordering::Relaxed), 3, "mouse input clears the tip");
+    }
 
     #[test]
     fn the_feed_keeps_the_last_pressure_within_0_to_1() {
@@ -283,17 +339,48 @@ mod tests {
         assert_eq!((feed.held(), feed.press()), (None, None), "a mouse moved");
     }
 
+    /// The tilt and rotation a pen read, kept within their ranges, until a mouse moves.
+    #[test]
+    fn the_feed_keeps_the_pens_tilt_and_rotation_within_their_ranges() {
+        let feed = StylusFeed::default();
+        assert_eq!(feed.pose(), None);
+        let pen = |pose| Some(PenSample { pressure: 0.4, pose, ..PenSample::default() });
+        let leaning = PenPose { tilt: Some([-120.0, 30.0]), rotation: Some(-90.0), wheel: None };
+        feed.set_sample(pen(leaning));
+        assert_eq!(feed.pose(), Some(PenPose { tilt: Some([-90.0, 30.0]), rotation: Some(270.0), wheel: None }));
+        assert_eq!(feed.held(), Some(0.4), "the pressure as before");
+        // Not a number: left out. A tiny negative rotation is 0, not 360.
+        feed.set_sample(pen(PenPose { tilt: Some([f32::NAN, 0.0]), rotation: Some(-1e-9), wheel: None }));
+        assert_eq!(feed.pose(), Some(PenPose { rotation: Some(0.0), ..PenPose::default() }));
+        feed.set_sample(pen(PenPose { rotation: Some(f32::INFINITY), wheel: Some(f32::NAN), ..PenPose::default() }));
+        assert_eq!(feed.pose(), None, "a pen that reads none of them");
+        assert!(PenPose { rotation: Some(725.0), ..Default::default() }.sanitized().rotation == Some(5.0));
+        // An airbrush pen's finger wheel, clamped to 0..1.
+        feed.set_sample(pen(PenPose { wheel: Some(1.25), ..PenPose::default() }));
+        assert_eq!(feed.pose(), Some(PenPose { wheel: Some(1.0), ..PenPose::default() }));
+        // The eraser end reads them too.
+        feed.set_sample(Some(PenSample { pressure: 0.4, eraser: true, pose: leaning }));
+        assert_eq!((feed.eraser(), feed.pose()), (Some(true), Some(PenPose { tilt: Some([-90.0, 30.0]), rotation: Some(270.0), wheel: None })));
+        // A pen that reads no tilt (`set`), or a mouse: none.
+        feed.set_sample(pen(leaning));
+        feed.set(Some(0.5));
+        assert_eq!(feed.pose(), None);
+        feed.set_sample(pen(leaning));
+        feed.set_sample(None);
+        assert_eq!((feed.pose(), feed.held()), (None, None));
+    }
+
     #[test]
     fn the_feed_keeps_the_eraser_end() {
         let feed = StylusFeed::default();
         assert_eq!(feed.eraser(), None, "no pen until one moves");
-        feed.set_sample(Some(PenSample { pressure: 1.5, eraser: true }));
+        feed.set_sample(Some(PenSample { pressure: 1.5, eraser: true, ..PenSample::default() }));
         assert_eq!((feed.eraser(), feed.held()), (Some(true), Some(1.0)), "clamped, and the eraser end kept");
-        feed.set_sample(Some(PenSample { pressure: f32::NAN, eraser: true }));
+        feed.set_sample(Some(PenSample { pressure: f32::NAN, eraser: true, ..PenSample::default() }));
         assert_eq!((feed.eraser(), feed.held()), (Some(true), Some(1.0)));
         feed.set(Some(0.25));
         assert_eq!((feed.eraser(), feed.held()), (Some(false), Some(0.25)), "the tip");
-        feed.set_sample(Some(PenSample { pressure: 0.0, eraser: true }));
+        feed.set_sample(Some(PenSample { pressure: 0.0, eraser: true, ..PenSample::default() }));
         assert_eq!(feed.eraser(), Some(true), "the eraser end hovering");
         feed.set_sample(None);
         assert_eq!(feed.eraser(), None, "a mouse moved");
@@ -302,17 +389,24 @@ mod tests {
     #[test]
     fn the_feed_keeps_the_pressure_of_each_move() {
         let feed = StylusFeed::default();
-        for p in [0.2, 1.5, 0.4] {
-            feed.set_move(PenSample { pressure: p, eraser: false });
+        let leaning = PenPose { tilt: Some([20.0, -10.0]), rotation: Some(400.0), wheel: Some(0.75) };
+        for (p, pose) in [(0.2, PenPose::default()), (1.5, leaning), (0.4, PenPose::default())] {
+            feed.set_move(PenSample { pressure: p, pose, ..PenSample::default() });
         }
         feed.set(Some(0.9));
-        assert_eq!(feed.take_moves(), [0.2, 1.0, 0.4], "clamped; a sample without a move keeps none");
+        let turned = PenPose { rotation: Some(40.0), ..leaning };
+        let unread = PenPose::default();
+        assert_eq!(
+            feed.take_moves(),
+            [(0.2, unread), (1.0, turned), (0.4, unread)],
+            "clamped, each move with its own pose; a sample without a move keeps none"
+        );
         assert_eq!((feed.take_moves(), feed.held()), (vec![], Some(0.9)), "taken once");
         for _ in 0..MAX_MOVES + 10 {
-            feed.set_move(PenSample { pressure: 0.5, eraser: false });
+            feed.set_move(PenSample { pressure: 0.5, ..PenSample::default() });
         }
         assert_eq!(feed.take_moves().len(), MAX_MOVES, "bounded");
-        feed.set_move(PenSample { pressure: 0.5, eraser: false });
+        feed.set_move(PenSample { pressure: 0.5, ..PenSample::default() });
         feed.set(None);
         assert!(feed.take_moves().is_empty(), "a mouse moved");
     }
@@ -342,11 +436,11 @@ mod tests {
         for p in [0.0, 0.8, 0.0] {
             feed.set(Some(p));
         }
-        feed.set_sample(Some(PenSample { pressure: 0.0, eraser: true }));
+        feed.set_sample(Some(PenSample { pressure: 0.0, eraser: true, ..PenSample::default() }));
         assert_eq!(feed.held(), Some(0.0), "the eraser end has not touched");
         assert_eq!(feed.press_within(Duration::ZERO), Some(0.0), "nor pressed");
-        feed.set_sample(Some(PenSample { pressure: 0.4, eraser: true }));
-        feed.set_sample(Some(PenSample { pressure: 0.0, eraser: true }));
+        feed.set_sample(Some(PenSample { pressure: 0.4, eraser: true, ..PenSample::default() }));
+        feed.set_sample(Some(PenSample { pressure: 0.0, eraser: true, ..PenSample::default() }));
         feed.set(Some(0.0));
         assert_eq!((feed.held(), feed.press_within(Duration::ZERO)), (Some(0.0), Some(0.0)), "back to the tip");
     }

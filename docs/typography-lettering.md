@@ -24,7 +24,7 @@ can use installed system fonts, while the web app uses the fonts supplied by its
 6. Adjust **Font Size** (the field beside **T**) and **Tracking** (beside **VA↔**) in the Character
    panel. Hover a field's label to see its name. For example, enter `72 pt` for a large heading and
    try tracking `50` to spread its letters slightly. Positive tracking adds space; negative tracking
-   tightens it. **Leading** controls the spacing between lines; **Kerning (0 = Auto)** adjusts pairs.
+   tightens it. **Leading** controls the spacing between lines; **Kerning** adjusts pairs.
 7. To change only part of the text, select **Type Tool**, click into the text and drag across the
    characters before using the Character panel. Press **Escape** when finished. Keep the text
    editable until its wording, font and spacing are settled.

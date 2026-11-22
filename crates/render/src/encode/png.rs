@@ -28,16 +28,12 @@ const ADAM7: [(u32, u32, u32, u32); 7] = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 
 
 /// Pixels per metre for a resolution in pixels per inch (the unit `pHYs` stores).
 pub fn pixels_per_metre(ppi: f64) -> u32 {
-    (ppi / 0.0254).round().clamp(1.0, u32::MAX as f64) as u32
+    vectorcraft_doc::ppi::pixels_per_metre(ppi)
 }
 
 /// A whole `pHYs` chunk (length, type, data, CRC) declaring `x` × `y` pixels per inch.
 pub fn phys_chunk(x: f64, y: f64) -> Vec<u8> {
-    let [x, y] = [x, y].map(|v| pixels_per_metre(v).to_be_bytes());
-    let mut out = Vec::with_capacity(21);
-    // x, y, unit 1 = metre.
-    chunk(&mut out, b"pHYs", &[x.as_slice(), y.as_slice(), &[1]].concat());
-    out
+    vectorcraft_doc::ppi::phys_chunk(x, y)
 }
 
 /// Encode straight-alpha RGBA8 pixels (`width`×`height`, row-major) as a PNG file.
@@ -51,6 +47,21 @@ pub fn encode(rgba: &[u8], width: u32, height: u32, o: &PngOptions) -> Result<Ve
     let (channels, color_type) = if opaque { (3, 2) } else { (4, 6) };
     let pixels: Cow<[u8]> = if opaque { Cow::Owned(px.iter().flat_map(|p| [p[0], p[1], p[2]]).collect()) } else { Cow::Borrowed(rgba) };
     write(&pixels, width, height, Layout { channels, bits: 8, color_type }, &[], o)
+}
+
+/// Encode grey levels with alpha (two bytes a pixel, `width`×`height`, row-major) as a greyscale
+/// PNG: grey and alpha (colour type 4), or grey alone (colour type 0) when every pixel is opaque.
+pub fn encode_gray(gray_alpha: &[u8], width: u32, height: u32, o: &PngOptions) -> Result<Vec<u8>, String> {
+    check_size(width, height)?;
+    if gray_alpha.len() as u64 != u64::from(width) * u64::from(height) * 2 {
+        return Err("PNG encoding failed: pixel buffer doesn't match the image size".into());
+    }
+    let px = gray_alpha.as_chunks::<2>().0;
+    if px.iter().all(|p| p[1] == 255) {
+        let levels: Vec<u8> = px.iter().map(|p| p[0]).collect();
+        return write(&levels, width, height, Layout { channels: 1, bits: 8, color_type: 0 }, &[], o);
+    }
+    write(gray_alpha, width, height, Layout { channels: 2, bits: 8, color_type: 4 }, &[], o)
 }
 
 /// Encode a palette image as an indexed PNG (colour type 3: `PLTE`, and `tRNS` for its
