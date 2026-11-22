@@ -1023,28 +1023,55 @@ fn free_copy_in(taken: &mut HashSet<String>, base: &str, reserved: impl Fn(&str)
     name
 }
 
-/// Rename each swatch of `d` that `colors` lists (library name, document name) under a numbered
-/// name that `reserved` says the library gives another swatch, to a free numbered name of its own
-/// ([`free_copy_in`]), and link every paint linked to it to the new name. A later add then finds
-/// the library's swatch of that name under its own name.
-fn rename_brought(d: &mut vectorcraft_doc::Document, colors: &mut patternlib::SwatchNames, reserved: impl Fn(&str) -> bool) {
-    let mut taken = taken_names(d);
-    for (from, to) in colors.iter_mut() {
-        if from == to || !reserved(to) {
-            continue;
-        }
-        let new = free_copy_in(&mut taken, from, &reserved);
-        let Some(w) = d.swatches_iter_mut().find(|w| w.name == *to) else { continue };
-        w.name = new.clone();
-        map_swatch_links(d, &mut |_, link, _| {
-            let hit = link.as_deref() == Some(to.as_str());
-            if hit {
-                *link = Some(new.clone());
+/// [`patternlib::import`] of pattern `pattern` of `src` into `d`, keeping the library's numbered
+/// swatch names (the keys of `names`, such as "Ink 2") that `d` does not use for the library's own
+/// swatches of those names, so that a color the art brings under a numbered name does not take one
+/// of them. While the import runs, a placeholder swatch holds each such name the art does not
+/// bring, and a copy of the library's color holds each one the art brings, which the art then
+/// takes. The placeholders are removed before it returns, and so is a copy the art did not take;
+/// a copy the art took is listed with the colors the import brought. Names of the patterns the
+/// import brings are not held.
+fn import_holding(
+    d: &mut vectorcraft_doc::Document,
+    src: &vectorcraft_doc::Document,
+    pattern: &str,
+    names: &HashMap<&str, &Swatch>,
+) -> Result<(String, patternlib::SwatchNames, patternlib::SwatchNames)> {
+    let numbered = |n: &str| n.rsplit_once(' ').is_some_and(|(_, k)| !k.is_empty() && k.bytes().all(|b| b.is_ascii_digit()));
+    let taken = taken_names(d);
+    let mut free: Vec<&str> = names.keys().copied().filter(|n| numbered(n) && !taken.contains(*n)).collect();
+    free.sort_unstable();
+    let (mut held, mut copies): (Vec<Swatch>, Vec<Swatch>) = (vec![], vec![]);
+    if !free.is_empty() {
+        let brings = patternlib::brought_names(src, pattern);
+        let patterns = patternlib::brought_patterns(src, pattern);
+        for n in free.into_iter().filter(|n| !patterns.contains(*n)) {
+            if !brings.contains(n) {
+                held.push(Swatch { name: n.to_string(), paint: Paint::None, global: false, spot: false });
+            } else if let Some(w) = names.get(n).filter(|w| w.paint.color().is_some() && linked_names(&w.paint).is_empty()) {
+                copies.push((*w).clone());
             }
-            hit
-        });
-        *to = new;
+        }
     }
+    let start = d.swatches.len();
+    d.swatches.extend(held.iter().chain(&copies).cloned());
+    let imported = patternlib::import(d, src, pattern);
+    let used = |n: &str| {
+        imported
+            .as_ref()
+            .is_ok_and(|(_, colors, took)| !colors.iter().any(|(from, _)| from == n) && !took.iter().any(|(from, to)| from == n && to != n))
+    };
+    let used: HashSet<String> = copies.iter().map(|w| w.name.clone()).filter(|n| used(n)).collect();
+    let mut i = 0;
+    d.swatches.retain(|w| {
+        i += 1;
+        let ours = held.iter().chain(&copies).any(|h| h.name == w.name && h.paint == w.paint);
+        !(i > start && ours && !used.contains(&w.name))
+    });
+    let (target, mut colors, mut took) = imported?;
+    took.retain(|(from, _)| !used.contains(from));
+    colors.extend(copies.into_iter().map(|w| w.name).filter(|n| used.contains(n)).map(|n| (n.clone(), n)));
+    Ok((target, colors, took))
 }
 
 /// Link the swatches of `d` that `pending` names (document name, library swatch) to their colors
@@ -1404,8 +1431,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     let mut learned = vec![];
                     if pending.iter().any(|(_, w)| linked_names(&w.paint).iter().any(waited)) {
                         let mut probe = d.clone();
-                        let (_, mut colors, took) = patternlib::import(&mut probe, src, pattern)?;
-                        rename_brought(&mut probe, &mut colors, |n| lib_by_name.contains_key(n));
+                        let (_, colors, took) = import_holding(&mut probe, src, pattern, &lib_by_name)?;
                         for (from, to) in colors_of(&probe, &colors, &took) {
                             if let std::collections::hash_map::Entry::Vacant(e) = links.entry(from.clone()) {
                                 e.insert(to);
@@ -1415,10 +1441,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     let settled = settle(d, &mut pending, &links);
                     let had = taken_names(d);
-                    let (target, mut colors, took) = patternlib::import(d, src, pattern)?;
-                    // A color the art brought under a numbered name the library gives another
-                    // swatch takes a free one instead.
-                    rename_brought(d, &mut colors, |n| lib_by_name.contains_key(n));
+                    let (target, colors, took) = import_holding(d, src, pattern, &lib_by_name)?;
                     // Those colors are the ones the library's tints of them link to, unless the
                     // document already has one for them. A name the copy gave that the import
                     // into the document did not give is replaced, and the tints linked to it are

@@ -138,6 +138,11 @@ pub(crate) fn brought_names(lib: &Document, name: &str) -> std::collections::Has
     gather(lib, name).swatches.into_iter().map(|w| w.name).collect()
 }
 
+/// The names in `lib` of pattern `name` and of the patterns its art brings.
+pub(crate) fn brought_patterns(lib: &Document, name: &str) -> std::collections::HashSet<String> {
+    gather(lib, name).patterns.into_iter().map(|p| p.name).collect()
+}
+
 /// The name pattern `name` has in the document `imported` went into.
 pub(crate) fn imported_name(imported: &Imported, name: &str) -> String {
     let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name).and_then(|r| r["to"].as_str());
