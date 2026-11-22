@@ -353,6 +353,49 @@ fn a_typed_text_the_script_refuses_stays_in_its_field_after_it_loses_the_focus()
 }
 
 #[test]
+fn a_typed_text_the_script_refuses_stays_in_its_field_when_a_click_on_a_button_takes_the_focus() {
+    let mut app = app();
+    start(&mut app, "var w = new Window('dialog'); w.add('edittext', undefined, 'a'); w.add('button', undefined, 'OK'); vc.log(w.show());");
+    assert!(until_window(&mut app));
+    let ctx = CTX.with(Clone::clone);
+    ctx.enable_accesskit();
+    frame(&mut app, Vec::new());
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs::show(&mut app, ui.ctx()));
+    out.textures_delta.clear();
+    let nodes = out.platform_output.accesskit_update.expect("an accessibility tree").nodes;
+    let center = |found: Option<&egui::accesskit::Node>, what: &str| {
+        let b = found.and_then(egui::accesskit::Node::bounds).unwrap_or_else(|| panic!("no {what}"));
+        egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
+    };
+    let field = center(nodes.iter().map(|(_, n)| n).find(|n| n.role() == egui::accesskit::Role::TextInput), "edit field");
+    let ok = center(nodes.iter().map(|(_, n)| n).find(|n| n.role() == egui::accesskit::Role::Button && n.label() == Some("OK")), "OK button");
+    let click = |app: &mut VectorcraftApp, at: egui::Pos2| {
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        frame(app, vec![egui::Event::PointerMoved(at)]);
+        frame(app, vec![button(true)]);
+        frame(app, vec![button(false)]);
+    };
+    click(&mut app, field);
+    let long = "x".repeat(16 * 1024 + 1);
+    frame(&mut app, vec![egui::Event::Text(long.clone())]);
+    let typed = app.ui.dialog.as_ref().and_then(|d| d.fields.get("text1")).and_then(Value::as_str).map(str::to_string);
+    let typed = typed.expect("the typed text is kept while the field has the focus");
+    assert!(typed.len() > 16 * 1024 && typed.contains(&long), "the field holds the long text");
+    click(&mut app, ok);
+    frame(&mut app, Vec::new());
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!(d.kind, KIND);
+    assert!(d.fields.get("text1") == Some(&json!(typed)), "the refused text stays in its field");
+    assert!(!d.fields.contains_key("queued"), "nothing is queued");
+    assert!(app.ui.status.contains("16 KiB"), "the error is in the status bar: {}", app.ui.status);
+    assert!(app.session.script_window().is_some(), "the script still waits");
+    app.session.script_request_stop();
+    assert!(!until_window(&mut app));
+}
+
+#[test]
 fn cancel_on_the_quit_question_does_not_show_a_dialog_whose_show_ended() {
     let mut app = app();
     start(
