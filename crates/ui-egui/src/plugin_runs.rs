@@ -187,7 +187,7 @@ pub fn any_shown(app: &VectorcraftApp) -> bool {
 
 /// The progress window of the first run it shows. `export_progress::show` orders the job tables and
 /// decides when a window may appear.
-pub fn shown(app: &VectorcraftApp) -> Option<export_progress::Shown> {
+pub(crate) fn shown(app: &VectorcraftApp) -> Option<export_progress::Shown> {
     let first = app.plugin_runs.running.iter().find(|r| r.shown())?;
     Some(export_progress::Shown {
         title: crate::i18n::msg(&first.label).to_string(),

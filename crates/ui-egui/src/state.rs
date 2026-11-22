@@ -442,17 +442,17 @@ pub struct UiState {
     pub transient_panel: Option<String>,
     /// The Appearance panel's rows and selection, kept while the app runs.
     #[serde(skip)]
-    pub appearance_panel: crate::panels::appearance::AppearancePanel,
+    pub(crate) appearance_panel: crate::panels::appearance::AppearancePanel,
     /// The Stroke panel's state, kept while the app runs.
     #[serde(skip)]
-    pub stroke_panel: crate::panels::stroke::StrokePanel,
+    pub(crate) stroke_panel: crate::panels::stroke::StrokePanel,
     /// The Transparency panel's state, kept while the app runs.
     #[serde(skip)]
-    pub transparency_panel: crate::panels::transparency::TransparencyPanel,
+    pub(crate) transparency_panel: crate::panels::transparency::TransparencyPanel,
     /// The Graphic Styles panel's state, kept while the app runs.
     #[serde(skip)]
     // PLAN: assumed `crate::panels::graphic_styles::GraphicStylesPanel` (ap.AS17 names no type; appearance-w10).
-    pub graphic_styles_panel: crate::panels::graphic_styles::GraphicStylesPanel,
+    pub(crate) graphic_styles_panel: crate::panels::graphic_styles::GraphicStylesPanel,
     /// The symbols the Symbols panel has picked (Select All Unused, a click), by name, with the uid
     /// of the document they were picked in.
     #[serde(skip)]
@@ -463,13 +463,13 @@ pub struct UiState {
     pub brush_selection: Option<(crate::panels::brushes::ClickKey, Selection<String>)>,
     /// The Brushes panel's view choices, kept while the app runs.
     #[serde(skip)]
-    pub brushes_view: crate::panels::brushes::BrushesView,
+    pub(crate) brushes_view: crate::panels::brushes::BrushesView,
     /// The Brush Options dialog that is open, while it is.
     #[serde(skip)]
     pub brush_options: Option<DialogId>,
     /// The selection of each open library panel, by panel id: its items and folders. Not saved.
     #[serde(skip)]
-    pub library_selection: HashMap<String, Selection<crate::panels::library_panel::LibraryKey>>,
+    pub(crate) library_selection: HashMap<String, Selection<crate::panels::library_panel::LibraryKey>>,
     /// The Libraries panel lists its items (on) instead of showing icons (off).
     #[serde(skip)]
     pub libraries_list_view: bool,
@@ -810,13 +810,13 @@ pub struct UiState {
     pub gradient_panel: crate::panels::gradient::GradientUi,
     /// The Swatches panel's selection, kept swatch and focus. Not saved.
     #[serde(skip)]
-    pub swatches_panel: crate::panels::swatches::Model,
+    pub(crate) swatches_panel: crate::panels::swatches::Model,
     /// The open Swatch Options dialog's record. Not saved.
     #[serde(skip)]
-    pub swatch_options: Option<crate::dialogs::swatch_options::Open>,
+    pub(crate) swatch_options: Option<crate::dialogs::swatch_options::Open>,
     /// The open New Swatch dialog's record. Not saved.
     #[serde(skip)]
-    pub new_swatch: Option<crate::dialogs::new_swatch::Open>,
+    pub(crate) new_swatch: Option<crate::dialogs::new_swatch::Open>,
     /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
     /// out-of-gamut shading and the color vision row
     /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
@@ -851,7 +851,7 @@ pub struct UiState {
     /// The open Proof Setup dialog's record: the proof view it found and the one its preview
     /// shows on the canvas.
     #[serde(skip)]
-    pub proof_setup: Option<crate::dialogs::proof_setup::Open>,
+    pub(crate) proof_setup: Option<crate::dialogs::proof_setup::Open>,
     /// The search the Missing Fonts dialog started (`text.findFontFiles`'s `id`), stopped once the
     /// dialog is gone.
     #[serde(skip)]
@@ -920,7 +920,7 @@ pub struct UiState {
     pub doc_info: crate::panels::doc_info::DocInfoView,
     /// The Links panel's options, selection and scroll. Not saved.
     #[serde(skip)]
-    pub links: crate::panels::links::LinksModel,
+    pub(crate) links: crate::panels::links::LinksModel,
     /// The Swatches, Graphic Styles and Symbols panels' views, chosen in their panel menus
     /// (`ui.panelView`). They are not saved and last the session.
     #[serde(skip)]
@@ -965,10 +965,10 @@ pub struct UiState {
     pub paragraph_hide_options: bool,
     /// The Tabs panel's session state. Not saved.
     #[serde(skip)]
-    pub tabs_panel: crate::panels::tabs::TabsPanel,
+    pub(crate) tabs_panel: crate::panels::tabs::TabsPanel,
     /// The Character and Paragraph Styles panels' session state. Not saved.
     #[serde(skip)]
-    pub text_styles: crate::panels::text_styles::StylesPanels,
+    pub(crate) text_styles: crate::panels::text_styles::StylesPanels,
     /// The Properties panel's open sections. Not saved.
     #[serde(skip)]
     pub properties_panel: crate::panels::properties::PropertiesUi,
@@ -983,22 +983,22 @@ pub struct UiState {
     pub paint_popover: Option<crate::panels::PaintPopover>,
     /// The Image Trace panel's shown settings and preset picker. Not saved.
     #[serde(skip)]
-    pub image_trace_panel: crate::panels::image_trace::ImageTraceUi,
+    pub(crate) image_trace_panel: crate::panels::image_trace::ImageTraceUi,
     /// The Asset Export panel's selection, applied preset and Save As name, per document. Not saved.
     #[serde(skip)]
-    pub asset_export_panel: crate::panels::asset_export::AssetExportPanel,
+    pub(crate) asset_export_panel: crate::panels::asset_export::AssetExportPanel,
     /// The Pattern Options panel's chosen pattern. Not saved.
     #[serde(skip)]
-    pub pattern_options_panel: crate::panels::pattern_options::PatternOptionsPanel,
+    pub(crate) pattern_options_panel: crate::panels::pattern_options::PatternOptionsPanel,
     /// The SVG Interactivity panel's chosen event. Not saved.
     #[serde(skip)]
-    pub svg_interactivity_panel: crate::panels::svg_interactivity::SvgInteractivityPanel,
+    pub(crate) svg_interactivity_panel: crate::panels::svg_interactivity::SvgInteractivityPanel,
     /// The CSS Properties panel's options. Not saved.
     #[serde(skip)]
-    pub css_properties_panel: crate::panels::css_properties::CssPropertiesPanel,
+    pub(crate) css_properties_panel: crate::panels::css_properties::CssPropertiesPanel,
     /// The Production Preflight panel's options and recheck cache. Not saved.
     #[serde(skip)]
-    pub preflight_panel: crate::panels::preflight::PreflightPanel,
+    pub(crate) preflight_panel: crate::panels::preflight::PreflightPanel,
     /// How many clicks the Image Trace pick has taken, which offsets the next pick. Not saved.
     #[serde(skip)]
     pub trace_pick_clicks: u32,

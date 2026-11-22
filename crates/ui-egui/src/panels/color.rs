@@ -191,7 +191,7 @@ pub fn deserialize_show_recent_colors<'de, D: serde::Deserializer<'de>>(d: D) ->
 
 /// What the panel shows for `tgt`: the Tint row of a swatch-linked colour, else the mode picked last
 /// for new art (nothing selected) or when it holds the colour's own model, else the colour's model.
-pub fn shown(app: &VectorcraftApp, tgt: &Target) -> ColorPanelShown {
+pub(crate) fn shown(app: &VectorcraftApp, tgt: &Target) -> ColorPanelShown {
     if let Some(t) = tgt.tint() {
         let mut row = TintRow::new(t.swatch.clone(), srgba(&t.base), t.tint * 100.0);
         // `Tint::of` only exists for global swatches.

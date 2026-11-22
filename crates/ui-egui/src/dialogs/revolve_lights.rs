@@ -158,7 +158,7 @@ pub(super) fn write_moved(fields: &mut DialogFields, from: &[Light], to: &[Light
 /// colours of its marks.
 #[derive(Clone, Debug, PartialEq, ComponentStyle)]
 #[non_exhaustive]
-pub(super) struct RowStyle {
+pub(crate) struct RowStyle {
     #[style(metrics)]
     metrics: Metrics,
     #[style(focus)]

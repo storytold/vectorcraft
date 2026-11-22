@@ -177,7 +177,7 @@ impl Fractions {
 
 /// Column's options beside the design.
 #[derive(Clone, Debug, PartialEq)]
-struct ColumnOptions {
+pub(crate) struct ColumnOptions {
     column_type: ColumnType,
     each: f64,
     fractions: Fractions,
