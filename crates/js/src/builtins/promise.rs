@@ -32,6 +32,7 @@ use crate::LimitKind;
 use crate::bytecode::Code;
 use crate::heap::{BOUND_ARG_BYTES, Class, Func, NativeFn, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, Roots, key};
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
+use crate::string_builtins::flat_charged;
 use crate::value::Value;
 
 /// Where a promise was rejected: the code and the instruction.
@@ -142,6 +143,9 @@ enum Then {
     Settle(ObjId),
     /// An exception rejects through this resolving record.
     Reject(ObjId),
+    /// The call was a `finally` callback that a reaction job runs in place of the Then Finally or
+    /// Catch Finally function: `derived` is settled as that function's result settles it.
+    Finally { derived: ObjId, value: Value, throws: bool },
 }
 
 /// The built-in functions a promise operation's functions call, with their record.
@@ -211,6 +215,10 @@ impl Promises {
         roots.values.extend(self.completion.iter());
         match &self.running {
             Some(Then::Settle(o) | Then::Reject(o)) => roots.objects.push(*o),
+            Some(Then::Finally { derived, value, .. }) => {
+                roots.objects.push(*derived);
+                roots.values.push(value);
+            }
             None => {}
         }
         for job in &self.queue {
@@ -231,6 +239,12 @@ impl Promises {
     /// The estimated bytes the queued jobs hold.
     pub(crate) fn queue_bytes(&self) -> usize {
         JOB_BYTES.saturating_mul(self.queue.len())
+    }
+
+    /// How many jobs are queued, and how many the queue's buffer has room for.
+    #[cfg(test)]
+    pub(crate) fn queue_size(&self) -> (usize, usize) {
+        (self.queue.len(), self.queue.capacity())
     }
 
     /// Drops the noted rejections whose promise has a handler now.
@@ -455,7 +469,7 @@ fn resolve_promise(interp: &mut Interp, p: ObjId, resolution: Value) -> JsResult
         if o == p {
             let e = error_value(interp, ErrorType::Type, "a promise cannot be resolved with itself");
             let site = here(interp);
-            return settle(interp, p, false, e, site);
+            return reject_promise(interp, p, e, site);
         }
         let then = match interp.get_from(o, &key("then"), &resolution) {
             Ok(t) => t,
@@ -584,10 +598,12 @@ impl Interp {
             if self.frames.is_empty() {
                 let Some(job) = self.promises.queue.pop_front() else {
                     self.promises.draining = false;
+                    // A pause asked for in the run's last step ends with the run.
+                    self.pause.set(false);
                     return Ok(Some(self.promises.completion.take().unwrap_or(Value::Undefined)));
                 };
                 self.start_job(job)?;
-                if self.frames.is_empty() && (self.fuel <= pause_at || self.pause.replace(false)) {
+                if self.can_pause_between_jobs(pause_at) {
                     return Ok(None);
                 }
                 continue;
@@ -597,6 +613,7 @@ impl Interp {
                 Ok(Some(v)) if self.promises.running.is_none() => {
                     // The script's own code ended.
                     if self.promises.queue.is_empty() {
+                        self.pause.set(false);
                         return Ok(Some(v));
                     }
                     self.promises.completion = Some(v);
@@ -606,10 +623,17 @@ impl Interp {
                 Err(Abrupt::Throw(v)) if self.promises.running.is_some() => self.finish_job(Err(v))?,
                 Err(e) => return Err(e),
             }
-            if self.frames.is_empty() && (self.fuel <= pause_at || self.pause.replace(false)) {
+            if self.can_pause_between_jobs(pause_at) {
                 return Ok(None);
             }
         }
+    }
+
+    /// No code is running and jobs are still queued, and the slice has used its fuel or the host
+    /// asked for a pause. With the queue empty the run is done instead, and the next turn of the
+    /// loop ends it.
+    fn can_pause_between_jobs(&self, pause_at: u64) -> bool {
+        self.frames.is_empty() && !self.promises.queue.is_empty() && (self.fuel <= pause_at || self.pause.replace(false))
     }
 
     fn job_returned(&mut self, r: JsResult<Value>) -> JsResult<()> {
@@ -632,7 +656,14 @@ impl Interp {
                         return if reject { reject_promise(interp, derived, argument, site) } else { resolve_promise(interp, derived, argument) };
                     }
                     root(interp, &Value::Object(derived));
-                    (handler, Value::Undefined, vec![argument], Then::Settle(derived))
+                    match finally_callback(interp, &handler) {
+                        // The callback runs as the job's own call, so a slice can pause inside it.
+                        Some((on_finally, throws)) => {
+                            interp.temp_roots.extend([handler, argument.clone()]);
+                            (on_finally, Value::Undefined, Vec::new(), Then::Finally { derived, value: argument, throws })
+                        }
+                        None => (handler, Value::Undefined, vec![argument], Then::Settle(derived)),
+                    }
                 }
                 Job::Thenable { promise, thenable, then } => {
                     interp.temp_roots.extend([Value::Object(promise), thenable.clone(), then.clone()]);
@@ -665,6 +696,18 @@ impl Interp {
                 root(interp, &Value::Object(rec));
                 reject_through(interp, rec, e, site)
             }),
+            (Then::Finally { derived, value, throws }, Ok(result)) => scoped(self, |interp| {
+                interp.temp_roots.extend([Value::Object(derived), value.clone(), result.clone()]);
+                match after_finally(interp, result, value, throws) {
+                    Ok(v) => resolve_promise(interp, derived, v),
+                    Err(Abrupt::Throw(e)) => {
+                        let site = caught(interp);
+                        reject_promise(interp, derived, e, site)
+                    }
+                    Err(e) => Err(e),
+                }
+            }),
+            (Then::Finally { derived, .. }, Err(e)) => reject_promise(self, derived, e, site),
         }
     }
 
@@ -673,7 +716,8 @@ impl Interp {
     pub(crate) fn end_jobs(&mut self, keep_rejections: bool) {
         let queued = self.promises.queue_bytes();
         self.heap.bytes = self.heap.bytes.saturating_sub(queued);
-        self.promises.queue.clear();
+        // A new queue frees the old one's buffer, which the heap estimate does not count.
+        self.promises.queue = VecDeque::new();
         self.promises.running = None;
         self.promises.completion = None;
         self.promises.draining = false;
@@ -799,8 +843,15 @@ fn finally_step(interp: &mut Interp, args: &[Value], throws: bool) -> JsResult<V
     let Record::Finally { on_finally } = record(interp, &rec_value)? else { return Err(Abrupt::Internal("not a finally record".into())) };
     let on_finally = on_finally.clone();
     let result = interp.call(&on_finally, &Value::Undefined, &[])?;
+    after_finally(interp, result, value, throws)
+}
+
+/// The steps of Then Finally and Catch Finally after the callback returned `result`: a promise
+/// that passes `value` on, or throws it again when `throws`, once `result` settles.
+fn after_finally(interp: &mut Interp, result: Value, value: Value, throws: bool) -> JsResult<Value> {
     scoped(interp, |interp| {
         root(interp, &value);
+        root(interp, &result);
         let ctor = interp.promises.ctor.map_or(Value::Undefined, Value::Object);
         let promise = promise_resolve(interp, &ctor, result)?;
         root(interp, &promise);
@@ -810,6 +861,29 @@ fn finally_step(interp: &mut Interp, args: &[Value], throws: bool) -> JsResult<V
         root(interp, &thunk);
         invoke(interp, &promise, "then", &[thunk])
     })
+}
+
+/// When `handler` is the Then Finally or Catch Finally function of a `finally` call, its callback,
+/// and whether the function throws the value it gets again.
+fn finally_callback(interp: &Interp, handler: &Value) -> Option<(Value, bool)> {
+    let Some(Class::Function(Func::Bound { target, args, .. })) = handler.as_object().and_then(|o| interp.heap.object(o)).map(|o| &o.class) else {
+        return None;
+    };
+    let natives = &interp.promises.natives;
+    let throws = if natives.get(Kind::ThenFinally as usize) == Some(target) {
+        false
+    } else if natives.get(Kind::CatchFinally as usize) == Some(target) {
+        true
+    } else {
+        return None;
+    };
+    match args.first().and_then(Value::as_object).and_then(|o| interp.heap.object(o)).map(|o| &o.class) {
+        Some(Class::PromiseRecord(rec)) => match &**rec {
+            Record::Finally { on_finally } => Some((on_finally.clone(), throws)),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn then_finally(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -934,10 +1008,12 @@ fn combine(interp: &mut Interp, this: Value, input: Value, how: Combine) -> JsRe
     })
 }
 
-/// Where the inputs of `Promise.all`, `allSettled` and `race` come from.
+/// Where the inputs of `Promise.all`, `allSettled` and `race` come from. An array is read up to
+/// its length at each step, as an array iterator reads it, and another object up to the `length`
+/// it had at the start.
 enum Inputs {
     Indexed { object: ObjId, length: f64 },
-    CodePoints(Vec<u16>),
+    CodePoints(Rc<[u16]>),
 }
 
 impl Inputs {
@@ -949,7 +1025,7 @@ impl Inputs {
                 }
                 _ => Err(interp.type_error(&format!("Promise.{} needs an array, a string or an object with a whole-number length", how.name()))),
             },
-            Value::String(s) => Ok(Inputs::CodePoints(s.flat().to_vec())),
+            Value::String(s) => Ok(Inputs::CodePoints(flat_charged(interp, s)?)),
             _ => Err(interp.type_error(&format!("Promise.{} needs an array, a string or an object with a whole-number length", how.name()))),
         }
     }
@@ -958,7 +1034,11 @@ impl Inputs {
     fn get(&self, interp: &mut Interp, index: &mut f64) -> JsResult<Option<Value>> {
         match self {
             Inputs::Indexed { object, length } => {
-                if *index >= *length {
+                let end = match interp.heap.object(*object).map(|o| &o.class) {
+                    Some(Class::Array { length, .. }) => f64::from(*length),
+                    _ => *length,
+                };
+                if *index >= end {
                     return Ok(None);
                 }
                 let v = super::get_at(interp, *object, *index)?;

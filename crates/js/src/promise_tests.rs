@@ -77,6 +77,26 @@ fn a_promise_resolved_with_itself_rejects_with_a_type_error() {
 }
 
 #[test]
+fn collections_while_a_promise_is_resolved_with_itself_keep_its_type_error() {
+    let src = "var bad = 0; function check(e) { if (!(e instanceof TypeError)) bad++; }\n\
+               for (var i = 0; i < 200; i++) { var res; var p = new Promise(function (r) { res = r; }); p.then(null, check); res(p); }";
+    let mut finished = 0;
+    for spare in (40_000..240_000).step_by(641) {
+        let mut r = realm();
+        let live = r.collect_garbage();
+        r.set_limits(Limits { heap_bytes: live + spare, ..Limits::default() });
+        match r.run(src) {
+            Ok(_) => finished += 1,
+            Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Heap) => continue,
+            Err(e) => panic!("{spare}: {e:?}"),
+        }
+        r.set_limits(Limits::default());
+        assert_eq!(r.run("bad"), Ok(JsValue::Number(0.0)), "{spare}");
+    }
+    assert!(finished > 0);
+}
+
+#[test]
 fn catch_finally_and_the_combinators_settle_as_the_specification_says() {
     let src = "Promise.reject(new Error('x')).catch(function (e) { log.push('caught ' + e.message); });\n\
                Promise.resolve(5).finally(function () { log.push('finally'); return 9; }).then(function (v) { log.push('kept ' + v); });\n\
@@ -102,6 +122,36 @@ fn catch_finally_and_the_combinators_settle_as_the_specification_says() {
     ] {
         assert!(out.contains(part), "{part} in {out}");
     }
+}
+
+#[test]
+fn the_combinators_read_an_array_to_its_length_at_each_step_and_another_object_to_its_first_length() {
+    // `Promise.resolve` runs once for each input and appends to the input while it is read.
+    let src = "var resolve = Promise.resolve; var input;\n\
+               Promise.resolve = function (x) {\n\
+                 if (input.length < 3) { input[input.length] = x + 1; if (!(input instanceof Array)) input.length++; }\n\
+                 return resolve.call(this, x);\n\
+               };\n\
+               input = [1]; Promise.all(input).then(function (v) { log.push('array ' + v.join(',')); });\n\
+               input = { length: 1, 0: 1 }; Promise.all(input).then(function (v) { log.push('object ' + v.join(',')); });";
+    let out = log(src);
+    assert!(out.contains("array 1,2,3"), "{out}");
+    assert!(out.contains("object 1"), "{out}");
+    assert!(!out.contains("object 1,"), "{out}");
+}
+
+#[test]
+fn a_string_a_combinator_reads_is_charged_to_the_heap_before_it_is_flattened() {
+    // A rope of 4 Mi code units is a few nodes until it is flattened to 8 MiB, more than the heap
+    // has room for. The combinator would stop at its first input.
+    let mut r = realm();
+    r.run("var s = 'ab'; for (var i = 0; i < 21; i++) s = s + s; var calls = 0; Promise.resolve = function () { calls++; throw 'stop'; };").unwrap();
+    let live = r.collect_garbage();
+    r.set_limits(Limits { heap_bytes: live + (1 << 20), ..Limits::default() });
+    let e = r.run("Promise.race(s)").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
+    r.set_limits(Limits::default());
+    assert_eq!(r.run("calls").unwrap(), JsValue::Number(0.0));
 }
 
 #[test]
@@ -207,17 +257,82 @@ fn a_sliced_run_pauses_inside_the_jobs_and_ends_once_the_queue_is_empty() {
 }
 
 #[test]
+fn a_sliced_run_whose_last_job_ends_a_slice_is_done_in_that_slice() {
+    let mut r = realm();
+    r.start("Promise.resolve().then(); Promise.reject(1).then(null, function () {}); 'done'").unwrap();
+    let v = loop {
+        match r.advance(1).unwrap() {
+            Progress::Paused => {
+                let interp = r.interp();
+                assert!(!interp.frames.is_empty() || interp.promises.queue_size().0 > 0, "paused with nothing left to run");
+            }
+            Progress::Done(v) => break v,
+        }
+    };
+    assert_eq!(v, JsValue::String("done".into()));
+    assert!(!r.is_running());
+}
+
+#[test]
+fn a_pause_the_last_job_asks_for_does_not_pause_the_next_run() {
+    let mut r = realm();
+    let flag = r.pause_flag();
+    r.define_function("pauseNow", move |_| {
+        flag.set(true);
+        Ok(JsValue::Undefined)
+    });
+    r.start("Promise.resolve().then(pauseNow); 'first'").unwrap();
+    assert_eq!(r.advance(1_000_000).unwrap(), Progress::Done(JsValue::String("first".into())));
+    r.start("var a = 1; var b = 2; a + b").unwrap();
+    assert_eq!(r.advance(1_000_000).unwrap(), Progress::Done(JsValue::Number(3.0)));
+}
+
+#[test]
+fn a_sliced_run_pauses_inside_a_finally_callback() {
+    let mut r = realm();
+    r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+    r.set_unbroken_fuel(5_000);
+    r.start(
+        "var t = 0, kept, caught; function work() { for (var i = 0; i < 5000; i++) t += i; return Promise.resolve('ignored'); }\n\
+         Promise.resolve(1).finally(work).then(function (v) { kept = v; });\n\
+         Promise.reject(2).finally(work).then(null, function (e) { caught = e; });\n\
+         'done'",
+    )
+    .unwrap();
+    let mut paused_in_jobs = 0;
+    let v = loop {
+        match r.advance(500).unwrap() {
+            Progress::Paused => {
+                if r.interp().promises.draining {
+                    paused_in_jobs += 1;
+                }
+            }
+            Progress::Done(v) => break v,
+        }
+    };
+    assert_eq!(v, JsValue::String("done".into()));
+    assert!(paused_in_jobs > 10, "{paused_in_jobs}");
+    assert_eq!(r.run("t + ' ' + kept + ' ' + caught").unwrap(), JsValue::String("24995000 1 2".into()));
+}
+
+#[test]
 fn an_ended_sliced_run_drops_its_jobs() {
     let mut r = realm();
-    r.start("var ran = 0; Promise.resolve().then(function () { for (;;) ran++; });").unwrap();
+    r.start(
+        "var ran = 0, after = false; Promise.resolve().then(function () { for (;;) ran++; }); Promise.resolve().then(function () { after = true; });",
+    )
+    .unwrap();
     let mut slices = 0;
     while r.advance(500).unwrap() == Progress::Paused && !r.interp().promises.draining {
         slices += 1;
         assert!(slices < 1000);
     }
     assert!(r.is_running());
+    assert_eq!(r.interp().promises.queue_size().0, 1);
     r.end();
     assert!(!r.is_running());
     assert_eq!(r.interp().promises.queue_bytes(), 0);
+    assert_eq!(r.interp().promises.queue_size(), (0, 0));
     assert_eq!(r.run("typeof ran").unwrap(), JsValue::String("number".into()));
+    assert_eq!(r.run("after").unwrap(), JsValue::Bool(false));
 }
