@@ -789,15 +789,17 @@ impl ScriptScope {
         self.allows(&real.join(rest))
     }
 
-    /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it.
+    /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it. Whether
+    /// it is hidden is a link's own, and the rest is what the link leads to.
     pub(crate) fn stat(&self, path: &Path) -> Result<ScriptEntry, ScriptRead> {
         let real = self.locate(path)?;
         let meta = std::fs::metadata(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
-        let link = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+        let own = std::fs::symlink_metadata(path).ok().filter(|m| m.file_type().is_symlink());
+        let link = own.is_some();
         #[cfg(windows)]
-        let hidden = std::os::windows::fs::MetadataExt::file_attributes(&meta) & 2 != 0;
+        let hidden = std::os::windows::fs::MetadataExt::file_attributes(own.as_ref().unwrap_or(&meta)) & 2 != 0;
         #[cfg(not(windows))]
-        let hidden = real.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'));
+        let hidden = if link { path.file_name() } else { real.file_name() }.is_some_and(|n| n.to_string_lossy().starts_with('.'));
         Ok(ScriptEntry {
             dir: meta.is_dir(),
             file: meta.is_file(),

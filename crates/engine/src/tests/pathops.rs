@@ -2067,6 +2067,23 @@ fn a_precision_set_after_a_scale_past_its_range_is_kept() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps);
 }
 
+/// Soft Mix's Mixing Rate is compared by value: 50 over a stored 50.0 records no undo step, and 51
+/// is an edit.
+#[test]
+fn a_soft_mix_rate_set_to_its_value_records_no_step() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.softMix", "params": {"mixingRate": 50.0}})).unwrap();
+    assert_eq!(first_effect_params(&s)["mixingRate"], json!(50.0));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    assert_eq!(s.execute("effect.setParams", &json!({"index": 0, "params": {"mixingRate": 50}})).unwrap(), json!({"ids": []}));
+    assert_eq!((first_effect_params(&s)["mixingRate"].clone(), steps(&s)), (json!(50.0), before), "50 over 50.0: no step");
+    assert_ne!(s.execute("effect.setParams", &json!({"index": 0, "params": {"mixingRate": 51}})).unwrap(), json!({"ids": []}));
+    assert_eq!((first_effect_params(&s)["mixingRate"].clone(), steps(&s)), (json!(51), before + 1), "51 is an edit");
+}
+
 /// A single group containing multiple overlapping paths is accepted by Crop.
 #[test]
 fn crop_operates_on_a_single_selected_group_of_paths() {
