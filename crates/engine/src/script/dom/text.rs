@@ -19,7 +19,9 @@
 //!   text, so a range the edit covers holds the new text, and an insertion at one of its ends joins
 //!   it. When a member finds the frame's text different from the text the model last saw, because
 //!   `vc.run` or an undo changed it, every range made before is stale and throws
-//!   `Stale text range`; a change reversed before that read leaves the ranges as they were.
+//!   `Stale text range`; a change reversed before that read leaves the ranges as they were. After
+//!   File › Revert every range made before is stale, even when the file read back holds the same
+//!   text.
 //! - The model keeps the frame's last [`MAX_EDITS`] edits; a range made before an edit that is no
 //!   longer kept is stale.
 //! - A character attribute read on a range whose characters differ gives the first character's
@@ -145,10 +147,12 @@ struct Edit {
     inserted: usize,
 }
 
-/// What the object model knows of one frame's text: the document it was read from, the text, the
-/// edits made through the model, and the oldest range generation still valid.
+/// What the object model knows of one frame's text: the document it was read from and its revert
+/// count then, the text, the edits made through the model, and the oldest range generation still
+/// valid.
 struct Log {
     doc: Weak<Document>,
+    reverts: u64,
     index: Rc<Index>,
     stamp: u64,
     floor: u64,
@@ -204,25 +208,34 @@ fn same_text(t: &TextObject, s: &str) -> bool {
     rest.is_empty()
 }
 
-/// The frame's index and its generation now, read again when its document changed.
+/// The frame's index and its generation now, read again when its document changed. After File ›
+/// Revert every earlier range goes stale, even when the file read back holds the same text.
 fn observe(h: &Host, st: &DocState, id: NodeId) -> std::result::Result<(Rc<Index>, u64), HostError> {
     let t = text_of(st, id).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let mut frames = h.dom.text.frames.borrow_mut();
     let key = (st.uid, id.0);
     let now = Arc::as_ptr(&st.doc);
     match frames.get_mut(&key) {
-        Some(l) if std::ptr::eq(l.doc.as_ptr(), now) => {}
+        Some(l) if std::ptr::eq(l.doc.as_ptr(), now) && l.reverts == st.reverts => {}
         Some(l) => {
-            if !same_text(t, &l.index.text) {
+            if l.reverts != st.reverts || !same_text(t, &l.index.text) {
                 l.stamp += 1;
                 l.floor = l.stamp;
                 l.edits.clear();
                 l.index = Rc::new(Index::new(t.plain_text()));
             }
             l.doc = Arc::downgrade(&st.doc);
+            l.reverts = st.reverts;
         }
         None => {
-            let l = Log { doc: Arc::downgrade(&st.doc), index: Rc::new(Index::new(t.plain_text())), stamp: 0, floor: 0, edits: VecDeque::new() };
+            let l = Log {
+                doc: Arc::downgrade(&st.doc),
+                reverts: st.reverts,
+                index: Rc::new(Index::new(t.plain_text())),
+                stamp: 0,
+                floor: 0,
+                edits: VecDeque::new(),
+            };
             frames.insert(key, l);
         }
     }
@@ -287,7 +300,7 @@ fn record(h: &Host, item: Item, before: &Index, at: usize, removed: usize, inser
             && now.get(a..a + inserted.len()) == Some(inserted);
         let mut frames = h.dom.text.frames.borrow_mut();
         let l = frames.get_mut(&(st.uid, item.id.0)).ok_or_else(|| HostError::Error(STALE_RANGE.into()))?;
-        if expected {
+        if expected && l.reverts == st.reverts {
             l.push(at, removed, inserted.encode_utf16().count());
         } else {
             l.stamp += 1;
@@ -296,6 +309,7 @@ fn record(h: &Host, item: Item, before: &Index, at: usize, removed: usize, inser
         }
         l.index = Rc::new(Index::new(now));
         l.doc = Arc::downgrade(&st.doc);
+        l.reverts = st.reverts;
         Ok(())
     })
 }
@@ -1585,7 +1599,7 @@ mod tests {
 
     #[test]
     fn the_edit_log_keeps_the_last_edits_and_drops_only_older_ones() {
-        let mut l = Log { doc: Weak::new(), index: Rc::new(Index::new(String::new())), stamp: 0, floor: 0, edits: VecDeque::new() };
+        let mut l = Log { doc: Weak::new(), reverts: 0, index: Rc::new(Index::new(String::new())), stamp: 0, floor: 0, edits: VecDeque::new() };
         for _ in 0..MAX_EDITS {
             l.push(0, 0, 1);
         }

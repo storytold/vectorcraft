@@ -2715,7 +2715,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   edit's new text, so a range the edit covers holds the new text, and an insertion at one of its ends joins it. When a
   member finds the frame's text different from the text these objects last saw, because `vc.run` or an undo changed
   it, a range made before throws `Stale text range`, and so does its `typename`; a change that was reversed before
-  that read leaves the text as the range knew it, and the range keeps working. These objects keep a record of the
+  that read leaves the text as the range knew it, and the range keeps working. After `file.revert`, a range made
+  before throws `Stale text range` even when the file read back holds the same text. These objects keep a record of the
   frame's last 100,000 edits, and a range made before an edit that is no longer in that record throws
   `Stale text range` too. A character attribute
   read on characters that differ gives the first one's value, and set on an empty range it changes nothing. Setting

@@ -144,6 +144,25 @@ fn ranges_follow_model_edits_and_go_stale_after_other_edits() {
 }
 
 #[test]
+fn ranges_made_before_file_revert_go_stale_even_when_the_text_is_the_same() {
+    let (mut s, _) = doc_with("one two");
+    let path = std::env::temp_dir().join(format!("vc-text-revert-{}.vectorcraft", std::process::id()));
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    let out = log(
+        &mut s,
+        "var t = app.activeDocument.textFrames[0], r = t.words[1];\
+         vc.run('shape.rectangle', {x: 1, y: 1, width: 5, height: 5}); vc.run('file.revert', {});\
+         var now = app.activeDocument.textFrames[0];\
+         vc.log(now.contents); try { vc.log(r.contents); } catch (e) { vc.log(e.message); }\
+         vc.log(now.words[1].contents);",
+    );
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(out[0], json!("one two"), "the reverted file holds the same text");
+    assert!(out[1].as_str().is_some_and(|m| m.contains("Stale text range")), "{out:?}");
+    assert_eq!(out[2], json!("two"), "a range made after the revert reads the reverted text");
+}
+
+#[test]
 fn a_range_an_edit_covers_holds_the_edits_new_text() {
     let (mut s, _) = doc_with("abc");
     let out = log(
