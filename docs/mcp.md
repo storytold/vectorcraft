@@ -13256,7 +13256,12 @@ fit makes `plugin.run` return a memory-budget error naming the object and its si
 memory-budget error `the selection is too large to hand over`, and more than 100,000 of these objects make it return
 an object-budget error. Its output returns
 each of them as `{"id": …}` or exactly as given, otherwise `plugin.run` returns an error naming the object and the
-field, and the document and undo history are unchanged. A filter at plug-in API level 2 whose manifest lists the
+field, and the document and undo history are unchanged. A filter at plug-in API level 3 whose manifest also lists some of
+those kinds in `writes` (with `doc.write`; `writes` in its `plugin.list` entry) may return an object of such a kind with
+only the fields it changes: its name and `transform`, type's `text.runs` and `text.paragraphs`, an image's `opacity` and
+an instance's `symbolId`, which must name a symbol in the document. Any other changed field, or a value out of range,
+makes `plugin.run` return an error naming the object and the field, with nothing changed (docs/plugins.md, "Writing
+type, images and symbols"). An output that changes nothing records no undo step. A filter at plug-in API level 2 whose manifest lists the
 `commands` permission and a `commandAllowlist` (both in its `plugin.list` entry) runs the commands that list names
 while it runs, through `vc_call`: the calls and its output are one undo step, and a run that fails or makes a call that
 fails leaves the documents, selections and history as they were. Without `doc.read` every call fails. A command that

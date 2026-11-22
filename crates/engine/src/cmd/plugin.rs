@@ -42,12 +42,14 @@
 //!
 //! A filter whose manifest lists `inputs` (plug-in API level 2) is also given the selected type,
 //! images or symbol instances of those kinds, to read only: its output must return each of them
-//! unchanged ([`objects::decode_output_with`]).
+//! unchanged ([`objects::decode_output_with`]). At level 3 its manifest's `writes` lists the kinds
+//! among them it may change: type's runs and paragraph styles, an image's transform and opacity,
+//! an instance's symbol and transform, and each one's name ([`objects::decode_output_writing`]).
 
 use std::sync::{Arc, Mutex, RwLock};
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{Effect, Node};
+use vectorcraft_doc::{Effect, Node, NodeKind};
 use vectorcraft_plugins::{Budget, Command, Kind, Plugin, effect, export, objects, registry, safe_mode};
 
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, has_doc, ids_param, str_param, switch_or};
@@ -100,6 +102,9 @@ pub fn describe(p: &Plugin) -> Value {
     }
     if !m.inputs.is_empty() {
         v["inputs"] = json!(m.inputs);
+    }
+    if !m.writes.is_empty() {
+        v["writes"] = json!(m.writes);
     }
     if m.paint_output {
         v["paintOutput"] = json!(true);
@@ -330,11 +335,12 @@ impl FilterRun {
     /// Applies the plug-in's `output` to the active document as one undo step: its objects, and what
     /// it keeps with the document from now on. An output its permissions don't allow, and one that
     /// changes or leaves out a read-only object it was given, is refused, and the document stays as
-    /// it was.
+    /// it was. An output that changes nothing records no undo step; one that only selects other
+    /// objects selects them without one.
     fn finish(self, s: &mut Session, output: &[u8]) -> Result<Value> {
         let m = self.plugin.manifest();
         let may = m.permissions();
-        let out = objects::decode_output_with(output, &self.input, &self.read_only).map_err(err)?;
+        let out = objects::decode_output_writing(output, &self.input, &self.read_only, &m.write_kinds()).map_err(err)?;
         if out.document_data.is_some() && !may.contains(&Permission::State) {
             return Err(not_granted(&m.name, Permission::State));
         }
@@ -342,18 +348,41 @@ impl FilterRun {
         // A command's undo step is named after the command.
         let label = self.label();
         let (inputs, parent) = (self.inputs, self.parent);
-        let ids = s.edit(&label, |d, sel| {
-            let before = (!may_write).then(|| d.layers.clone());
-            let ids = objects::apply_output(d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
-            if before.is_some_and(|b| b != d.layers) {
-                return Err(not_granted(&m.name, Permission::DocWrite));
-            }
-            if let Some(data) = out.document_data {
-                d.set_plugin_data(&m.id, data);
-            }
-            sel.set(ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)));
-            Ok(ids)
-        })?;
+        // Typing in progress is kept first, as `s.edit` keeps it, so the copy below holds it.
+        if !s.previewing && super::typing_in_progress(s) {
+            super::settle_interaction(s)?;
+        }
+        let st = s.doc()?;
+        let mut d = (*st.doc).clone();
+        let mut sel = st.selection.clone();
+        let ids = objects::apply_output(&mut d, &inputs, out.objects, parent, &admit_effects).map_err(err)?;
+        if !may_write && d.layers != st.doc.layers {
+            return Err(not_granted(&m.name, Permission::DocWrite));
+        }
+        // Type whose text the output changed is laid out again.
+        let retyped: Vec<NodeId> = ids
+            .iter()
+            .copied()
+            .filter(|&id| match (d.node(id).map(|n| &n.kind), st.doc.node(id).map(|n| &n.kind)) {
+                (Some(NodeKind::Text(new)), Some(NodeKind::Text(old))) => new.runs != old.runs || new.paras != old.paras || new.para != old.para,
+                _ => false,
+            })
+            .collect();
+        super::typecmd::refresh_bounds_of(&mut d, &retyped);
+        if let Some(data) = out.document_data {
+            d.set_plugin_data(&m.id, data);
+        }
+        sel.set(ids.iter().copied().filter(|&id| d.node(id).is_some_and(objects::selectable)));
+        let (changed, reselected) = (d != *st.doc, sel != st.selection);
+        if changed {
+            s.edit(&label, |doc, selection| {
+                *doc = d;
+                *selection = sel;
+                Ok(())
+            })?;
+        } else if reselected {
+            s.select(|_, selection| *selection = sel)?;
+        }
         let mut out = json!({"plugin": m.id, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
         if let Some(cmd) = &self.command {
             out["command"] = json!(cmd.id);
@@ -1270,7 +1299,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), writes?: [\"type\"|\"image\"|\"symbolInstance\"] (the kinds among inputs a filter may change, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 to 3), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1288,7 +1317,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}",
+            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. A filter at api 3 whose manifest lists some of those kinds in writes (with doc.write) may return an object of such a kind with only the fields it changes: name and transform (6 numbers within ±4,000,000 that don't flatten it), type's text.runs ({text, style, inline?} with the native character attributes; inline graphics stay as they were; at most 4,096 runs and 256 KiB of text; a style of its own needs a font family and a size of 0.1 to 1296 pt) and text.paragraphs (one style per paragraph), an image's opacity (0 to 1), an instance's symbolId (a symbol in the document); any other field changed, or a value out of range, refuses the run naming the object and the field, and nothing changes. An output that changes nothing records no undo step. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}",
             has_doc,
             run
         ),

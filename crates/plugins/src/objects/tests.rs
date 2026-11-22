@@ -1151,6 +1151,299 @@ fn read_only_kind_field_and_omission_refuse() {
     assert_eq!(d, before);
 }
 
+/// [`mixed`] with a second symbol, "Moon", and its targets and input for a filter that reads and may
+/// change every kind.
+fn writable() -> (Document, Vec<NodeId>, Vec<u8>, ReadOnlySpans, [NodeId; 5]) {
+    let (mut d, _, layer, extra) = mixed();
+    let art = Arc::new(Node::path(d.alloc_id(), square(5.0), Appearance::default()));
+    d.symbols.push(vectorcraft_doc::Symbol { name: "Moon".into(), art, dynamic: false });
+    let targets = filter_targets_with(&d, &[layer], &InputKind::ALL);
+    let (bytes, read_only) = encode_input_with(&d, &targets, &InputKind::ALL, usize::MAX).unwrap();
+    (d, targets, bytes, read_only, extra)
+}
+
+/// Decodes `out` for [`writable`]'s input with `writes` and applies it to `d`.
+fn write_out(
+    d: &mut Document,
+    targets: &[NodeId],
+    bytes: &[u8],
+    read_only: &ReadOnlySpans,
+    writes: &[InputKind],
+    out: &Value,
+) -> Result<Vec<NodeId>> {
+    let out = decode_output_writing(out.to_string().as_bytes(), bytes, read_only, writes)?;
+    apply_output(d, targets, out.objects, None, &keep)
+}
+
+/// A filter that may write type, images and symbol instances changes type's runs and character
+/// attributes, an image's transform and opacity, and the symbol and transform of an instance,
+/// with entries that give only the fields they change. What it writes reads back the same. An
+/// exact echo, `{"id": …}` alone and fields given as they were (numbers by value) change nothing.
+#[test]
+fn writable_kinds_take_type_runs_image_placement_and_instance_symbols() {
+    use vectorcraft_doc::{CharStyle, ParaStyle};
+    let (mut d, targets, bytes, read_only, [text, embedded, linked, star, ghost]) = writable();
+    let before = d.clone();
+    let all = &InputKind::ALL;
+    let echo = decode_output_writing(&bytes, &bytes, &read_only, all).unwrap();
+    assert!(echo.objects.iter().all(|o| o.edit.is_none()));
+    apply_output(&mut d, &targets, echo.objects, None, &keep).unwrap();
+    assert_eq!(d, before, "an exact echo changes nothing");
+    let ro = |id: NodeId| json!({"id": id.0});
+    let paths: Vec<Value> = targets.iter().filter(|id| !read_only.contains_key(id)).map(|id| ro(*id)).collect();
+    let with = |entries: Vec<Value>| {
+        let objects = [paths.clone(), entries].concat();
+        json!({ "objects": objects })
+    };
+    let same = with(vec![
+        json!({"id": text.0, "transform": [1, 0, 0, 1, 5, 50], "name": "T"}),
+        json!({"id": embedded.0, "opacity": 1}),
+        ro(linked),
+        json!({"id": star.0, "symbolId": "Star"}),
+        ro(ghost),
+    ]);
+    let out = decode_output_writing(same.to_string().as_bytes(), &bytes, &read_only, all).unwrap();
+    assert!(out.objects.iter().all(|o| o.edit.is_none()));
+    assert_eq!(out.objects.iter().filter(|o| o.kept).count(), 5, "fields given as they were change nothing");
+    // The changes, each entry giving only what it changes.
+    let big = CharStyle { size: 24.0, ..CharStyle::default() };
+    let runs = json!([{"text": "Bye\n", "style": CharStyle::default()}, {"text": "now", "style": big}]);
+    let out = with(vec![
+        json!({"id": text.0, "name": "Renamed", "text": {"runs": runs}}),
+        json!({"id": embedded.0, "transform": [1, 0, 0, 1, 10, 20], "opacity": 0.5}),
+        ro(linked),
+        json!({"id": star.0, "symbolId": "Moon", "transform": [1, 0, 0, 1, 50, 0]}),
+        ro(ghost),
+    ]);
+    let made = write_out(&mut d, &targets, &bytes, &read_only, all, &out).unwrap();
+    assert_eq!(made.len(), targets.len());
+    let node = |id: NodeId| d.node(id).unwrap().clone();
+    let NodeKind::Text(t) = &node(text).kind else { panic!("type") };
+    assert_eq!((t.plain_text().as_str(), t.runs[1].style.size), ("Bye\nnow", 24.0));
+    assert_eq!(t.para_at(1).space_before, 6.0, "paragraphs keep their styles");
+    assert_eq!(t.para_at(0), &ParaStyle::default());
+    assert_eq!(node(text).name.as_deref(), Some("Renamed"));
+    let NodeKind::Image(im) = &node(embedded).kind else { panic!("image") };
+    assert_eq!((im.xf, node(embedded).opacity), (Affine::new([1.0, 0.0, 0.0, 1.0, 10.0, 20.0]), 0.5));
+    assert_eq!(node(star).kind, NodeKind::SymbolInstance { symbol: "Moon".into(), xf: Affine::translate((50.0, 0.0)) });
+    for id in [linked, ghost] {
+        assert_eq!(d.node(id), before.node(id), "objects returned by id stay as they were");
+    }
+    // Read again, the changed objects give what was written.
+    let read = |id: NodeId| encode_read_only(&d, d.node(id).unwrap()).unwrap();
+    assert_eq!(read(text)["text"]["runs"], runs);
+    assert_eq!((&read(embedded)["transform"], &read(embedded)["opacity"]), (&json!([1.0, 0.0, 0.0, 1.0, 10.0, 20.0]), &json!(0.5)));
+    assert_eq!((&read(star)["symbolId"], &read(star)["transform"]), (&json!("Moon"), &json!([1.0, 0.0, 0.0, 1.0, 50.0, 0.0])));
+    assert!(read(star).get("missing").is_none());
+    // An instance of a symbol the document lacks can point to one it has.
+    let mut d = before.clone();
+    let out = with(vec![ro(text), ro(embedded), ro(linked), ro(star), json!({"id": ghost.0, "symbolId": "Star"})]);
+    write_out(&mut d, &targets, &bytes, &read_only, all, &out).unwrap();
+    assert!(matches!(&d.node(ghost).unwrap().kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Star"));
+}
+
+/// An entry that changes a field its kind can't change, a kind the manifest doesn't list in
+/// `writes`, or gives a value out of range is refused naming the object and the field, before
+/// anything changes.
+#[test]
+fn bad_writes_are_refused_naming_the_object_and_the_field() {
+    use vectorcraft_doc::CharStyle;
+    let (d, targets, bytes, read_only, [text, embedded, linked, star, ghost]) = writable();
+    let input: Value = serde_json::from_slice(&bytes).unwrap();
+    let at = |id: NodeId| input["objects"].as_array().unwrap().iter().position(|o| o["id"] == json!(id.0)).unwrap();
+    let style = serde_json::to_value(CharStyle::default()).unwrap();
+    let styled = |f: &dyn Fn(&mut Value)| {
+        let mut s = style.clone();
+        f(&mut s);
+        json!([{"text": "Hi\nthere", "style": s}])
+    };
+    let (t, e, l, s) = (text.0, embedded.0, linked.0, star.0);
+    let (ti, ei, si) = (at(text), at(embedded), at(star));
+    let cases: Vec<(NodeId, Value, &[InputKind], String)> = vec![
+        (text, json!({"text": {"kind": "area"}}), &InputKind::ALL, format!("objects[{ti}] (id {t}): read-only field 'text.kind' changed")),
+        (text, json!({"text": {"x": 1}}), &InputKind::ALL, format!("(id {t}): read-only field 'text.x' changed")),
+        (text, json!({"bounds": [0, 0, 1, 1]}), &InputKind::ALL, format!("(id {t}): read-only field 'bounds[0]' changed")),
+        (text, json!({"opacity": 0.5}), &InputKind::ALL, format!("(id {t}): read-only field 'opacity' changed")),
+        (text, json!({"text": {"runs": []}}), &InputKind::ALL, "text.runs: type needs at least one run".into()),
+        (
+            text,
+            json!({"text": {"runs": styled(&|s| s["fontSzie"] = json!(9))}}),
+            &InputKind::ALL,
+            "text.runs[0].style: unknown attribute 'fontSzie'".into(),
+        ),
+        (
+            text,
+            json!({"text": {"runs": styled(&|s| s["size"] = json!(5000))}}),
+            &InputKind::ALL,
+            "text.runs[0].style.size: must be 0.1 to 1296 pt".into(),
+        ),
+        (text, json!({"text": {"runs": styled(&|s| s["size"] = json!("big"))}}), &InputKind::ALL, "text.runs[0].style:".into()),
+        (
+            text,
+            json!({"text": {"runs": styled(&|s| s["font_family"] = json!(" "))}}),
+            &InputKind::ALL,
+            "font_family: must be 1-256 printable characters".into(),
+        ),
+        (text, json!({"text": {"runs": [{"text": "Hi", "style": style, "color": 1}]}}), &InputKind::ALL, "text.runs[0]: unknown key 'color'".into()),
+        (
+            text,
+            json!({"text": {"runs": [{"text": "Hi\u{FFFC}", "style": style}]}}),
+            &InputKind::ALL,
+            "holds the character of an inline graphic".into(),
+        ),
+        (text, json!({"text": {"paragraphs": [{}]}}), &InputKind::ALL, "text.paragraphs: expected 2 paragraph styles, one per paragraph".into()),
+        (text, json!({"transform": [1, 0, 0, 0, 0, 0]}), &InputKind::ALL, format!("objects[{ti}] (id {t}).transform: flattens the object")),
+        (text, json!({"transform": [1, 0, 0, 1, 1e9, 0]}), &InputKind::ALL, "transform: a number is out of range".into()),
+        (text, json!({"transform": [1, 0, null, 0, 1, 10, 20]}), &InputKind::ALL, "transform: must be a list of 6 numbers".into()),
+        (text, json!({"transform": [1, 0, 0, 1, 10]}), &InputKind::ALL, "transform: must be a list of 6 numbers".into()),
+        (text, json!({"transform": [1, 0, 0, 1]}), &InputKind::ALL, "transform: must be a list of 6 numbers".into()),
+        (embedded, json!({"pixelSize": [3, 1]}), &InputKind::ALL, format!("(id {e}): read-only field 'pixelSize[0]' changed")),
+        (embedded, json!({"opacity": 2}), &InputKind::ALL, format!("objects[{ei}] (id {e}).opacity: must be a number from 0 to 1")),
+        (embedded, json!({"opacity": "half"}), &InputKind::ALL, "opacity: must be a number from 0 to 1".into()),
+        (linked, json!({"linked": false}), &InputKind::ALL, format!("(id {l}): read-only field 'linked' changed")),
+        (embedded, json!({"opacity": 0.5}), &[InputKind::Type, InputKind::SymbolInstance], format!("(id {e}): read-only field 'opacity' changed")),
+        (
+            star,
+            json!({"symbolId": "Nowhere"}),
+            &InputKind::ALL,
+            format!("objects[{si}] (id {s}).symbolId: 'Nowhere' is not a symbol in this document"),
+        ),
+        (star, json!({"symbolId": 7}), &InputKind::ALL, "symbolId: must be the name of a symbol".into()),
+        (star, json!({"overrides": {"a": 1}}), &InputKind::ALL, format!("(id {s}): read-only field 'overrides.a' changed")),
+        (ghost, json!({"missing": false}), &InputKind::ALL, "read-only field 'missing' changed".into()),
+        (star, json!({"symbolId": "Moon"}), &[InputKind::Type], format!("(id {s}): read-only field 'symbolId' changed")),
+    ];
+    for (id, entry, writes, says) in cases {
+        let mut out = input.clone();
+        let mut e = entry.clone();
+        e["id"] = json!(id.0);
+        out["objects"][at(id)] = e;
+        let mut doc = d.clone();
+        let err = write_out(&mut doc, &targets, &bytes, &read_only, writes, &out).unwrap_err().to_string();
+        assert!(err.contains(&says), "{entry}: {says}: {err}");
+        assert_eq!(doc, d, "{entry}: nothing changed");
+    }
+    // Leaving a writable object out is still refused: it isn't deleted.
+    let mut out = input.clone();
+    out["objects"].as_array_mut().unwrap().remove(at(star));
+    let e = write_out(&mut d.clone(), &targets, &bytes, &read_only, &InputKind::ALL, &out).unwrap_err().to_string();
+    assert!(e.contains(&format!("objects (id {s}): a read-only object was left out")), "{e}");
+}
+
+/// The text a filter writes to one type object is held to [`MAX_INPUT_TEXT`] bytes and
+/// [`MAX_INPUT_RUNS`] runs and paragraphs, as the text it is given; type given as `truncated`
+/// keeps its text, though it can still move.
+#[test]
+fn written_text_is_held_to_the_input_limits_and_truncated_type_keeps_its_text() {
+    use vectorcraft_doc::{CharStyle, TextObject};
+    let (mut d, _, layer, [text, ..]) = mixed();
+    let long = Node::new(
+        d.alloc_id(),
+        NodeKind::Text(Box::new(TextObject::point(Point::new(0.0, 0.0), &"x".repeat(MAX_INPUT_TEXT + 1), CharStyle::default()))),
+    );
+    let long = d.insert(Some(layer), usize::MAX, long).unwrap();
+    let targets = filter_targets_with(&d, &[layer], &[InputKind::Type]);
+    let (bytes, read_only) = encode_input_with(&d, &targets, &[InputKind::Type], usize::MAX).unwrap();
+    let input: Value = serde_json::from_slice(&bytes).unwrap();
+    let at = |id: NodeId| input["objects"].as_array().unwrap().iter().position(|o| o["id"] == json!(id.0)).unwrap();
+    assert_eq!(input["objects"][at(long)]["truncated"], json!(true));
+    let style = serde_json::to_value(CharStyle::default()).unwrap();
+    let run = |s: String| json!({"text": s, "style": style});
+    let writes = &[InputKind::Type];
+    for (id, text_v, says) in [
+        (text, json!({"runs": [run("x".repeat(MAX_INPUT_TEXT + 1))]}), format!("bytes of text (limit {MAX_INPUT_TEXT})")),
+        (text, json!({"runs": vec![run("x".into()); MAX_INPUT_RUNS + 1]}), format!("must be a list of at most {MAX_INPUT_RUNS} entries")),
+        (text, json!({"paragraphs": vec![json!({}); MAX_INPUT_RUNS + 1]}), format!("must be a list of at most {MAX_INPUT_RUNS} entries")),
+        (long, json!({"runs": [run("short".into())]}), "the text of type given as `truncated` can't be changed".to_string()),
+    ] {
+        let mut out = input.clone();
+        out["objects"][at(id)] = json!({"id": id.0, "text": text_v});
+        let mut doc = d.clone();
+        let e = write_out(&mut doc, &targets, &bytes, &read_only, writes, &out).unwrap_err().to_string();
+        assert!(e.contains(&says), "{says}: {e}");
+        assert_eq!(doc, d);
+    }
+    // At the limit the text is written; truncated type still moves.
+    let mut out = input.clone();
+    out["objects"][at(text)] = json!({"id": text.0, "text": {"runs": [run("x".repeat(MAX_INPUT_TEXT))]}});
+    out["objects"][at(long)] = json!({"id": long.0, "transform": [1, 0, 0, 1, 3, 4]});
+    write_out(&mut d, &targets, &bytes, &read_only, writes, &out).unwrap();
+    assert!(matches!(&d.node(text).unwrap().kind, NodeKind::Text(t) if t.plain_text().len() == MAX_INPUT_TEXT));
+    assert!(
+        matches!(&d.node(long).unwrap().kind, NodeKind::Text(t) if t.xf == Affine::translate((3.0, 4.0)) && t.plain_text().len() == MAX_INPUT_TEXT + 1)
+    );
+}
+
+/// An inline graphic in type stays as it was, in its place among the inline graphics: the runs
+/// around it can change, and adding, removing or changing one is refused.
+#[test]
+fn inline_graphics_in_written_type_stay_as_they_were() {
+    use vectorcraft_doc::{CharStyle, InlineArt, TextObject, TextRun};
+    let (mut d, _, layer, _) = mixed();
+    let mut t = TextObject::point(Point::new(0.0, 0.0), "A", CharStyle::default());
+    t.runs = vec![
+        TextRun::new("A", CharStyle::default()),
+        TextRun::inline(InlineArt::new("Star"), CharStyle::default()),
+        TextRun::new("B", CharStyle::default()),
+    ];
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    let targets = vec![id];
+    let (bytes, read_only) = encode_input_with(&d, &targets, &[InputKind::Type], usize::MAX).unwrap();
+    let input: Value = serde_json::from_slice(&bytes).unwrap();
+    let runs = input["objects"][0]["text"]["runs"].clone();
+    let writes = &[InputKind::Type];
+    let with = |runs: Value| json!({"objects": [{"id": id.0, "text": {"runs": runs}}]});
+    let mut changed = runs.clone();
+    changed[0]["text"] = json!("Before ");
+    changed[2]["text"] = json!(" after");
+    let mut doc = d.clone();
+    write_out(&mut doc, &targets, &bytes, &read_only, writes, &with(changed)).unwrap();
+    let NodeKind::Text(t) = &doc.node(id).unwrap().kind else { panic!("type") };
+    assert_eq!(t.plain_text(), "Before \u{FFFC} after");
+    assert_eq!(t.runs[1].inline.as_ref().map(|a| a.symbol.as_str()), Some("Star"));
+    let mut moved = runs.clone();
+    moved[1]["inline"]["symbol"] = json!("Moon");
+    let without = json!([runs[0], runs[2]]);
+    let doubled = json!([runs[0], runs[1], runs[1], runs[2]]);
+    for bad in [moved, without, doubled] {
+        let mut doc = d.clone();
+        let e = write_out(&mut doc, &targets, &bytes, &read_only, writes, &with(bad.clone())).unwrap_err().to_string();
+        assert!(e.contains("inline graphics can't be added, removed, reordered or changed"), "{bad}: {e}");
+        assert_eq!(doc, d);
+    }
+}
+
+/// Runs written without `paragraphs` keep each paragraph's style when the number of paragraphs
+/// stays the same, and otherwise move the styles with the text as typing the same change would: a
+/// paragraph added before others takes the style of the one it splits and the others keep theirs,
+/// and joining two paragraphs keeps the first one's style.
+#[test]
+fn written_runs_without_paragraphs_keep_each_paragraph_s_style() {
+    use vectorcraft_doc::{CharStyle, Justify, ParaStyle, TextObject};
+    let (mut d, _, layer, _) = mixed();
+    let mut t = TextObject::point(Point::new(0.0, 0.0), "A\nB\nC", CharStyle::default());
+    let styled = |justify| ParaStyle { justify, ..ParaStyle::default() };
+    t.set_paragraph_styles(vec![styled(Justify::Left), styled(Justify::Center), styled(Justify::Right)]);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let id = d.insert(Some(layer), usize::MAX, n).unwrap();
+    let targets = vec![id];
+    let (bytes, read_only) = encode_input_with(&d, &targets, &[InputKind::Type], usize::MAX).unwrap();
+    let justified = |text: &str| {
+        let out = json!({"objects": [{"id": id.0, "text": {"runs": [{"text": text, "style": CharStyle::default()}]}}]});
+        let mut doc = d.clone();
+        write_out(&mut doc, &targets, &bytes, &read_only, &[InputKind::Type], &out).unwrap();
+        let NodeKind::Text(t) = &doc.node(id).unwrap().kind else { panic!("type") };
+        assert_eq!(t.plain_text(), text);
+        (0..t.paragraph_count()).map(|i| t.para_at(i).justify).collect::<Vec<_>>()
+    };
+    assert_eq!(justified("X\nA\nB\nC"), [Justify::Left, Justify::Left, Justify::Center, Justify::Right]);
+    assert_eq!(justified("A\nBé\nC"), [Justify::Left, Justify::Center, Justify::Right]);
+    assert_eq!(justified("One\nTwo\nThree"), [Justify::Left, Justify::Center, Justify::Right]);
+    assert_eq!(justified("AB\nC"), [Justify::Left, Justify::Right]);
+    assert_eq!(justified("A\nB\nC\nD"), [Justify::Left, Justify::Center, Justify::Right, Justify::Right]);
+}
+
 /// A filter's `documentData`: absent keeps what the plug-in keeps, `null` forgets it, any other JSON
 /// of at most [`MAX_DOCUMENT_DATA`] bytes is kept, and more refuses the whole output.
 #[test]

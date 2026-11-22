@@ -324,10 +324,11 @@ capability model proposed for PhotoCraft plug-ins
 - The host enforces the grant on a filter run and a command run: without `doc.read` the filter is given no objects;
   without `state` its `documentData` is `null` and an output that sets it is refused; without `doc.write` an output that
   changes the document is refused. A refused output leaves the document as it was.
-- `api` is the plug-in API level the manifest is written for: `1` (the default) or `2`, which adds the [host
+- `api` is the plug-in API level the manifest is written for: `1` (the default), `2`, which adds the [host
   imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
-  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects). A higher one
-  is refused. `plugin.list` and `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for
+  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects), or `3`, which
+  adds a filter's `writes` ([writing type, images and symbols](#writing-type-images-and-symbols)). A higher one is
+  refused. `plugin.list` and `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for
   are read under `doc.read`, which a filter that lists `inputs` must list in `permissions`, so installing it asks the
   user to grant them. A level 2 effect that declares `paintOutput` needs no other permission than `doc.read` and
   `effect.render`.
@@ -556,6 +557,11 @@ the module's start function, in a run that isn't a filter's run on a document, o
   filter gets paths and compound paths alone, as before. An unknown, repeated or wrongly typed entry, `inputs` on
   another kind, below `api` 2, or without a `permissions` list that holds `doc.read`, is refused when the plug-in is
   installed, and so is `api` 2 on hosts from before it.
+- `writes` (filters at `api` 3 only): the kinds among `inputs` the filter may change ([writing type, images and
+  symbols](#writing-type-images-and-symbols)), each at most once (`"writes": ["type"]`). Left out or `[]`, everything
+  the filter reads stays read-only. An unknown, repeated or wrongly typed entry, a kind `inputs` doesn't list, `writes`
+  on another kind, below `api` 3, or without `doc.write` in `permissions`, is refused when the plug-in is installed, and
+  hosts from before it refuse `api` 3.
 - `paintOutput` (live effects at `api` 2 only): `true` makes the effect return [painted pieces](#painted-live-effects)
   instead of geometry alone. `true` is the only value the key takes; `false`, `null`, another type, another kind or
   `api` 1 is refused when the module is installed, and the error names `paintOutput`. Without the key the effect returns
@@ -677,7 +683,7 @@ every attribute:
             "runs": [{"text": "Hello\nthere", "style": {"font_family": "Source Sans 3", "size": 12}}],
             "paragraphs": [{"justify": "Left"}, {"justify": "Center"}]},
    "truncated": false},
-  {"id": 18, "type": "image", "bounds": [0, 0, 4, 2], "transform": [2, 0, 0, 2, 0, 0], "pixelSize": [2, 1],
+  {"id": 18, "type": "image", "bounds": [0, 0, 4, 2], "transform": [2, 0, 0, 2, 0, 0], "opacity": 1, "pixelSize": [2, 1],
    "colorMode": "rgb", "linked": false, "pixelsOmitted": false, "pixelsBase64": "AAAegGQAHoA="},
   {"id": 19, "type": "symbolInstance", "bounds": [100, 0, 110, 10], "transform": [1, 0, 0, 1, 100, 0],
    "symbolId": "Star", "overrides": {}}
@@ -691,7 +697,7 @@ every attribute:
   true` and empty `runs` and `paragraphs`. The runs and paragraphs of all the type in one input take at most 16 MiB
   of JSON: type whose runs and paragraphs don't fit what the type before it in paint order left comes with
   `truncated: true` too.
-- An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
+- An image (`"image"`): `opacity` is its opacity, 0 to 1; `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
   `"unknown"`, read from the image itself. An image whose corners Perspective Distort or Free Distort moved to a shape
   that is not a parallelogram also has `corners`, its pixel rectangle's corners on the page (top left, top right,
   bottom right, bottom left), and its `transform` is then the affine placement nearest them, the one that matches the
@@ -727,6 +733,49 @@ that doesn't fit fails it with `plug-in exceeded its memory budget (the selectio
 the objects after it are written. An output lists at most 100,000 objects, so a run given more than 100,000 of these
 objects fails with `plug-in exceeded its object budget (more than 100000 read-only objects)`. An echo of them counts
 toward the 64 MiB output cap.
+
+### Writing type, images and symbols
+
+A filter at `api` 3 whose manifest lists some of its `inputs` kinds in `writes`, with `doc.write` in its
+`permissions`, may change the objects of those kinds it is given. It returns such an object as `{"id": 17}` alone,
+exactly as given, or with the fields it changes; a field it leaves out keeps its value. Each kind takes these fields:
+
+| Kind | Fields a filter may change |
+|------|----------------------------|
+| `type` | `name`, `transform`, `text.runs`, `text.paragraphs` |
+| `image` | `name`, `transform`, `opacity` |
+| `symbolInstance` | `name`, `transform`, `symbolId` |
+
+```json
+{"objects": [
+  {"id": 17, "text": {"runs": [{"text": "Goodbye", "style": {"font_family": "Source Sans 3", "size": 14}}]}},
+  {"id": 18, "transform": [2, 0, 0, 2, 50, 60], "opacity": 0.5},
+  {"id": 19, "symbolId": "Moon"}
+]}
+```
+
+- `name` is a string, or `null` for no name.
+- `transform` is six finite numbers, each within ±4,000,000, that don't flatten the object to a line. The object moves
+  by the change from its given transform, so an image's distorted corners move with it.
+- `text.runs` replaces the type's runs: each is `{text, style, inline?}` with the character attributes as the native
+  file stores them, and an attribute the host doesn't know is refused. There is at least one run, at most 4,096, and at
+  most 256 KiB of UTF-8 text; the runs written in one output take at most 16 MiB. A style that none of the type's runs
+  has needs a font family of 1 to 256 printable characters, a size from 0.1 to 1296 pt, and fills and strokes that a
+  path's appearance would take. Inline graphics stay where they were: the runs keep each `inline` run as it was given,
+  in the same order. The characters of threaded type, and of type with ruby, can't change, though their attributes can.
+  The runs and paragraphs of type given with `truncated: true` can't change.
+- `text.paragraphs` holds one paragraph style per paragraph of the new text. With `text.runs` alone, each paragraph
+  keeps its style when the number of paragraphs stays the same; runs that add or join paragraphs move the styles with
+  the text, as typing the same change does.
+- `opacity` is a number from 0 to 1.
+- `symbolId` names a symbol in the document. An instance that shows another symbol loses its overrides, as Replace
+  Symbol does.
+
+Every other field, including `type`, `bounds`, `text.kind` and an image's pixels, stays read-only, and objects of these
+kinds can't be added or left out. A changed read-only field or a value out of range refuses the whole output, naming
+the object and the field (`objects[2] (id 18).opacity: must be a number from 0 to 1`), and the document and undo history
+stay as they were. The changes of one run are one undo step, with the type laid out again; an output that changes
+nothing records no undo step. The host never reads or gives a linked image's file when a filter writes.
 
 ### Parameters
 
@@ -889,6 +938,6 @@ per change of their input, parameters or paints (results are cached), not per fr
   importers that place files (File › Place reads only the built-in formats) or make type, images, layers or
   artboards.
 - Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
-  it returns), and filters that change type, images or symbol instances (a filter at `api` 2 reads them, see
-  [`inputs`](#reading-type-images-and-symbols)).
+  it returns), filters that add or delete type, images or symbol instances or change their pixels and other fields
+  (a filter at `api` 3 changes [some of their fields](#writing-type-images-and-symbols)).
 - Apply Last Effect and Last Effect work for plug-in effects; there is no "last filter" for object filters yet.
