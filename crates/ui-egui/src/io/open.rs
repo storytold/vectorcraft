@@ -1,6 +1,7 @@
+use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::permissions;
 
-use super::save::suggested;
+use super::save::{notes_of, show_with_notes, suggested};
 use super::{Dialog, FilePick, Format, Value, VectorcraftApp, dialogs, fileio, json};
 
 /// Template extensions New from Template's open dialog lists first.
@@ -34,6 +35,9 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
         };
         return dialogs::script_check::command(app, &p).map(|_| Value::Null);
     }
+    if let Some(OpensAs::Presets { import: "imageTrace.presets.import", .. }) = opens {
+        return dialogs::tracing_presets::open_file(app, bytes).map(|_| Value::Null);
+    }
     if let Some(OpensAs::Presets { import, what }) = opens {
         import_presets(app, import, what, serde_json::json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}))?;
         return Ok(Value::Null);
@@ -51,10 +55,12 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
         let load = if swatches { crate::panels::swatches::load_library } else { crate::panels::graphic_styles::load_library };
         return load(app, p).map(|_| Value::Null);
     }
-    // A PDF with several pages or a password asks first (the Import PDF dialog), and so does a
-    // DXF drawing (DXF Import Options).
+    // A PDF with several pages or a password asks first (the Import PDF dialog), and so do a DXF
+    // drawing (DXF Import Options) and a PSD file with several layers or with slices (PSD Import
+    // Options), unless `p` says how its layers come in.
     if crate::dialogs::import_pdf::offer(app, name, bytes, path.clone(), None)
         || crate::dialogs::dxf_import::offer(app, name, bytes, path.clone(), None)
+        || (p.get("layers").is_none() && crate::dialogs::psd_import::offer(app, name, bytes, path.clone(), None))
     {
         return Ok(Value::Null);
     }
@@ -105,6 +111,7 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
         (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
         (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
         (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
+        (vectorcraft_engine::cmd::TRACE_PRESET_EXTS, "imageTrace.presets.import", "tracing presets"),
         (fileio::SCREEN_EXPORT_PRESET_EXTS, "document.exportPresets.import", EXPORT_PRESETS),
         (vectorcraft_engine::cmd::compositefonts::EXTS, "type.compositeFonts.import", "composite fonts"),
     ];
@@ -128,26 +135,71 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
 }
 
 /// Open a document through the engine loader with the `document.open` options in `p` →
-/// `document.open`'s result.
+/// `document.open`'s result, or `{dialog}` when Edit › Color Settings asks about its profile first
+/// ([`dialogs::profile_mismatch::open_or_ask`]): the document then opens, and goes on the recent
+/// files, once the question is answered. A PDF opens with the `pdfTextAs` preference unless `p`
+/// gives `textAs` ([`dialogs::import_pdf::with_preferred_text_as`]).
 pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
-    let r = fileio::open_bytes_with(&mut app.session, name, bytes, path, p).map_err(|e| e.to_string())?;
-    opened(app, &r);
-    Ok(r)
+    let p = &dialogs::import_pdf::with_preferred_text_as(app, name, bytes, p);
+    let update_links = app.session.prefs.update_links == "automatically";
+    let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
+    let file = fileio::read_for_open_asking(name, bytes, path.clone(), p, update_links, low_res_proxy_eps, true).map_err(|e| e.to_string())?;
+    dialogs::profile_mismatch::open_or_ask(app, file, path, false)
+}
+
+/// Did an open answer that it asks a question first (`{dialog}`), so the file isn't open yet?
+pub(crate) fn asks_first(r: &Value) -> bool {
+    r.get("dialog").is_some()
 }
 
 /// A document just opened (`r`: `document.open`'s result): the views follow, the status bar says
-/// what didn't come in as it was, and missing links are asked about.
+/// what didn't come in as it was, and missing links are asked about. The status bar names the
+/// first of the notes that say reading the file left something out (the ones that make Save ask
+/// before writing over it), else the first note, and keeps the notes in that order for its hover.
+/// A line about the document's linked files comes before the notes ([`show_opened`]).
 pub(crate) fn opened(app: &mut VectorcraftApp, r: &Value) {
     app.sync_views();
-    if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
-        app.status(opened_with_notes(w.len(), w[0].as_str().unwrap_or_default()));
-    }
-    crate::dialogs::missing_links::after_open(app, r);
+    let notes = open_notes(app, r);
+    crate::dialogs::missing_links::after_open(app, r, notes);
+}
+
+/// Show what an open says in the status bar: `notice`, a line about the document's linked files,
+/// then the open's `notes` ([`opened_with_notes`]), kept for the message's hover. Without either
+/// the status bar keeps its message.
+pub(crate) fn show_opened(app: &mut VectorcraftApp, notice: Option<String>, notes: Vec<String>) {
+    let status = match (notice, notes.first()) {
+        (Some(notice), Some(first)) => opened_after_notice(&notice, notes.len(), first),
+        (None, Some(first)) => opened_with_notes(notes.len(), first),
+        (Some(notice), None) => notice,
+        (None, None) => return,
+    };
+    show_with_notes(app, status, notes);
+}
+
+/// The notes of the open `r`, those of what reading the file left out (its document's
+/// `import_losses`) first, each group in the order the import gave them.
+pub(crate) fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
+    let notes = notes_of(r);
+    let index = r["index"].as_u64().and_then(|i| usize::try_from(i).ok());
+    let losses = index.and_then(|i| app.session.documents().get(i)).map(|st| st.import_losses.as_slice()).unwrap_or_default();
+    let (mut first, rest): (Vec<String>, Vec<String>) = notes.into_iter().partition(|n| losses.contains(n));
+    first.extend(rest);
+    first
 }
 
 /// The status bar's line for a document opened with `n` notes, the first of them `first`.
 pub(crate) fn opened_with_notes(n: usize, first: &str) -> String {
     crate::i18n::msg_n(n as u64, "Opened with {n} note: {first}", "Opened with {n} notes: {first}", &[("first", first)])
+}
+
+/// [`opened_with_notes`] after `notice`, a line about the document's linked files.
+pub(crate) fn opened_after_notice(notice: &str, n: usize, first: &str) -> String {
+    crate::i18n::msg_n(
+        n as u64,
+        "{notice}. Opened with {n} note: {first}",
+        "{notice}. Opened with {n} notes: {first}",
+        &[("notice", notice), ("first", first)],
+    )
 }
 
 /// A path from the open dialog, or "cancelled".
@@ -171,10 +223,13 @@ pub fn install_plugin(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     install_module(app, json!({ "path": path }))
 }
 
-/// What permission `name` lets a plug-in do, in plain words in the UI language; a name the app
-/// doesn't know is shown as it is.
-fn permission_words(name: &str) -> String {
+/// What permission `name` lets a plug-in do, in plain words in the UI language, with the ids of
+/// the `commands` it may call for `commands`; a name the app doesn't know is shown as it is.
+fn permission_words(name: &str, commands: &[String]) -> String {
     let words = match permissions::Permission::parse(name) {
+        Some(permissions::Permission::Commands) => {
+            return crate::i18n::fmt(tl!("Run these commands on the document: {ids}"), &[("ids", &commands.join(", "))]);
+        }
         Some(permissions::Permission::DocRead) => tl!("Read the objects it is given"),
         Some(permissions::Permission::DocWrite) => tl!("Change, add and delete objects in the document"),
         Some(permissions::Permission::State) => tl!("Keep data of its own with the document"),
@@ -190,79 +245,104 @@ fn permission_words(name: &str) -> String {
 }
 
 /// Installs the plug-in module that `module` names (`plugin.install`'s `path`, or `dataBase64`
-/// with `name`) → `plugin.install`'s result. A plug-in that lists permissions the user hasn't
-/// granted it yet (`grant`) asks them first, showing its name, id, version, file hash and what each
-/// permission lets it do, so does a filter that asks for a heavy budget the user hasn't allowed
-/// yet (`allowHeavy`), and so does a module that would take the place of another one with its id
-/// and get its settings and cache (`replace`); OK installs it if the module still has the hash the
-/// prompt showed, Cancel installs nothing → `{pending}` while it asks. Every
-/// text from the manifest is shown with its hidden characters escaped and its length capped
+/// with `name`) → `plugin.install`'s result. A plug-in that lists permissions no person has granted
+/// it yet asks first, showing its name, id, version, file hash and what each permission lets it
+/// do, so does a filter that asks for a heavy budget, and so does a module that would take the
+/// place of another one with its id and get its settings and cache (`replace`); OK installs it if
+/// the module still has the hash the prompt showed, Cancel installs nothing → `{pending}` while it
+/// asks. The `grant` and `allowHeavy` of a request are ignored: only the dialog's OK approves.
+/// Every question opens the approval dialog ([`dialogs::plugin::ask_install`]). When automation
+/// asked ([`VectorcraftApp::automation_asked`]), the question has no OK that installs, its
+/// `replace: true` doesn't skip asking about replacing, and the answer while it asks adds
+/// `approval: "personMustStartInstall"`: the person starts Install Plug-in… to install it.
+/// Every text from the manifest is shown with its hidden characters escaped and its length capped
 /// ([`permissions::display_text`]).
 pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, String> {
-    let heavy_allowed = module.get("allowHeavy").and_then(Value::as_bool) == Some(true);
-    let granted = module.get("grant").is_some_and(|g| !g.is_null());
-    // `replace: false` asks for no replacing, so only a module without `replace` asks.
-    let replace_given = module.get("replace").is_some_and(|r| !r.is_null());
-    if !heavy_allowed || !granted || !replace_given {
-        let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
-        let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
-        // What OK installs: the same module, with what the user has agreed to so far, pinned to
-        // the bytes the prompt shows (`hash`).
-        let mut answered =
-            Value::Object(["path", "dataBase64", "name", "replace", "grant", "allowHeavy", "hash"].into_iter().filter_map(given).collect());
-        let info = app.run("plugin.inspect", source)?;
-        if answered.get("hash").is_none() {
-            answered["hash"] = info["hash"].clone();
-        }
-        let shown = |k: &str, max: usize| permissions::display_text(info[k].as_str().unwrap_or_default(), max);
-        let name = shown("name", permissions::MAX_SHOWN_NAME);
-        if !granted && info["needsApproval"] == true {
-            let message = crate::i18n::fmt(tl!("Install “{name}”, which asks for these permissions?"), &[("name", &name)]);
-            let mut lines = vec![crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))])];
-            let version = shown("version", permissions::MAX_SHOWN_FIELD);
-            if !version.is_empty() {
-                lines.push(crate::i18n::fmt(tl!("Version: {version}"), &[("version", &version)]));
-            }
-            lines.push(crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]));
-            lines.push(String::new());
-            let asked = info["permissions"].as_array().cloned().unwrap_or_default();
-            lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p))));
-            let mut again = answered;
-            again["grant"] = Value::Array(asked);
-            dialogs::confirm::ask(app, &message, &lines.join("\n"), "ui.installPlugin", again);
-            return Ok(json!({ "pending": dialogs::confirm::KIND }));
-        }
-        if !heavy_allowed && info["budget"] == "heavy" {
-            let (minutes, times) = vectorcraft_plugins::heavy_terms();
-            let message = crate::i18n::fmt(tl!("Install “{name}”, which asks for a heavy budget?"), &[("name", &name)]);
-            let detail = crate::i18n::fmt(
-                tl!(
-                    "Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it."
-                ),
-                &[("minutes", &minutes.to_string()), ("times", &times.to_string())],
-            );
-            let mut allowed = answered;
-            allowed["allowHeavy"] = json!(true);
-            dialogs::confirm::ask(app, &message, &detail, "ui.installPlugin", allowed);
-            return Ok(json!({ "pending": dialogs::confirm::KIND }));
-        }
-        if !replace_given && info["needsReplace"] == true {
-            let message = crate::i18n::fmt(tl!("Install “{name}” in place of the plug-in with the same ID?"), &[("name", &name)]);
-            let lines = [
-                crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))]),
-                crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]),
-                String::new(),
-                tl!("This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.").to_string(),
-            ];
-            let mut replaced = answered;
-            replaced["replace"] = json!(true);
-            dialogs::confirm::ask(app, &message, &lines.join("\n"), "ui.installPlugin", replaced);
-            return Ok(json!({ "pending": dialogs::confirm::KIND }));
-        }
+    let origin = if app.automation_asked() { dialogs::plugin::InstallOrigin::Automation } else { dialogs::plugin::InstallOrigin::Person };
+    let automated = origin == dialogs::plugin::InstallOrigin::Automation;
+    let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
+    let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
+    let mut install = Value::Object(["path", "dataBase64", "name", "replace", "hash"].into_iter().filter_map(given).collect());
+    let info = app.run("plugin.inspect", source)?;
+    let (needs_grant, heavy) = (info["needsApproval"] == true, info["budget"] == "heavy");
+    // `replace: false` asks for no replacing, so only a module without `replace` asks, or one whose
+    // `replace: true` automation gave.
+    let replace = module.get("replace").filter(|v| !v.is_null());
+    let asks_replace = info["needsReplace"] == true && replace.is_none_or(|r| automated && *r == true);
+    if !needs_grant && !heavy && !asks_replace {
+        let r = app.run("plugin.install", install)?;
+        report_installed(app, &r);
+        return Ok(r);
     }
-    let r = app.run("plugin.install", module)?;
+    // Pinned to the bytes the prompt shows.
+    if install.get("hash").is_none() {
+        install["hash"] = info["hash"].clone();
+    }
+    let shown = |k: &str, max: usize| permissions::display_text(info[k].as_str().unwrap_or_default(), max);
+    let name = shown("name", permissions::MAX_SHOWN_NAME);
+    let identity = [
+        crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))]),
+        crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]),
+    ]
+    .join("\n");
+    let takes_place = tl!("This file is not the plug-in installed before with this ID. It gets the settings and cache kept for that ID.");
+    if asks_replace {
+        install["replace"] = json!(true);
+    }
+    // Taking another module's place alone asks in the approval dialog too, whose params no request
+    // can rewrite.
+    let asked = info["permissions"].as_array().cloned().unwrap_or_default();
+    let mut paragraphs = vec![];
+    if needs_grant {
+        let mut lines = vec![crate::i18n::fmt(tl!("ID: {id}"), &[("id", &shown("id", permissions::MAX_SHOWN_FIELD))])];
+        let version = shown("version", permissions::MAX_SHOWN_FIELD);
+        if !version.is_empty() {
+            lines.push(crate::i18n::fmt(tl!("Version: {version}"), &[("version", &version)]));
+        }
+        lines.push(crate::i18n::fmt(tl!("File SHA-256: {hash}"), &[("hash", &shown("hash", 64))]));
+        lines.push(String::new());
+        let commands: Vec<String> = info["commandAllowlist"]
+            .as_array()
+            .map(|ids| ids.iter().filter_map(Value::as_str).map(|id| permissions::display_text(id, permissions::MAX_SHOWN_FIELD)).collect())
+            .unwrap_or_default();
+        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p, &commands))));
+        paragraphs.push(lines.join("\n"));
+        install["grant"] = Value::Array(asked.clone());
+    }
+    if heavy {
+        let (minutes, times) = vectorcraft_plugins::heavy_terms();
+        paragraphs.push(crate::i18n::fmt(
+            tl!(
+                "Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it."
+            ),
+            &[("minutes", &minutes.to_string()), ("times", &times.to_string())],
+        ));
+        install["allowHeavy"] = json!(true);
+    }
+    if asks_replace {
+        paragraphs.push(if needs_grant { takes_place.to_string() } else { format!("{identity}\n\n{takes_place}") });
+    }
+    let message = if needs_grant {
+        crate::i18n::fmt(tl!("Install “{name}”, which asks for these permissions?"), &[("name", &name)])
+    } else if heavy {
+        crate::i18n::fmt(tl!("Install “{name}”, which asks for a heavy budget?"), &[("name", &name)])
+    } else {
+        crate::i18n::fmt(tl!("Install “{name}” in place of the plug-in with the same ID?"), &[("name", &name)])
+    };
+    let approval = InstallApproval {
+        id: info["id"].as_str().unwrap_or_default().to_string(),
+        hash: info["hash"].as_str().unwrap_or_default().to_string(),
+        permissions: asked.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+        heavy,
+    };
+    let pending =
+        dialogs::plugin::PendingInstall { message, detail: paragraphs.join("\n\n"), params: install, approval, origin, shown: Default::default() };
+    Ok(dialogs::plugin::ask_install(app, pending))
+}
+
+/// Says in the status bar that `plugin.install`'s result `r` was installed.
+pub(crate) fn report_installed(app: &mut VectorcraftApp, r: &Value) {
     app.status(format!("Installed plug-in {}", permissions::display_text(r["name"].as_str().unwrap_or_default(), permissions::MAX_SHOWN_NAME)));
-    Ok(r)
 }
 
 /// Where File → Open… starts: the folder of the most recently opened file, else the active
@@ -273,8 +353,7 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
 
 /// File → Open…
 pub fn open_dialog(app: &mut VectorcraftApp) -> Result<(), String> {
-    if let Some(f) = app.services.open_async.as_mut() {
-        f();
+    if crate::picks::open_async(app) {
         return Ok(());
     }
     let path =
@@ -337,9 +416,8 @@ pub(crate) fn open_with_on(app: &mut VectorcraftApp, p: &Value, background: bool
                 Err(back) => bytes = back,
             }
         }
-        let r = open_document(app, &path, &bytes, Some(path.clone()), &o)?;
-        note_recent(app, &path);
-        Ok(r)
+        // The open notes it on the recent files, after any question it asks first.
+        open_document(app, &path, &bytes, Some(path.clone()), &o)
     });
     if let Err(e) = &opened {
         report_open_error(app, &fileio::file_name(&path), e);
@@ -485,25 +563,37 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A tracing presets file is read up to its size limit, as Import… reads it.
+    if let Some(OpensAs::Presets { import: "imageTrace.presets.import", .. }) = opens_as(path) {
+        dialogs::tracing_presets::open_path(app, path)?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
     // A file only an importer plug-in reads is not read past the importer's input limit.
     check_import_size(path, false)?;
     let mut bytes = read(app, path)?;
     if background && opens_as(path).is_none() {
-        // A PDF with several pages or a password, or a DXF drawing, asks first, as at once.
+        // A PDF with several pages or a password, a DXF drawing, or a PSD file with several layers
+        // or with slices asks first, as at once.
         if crate::dialogs::import_pdf::offer(app, path, &bytes, Some(path.to_string()), None)
             || crate::dialogs::dxf_import::offer(app, path, &bytes, Some(path.to_string()), None)
+            || (p.get("layers").is_none() && crate::dialogs::psd_import::offer(app, path, &bytes, Some(path.to_string()), None))
         {
             note_recent(app, path);
             return Ok(Value::Null);
         }
-        match crate::opening::start(app, path, bytes) {
+        let params = crate::dialogs::import_pdf::with_preferred_text_as(app, path, &bytes, &Value::Null);
+        match crate::opening::start_with(app, path, bytes, params) {
             Ok(r) => return Ok(r),
             // No thread: at once.
             Err(back) => bytes = back,
         }
     }
     let r = open_bytes_with(app, path, &bytes, Some(path.to_string()), p)?;
-    note_recent(app, path);
+    // A document that asks a question first goes on the recent files once it opens.
+    if !asks_first(&r) {
+        note_recent(app, path);
+    }
     Ok(r)
 }
 
@@ -521,8 +611,7 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
     };
     let bytes = read(app, &path)?;
     let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
-    app.sync_views();
-    crate::dialogs::missing_links::after_open(app, &r);
+    opened(app, &r);
     Ok(r)
 }
 

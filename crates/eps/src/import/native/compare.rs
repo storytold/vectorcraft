@@ -56,6 +56,15 @@ pub(in crate::import) fn differ(p: &[u8; 4], q: &[u8; 4]) -> bool {
     lightness(p).abs_diff(lightness(q)) > SAME_PIXEL || (a.min(b) <= WHITE && a.abs_diff(b) > SAME_PIXEL)
 }
 
+/// Do two pixels look different seen on black: in lightness? An object drawn on its own and seen
+/// only on white hides what it draws in white (white type over nothing looks like nothing): seen
+/// on black too, that shows.
+pub(in crate::import) fn differ_on_black(p: &[u8; 4], q: &[u8; 4]) -> bool {
+    // Premultiplied, a pixel is what it shows on black.
+    let on_black = |p: &[u8; 4]| [0, 1, 2].map(|i| u32::from(p[i]));
+    p != q && lightness(on_black(p)).abs_diff(lightness(on_black(q))) > SAME_PIXEL
+}
+
 /// How far apart two pixels' red, green or blue may be for them to be the same colour (a colour
 /// and its CMYK equivalent stay within it; a red and a dark red don't).
 const SAME_COLOUR: u32 = 64;
@@ -113,7 +122,7 @@ pub(super) fn comparison_samples(doc: &Document) -> u32 {
     let (mut images, mut vector) = (false, false);
     doc.walk(|n| match n.kind {
         NodeKind::Image(_) => images = true,
-        NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Path { clipping: true, .. } => {}
+        NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Path { clipping: true, .. } | NodeKind::RulerGuide { .. } => {}
         _ => vector = true,
     });
     if images && !vector { 4 } else { 1 }
@@ -561,6 +570,34 @@ impl PageView {
             }
         }
     }
+
+    /// Which pixels of each of the pages `on` `art` inks (draws over with an alpha above 8 of 255),
+    /// drawn as the layers are drawn on them, row by row.
+    pub(super) fn inked(&mut self, art: &Document, on: &[usize]) -> Vec<(usize, Vec<bool>)> {
+        self.draw(art, on)
+            .into_iter()
+            .map(|(i, drawn)| (i, drawn.pixels.as_chunks::<4>().0.iter().map(|p| u32::from(p[3]) > WHITE).collect()))
+            .collect()
+    }
+
+    /// Of the pixels of page `i` that `marks` marks (row by row), how many `b` draws differently from
+    /// the page, as [`compared`] counts them: those that differ (with `reflow`, those away from type),
+    /// and those that differ with all their neighbors, away from type. `None` when `marks` isn't the
+    /// page's size.
+    pub(super) fn differing_in(&mut self, b: &Document, i: usize, marks: &[bool], reflow: bool) -> Option<(usize, usize)> {
+        self.layered(b, &[i]);
+        let printed = as_printed(b);
+        let b = printed.as_ref().unwrap_or(b);
+        let page = self.pages.get(i)?;
+        let layered = self.drawn.last()?.pages.get(i)?.as_ref()?;
+        let (differs, typed, solid) = differing_pixels(&page.drawn, &layered.pixels, &page.counted_type(b, page.region, reflow), &page.skipped())?;
+        if marks.len() != differs.len() {
+            return None;
+        }
+        let any = marks.iter().zip(&differs).zip(&typed).filter(|((m, d), t)| **m && **d && !(reflow && **t)).count();
+        let solid = marks.iter().zip(&solid).filter(|(m, s)| **m && **s).count();
+        Some((any, solid))
+    }
 }
 
 /// The `w` × `h` pixels of `from` from pixel (`x`, `y`): `None` unless they lie in it, from a pixel.
@@ -673,8 +710,27 @@ pub(super) fn compared(x: &vectorcraft_render::Rendered, y: &vectorcraft_render:
 /// [`compared`], and which of the pixels (row by row) are counted in its `solid` share: none when
 /// the drawings can't be compared.
 fn compared_with_solid(x: &vectorcraft_render::Rendered, y: &vectorcraft_render::Rendered, areas: &[Rect], skip: &[Rect]) -> (Difference, Vec<bool>) {
-    if x.width == 0 || x.height == 0 || x.width != y.width || x.height != y.height {
+    let Some((differs, typed, solid)) = differing_pixels(x, y, areas, skip) else {
         return (Difference { any: 1.0, art: 1.0, solid: 1.0, typed: 0.0 }, vec![]);
+    };
+    let area = (f64::from(x.width) * f64::from(x.height)).max(1.0);
+    let any = differs.iter().filter(|d| **d).count() as f64 / area;
+    let art = differs.iter().zip(&typed).filter(|(d, t)| **d && !**t).count() as f64 / area;
+    let shares = Difference { any, art, solid: solid.iter().filter(|s| **s).count() as f64 / area, typed: any - art };
+    (shares, solid)
+}
+
+/// Which pixels (row by row) of two drawings of the same size differ ([`differ`], those in `skip`
+/// counting as alike), which of those lie in the type's `areas`, and which differ with all their
+/// neighbors away from type: [`compared`]'s pixels. `None` when the drawings can't be compared.
+fn differing_pixels(
+    x: &vectorcraft_render::Rendered,
+    y: &vectorcraft_render::Rendered,
+    areas: &[Rect],
+    skip: &[Rect],
+) -> Option<(Vec<bool>, Vec<bool>, Vec<bool>)> {
+    if x.width == 0 || x.height == 0 || x.width != y.width || x.height != y.height {
+        return None;
     }
     let (w, h) = (x.width as usize, x.height as usize);
     // Pixels in `skip` count as alike.
@@ -682,10 +738,9 @@ fn compared_with_solid(x: &vectorcraft_render::Rendered, y: &vectorcraft_render:
     let differs: Vec<bool> =
         x.pixels.as_chunks::<4>().0.iter().zip(y.pixels.as_chunks::<4>().0).zip(&skipped).map(|((p, q), s)| !*s && differ(p, q)).collect();
     if !differs.contains(&true) {
-        return (Difference { any: 0.0, art: 0.0, solid: 0.0, typed: 0.0 }, vec![false; w * h]);
+        return Some((differs, vec![false; w * h], vec![false; w * h]));
     }
-    let typed = in_areas(areas, w, h);
-    let art = differs.iter().zip(&typed).filter(|(d, t)| **d && !**t).count();
+    let typed: Vec<bool> = in_areas(areas, w, h).into_iter().zip(&differs).map(|(t, d)| t && *d).collect();
     // Which pixels differ with their left and right neighbors.
     let mut across = vec![false; w * h];
     for (k, a) in across.iter_mut().enumerate() {
@@ -697,15 +752,12 @@ fn compared_with_solid(x: &vectorcraft_render::Rendered, y: &vectorcraft_render:
     for (k, s) in solid.iter_mut().enumerate().skip(w).take(w * h.saturating_sub(2)) {
         *s = !typed.get(k).copied().unwrap_or(true) && [k - w, k, k + w].iter().all(|n| across.get(*n).copied().unwrap_or(false));
     }
-    let area = (w as f64 * h as f64).max(1.0);
-    let any = differs.iter().filter(|d| **d).count() as f64 / area;
-    let art = art as f64 / area;
-    let shares = Difference { any, art, solid: solid.iter().filter(|s| **s).count() as f64 / area, typed: any - art };
-    (shares, solid)
+    Some((differs, typed, solid))
 }
 
 /// Where the type that shows in `nodes` is, in pixels of `region` drawn at `scale` (with a margin
-/// for the strokes round it).
+/// for the strokes round it). The type in a live envelope isn't: the envelope draws it bent, away
+/// from its text object's box, and is weighed as the art it draws, as its drawn art would be.
 fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>) {
     for n in nodes.iter().filter(|n| n.visible) {
         if let NodeKind::Text(_) = n.kind
@@ -714,7 +766,9 @@ fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>
             let px =
                 |r: Rect| Rect::new((r.x0 - region.x0) * scale, (r.y0 - region.y0) * scale, (r.x1 - region.x0) * scale, (r.y1 - region.y0) * scale);
             out.push(px(b.inflate(OUTLINE_REACH, OUTLINE_REACH)));
-        } else if let Some(c) = n.children() {
+        } else if !matches!(n.kind, NodeKind::Envelope { .. })
+            && let Some(c) = n.children()
+        {
             type_areas(c, region, scale, out);
         }
     }
@@ -867,7 +921,7 @@ const NOTABLE_DIFFERENCE: f64 = 0.002;
 pub(in crate::import) const MAX_SOLID_DIFFERENCE: f64 = 0.001;
 
 /// How far (points) the art the layers print may reach past a page that holds it all.
-const PAST_THE_PAGE: f64 = 1.0;
+pub(super) const PAST_THE_PAGE: f64 = 1.0;
 
 /// Do the layers' art and the page's own look alike (where the page holds all the art that prints,
 /// also round it), on every page the frame has ([`Frame::more`])? An error says they don't; `Ok` has

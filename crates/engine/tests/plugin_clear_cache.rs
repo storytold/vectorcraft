@@ -40,6 +40,7 @@ fn clearing_every_cache_empties_each_plugins_cache_and_keeps_its_settings() {
     std::fs::create_dir_all(&folder).unwrap();
     let ids = ["test.clearcache.a", "test.clearcache.b"];
     let mut s = Session::new();
+    s.allow_plugin_grants_from_requests();
     s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
     s.attach_plugin_store(folder.clone());
     for id in ids {

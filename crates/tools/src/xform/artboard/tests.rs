@@ -367,10 +367,20 @@ fn a_shift_drag_on_the_pasteboard_selects_the_artboards_it_touches() {
     assert_eq!(t.options()["selected"], json!([1, 2]));
 }
 
-/// A drag begun without Shift still moves the artboard, and on the pasteboard still draws one;
-/// Shift pressed during either no longer keeps the move at 45° or the new artboard square.
+/// The `(dx, dy)` of an `artboard.move` preview.
+fn moved_by(v: &Value) -> (f64, f64) {
+    (v["dx"].as_f64().unwrap(), v["dy"].as_f64().unwrap())
+}
+
+fn near(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9
+}
+
+/// Shift held once a move is under way keeps it to the level, upright or 45° line, at the length
+/// dragged (#8580); without Shift it follows the pointer again. (A Shift-press draws or
+/// selects rather than moving: `a_shift_drag_inside_an_artboard_draws_a_new_one`.)
 #[test]
-fn a_plain_drag_still_moves_and_shift_no_longer_constrains_it() {
+fn shift_held_during_a_move_keeps_it_to_its_line() {
     let d = two_boards();
     let (s, p) = (Selection::default(), paint());
     let mut c = cx(&d, &s, &p);
@@ -378,13 +388,97 @@ fn a_plain_drag_still_moves_and_shift_no_longer_constrains_it() {
     let shift = Mods { shift: true, ..Default::default() };
     let mut t = ArtboardTool::default();
     t.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0));
-    let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 730.0, 110.0).with_mods(shift)));
-    assert_eq!((v["index"].as_u64(), v["dx"].as_f64(), v["dy"].as_f64()), (Some(1), Some(30.0), Some(10.0)));
-    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 730.0, 110.0).with_mods(shift)), vec![Action::Commit]);
+    let mut drag = |dx: f64, dy: f64, m: Mods| moved_by(&preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 700.0 + dx, 100.0 + dy).with_mods(m))));
+    assert!(near(drag(30.0, 10.0, shift), (1000f64.sqrt(), 0.0)), "level");
+    assert!(near(drag(12.0, 40.0, shift), (0.0, 1744f64.sqrt())), "upright");
+    let (dx, dy) = drag(30.0, 28.0, shift);
+    assert!(dx > 0.0 && (dx - dy).abs() < 1e-9, "45°: {dx} {dy}");
+    // Shift released: the move follows the pointer.
+    assert_eq!(drag(30.0, 10.0, Mods::default()), (30.0, 10.0));
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 730.0, 110.0)), vec![Action::Commit]);
+    // A new artboard drawn on the pasteboard isn't kept square by Shift held during the drag.
     t.pointer(&c, &ev(PointerKind::Down, 1000.0, 1000.0));
     t.pointer(&c, &ev(PointerKind::Drag, 1100.0, 1050.0).with_mods(shift));
     let a = t.pointer(&c, &ev(PointerKind::Up, 1100.0, 1050.0).with_mods(shift));
     assert_eq!(a, create_artboard(Rect::new(1000.0, 1000.0, 1100.0, 1050.0)));
+}
+
+/// An Alt-drag copy keeps to its line with Shift too, and the line turns with General › Constrain
+/// Angle.
+#[test]
+fn shift_keeps_an_alt_drag_copy_to_its_line_from_the_constrain_angle() {
+    let d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let mut c = cx(&d, &s, &p);
+    c.smart_guides = false;
+    let alt = Mods { alt: true, ..Default::default() };
+    let both = Mods { alt: true, shift: true, ..Default::default() };
+    let mut t = ArtboardTool::default();
+    t.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0).with_mods(alt));
+    let v = preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 730.0, 110.0).with_mods(both)));
+    assert!(near(moved_by(&v), (1000f64.sqrt(), 0.0)) && v["copy"] == true, "{v}");
+    // Alt released and pressed again mid-drag: a constrained move, then a constrained copy again.
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 730.0, 110.0).with_mods(Mods { shift: true, ..Default::default() }));
+    assert_eq!(a[..2], [Action::Cancel, Action::Begin("Move Artboard".into())]);
+    let v = preview_params(&a);
+    assert!(near(moved_by(&v), (1000f64.sqrt(), 0.0)) && v["copy"] == false, "{v}");
+    let a = t.pointer(&c, &ev(PointerKind::Drag, 730.0, 110.0).with_mods(both));
+    assert_eq!(a[..2], [Action::Cancel, Action::Begin("Duplicate Artboard".into())]);
+    assert!(near(moved_by(&preview_params(&a)), (1000f64.sqrt(), 0.0)));
+    t.pointer(&c, &ev(PointerKind::Up, 730.0, 110.0).with_mods(both));
+    // Constrain Angle 30°: the lines run in 45° steps from 30° up the page (30° up, 15° down, …),
+    // and a drag 18.4° below level keeps to the one 15° below level (down the page is positive y).
+    c.constrain_angle = 30.0;
+    t.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0));
+    let (dx, dy) =
+        moved_by(&preview_params(&t.pointer(&c, &ev(PointerKind::Drag, 730.0, 110.0).with_mods(Mods { shift: true, ..Default::default() }))));
+    assert!((dy.atan2(dx).to_degrees() - 15.0).abs() < 1e-9, "{dx} {dy}");
+}
+
+/// Snaps slide a move Shift keeps to its line along that line: Smart Guides, the grid and whole
+/// pixels never take it off the line.
+#[test]
+fn snaps_keep_a_shift_move_on_its_line() {
+    let d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut c = cx(&d, &s, &p);
+    let mut t = ArtboardTool::default();
+    let mut drag = |c: &ToolContext, dx: f64, dy: f64| {
+        t.pointer(c, &ev(PointerKind::Down, 700.0, 100.0));
+        let v = moved_by(&preview_params(&t.pointer(c, &ev(PointerKind::Drag, 700.0 + dx, 100.0 + dy).with_mods(shift))));
+        t.pointer(c, &ev(PointerKind::Up, 700.0 + dx, 100.0 + dy).with_mods(shift));
+        v
+    };
+    // Level, 101.5 pt left: the left edge, 1.5 pt past artboard 1's right edge (500), slides back
+    // onto it, and the move stays level.
+    assert!(near(drag(&c, -97.0, 30.0), (-100.0, 0.0)));
+    c.smart_guides = false;
+    c.snap_to_grid = true;
+    // Grid step 72 / 8 = 9: x 620.9 → 621, y stays 0 (not 9, where it would snap off the line).
+    assert!(near(drag(&c, 20.0, 6.0), (21.0, 0.0)));
+    c.snap_to_grid = false;
+    c.snap_to_pixel = true;
+    assert!(near(drag(&c, 10.0, 3.0), (10.0, 0.0)));
+}
+
+/// While Shift keeps a move to its line the cursor stays the move cursor, also where the pointer
+/// has left the moved artboard; before a press, Shift shows the crosshair of a drag that draws or
+/// selects.
+#[test]
+fn shift_during_a_move_keeps_the_move_cursor() {
+    let mut d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ArtboardTool::default();
+    let over = Point::new(1100.0, 250.0);
+    assert_eq!(t.cursor(&cx(&d, &s, &p), Point::new(700.0, 100.0), shift), Cursor::Crosshair);
+    t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 700.0, 100.0));
+    let (dx, dy) = moved_by(&preview_params(&t.pointer(&cx(&d, &s, &p), &ev(PointerKind::Drag, over.x, over.y).with_mods(shift))));
+    // The engine shows the preview: the level move leaves the pointer 50 pt below the artboard.
+    d.artboards[1].rect = d.artboards[1].rect + Vec2::new(dx, dy);
+    assert!(!d.artboards[1].rect.contains(over));
+    assert_eq!(t.cursor(&cx(&d, &s, &p), over, shift), Cursor::Move);
 }
 
 /// Escape during a marquee or while a new artboard is being drawn ends the gesture without
@@ -609,6 +703,44 @@ fn add_buttons_hide_with_several_artboards_selected_or_during_a_drag() {
     t.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0));
     t.pointer(&c, &ev(PointerKind::Drag, 720.0, 100.0));
     assert!(button_sides(&t, &c).is_empty(), "none while an artboard is dragged");
+}
+
+/// The tooltips the add buttons carry: each one's center, radius and text.
+fn button_tips(t: &ArtboardTool, c: &ToolContext) -> Vec<(Point, f64, &'static str)> {
+    t.overlays(c)
+        .into_iter()
+        .filter_map(|o| if let Overlay::HoverText { center, radius, text } = o { Some((center, radius, text)) } else { None })
+        .collect()
+}
+
+#[test]
+fn each_add_button_has_a_tooltip_over_the_area_a_press_takes() {
+    let mut d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let t = ArtboardTool::default();
+    let radius = c.tol(EDGE_BUTTON_RADIUS);
+    let want: Vec<_> = t.edge_buttons(&c).into_iter().map(|(_, at)| (at, radius, EDGE_BUTTON_TIP)).collect();
+    assert_eq!(want.len(), 3, "no button and no tooltip on the side without room");
+    assert_eq!(button_tips(&t, &c), want);
+    // The tooltip's disc is the one a press takes.
+    for (at, r, _) in &want {
+        assert!(t.edge_button_at(&c, *at + Vec2::new(r * 0.99, 0.0)).is_some());
+        assert!(t.edge_button_at(&c, *at + Vec2::new(r * 1.01, 0.0)).is_none());
+    }
+    // None with several artboards selected or during a drag.
+    let several = ArtboardTool { active: 1, others: vec![0], ..Default::default() };
+    assert!(button_tips(&several, &c).is_empty());
+    let mut dragging = ArtboardTool::default();
+    dragging.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0));
+    dragging.pointer(&c, &ev(PointerKind::Drag, 720.0, 100.0));
+    assert!(button_tips(&dragging, &c).is_empty(), "none while an artboard is dragged");
+    // A locked artboard's buttons tell only what a click does: an Alt-click does nothing there.
+    d.artboards[0].locked = true;
+    let c = cx(&d, &s, &p);
+    let tips = button_tips(&t, &c);
+    assert_eq!(tips.len(), 3);
+    assert!(tips.iter().all(|(_, _, text)| *text == EDGE_BUTTON_TIP_LOCKED), "{tips:?}");
 }
 
 #[test]

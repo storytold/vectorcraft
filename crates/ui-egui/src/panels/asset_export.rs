@@ -7,11 +7,20 @@
 //! desktop with Background Export on, on the background thread); the web downloads them. The
 //! screen button opens Export for Screens on its Assets tab.
 //!
-//! Export 3D Object (the panel menu) collects the selected objects with a 3D effect as 3D assets,
+//! Export 3D Object (the panel menu, and the 3D and Materials panel's button) collects the selected objects with a 3D effect as 3D assets,
 //! marked 3D on their tiles. While the panel's assets include 3D assets, a Format row picks their
 //! mesh format (USDA, USDZ, glTF or OBJ), and Export writes them as mesh files beside the pictures.
 //!
-//! Everything runs through the `assets.*` commands.
+//! The panel menu also holds Format Settings… (Export for Screens showing the first row's format
+//! settings), and Create Sub-folders and Open Location after Export, the dialog's two checkboxes,
+//! which Export follows. Create Sub-folders sorts the pictures into a folder per format row, or per
+//! format or item when Export for Screens remembers that choice; 3D assets' mesh files go in the
+//! folder itself.
+//!
+//! Tile context menus export or remove the asset selection, rename a tile, select its source
+//! artwork on the canvas, or collect the selected artwork.
+//!
+//! Everything runs through the `assets.*` commands (canvas selection uses `select.set`).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -26,7 +35,7 @@ use vectorcraft_engine::cmd::fileio::{FORMATS_3D, SCREEN_SETTINGS_KEYS, format_3
 use super::{pstate, set_pstate};
 use crate::dialogs::{
     EXPORT_FOR_SCREENS, ScreenPresetPick, drop_unread_screen_settings, open_export_for_screens_assets, screen_export_preset, screen_formats,
-    screen_import_presets, screen_preset_list, screen_saved_options, screen_saved_rows,
+    screen_import_presets, screen_preset_list, screen_saved_options, screen_saved_rows, screen_settings_format,
 };
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -115,6 +124,15 @@ struct Events {
     rename: Option<(u64, String)>,
     /// Art dropped on the panel: (ids, as one asset).
     drop: Option<(Vec<NodeId>, bool)>,
+    /// A tile context-menu action, dispatched after the document borrow ends.
+    action: Option<TileAction>,
+}
+
+enum TileAction {
+    Export(Vec<u64>),
+    Remove(Vec<u64>),
+    SelectArtwork(Vec<NodeId>),
+    Collect(bool),
 }
 
 /// The asset tiles: thumbnail, name (a text field while renaming), selection.
@@ -185,8 +203,51 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
             } else if resp.clicked() {
                 ev.click = Some((a.id, ui.input(|i| i.modifiers.shift || i.modifiers.command)));
             }
+            if resp.secondary_clicked() && !on {
+                ev.click = Some((a.id, false));
+            }
+            resp.context_menu(|ui| tile_context_menu(ui, st, a, sel, ev));
         }
     });
+}
+
+/// A tile's menu queues commands while the document is borrowed for drawing.
+fn tile_context_menu(ui: &mut Ui, st: &DocState, a: &ExportAsset, sel: &[u64], ev: &mut Events) {
+    let rename_id = egui::Id::unique("asset-export-rename");
+    // On the opening frame the queued selection has not been applied yet.
+    let targets = if sel.contains(&a.id) { sel.to_vec() } else { vec![a.id] };
+    let count = targets.len().to_string();
+    let export_label =
+        if targets.len() > 1 { crate::i18n::fmt(tl!("Export {count} Assets…"), &[("count", &count)]) } else { tl!("Export Asset…").to_string() };
+    let remove_label =
+        if targets.len() > 1 { crate::i18n::fmt(tl!("Remove {count} Assets"), &[("count", &count)]) } else { tl!("Remove Asset").to_string() };
+    if widgets::menu_item_name(ui, &export_label, true, false) {
+        ev.action = Some(TileAction::Export(targets.clone()));
+        ui.close();
+    }
+    if widgets::menu_item_name(ui, &remove_label, true, false) {
+        ev.action = Some(TileAction::Remove(targets));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Rename"), true, false) {
+        ui.data_mut(|d| d.insert_temp(rename_id, (a.id, a.name.clone())));
+        ui.close();
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Select Artwork on Canvas"), true, false) {
+        ev.action = Some(TileAction::SelectArtwork(a.nodes.clone()));
+        ui.close();
+    }
+    ui.separator();
+    let has_art = !st.selection.is_empty();
+    if menu_item(ui, tl!("Add Selected Artwork as One Asset"), has_art, false) {
+        ev.action = Some(TileAction::Collect(true));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Add Selected Artwork as Multiple Assets"), has_art, false) {
+        ev.action = Some(TileAction::Collect(false));
+        ui.close();
+    }
 }
 
 /// Art dragged off the canvas over the list: outline it; dropped, it becomes assets.
@@ -199,6 +260,16 @@ fn drop_zone(ui: &Ui, zone: &egui::Response, ev: &mut Events) {
 /// Run `cmd`, reporting a failure in the status bar.
 fn run(app: &mut VectorcraftApp, cmd: &str, params: Value) -> Option<Value> {
     app.run(cmd, params).map_err(|e| app.status(e)).ok()
+}
+
+/// Export 3D Object: collects objects `ids` (else the selection) as 3D assets (`assets.add3D`), and
+/// selects their assets in the panel, including those that were assets already.
+pub(crate) fn add_3d(app: &mut VectorcraftApp, ctx: &egui::Context, ids: Option<&[u64]>) -> Result<(), String> {
+    let p = ids.map_or_else(|| json!({}), |ids| json!({ "ids": ids }));
+    let r = app.run("assets.add3D", p)?;
+    let assets: Vec<u64> = r["assets"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+    set_pstate(ctx, SELECTED, assets);
+    Ok(())
 }
 
 /// Collect `ids` (else the selection) as assets (one of them all with `single`), and select them
@@ -214,6 +285,17 @@ fn collect(app: &mut VectorcraftApp, ctx: &egui::Context, ids: Option<Vec<NodeId
     }
 }
 
+/// Does the export of 3D asset `asset` draw a texture for the graphics mapped onto its faces
+/// ([`vectorcraft_engine::cmd::fileio::draws_textures`])? Only objects whose 3D effects map graphics
+/// are built to find out.
+fn writes_textures(doc: &vectorcraft_doc::Document, asset: &ExportAsset) -> bool {
+    let maps = |e: &vectorcraft_doc::Effect| e.visible && !vectorcraft_render::effects::mapped_graphics(&e.params).is_empty();
+    let nodes: Vec<&Node> = asset.nodes.iter().filter_map(|id| doc.node(*id)).collect();
+    nodes.iter().any(|n| n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects())).any(maps))
+        && vectorcraft_render::effects::three_d_meshes_of_in(Some(doc), nodes.iter().copied())
+            .is_ok_and(|parts| vectorcraft_engine::cmd::fileio::draws_textures(doc, &parts))
+}
+
 /// Export assets `ids` (`files_each`: the files one asset makes) into a picked folder (without a
 /// folder picker: the last folder Export for Screens used, else the Desktop); the web downloads
 /// them, several as one zip.
@@ -224,12 +306,28 @@ fn export(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
 
 fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
     // 3D assets are written as mesh files (`assets.export3D`), the others as pictures.
+    let web = io::is_web(app);
     let Some(st) = app.session.active() else { return };
     let format = |id: &u64| st.doc.asset(*id).and_then(|a| a.format_3d.clone());
     let (three_d, ids): (Vec<u64>, Vec<u64>) = ids.into_iter().partition(|id| format(id).is_some());
-    // An OBJ is two files.
-    let mesh_files: usize = three_d.iter().map(|id| if format(id).as_deref() == Some("obj") { 2 } else { 1 }).sum();
-    let mut p = json!({ "assets": ids });
+    // An OBJ is two files, and an OBJ or a USDA whose graphics draw a texture writes it beside
+    // them. Only the web, which zips several files, needs the count.
+    let mesh_files: usize = three_d
+        .iter()
+        .map(|id| {
+            let format = format(id);
+            let textures = web && matches!(format.as_deref(), Some("obj" | "usda")) && st.doc.asset(*id).is_some_and(|a| writes_textures(&st.doc, a));
+            usize::from(format.as_deref() == Some("obj")) + 1 + usize::from(textures)
+        })
+        .sum();
+    // Create Sub-folders as the panel menu checks it: on by default, and remembered folders (per
+    // row, format or item) are used as Export for Screens uses them (a remembered `subfolders`
+    // false beside them would alone put every file in the folder itself).
+    let saved = &st.doc.export_settings;
+    let mut p = keep_subfolders(saved, json!({ "assets": ids }));
+    if let Some(f) = saved.get("folders").and_then(Value::as_str).filter(|f| !matches!(*f, "none" | "")) {
+        p["folders"] = json!(f);
+    }
     // Match the shared dialog's TIFF defaults, retaining saved choices and other formats.
     if let Some(st) = app.session.active()
         && screen_saved_rows(&st.doc.export_settings)
@@ -267,7 +365,7 @@ fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
             }
         };
         p["folder"] = json!(folder);
-        p["openLocation"] = json!(saved.get("openLocation").and_then(Value::as_bool).unwrap_or(true));
+        p["openLocation"] = json!(open_location(&saved));
     }
     let mut meshes = json!({ "assets": three_d });
     if io::is_web(app) {
@@ -287,6 +385,43 @@ fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
         && let Err(e) = io::export_files(app, "assets.export", p)
     {
         app.status(e);
+    }
+}
+
+/// Create Sub-folders for the remembered settings `saved`, as Export for Screens opens on it: off
+/// for remembered folders `none`, on for any other remembered folders (a folder per row, format or
+/// item); without them the remembered `subfolders`, else on for a document without settings or
+/// with a preset's rows.
+fn subfolders_on(saved: &serde_json::Map<String, Value>) -> bool {
+    match saved.get("folders").and_then(Value::as_str) {
+        // An export reads empty folders as none.
+        Some("none" | "") => false,
+        Some(_) => true,
+        None => saved.get("subfolders").and_then(Value::as_bool).unwrap_or_else(|| saved.is_empty() || screen_saved_rows(saved).1.is_some()),
+    }
+}
+
+/// `p` (params of `assets.settings.set` or `assets.export`) with `subfolders: true` when `saved`
+/// makes no Create Sub-folders choice and it is on by default: the export would otherwise write
+/// into the folder itself, and settings `p` adds would turn the default off.
+fn keep_subfolders(saved: &serde_json::Map<String, Value>, mut p: Value) -> Value {
+    if !saved.contains_key("folders") && !saved.contains_key("subfolders") && subfolders_on(saved) {
+        p["subfolders"] = json!(true);
+    }
+    p
+}
+
+/// Open Location after Export for the remembered settings `saved` (on until it is turned off).
+fn open_location(saved: &serde_json::Map<String, Value>) -> bool {
+    saved.get("openLocation").and_then(Value::as_bool).unwrap_or(true)
+}
+
+/// Open Export for Screens on the Assets tab with assets `ids` checked, showing the Format Settings
+/// of format `format`.
+fn format_settings(app: &mut VectorcraftApp, ids: &[u64], format: &str) {
+    open_export_for_screens_assets(app, Some(ids));
+    if let Some(d) = app.ui.dialog.as_mut() {
+        d.fields.insert("__settings".into(), json!(format));
     }
 }
 
@@ -328,7 +463,7 @@ fn settings(ui: &mut Ui, st: &DocState) -> (Option<Settings>, usize) {
         Some(Settings::Set(json!({ "preset": picked, "subfolders": true })))
     } else if picked != preset || formats.as_array() != Some(&rows) {
         // Rows edited, or Custom picked: the rows as they are, without the preset.
-        Some(Settings::Set(json!({ "formats": formats, "preset": "" })))
+        Some(Settings::Set(keep_subfolders(&st.doc.export_settings, json!({ "formats": formats, "preset": "" }))))
     } else {
         None
     };
@@ -432,12 +567,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         Some(Settings::Set(p)) => {
             run(app, "assets.settings.set", p);
         }
-        Some(Settings::Format(f)) => {
-            open_export_for_screens_assets(app, Some(&sel_or_all(&sel, &all)));
-            if let Some(d) = app.ui.dialog.as_mut() {
-                d.fields.insert("__settings".into(), json!(f));
-            }
-        }
+        Some(Settings::Format(f)) => format_settings(app, &sel_or_all(&sel, &all), &f),
         None => {}
     }
     if let Some(pick) = save_pick {
@@ -458,6 +588,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if export_clicked {
         export(app, sel_or_all(&sel, &all), files_each);
+    }
+    match ev.action {
+        Some(TileAction::Export(targets)) => export(app, targets, files_each),
+        Some(TileAction::Remove(targets)) => {
+            run(app, "assets.remove", json!({ "assets": targets }));
+            set_pstate(&ctx, SELECTED, Vec::<u64>::new());
+        }
+        Some(TileAction::SelectArtwork(ids)) => {
+            run(app, "select.set", json!({ "ids": ids }));
+        }
+        Some(TileAction::Collect(single)) => collect(app, &ctx, None, single),
+        None => {}
     }
 }
 
@@ -575,6 +717,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let doc = st.uid;
     let (has_art, sel) = (!st.selection.is_empty(), selected(&ctx, st));
     let all: Vec<u64> = st.doc.assets.iter().map(|a| a.id).collect();
+    let saved = &st.doc.export_settings;
+    let (subfolders, open_after) = (subfolders_on(saved), open_location(saved));
+    let settings_format = screen_settings_format(&screen_saved_rows(saved).0);
     if menu_item(ui, tl!("Add Selected Artwork as One Asset"), has_art, false) {
         collect(app, &ctx, None, true);
     }
@@ -582,10 +727,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         collect(app, &ctx, None, false);
     }
     if menu_item(ui, tl!("Export 3D Object"), has_art, false)
-        && let Some(r) = run(app, "assets.add3D", json!({}))
+        && let Err(e) = add_3d(app, &ctx, None)
     {
-        let ids: Vec<u64> = r["assets"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
-        set_pstate(&ctx, SELECTED, ids);
+        app.status(e);
     }
     ui.separator();
     if menu_item(ui, tl!("Select All Assets"), !all.is_empty(), false) {
@@ -598,6 +742,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     if menu_item(ui, tl!("Export for Screens…"), true, false) {
         open_export_for_screens_assets(app, Some(&sel_or_all(&sel, &all)));
+    }
+    if menu_item(ui, tl!("Format Settings…"), true, false) {
+        format_settings(app, &sel_or_all(&sel, &all), settings_format);
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Create Sub-folders"), true, subfolders) {
+        run(app, "assets.settings.set", json!({ "subfolders": !subfolders }));
+    }
+    // The web downloads the files: there is no location to open.
+    if !io::is_web(app) && menu_item(ui, tl!("Open Location after Export"), true, open_after) {
+        run(app, "assets.settings.set", json!({ "openLocation": !open_after }));
     }
     ui.separator();
     let (preset_doc, current): (u64, String) = pstate(&ctx, PRESET);

@@ -90,6 +90,7 @@ fn a_tab_dragged_along_the_strip_moves_its_document_and_the_current_one_stays() 
     assert_eq!(during.platform_output.cursor_icon, egui::CursorIcon::Grabbing, "the tab is held while it moves");
     assert_eq!(order(&app), ["Bravo", "Charlie", "Delta", "Alpha"]);
     assert_eq!(current(&app), "Delta", "a move is not a switch");
+    assert!(app.ui.floating.is_empty(), "a move along the strip floats no document");
     // The tabs are drawn in the new order.
     let xs: Vec<f32> = NAMES.iter().map(|n| tab(&mut app, &ctx, 1.0, n).x).collect();
     assert!(xs[1] < xs[2] && xs[2] < xs[3] && xs[3] < xs[0], "Bravo, Charlie, Delta, Alpha: {xs:?}");
@@ -160,8 +161,8 @@ fn views_follow_closes_and_moves_made_in_one_batch() {
     .unwrap();
     assert_eq!(order(&app), ["Delta", "Charlie"]);
     assert_eq!(zooms(&app), [4.0, 3.0], "Delta does not take the closed Alpha's view");
-    // Closing by index made the document in the closed one's place current (Charlie); it shows its own view.
-    assert_eq!((current(&app), app.view().map(|v| v.zoom)), ("Charlie".into(), Some(3.0)));
+    // Closing other documents by index leaves the current one (Delta) current; it shows its own view.
+    assert_eq!((current(&app), app.view().map(|v| v.zoom)), ("Delta".into(), Some(4.0)));
     // A document opened afterwards starts with a view of its own.
     app.run("file.new", json!({"width": 100, "height": 100, "name": "Echo"})).unwrap();
     app.sync_views();

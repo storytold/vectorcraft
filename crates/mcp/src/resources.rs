@@ -18,6 +18,20 @@ pub const DOC_JSON_URI: &str = "vectorcraft://document/json";
 
 /// The live command catalog, including enabled state.
 pub const COMMANDS_URI: &str = "vectorcraft://commands";
+/// The command API reference in Markdown (`engine.apiReference`).
+pub const REFERENCE_URI: &str = "vectorcraft://commands/reference";
+
+/// The media type of the JSON resources.
+pub const JSON: &str = "application/json";
+/// The media type of the command API reference.
+pub const MARKDOWN: &str = "text/markdown; charset=utf-8";
+
+/// What `resources/read` returns for a URI: the text and its media type.
+#[derive(Debug, PartialEq)]
+pub struct Contents {
+    pub mime: &'static str,
+    pub text: String,
+}
 
 /// Why a resource could not be read. The distinction matters: the server turns it into `-32002`
 /// (no such resource) or `-32602` (bad URI), and guessing from the message text would not hold.
@@ -83,7 +97,22 @@ pub fn list() -> Value {
         {"uri": DOC_URI, "name": "document", "title": "Active document (summary)", "description": "Layer tree, artboards, selection and history of the active document (document.inspect)", "mimeType": "application/json"},
         {"uri": DOC_JSON_URI, "name": "document-json", "title": "Active document (full model)", "description": "The complete document model as JSON (document.json)", "mimeType": "application/json"},
         {"uri": COMMANDS_URI, "name": "commands", "title": "Command catalog", "description": "Command ids, labels, parameter descriptions and current enabled state", "mimeType": "application/json"},
+        {"uri": REFERENCE_URI, "name": "command-reference", "title": "Command API reference", "description": "Markdown reference of the commands that have a parameter schema: types, ranges, units, defaults, API levels, what each writes and returns (engine.apiReference)", "mimeType": MARKDOWN},
     ]})
+}
+
+/// `resources/read`: the text behind a resource URI, the command API reference as Markdown and
+/// every other resource as indented JSON ([`read`]).
+pub fn read_contents(b: &mut dyn Backend, uri: &str) -> Result<Contents, ReadError> {
+    if uri == REFERENCE_URI {
+        let mut reply = exec(b, "engine.apiReference").map_err(ReadError::Backend)?;
+        return match reply.get_mut("markdown").map(Value::take) {
+            Some(Value::String(text)) => Ok(Contents { mime: MARKDOWN, text }),
+            _ => Err(ReadError::Backend("engine.apiReference returned no `markdown` text".into())),
+        };
+    }
+    let v = read(b, uri)?;
+    Ok(Contents { mime: JSON, text: serde_json::to_string_pretty(&v).unwrap_or_default() })
 }
 
 /// `resources/templates/list`.
@@ -246,7 +275,7 @@ mod tests {
     #[test]
     fn lists_are_well_formed() {
         let l = list();
-        assert_eq!(l["resources"].as_array().map(Vec::len), Some(3));
+        assert_eq!(l["resources"].as_array().map(Vec::len), Some(4));
         let t = templates();
         let items = t["resourceTemplates"].as_array().expect("templates");
         assert_eq!(items.len(), TEMPLATES.len());
@@ -254,6 +283,51 @@ mod tests {
             assert_eq!(entry["uriTemplate"], t.uri);
             assert!(t.uri.contains('{'), "{} has no variable", t.uri);
             assert!(t.description.len() > 20, "{} needs a description", t.name);
+        }
+    }
+
+    /// A backend that gives every call the same reply.
+    struct Fixed(Result<Value, String>);
+
+    impl Backend for Fixed {
+        fn call(&mut self, _: &str, _: Value) -> Result<Value, String> {
+            self.0.clone()
+        }
+        fn has_ui(&self) -> bool {
+            false
+        }
+        fn describe(&self) -> String {
+            "fixed".into()
+        }
+    }
+
+    /// The command reference is listed and read as Markdown, with the text `engine.apiReference`
+    /// returns, and with no document open; the other fixed resources still read as JSON.
+    #[test]
+    fn the_command_reference_reads_as_markdown() {
+        let listed = list();
+        let entry = listed["resources"].as_array().and_then(|r| r.iter().find(|r| r["uri"] == REFERENCE_URI)).expect("listed");
+        assert_eq!(entry["mimeType"], MARKDOWN);
+        assert_eq!(entry["name"], "command-reference");
+        let mut b = Box::new(crate::Headless::new());
+        let read = read_contents(b.as_mut(), REFERENCE_URI).unwrap();
+        assert_eq!(read.mime, MARKDOWN);
+        let direct = b.call("engine.execute", json!({"command": "engine.apiReference", "params": {}})).unwrap();
+        assert_eq!(read.text, direct["markdown"].as_str().unwrap());
+        assert!(read.text.starts_with("# VectorCraft command API reference\n"), "{}", read.text);
+        assert_eq!(read_contents(b.as_mut(), REFERENCE_URI).unwrap(), read);
+        let commands = read_contents(b.as_mut(), COMMANDS_URI).unwrap();
+        assert_eq!(commands.mime, JSON);
+        assert!(serde_json::from_str::<Value>(&commands.text).unwrap().is_array());
+        assert!(matches!(read_contents(b.as_mut(), "vectorcraft://commands/nope"), Err(ReadError::NotFound(_))));
+    }
+
+    /// A reply without the Markdown text, and an app that cannot be reached, are backend errors.
+    #[test]
+    fn a_bad_or_failed_reference_reply_is_a_backend_error() {
+        for reply in [Ok(json!({})), Ok(json!({"markdown": 5})), Ok(json!("text")), Err("the app is not running".to_string())] {
+            let mut b = Fixed(reply.clone());
+            assert!(matches!(read_contents(&mut b, REFERENCE_URI), Err(ReadError::Backend(_))), "{reply:?}");
         }
     }
 

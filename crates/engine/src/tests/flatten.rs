@@ -351,6 +351,31 @@ fn gradients_rasterize_and_flat_areas_stay_vector() {
 }
 
 #[test]
+fn a_long_rasterized_area_is_placed_whole() {
+    let _settings = settings_lock();
+    let mut s = session();
+    // 5569 pt long: more than the renderer's 32,768 pixels a side at the 64 Mpx limit's scale.
+    let g = rect(&mut s, 10.0, 10.0, 100.0, 5569.0, "#000000");
+    run(
+        &mut s,
+        "paint.setFill",
+        json!({"ids": [g], "gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}}),
+    );
+    run(&mut s, "transparency.set", json!({"ids": [g], "opacity": 40}));
+    let (ids, _, rasterized) = flatten(&mut s, json!({"ids": [g], "lineArtPpi": 1200, "gradientPpi": 1200}));
+    assert_eq!(rasterized, 1);
+    let mut placed = vec![];
+    node(&s, ids[0]).walk(&mut |c| {
+        if let NodeKind::Image(im) = &c.kind {
+            placed.push((im.height, im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)))));
+        }
+    });
+    let [(height, b)] = placed[..] else { panic!("one image: {placed:?}") };
+    assert!(height <= vectorcraft_render::MAX_RASTER_SIDE, "{height} pixels");
+    assert!(b.y0 <= 10.0 && b.y1 >= 5579.0, "the image covers the strip: {b:?}");
+}
+
+#[test]
 fn flatten_says_when_an_image_could_not_be_decoded() {
     let _settings = settings_lock();
     let mut s = session();
@@ -423,6 +448,54 @@ fn objects_without_transparency_stay_unless_outlined() {
             assert!(c.appearance.stroke().is_none_or(|st| st.paint.is_none()), "strokes are outlined");
         });
     }
+}
+
+/// A row of opaque rectangles 1.5 pt apart (closer than twice the antialiasing margin), with a
+/// see-through one touching each end: only the two next to a see-through one are flattened, and
+/// the document looks the same.
+#[test]
+fn opaque_art_that_touches_only_opaque_art_stays() {
+    let _settings = settings_lock();
+    let mut s = session();
+    let under = rect(&mut s, 0.0, 50.0, 10.0, 10.0, "#2060c0");
+    run(&mut s, "transparency.set", json!({"ids": [under], "opacity": 50}));
+    let row: Vec<u64> = (1..15).map(|i| rect(&mut s, 11.5 * f64::from(i), 50.0, 10.0, 10.0, "#e04010")).collect();
+    let over = rect(&mut s, 11.5 * 15.0, 50.0, 10.0, 10.0, "#20a040");
+    run(&mut s, "transparency.set", json!({"ids": [over], "opacity": 50, "blend": "Multiply"}));
+    let before = picture(&s);
+    run(&mut s, "select.all", json!({}));
+    let (ids, vector, rasterized) = flatten(&mut s, json!({}));
+    assert_eq!((vector, rasterized), (4, 0), "two groups of two regions each");
+    let (ends, kept) = (row[0], row.last().copied().unwrap());
+    assert!(!exists(&s, under) && !exists(&s, over) && !exists(&s, ends) && !exists(&s, kept));
+    assert!(row[1..row.len() - 1].iter().all(|id| exists(&s, *id) && ids.contains(id)), "the rest of the row stays");
+    assert_eq!(ids.len(), row.len() - 2 + 2);
+    let diff = changed(&before, &picture(&s));
+    assert!(diff == 0.0, "{:.2}% of the pixels changed", diff * 100.0);
+}
+
+/// Opaque art between a see-through object's group and the top of that group, painting over a
+/// member, joins the group (along a chain too), so it still paints over it; opaque art under the
+/// group stays.
+#[test]
+fn opaque_art_the_group_would_move_under_joins_it() {
+    let _settings = settings_lock();
+    let mut s = session();
+    let d = rect(&mut s, 40.0, 80.0, 25.0, 40.0, "#f0d000");
+    let a = rect(&mut s, 60.0, 50.0, 45.0, 40.0, "#e01010");
+    let b = rect(&mut s, 20.0, 20.0, 45.0, 35.0, "#10a010");
+    let c = rect(&mut s, 0.0, 0.0, 25.0, 25.0, "#1010e0");
+    let t = rect(&mut s, 100.0, 50.0, 40.0, 40.0, "#000000");
+    run(&mut s, "transparency.set", json!({"ids": [t], "opacity": 50}));
+    let before = picture(&s);
+    let (ids, ..) = flatten(&mut s, json!({"ids": [d, a, b, c, t]}));
+    assert!(exists(&s, d) && ids.contains(&d), "the art under the group stays");
+    assert!([a, b, c, t].iter().all(|id| !exists(&s, *id)), "the others are flattened together");
+    // Where B paints over A, and C over B, they still do.
+    for p in [Point::new(62.5, 52.5), Point::new(22.5, 22.5), Point::new(62.5, 85.5), Point::new(102.5, 70.5)] {
+        assert_eq!(pixel(&picture(&s), p), pixel(&before, p), "at {p:?}");
+    }
+    assert!(changed(&before, &picture(&s)) == 0.0);
 }
 
 #[test]

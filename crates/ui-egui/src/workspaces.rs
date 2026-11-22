@@ -24,11 +24,28 @@ pub struct Workspace {
     /// The Control bar is docked to the bottom of the window (built-in workspaces, and workspaces
     /// saved without this field: the top).
     pub control_bar_bottom: bool,
+    /// The Control bar floats at `control_bar_float_pos` (built-in workspaces, and workspaces saved
+    /// without this field: docked at the edge `control_bar_bottom` names).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub control_bar_floating: bool,
+    /// Where the Control bar floats, or last floated (built-in workspaces: none, the first position).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub control_bar_float_pos: Option<[f32; 2]>,
+    /// The groups of the Control bar's options its panel menu has off (built-in workspaces, and
+    /// workspaces saved without this field: none).
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty", deserialize_with = "crate::chrome::read_hidden_groups")]
+    pub control_bar_hidden_groups: std::collections::BTreeSet<String>,
     pub rulers: bool,
     pub toolbar: bool,
     pub toolbar_double: bool,
+    /// Compact main Tools spacing (built-in and older workspaces: regular).
+    pub toolbar_compact: bool,
     pub toolbar_advanced: bool,
     pub task_bar: bool,
+    /// The Contextual Task Bar's actions and chips its Bar Actions has off (built-in workspaces, and
+    /// workspaces saved without this field: none).
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty", deserialize_with = "crate::canvas::read_hidden_task_bar_actions")]
+    pub task_bar_hidden_actions: std::collections::BTreeSet<String>,
     pub dock: bool,
     pub dock_tab: DockTab,
     /// The dock's tabbed group is collapsed to icons (built-in workspaces: expanded).
@@ -83,7 +100,7 @@ pub const ESSENTIALS: &str = "Essentials";
 /// Touch workspace (Window → Workspace → Touch; Preferences › Devices › Enable Touch Workspace).
 pub const TOUCH: &str = "Touch";
 
-/// Built-in workspaces, in Illustrator's menu order (Essentials first).
+/// Built-in workspaces, in menu order (Essentials first).
 pub fn builtins() -> Vec<Workspace> {
     let base = Workspace::default();
     let w = |name: &str, f: &dyn Fn(&mut Workspace)| {
@@ -186,11 +203,16 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
         name: name.into(),
         control_bar: ui.control_bar,
         control_bar_bottom: ui.control_bar_bottom,
+        control_bar_floating: ui.control_bar_floating,
+        control_bar_float_pos: ui.control_bar_float_pos,
+        control_bar_hidden_groups: ui.control_bar_hidden_groups.clone(),
         rulers: ui.view.rulers,
         toolbar: ui.toolbar,
         toolbar_double: ui.toolbar_double,
+        toolbar_compact: ui.toolbar_compact,
         toolbar_advanced: ui.toolbar_advanced,
         task_bar: ui.task_bar,
+        task_bar_hidden_actions: ui.task_bar_hidden_actions.clone(),
         dock: ui.dock,
         dock_tab: ui.dock_tab,
         dock_collapsed: ui.dock_collapsed,
@@ -216,11 +238,21 @@ pub fn capture(ui: &UiState, name: &str) -> Workspace {
 pub fn apply(ui: &mut UiState, w: &Workspace) {
     ui.control_bar = w.control_bar;
     ui.control_bar_bottom = w.control_bar_bottom;
+    ui.control_bar_floating = w.control_bar_floating;
+    // A floating workspace floats the bar where it was saved (none: the first position); a docked
+    // one without a floating position keeps the one the bar last floated at.
+    if w.control_bar_floating || w.control_bar_float_pos.is_some() {
+        ui.control_bar_float_pos = w.control_bar_float_pos;
+        crate::state::sanitize_toolbar_pos(&mut ui.control_bar_float_pos);
+    }
+    ui.control_bar_hidden_groups = w.control_bar_hidden_groups.clone();
     ui.view.rulers = w.rulers;
     ui.toolbar = w.toolbar;
     ui.toolbar_double = w.toolbar_double;
+    ui.toolbar_compact = w.toolbar_compact;
     ui.toolbar_advanced = w.toolbar_advanced;
     ui.task_bar = w.task_bar;
+    ui.task_bar_hidden_actions = w.task_bar_hidden_actions.clone();
     ui.dock = w.dock;
     ui.tab_hid = None;
     ui.dock_tab = w.dock_tab;
@@ -411,27 +443,31 @@ pub fn popup(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     ui.set_min_width(210.0);
     ui.set_max_width(240.0);
     let mut clicked: Option<(&'static str, Value)> = None;
-    for it in menu_items() {
-        match it {
-            crate::menus::Item::Sep => {
-                ui.separator();
-            }
-            crate::menus::Item::Cmd(label, id, p) => {
-                // As the Window menu draws it: custom workspace names (and Reset <name>) as they are.
-                let label = crate::menus::display_label(app, id, label);
-                let text = match crate::menus::checked(app, id, &p) {
-                    Some(true) => format!("✓  {label}"),
-                    Some(false) => format!("     {label}"),
-                    None => format!("     {label}"),
-                };
-                if ui.add(egui::Button::new(text).min_size(egui::vec2(220.0, 0.0))).clicked() {
-                    clicked = Some((id, if p.is_null() { json!({}) } else { p }));
-                    ui.close();
+    // With many saved workspaces the menu is taller than a short window: it scrolls, as the
+    // Window menu does.
+    crate::widgets::menu_scroll(ui, |ui| {
+        for it in menu_items() {
+            match it {
+                crate::menus::Item::Sep => {
+                    ui.separator();
                 }
+                crate::menus::Item::Cmd(label, id, p) => {
+                    // As the Window menu draws it: custom workspace names (and Reset <name>) as they are.
+                    let label = crate::menus::display_label(app, id, label);
+                    let text = match crate::menus::checked(app, id, &p) {
+                        Some(true) => format!("✓  {label}"),
+                        Some(false) => format!("     {label}"),
+                        None => format!("     {label}"),
+                    };
+                    if ui.add(egui::Button::new(text).min_size(egui::vec2(220.0, 0.0))).clicked() {
+                        clicked = Some((id, if p.is_null() { json!({}) } else { p }));
+                        ui.close();
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         }
-    }
+    });
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, id, p);
     }
@@ -754,6 +790,42 @@ mod tests {
         }
     }
 
+    /// With 30 saved workspaces the app bar's workspace menu is taller than a 600 pt window: it
+    /// stops above the window's bottom edge and scrolls, and with room to spare it shows whole.
+    #[test]
+    fn the_workspace_menu_scrolls_inside_a_short_window() {
+        use crate::{Services, VectorcraftApp};
+        use vectorcraft_engine::Session;
+
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        for i in 0..30 {
+            save_as(&mut app.ui, &format!("Workspace {i:02}")).unwrap();
+        }
+        sync(&app.ui);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let id = egui::Id::unique("test-workspace-menu");
+        let mut rect = |height: f32| {
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
+            for _ in 0..3 {
+                let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+                let mut out = ctx.run_ui(input, |ui| {
+                    egui::Area::new(id).fixed_pos(egui::pos2(900.0, 30.0)).show(ui.ctx(), |ui| {
+                        egui::containers::menu::menu_style(ui.style_mut());
+                        popup(&mut app, ui);
+                    });
+                });
+                out.textures_delta.clear();
+            }
+            ctx.memory(|m| m.area_rect(id)).unwrap()
+        };
+        let short = rect(600.0);
+        assert!(short.bottom() <= 600.0, "the workspace menu ends at {} in a 600 pt window", short.bottom());
+        let tall = rect(3000.0);
+        assert!(tall.height() > short.height() + 100.0, "{} vs {}", tall.height(), short.height());
+        assert!(tall.bottom() < 3000.0);
+    }
+
     #[test]
     fn touch_workspace_preference_switches_and_restores() {
         use crate::{Services, VectorcraftApp};
@@ -805,5 +877,120 @@ mod tests {
         let old: Workspace = serde_json::from_value(old).unwrap();
         apply(&mut ui, &old);
         assert!(ui.control_bar && !ui.control_bar_bottom, "an older workspace docks the bar at the top");
+    }
+
+    /// A workspace keeps a floating Control bar and where it floats, through the preferences' JSON
+    /// too; switching to a docked workspace docks it and keeps that position for the next float.
+    /// Reset floats the bar where the workspace was saved floating. A workspace or preferences saved
+    /// before floating keep their top or bottom edge, and a position that is not a number is
+    /// dropped.
+    #[test]
+    fn saved_workspaces_restore_floating_control_bar_position() {
+        let mut ui = UiState { control_bar: true, control_bar_floating: true, control_bar_float_pos: Some([220.0, 140.0]), ..Default::default() };
+        save_as(&mut ui, "Floating").unwrap();
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert!(!ui.control_bar_floating && !ui.control_bar_bottom, "Essentials docks the bar at the top");
+        assert_eq!(ui.control_bar_float_pos, Some([220.0, 140.0]), "the last floating position is kept while docked");
+        switch(&mut ui, "Floating").unwrap();
+        assert!(ui.control_bar_floating, "the saved workspace floats the bar again");
+        assert_eq!(ui.control_bar_float_pos, Some([220.0, 140.0]));
+        let back: UiState = serde_json::from_value(serde_json::to_value(&ui).unwrap()).unwrap();
+        assert!(back.control_bar_floating && back.custom_workspaces[0].control_bar_floating, "both survive the preferences' JSON");
+        assert_eq!(back.custom_workspaces[0].control_bar_float_pos, Some([220.0, 140.0]));
+        // Saved before the bar floated: the edge it was docked to, top or bottom.
+        for bottom in [false, true] {
+            let old: Workspace = serde_json::from_value(json!({"name": "Old", "controlBar": true, "controlBarBottom": bottom})).unwrap();
+            apply(&mut ui, &old);
+            assert!(!ui.control_bar_floating && ui.control_bar_bottom == bottom, "an older workspace docks the bar at its edge, bottom: {bottom}");
+            let old: UiState = serde_json::from_value(json!({"control_bar": true, "control_bar_bottom": bottom})).unwrap();
+            assert!(!old.control_bar_floating && old.control_bar_bottom == bottom, "older preferences dock it at their edge, bottom: {bottom}");
+        }
+        // Saved floating at the first position: Reset after a move floats it there again.
+        let mut ui = UiState { control_bar: true, control_bar_floating: true, ..Default::default() };
+        save_as(&mut ui, "First").unwrap();
+        ui.control_bar_float_pos = Some([300.0, 90.0]);
+        reset(&mut ui);
+        assert!(ui.control_bar_floating, "Reset floats the bar");
+        assert_eq!(ui.control_bar_float_pos, None, "at the first position, as the workspace was saved");
+        let odd: UiState = serde_json::from_value(json!({"control_bar_floating": true, "control_bar_float_pos": [1e39, 5.0]})).unwrap();
+        assert_eq!(odd.sanitized().control_bar_float_pos, None, "a position out of range is dropped");
+    }
+
+    /// A workspace keeps the groups of Control bar options its panel menu has off: switching
+    /// brings each workspace's back, Reset turns a built-in workspace's on again, and they survive
+    /// the preferences' JSON. A workspace or preferences saved without them, or with groups the bar
+    /// does not have, show every group, or the ones they name that it has.
+    #[test]
+    fn saved_workspaces_restore_the_control_bar_groups() {
+        let hidden = |ids: &[&str]| ids.iter().map(|s| s.to_string()).collect::<std::collections::BTreeSet<String>>();
+        let mut ui = UiState { control_bar: true, control_bar_hidden_groups: hidden(&["opacity", "transform"]), ..Default::default() };
+        save_as(&mut ui, "Lean").unwrap();
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert!(ui.control_bar_hidden_groups.is_empty(), "Essentials shows every group");
+        ui.control_bar_hidden_groups = hidden(&["snapping"]);
+        switch(&mut ui, "Lean").unwrap();
+        assert_eq!(ui.control_bar_hidden_groups, hidden(&["opacity", "transform"]), "the saved workspace's groups");
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert_eq!(ui.control_bar_hidden_groups, hidden(&["snapping"]), "Essentials as it was left");
+        reset(&mut ui);
+        assert!(ui.control_bar_hidden_groups.is_empty(), "Reset Essentials shows every group again");
+        switch(&mut ui, "Lean").unwrap();
+        let json = serde_json::to_value(&ui).unwrap();
+        assert_eq!(json["custom_workspaces"][0]["controlBarHiddenGroups"], serde_json::json!(["opacity", "transform"]));
+        let back: UiState = serde_json::from_value(json).unwrap();
+        assert_eq!(back.control_bar_hidden_groups, hidden(&["opacity", "transform"]), "kept in the preferences");
+        assert_eq!(back.custom_workspaces[0].control_bar_hidden_groups, hidden(&["opacity", "transform"]), "kept with the workspace");
+        let mut old = serde_json::to_value(&back.custom_workspaces[0]).unwrap();
+        assert!(old.as_object_mut().unwrap().remove("controlBarHiddenGroups").is_some());
+        let old: Workspace = serde_json::from_value(old).unwrap();
+        apply(&mut ui, &old);
+        assert!(ui.control_bar_hidden_groups.is_empty(), "an older workspace shows every group");
+        let mut prefs = serde_json::to_value(&back).unwrap();
+        prefs["control_bar_hidden_groups"] = serde_json::json!(["opacity", "stroke", 3, "paragraph"]);
+        prefs["custom_workspaces"][0]["controlBarHiddenGroups"] = serde_json::json!("opacity");
+        let read: UiState = serde_json::from_value(prefs.clone()).unwrap();
+        assert_eq!(read.control_bar_hidden_groups, hidden(&["opacity", "paragraph"]), "groups the bar does not have are dropped");
+        assert!(read.custom_workspaces[0].control_bar_hidden_groups.is_empty(), "a value that is not a list shows every group");
+        prefs.as_object_mut().unwrap().remove("control_bar_hidden_groups");
+        let read: UiState = serde_json::from_value(prefs).unwrap();
+        assert!(read.control_bar_hidden_groups.is_empty(), "older preferences show every group");
+    }
+
+    /// A workspace keeps the Contextual Task Bar's actions its Bar Actions has off: switching
+    /// brings each workspace's back, Reset turns a built-in workspace's on again, and they survive
+    /// the preferences' JSON. A workspace saved without them, or with ids the bar does not have,
+    /// shows every action, or the ones it names that the bar has.
+    #[test]
+    fn saved_workspaces_restore_the_task_bar_actions() {
+        let hidden = |ids: &[&str]| ids.iter().map(|s| s.to_string()).collect::<std::collections::BTreeSet<String>>();
+        let mut ui = UiState { task_bar_hidden_actions: hidden(&["duplicate", "fill"]), ..Default::default() };
+        save_as(&mut ui, "Lean").unwrap();
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert!(ui.task_bar_hidden_actions.is_empty(), "Essentials shows every action");
+        ui.task_bar_hidden_actions = hidden(&["simplify"]);
+        switch(&mut ui, "Lean").unwrap();
+        assert_eq!(ui.task_bar_hidden_actions, hidden(&["duplicate", "fill"]), "the saved workspace's actions");
+        switch(&mut ui, ESSENTIALS).unwrap();
+        assert_eq!(ui.task_bar_hidden_actions, hidden(&["simplify"]), "Essentials as it was left");
+        reset(&mut ui);
+        assert!(ui.task_bar_hidden_actions.is_empty(), "Reset Essentials shows every action again");
+        switch(&mut ui, "Lean").unwrap();
+        let json = serde_json::to_value(&ui).unwrap();
+        assert_eq!(json["custom_workspaces"][0]["taskBarHiddenActions"], serde_json::json!(["duplicate", "fill"]));
+        let back: UiState = serde_json::from_value(json).unwrap();
+        assert_eq!(back.task_bar_hidden_actions, hidden(&["duplicate", "fill"]), "kept in the preferences");
+        assert_eq!(back.custom_workspaces[0].task_bar_hidden_actions, hidden(&["duplicate", "fill"]), "kept with the workspace");
+        let mut old = serde_json::to_value(&back.custom_workspaces[0]).unwrap();
+        assert!(old.as_object_mut().unwrap().remove("taskBarHiddenActions").is_some());
+        let old: Workspace = serde_json::from_value(old).unwrap();
+        apply(&mut ui, &old);
+        assert!(ui.task_bar_hidden_actions.is_empty(), "an older workspace shows every action");
+        let mut prefs = serde_json::to_value(&back).unwrap();
+        prefs["custom_workspaces"][0]["taskBarHiddenActions"] = serde_json::json!(["fill", "teleport", 3]);
+        let read: UiState = serde_json::from_value(prefs.clone()).unwrap();
+        assert_eq!(read.custom_workspaces[0].task_bar_hidden_actions, hidden(&["fill"]), "ids the bar does not have are dropped");
+        prefs["custom_workspaces"][0]["taskBarHiddenActions"] = serde_json::json!("fill");
+        let read: UiState = serde_json::from_value(prefs).unwrap();
+        assert!(read.custom_workspaces[0].task_bar_hidden_actions.is_empty(), "a value that is not a list shows every action");
     }
 }

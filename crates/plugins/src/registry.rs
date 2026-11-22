@@ -7,9 +7,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
-#[cfg(not(target_arch = "wasm32"))]
 use crate::Error;
-use crate::permissions::Grant;
+use crate::permissions::{Grant, GrantToken};
 use crate::storage::Storage;
 use crate::{Limits, Plugin, Result};
 
@@ -35,8 +34,11 @@ pub fn storage(id: &str) -> Option<Arc<dyn Storage>> {
     STORAGE.read().unwrap_or_else(|e| e.into_inner()).get(id).cloned()
 }
 
-/// Records what the user approved for a plug-in, replacing an earlier grant for its id.
-pub fn grant(g: Grant) {
+/// Records what the user approved for a plug-in, replacing an earlier grant for its id. Only a
+/// [`GrantToken`] is recorded, which the engine makes after an approval or when it loads its grants
+/// file.
+pub fn grant(token: GrantToken) {
+    let g = token.grant().clone();
     GRANTS.write().unwrap_or_else(|e| e.into_inner()).insert(g.id.clone(), g);
 }
 
@@ -63,20 +65,78 @@ pub fn approved(plugin: &Plugin) -> bool {
     !m.asks_permissions() || granted(&m.id).is_some_and(|g| g.covers(&m.id, plugin.hash(), &m.permissions()))
 }
 
-/// Installs `plugin`, replacing one with the same id.
-pub fn install(mut plugin: Plugin) -> Arc<Plugin> {
+/// Installs `plugin`, replacing one with the same id, when it is [`approved`]: a module that lists
+/// permissions no recorded grant gives this very module is refused ([`Error::NeedsApproval`]), and
+/// the plug-in installed under its id, the grants and the revision stay as they were.
+pub fn install(mut plugin: Plugin) -> Result<Arc<Plugin>> {
     // The revision moves while the write lock is held, so a cache that reads the new revision and
-    // then the plug-ins finds the new plug-in among them.
+    // then the plug-ins finds the new plug-in among them. The approval is checked while it is held
+    // too.
     let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
+    if !approved(&plugin) {
+        return Err(Error::NeedsApproval(crate::permissions::names(&plugin.manifest().permissions()).join(", ")));
+    }
     plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
     let p = Arc::new(plugin);
     plugins.insert(p.id().to_string(), p.clone());
-    p
+    Ok(p)
 }
 
-/// Loads `bytes` with the default limits and installs the plug-in.
+/// What [`install_checked`] does to the grant recorded for the plug-in's id.
+pub enum GrantUpdate {
+    /// Records this grant, replacing an earlier one for the id ([`grant`]).
+    Record(GrantToken),
+    /// Forgets the grant for the id ([`revoke`]).
+    Revoke,
+}
+
+/// Installs `plugin` and updates the grant for its id as one step. While it holds the plug-ins and
+/// then the grants, `check` is given the plug-in installed under the id and the grant recorded for
+/// it. When `check` returns an error, nothing changes and that error is returned. A plug-in that
+/// lists permissions the grant `update` records doesn't give this very module is refused the same
+/// way, with [`Error::NeedsApproval`] passed through `refused`. Otherwise `attach` runs, the grant
+/// is updated and the plug-in is installed, replacing one with the same id. `check` and `attach`
+/// must not call the other functions of this module, which wait for the locks held here.
+pub fn install_checked<E>(
+    mut plugin: Plugin,
+    update: GrantUpdate,
+    check: impl FnOnce(Option<&Plugin>, Option<&Grant>) -> std::result::Result<(), E>,
+    attach: impl FnOnce(),
+    refused: impl FnOnce(Error) -> E,
+) -> std::result::Result<Arc<Plugin>, E> {
+    // The same order as `install`, which reads the grants while it holds the plug-ins.
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
+    let mut grants = GRANTS.write().unwrap_or_else(|e| e.into_inner());
+    let id = plugin.id().to_string();
+    check(plugins.get(&id).map(|p| &**p), grants.get(&id))?;
+    let m = plugin.manifest();
+    let granted = match &update {
+        GrantUpdate::Record(token) => Some(token.grant()),
+        GrantUpdate::Revoke => None,
+    };
+    if m.asks_permissions() && !granted.is_some_and(|g| g.covers(&m.id, plugin.hash(), &m.permissions())) {
+        return Err(refused(Error::NeedsApproval(crate::permissions::names(&m.permissions()).join(", "))));
+    }
+    attach();
+    match update {
+        GrantUpdate::Record(token) => {
+            let g = token.grant().clone();
+            grants.insert(g.id.clone(), g);
+        }
+        GrantUpdate::Revoke => {
+            grants.remove(&id);
+        }
+    }
+    plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
+    let p = Arc::new(plugin);
+    plugins.insert(id, p.clone());
+    Ok(p)
+}
+
+/// Loads `bytes` with the default limits and installs the plug-in ([`install`]: one that lists
+/// permissions installs only when they were granted to this very module).
 pub fn install_bytes(bytes: &[u8]) -> Result<Arc<Plugin>> {
-    Ok(install(Plugin::load(bytes, Limits::default())?))
+    install(Plugin::load(bytes, Limits::default())?)
 }
 
 pub fn get(id: &str) -> Option<Arc<Plugin>> {
@@ -122,18 +182,73 @@ pub fn intern(s: &str) -> &'static str {
 /// and loads it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_file(path: &std::path::Path, limits: Limits) -> Result<Plugin> {
-    use std::io::Read;
-    let meta = std::fs::metadata(path).map_err(|e| Error::Io(format!("{}: {e}", path.display())))?;
-    if !meta.is_file() {
-        return Err(Error::Io(format!("{} is not a file", path.display())));
-    }
-    if meta.len() > limits.max_module_bytes as u64 {
-        return Err(Error::Module(format!("{} is {} bytes (limit {})", path.display(), meta.len(), limits.max_module_bytes)));
-    }
-    let f = std::fs::File::open(path).map_err(|e| Error::Io(format!("{}: {e}", path.display())))?;
-    let mut bytes = Vec::new();
-    f.take(limits.max_module_bytes as u64 + 1).read_to_end(&mut bytes).map_err(|e| Error::Io(format!("{}: {e}", path.display())))?;
+    let bytes = read_module(path, &limits, || {})?;
     Ok(Plugin::load(&bytes, limits)?.with_source(path.display().to_string()))
+}
+
+/// The bytes of the module file at `path`. A path that doesn't name a regular file is refused
+/// before it is opened, and so is one over the module limit. On Unix the file is opened without
+/// waiting, so a named pipe put in its place after that check doesn't hold the load until something
+/// writes to it; what was opened is checked again and refused the same way. `opening` runs between
+/// the first check and the open.
+#[cfg(not(target_arch = "wasm32"))]
+fn read_module(path: &std::path::Path, limits: &Limits, opening: impl FnOnce()) -> Result<Vec<u8>> {
+    use std::io::Read;
+    let io = |e: std::io::Error| Error::Io(format!("{}: {e}", path.display()));
+    let regular = |meta: std::fs::Metadata| {
+        if !meta.is_file() {
+            return Err(Error::Io(format!("{} is not a file", path.display())));
+        }
+        if meta.len() > limits.max_module_bytes as u64 {
+            return Err(Error::Module(format!("{} is {} bytes (limit {})", path.display(), meta.len(), limits.max_module_bytes)));
+        }
+        Ok(())
+    };
+    regular(std::fs::metadata(path).map_err(io)?)?;
+    opening();
+    let f = open_module(path).map_err(io)?;
+    regular(f.metadata().map_err(io)?)?;
+    let mut bytes = Vec::new();
+    f.take(limits.max_module_bytes as u64 + 1).read_to_end(&mut bytes).map_err(io)?;
+    Ok(bytes)
+}
+
+/// Opens the module file at `path` for reading. On Unix the open doesn't wait for a writer when
+/// the path names a named pipe, and doesn't make a terminal device the controlling terminal.
+#[cfg(not(target_arch = "wasm32"))]
+fn open_module(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut open = std::fs::OpenOptions::new();
+    open.read(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut open, (rustix::fs::OFlags::NONBLOCK | rustix::fs::OFlags::NOCTTY).bits() as i32);
+    open.open(path)
+}
+
+/// The most `.wasm` files one [`load_folder`] reads.
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_FOLDER_FILES: usize = 1000;
+
+/// The first [`MAX_FOLDER_FILES`] `*.wasm` paths directly in `dir` by file name, sorted, and how
+/// many more there are. Only that many paths are held while the folder is listed. An error while
+/// the folder is listed is returned, as one opening it is.
+#[cfg(not(target_arch = "wasm32"))]
+fn folder_files(dir: &std::path::Path) -> Result<(Vec<std::path::PathBuf>, usize)> {
+    let io = |e: std::io::Error| Error::Io(format!("{}: {e}", dir.display()));
+    let rd = std::fs::read_dir(dir).map_err(io)?;
+    let mut kept = std::collections::BinaryHeap::new();
+    let mut more = 0;
+    for entry in rd {
+        let p = entry.map_err(io)?.path();
+        if !p.extension().is_some_and(|x| x.eq_ignore_ascii_case("wasm")) {
+            continue;
+        }
+        kept.push(p);
+        if kept.len() > MAX_FOLDER_FILES {
+            kept.pop();
+            more += 1;
+        }
+    }
+    Ok((kept.into_sorted_vec(), more))
 }
 
 /// What [`load_folder`] reports for a plug-in the user disabled.
@@ -144,25 +259,30 @@ pub const DISABLED: &str = "disabled: turn it on again in Help › Safe Mode, fo
 pub struct FolderReport {
     /// Ids of the plug-ins installed.
     pub loaded: Vec<String>,
-    /// `(file, error)` for each `.wasm` that failed to load.
+    /// `(file, error)` for each `.wasm` that failed to load, including one that isn't a regular file.
     pub failed: Vec<(String, String)>,
+    /// How many `.wasm` files were not tried because the folder holds more than a load reads.
+    pub left_out: usize,
     /// The disabled items saved for the next launch changed: a plug-in disabled by its id alone was
     /// found in a file, which is now disabled too ([`crate::safe_mode::disable_file_of`]). The app
     /// saves the list again.
     pub disabled_changed: bool,
 }
 
-/// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order. A bad module is
-/// reported and skipped, the others still load; so is a heavy one ([`crate::Budget::Heavy`]),
-/// which installs only once the user agrees, and one that lists permissions the user has not
-/// granted this very module ([`approved`]).
+/// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order, up to the first
+/// 1,000 by file name; the report counts the files left out ([`FolderReport::left_out`]). Anything
+/// that isn't a regular file, such as a named pipe, is reported and skipped without waiting on it
+/// ([`load_file`]). A bad module is reported and skipped, the others still load; so is a heavy one
+/// ([`crate::Budget::Heavy`]), which installs only once the user agrees, and one that lists
+/// permissions the user has not granted this very module ([`approved`]).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_folder(dir: &std::path::Path) -> Result<FolderReport> {
     load_folder_where(dir, |_| Ok(()), approved)
 }
 
 /// [`load_folder`], loading only the files `allow` accepts, and of the plug-ins that list
-/// permissions only those `approve` accepts; the others are reported as failed with the reason. A plug-in the user disabled ([`crate::safe_mode::skipped`]) is reported and
+/// permissions only those `approve` accepts and a recorded grant covers ([`install`]); the others
+/// are reported as failed with the reason. A plug-in the user disabled ([`crate::safe_mode::skipped`]) is reported and
 /// skipped, by its file before it loads or by its id after (its file is then disabled too, so the
 /// next load skips it before it runs); the launch marker names each file while it loads
 /// ([`crate::safe_mode::loading`]). In Safe Mode nothing loads ([`Error::SafeMode`]). When the
@@ -176,12 +296,8 @@ pub fn load_folder_where(
 ) -> Result<FolderReport> {
     use crate::safe_mode::{self, Item};
     safe_mode::check()?;
-    let rd = std::fs::read_dir(dir).map_err(|e| Error::Io(format!("{}: {e}", dir.display())))?;
-    let mut files: Vec<std::path::PathBuf> =
-        rd.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("wasm"))).collect();
-    files.sort();
-    files.truncate(1000);
-    let mut report = FolderReport::default();
+    let (files, left_out) = folder_files(dir)?;
+    let mut report = FolderReport { left_out, ..FolderReport::default() };
     for f in files {
         if let Err(why) = allow(&f) {
             report.failed.push((f.display().to_string(), why));
@@ -206,12 +322,14 @@ pub fn load_folder_where(
             }
             Ok(p) if p.manifest().asks_permissions() && !approve(&p) => {
                 let asked = crate::permissions::names(&p.manifest().permissions()).join(", ");
-                report.failed.push((
-                    f.display().to_string(),
-                    format!("needs approval: it asks for {asked}, which the user grants when installing it on its own"),
-                ));
+                report.failed.push((f.display().to_string(), Error::NeedsApproval(asked).to_string()));
             }
-            Ok(p) => report.loaded.push(install(p).id().to_string()),
+            // `approve` only narrows what installs: `install` still refuses a module that no
+            // recorded grant covers.
+            Ok(p) => match install(p) {
+                Ok(p) => report.loaded.push(p.id().to_string()),
+                Err(e) => report.failed.push((f.display().to_string(), e.to_string())),
+            },
             Err(e) => report.failed.push((f.display().to_string(), e.to_string())),
         }
     }
@@ -231,6 +349,7 @@ mod tests {
     /// waiting for the set leaves the revision alone until it holds the set.
     #[test]
     fn an_install_changes_the_revision_only_while_it_holds_the_set() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let plugin = Plugin::load(include_bytes!("../tests/fixtures/desaturate.wasm"), Limits::default()).unwrap();
         let id = plugin.id().to_string();
         let held = PLUGINS.read().unwrap_or_else(|e| e.into_inner());
@@ -241,8 +360,262 @@ mod tests {
             revision() != before
         });
         drop(held);
-        installing.join().unwrap();
+        installing.join().unwrap().unwrap();
         assert!(!moved, "the revision changed while the install waited for the set");
         assert!(revision() > before && remove(&id));
+    }
+
+    /// A module of a filter `id` whose manifest lists `permissions` (a JSON list, or nothing), with
+    /// `marker` in its code so that two markers give two SHA-256s.
+    fn module(id: &str, permissions: Option<&str>, marker: i64) -> Vec<u8> {
+        let listed = permissions.map(|p| format!(r#","permissions":{p}"#)).unwrap_or_default();
+        let manifest = format!(r#"{{"id":"{id}","name":"T","kind":"filter"{listed}}}"#);
+        wat::parse_str(crate::wat::module(&manifest, &format!("(i64.const {marker}) (drop) (i64.const 0)"), "", 1)).unwrap()
+    }
+
+    fn grant_for(id: &str, bytes: &[u8], permissions: Vec<crate::permissions::Permission>) -> Grant {
+        Grant { id: id.into(), hash: crate::permissions::sha256_hex(bytes), permissions }
+    }
+
+    /// A module that lists permissions installs only once a recorded grant gives this very module
+    /// all of them: refused, nothing changes, neither the revision nor the plug-in under its id.
+    #[test]
+    fn install_bytes_refuses_unapproved_manifest_permissions() {
+        // The other tests that install or remove plug-ins hold it, so the revision moves only here.
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.registry.unapproved";
+        let plain = install_bytes(&module(id, None, 1)).unwrap();
+        let before = revision();
+        let e = install_bytes(&module(id, Some(r#"["doc.read"]"#), 2)).unwrap_err();
+        assert_eq!(e, Error::NeedsApproval("doc.read".into()));
+        assert_eq!(revision(), before, "nothing installed");
+        assert_eq!(get(id).map(|p| p.hash().to_string()), Some(plain.hash().to_string()), "the plug-in before it stays");
+        assert!(granted(id).is_none());
+        assert!(remove(id));
+    }
+
+    /// `install` itself and a folder load whose `approve` accepts everything refuse the module too.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn install_and_folder_callback_cannot_bypass_approval() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let id = "test.registry.bypass";
+        let plain = install_bytes(&module(id, Some("[]"), 3)).unwrap();
+        let asking = module(id, Some(r#"["doc.read","doc.write"]"#), 4);
+        let e = install(Plugin::load(&asking, Limits::default()).unwrap()).unwrap_err();
+        assert_eq!(e, Error::NeedsApproval("doc.read, doc.write".into()));
+        let dir = std::env::temp_dir().join(format!("vc-registry-bypass-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("asking.wasm"), &asking).unwrap();
+        let r = load_folder_where(&dir, |_| Ok(()), |_| true).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(r.loaded.is_empty(), "{r:?}");
+        assert_eq!(r.failed.len(), 1);
+        assert!(r.failed[0].1.starts_with("needs approval: it asks for doc.read, doc.write"), "{r:?}");
+        assert_eq!(get(id).map(|p| p.hash().to_string()), Some(plain.hash().to_string()), "the plug-in before it stays");
+        assert!(remove(id));
+    }
+
+    /// A recorded grant lets in only the module with its id and SHA-256 that lists nothing it
+    /// doesn't grant; a module whose manifest lists no permissions, or an empty list, needs none.
+    #[test]
+    fn matching_grant_allows_only_exact_bytes() {
+        use crate::permissions::Permission::{DocRead, DocWrite};
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.registry.exact";
+        let bytes = module(id, Some(r#"["doc.read","doc.write"]"#), 5);
+        let plugin = Plugin::load(&bytes, Limits::default()).unwrap();
+        assert_eq!(plugin.hash(), crate::permissions::sha256_hex(&bytes), "a grant's hash is the loaded module's");
+        let refused = |g: Grant, why: &str| {
+            let other = g.id.clone();
+            revoke(id);
+            grant(GrantToken::after_engine_approval(g));
+            assert!(matches!(install_bytes(&bytes), Err(Error::NeedsApproval(_))), "{why}");
+            assert!(get(id).is_none(), "{why}");
+            revoke(&other);
+        };
+        refused(grant_for(id, &module(id, Some(r#"["doc.read","doc.write"]"#), 6), vec![DocRead, DocWrite]), "other bytes");
+        refused(grant_for("test.registry.other", &bytes, vec![DocRead, DocWrite]), "another id");
+        refused(Grant { id: id.into(), hash: "not a hash".into(), permissions: vec![DocRead, DocWrite] }, "a malformed hash");
+        refused(
+            Grant { id: id.into(), hash: crate::permissions::sha256_hex(&bytes).to_uppercase(), permissions: vec![DocRead, DocWrite] },
+            "an upper-case hash",
+        );
+        refused(grant_for(id, &bytes, vec![DocRead]), "a missing permission");
+        grant(GrantToken::from_engine_grants_file(grant_for(id, &bytes, vec![DocRead, DocWrite])));
+        assert_eq!(install_bytes(&bytes).unwrap().hash(), plugin.hash());
+        assert!(remove(id) && revoke(id));
+        for listed in [None, Some("[]")] {
+            assert!(install_bytes(&module(id, listed, 7)).is_ok(), "{listed:?}");
+            assert!(granted(id).is_none() && remove(id), "{listed:?}");
+        }
+    }
+
+    /// `install_checked` gives `check` the plug-in and grant held for the id. When `check` refuses,
+    /// or the grant it would record doesn't approve the module, the plug-in, the grant and the
+    /// revision stay as they were and `attach` doesn't run; otherwise it records the grant (or
+    /// forgets it) and installs the module.
+    #[test]
+    fn install_checked_changes_nothing_when_refused() {
+        use crate::permissions::Permission::DocRead;
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.registry.checked";
+        let old = module(id, Some(r#"["doc.read"]"#), 8);
+        let new = module(id, Some(r#"["doc.read"]"#), 9);
+        grant(GrantToken::after_engine_approval(grant_for(id, &old, vec![DocRead])));
+        install_bytes(&old).unwrap();
+        let load = |bytes: &[u8]| Plugin::load(bytes, Limits::default()).unwrap();
+        let record = |bytes: &[u8]| GrantUpdate::Record(GrantToken::after_engine_approval(grant_for(id, bytes, vec![DocRead])));
+        let unchanged = |why: &str| {
+            assert_eq!(get(id).map(|p| p.hash().to_string()), Some(crate::permissions::sha256_hex(&old)), "{why}");
+            assert_eq!(granted(id), Some(grant_for(id, &old, vec![DocRead])), "{why}");
+        };
+        let attached = std::cell::Cell::new(false);
+        let before = revision();
+
+        let seen = std::cell::RefCell::new(None);
+        let e = install_checked(
+            load(&new),
+            record(&new),
+            |p, g| {
+                *seen.borrow_mut() = Some((p.map(|p| p.hash().to_string()), g.cloned()));
+                Err("refused")
+            },
+            || attached.set(true),
+            |_| "not approved",
+        )
+        .unwrap_err();
+        assert_eq!(e, "refused");
+        assert_eq!(seen.take(), Some((Some(crate::permissions::sha256_hex(&old)), Some(grant_for(id, &old, vec![DocRead])))));
+        unchanged("check refused");
+
+        let same = std::convert::identity::<Error>;
+        let e = install_checked(load(&new), record(&old), |_, _| Ok(()), || attached.set(true), same).unwrap_err();
+        assert_eq!(e, Error::NeedsApproval("doc.read".into()));
+        unchanged("a grant for other bytes");
+        let e = install_checked(load(&new), GrantUpdate::Revoke, |_, _| Ok(()), || attached.set(true), same).unwrap_err();
+        assert_eq!(e, Error::NeedsApproval("doc.read".into()));
+        unchanged("no grant");
+        assert!(!attached.get() && revision() == before, "nothing ran or moved");
+
+        let p = install_checked(load(&new), record(&new), |_, _| Ok(()), || attached.set(true), same).unwrap();
+        assert!(attached.get() && revision() > before);
+        assert_eq!(get(id).map(|p| p.hash().to_string()), Some(p.hash().to_string()));
+        assert_eq!(granted(id), Some(grant_for(id, &new, vec![DocRead])));
+        let plain = module(id, Some("[]"), 10);
+        install_checked(load(&plain), GrantUpdate::Revoke, |_, _| Ok(()), || {}, same).unwrap();
+        assert!(granted(id).is_none(), "a module without permissions forgets the grant");
+        assert!(remove(id));
+    }
+
+    /// An empty folder for one test, with anything an earlier run left there removed.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("vc-registry-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Makes a named pipe at `path`.
+    #[cfg(unix)]
+    fn make_pipe(path: &std::path::Path) {
+        assert!(std::process::Command::new("mkfifo").arg(path).status().unwrap().success(), "mkfifo {}", path.display());
+    }
+
+    /// Limits that let a test go past the module size with a few bytes.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn small_limits() -> Limits {
+        Limits { max_module_bytes: 16, ..Limits::default() }
+    }
+
+    /// A module file is opened so that a named pipe in its place doesn't make the open wait for a
+    /// writer. The test holds the pipe open for reading and writing itself, so the open returns
+    /// either way.
+    #[cfg(unix)]
+    #[test]
+    fn a_module_file_is_opened_without_waiting_for_a_writer() {
+        let dir = test_dir("open");
+        let pipe = dir.join("x.wasm");
+        make_pipe(&pipe);
+        let held = std::fs::OpenOptions::new().read(true).write(true).open(&pipe).unwrap();
+        let opened = open_module(&pipe).unwrap();
+        let flags = rustix::fs::fcntl_getfl(&opened).unwrap();
+        drop((opened, held));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(flags.contains(rustix::fs::OFlags::NONBLOCK), "the open would wait for a writer: {flags:?}");
+    }
+
+    /// A `.wasm` that a named pipe replaces after it was checked is refused as not a file, even
+    /// when the pipe holds more bytes than the module limit allows.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_replaced_by_a_pipe_is_refused() {
+        use std::io::Write;
+        let dir = test_dir("pipe");
+        let path = dir.join("x.wasm");
+        let pipe = dir.join("pipe");
+        std::fs::write(&path, b"\0asm").unwrap();
+        make_pipe(&pipe);
+        let mut held = std::fs::OpenOptions::new().read(true).write(true).open(&pipe).unwrap();
+        held.write_all(&[0; 32]).unwrap();
+        let read = read_module(&path, &small_limits(), || std::fs::rename(&pipe, &path).unwrap());
+        drop(held);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(matches!(&read, Err(Error::Io(e)) if e.ends_with("is not a file")), "{read:?}");
+    }
+
+    /// A `.wasm` that grows past the module limit after it was checked is refused by its size.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_file_that_grows_after_the_check_is_refused() {
+        let dir = test_dir("grow");
+        let path = dir.join("x.wasm");
+        std::fs::write(&path, b"\0asm").unwrap();
+        let read = read_module(&path, &small_limits(), || std::fs::write(&path, [0; 32]).unwrap());
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(matches!(&read, Err(Error::Module(e)) if e.contains("limit 16")), "{read:?}");
+    }
+
+    /// A folder load reports a subfolder, a named pipe and a link to a named pipe with `.wasm`
+    /// names as not files, and goes on.
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_reports_entries_that_are_not_files() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("special");
+        std::fs::create_dir(dir.join("a.wasm")).unwrap();
+        make_pipe(&dir.join("b.wasm"));
+        std::os::unix::fs::symlink(dir.join("b.wasm"), dir.join("c.wasm")).unwrap();
+        let r = load_folder_where(&dir, |_| Ok(()), |_| false);
+        std::fs::remove_dir_all(&dir).unwrap();
+        let r = r.unwrap();
+        let failed: Vec<(String, bool)> = r.failed.iter().map(|(f, e)| (f.clone(), e.ends_with("is not a file"))).collect();
+        let expected: Vec<(String, bool)> = ["a", "b", "c"].iter().map(|n| (dir.join(format!("{n}.wasm")).display().to_string(), true)).collect();
+        assert_eq!(failed, expected, "{r:?}");
+        assert!(r.loaded.is_empty() && r.left_out == 0, "{r:?}");
+    }
+
+    /// A folder with more `.wasm` files than a load reads tries the first ones by file name and
+    /// counts the files it left out.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_folder_over_the_file_limit_reports_the_files_left_out() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("limit");
+        // Written last first, so the listing's order is not the file-name order.
+        for i in (0..MAX_FOLDER_FILES + 2).rev() {
+            std::fs::write(dir.join(format!("{i:05}.wasm")), b"").unwrap();
+        }
+        let r = load_folder_where(&dir, |_| Ok(()), |_| false).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(r.loaded.is_empty(), "{r:?}");
+        assert_eq!(r.left_out, 2, "{r:?}");
+        let tried: Vec<String> = r.failed.iter().map(|(f, _)| f.clone()).collect();
+        let first: Vec<String> = (0..MAX_FOLDER_FILES).map(|i| dir.join(format!("{i:05}.wasm")).display().to_string()).collect();
+        assert_eq!(tried, first, "the first files by name, in that order");
     }
 }
