@@ -453,7 +453,11 @@ impl Tool for TransformTool {
                     }
                     self.drop_axis();
                     let copy = ev.mods.alt;
-                    let (m, _, _) = self.solve(d.angle_for(copy, ev.backquote), first, SolveDrag { start: first, p: d.pick, moved: d.pick - first, shift: false, bounds: d.bounds });
+                    let (m, _, _) = self.solve(
+                        d.angle_for(copy, ev.backquote),
+                        first,
+                        SolveDrag { start: first, p: d.pick, moved: d.pick - first, shift: false, bounds: d.bounds },
+                    );
                     vec![Action::Begin(self.kind.label().into()), preview(m, copy, ev.backquote), Action::Commit]
                 } else {
                     // A click sets the reference point; with Alt, it opens the dialog too. With the
