@@ -304,8 +304,8 @@ impl VectorcraftApp {
                 }
             };
         // A clipboard with no text can't show a later copy of a picture, or tell an empty clipboard
-        // from one that couldn't be read.
-        let trackable = held.is_some();
+        // from one that couldn't be read: unless it held text the write emptied, and it reads.
+        let trackable = held.is_some() || (before_write.is_some() && cb.read(&[TEXT]).is_ok());
         self.clipboard_publishing.unwritten = text.filter(|_| current && left_by_write && trackable).map(|text| (held, text));
         Err(e.to_string())
     }
