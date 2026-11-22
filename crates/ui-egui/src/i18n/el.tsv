@@ -2611,6 +2611,7 @@ axis	Both	Και τα δύο
 	Run Script	Εκτέλεση σεναρίου
 	Stop Script	Διακοπή σεναρίου
 	Show External Script Warning	Εμφάνιση προειδοποίησης για εξωτερικά σενάρια
+	Run Startup Scripts	Εκτέλεση σεναρίων εκκίνησης
 	A Script Is Running	Εκτελείται ένα σενάριο
 	Script Alert	Ειδοποίηση σεναρίου
 	Script File Access	Πρόσβαση σεναρίου σε αρχεία
@@ -4128,6 +4129,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Τα εργαλεία σχεδίασης εμφανίζουν δείκτη σταυρονήματος αντί για το εικονίδιό τους· το Caps Lock κάνει το ίδιο όσο είναι ενεργό.
 	Shows a tip when the pointer rests on a button or field that has one.	Εμφανίζει μια συμβουλή όταν ο δείκτης σταματά πάνω σε κουμπί ή πεδίο που έχει.
 	Shows a warning before a script you choose runs.	Εμφανίζει μια προειδοποίηση πριν εκτελεστεί ένα σενάριο που επιλέγετε.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Εκτελεί τα σενάρια του φακέλου Startup Scripts κατά την εκκίνηση του VectorCraft και πριν από κάθε σενάριο από Αρχείο › Δέσμες ενεργειών· όχι σε ασφαλή λειτουργία.
 	Smooths the edges of artwork on the canvas.	Εξομαλύνει τα άκρα του γραφικού στον καμβά.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Τα Επιλογή › Ίδιο › Χρώμα γεμίσματος, Χρώμα περιγράμματος και Γέμισμα και περίγραμμα βρίσκουν μόνο την ίδια απόχρωση ενός καθολικού ή σημειακού δείγματος, όχι οποιαδήποτε απόχρωσή του.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Εμφανίζει την αρχική οθόνη όταν δεν είναι ανοιχτό κανένα έγγραφο· όταν είναι ανενεργό, το παράθυρο μένει κενό μέχρι να κάνετε κλικ στην Αρχική οθόνη.

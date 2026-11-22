@@ -6502,6 +6502,7 @@ font-technology	Variable	ცვლადი
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	სახატავი ხელსაწყოები ხატულის ნაცვლად ჯვრისებრ მაჩვენებელს აჩვენებენ; Caps Lock იგივეს აკეთებს, სანამ ჩართულია.
 	Shows a tip when the pointer rests on a button or field that has one.	აჩვენებს მინიშნებას, როცა მაჩვენებელი ჩერდება ღილაკზე ან ველზე, რომელსაც ის აქვს.
 	Shows a warning before a script you choose runs.	აჩვენებს გაფრთხილებას თქვენ მიერ არჩეული სკრიპტის გაშვებამდე.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	უშვებს Startup Scripts საქაღალდის სკრიპტებს VectorCraft-ის გაშვებისას და ფაილი › სკრიპტები მენიუს ყოველი სკრიპტის წინ; უსაფრთხო რეჟიმში არა.
 	Smooths the edges of artwork on the canvas.	ტილოზე ნახატის კიდეებს აგლუვებს.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	მონიშვნა › იგივე › შევსების ფერი, კონტურის ფერი და შევსება და კონტური პოულობს გლობალური ან სპოტ-ფერის ნიმუშის მხოლოდ იმავე ტონირებას და არა მის ნებისმიერ ტონირებას.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	აჩვენებს საწყის ეკრანს, როცა არცერთი დოკუმენტი არ არის გახსნილი; გამორთვისას ფანჯარა ცარიელი რჩება, „საწყის ეკრანზე“ დაწკაპუნებამდე.
@@ -8440,6 +8441,7 @@ imageTrace	Outline	კონტური
 	List Installed Scripts	დაინსტალირებული სკრიპტების სია
 	Stop Script	სკრიპტის შეჩერება
 	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
+	Run Startup Scripts	გაშვების სკრიპტების შესრულება
 	A Script Is Running	სკრიპტი მუშაობს
 	Script Alert	სკრიპტის შეტყობინება
 	Script File Access	სკრიპტის წვდომა ფაილებზე

@@ -3,7 +3,7 @@
 //! shows it with a Stop button; a run that has added a great deal, or that opened a dialog with
 //! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
 use crate::dialogs::script_run;
@@ -12,6 +12,10 @@ use crate::state::Dialog;
 /// Advances the running script by one slice, or asks what its growth needs asked.
 pub fn poll(app: &mut VectorcraftApp) {
     script_run::drain(app);
+    // Each run `script.startup.run` queued that could not start.
+    for (name, error) in app.session.take_startup_failures() {
+        app.status(format!("{name}: {error}"));
+    }
     if !app.session.script_running() {
         return;
     }
@@ -75,6 +79,26 @@ fn ask(app: &mut VectorcraftApp) -> bool {
         return true;
     }
     false
+}
+
+/// Runs the script of `params` (`script.run`'s) that the person chose from File › Scripts, after
+/// the startup scripts when General › Run Startup Scripts is on (`script.startup.run`).
+pub(crate) fn run_chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
+    if app.session.startup_skip().is_some() {
+        return app.run("script.run", params);
+    }
+    app.run("script.startup.run", json!({"reason": "menu", "then": params}))
+}
+
+/// When the app has started, out of Safe Mode: the startup scripts run when General › Run Startup
+/// Scripts is on (`script.startup.run`). A failure to start them shows in the status bar.
+pub fn run_at_launch(app: &mut VectorcraftApp) {
+    if app.session.startup_skip().is_some() {
+        return;
+    }
+    if let Err(e) = app.run("script.startup.run", json!({"reason": "launch"})) {
+        app.status(e);
+    }
 }
 
 /// Shows why a run ended without its changes. A stopped run that wrote no file says only that it

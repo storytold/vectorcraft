@@ -5115,6 +5115,7 @@ font-technology	Variable	Variabel
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Tekengereedschappen tonen een kruisdraadaanwijzer in plaats van hun pictogram; Caps Lock doet hetzelfde zolang die aan staat.
 	Shows a tip when the pointer rests on a button or field that has one.	Toont een tip wanneer de aanwijzer stilstaat op een knop of veld dat er een heeft.
 	Shows a warning before a script you choose runs.	Toont een waarschuwing voordat een script dat u kiest wordt uitgevoerd.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Voert de scripts in de map Startup Scripts uit wanneer VectorCraft start en vóór elk script uit Bestand › Scripts; niet in de veilige modus.
 	Smooths the edges of artwork on the canvas.	Maakt de randen van illustraties op het canvas vloeiend.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selecteren › Zelfde › Vulkleur, Contourkleur en Vulling en contour vinden alleen dezelfde tint van een globaal of steunkleurstaal, niet elke tint ervan.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Toont het startscherm wanneer er geen document open is; uitgeschakeld blijft het venster leeg totdat u op Home klikt.
@@ -5518,6 +5519,7 @@ imageTrace	Outline	Contour
 	Run Script	Script uitvoeren
 	Stop Script	Script stoppen
 	Show External Script Warning	Waarschuwing voor externe scripts tonen
+	Run Startup Scripts	Opstartscripts uitvoeren
 	A Script Is Running	Er wordt een script uitgevoerd
 	Script Alert	Scriptmelding
 	Script File Access	Bestandstoegang van script

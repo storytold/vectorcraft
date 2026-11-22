@@ -3366,6 +3366,7 @@ arrowhead	Feather	પીંછું
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	ડ્રોઇંગ ટૂલ્સ તેમના આઇકનને બદલે ક્રોસહેર પોઇન્ટર બતાવે છે; Caps Lock ચાલુ હોય ત્યારે પણ આવું જ થાય છે.
 	Shows a tip when the pointer rests on a button or field that has one.	ટિપ ધરાવતા બટન કે ફીલ્ડ પર પોઇન્ટર અટકે ત્યારે ટિપ બતાવે છે.
 	Shows a warning before a script you choose runs.	તમે પસંદ કરેલી સ્ક્રિપ્ટ ચાલે તે પહેલાં ચેતવણી બતાવે છે.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	VectorCraft શરૂ થાય ત્યારે અને ફાઇલ › સ્ક્રિપ્ટ્સમાંથી દરેક સ્ક્રિપ્ટ પહેલાં Startup Scripts ફોલ્ડરની સ્ક્રિપ્ટ્સ ચલાવે છે; સેફ મોડમાં નહીં.
 	Smooths the edges of artwork on the canvas.	કેનવાસ પરના આર્ટવર્કની કિનારીઓ સુંવાળી કરે છે.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	પસંદ કરો › સમાન › ભરવાનો રંગ, સ્ટ્રોક રંગ અને ભરો અને સ્ટ્રોક ફક્ત ગ્લોબલ કે સ્પોટ સ્વૉચના એ જ ટિન્ટ સાથે મેળ ખાય છે, તેના કોઈપણ ટિન્ટ સાથે નહીં.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	કોઈ દસ્તાવેજ ખુલ્લો ન હોય ત્યારે હોમ સ્ક્રીન બતાવે છે; બંધ હોય ત્યારે તમે હોમ પર ક્લિક ન કરો ત્યાં સુધી વિન્ડો ખાલી રહે છે.
@@ -3979,6 +3980,7 @@ arrowhead	Feather	પીંછું
 	Show East Asian Options	પૂર્વ એશિયન વિકલ્પો બતાવો
 	Show Edges	કિનારીઓ બતાવો
 	Show External Script Warning	બાહ્ય સ્ક્રિપ્ટ ચેતવણી બતાવો
+	Run Startup Scripts	સ્ટાર્ટઅપ સ્ક્રિપ્ટ્સ ચલાવો
 	Show Find Field	શોધ ફીલ્ડ બતાવો
 	Show Font Height Options	ફોન્ટ ઊંચાઈ વિકલ્પો બતાવો
 	Show Font Names in English	ફોન્ટ નામો અંગ્રેજીમાં બતાવો

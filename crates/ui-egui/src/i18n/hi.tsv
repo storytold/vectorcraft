@@ -4694,6 +4694,7 @@ arrowhead	Feather	पंख
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	ड्रॉइंग टूल अपने आइकन की जगह क्रॉसहेयर पॉइंटर दिखाते हैं; Caps Lock चालू रहने पर भी यही होता है।
 	Shows a tip when the pointer rests on a button or field that has one.	जब पॉइंटर टिप वाले किसी बटन या फ़ील्ड पर रुकता है, तब टिप दिखाता है।
 	Shows a warning before a script you choose runs.	आपकी चुनी गई स्क्रिप्ट चलने से पहले चेतावनी दिखाता है।
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	VectorCraft शुरू होने पर और फ़ाइल › स्क्रिप्ट्स की हर स्क्रिप्ट से पहले Startup Scripts फ़ोल्डर की स्क्रिप्ट चलाता है; सुरक्षित मोड में नहीं।
 	Smooths the edges of artwork on the canvas.	कैनवास पर आर्टवर्क के किनारों को चिकना करता है।
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	सिलेक्ट › समान › फ़िल रंग, स्ट्रोक रंग और फ़िल व स्ट्रोक केवल ग्लोबल या स्पॉट स्वॉच के उसी टिंट से मेल खाते हैं, उसके किसी भी टिंट से नहीं।
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	कोई डॉक्यूमेंट खुला न होने पर होम स्क्रीन दिखाता है; बंद होने पर विंडो तब तक खाली रहती है जब तक आप होम पर क्लिक नहीं करते।
@@ -7560,6 +7561,7 @@ arrowhead	Feather	पंख
 	Run Script	स्क्रिप्ट चलाएँ
 	Stop Script	स्क्रिप्ट रोकें
 	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
+	Run Startup Scripts	स्टार्टअप स्क्रिप्ट चलाएँ
 	A Script Is Running	एक स्क्रिप्ट चल रही है
 	Script Alert	स्क्रिप्ट सूचना
 	Script File Access	स्क्रिप्ट की फ़ाइल पहुँच

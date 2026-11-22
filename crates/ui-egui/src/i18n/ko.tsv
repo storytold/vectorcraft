@@ -3317,6 +3317,7 @@ mark-style	Japanese	일본식
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	그리기 도구의 포인터를 아이콘 대신 십자선으로 표시합니다. Caps Lock이 켜져 있는 동안에도 같습니다.
 	Shows a tip when the pointer rests on a button or field that has one.	도움말이 있는 버튼이나 필드에 포인터를 올려 두면 도움말을 표시합니다.
 	Shows a warning before a script you choose runs.	선택한 스크립트를 실행하기 전에 경고를 표시합니다.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	VectorCraft가 시작될 때와 파일 › 스크립트의 각 스크립트 전에 Startup Scripts 폴더의 스크립트를 실행합니다. 안전 모드에서는 실행하지 않습니다.
 	Smooths the edges of artwork on the canvas.	캔버스에 있는 아트웍의 가장자리를 매끄럽게 표시합니다.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	선택 › 동일 › 칠 색상, 선 색상, 칠 및 선은 전역 또는 별색 견본의 같은 색조만 찾고, 다른 색조는 찾지 않습니다.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	열린 문서가 없을 때 홈 화면을 표시합니다. 끄면 홈을 클릭할 때까지 창이 비어 있습니다.
@@ -5700,6 +5701,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 	Run Script	스크립트 실행
 	Stop Script	스크립트 중지
 	Show External Script Warning	외부 스크립트 경고 표시
+	Run Startup Scripts	시작 스크립트 실행
 	A Script Is Running	스크립트 실행 중
 	Script Alert	스크립트 알림
 	Script File Access	스크립트 파일 접근

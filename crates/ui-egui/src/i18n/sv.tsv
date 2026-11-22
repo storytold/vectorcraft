@@ -3231,6 +3231,7 @@ digits	Malayalam	Malayalam
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Ritverktyg visar en hårkorspekare i stället för sin ikon; Caps Lock gör samma sak medan den är på.
 	Shows a tip when the pointer rests on a button or field that has one.	Visar ett tips när pekaren vilar på en knapp eller ett fält som har ett.
 	Shows a warning before a script you choose runs.	Visar en varning innan ett skript som du väljer körs.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Kör skripten i mappen Startup Scripts när VectorCraft startar och före varje skript från Fil › Skript; inte i felsäkert läge.
 	Smooths the edges of artwork on the canvas.	Jämnar ut kanterna på grafiken på arbetsytan.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Markera › Samma › Fyllnadsfärg, Konturfärg och Fyllning och kontur hittar bara samma nyans av ett globalt färgprov eller en dekorfärg, inte vilken nyans som helst av det.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Visar startskärmen när inget dokument är öppet; när det är av förblir fönstret tomt tills du klickar på Start.
@@ -4783,6 +4784,7 @@ axis	Both	Båda
 	Run Script	Kör skript
 	Stop Script	Stoppa skript
 	Show External Script Warning	Visa varning för externa skript
+	Run Startup Scripts	Kör startskript
 	A Script Is Running	Ett skript körs
 	Script Alert	Skriptmeddelande
 	Script File Access	Skriptets filåtkomst

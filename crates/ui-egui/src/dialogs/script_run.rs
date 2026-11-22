@@ -4,7 +4,8 @@
 //!
 //! `ui.runScript {path? | source?, name?}` shows the warning for that script; without either it
 //! asks for a `.js` or `.jsx` file (the web opens the browser's file picker). With Preferences ›
-//! General › Show External Script Warning off, the chosen script runs at once. Warning fields:
+//! General › Show External Script Warning off, the chosen script runs at once. With General › Run
+//! Startup Scripts on, the startup scripts run first (`script.startup.run`). Warning fields:
 //! `name`, `script` (`script.run`'s params) and `dontShow` (true: turn the warning off).
 //!
 //! A script's dialog (kind `scriptDialog`) has the fields `kind` (alert, confirm or prompt),
@@ -148,7 +149,7 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         return Err("Choose a .js or .jsx script".into());
     }
     if !app.session.prefs.show_external_script_warning {
-        return app.run("script.run", params);
+        return crate::script_runs::run_chosen(app, params);
     }
     let name = params.get("name").and_then(Value::as_str).or(path).map_or_else(|| "script".to_string(), vectorcraft_engine::cmd::fileio::file_name);
     app.ui.dialog = Some(Dialog::new(KIND, json!({"name": name, "script": params, "dontShow": false})));
@@ -174,7 +175,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     let script = d.fields.get("script").cloned().unwrap_or(Value::Null);
     app.ui.dialog = None;
-    app.run("script.run", script)
+    crate::script_runs::run_chosen(app, script)
 }
 
 fn growth_confirm(app: &mut VectorcraftApp, _: &Dialog) -> Result<Value, String> {

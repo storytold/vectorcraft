@@ -4801,6 +4801,7 @@ font-technology	Variable	Variabilní
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Kreslicí nástroje zobrazí místo své ikony nitkový kříž; Caps Lock udělá totéž, dokud je zapnutý.
 	Shows a tip when the pointer rests on a button or field that has one.	Zobrazí tip, když ukazatel spočine na tlačítku nebo poli, které ho má.
 	Shows a warning before a script you choose runs.	Zobrazí upozornění před spuštěním skriptu, který zvolíte.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Spouští skripty ze složky Startup Scripts při spuštění aplikace VectorCraft a před každým skriptem z nabídky Soubor › Skripty; ne v nouzovém režimu.
 	Smooths the edges of artwork on the canvas.	Vyhladí okraje kresby na plátně.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Výběr › Stejné › Barva výplně, Barva tahu a Výplň a tah najdou jen stejný odstín globálního nebo přímého vzorku, ne libovolný jeho odstín.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Zobrazí domovskou obrazovku, když není otevřený žádný dokument; když je vypnuto, okno zůstane prázdné, dokud neklepnete na Domů.
@@ -5222,6 +5223,7 @@ imageTrace	Outline	Obrys
 	Run Script	Spustit skript
 	Stop Script	Zastavit skript
 	Show External Script Warning	Zobrazit upozornění u externích skriptů
+	Run Startup Scripts	Spouštět spouštěcí skripty
 	A Script Is Running	Běží skript
 	Script Alert	Upozornění skriptu
 	Script File Access	Přístup skriptu k souborům

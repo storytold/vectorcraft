@@ -3360,6 +3360,7 @@ digits	Malayalam	Malayalam
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Gli strumenti di disegno mostrano un puntatore a croce invece della loro icona; Bloc Maiusc fa lo stesso finché è attivo.
 	Shows a tip when the pointer rests on a button or field that has one.	Mostra un suggerimento quando il puntatore si ferma su un pulsante o un campo che ne ha uno.
 	Shows a warning before a script you choose runs.	Mostra un avviso prima che venga eseguito uno script che scegli.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Esegue gli script della cartella Startup Scripts all’avvio di VectorCraft e prima di ogni script di File › Script; non in modalità provvisoria.
 	Smooths the edges of artwork on the canvas.	Smussa i bordi della grafica nell'area di lavoro.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selezione › Uguale › Colore riempimento, Colore traccia e Riempimento e traccia trovano solo la stessa tinta di un campione globale o di un colore spot, non qualsiasi sua tinta.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Mostra la schermata Home quando nessun documento è aperto; se disattivata, la finestra resta vuota finché non fai clic su Home.
@@ -4945,6 +4946,7 @@ axis	Both	Entrambi
 	Run Script	Esegui script
 	Stop Script	Interrompi script
 	Show External Script Warning	Mostra avviso per gli script esterni
+	Run Startup Scripts	Esegui script di avvio
 	A Script Is Running	È in esecuzione uno script
 	Script Alert	Avviso dello script
 	Script File Access	Accesso dello script ai file

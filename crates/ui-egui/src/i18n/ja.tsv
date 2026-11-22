@@ -3328,6 +3328,7 @@ mark-style	Japanese	日本式
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	描画ツールのポインターをアイコンではなく十字にします。Caps Lock がオンの間も同じになります。
 	Shows a tip when the pointer rests on a button or field that has one.	ヒントのあるボタンやフィールドにポインターを置くとヒントを表示します。
 	Shows a warning before a script you choose runs.	選んだスクリプトを実行する前に警告を表示します。
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	VectorCraft の起動時と、ファイル › スクリプト のスクリプトを実行する前に、Startup Scripts フォルダーのスクリプトを実行します。セーフモードでは実行しません。
 	Smooths the edges of artwork on the canvas.	カンバス上のアートワークの縁を滑らかにします。
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選択 › 共通 › カラー (塗り)、カラー (線)、塗りと線は、グローバルスウォッチまたは特色スウォッチの同じ濃度だけを選び、ほかの濃度は選びません。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	ドキュメントが開いていないときにホーム画面を表示します。オフのときは、ホームをクリックするまでウィンドウは空のままです。
@@ -5771,6 +5772,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 	Run Script	スクリプトを実行
 	Stop Script	スクリプトを停止
 	Show External Script Warning	外部スクリプトの警告を表示
+	Run Startup Scripts	スタートアップスクリプトを実行
 	A Script Is Running	スクリプトの実行中
 	Script Alert	スクリプトの通知
 	Script File Access	スクリプトのファイルアクセス

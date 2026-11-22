@@ -3201,6 +3201,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	绘图工具显示十字指针而不是工具图标；Caps Lock 打开时效果相同。
 	Shows a tip when the pointer rests on a button or field that has one.	指针停在带有提示的按钮或字段上时显示提示。
 	Shows a warning before a script you choose runs.	在你选择的脚本运行前显示警告。
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	在 VectorCraft 启动时以及运行“文件 › 脚本”中的每个脚本前，运行 Startup Scripts 文件夹中的脚本；安全模式下不运行。
 	Smooths the edges of artwork on the canvas.	使画布上图稿的边缘平滑。
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	选择 › 相同 › 填色、描边颜色和填色和描边只匹配全局色板或专色色板的相同色调，而不是其任意色调。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	没有打开文档时显示主页屏幕；关闭时，窗口保持空白，直到你点击主页。
@@ -5436,6 +5437,7 @@ imageTrace	Outline	轮廓
 	Run Script	运行脚本
 	Stop Script	停止脚本
 	Show External Script Warning	显示外部脚本警告
+	Run Startup Scripts	运行启动脚本
 	A Script Is Running	脚本正在运行
 	Script Alert	脚本提示
 	Script File Access	脚本文件访问

@@ -2782,6 +2782,7 @@ file-filter	Templates	範本
 	Run Script	執行指令碼
 	Stop Script	停止指令碼
 	Show External Script Warning	顯示外部指令碼警告
+	Run Startup Scripts	執行啟動指令碼
 	A Script Is Running	指令碼正在執行
 	Script Alert	指令碼提示
 	Script File Access	指令碼檔案存取
@@ -4650,6 +4651,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	繪圖工具顯示十字指標而不是工具圖示；Caps Lock 開啟時效果相同。
 	Shows a tip when the pointer rests on a button or field that has one.	指標停在有提示的按鈕或欄位上時顯示提示。
 	Shows a warning before a script you choose runs.	在你選擇的指令碼執行前顯示警告。
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	在 VectorCraft 啟動時以及執行「檔案 › 指令碼」中的每個指令碼前，執行 Startup Scripts 資料夾中的指令碼；安全模式下不執行。
 	Smooths the edges of artwork on the canvas.	使畫布上圖稿的邊緣平滑。
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選取 › 相同 › 填色顏色、筆畫顏色和填色與筆畫只符合全域色票或特別色色票的相同色調，而不是其任意色調。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	沒有開啟文件時顯示首頁畫面；關閉時，視窗保持空白，直到你按下首頁。

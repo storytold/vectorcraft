@@ -4692,6 +4692,7 @@ font-technology	Variable	Varijabilni
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Alati za crtanje prikazuju pokazivač u obliku krstića umjesto svoje ikone; Caps Lock čini isto dok je uključen.
 	Shows a tip when the pointer rests on a button or field that has one.	Prikazuje savjet kada se pokazivač zadrži na dugmetu ili polju koje ga ima.
 	Shows a warning before a script you choose runs.	Prikazuje upozorenje prije nego što se pokrene skripta koju odaberete.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Pokreće skripte iz mape Startup Scripts kada se VectorCraft pokrene i prije svake skripte iz Datoteka › Skripte; ne u sigurnom načinu rada.
 	Smooths the edges of artwork on the canvas.	Izglađuje rubove grafike na platnu.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Odabir › Isto › Boja ispune, Boja poteza i Ispuna i potez pronalaze samo istu nijansu globalnog ili spot uzorka, a ne bilo koju njegovu nijansu.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Prikazuje početni ekran kada nijedan dokument nije otvoren; kada je isključeno, prozor ostaje prazan dok ne kliknete Početna.
@@ -5107,6 +5108,7 @@ imageTrace	Outline	Obris
 	Run Script	Pokreni skriptu
 	Stop Script	Zaustavi skriptu
 	Show External Script Warning	Prikaži upozorenje za vanjske skripte
+	Run Startup Scripts	Pokreni skripte pri pokretanju
 	A Script Is Running	Skripta se izvršava
 	Script Alert	Upozorenje skripte
 	Script File Access	Pristup skripte datotekama

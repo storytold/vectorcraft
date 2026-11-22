@@ -95,7 +95,8 @@ fn item_of(v: &Value) -> Item {
 }
 
 /// The choice's Disable and Continue (OK) or Start Normally: Safe Mode ends and the plug-ins load,
-/// without the stopped one for Disable and Continue (kept off for later launches too).
+/// without the stopped one for Disable and Continue (kept off for later launches too), then the
+/// startup scripts run ([`crate::script_runs::run_at_launch`]), without a disabled one.
 fn confirm_stopped(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     app.ui.dialog = None;
     app.ui.stopped_plugin = None;
@@ -109,6 +110,8 @@ fn confirm_stopped(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String
     }
     safe_mode::set_active(None);
     vectorcraft_engine::cmd::plugin::load_prefs_folder(&mut app.session);
+    // The launch's startup scripts waited for Safe Mode to end.
+    crate::script_runs::run_at_launch(app);
     Ok(Value::Null)
 }
 

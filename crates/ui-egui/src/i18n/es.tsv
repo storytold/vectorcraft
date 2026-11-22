@@ -3311,6 +3311,7 @@ digits	Malayalam	Malayálam
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Las herramientas de dibujo muestran un puntero en cruz en lugar de su icono; Bloq Mayús hace lo mismo mientras está activado.
 	Shows a tip when the pointer rests on a button or field that has one.	Muestra una sugerencia cuando el puntero se detiene sobre un botón o campo que la tiene.
 	Shows a warning before a script you choose runs.	Muestra una advertencia antes de que se ejecute un script que elija.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Ejecuta los scripts de la carpeta Startup Scripts al iniciar VectorCraft y antes de cada script de Archivo › Scripts; no en modo seguro.
 	Smooths the edges of artwork on the canvas.	Suaviza los bordes de la ilustración en el lienzo.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selección › Igual › Color de relleno, Color de trazo y Relleno y trazo solo coinciden con el mismo matiz de una muestra global o de tinta plana, no con cualquier matiz de ella.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Muestra la pantalla de inicio cuando no hay ningún documento abierto; desactivada, la ventana queda vacía hasta que hace clic en Inicio.
@@ -4886,6 +4887,7 @@ axis	Both	Ambos
 	Run Script	Ejecutar script
 	Stop Script	Detener script
 	Show External Script Warning	Mostrar advertencia de scripts externos
+	Run Startup Scripts	Ejecutar scripts de inicio
 	A Script Is Running	Se está ejecutando un script
 	Script Alert	Aviso del script
 	Script File Access	Acceso del script a archivos

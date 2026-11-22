@@ -536,6 +536,70 @@ fn a_slow_first_read_says_so_until_its_listing_comes() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The names of the runs the Script Console started, in order.
+fn started(app: &VectorcraftApp) -> Vec<String> {
+    let lines = app.session.script_console().to_json();
+    lines["lines"].as_array().unwrap().iter().filter(|l| l["kind"] == "start").map(|l| l["name"].as_str().unwrap().to_string()).collect()
+}
+
+/// `dir`'s `Startup Scripts` folder, attached to `app`, holding `a.jsx` that draws one rectangle.
+fn startup_folder(app: &mut VectorcraftApp, dir: &std::path::Path) {
+    let startup = dir.join("Startup Scripts");
+    std::fs::create_dir_all(&startup).unwrap();
+    std::fs::write(startup.join("a.jsx"), "vc.run('shape.rectangle', {x:40,y:0,width:10,height:10});").unwrap();
+    app.session.attach_startup_scripts_dir(startup);
+}
+
+#[test]
+fn with_run_startup_scripts_on_a_listed_script_runs_after_the_startup_scripts() {
+    let dir = folder("startup");
+    let mut app = app(&dir);
+    startup_folder(&mut app, &dir);
+    let draw = write(&dir, "Draw Two.jsx", DRAW);
+    read(&app);
+    // Off by default: the listed script runs alone.
+    menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": draw })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(started(&app), ["Draw Two.jsx"]);
+    assert_eq!(objects(&app), 2);
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": draw })).unwrap().unwrap();
+    assert!(app.session.script_running());
+    finish(&mut app);
+    assert_eq!(started(&app), ["Draw Two.jsx", "a.jsx", "Draw Two.jsx"], "the startup script runs first");
+    assert_eq!(objects(&app), 5);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2, "an undo step for each run");
+    assert_eq!(app.ui.status, "Ran Draw Two.jsx");
+    // A script that left the folder runs neither itself nor the startup scripts.
+    std::fs::remove_file(&draw).unwrap();
+    let e = menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": draw })).unwrap().unwrap_err();
+    assert_eq!(e, "the script is no longer in the Scripts folder");
+    assert!(!app.session.script_running());
+    assert_eq!(started(&app).len(), 3);
+    scripts_menu::wait();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn with_run_startup_scripts_on_other_script_and_the_launch_run_the_startup_scripts() {
+    let dir = folder("startup-other");
+    let mut app = app(&dir);
+    startup_folder(&mut app, &dir);
+    app.session.prefs.show_external_script_warning = false;
+    script_runs::run_at_launch(&mut app);
+    assert!(!app.session.script_running(), "off by default, nothing runs at launch");
+    app.run("prefs.set", json!({"key": "runStartupScripts", "value": true})).unwrap();
+    script_runs::run_at_launch(&mut app);
+    finish(&mut app);
+    assert_eq!(started(&app), ["a.jsx"]);
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": DRAW, "name": "chosen" })).unwrap().unwrap();
+    finish(&mut app);
+    assert_eq!(started(&app), ["a.jsx", "a.jsx", "chosen"]);
+    assert_eq!(objects(&app), 4);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn a_first_read_that_ends_without_a_listing_says_the_folder_cannot_be_read_and_the_next_read_tries_again() {
     let dir = folder("lost");

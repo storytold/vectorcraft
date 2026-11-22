@@ -71,6 +71,7 @@ use crate::{
 
 pub mod files;
 pub mod folder;
+pub mod startup;
 
 /// The most bytes of source a run takes, as a file or as `source`.
 pub const MAX_SOURCE_BYTES: usize = 8 << 20;
@@ -1879,6 +1880,9 @@ impl Session {
     /// Stops the running script at once and puts everything back, with the report of a stopped run
     /// ([`Self::script_report`]). False with none running.
     pub fn script_abandon(&mut self) -> bool {
+        // The runs queued after it are not started.
+        self.script_queue.clear();
+        self.startup_ended();
         let Some(key) = self.script_key.take() else { return false };
         let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
             self.script_gone(key, console::Ending::Stopped);
@@ -1909,6 +1913,16 @@ impl Session {
         self.script_stop.clear();
         self.reset_tool();
         cmd::compositefonts::sync(self);
+    }
+
+    /// A script named `name` that did not start because its file could not be read as a script:
+    /// the Script Console gets a run with a start line, `message` as its error and an end line.
+    pub(crate) fn note_unread(&mut self, name: &str, message: &str) {
+        self.script_runs += 1;
+        let name = console::line_name(name);
+        for entry in [console::Entry::Start, console::Entry::Error(format!("{name}: {message}")), console::Entry::End(console::Ending::Error)] {
+            self.script_console.push(console::ConsoleLine { run: self.script_runs, name: name.clone(), entry }, false);
+        }
     }
 
     /// A script can't start while a document holds a drag in progress or an undo group, which its
@@ -2109,8 +2123,18 @@ impl Session {
     }
 
     /// Advances the running script by one slice. `None` while it is still running; otherwise the
-    /// run has ended: its report, or the error that ended it, with the documents put back.
+    /// run has ended: its report, or the error that ended it, with the documents put back. When
+    /// `script.startup.run` queued more runs, the next one starts then, and a queued run that cannot
+    /// start is kept for [`Self::take_startup_failures`].
     pub fn script_pump(&mut self) -> Option<Result<Value>> {
+        let result = self.pump_one()?;
+        self.startup_ended();
+        self.start_queued();
+        Some(result)
+    }
+
+    /// [`Self::script_pump`] for the running script alone.
+    fn pump_one(&mut self) -> Option<Result<Value>> {
         let key = self.script_key.take()?;
         let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
             self.script_gone(key, console::Ending::Internal);

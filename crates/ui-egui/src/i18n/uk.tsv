@@ -3352,6 +3352,7 @@ digits	Malayalam	Малаялам
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Інструменти малювання показують вказівник-перехрестя замість свого значка; Caps Lock робить те саме, поки він увімкнений.
 	Shows a tip when the pointer rests on a button or field that has one.	Показує підказку, коли вказівник зупиняється на кнопці або полі, що її мають.
 	Shows a warning before a script you choose runs.	Показує попередження перед запуском вибраного вами скрипту.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Запускає сценарії з папки Startup Scripts під час запуску VectorCraft і перед кожним сценарієм з меню Файл › Сценарії; не в безпечному режимі.
 	Smooths the edges of artwork on the canvas.	Згладжує краї графіки на полотні.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Виділення › Те саме › Колір заливки», «Колір обведення» та «Заливка та обведення» знаходять лише той самий відтінок глобального або плашкового зразка, а не будь-який його відтінок.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показує початковий екран, коли немає відкритих документів; якщо вимкнено, вікно лишається порожнім, доки ви не натиснете «Додому».
@@ -4929,6 +4930,7 @@ axis	Both	Обидві
 	Run Script	Виконати скрипт
 	Stop Script	Зупинити скрипт
 	Show External Script Warning	Показувати попередження про зовнішні скрипти
+	Run Startup Scripts	Запускати сценарії автозапуску
 	A Script Is Running	Виконується скрипт
 	Script Alert	Повідомлення скрипту
 	Script File Access	Доступ скрипту до файлів

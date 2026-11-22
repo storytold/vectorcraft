@@ -3899,6 +3899,7 @@ mark-style	Japanese	Japán
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	A rajzeszközök az ikonjuk helyett célkeresztes mutatót jelenítenek meg; a Caps Lock bekapcsolva ugyanezt teszi.
 	Shows a tip when the pointer rests on a button or field that has one.	Tippet jelenít meg, ha a mutató olyan gombon vagy mezőn áll meg, amelyhez tartozik tipp.
 	Shows a warning before a script you choose runs.	Figyelmeztetést jelenít meg egy kiválasztott parancsfájl futása előtt.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	A VectorCraft indulásakor és a Fájl › Szkriptek menü minden parancsfájlja előtt futtatja a Startup Scripts mappa parancsfájljait; csökkentett módban nem.
 	Smooths the edges of artwork on the canvas.	Kisimítja a grafika széleit a vásznon.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	A Kijelölés › Azonos › Kitöltőszín, Körvonalszín és Kitöltés és körvonal csak egy globális vagy direkt színminta azonos árnyalatát találja meg, nem bármely árnyalatát.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Megjeleníti a kezdőképernyőt, ha nincs megnyitott dokumentum; kikapcsolva az ablak üres marad, amíg a Kezdőképernyő gombra nem kattint.
@@ -5739,6 +5740,7 @@ imageTrace	Outline	Körvonal
 	Run Script	Parancsfájl futtatása
 	Stop Script	Parancsfájl leállítása
 	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
+	Run Startup Scripts	Indítási parancsfájlok futtatása
 	A Script Is Running	Egy parancsfájl fut
 	Script Alert	Parancsfájl-értesítés
 	Script File Access	Parancsfájl fájlhozzáférése

@@ -4644,6 +4644,7 @@ font-technology	Variable	Zmienne
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Narzędzia do rysowania pokazują wskaźnik w kształcie krzyżyka zamiast swojej ikony; Caps Lock działa tak samo, dopóki jest włączony.
 	Shows a tip when the pointer rests on a button or field that has one.	Pokazuje wskazówkę, gdy wskaźnik zatrzyma się na przycisku lub polu, które ją ma.
 	Shows a warning before a script you choose runs.	Pokazuje ostrzeżenie przed uruchomieniem wybranego skryptu.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Uruchamia skrypty z folderu Startup Scripts przy starcie programu VectorCraft i przed każdym skryptem z menu Plik › Skrypty; nie w trybie awaryjnym.
 	Smooths the edges of artwork on the canvas.	Wygładza krawędzie kompozycji na obszarze roboczym.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Zaznacz › Taki sam › Kolor wypełnienia, Kolor obrysu oraz Wypełnienie i obrys dopasowują tylko ten sam odcień globalnej lub dodatkowej próbki, a nie dowolny jej odcień.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Pokazuje stronę startową, gdy nie jest otwarty żaden dokument; po wyłączeniu okno pozostaje puste, dopóki nie klikniesz Strona startowa.
@@ -5050,6 +5051,7 @@ imageTrace	Outline	Kontur
 	Run Script	Uruchom skrypt
 	Stop Script	Zatrzymaj skrypt
 	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
+	Run Startup Scripts	Uruchamiaj skrypty startowe
 	A Script Is Running	Skrypt jest uruchomiony
 	Script Alert	Komunikat skryptu
 	Script File Access	Dostęp skryptu do plików

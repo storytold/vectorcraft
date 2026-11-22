@@ -3076,6 +3076,7 @@ digits	Malayalam	Malayalam
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Çizim araçları simgeleri yerine artı işaretli bir imleç gösterir; Caps Lock açıkken aynısını yapar.
 	Shows a tip when the pointer rests on a button or field that has one.	İmleç ipucu olan bir düğme veya alan üzerinde durduğunda ipucunu gösterir.
 	Shows a warning before a script you choose runs.	Seçtiğiniz bir komut dosyası çalışmadan önce uyarı gösterir.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	VectorCraft başladığında ve Dosya › Komut dosyaları menüsündeki her komut dosyasından önce Startup Scripts klasöründeki komut dosyalarını çalıştırır; Güvenli Mod'da çalıştırmaz.
 	Smooths the edges of artwork on the canvas.	Tuvaldeki resmin kenarlarını yumuşatır.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seçim › Aynı › Dolgu Rengi, Kontur Rengi ve Doldur ve Konturla yalnızca genel veya spot renk örneğinin aynı tonunu bulur, herhangi bir tonunu değil.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiçbir belge açık değilken Ana Sayfa ekranını gösterir; kapalıyken siz Ana Sayfa'ya tıklayana kadar pencere boş kalır.
@@ -4635,6 +4636,7 @@ axis	Both	Her İkisi
 	Run Script	Betiği Çalıştır
 	Stop Script	Betiği Durdur
 	Show External Script Warning	Harici Betik Uyarısını Göster
+	Run Startup Scripts	Başlangıç Betiklerini Çalıştır
 	A Script Is Running	Bir Betik Çalışıyor
 	Script Alert	Betik Uyarısı
 	Script File Access	Betik Dosya Erişimi

@@ -192,6 +192,9 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
+    /// The Startup Scripts folder, whose scripts `script.startup.run` runs; `None`: no folder
+    /// ([`Session::attach_startup_scripts_dir`]).
+    startup_scripts_dir: Option<std::path::PathBuf>,
     /// The folder of File Info's metadata templates; `None`: no folder
     /// ([`Session::attach_metadata_templates_dir`]).
     metadata_templates_dir: Option<std::path::PathBuf>,
@@ -307,6 +310,15 @@ pub struct Session {
     /// `script.run` starts the job and returns, and the frontend advances it once per frame
     /// ([`Session::script_pump`]). Off, `script.run` advances it to its end.
     pub script_frames: bool,
+    /// The runs `script.startup.run` queued in the app, each started when the run before it ends
+    /// ([`Session::script_pump`]).
+    pub(crate) script_queue: std::collections::VecDeque<script::startup::Queued>,
+    /// While a startup script runs: the launch marker's entry naming it
+    /// ([`vectorcraft_plugins::safe_mode::loading`]).
+    pub(crate) startup_loading: Option<vectorcraft_plugins::safe_mode::Loading>,
+    /// The queued runs that could not start, as (name, error), until the frontend takes them
+    /// ([`Session::take_startup_failures`]).
+    pub(crate) startup_failures: Vec<(String, String)>,
     /// Each open document's highest next id a run has seen, by [`DocState::uid`].
     pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
     /// While a slice of a script runs in this session.

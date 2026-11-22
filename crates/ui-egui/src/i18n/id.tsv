@@ -5115,6 +5115,7 @@ font-technology	Variable	Variabel
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Alat gambar menampilkan penunjuk silang sebagai pengganti ikonnya; Caps Lock melakukan hal yang sama selama aktif.
 	Shows a tip when the pointer rests on a button or field that has one.	Menampilkan tip saat penunjuk berhenti di atas tombol atau bidang yang memilikinya.
 	Shows a warning before a script you choose runs.	Menampilkan peringatan sebelum skrip yang Anda pilih dijalankan.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Menjalankan skrip di folder Startup Scripts saat VectorCraft dimulai dan sebelum setiap skrip dari Berkas › Skrip; tidak dalam mode aman.
 	Smooths the edges of artwork on the canvas.	Menghaluskan tepi karya seni di kanvas.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seleksi › Sama › Warna isian, Warna stroke, dan Isian & stroke hanya mencocokkan tint yang sama dari swatch global atau spot, bukan sembarang tint-nya.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Menampilkan layar Home saat tidak ada dokumen yang terbuka; saat nonaktif, jendela tetap kosong sampai Anda mengklik Home.
@@ -5518,6 +5519,7 @@ imageTrace	Outline	Kontur
 	Run Script	Jalankan Skrip
 	Stop Script	Hentikan Skrip
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
+	Run Startup Scripts	Jalankan Skrip Awal
 	A Script Is Running	Skrip Sedang Berjalan
 	Script Alert	Peringatan Skrip
 	Script File Access	Akses Berkas Skrip

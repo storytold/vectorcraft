@@ -4063,6 +4063,7 @@ digits	Malayalam	Malaiàlam
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Les eines de dibuix mostren un punter en creu en lloc de la seva icona; Bloq Maj fa el mateix mentre està activat.
 	Shows a tip when the pointer rests on a button or field that has one.	Mostra un consell quan el punter s’atura sobre un botó o un camp que en té.
 	Shows a warning before a script you choose runs.	Mostra un avís abans que s’executi un script que trieu.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Executa els scripts de la carpeta Startup Scripts quan s’inicia VectorCraft i abans de cada script de Fitxer › Scripts; no en mode segur.
 	Smooths the edges of artwork on the canvas.	Suavitza les vores de la il·lustració al llenç.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selecció › Igual › Color de farciment, Color del traç i Farciment i traç només coincideixen amb el mateix matís d’una mostra global o de tinta plana, no amb qualsevol matís seu.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Mostra la pantalla d’inici quan no hi ha cap document obert; desactivada, la finestra queda buida fins que feu clic a Inici.
@@ -6414,6 +6415,7 @@ digits	Malayalam	Malaiàlam
 	Run Script	Executa l'script
 	Stop Script	Atura l'script
 	Show External Script Warning	Mostra l'avís dels scripts externs
+	Run Startup Scripts	Executa els scripts d’inici
 	A Script Is Running	S'està executant un script
 	Script Alert	Avís de l'script
 	Script File Access	Accés de l’script als fitxers

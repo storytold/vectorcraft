@@ -4711,6 +4711,7 @@ font-technology	Variable	Muuttuvat
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Piirtotyökalut näyttävät kuvakkeensa sijaan ristikko-osoittimen; Caps Lock tekee saman, kun se on käytössä.
 	Shows a tip when the pointer rests on a button or field that has one.	Näyttää vihjeen, kun osoitin pysähtyy painikkeen tai kentän päälle, jolla on vihje.
 	Shows a warning before a script you choose runs.	Näyttää varoituksen ennen kuin valitsemasi komentosarja suoritetaan.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Suorittaa Startup Scripts -kansion komentosarjat, kun VectorCraft käynnistyy, ja ennen jokaista komentosarjaa valikosta Tiedosto › Komentosarjat; ei vikasietotilassa.
 	Smooths the edges of artwork on the canvas.	Pehmentää piirtopinnalla olevan grafiikan reunat.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Valinta › Sama › Täyttöväri, Viivan väri sekä Täyttö ja viiva löytävät vain globaalin tai spottivärimallin saman sävyn, eivät mitä tahansa sen sävyä.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Näyttää aloitusnäytön, kun yhtään asiakirjaa ei ole auki; kun asetus ei ole käytössä, ikkuna pysyy tyhjänä, kunnes napsautat Aloitus.
@@ -5127,6 +5128,7 @@ imageTrace	Outline	Ääriviiva
 	Run Script	Suorita komentosarja
 	Stop Script	Pysäytä komentosarja
 	Show External Script Warning	Näytä ulkoisten komentosarjojen varoitus
+	Run Startup Scripts	Suorita käynnistyskomentosarjat
 	A Script Is Running	Komentosarja on käynnissä
 	Script Alert	Komentosarjan ilmoitus
 	Script File Access	Komentosarjan tiedostojen käyttö

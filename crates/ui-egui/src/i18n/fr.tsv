@@ -3299,6 +3299,7 @@ digits	Malayalam	Malayalam
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Les outils de dessin affichent un pointeur en croix au lieu de leur icône. Le Verrouillage majuscules fait de même tant qu’il est activé.
 	Shows a tip when the pointer rests on a button or field that has one.	Affiche une info-bulle quand le pointeur s’arrête sur un bouton ou un champ qui en a une.
 	Shows a warning before a script you choose runs.	Affiche un avertissement avant l’exécution d’un script que vous choisissez.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Exécute les scripts du dossier Startup Scripts au démarrage de VectorCraft et avant chaque script de Fichier › Scripts. Ne s’applique pas en mode sans échec.
 	Smooths the edges of artwork on the canvas.	Lisse les bords des illustrations sur la zone de travail.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Sélection › Identique › Couleur de fond, Couleur du contour et Fond et contour ne retiennent que la même teinte d’une nuance globale ou d’une couleur d’accompagnement, et non toutes ses teintes.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Affiche l’écran d’accueil quand aucun document n’est ouvert. Désactivée, la fenêtre reste vide jusqu’à ce que vous cliquiez sur Accueil.
@@ -4868,6 +4869,7 @@ axis	Both	Les deux
 	Run Script	Exécuter le script
 	Stop Script	Arrêter le script
 	Show External Script Warning	Afficher l’avertissement des scripts externes
+	Run Startup Scripts	Exécuter les scripts de démarrage
 	A Script Is Running	Un script est en cours d’exécution
 	Script Alert	Alerte de script
 	Script File Access	Accès du script aux fichiers

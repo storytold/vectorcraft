@@ -3133,6 +3133,50 @@ leaves out the listed scripts outside the read roots.
 vectorcraft-cli run --cmd script.listInstalled --params '{}'
 ```
 
+### Startup scripts
+
+With Preferences › General › Run Startup Scripts on (`runStartupScripts`, off by default), the `.jsx` files of the
+`Startup Scripts` folder next to the preferences run when VectorCraft starts, and again before each script chosen from
+File › Scripts, whether a listed script or Other Script…. The folder is `~/Library/Application
+Support/VectorCraft/Startup Scripts` on macOS, `%APPDATA%\VectorCraft\Startup Scripts` on Windows, and
+`$XDG_CONFIG_HOME/vectorcraft/Startup Scripts` or `~/.config/vectorcraft/Startup Scripts` on Linux and BSD.
+VectorCraft does not make the folder. The scripting guide
+https://web.archive.org/web/20210515232518/https://www.adobe.com/content/dam/acom/en/devnet/illustrator/pdf/Illustrator_Scripting_Guide_cc.pdf
+(page 11) describes startup scripts as `.jsx` files that run when the application starts and each time a script is
+run.
+
+The rest of this section is VectorCraft's own rules:
+
+- Only the folder's own `.jsx` files run, never its subfolders. Links, names that start with a dot, files Windows marks
+  hidden or system, names longer than 255 bytes and other file types are left out. A listing stops at 2,048 folder
+  entries, 512 scripts or 250 ms. A folder that is missing runs nothing.
+- The scripts run one at a time, sorted by name without regard to case, then by name. Each runs as `script.run` runs a
+  file, with the same limits, and each that changes a document adds its own Run Script undo step. The chosen script
+  runs after the last of them.
+- A startup script that cannot be read, is larger than 8 MiB, throws, runs out of instructions or is stopped is named
+  in the Script Console and the status bar, and the next one runs. The app opens and the chosen script runs either way.
+- In Safe Mode nothing in the folder runs. After a launch that stopped, the startup scripts run once the person
+  chooses Disable and Continue or Start Normally. While a startup script runs, the launch marker names it, so a launch
+  that stops during one offers to disable that script. A disabled startup script does not run, and the reply names it
+  in `disabled`.
+- Running the startup scripts is itself a `script.*` command, which a script cannot run, so a startup script cannot
+  start another round of them. `script.run` called from automation runs alone.
+- The web build has no Startup Scripts folder, and neither has a run with `VECTORCRAFT_NO_PREFS` set.
+
+`script.startup.run {reason: launch|menu, then?, maxFuel?}` runs the folder now. `then` holds `script.run`'s
+parameters for a script that runs after the startup scripts; `maxFuel` limits each startup script's instructions
+(from 1 to 100,000,000,000, default 1,000,000,000). It returns `{reason, skipped: true, why}` with `why` set to `off`,
+`safeMode` or `noFolder` when nothing runs, and otherwise `{reason, skipped: false, ran, failed: [{name, error}],
+disabled, truncated, unreadable}`, with `then` holding `script.run`'s reply. In the app the runs are queued and the
+reply is `{reason, skipped: false, running, queued, failed, disabled, truncated, unreadable}`, with `failed` naming
+the runs that could not start before the first one did; each run then reports as a `script.run` in the app does, and
+a later run that cannot start, the chosen script included, is named in the status bar. Under `--automation-read-root` it reads the folder only when the folder lies inside a
+read root.
+
+```sh
+vectorcraft-cli run --cmd script.startup.run --params '{"reason": "launch"}'
+```
+
 ## Transparency and opacity masks
 
 Transparency and opacity-mask commands take `ids` (or `id`), so they need no selection. Opacity is a percentage

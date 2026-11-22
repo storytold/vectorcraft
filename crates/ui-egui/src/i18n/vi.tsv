@@ -3672,6 +3672,7 @@ mark-style	Japanese	Kiểu Nhật
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Các công cụ vẽ hiển thị con trỏ hình chữ thập thay cho biểu tượng của chúng; Caps Lock cũng làm vậy khi đang bật.
 	Shows a tip when the pointer rests on a button or field that has one.	Hiển thị mẹo khi con trỏ dừng trên một nút hoặc trường có mẹo.
 	Shows a warning before a script you choose runs.	Hiển thị cảnh báo trước khi một tập lệnh bạn chọn chạy.
+	Runs the scripts in the Startup Scripts folder when VectorCraft starts and before each script from File › Scripts; not in Safe Mode.	Chạy các tập lệnh trong thư mục Startup Scripts khi VectorCraft khởi động và trước mỗi tập lệnh từ Tệp › Script; không chạy ở chế độ an toàn.
 	Smooths the edges of artwork on the canvas.	Làm mịn các cạnh của hình minh họa trên khung vẽ.
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Vùng chọn › Giống nhau › Màu tô, Màu nét và Tô & Nét chỉ khớp với cùng sắc độ của một mẫu màu toàn cục hoặc màu pha, không phải mọi sắc độ của nó.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiển thị màn hình Trang chủ khi không có tài liệu nào mở; khi tắt, cửa sổ để trống cho đến khi bạn nhấp vào Trang chủ.
@@ -5407,6 +5408,7 @@ theme	Appearance	Giao diện
 	Run Script	Chạy tập lệnh
 	Stop Script	Dừng tập lệnh
 	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
+	Run Startup Scripts	Chạy tập lệnh khởi động
 	A Script Is Running	Một tập lệnh đang chạy
 	Script Alert	Thông báo của tập lệnh
 	Script File Access	Quyền truy cập tệp của tập lệnh
