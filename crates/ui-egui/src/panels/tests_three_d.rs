@@ -987,7 +987,7 @@ fn the_lighting_widget_drags_a_light_in_one_undo_step() {
     let (_, at) = light(&fixture, 1);
     fixture.click(&at);
     assert_eq!(merged_light(&app.borrow()), start);
-    assert_eq!(undo_len(&app.borrow()), history + 1, "the undone step stays undone");
+    assert_eq!(undo_len(&app.borrow()), history, "the undone step stays undone");
 }
 
 /// With objects whose lights differ in Height, an arrow key that turns the light changes only

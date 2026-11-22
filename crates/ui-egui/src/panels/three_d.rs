@@ -245,6 +245,8 @@ pub(crate) fn apply(app: &mut VectorcraftApp, params: &[Param], input: &DialogFi
     for event in events {
         match event {
             EditEvent::Begin { id, .. } => {
+                // A gesture still running (its selection changed under it) ends with what it previewed.
+                finish(app);
                 app.three_d.gesture = Some(*id);
                 app.three_d.before = settings(input);
                 app.three_d.plan = Some(plan(app));
@@ -359,9 +361,11 @@ fn rows(app: &VectorcraftApp, t: &Target) -> (Vec<Param>, DialogFields) {
     json.insert(PAGE.into(), json!(app.three_d.page));
     json.insert(LIGHT.into(), json!(app.three_d.light));
     json.insert(materials::SELECTED.into(), json!(app.three_d.graphic));
-    // The rows depend on the values (the page) and the values' types on the rows, so the first
-    // pass over the bare values only fixes the page.
-    let params = revolve::params(&data, &form::fields_of(&[], &json), Place::Panel);
+    // The rows depend on the values (the page, which settings the selected effects disagree on) and the values' types
+    // on the rows, so the first pass over the bare values only fixes the rows.
+    let mut bare = form::fields_of(&[], &json);
+    mark_mixed(app, &mut bare);
+    let params = revolve::params(&data, &bare, Place::Panel);
     let mut fields = form::fields_of(&params, &json);
     mark_mixed(app, &mut fields);
     (params, fields)
