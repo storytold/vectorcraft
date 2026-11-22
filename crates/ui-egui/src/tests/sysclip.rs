@@ -359,6 +359,99 @@ fn our_own_copy_pastes_the_lossless_internal_clipboard() {
     assert!(matches!(pasted(&app)[0].kind, NodeKind::Path { .. }));
 }
 
+/// SVG markup of three closed paths, a group of two more and a compound path with a hole: five
+/// objects.
+fn closed_paths_svg() -> String {
+    let mut svg = String::from(r#"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">"#);
+    for x in [10, 20, 30] {
+        svg.push_str(&format!(r##"<path d="M{x} 10h4v4h-4z" fill="#336699"/>"##));
+    }
+    svg.push_str(r#"<g><path d="M200 200h2v2h-2z"/><path d="M204 200h2v2h-2z"/></g>"#);
+    svg.push_str(r#"<path fill-rule="evenodd" d="M210 200h6v6h-6zM212 202h2v2h-2z"/></svg>"#);
+    svg
+}
+
+/// Paste the objects of [`closed_paths_svg`] from another app and select them all → their count.
+fn paste_closed_paths(app: &mut VectorcraftApp, board: &Rc<RefCell<Board>>) -> usize {
+    copy_elsewhere(board, vec![(SVG, closed_paths_svg().into_bytes())]);
+    run(app, "edit.paste", json!({}));
+    run(app, "select.all", json!({}));
+    let objects = count(app);
+    assert_eq!(app.session.active().unwrap().selection.objects.len(), objects);
+    objects
+}
+
+/// A Copy or Cut whose formats can't be written to the system clipboard (another app holds it
+/// open, or refuses the write) stays what every Paste command takes while nothing else is copied,
+/// with and without a change count, and when its formats have no text; the clipboard's older
+/// contents do not replace it, and a paste into text takes the copy's text, or nothing. A later
+/// copy in another app still wins. Without a change count, a clipboard that held only a picture
+/// can't show a later copy, so there Paste takes the picture.
+#[test]
+fn a_copy_the_system_clipboard_refused_still_pastes_the_copied_art() {
+    type Fail = fn(&Rc<RefCell<Board>>, bool);
+    // Case, Copy or Cut, how the write fails, no change count, On Copy: Include SVG Code, the
+    // other app's copy before it is a picture, Paste takes the copied art.
+    let cases: [(&str, &str, Fail, bool, bool, bool, bool); 8] = [
+        ("locked", "edit.cut", lock, false, true, false, true),
+        ("refused", "edit.cut", refuse_writes, false, true, false, true),
+        ("refused, uncounted", "edit.cut", refuse_writes, true, true, false, true),
+        ("refused, no text", "edit.cut", refuse_writes, false, false, false, true),
+        ("refused, uncounted, no text", "edit.cut", refuse_writes, true, false, false, true),
+        ("refused copy", "edit.copy", refuse_writes, false, true, false, true),
+        ("refused, over a picture", "edit.cut", refuse_writes, false, true, true, true),
+        ("refused, uncounted, over a picture", "edit.cut", refuse_writes, true, true, true, false),
+    ];
+    let pastes =
+        ["edit.paste", "edit.pasteInFront", "edit.pasteInBack", "edit.pasteInPlace", "edit.pasteOnAllArtboards", "edit.pasteWithoutFormatting"];
+    for (case, op, fail, uncounted, svg_text, over_picture, kept) in cases {
+        let (mut app, board) = app();
+        if uncounted {
+            without_change_count(&board);
+        }
+        run(&mut app, "prefs.set", json!({"key": "copyAsSvg", "value": svg_text}));
+        let objects = paste_closed_paths(&mut app, &board);
+        if over_picture {
+            copy_elsewhere(&board, vec![(PNG, blue_png())]);
+        } else {
+            copy_elsewhere(&board, vec![(TEXT, b"Words another app copied".to_vec())]);
+        }
+        fail(&board, true);
+        run(&mut app, op, json!({}));
+        background::wait_all(&mut app);
+        fail(&board, false);
+        assert!(app.ui.status.starts_with("Couldn't copy to the system clipboard"), "{case}: {}", app.ui.status);
+        let left = if op == "edit.cut" { 0 } else { objects };
+        assert_eq!(count(&app), left, "{case}");
+        if !kept {
+            run(&mut app, "edit.paste", json!({}));
+            assert!(matches!(pasted(&app)[0].kind, NodeKind::Image { .. }), "{case}: the picture");
+            continue;
+        }
+        let text = app.written_clipboard_text();
+        assert_eq!(text.is_some(), svg_text, "{case}: a paste into text takes the copy's text, or nothing: {text:?}");
+        assert!(text.is_none_or(|t| t.contains("<svg")), "{case}: the copy's text");
+        for (i, paste) in pastes.into_iter().enumerate() {
+            run(&mut app, paste, json!({}));
+            let p = pasted(&app);
+            assert_eq!(p.len(), objects, "{case}, {paste}: the copied art, not the other app's copy");
+            assert!(p.iter().all(|n| !matches!(n.kind, NodeKind::Text(_) | NodeKind::Image { .. })), "{case}, {paste}");
+            assert_eq!(count(&app), left + objects * (i + 1), "{case}, {paste}");
+        }
+        // A later copy of a picture is noticed by the change count only.
+        if uncounted {
+            copy_elsewhere(&board, vec![(TEXT, b"Newer words".to_vec())]);
+            run(&mut app, "edit.paste", json!({}));
+            let NodeKind::Text(t) = &pasted(&app)[0].kind else { panic!("{case}: not the newer copy") };
+            assert_eq!(t.plain_text(), "Newer words", "{case}");
+        } else {
+            copy_elsewhere(&board, vec![(PNG, blue_png())]);
+            run(&mut app, "edit.paste", json!({}));
+            assert!(matches!(pasted(&app)[0].kind, NodeKind::Image { .. }), "{case}: not the newer copy");
+        }
+    }
+}
+
 /// Copy returns before the system clipboard's formats are made: the background worker makes them
 /// (here after another Copy's) and they are written when it is done. A paste meanwhile takes what
 /// was copied, and neither the status bar nor `ui.inspect` shows the work.

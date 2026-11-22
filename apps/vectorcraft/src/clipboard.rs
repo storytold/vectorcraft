@@ -1513,6 +1513,13 @@ mod portable {
             }
         }
 
+        /// On macOS the pasteboard's change count ([`super::mac::change_count`]); the other
+        /// platforms this module serves have none.
+        #[cfg(target_os = "macos")]
+        fn change_count(&mut self) -> Option<u64> {
+            super::mac::change_count()
+        }
+
         fn read(&mut self, mimes: &[&'static str]) -> Option<Flavour> {
             self.read_now_or_later(mimes)?.flavour()
         }
@@ -3225,6 +3232,12 @@ mod mac {
             let types: Vec<&NSString> = types.iter().map(|t| &**t).collect();
             !types.is_empty() && NSPasteboard::generalPasteboard().availableTypeFromArray(&NSArray::from_slice(&types)).is_some()
         })
+    }
+
+    /// The pasteboard's change count, which goes up each time the pasteboard's ownership changes,
+    /// as when an app clears it to copy something.
+    pub fn change_count() -> Option<u64> {
+        autoreleasepool(|_| u64::try_from(NSPasteboard::generalPasteboard().changeCount()).ok())
     }
 
     /// The pasteboard's data for `mime`, the first of its types held ([`pasteboard_types`]) that is
