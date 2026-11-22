@@ -136,8 +136,13 @@ impl FontDb {
     /// ones the database holds ([`FontDb::lend_composite_fonts`]), it is a number of its own for
     /// those definitions.
     pub fn generation(&self) -> u64 {
+        self.lent_generation(self.own_generation())
+    }
+
+    /// [`FontDb::generation`] without a loan's: the database's count and its catalog's.
+    pub(super) fn own_generation(&self) -> u64 {
         // Both count up from 0, so their sum moves whenever either does.
-        self.lent_generation(self.generation.load(Ordering::Relaxed).wrapping_add(self.catalog.generation()))
+        self.generation.load(Ordering::Relaxed).wrapping_add(self.catalog.generation())
     }
 
     /// A number no other database made in this process has: with [`FontDb::generation`], it tells

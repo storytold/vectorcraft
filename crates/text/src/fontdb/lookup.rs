@@ -148,8 +148,12 @@ impl FontDb {
         match (installed, found.first()) {
             (Some((face, Match::Exact)), _) => (face.family, face.style),
             (_, Some(a)) => (a.family.clone(), style.to_string()),
-            // A legacy family name whose legacy style isn't the one asked for.
-            (Some((face, _)), None) => (face.family, style.to_string()),
+            // A legacy family name whose legacy style isn't the one asked for: the face of the
+            // PostScript name it reads as, if any, else its family in the style asked for.
+            (Some((face, _)), None) => match self.catalog.by_postscript_name(family) {
+                Some(named) => (named.family, named.style),
+                None => (face.family, style.to_string()),
+            },
             (None, None) => (family.to_string(), style.to_string()),
         }
     }
