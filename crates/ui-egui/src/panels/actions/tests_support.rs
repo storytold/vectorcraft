@@ -17,9 +17,13 @@ use super::edits::ActionsQuestion;
 use super::{INSERT_MENU_ITEM, INSERT_STOP, files, model, playback_drawn, tick_playback};
 use crate::VectorcraftApp;
 
-/// An app with the built-in set, in a window whose dialog host the tests drive.
+/// An app with the built-in set, in a window whose dialog host the tests drive and which has drawn its first frame, so
+/// the window's keymap holds the app's commands.
 pub(crate) fn new_app() -> VectorcraftApp {
-    crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()))
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+    let ctx = app.ui_ctx.clone().expect("a window");
+    crate::testing::app_frame(&mut app, &ctx, Default::default());
+    app
 }
 
 /// An action named `name` with `steps`, each a command and its params, in no set yet.
