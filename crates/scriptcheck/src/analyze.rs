@@ -1401,7 +1401,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             _ => return,
         };
         let Some(i) = catalog::DOM_FILE_WRITES.iter().position(|m| *m == key.as_ref()) else { return };
-        let Some(o) = self.objects.last_mut().filter(|o| o.depth == depth) else { return };
+        // A value that starts with a bracket has opened it already: the key is at the depth outside it.
+        let at = if t.is("(") || t.is("[") || t.is("{") { depth.saturating_sub(1) } else { depth };
+        let Some(o) = self.objects.last_mut().filter(|o| o.depth == at) else { return };
         if t.word("function") {
             o.bits |= 1 << i;
         } else {

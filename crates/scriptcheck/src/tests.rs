@@ -609,8 +609,11 @@ fn a_changed_or_shared_own_save_as_writes_a_file() {
         "var m = {saveAs: d.saveAs}; var n = {saveAs: function () {}, saveAs: d.saveAs};\n",
         "m.saveAs(f);\n",
         "n.saveAs(f);\n",
+        "var q = {saveAs: function () {}, saveAs: (d.saveAs)}; var s = {saveAs: function () {}, saveAs: [w][0]};\n",
+        "q['saveAs'](f);\n",
+        "s.saveAs(f);\n",
     ));
-    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16, 18, 19][..]));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16, 18, 19, 21, 22][..]));
 }
 
 /// Only a `var` statement directly in a function body or the global code that gives its first name
