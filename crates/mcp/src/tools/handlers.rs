@@ -81,19 +81,24 @@ fn paint_steps(a: &Args) -> Result<(Vec<Step<'static>>, Map<String, Value>), Str
 }
 
 /// Sets the paint `a` gives on `ids` (default: the selection) and as the default for new art.
-/// Returns the paint applied and the most objects one of its edits painted (the `objects` of the
-/// `paint.setFill`, `paint.setStroke` and `stroke.set` replies).
-pub(super) fn apply_paint(b: &mut dyn Backend, a: &Args, ids: Option<Value>) -> Result<(Value, u64), String> {
+/// Returns the paint applied, the most objects one of its edits painted (the `objects` of the
+/// `paint.setFill`, `paint.setStroke` and `stroke.set` replies) and the commands among them that
+/// painted no object.
+pub(super) fn apply_paint(b: &mut dyn Backend, a: &Args, ids: Option<Value>) -> Result<(Value, u64, Vec<&'static str>), String> {
     let (steps, applied) = paint_steps(a)?;
-    let mut objects = 0;
+    let (mut objects, mut unpainted) = (0, vec![]);
     for (cmd, mut p) in steps {
         if let Some(ids) = &ids {
             p["ids"] = ids.clone();
         }
         let r = exec(b, cmd, p)?;
-        objects = objects.max(r.get("objects").and_then(Value::as_u64).unwrap_or(0));
+        let n = r.get("objects").and_then(Value::as_u64).unwrap_or(0);
+        if n == 0 {
+            unpainted.push(cmd);
+        }
+        objects = objects.max(n);
     }
-    Ok((Value::Object(applied), objects))
+    Ok((Value::Object(applied), objects, unpainted))
 }
 
 /// Checks `draw_path` / `draw_shape`'s `dash`, `cap`, `join`, `opacity`, `name` and `effects`

@@ -74,11 +74,16 @@ pub struct Session {
     /// While Cmd lends `tool` (a selection tool) for a drag: the tool it was lent to, which comes
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
-    /// Set while tool actions that end by switching back to the Live Paint Bucket are applied (the
-    /// Eyedropper's sample into a stop of the bucket's gradient), and while a tool the bucket lent
-    /// is deactivated as it goes back: their paint commands change the colors the bucket paints
-    /// with ([`Session::bucket_paints`]).
-    pub(crate) back_to_bucket: bool,
+    /// While tool actions that end by switching back to a tool that paints with the chosen colors
+    /// are applied (the Eyedropper's sample into a stop of the Live Paint Bucket's gradient), and
+    /// while a tool such a tool lent is deactivated as it goes back, that tool's id: their paint
+    /// commands change the colors it paints with ([`Session::tool_paints`]).
+    pub(crate) back_to_painter: Option<&'static str>,
+    /// Whose gradient the stop was on when the Eyedropper was last armed to sample into one
+    /// (`tool.setOption {stop}`), when it was the gradient a tool paints with
+    /// ([`Session::painting_tool`]); None for a stop of the selection's paint. A pick armed for
+    /// such a stop samples only into a stop selected on that gradient, and otherwise ends.
+    pub(crate) stop_pick: Option<cmd::gradient::StopOwner>,
     /// Pointer and key input that came while the tool computed an edit on another thread, each with
     /// its number and view, made in order once the edit is applied.
     held_input: std::collections::VecDeque<(u64, tooling::HeldInput, ViewInfo)>,

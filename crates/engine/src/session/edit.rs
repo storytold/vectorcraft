@@ -303,6 +303,7 @@ impl Session {
             paint,
             preview_paint: None,
             color_mode_paints: None,
+            tool_paints: false,
             deferred_color_mode: None,
             active_layer: st.active_layer,
             layer_rows: st.layer_rows.clone(),
@@ -321,9 +322,11 @@ impl Session {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
-        // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
-        // each preview starts from the colors the interaction began with.
-        let bucket = self.bucket_paints();
+        // While the active tool paints with the chosen fill or stroke (the Live Paint Bucket, the
+        // Shape Builder), paint previews of that kind change only the colors it paints with, so each
+        // preview starts from the colors the interaction began with, as the document starts from
+        // its snapshot.
+        let tool_paints = self.tool_paints(false) || self.tool_paints(true);
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
@@ -337,7 +340,8 @@ impl Session {
             st.doc = it.doc.clone();
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
-            let restore_paint = bucket
+            it.tool_paints |= tool_paints;
+            let restore_paint = it.tool_paints
                 || cmd == "command.batch"
                 || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch")
                 || it.color_mode_paints.is_some();
@@ -484,13 +488,15 @@ impl Session {
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         self.pending_paint = None;
-        // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
-        // cancel puts back as well.
-        let bucket = self.bucket_paints();
+        // A color previewed while the active tool painted with the chosen fill or stroke is the
+        // tool's color, which the cancel puts back as well, also after another tool was chosen.
+        let tool_paints = self.tool_paints(false) || self.tool_paints(true);
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
-            .filter(|it| bucket || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
+            .filter(|it| {
+                tool_paints || it.tool_paints || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some()
+            })
             .map(|it| it.paint.clone())
         {
             self.paint = paint;

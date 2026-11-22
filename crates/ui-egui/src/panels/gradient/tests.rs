@@ -63,6 +63,39 @@ fn a_swatch_color_on_a_stop_or_a_point_keeps_its_model_in_a_cmyk_document() {
     assert_eq!(g.freeform.map(|f| f.points[1].color), Some(orange));
 }
 
+/// While the Shape Builder paints with a freeform fill, which lies on no object, the panel shows
+/// that fill's stops, and a swatch color recolors the selected stop instead of a point.
+#[test]
+fn the_shape_builders_freeform_fill_is_edited_by_its_stops() {
+    use egui_kittest::kittest::Queryable;
+    let mut app = app(json!({"color": "#000000"}));
+    app.select_tool("shapeBuilder");
+    app.run("paint.editGradient", json!({"stroke": false, "kind": "freeform"})).unwrap();
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    app.run("paint.editGradient", json!({"stroke": false, "stops": stops})).unwrap();
+    app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+    let orange = Color::rgb8(255, 128, 0);
+    assert!(recolor_selected(&mut app, orange, &json!({})), "the selected stop takes the color");
+    let Paint::Gradient(g) = active_paint(&app) else { panic!("the tool's fill is not a gradient") };
+    assert_eq!(g.gradient.kind, GradientKind::Freeform);
+    assert_eq!(g.gradient.stops[1].color, orange);
+    let mut fonts = false;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(280.0, 640.0)).with_accessibility_check(false).build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if !std::mem::replace(&mut fonts, true) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            show(app, ui);
+        },
+        app,
+    );
+    h.run_steps(3);
+    let _ = h.get_by_label("Delete Stop");
+    let _ = h.get_by_label("Location:");
+    let _ = h.get_by_label("Draw:");
+}
+
 /// In a CMYK document Add to Swatches and Save to Swatches keep the gradient's RGB stops RGB.
 #[test]
 fn a_gradient_saved_as_a_swatch_keeps_its_stops_models_in_a_cmyk_document() {

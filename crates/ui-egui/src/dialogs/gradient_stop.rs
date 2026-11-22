@@ -14,7 +14,7 @@
 use egui::{Sense, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::move_stop;
-use vectorcraft_color::{Color, FreeformPoint, GradientKind, GradientStop, Paint};
+use vectorcraft_color::{Color, FreeformPoint, GradientStop, Paint};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::params::color_json;
 
@@ -22,7 +22,7 @@ use super::{DialogResult, DialogSpec};
 use crate::VectorcraftApp;
 use crate::canvas::Xf;
 use crate::panels::active_paint;
-use crate::panels::gradient::{edit_point, set_stops, shown_points};
+use crate::panels::gradient::{edit_point, edits_points, set_stops, shown_points};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets::{self, Live};
@@ -56,7 +56,7 @@ impl Target {
 
 fn selected(app: &VectorcraftApp) -> Option<Target> {
     let Paint::Gradient(g) = active_paint(app) else { return None };
-    if g.gradient.kind == GradientKind::Freeform {
+    if edits_points(app, &g) {
         let f = shown_points(&g);
         let i = app.session.selected_freeform_point().filter(|i| *i < f.points.len())?;
         return Some(Target::Point(f.points[i], i));

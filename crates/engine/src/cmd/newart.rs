@@ -208,15 +208,30 @@ impl Session {
     /// After each command: with New Art Has Basic Appearance off, new art takes the appearance of
     /// the first selected object (so the last selection's once nothing is selected). Not while the
     /// Live Paint Bucket is the active tool: the fill and stroke are the colors it paints with.
+    /// While the Shape Builder is active, the fill it paints with stays ([`Session::tool_paints`]).
     pub(crate) fn inherit_new_art(&mut self) {
-        if self.prefs.new_art_basic || self.bucket_paints() {
+        let (fill, stroke) = (self.tool_paints(false), self.tool_paints(true));
+        if self.prefs.new_art_basic || (fill && stroke) {
             return;
         }
         let Some(st) = self.active() else { return };
         let Some(n) = st.selection.subjects().first().and_then(|id| st.doc.node(*id)) else { return };
         let style = super::style::linked_style(&st.doc, n).map(|g| g.name.clone());
         let (ap, opacity, blend) = (super::style::captured(n), n.opacity, n.blend);
+        let kept_fill = fill.then(|| self.paint.fill.clone());
+        let kept_stroke = stroke.then(|| (self.paint.stroke.clone(), self.paint.stroke_width));
         self.take_new_art(ap, opacity, blend, style, true);
+        let p = &mut self.paint;
+        // New art whose kept paint differs from the selection's is not linked to its graphic style.
+        if kept_fill.as_ref().is_some_and(|f| *f != p.fill) || kept_stroke.as_ref().is_some_and(|(s, w)| *s != p.stroke || *w != p.stroke_width) {
+            p.style = None;
+        }
+        if let Some(f) = kept_fill {
+            p.fill = f;
+        }
+        if let Some((s, w)) = kept_stroke {
+            (p.stroke, p.stroke_width) = (s, w);
+        }
     }
 
     /// After a command changed the selection, with New Art Has Basic Appearance on: the fill and
@@ -240,13 +255,14 @@ impl Session {
         let (fill, stroke) = self.proxy_paints();
         let weight_mixed = self.active().is_some_and(|st| st.stroke_mixed().weight);
         let weight = self.shown_stroke().filter(|st| st.paint != Paint::None && !weight_mixed).map(|st| st.width);
-        if !fill_mixed {
+        // A proxy that shows the color the active tool paints with (the Shape Builder's fill) keeps it.
+        if !fill_mixed && !self.tool_paints(false) {
             self.paint.fill = unplaced(&fill);
         }
-        if !stroke_mixed {
+        if !stroke_mixed && !self.tool_paints(true) {
             self.paint.stroke = unplaced(&stroke);
         }
-        if let Some(width) = weight {
+        if let Some(width) = weight.filter(|_| !self.tool_paints(true)) {
             self.paint.stroke_width = width;
         }
     }

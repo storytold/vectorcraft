@@ -537,14 +537,17 @@ impl Tool for EyedropperTool {
             self.stop = None;
             return vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&c) })), Action::SwitchTool(back)];
         }
-        // A pick for a stop of the Live Paint Bucket's gradient (the default paint's) ends without
-        // sampling once that stop is no longer selected (a Cmd-click selected another object) or no
-        // longer there (another paint was chosen): the click switches back.
-        let bucket_paint = if cx.fill_active { &cx.paint.fill } else { &cx.paint.stroke };
-        let bucket_stop = cx.gradient_stop.filter(|i| matches!(bucket_paint, Paint::Gradient(g) if *i < g.gradient.stops.len()));
-        if self.stop.as_deref() == Some("livePaintBucket") && bucket_stop.is_none() {
-            self.stop = None;
-            return vec![Action::SwitchTool("livePaintBucket".into())];
+        // A pick for a stop of the gradient of a tool that paints with the chosen colors (the
+        // default paint's: the Live Paint Bucket's, or the Shape Builder's fill) ends
+        // without sampling once that stop is no longer selected (a Cmd-click selected another
+        // object) or no longer there (another paint was chosen): the click switches back.
+        let tool_paint = if cx.fill_active { &cx.paint.fill } else { &cx.paint.stroke };
+        let tool_stop = cx.gradient_stop.filter(|i| matches!(tool_paint, Paint::Gradient(g) if *i < g.gradient.stops.len()));
+        if cx.tool_paints
+            && tool_stop.is_none()
+            && let Some(back) = self.stop.take()
+        {
+            return vec![Action::SwitchTool(back)];
         }
         let stop = self.stop.as_ref().zip(cx.gradient_stop);
         // A plain click on a selected gradient mesh gives the fill color to the point there, else
@@ -852,19 +855,23 @@ mod tests {
             ]
         );
         assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}), "one sample only");
-        // Armed for the Live Paint Bucket with its stop no longer selected, a click ends the pick.
-        cx.gradient_stop = None;
-        t.set_option("stop", &json!("livePaintBucket"));
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
-        assert_eq!(a, vec![Action::SwitchTool("livePaintBucket".into())]);
-        assert_eq!(t.returns_to(), None);
-        // So does a click once the default paint has no such stop (here, a solid fill).
-        cx.gradient_stop = Some(1);
-        assert!(!matches!(cx.paint.fill, Paint::Gradient(_)));
-        t.set_option("stop", &json!("livePaintBucket"));
-        assert_eq!(t.returns_to(), Some("livePaintBucket"));
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
-        assert_eq!(a, vec![Action::SwitchTool("livePaintBucket".into())]);
+        // Armed for a tool that paints with the chosen colors (the Live Paint Bucket, or the Shape
+        // Builder's fill) with its stop no longer selected, a click ends the pick.
+        cx.tool_paints = true;
+        for back in ["livePaintBucket", "shapeBuilder"] {
+            cx.gradient_stop = None;
+            t.set_option("stop", &json!(back));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+            assert_eq!(a, vec![Action::SwitchTool(back.into())]);
+            assert_eq!(t.returns_to(), None);
+            // So does a click once the default paint has no such stop (here, a solid fill).
+            cx.gradient_stop = Some(1);
+            assert!(!matches!(cx.paint.fill, Paint::Gradient(_)));
+            t.set_option("stop", &json!(back));
+            assert_eq!(t.returns_to(), Some(back));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+            assert_eq!(a, vec![Action::SwitchTool(back.into())]);
+        }
         // Neither a Key Color pick nor an Image Trace ignored-color pick is a gradient stop's.
         t.set_option("brushKeyColor", &json!(true));
         t.set_option("stop", &json!("livePaintBucket"));

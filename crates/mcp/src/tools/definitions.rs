@@ -282,7 +282,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "set_paint",
             "Set paint",
-            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed.",
+            "Set fill, stroke and/or stroke weight on the selection (or `ids`) and as the default for new art. Returns {applied, objects}: `objects` counts the objects painted, as paint.setFill, paint.setStroke and stroke.set report them (the largest of their counts); when it is 0, a `note` says that only the default for new art changed, and when only some of those commands painted no object, `unpainted` lists them with a `note`.",
             obj(
                 json!({
                     "fill": paint_schema("Fill"),
