@@ -136,12 +136,14 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     }
 
     /// `name`, a property of `receiver` read with `.` or as a string literal in brackets, `before`
-    /// coming before the receiver: when it is a File object's setter, the next token says whether it
-    /// is set ([`Pending::Setter`]). An update operator in `before` is a prefix (`++f.length`) when
-    /// the receiver is on its line, or when it starts a line or comes where an expression may start;
-    /// otherwise it ends the operand before it (`i++` and a line break, then `f.length`).
+    /// coming before the receiver: when it is the setter of an object that may be a File object (not
+    /// of one that is a Folder object whatever the path names), the next token says whether it is set
+    /// ([`Pending::Setter`]). An update operator in `before` is a prefix
+    /// (`++f.length`) when the receiver is on its line, or when it starts a line or comes where an
+    /// expression may start; otherwise it ends the operand before it (`i++` and a line break, then
+    /// `f.length`).
     fn setter(&mut self, name: &str, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>, line: Option<usize>) {
-        if catalog::FILE_SETTERS.contains(&name) && self.file_receiver(receiver, before) {
+        if catalog::FILE_SETTERS.contains(&name) && self.held_file(receiver, before) == Some(false) {
             // Before a receiver that ends in `)` (`new File(i++).length`), the operator is inside the
             // parentheses.
             let update = before.filter(|b| (b.is("++") || b.is("--")) && receiver.is_some_and(|r| r.kind == T::Ident));
@@ -328,7 +330,21 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// (not a property of the same name), or a File or Folder object made in place or held in
     /// grouping parentheses ([`Sig::file`]).
     fn file_receiver(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> bool {
-        receiver.is_some_and(|r| r.file || (r.kind == T::Ident && !member_mark(before) && self.files.contains(r.text)))
+        self.held_file(receiver, before).is_some()
+    }
+
+    /// What [`Self::file_receiver`] finds: `Some(true)` for a Folder object whatever the path names
+    /// ([`Sig::folder`], [`Analyzer::folder`]), `Some(false)` for an object that may be a File object,
+    /// and `None` for anything else.
+    fn held_file(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> Option<bool> {
+        let r = receiver?;
+        if r.file {
+            Some(r.folder)
+        } else if r.kind == T::Ident && !member_mark(before) && self.alias(&r) {
+            Some(self.folder(r.text))
+        } else {
+            None
+        }
     }
 
     fn string(&mut self, t: &Sig<'s>, line: Option<usize>) {
