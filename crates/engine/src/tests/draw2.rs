@@ -2692,6 +2692,28 @@ fn a_smooth_drag_that_only_meets_corners_adds_no_undo_step() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
 }
 
+/// Drags of the Smooth tool again and again along the lower half of an ellipse add no anchors after
+/// the first, which splits the two segments the drag's reach ends on, and leave no corner. The
+/// anchors at those splits lie on the edge of the next drag's reach, where the segment beyond each
+/// one is in reach at that anchor only, so the next drag leaves that segment as it is.
+#[test]
+fn smooth_drags_again_and_again_along_part_of_an_ellipse_add_no_anchors_or_corners() {
+    let mut s = session();
+    let r = s.execute("shape.ellipse", &json!({"x": 100, "y": 100, "width": 200, "height": 120})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let drag: Vec<Point> =
+        (0..=32).map(|i| f64::from(i) / 32.0 * std::f64::consts::PI).map(|a| Point::new(200.0 + 100.0 * a.cos(), 160.0 + 60.0 * a.sin())).collect();
+    let mut first = None;
+    for pass in 1..=6 {
+        smooth_pass(&mut s, &drag);
+        let p = path(&s, id);
+        let turns = smooth_anchor_turns(&p.subpaths[0]);
+        assert!(turns.iter().all(|t| *t < 1.0), "pass {pass} leaves a corner: {turns:?}");
+        assert_eq!(p.anchor_count(), *first.get_or_insert(p.anchor_count()), "pass {pass}");
+    }
+}
+
 #[test]
 fn join_tool_joins_two_lines() {
     let mut s = session();

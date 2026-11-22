@@ -2077,18 +2077,19 @@ fn a_dimension_line_placed_beside_another_lands_on_its_level() {
     run(&mut s, "object.lock", json!({}));
     assert_eq!(level_next(&mut s, plain, 172.5), (pt(200.0, 172.5), pt(300.0, 172.5)));
     // A dimension of the right edge has a vertical line, which is not parallel to the first: the
-    // pointer 2.5 points below the first line's level places it where the pointer is.
+    // pointer 2.5 points right of the first line's left end, within reach across the vertical
+    // line, places it where the pointer is.
     let (mut s, _) = level_start(plain);
     linear_click(&mut s, plain, 300.0, 200.0);
     linear_click(&mut s, plain, 300.0, 300.0);
-    linear_click(&mut s, plain, 330.0, 172.5);
+    linear_click(&mut s, plain, 102.5, 172.5);
     let id = s.doc().unwrap().selection.objects[0].0;
-    assert_eq!(recipe(&s, id).line_ends(), (pt(330.0, 200.0), pt(330.0, 300.0)));
+    assert_eq!(recipe(&s, id).line_ends(), (pt(102.5, 200.0), pt(102.5, 300.0)));
 }
 
 /// While a dimension is placed with its line on the level of another, one alignment guide runs
-/// along the level across both lines. Off the level, after a dropped press and with Alignment
-/// Guides off, no guide shows.
+/// along the level across both lines. Off the level, after a dropped press and with Smart Guides
+/// or Alignment Guides off, no guide shows.
 #[test]
 fn a_dimension_line_on_another_level_shows_one_guide_across_both() {
     let plain = ViewInfo::default();
@@ -2097,7 +2098,10 @@ fn a_dimension_line_on_another_level_shows_one_guide_across_both() {
     linear_click(&mut s, plain, 200.0, 200.0);
     linear_click(&mut s, plain, 300.0, 200.0);
     let guides = guide_lines(&mut s, plain, 250.0, 172.5);
-    assert!(guides.iter().any(|(a, b)| near(*a, pt(100.0, 170.0)) && near(*b, pt(300.0, 170.0))), "{guides:?}");
+    assert!(matches!(guides.as_slice(), [(a, b)] if near(*a, pt(100.0, 170.0)) && near(*b, pt(300.0, 170.0))), "{guides:?}");
+    // Smart Guides turned off before the next pointer move: the guide goes.
+    let off = ViewInfo { smart_guides: false, ..plain };
+    assert!(s.overlays(off).iter().all(|o| !matches!(o, vectorcraft_engine::tools::Overlay::Line { .. })), "{:?}", s.overlays(off));
     assert!(guide_lines(&mut s, plain, 250.0, 180.0).is_empty(), "no guide off the level");
     // A press on the level that the app drops cancels the preview, and its guide goes with it.
     assert!(!guide_lines(&mut s, plain, 250.0, 172.5).is_empty());
