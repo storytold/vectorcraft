@@ -558,6 +558,57 @@ fn save_as_and_export_file_in_brackets_write_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
 }
 
+/// `saveAs` and `exportFile` called on an object literal of the script's own that defines them write
+/// nothing, with `.` or in brackets. On a document, on a variable the check does not follow, on one
+/// assigned something else since, and for a method the literal does not define, they write the file.
+#[test]
+fn the_scripts_own_save_as_writes_no_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var local = {saveAs: function () {}, 'n': 1};\n",
+        "local.saveAs(f);\n",
+        "local['saveAs'](f);\n",
+        "app.activeDocument.saveAs(f);\n",
+        "local.exportFile(f);\n",
+        "other.saveAs(f);\n",
+        "local = app.activeDocument;\n",
+        "local.saveAs(f);\n",
+        "var t = {x: 1, a: ok ? saveAs : 0, 'exportFile': function () {}};\n",
+        "t['exportFile'](f);\n",
+        "t.saveAs(f);\n",
+        "var activeDocument = {saveAs: function () {}};\n",
+        "app.activeDocument['saveAs'](f);\n",
+        "app.activeDocument.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[5, 6, 7, 9, 12, 14, 15][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[5, 6, 7, 9, 12, 14, 15][..])]);
+}
+
+/// Once the script replaces or deletes such a method, indexes the object with a computed key, or
+/// lets another name hold the object, its `saveAs` may write a file again.
+#[test]
+fn a_changed_or_shared_own_save_as_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var a = {saveAs: function () {}}, b = {saveAs: function () {}}, c = {saveAs: function () {}};\n",
+        "var d = {saveAs: function () {}}, e = {saveAs: function () {}}, g = {saveAs: function () {}};\n",
+        "a.saveAs(f); b['saveAs'](f); a.n = 1; a.n;\n",
+        "a.saveAs = app.activeDocument.saveAs;\n",
+        "b['saveAs'] = w;\n",
+        "c[k] = w;\n",
+        "delete d.saveAs;\n",
+        "var h = e;\n",
+        "use(g);\n",
+        "a.saveAs(f);\n",
+        "b.saveAs(f);\n",
+        "c.saveAs(f);\n",
+        "d.saveAs(f);\n",
+        "e.saveAs(f);\n",
+        "g['saveAs'](f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16][..]));
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]

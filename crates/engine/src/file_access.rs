@@ -992,14 +992,17 @@ mod tests {
         };
         let (kept, fresh) = (s(out.clone()), s(base.join("out/new.svg")));
         let check = |p: &str| with_script_gate(gate.clone(), || (check_write(p).is_ok(), check_read(p).is_ok()));
+        // The open document's file is the only grant: no folder scope covers it.
+        let documents = ScriptGate { write: ScriptScope::default(), documents: vec![kept.clone()], ..gate.clone() };
+        let document_write = || with_script_gate(documents.clone(), || check_write(&kept).is_ok());
         assert_eq!(check(&kept), (true, true));
+        assert!(document_write(), "an open document's file is written");
         let mut perms = std::fs::metadata(&out).unwrap().permissions();
         perms.set_readonly(true);
         std::fs::set_permissions(&out, perms.clone()).unwrap();
         assert_eq!(check(&kept), (false, true), "a read-only file is read but not written");
         assert!(check(&fresh).0, "a new file next to it is written");
-        let documents = ScriptGate { documents: vec![kept.clone()], ..gate.clone() };
-        assert!(!with_script_gate(documents, || check_write(&kept).is_ok()), "also when it is an open document's file");
+        assert!(!document_write(), "also when it is an open document's file");
         #[allow(clippy::permissions_set_readonly_false)]
         perms.set_readonly(false);
         std::fs::set_permissions(&out, perms).unwrap();

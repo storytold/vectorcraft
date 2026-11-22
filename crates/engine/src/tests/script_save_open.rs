@@ -64,7 +64,7 @@ fn save_as_export_file_and_open_write_and_read_where_the_script_may() {
              vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}});\n\
              d.saveAs(new File(dir + '/a.svg'));\n\
              var o = new PDFSaveOptions(); vc.log([o.typename, o.compatibility, o.preserveEditability]);\n\
-             o.compatibility = PDFCompatibility.ACROBAT7; o.viewAfterSaving = false; o.someOtherName = 3;\n\
+             o.compatibility = PDFCompatibility.ACROBAT7; o.viewAfterSaving = false; o.pDFXStandardDescription = undefined;\n\
              o.colorCompression = 'CompressionQuality.None';\n\
              d.saveAs(new File(dir + '/b.pdf'), o); vc.log(d.name);\n\
              var p = new ExportOptionsPNG24(); p.horizontalScale = p.verticalScale = 200; p.artBoardClipping = true;\n\
@@ -481,6 +481,12 @@ fn bad_arguments_are_refused_with_an_error() {
         (format!("app.open({f}, undefined, {{pageToOpen: 0}});"), "from 1"),
         (format!("app.open({f}, undefined, {{pDFCropToBox: 'art'}});"), "PDFBoxType"),
         (format!("app.open({f}, undefined, 5);"), "PDFFileOptions"),
+        (format!("var o = new PDFSaveOptions(); o.trimMark = true; app.activeDocument.saveAs({f}, o);"), "PDFSaveOptions has no option trimMark"),
+        (
+            format!("var p = new ExportOptionsPNG24(); p.transparancy = false; app.activeDocument.exportFile({f}, ExportType.PNG24, p);"),
+            "ExportOptionsPNG24 has no option transparancy",
+        ),
+        (format!("app.open({f}, undefined, {{pageToOpne: 2}});"), "PDFFileOptions has no option pageToOpne"),
         ("app.userInteractionLevel = 'quiet';".into(), "UserInteractionLevel"),
         (format!("app.open({});", quoted(&dir.join("x.svg"))), "open needs a File"),
     ];
@@ -560,7 +566,7 @@ fn open_takes_the_page_and_crop_box_of_its_options() {
         &mut s,
         &base,
         &format!(
-            "Folder.userData; var g = app.open(new File({}), DocumentColorSpace.CMYK, {{pageToOpen: 2, pDFCropToBox: PDFBoxType.PDFMEDIABOX}});\n\
+            "Folder.userData; var g = app.open(new File({}), DocumentColorSpace.CMYK, {{pageToOpen: 2, pDFCropToBox: PDFBoxType.PDFMEDIABOX, typename: 'PDFFileOptions', later: undefined}});\n\
              vc.log(g.documentColorSpace);",
             quoted(&pdf)
         ),
@@ -570,5 +576,10 @@ fn open_takes_the_page_and_crop_box_of_its_options() {
     assert!(!e.is_empty(), "a page the file does not have");
     assert_eq!(s.documents().len(), 2);
     assert_eq!(s.active().unwrap().doc.artboards.len(), 1, "one page");
+    // Options left undefined are left out: the file opens as it does without options.
+    let undefined = format!("Folder.userData; app.open(new File({}), undefined, {{pageToOpen: undefined, pDFCropToBox: undefined}});", quoted(&pdf));
+    logged(&mut s, &base, &undefined);
+    assert_eq!(s.documents().len(), 3);
+    assert_eq!(s.active().unwrap().doc.artboards.len(), 2, "both pages");
     let _ = std::fs::remove_dir_all(base);
 }

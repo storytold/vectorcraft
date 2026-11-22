@@ -495,6 +495,8 @@ struct Saved {
     shadowed: Option<bool>,
     /// It was a platform name the script had a meaning of its own for.
     own: bool,
+    /// What it held in [`Analyzer::writers`], 0 for nothing.
+    writer: u8,
 }
 
 /// The open brackets and their lines, up to [`crate::Limits::nesting`]; the brackets past that are
@@ -566,6 +568,16 @@ struct Analyzer<'s, 'a, 'l> {
     maybe_files: HashSet<String>,
     /// `maybe_files` ran out of room: no variable counts as holding a Folder object.
     maybe_files_full: bool,
+    /// The variables holding an object literal of the script's own that defines a method named as a
+    /// document method that writes a file (`{saveAs: …}`), each with a bit per method it defines (bit
+    /// `i` for `catalog::DOM_FILE_WRITES[i]`): a call of that method on them writes nothing.
+    writers: HashMap<String, u8>,
+    /// The object literals being assigned to a variable, the innermost last, each with the bracket
+    /// depth inside its `{`, up to [`crate::Limits::nesting`] of them.
+    objects: Vec<(String, usize)>,
+    /// What the receiver before the last `[` read defines in [`Analyzer::writers`], 0 for a receiver
+    /// that is not such a variable.
+    index_receiver: u8,
     /// The platform names ([`platform_name`]) the script declares or assigns a meaning of its own
     /// for: they no longer stand for the platform's objects.
     own_names: HashSet<String>,
@@ -637,6 +649,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             folders: known.folders.clone(),
             maybe_files: known.files.difference(&known.folders).cloned().collect(),
             maybe_files_full: false,
+            writers: HashMap::new(),
+            objects: vec![],
+            index_receiver: 0,
             own_names: HashSet::new(),
             scopes: vec![],
             declared,
@@ -742,6 +757,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.group_step(&t, started, before);
         self.paren_step(&t, before);
         self.assignment(&t, started);
+        self.object_key(&t);
         self.features(&t);
         self.newer(&t);
         self.module_check(&t);
@@ -841,6 +857,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn bind(&mut self, name: String, path: String) {
         self.files.remove(&name);
         self.folders.remove(&name);
+        self.writers.remove(&name);
         if self.bound.contains_key(&name) || self.acc.room(self.bound.len()) {
             self.bound.insert(name, path);
         }
@@ -850,6 +867,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn hold_file(&mut self, name: String, folder: bool) {
         self.bound.remove(&name);
         self.folders.remove(&name);
+        self.writers.remove(&name);
         if !folder && !self.maybe_files.contains(&name) {
             if self.acc.room(self.maybe_files.len()) {
                 self.maybe_files.insert(name.clone());
@@ -973,6 +991,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             local: false,
             shadowed,
             own: self.own_names.contains(name),
+            writer: self.writers.get(name).copied().unwrap_or(0),
         }
     }
 
@@ -1006,6 +1025,11 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             self.own_names.insert(name.clone());
         } else {
             self.own_names.remove(&name);
+        }
+        if saved.writer != 0 {
+            self.writers.insert(name.clone(), saved.writer);
+        } else {
+            self.writers.remove(&name);
         }
         if let Some(hidden) = saved.shadowed
             && let Some(i) = catalog::DOM_ROOTS.iter().position(|r| *r == name)
@@ -1056,6 +1080,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.bound.remove(name);
         self.files.remove(name);
         self.folders.remove(name);
+        self.writers.remove(name);
         self.hide_root(name);
     }
 
@@ -1249,6 +1274,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             local: false,
             shadowed: catalog::DOM_ROOTS.contains(&name).then_some(true),
             own: platform_name(name),
+            writer: 0,
         };
         let outside = std::mem::replace(&mut c.saved, empty);
         if let Some(scope) = self.scopes.last_mut() {
@@ -1272,6 +1298,12 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.start_value(a.name, Operand::Done(Held::File { folder: false }));
             } else if !a.after_new && t.is("(") {
                 self.start_group(a.name);
+            } else if !a.after_new && t.is("{") {
+                // An object literal: its keys are read at the depth inside its `{` ([`Self::object_key`]).
+                self.unbind(&a.name);
+                if self.objects.len() < self.acc.limits.nesting {
+                    self.objects.push((a.name, self.depth()));
+                }
             } else {
                 self.unbind(&a.name);
             }
@@ -1307,6 +1339,28 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             Some((name, true)) => self.start_value(name.to_string(), Operand::Other),
             Some((name, false)) => self.unbind(name),
             None => {}
+        }
+    }
+
+    /// `t` in an object literal assigned to a variable: a `:` directly inside its braces after a key
+    /// that names a document method writing a file (`{saveAs: …}`, `{'exportFile': …}`) makes the
+    /// variable one of [`Analyzer::writers`]. A closing brace ends the literals it closes.
+    fn object_key(&mut self, t: &Sig<'s>) {
+        let depth = self.depth();
+        while self.objects.pop_if(|(_, d)| *d > depth).is_some() {}
+        if !t.is(":") {
+            return;
+        }
+        let [h0, h1, ..] = self.h;
+        let Some(name) = self.objects.last().filter(|(_, d)| *d == depth).map(|(n, _)| n.clone()) else { return };
+        let key = match h0 {
+            Some(k) if k.kind == T::Ident => Cow::Borrowed(k.text),
+            Some(k) if k.kind == T::Str => Cow::Owned(unquote(k.text, 32)),
+            _ => return,
+        };
+        let Some(i) = catalog::DOM_FILE_WRITES.iter().position(|m| *m == key.as_ref()) else { return };
+        if (is(h1, "{") || is(h1, ",")) && (self.writers.contains_key(&name) || self.acc.room(self.writers.len())) {
+            *self.writers.entry(name).or_insert(0) |= 1 << i;
         }
     }
 

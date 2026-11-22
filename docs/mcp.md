@@ -2726,8 +2726,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
   visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
   when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
-  an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`; properties the help
-  pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
+  an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`. A property the help
+  pages do not list throws an error that names it (`PDFFileOptions` also accepts its read-only `typename` and
+  `parent`), and an `undefined` one is left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
   keeps the preset's value. A bad value throws an error before anything is written.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.

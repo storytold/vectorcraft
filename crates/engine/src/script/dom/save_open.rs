@@ -27,10 +27,12 @@
 //!   and when one of those files may not be written, none of them is.
 //! - An option the classes here map is applied; a listed option that is not mapped is accepted at
 //!   the default its help page gives and throws an error that says it is not available yet at any
-//!   other value; a property the help pages do not list is left out. With `pDFPreset` named, a
-//!   `PDFSaveOptions` option still at a new object's default keeps the preset's value.
+//!   other value; a property the help pages do not list throws an error that names it, unless it is
+//!   `undefined`. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
+//!   keeps the preset's value.
 //! - `app.open(file, documentColorSpace?, options?)` takes `options` as a `PDFFileOptions` record:
-//!   an object with `pageToOpen` and `pDFCropToBox`, used for that call only.
+//!   an object with `pageToOpen` and `pDFCropToBox`, used for that call only. Any other property
+//!   but `typename` and `parent` throws the same error, unless it is `undefined`.
 //! - `app.userInteractionLevel` starts at `UserInteractionLevel.DISPLAYALERTS` in each run. The
 //!   commands a script runs never show a dialog, so the level does not change what they do, and it
 //!   never allows a file the script's grants do not.
@@ -129,6 +131,11 @@ struct OptionClass {
 
 fn not_available(class: &str, name: &str) -> HostError {
     HostError::Error(format!("{class}.{name} is not available yet"))
+}
+
+/// The error a property that the help page of `class` does not list throws.
+fn not_an_option(class: &str, name: &str) -> HostError {
+    HostError::Error(format!("{class} has no option {name}"))
 }
 
 fn whole_in(d: &Data, what: &str, lo: u64, hi: u64) -> std::result::Result<u64, HostError> {
@@ -522,7 +529,7 @@ fn options_params(class: &OptionClass, d: &Data) -> std::result::Result<Map<Stri
         match class.kept.iter().find(|(n, _)| n == k) {
             Some((_, default)) if default.matches(v) => {}
             Some(_) => return Err(not_available(class.name, k)),
-            None => {}
+            None => return Err(not_an_option(class.name, k)),
         }
     }
     Ok(p)
@@ -670,6 +677,9 @@ fn app_open(h: &Host, a: &[Data]) -> Answer {
             return Err(HostError::Type("open's options must be a PDFFileOptions record".into()));
         }
         for (k, v) in items {
+            if matches!(v, Data::Undefined) {
+                continue;
+            }
             match k.as_str() {
                 "pageToOpen" => {
                     p.insert("page".into(), json!(whole_in(v, "PDFFileOptions.pageToOpen", 1, 1_000_000)?));
@@ -686,7 +696,9 @@ fn app_open(h: &Host, a: &[Data]) -> Answer {
                     };
                     p.insert("cropTo".into(), json!(crop));
                 }
-                _ => {}
+                // The read-only members the help page lists.
+                "typename" | "parent" => {}
+                _ => return Err(not_an_option("PDFFileOptions", k)),
             }
         }
     }

@@ -84,6 +84,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 }
             }
         }
+        self.writer_use(t);
         match t.kind {
             T::Ident => self.name(t, line),
             T::Punct => self.punct(t, line),
@@ -272,6 +273,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 let name = h0.map(|s| unquote(s.text, 16)).unwrap_or_default();
                 self.setter(&name, h2, h3, line);
             }
+            // `local['saveAs']`: what the object before the bracket defines, for a call that may follow.
+            "[" => self.index_receiver = self.writer_bits(h0, h1),
             "(" => self.call(line),
             // `Name.prototype["+"] = …` defines an operator.
             "=" => {
@@ -292,8 +295,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         // `doc['saveAs'](f)`: a document method named by a string literal in brackets.
         if is(h0, "]")
             && is(h2, "[")
-            && let Some(name) = h1.filter(|s| s.kind == T::Str)
-            && catalog::DOM_FILE_WRITES.contains(&unquote(name.text, 32).as_str())
+            && let Some(method) = h1.filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 32))
+            && catalog::DOM_FILE_WRITES.contains(&method.as_str())
+            && !Self::defines(self.index_receiver, &method)
         {
             self.acc.feature(FeatureId::FileWrite, line);
             self.acc.outside(OutsideId::FilesWritten, line, None);
@@ -313,7 +317,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
                 self.acc.feature(FeatureId::FileRead, line);
-            } else if (file && catalog::FILE_WRITES.contains(&n)) || catalog::DOM_FILE_WRITES.contains(&n) {
+            } else if (file && catalog::FILE_WRITES.contains(&n))
+                || (catalog::DOM_FILE_WRITES.contains(&n) && !Self::defines(self.writer_bits(h2, h3), n))
+            {
                 self.acc.feature(FeatureId::FileWrite, line);
                 self.acc.outside(OutsideId::FilesWritten, line, None);
             } else if n == catalog::EXECUTE {
@@ -334,6 +340,57 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.outside(OutsideId::UnseenCode, line, None);
             }
         }
+    }
+
+    /// The methods that `receiver`, which `before` comes before, defines when it is a variable holding
+    /// an object literal of the script's own ([`Analyzer::writers`]), not a property of the same name;
+    /// 0 for anything else. A receiver the check does not follow may be a document.
+    fn writer_bits(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> u8 {
+        match receiver {
+            Some(r) if r.kind == T::Ident && !member_mark(before) => self.writers.get(r.text).copied().unwrap_or(0),
+            _ => 0,
+        }
+    }
+
+    /// A variable of [`Analyzer::writers`] used before `t` in any way but a member (`local.name`,
+    /// `local['name']`) or an assignment to it ([`Analyzer::assignment`]), or whose `saveAs` or
+    /// `exportFile` is assigned: another name may hold its object, or its methods may change, so its
+    /// own methods are no longer known (`var b = local`, `f(local)`, `local.saveAs = w`,
+    /// `local[k] = w`, `delete local.saveAs`).
+    fn writer_use(&mut self, t: &Sig<'s>) {
+        let [h0, h1, h2, h3] = self.h;
+        let writer = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| s.filter(|s| self.writer_bits(Some(*s), before) != 0).map(|s| s.text);
+        let changes = t.kind == T::Punct && (t.text == "=" || COMPOUND.contains(&t.text) || matches!(t.text, "++" | "--"));
+        let key = t.is(":") && (is(h1, "{") || is(h1, ","));
+        let escaped = if word(h0, "delete") {
+            // `delete local…`
+            writer(Some(*t), h0)
+        } else if let Some(name) = writer(h0, h1) {
+            // `local` followed by anything but a member, its own assignment or an object key's `:`.
+            (!t.is(".") && !t.is("[") && !t.is("=") && !key).then_some(name)
+        } else if is(h1, ".") && changes && h0.is_some_and(|m| catalog::DOM_FILE_WRITES.contains(&m.text)) {
+            // `local.saveAs = …`
+            writer(h2, h3)
+        } else if is(h0, "[") {
+            // `local[k]` with a key that is not a string literal.
+            writer(h1, h2).filter(|_| t.kind != T::Str)
+        } else if is(h1, "[") && h0.is_some_and(|s| s.kind == T::Str) {
+            // `local['name' + k]`.
+            writer(h2, h3).filter(|_| !t.is("]"))
+        } else if is(h0, "]") && is(h2, "[") && changes && h1.is_some_and(|m| catalog::DOM_FILE_WRITES.contains(&unquote(m.text, 32).as_str())) {
+            // `local['saveAs'] = …`
+            writer(h3, None)
+        } else {
+            None
+        };
+        if let Some(name) = escaped {
+            self.writers.remove(name);
+        }
+    }
+
+    /// Whether `bits` ([`Self::writer_bits`]) has `method`: the receiver's own `method` is called.
+    fn defines(bits: u8, method: &str) -> bool {
+        catalog::DOM_FILE_WRITES.iter().position(|m| *m == method).is_some_and(|i| bits & (1 << i) != 0)
     }
 
     /// Whether `receiver`, which `before` comes before, is a variable holding a File or Folder object
