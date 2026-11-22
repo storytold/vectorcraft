@@ -320,21 +320,36 @@ pub fn open_edit(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
     }
     fields.insert("__edit".into(), id);
+    fields.insert(EDIT_DOC.into(), json!(app.session.active().map(|st| st.uid)));
     app.ui.dialog = Some(Dialog { kind: GENERATE_KIND.into(), fields });
     Ok(Value::Null)
 }
 
-/// Does the selection hold exactly one generated art object, which Edit Generated Art… edits?
+/// The field of an Edit Generated Art… dialog that holds the [`uid`](vectorcraft_engine::DocState::uid)
+/// of the document whose object it edits.
+const EDIT_DOC: &str = "__editDoc";
+
+/// OK's error when that document is no longer the active one.
+const EDIT_DOC_GONE: &str = "the document it was prepared for is no longer active";
+
+/// Is the selection one object, a generated art object, which Edit Generated Art… edits?
 pub fn one_generated_selected(app: &VectorcraftApp) -> bool {
-    app.session
-        .active()
-        .is_some_and(|st| st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some_and(|n| n.extras().generated.is_some())).count() == 1)
+    app.session.active().is_some_and(|st| match st.selection.objects.as_slice() {
+        [id] => st.doc.node(*id).is_some_and(|n| n.extras().generated.is_some()),
+        _ => false,
+    })
 }
 
 /// OK: draws new generated art (`plugin.generate`), or draws the object of `__edit` again
-/// (`plugin.editGenerated`), as one undo step; the dialog closes once it is drawn.
+/// (`plugin.editGenerated`), as one undo step; the dialog closes once it is drawn. When another
+/// document has come to the front since Edit Generated Art… opened the dialog, OK draws nothing,
+/// closes the dialog and says so.
 fn generate_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let r = match d.fields.get("__edit").filter(|v| !v.is_null()) {
+        Some(_) if d.fields.get(EDIT_DOC) != Some(&json!(app.session.active().map(|st| st.uid))) => {
+            app.ui.dialog = None;
+            return Err(EDIT_DOC_GONE.into());
+        }
         Some(id) => app.run("plugin.editGenerated", json!({"id": id, "params": form::params(d)})),
         None => app.run(GENERATE, json!({"id": d.str("__plugin"), "params": form::params(d)})),
     };

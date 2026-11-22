@@ -76,3 +76,41 @@ fn object_plug_ins_draws_and_edits_generated_art() {
     assert_eq!(kind(&app), None);
     assert_eq!(art(&app, id), ["Big"]);
 }
+
+/// Edit Generated Art… is for one selected object: a generated art object selected with another
+/// object is not. OK in its dialog draws the object of the document it was opened in: after another
+/// document comes to the front, OK draws nothing there, closes the dialog and says why.
+#[test]
+fn edit_generated_art_is_for_one_object_of_the_document_it_opened_in() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let manifest = tpl::generator("test.ui.generator2", r#"{"size":{"type":"int","min":1,"max":100,"default":10}}"#);
+    let wasm = wat::parse_str(tpl::when_given_else(&manifest, Given::Params, r#""size":20"#, BIG, SMALL)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm)})).unwrap();
+    let generate = |app: &mut VectorcraftApp| {
+        app.run("plugin.generate", json!({"id": "test.ui.generator2", "params": {}})).unwrap();
+        app.session.doc().unwrap().selection.objects[0].0
+    };
+
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let first = generate(&mut app);
+    let square = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap();
+    app.run("select.set", json!({"ids": [first, square["id"]]})).unwrap();
+    assert!(!plugin::one_generated_selected(&app), "a generated art object and a rectangle");
+    app.run("select.set", json!({"ids": [first]})).unwrap();
+    assert!(plugin::one_generated_selected(&app));
+
+    app.run(plugin::EDIT_COMMAND, json!({})).unwrap();
+    frame(&mut app);
+    set(&mut app, "size", json!(20));
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let second = generate(&mut app);
+    let steps = app.session.doc().unwrap().history.undo.len();
+    let e = confirm(&mut app).unwrap_err();
+    assert_eq!(e, "the document it was prepared for is no longer active");
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(art(&app, second), ["Small"]);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), steps);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(art(&app, first), ["Small"]);
+    app.run("plugin.remove", json!({"id": "test.ui.generator2"})).unwrap();
+}

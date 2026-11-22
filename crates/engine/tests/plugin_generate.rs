@@ -146,6 +146,14 @@ fn editing_the_parameters_draws_the_art_again_as_one_undo_step() {
     s.execute("select.none", &json!({})).unwrap();
     let e = s.execute("plugin.editGenerated", &json!({"params": {"size": 20}})).unwrap_err().to_string();
     assert!(e.contains("select one generated art object"), "{e}");
+    // The generated art object selected with another object: neither command picks it out.
+    let square = s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 10, "height": 10})).unwrap();
+    s.execute("select.set", &json!({"ids": [id, square["id"]]})).unwrap();
+    for (c, p) in [("plugin.editGenerated", json!({"params": {"size": 20}})), ("plugin.generatedInfo", json!({}))] {
+        let e = s.execute(c, &p).unwrap_err().to_string();
+        assert!(e.contains("select one generated art object"), "{c}: {e}");
+    }
+    assert_eq!(art(&s, id), ["Small"]);
 }
 
 /// A generator's art: a line with a 2 pt stroke.

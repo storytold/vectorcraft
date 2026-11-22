@@ -106,11 +106,15 @@ fn strict(m: &crate::Manifest, given: &Map<String, Value>) -> Result<()> {
 }
 
 /// Is `v`, a number given for a whole-number parameter, outside `min..=max` (rounded, as
-/// [`crate::Manifest::resolve_params`] rounds it)? A value that is not a number is not.
+/// [`crate::Manifest::resolve_params`] rounds it)? A value that is not a number is not. The rounded
+/// value is compared with the bounds as integers: an `i64` bound past 2^53 has no exact `f64`.
 fn int_outside(v: &Value, min: i64, max: i64) -> bool {
+    // -2^63 and 2^63, exact as f64: a whole number in between converts to i64 exactly.
+    const LOW: f64 = -9_223_372_036_854_775_808.0;
+    const HIGH: f64 = 9_223_372_036_854_775_808.0;
     match v.as_i64() {
         Some(i) => !(min..=max).contains(&i),
-        None => v.is_u64() || v.as_f64().is_some_and(|f| !(min as f64..=max as f64).contains(&f.round())),
+        None => v.is_u64() || v.as_f64().map(f64::round).is_some_and(|r| !(LOW..HIGH).contains(&r) || !(min..=max).contains(&(r as i64))),
     }
 }
 
@@ -202,6 +206,25 @@ mod tests {
         for bad in [json!([100]), json!([1, -0.5])] {
             let e = strict(&m, &given(bad.clone())).unwrap_err().to_string();
             assert!(e.contains("each number of `stops` must be from 0 to 10"), "{bad}: {e}");
+        }
+    }
+
+    /// A whole-number parameter's bounds are compared exactly, also past 2^53, where `max as f64`
+    /// rounds up to the next value an f64 holds; a fraction is still rounded first.
+    #[test]
+    fn a_whole_number_just_past_a_large_maximum_is_refused() {
+        let m: crate::Manifest = serde_json::from_value(json!({
+            "id": "t.gen", "name": "T", "kind": "generator",
+            "params": {"n": {"type": "int", "min": -9007199254740995_i64, "max": 9007199254740995_i64}}
+        }))
+        .unwrap();
+        let given = |v: Value| json!({"n": v}).as_object().cloned().unwrap();
+        for ok in [json!(9007199254740995_i64), json!(3.6), json!(-9007199254740995_i64), json!(9007199254740994.0)] {
+            assert!(strict(&m, &given(ok.clone())).is_ok(), "{ok}");
+        }
+        for bad in [json!(9007199254740996.0), json!(-9007199254740996.0), json!(1e300), json!(-1e300), json!(u64::MAX)] {
+            let e = strict(&m, &given(bad.clone())).unwrap_err().to_string();
+            assert!(e.contains("`n` must be from -9007199254740995 to 9007199254740995"), "{bad}: {e}");
         }
     }
 }

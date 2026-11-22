@@ -161,13 +161,10 @@ fn target(s: &Session, c: &str, p: &Value) -> Result<(NodeId, GeneratedArt)> {
     let found = match super::given_objects(s, p, c)? {
         Some(ids) if ids.len() == 1 => one(ids[0]),
         Some(_) => None,
-        None => {
-            let mut picked = st.selection.objects.iter().filter_map(|id| one(*id));
-            match (picked.next(), picked.next()) {
-                (Some(g), None) => Some(g),
-                _ => None,
-            }
-        }
+        None => match st.selection.objects.as_slice() {
+            [id] => one(*id),
+            _ => None,
+        },
     };
     let select = || bad(c, "select one generated art object");
     let (id, g) = found.ok_or_else(select)?;

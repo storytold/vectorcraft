@@ -280,11 +280,12 @@ fn read_affine(t: Option<Value>) -> Option<Affine> {
     }
 }
 
-/// A saved scale `k` (absent: 1): `None` when it is not a finite number above 0.
+/// A saved scale `k` (absent: 1): `None` when it is not a finite number of 0 or more. A transform
+/// that flattens the art to a line or a point scales its strokes and effects by 0.
 fn read_scale(k: Option<Value>) -> Option<f64> {
     match k {
         None => Some(1.0),
-        Some(k) => k.as_f64().filter(|k| k.is_finite() && *k > 0.0),
+        Some(k) => k.as_f64().filter(|k| k.is_finite() && *k >= 0.0),
     }
 }
 
@@ -506,6 +507,13 @@ mod tests {
         let a = back.extras().generated.as_deref().unwrap();
         assert_eq!((a.stroke_scale, a.effect_scale, a.pattern_transform, a.state), (2.0, 1.0, Affine::scale(2.0), State::Intact));
         assert_eq!(a.transform, Affine::scale(6.0));
+        // A transform that flattens it to a point, with Scale Strokes & Effects on, scales its
+        // strokes and effects by 0, and it reads back intact with those scales.
+        let mut flat = g.clone();
+        flat.transform(Affine::new([0.0; 6]), Scaling { strokes: true, effects: Some(|_, _| {}), ..Scaling::default() });
+        let back = reread(&serde_json::to_value(&flat).unwrap());
+        let a = back.extras().generated.as_deref().unwrap();
+        assert_eq!((a.stroke_scale, a.effect_scale, a.state), (0.0, 0.0, State::Intact));
     }
 
     /// Art that doesn't match the file's hash, and fields that can't be read, keep the art and say
@@ -539,7 +547,7 @@ mod tests {
             ("strokeScale", json!(-2.0)),
             ("strokeScale", Value::Null),
             ("strokeScale", json!("big")),
-            ("effectScale", json!(0.0)),
+            ("effectScale", json!(-0.5)),
             ("patternTransform", json!([1, 0, 0, 1, 0])),
             ("patternTransform", Value::Null),
             ("effectScale", Value::Null),

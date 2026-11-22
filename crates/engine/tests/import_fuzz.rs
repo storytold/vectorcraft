@@ -3023,6 +3023,7 @@ proptest! {
         let mut v = generated_sample();
         let node = generated_node(&mut v).unwrap();
         let art = node["kind"].clone();
+        let id = vectorcraft_doc::NodeId(node["id"].as_u64().unwrap());
         match ["plugin", "name", "params", "transform", "strokeScale", "effectScale", "patternTransform", "hash"].get(field) {
             Some(key) => node["generated"][*key] = value,
             None => node["generated"] = value,
@@ -3030,15 +3031,18 @@ proptest! {
         let bytes = serde_json::to_vec(&v).unwrap();
         let loaded = vectorcraft_engine::cmd::fileio::load("x.vectorcraft", &bytes);
         if let Ok(l) = &loaded {
-            let mut found = vec![];
+            // The group keeps its art whatever was read of its generated art fields.
+            let group = l.doc.node(id);
+            prop_assert!(group.is_some(), "the group is gone");
+            prop_assert_eq!(group.map(|n| serde_json::to_value(&n.kind).unwrap()), Some(art));
+            let mut plugins = vec![];
             l.doc.walk(|n| {
                 if let Some(g) = n.extras().generated.as_deref() {
-                    found.push((g.plugin.clone(), serde_json::to_value(&n.kind).unwrap()));
+                    plugins.push(g.plugin.clone());
                 }
             });
-            for (plugin, kind) in &found {
+            for plugin in &plugins {
                 prop_assert!(plugin.is_empty() || vectorcraft_doc::generated::valid_id(plugin), "{plugin:?}");
-                prop_assert_eq!(kind, &art);
             }
         }
         survive("generated art fields", || loaded.ok().map(|l| l.doc))?;
