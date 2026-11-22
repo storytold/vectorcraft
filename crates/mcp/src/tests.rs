@@ -1124,6 +1124,7 @@ fn remote_does_not_replay_when_edit_reply_is_lost() {
             stream.set_write_timeout(Some(timeout)).unwrap();
             let mut out = stream.try_clone().unwrap();
             let mut reader = BufReader::new(stream);
+            accept_sign_in(&mut reader, &out);
             for _ in 0..2 {
                 let mut line = String::new();
                 reader.read_line(&mut line).unwrap();
@@ -1284,6 +1285,7 @@ fn remote_rejects_uncorrelated_replies_without_replaying() {
                 stream.set_write_timeout(Some(timeout)).unwrap();
                 let mut out = stream.try_clone().unwrap();
                 let mut reader = BufReader::new(stream);
+                accept_sign_in(&mut reader, &out);
                 let mut line = String::new();
                 reader.read_line(&mut line).unwrap();
                 let msg: Value = serde_json::from_str(&line).unwrap();
@@ -1326,6 +1328,7 @@ fn remote_rejects_a_reply_with_a_mismatched_id_and_reconnects() {
             stream.set_read_timeout(Some(WAIT)).unwrap();
             let mut out = stream.try_clone().unwrap();
             let mut reader = BufReader::new(stream);
+            accept_sign_in(&mut reader, &out);
             let mut line = String::new();
             if reader.read_line(&mut line).unwrap_or(0) == 0 {
                 continue;
@@ -1360,14 +1363,18 @@ fn remote_reports_the_reason_of_a_refusal_without_an_id() {
         let (mut refused, _) = listener.accept().unwrap();
         // The request is read first, so the refusal answers it and the close is orderly.
         refused.set_read_timeout(Some(WAIT)).unwrap();
-        let _ = BufReader::new(refused.try_clone().unwrap()).read_line(&mut String::new());
+        let mut reader = BufReader::new(refused.try_clone().unwrap());
+        accept_sign_in(&mut reader, &refused);
+        let _ = reader.read_line(&mut String::new());
         writeln!(refused, "{}", json!({"ok": false, "error": "too many control connections"})).unwrap();
         drop(refused);
         let (stream, _) = listener.accept().unwrap();
         stream.set_read_timeout(Some(WAIT)).unwrap();
         let mut out = stream.try_clone().unwrap();
         let mut line = String::new();
-        BufReader::new(stream).read_line(&mut line).unwrap();
+        let mut reader = BufReader::new(stream);
+        accept_sign_in(&mut reader, &out);
+        reader.read_line(&mut line).unwrap();
         let msg: Value = serde_json::from_str(&line).unwrap();
         writeln!(out, "{}", json!({"ok": true, "result": 7, "id": msg["id"]})).unwrap();
     });
@@ -1421,6 +1428,15 @@ fn reusable_listener(addr: std::net::SocketAddr) -> std::net::TcpListener {
     socket.into()
 }
 
+/// Reads the sign-in `Remote` opens each connection with from `reader`, and accepts it on `out`.
+fn accept_sign_in(reader: &mut impl BufRead, mut out: impl Write) {
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    let auth: Value = serde_json::from_str(&line).unwrap();
+    assert_eq!((auth["method"].as_str(), auth["params"]["token"].as_str()), (Some("auth"), Some(TOKEN)));
+    writeln!(out, "{}", json!({"id": auth["id"], "ok": true})).unwrap();
+}
+
 /// A `Remote` connected to `listener`, and the app's end of its connection: a thread takes the
 /// connection and answers its sign-in, which `Remote::connect` waits for.
 fn signed_in(listener: &std::net::TcpListener) -> (Remote, std::net::TcpStream) {
@@ -1429,11 +1445,7 @@ fn signed_in(listener: &std::net::TcpListener) -> (Remote, std::net::TcpStream) 
         let app = scope.spawn(|| {
             let (stream, _) = listener.accept().unwrap();
             stream.set_read_timeout(Some(WAIT)).unwrap();
-            let mut line = String::new();
-            BufReader::new(stream.try_clone().unwrap()).read_line(&mut line).unwrap();
-            let auth: Value = serde_json::from_str(&line).unwrap();
-            assert_eq!((auth["method"].as_str(), auth["params"]["token"].as_str()), (Some("auth"), Some(TOKEN)));
-            writeln!(&stream, "{}", json!({"id": auth["id"], "ok": true})).unwrap();
+            accept_sign_in(&mut BufReader::new(stream.try_clone().unwrap()), &stream);
             stream
         });
         let remote = Remote::connect(&addr, TOKEN).unwrap();
@@ -1499,7 +1511,9 @@ fn remote_edit_succeeds_once_when_app_restarts() {
         let mut backend = Headless::with_document();
         let base = backend.call("document.inspect", json!({})).unwrap()["objects"].as_u64().unwrap();
         let mut requests = 0;
-        for line in BufReader::new(stream).lines() {
+        let mut reader = BufReader::new(stream);
+        accept_sign_in(&mut reader, &writer);
+        for line in reader.lines() {
             let message: Value = serde_json::from_str(&line.unwrap()).unwrap();
             let result = backend.call(message["method"].as_str().unwrap(), message["params"].clone()).unwrap();
             requests += 1;
@@ -1531,7 +1545,9 @@ fn remote_does_not_send_on_a_connection_with_a_stray_line() {
         stream.set_read_timeout(Some(WAIT)).unwrap();
         let mut out = stream.try_clone().unwrap();
         let mut line = String::new();
-        BufReader::new(stream).read_line(&mut line).unwrap();
+        let mut reader = BufReader::new(stream);
+        accept_sign_in(&mut reader, &out);
+        reader.read_line(&mut line).unwrap();
         let msg: Value = serde_json::from_str(&line).unwrap();
         writeln!(out, "{}", json!({"ok": true, "result": 7, "id": msg["id"]})).unwrap();
     });
