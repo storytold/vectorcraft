@@ -845,6 +845,26 @@ fn plugin_menus_show_the_plugins_names_in_the_ui_language() {
     }
 }
 
+/// Last Effect shows a live-effect plug-in's translated name as the plug-in gives it, even where it
+/// matches text the app translates: "Open" in German stays "Open".
+#[test]
+fn last_effect_leaves_a_plugins_translated_name_as_it_gives_it() {
+    let mut app = app();
+    let effect = "test.ui.translated.last_effect";
+    let manifest = format!(r#"{{"id":"{effect}","name":"Unseal","kind":"effect","translations":{{"de":{{"name":"Open"}}}}}}"#);
+    let module = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    app.last_effect = Some((vectorcraft_plugins::effect::effect_id(effect), json!({})));
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    crate::i18n::set_current(de);
+    let shown = menus::display_label(&app, "effect.last", "Last Effect…");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    app.last_effect = None;
+    app.run("plugin.remove", json!({"id": effect})).unwrap();
+    assert_ne!(crate::i18n::tr(de, "Open"), "Open", "German translates the app's Open");
+    assert_eq!(shown, crate::i18n::fmt(crate::i18n::tr(de, "Last Effect: {name}"), &[("name", "Open")]));
+}
+
 /// Keyboard Shortcuts shows a plug-in command's label and its plug-in's name as the plug-in gives
 /// them, even where they match text the app translates: in German, a command labeled "Open" of a
 /// plug-in named "Close" keeps both, as in its menu.

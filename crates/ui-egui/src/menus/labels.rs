@@ -194,8 +194,10 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         }
         "effect.last" => match &app.last_effect {
             Some((e, _)) => {
+                // A plug-in's name is already in the UI language from its translations.
                 let name = last_effect_name(e);
-                fmt(tl!("Last Effect: {name}"), &[("name", crate::i18n::tr_id(lang, e, name))])
+                let name = if vectorcraft_plugins::effect::plugin_id(e).is_some() { name } else { crate::i18n::tr_id(lang, e, name) };
+                fmt(tl!("Last Effect: {name}"), &[("name", name)])
             }
             None => crate::i18n::tr_id(lang, id, label).to_string(),
         },
