@@ -6885,6 +6885,7 @@ axis	Y Axis	Y-Achse
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	„{_1}“ verlangt ein großes Rechenbudget (jede Ausführung bis zu {minutes} Minuten und {times}-mal so viele Anweisungen wie üblich): Eine Person muss es in der Desktop-App genehmigen, oder übergeben Sie `allowHeavy: true` in einer mit --allow-plugin-grants gestarteten Sitzung
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` muss 1-64 druckbare Zeichen haben
+@msg	`{key}` must be 1-64 printable characters	`{key}` muss 1-64 druckbare Zeichen haben
 @msg	`version`, `description` or `author` is too long	`version`, `description` oder `author` ist zu lang
 @msg	`warnings` must be a list of strings	`warnings` muss eine Liste von Zeichenketten sein
 @msg	`{k}` must be one of {_1}	`{k}` muss einer der folgenden Werte sein: {_1}

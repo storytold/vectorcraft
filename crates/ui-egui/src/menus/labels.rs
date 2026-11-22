@@ -334,9 +334,14 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Lock Grid",
 ];
 
-/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares?
+/// Is `children` a plug-in's submenu: does it hold a command the plug-in declares, and only items
+/// that list plug-ins? A built-in submenu that a plug-in's manifest places a command in is not.
 pub(crate) fn holds_plugin_commands(children: &[Item]) -> bool {
     children.iter().any(|c| matches!(c, Item::Cmd(_, id, _) if vectorcraft_engine::cmd::plugin::is_command_id(id)))
+        && children.iter().all(|c| match c {
+            Item::Cmd(_, id, params) => lists_plugin(id, params),
+            _ => true,
+        })
 }
 
 /// Every English string the menus, the command palette, the panel registry, the toolbar and the

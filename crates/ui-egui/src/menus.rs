@@ -76,9 +76,9 @@ pub use invoke::{click_target, invoke, invoke_from_system_menu};
 pub(crate) use keyboard::handle_input as handle_keyboard_input;
 // Shared numeric fields preserve their caret when a transient menu returns their focus.
 pub(crate) use keyboard::restoring_field_focus;
-pub(crate) use labels::lists_plugin;
 pub(crate) use labels::shows_a_name;
 pub use labels::{CONTEXT_LABELS, DYNAMIC_LABELS, display_label, dynamic_label, item_shortcut, menu_strings};
+pub(crate) use labels::{holds_plugin_commands, lists_plugin};
 pub use run::{check_params, run_ui_command};
 pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};
 #[cfg(test)]

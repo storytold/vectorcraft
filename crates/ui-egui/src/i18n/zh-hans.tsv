@@ -7134,6 +7134,7 @@ axis	Y Axis	Y 轴
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` 必须是 1-64 个可打印字符
+@msg	`{key}` must be 1-64 printable characters	`{key}` 必须是 1-64 个可打印字符
 @msg	`version`, `description` or `author` is too long	`version`、`description` 或 `author` 太长
 @msg	`warnings` must be a list of strings	`warnings` 必须是字符串列表
 @msg	`{k}` must be one of {_1}	`{k}` 必须是 {_1} 之一

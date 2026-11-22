@@ -11,6 +11,14 @@ pub fn menu_tree() -> Vec<(&'static str, Vec<Item>)> {
 }
 
 pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
+    let mut tree = built_in_tree(english_names);
+    crate::dialogs::plugin::place_commands(&mut tree);
+    tree
+}
+
+/// The menus with each plug-in command in its plug-in's submenu, before
+/// [`crate::dialogs::plugin::place_commands`] moves those whose manifest names another menu.
+fn built_in_tree(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
     let panel = |label: &'static str, id: &'static str| cp(label, "window.panel", json!({ "panel": id, "toggle": true }));
     vec![
         (

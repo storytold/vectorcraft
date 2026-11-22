@@ -7287,6 +7287,7 @@ axis	Y Axis	Y tengely
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): egy személynek jóvá kell hagynia az asztali alkalmazásban, vagy add meg az `allowHeavy: true` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	a `name` 1-64 nyomtatható karakter legyen
+@msg	`{key}` must be 1-64 printable characters	a `{key}` 1-64 nyomtatható karakter legyen
 @msg	`version`, `description` or `author` is too long	a `version`, a `description` vagy az `author` túl hosszú
 @msg	`warnings` must be a list of strings	a `warnings` karakterláncok listája legyen
 @msg	`{k}` must be one of {_1}	`{k}`: ezek egyike kell: {_1}

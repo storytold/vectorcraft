@@ -5425,7 +5425,7 @@ fn script_interpreter_core_errors_are_translated() {
     }
 }
 
-/// A manifest whose `commands` value has the wrong shape is refused with an error that every
+/// A manifest whose `commands` value, or a command's `menu`, has the wrong shape is refused with an error that every
 /// language of [`COMPLETE_MESSAGES`] translates whole, the command's name and the place in the
 /// manifest included.
 #[test]
@@ -5442,9 +5442,35 @@ fn wrongly_shaped_plugin_commands_errors_are_translated() {
         r#"[{"id":"x","id":"y","label":"A"}]"#.to_string(),
         format!("[{}]", many.join(",")),
     ];
-    let english = ["must", "list", "missing", "field", "duplicate", "object", "line", "column", "each", "with", "invalid", "expected"];
-    for value in &commands {
-        let manifest = format!(r#"{{"id":"a","name":"x","kind":"filter","commands":{value}}}"#);
+    let english = [
+        "must",
+        "list",
+        "missing",
+        "field",
+        "duplicate",
+        "object",
+        "line",
+        "column",
+        "each",
+        "with",
+        "invalid",
+        "expected",
+        "unknown",
+        "printable",
+        "characters",
+    ];
+    // A `menu` of the wrong shape (read at API level 2).
+    let menus = [
+        r#"{"path":["File"]}"#,
+        r#"{"path":["Select"],"before":"Inverse"}"#,
+        r#"{"path":["Select"],"after":3}"#,
+        r#"{"path":["Select"],"after":" "}"#,
+        r#"{"path":["Select"]},"menu":{"path":["Edit"]}"#,
+    ];
+    let manifests = commands.iter().map(|value| format!(r#"{{"id":"a","name":"x","kind":"filter","commands":{value}}}"#)).chain(
+        menus.iter().map(|menu| format!(r#"{{"id":"a","name":"x","api":2,"kind":"filter","commands":[{{"id":"x","label":"A","menu":{menu}}}]}}"#)),
+    );
+    for manifest in manifests {
         let e = vectorcraft_plugins::manifest::Manifest::parse(manifest.as_bytes()).unwrap_err().to_string();
         let numbers: Vec<&str> = e.split(|c: char| !c.is_ascii_digit()).filter(|n| !n.is_empty()).collect();
         for code in COMPLETE_MESSAGES {

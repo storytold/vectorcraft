@@ -6999,6 +6999,7 @@ axis	Y Axis	Y 軸
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `allowHeavy: true` を指定してください
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` は印刷可能な 1-64 文字にしてください
+@msg	`{key}` must be 1-64 printable characters	`{key}` は印刷可能な 1-64 文字にしてください
 @msg	`version`, `description` or `author` is too long	`version`、`description` または `author` が長すぎます
 @msg	`warnings` must be a list of strings	`warnings` は文字列のリストにしてください
 @msg	`{k}` must be one of {_1}	`{k}` は {_1} のいずれかにしてください
