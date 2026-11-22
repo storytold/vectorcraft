@@ -875,9 +875,11 @@ fill and stroke the piece returns, three more keys:
   them may stay a bare paint. A stroke takes them beside its `paint`, `width`, `join`, `cap` and `miterLimit`.
 - An effect record names a built-in effect that `effect.list` lists, other than a 3D effect or a Pathfinder effect
   (`pathfinder.*`, which has nothing to combine on a piece's one path), with parameters that effect takes, each of the
-  type of its default and within the range `effect.list` gives for it, where it gives one. The values `effect.apply`
+  type of its default, within the range `effect.list` gives for it, where it gives one, and one of the choices it
+  lists for it, where it lists them (Roughen's `points` is `"smooth"` or `"corner"`). The values `effect.apply`
   checks for one effect are checked the same way: an SVG filter's `xml`, `scale`, `origin`, `axes` and `name`, a
-  Warp's `version`, a `color`, a Levels or Curves `channel` and a Radial Blur's center. Omitted parameters take the
+  Warp's `version`, a `color`, a Levels or Curves `channel` and a Radial Blur's center. A Drop Shadow's, Inner
+  Glow's or Outer Glow's `mode` must name a blend mode (`"multiply"`, `"color-burn"`). Omitted parameters take the
   effect's defaults. On a fill or stroke only raster effects are taken, and only from an effect in the object's stack:
   the fills or strokes that an effect on a fill or a stroke returns take `opacity` and `blend` but no `effects` (its
   pieces still take them). A plug-in effect (`plugin.<id>`), this effect's own included, is refused, so the effects a

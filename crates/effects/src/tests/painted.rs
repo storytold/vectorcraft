@@ -284,6 +284,22 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
     assert_eq!(check(&e("distort.transform", json!({"copies": 1000})), false), Ok(()));
     // A parameter documented right after a comma has its range checked too.
     assert_eq!(check(&e("artistic.paintDaubs", json!({"sharpness": 25})), false), Ok(()));
+    // Each documented choice and each end of a documented range passes.
+    for (id, params) in [
+        ("distort.roughen", json!({"points": "smooth"})),
+        ("distort.roughen", json!({"points": "corner"})),
+        ("distort.zigZag", json!({"points": "corner"})),
+        ("distort.puckerBloat", json!({"amount": -200})),
+        ("distort.puckerBloat", json!({"amount": 200})),
+        ("adjust.temperatureTint", json!({"temperature": -100, "tint": 100})),
+        ("stylize.dropShadow", json!({"mode": "color-burn"})),
+        ("stylize.outerGlow", json!({"mode": "Normal"})),
+        // A `color` is also taken as [r, g, b] 0..1 or a color object, as the effects draw it.
+        ("stylize.dropShadow", json!({"color": [1.0, 0.0, 0.0]})),
+        ("stylize.outerGlow", json!({"color": {"model": "gray", "k": 0.5}})),
+    ] {
+        assert_eq!(check(&e(id, params.clone()), false), Ok(()), "{id} {params}");
+    }
     // Every effect's own defaults pass the check, so each documented range holds its default.
     for info in crate::effect_catalog().into_iter().filter(|i| !crate::is_three_d(i.id) && !crate::is_pathfinder(i.id)) {
         assert_eq!(check(&e(info.id, info.defaults.clone()), false), Ok(()), "{}", info.id);
@@ -315,6 +331,9 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         (crate::SVG_FILTER, json!({"name": "f"}), "name"),
         ("warp.arc", json!({"version": 99}), "version"),
         ("stylize.dropShadow", json!({"color": "#zz0000"}), "color"),
+        ("stylize.dropShadow", json!({"color": [1.0, "0", 0.0]}), "color"),
+        ("stylize.innerGlow", json!({"color": {"model": "rgb"}}), "color"),
+        ("stylize.outerGlow", json!({"color": true}), "color"),
         ("adjust.levels", json!({"channel": "cyan"}), "channel"),
         ("blur.radial", json!({"centerX": 1.5}), "centerX"),
         ("blur.gaussian", json!({"linear": 1}), "linear"),
@@ -322,6 +341,17 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         ("distort.twist", json!({"angle": 4000.0}), "angle"),
         ("distort.freeDistort", json!({"corners": []}), "corners"),
         ("distort.freeDistort", json!({"corners": [[0, 0], [1, 0], [1, 1], [0]]}), "corners"),
+        ("distort.roughen", json!({"points": "invalid"}), "points"),
+        ("distort.zigZag", json!({"points": "Corner"}), "points"),
+        ("path.offsetPath", json!({"joins": "square"}), "joins"),
+        (crate::RASTERIZE, json!({"colorModel": "cmyk"}), "colorModel"),
+        (crate::CROP_MARKS, json!({"style": 1}), "style"),
+        ("distort.puckerBloat", json!({"amount": -201}), "amount"),
+        ("distort.puckerBloat", json!({"amount": 201}), "amount"),
+        ("adjust.temperatureTint", json!({"temperature": 101}), "temperature"),
+        ("adjust.temperatureTint", json!({"tint": -101}), "tint"),
+        ("stylize.dropShadow", json!({"mode": "not-a-mode"}), "mode"),
+        ("stylize.innerGlow", json!({"mode": "???"}), "mode"),
     ] {
         let why = check(&e(id, params.clone()), false).expect_err(&format!("{id} {params}"));
         assert!(why.contains(key), "{id} {params}: {why}");

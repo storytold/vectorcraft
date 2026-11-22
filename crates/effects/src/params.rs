@@ -121,7 +121,8 @@ pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
 /// fills or strokes (`row`) ([`vectorcraft_plugins::painted::CheckEffect`]): a built-in effect other
 /// than a 3D or Pathfinder effect, a raster effect only on a fill or stroke, and parameters that effect takes. A
 /// parameter is one its defaults or its parameter documentation name, of the type its default has,
-/// within the range its documentation gives ([`crate::catalog::any_documented_range`]); a texture is one as `effect.list`
+/// within the range its documentation gives ([`crate::catalog::any_documented_range`]) and one of the
+/// choices it lists ([`crate::catalog::documented_choices`]); a texture is one as `effect.list`
 /// gives it, and an SVG filter's XML one drawable filter. A plug-in effect, the plug-in itself
 /// included, is refused, so the effects a plug-in returns never run a plug-in.
 pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
@@ -152,8 +153,11 @@ pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
             return Err(format!("`{key}` is not a parameter of {:?}", e.id));
         }
         let kind = |v: &Value| std::mem::discriminant(v);
+        // A `color` is checked as a color, in any form the effect draws ([`is_color`]).
+        let color = key == "color" && default.is_some_and(Value::is_string);
         if let Some(d) = default
             && !d.is_null()
+            && !color
             && kind(d) != kind(v)
         {
             return Err(format!("`{key}` must be of the type its default {d} has"));
@@ -163,6 +167,11 @@ pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
             && !r.contains(&x)
         {
             return Err(format!("`{key}` must be from {} to {}", r.start(), r.end()));
+        }
+        if let Some(choices) = crate::catalog::documented_choices(&e.id, key)
+            && !v.as_str().is_some_and(|v| choices.contains(&v))
+        {
+            return Err(format!("`{key}` must be one of \"{}\"", choices.join("\", \"")));
         }
     }
     if let Some(t) = given.get(crate::pixel::TEXTURE_IMAGE)
@@ -175,7 +184,8 @@ pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
 
 /// The values in `given`, the parameters of built-in effect `id` that a painted live-effect plug-in
 /// returned, that are checked further: an SVG filter's XML, `scale`, `origin`, `axes` and
-/// `name`; a Free Distort's four `corners`; a Warp's `version`; a `color` the effect can draw; a Levels or Curves `channel`; a Radial
+/// `name`; a Free Distort's four `corners`; a Warp's `version`; a `color` the effect can draw; a
+/// shadow's or glow's blend `mode`; a Levels or Curves `channel`; a Radial
 /// Blur's center; and the type of each parameter without a default.
 fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), String> {
     let number = |key: &str| given.get(key).is_some_and(|v| !v.is_number());
@@ -210,6 +220,10 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
     let takes_color = catalog_index().get(id).is_some_and(|info| info.defaults.get("color").is_some_and(Value::is_string));
     if takes_color && given.get("color").is_some_and(|v| !is_color(v)) {
         return Err("`color` must be a #rrggbb color".into());
+    }
+    let takes_blend_mode = catalog_index().get(id).is_some_and(|info| info.params.contains("mode: blend mode"));
+    if takes_blend_mode && given.get("mode").is_some_and(|v| v.as_str().and_then(crate::raster::named_blend_mode).is_none()) {
+        return Err("`mode` must be a blend mode, such as \"multiply\" or \"screen\"".into());
     }
     if matches!(id, "adjust.levels" | "adjust.curves") && given.get("channel").is_some_and(|v| !v.as_str().is_some_and(crate::is_channel)) {
         return Err(format!("`channel` must be one of {}", crate::CHANNELS.join(", ")));

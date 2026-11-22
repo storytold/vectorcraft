@@ -85,6 +85,30 @@ pub(crate) fn any_documented_range(id: &str, key: &str) -> Option<std::ops::Rang
     })
 }
 
+/// The choices parameter `key` of effect `id` is documented with (`key: "a"|"b"`, a note in
+/// parentheses allowed after a choice: `key: "a" (note)|"b"`); `None` when its documentation gives
+/// fewer than two.
+pub(crate) fn documented_choices(id: &str, key: &str) -> Option<Vec<&'static str>> {
+    let doc = catalog_index().get(id)?.params;
+    doc.match_indices(key).map(|(at, _)| at).filter(|at| starts_key(doc, *at)).find_map(|at| {
+        let rest = doc.get(at + key.len()..)?;
+        let mut rest = rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?;
+        let mut choices = vec![];
+        while let Some((choice, after)) = rest.strip_prefix('"').and_then(|r| r.split_once('"')) {
+            choices.push(choice);
+            let after = match after.strip_prefix(" (") {
+                Some(note) => note.get(note.find(')')? + 1..)?,
+                None => after,
+            };
+            match after.strip_prefix('|') {
+                Some(next) => rest = next,
+                None => break,
+            }
+        }
+        (choices.len() >= 2).then_some(choices)
+    })
+}
+
 /// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`).
 fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;
@@ -290,7 +314,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "{corners: [[x,y]×4] (new positions of the bounding-box corners TL, TR, BR, BL in unit box coordinates; identity [[0,0],[1,0],[1,1],[0,1]]; placed gradients move and scale from the object's bounds to its distorted bounds)}",
             json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]}),
         ),
-        g("distort.puckerBloat", "Pucker & Bloat…", DT, "{amount: % (-200 pucker … 200 bloat, default 0)}", json!({"amount": 0.0})),
+        g("distort.puckerBloat", "Pucker & Bloat…", DT, "{amount: % -200..200 (0; -200 puckers, 200 bloats)}", json!({"amount": 0.0})),
         g(
             "distort.roughen",
             "Roughen…",
@@ -841,7 +865,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "adjust.temperatureTint",
             "Temperature/Tint…",
             ADJUST,
-            "{temperature: -100 (cooler) .. 100 (warmer) (0), tint: -100 (greener) .. 100 (more magenta) (0)} recolours as Brightness/Contrast does",
+            "{temperature: -100..100 (0; -100 cooler, 100 warmer), tint: -100..100 (0; -100 greener, 100 more magenta)} recolours as Brightness/Contrast does",
             json!({"temperature": 0.0, "tint": 0.0}),
         ),
     ]);
