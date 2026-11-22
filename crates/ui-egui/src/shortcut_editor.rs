@@ -1011,11 +1011,12 @@ fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
 
 /// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
 /// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
-/// of `{}` or `{path…}`. Rename has no default key, and a key press names the selection: it needs
-/// no `id`. Color Picker… has no default key either, and a key press opens it for the proxy in
-/// front.
+/// of `{}` or `{path?…}`, where a call with no path picks a file. A params doc of `{path}` or
+/// `{path: …}` (Save Summary…, a Scripts folder script) needs a path, so a key press alone can't
+/// run it. Rename has no default key, and a key press names the selection: it needs no `id`. Color
+/// Picker… has no default key either, and a key press opens it for the proxy in front.
 fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
-    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename" || id == "ui.colorPicker"
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path?") || id == "ui.rename" || id == "ui.colorPicker"
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens
@@ -3427,6 +3428,23 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    /// A UI command whose params doc starts `{path}` or `{path: …}` needs a path, so it is neither
+    /// listed on its own nor offered as a button; one that starts `{path?` picks a file without one.
+    #[test]
+    fn a_ui_command_that_needs_a_path_is_not_run_without_one() {
+        for id in ["ui.pdfSummary.save", crate::scripts_menu::COMMAND] {
+            let (_, _, sc, params) = menus::UI_COMMANDS.iter().find(|c| c.0 == id).unwrap_or_else(|| panic!("{id} is a UI command"));
+            assert!(!ui_listed_on_its_own(id, sc, params), "{id} is not listed on its own");
+            assert!(ui_command_needs_params(id), "{id} needs a path");
+            assert!(!crate::palette::is_command(id), "{id} is not offered as a toolbar button");
+        }
+        for id in ["shortcuts.export", "file.open"] {
+            let (_, _, sc, params) = menus::UI_COMMANDS.iter().find(|c| c.0 == id).unwrap_or_else(|| panic!("{id} is a UI command"));
+            assert!(ui_listed_on_its_own(id, sc, params) || a_menu_bar_item_runs(id, params), "{id} runs without a path");
+            assert!(!ui_command_needs_params(id), "{id} picks a file without a path");
+        }
     }
 
     /// #2991: Enter Isolation Mode has no default key but runs on the selection, so it belongs in

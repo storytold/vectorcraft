@@ -846,6 +846,8 @@ struct Known {
     stale: std::collections::HashMap<String, Option<String>>,
     /// How many more commands this frame may ask.
     budget: usize,
+    /// The frame `budget` was set for; a later pass of the same frame keeps what is left of it.
+    frame: Option<u64>,
     /// Is a command still waiting to be asked in this state?
     pending: bool,
 }
@@ -853,7 +855,8 @@ struct Known {
 impl Known {
     /// The answers for the state now. The state leaves out a panel shown and a tool chosen, so a
     /// frame with a pointer button release or a key press asks every command again, as the Command
-    /// Palette asks its results again on a click.
+    /// Palette asks its results again on a click. Every pass of one frame (a `request_discard`
+    /// rerun) shares that frame's [`ASKS_PER_FRAME`].
     fn load(app: &VectorcraftApp, ctx: &egui::Context) -> Known {
         let key = crate::palette::availability_key(app);
         let mut known = ctx.data(|d| d.get_temp::<Known>(known_id())).unwrap_or_default();
@@ -865,7 +868,11 @@ impl Known {
             known.stale.extend(old);
             known.key = key;
         }
-        known.budget = ASKS_PER_FRAME;
+        let frame = ctx.cumulative_frame_nr();
+        if known.frame != Some(frame) {
+            known.budget = ASKS_PER_FRAME;
+            known.frame = Some(frame);
+        }
         known.pending = false;
         known
     }
@@ -3129,5 +3136,31 @@ mod tests {
         frame(&mut app, vec![]);
         assert_eq!(place(&app, "Mine"), (None, false), "released outside its lane");
         assert!(ctx.memory(|m| m.area_rect(area_id("Mine"))).unwrap().contains(out));
+    }
+
+    /// A `request_discard` rerun of a frame asks no more commands than are left of that frame's
+    /// [`ASKS_PER_FRAME`]; the next frame may ask that many again.
+    #[test]
+    fn a_rerun_of_a_frame_shares_its_checks() {
+        let app = app();
+        let ctx = egui::Context::default();
+        let mut left = vec![];
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let ctx = ui.ctx();
+                let mut known = Known::load(&app, ctx);
+                for i in 0..ASKS_PER_FRAME - 2 {
+                    let id = format!("tool:probe-{}-{i}", left.len());
+                    known.why(&app, &id, &id);
+                }
+                left.push(known.budget);
+                ctx.data_mut(|d| d.insert_temp(known_id(), known));
+                if left.len() == 1 {
+                    ctx.request_discard("a second pass");
+                }
+            });
+            out.textures_delta.clear();
+        }
+        assert_eq!(left, [2, 0, 2], "the rerun used what was left; the next frame started anew");
     }
 }
