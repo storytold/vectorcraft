@@ -14,6 +14,7 @@ use craft::ui::contract::{
 };
 use craft::ui::primitives::{EditorPurpose, EditorState};
 use craft::ui::runtime::focus::{self, FocusTarget, KeyUse};
+use craft::ui::runtime::pending::Pending;
 use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::{Rect, Response, Vec2};
 use serde_json::json;
@@ -160,8 +161,9 @@ impl<'a> TypeEditor<'a> {
         TypeEditor { common: Common::new(), app, caret }.label("Type")
     }
 
-    /// Applies one input of the editor part to the engine tool.
-    fn apply(&mut self, input: EditorInput, view: ViewInfo) {
+    /// Applies one input of the editor part to the engine tool; a Paste types `pasted`, the text the paste delivered,
+    /// or else the clipboard's.
+    fn apply(&mut self, input: EditorInput, view: ViewInfo, pasted: Option<String>) {
         let app = &mut *self.app;
         match input {
             EditorInput::Text(text) => {
@@ -205,7 +207,7 @@ impl<'a> TypeEditor<'a> {
                         text_key(app, ToolKey::Delete, Mods::default());
                     }
                 }
-                EditCommand::Paste => text_paste(app, None, false),
+                EditCommand::Paste => text_paste(app, pasted, false),
                 EditCommand::SelectAll => {
                     if let Err(e) = app.run("select.all", json!({})) {
                         app.status(e);
@@ -282,6 +284,10 @@ impl Component for TypeEditor<'_> {
 
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
         let inputs: Vec<EditorInput> = cx.editor_input().collect();
+        let pasted = match cx.clipboard().paste() {
+            Pending::Ready(content) => content.text.as_deref().map(str::to_owned),
+            _ => None,
+        };
         let mut fired = Vec::new();
         while let Some((command, _)) = cx.take_command::<TypeEditorCommand>() {
             fired.push(command);
@@ -292,7 +298,7 @@ impl Component for TypeEditor<'_> {
         }
         let view = self.app.view_info();
         for input in inputs {
-            self.apply(input, view);
+            self.apply(input, view, pasted.clone());
         }
         for command in fired {
             self.run(command, view);
