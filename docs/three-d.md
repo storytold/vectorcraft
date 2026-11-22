@@ -109,8 +109,8 @@ normals and triangles, a mesh carries:
   the smoothing rule and the 60° crease are VectorCraft's own.
 - **Texture coordinates** for every corner, each from 0 to 1, u to the right and v down, as glTF 2.0 places
   `TEXCOORD_0` (<https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html>). Caps, Rotate's plane and Inflate's
-  front and back take each corner's art point, before any twist or taper, in the art's bounds; the back is not
-  mirrored. Extrude & Bevel's bevels and walls and Inflate's walls take u along each contour of the outline from its
+  front and back take each corner's art point, before any twist or taper, in the bounds of the whole object, which all
+  of its parts share; the back is not mirrored. Extrude & Bevel's bevels and walls and Inflate's walls take u along each contour of the outline from its
   first point, as the distance over the contour's length, so the seam at the first point has corners at both 0 and 1,
   and v across the side from the front cap's edge to the back cap's. Revolve's side takes u around the sweep from its
   start and v along each contour of the profile; its end caps span the disk they close, and its cut sides take each

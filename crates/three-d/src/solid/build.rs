@@ -1001,8 +1001,9 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
             (steps.first(), maps.first(), along.first(), 1.0, PlanarFace::Front, MeshPart::Front),
             (steps.last(), maps.last(), along.last(), -1.0, PlanarFace::Back, MeshPart::Back),
         ];
-        // Each cap's corners take their art points, before any twist or taper, in the art's bounds.
-        let area = rings_bounds(rings.iter().copied());
+        // Each cap's corners take their art points, before any twist or taper, in `bounds`, which
+        // every part of one object shares.
+        let area = bounds;
         for (s, map, along, n, end, part) in caps {
             let (Some(s), Some(map)) = (s, map) else { continue };
             let before = b.len();
@@ -1217,9 +1218,9 @@ pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: V
     let up = camera.rotate(V3(0.0, 0.0, 1.0));
     let n = if camera.facing(V3::default(), up) < 0.0 { V3(-up.0, -up.1, -up.2) } else { up };
     let m = Placing::new(&camera, bounds.center(), Turn::new(bounds, 0.0, 1.0, 0.0), 0.0);
-    // The plane's corners take their art points in the art's bounds.
+    // The plane's corners take their art points in `bounds`, which every part of one object shares.
     let (x, y, origin) = m.frame();
-    let plane = Attrs::Planar(PlaneUv { origin, x, y, area: rings_bounds(rings.iter().map(|r| r.points.as_slice())) });
+    let plane = Attrs::Planar(PlaneUv { origin, x, y, area: bounds });
     b.face(contours, n, Order::Last, MeshPart::Front, |_| plane)?;
     b.end(0, PlanarFace::Front);
     let at = |span: &Span, t: f64| camera.project(m.place(span.curve.eval(t)));

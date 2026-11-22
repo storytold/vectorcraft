@@ -1,6 +1,5 @@
 use super::build::{
-    Attrs, BandMesh, Builder, Built, Camera, Keep, Order, Placing, PlaneUv, Turn, along_ring, check_bounds, cuts, fit, newell, outward, rings_bounds,
-    share,
+    Attrs, BandMesh, Builder, Built, Camera, Keep, Order, Placing, PlaneUv, Turn, along_ring, check_bounds, cuts, fit, newell, outward, share,
 };
 use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, crossings, filled, material};
 use super::rings::{MAX_SOLID_POINTS, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings};
@@ -282,9 +281,10 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Kee
         if n.dot(n) > 0.5 { n } else { V3(0.0, 0.0, 1.0) }
     };
     let smooth = view.shade && view.has_colored_lights();
-    // For a mesh, a point of the front or back takes its art point in the shape's bounds, and on a
-    // puffed surface its own normal, front or back (turned as the back is).
-    let area = rings_bounds(rings.iter().map(Vec::as_slice));
+    // For a mesh, a point of the front or back takes its art point in `bounds`, which every shape
+    // inflated together shares, and on a puffed surface its own normal, front or back (turned as
+    // the back is).
+    let area = bounds;
     let uv = |q: Point| [share(q.x, area.x0, area.x1), share(q.y, area.y0, area.y1)];
     let puffed = height > 0.0;
     let back_normal = |n: V3, turn: &Turn| V3(turn.cos * n.0 - turn.sin * n.1, turn.sin * n.0 + turn.cos * n.1, -n.2);

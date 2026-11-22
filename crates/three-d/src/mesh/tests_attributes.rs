@@ -221,6 +221,35 @@ fn caps_take_their_art_points_and_the_side_runs_around_the_outline_and_front_to_
 }
 
 #[test]
+fn the_parts_of_one_object_place_their_caps_and_planes_in_its_shared_bounds() {
+    // A small part inside the 100 by 60 pt bounds of its object: its front, back and plane corners
+    // take their art points in the object's bounds, as a larger part's do, not in its own.
+    let (big, r) = rectangle(0.0, 0.0, 100.0, 60.0);
+    let (small, _) = rectangle(10.0, 10.0, 20.0, 20.0);
+    let on_shared = |m: &Mesh, what: &str| {
+        let mut seen = 0;
+        for (t, part) in m.triangles.iter().zip(&m.parts) {
+            if !matches!(part, MeshPart::Front | MeshPart::Back) {
+                continue;
+            }
+            for &i in t {
+                let (q, uv) = (m.positions[i as usize], m.uvs[i as usize]);
+                // The art at (x, y) lies at (x - 50, 30 - y) in the mesh.
+                assert!((uv[0] - (q[0] + 50.0) / 100.0).abs() < 1e-9 && (uv[1] - (30.0 - q[1]) / 60.0).abs() < 1e-9, "{what} {q:?} {uv:?}");
+                seen += 1;
+            }
+        }
+        assert!(seen > 0, "{what}");
+    };
+    on_shared(&extrude_mesh(&small, FillRule::NonZero, r, Extrude::default(), front()).unwrap(), "extrude");
+    on_shared(&plane_mesh(&small, FillRule::NonZero, r, front()).unwrap(), "plane");
+    let deep = Inflate { depth: 10.0, ..Inflate::default() };
+    for (k, m) in inflate_meshes(&[(&big, FillRule::NonZero), (&small, FillRule::NonZero)], r, deep, front()).enumerate() {
+        on_shared(&m.unwrap(), &format!("inflate {k}"));
+    }
+}
+
+#[test]
 fn revolves_side_runs_around_the_sweep_and_along_the_profile() {
     let (line, lr) = line_profile();
     let o = Revolve { offset: 10.0, segments: 16, ..Revolve::default() };
