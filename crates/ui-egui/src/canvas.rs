@@ -431,7 +431,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         original_path_overlay(app, &painter, &xf);
 
-        let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
+        let mut overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
+        names_on_a_white_canvas(app, &mut overlays);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
         crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
@@ -865,7 +866,7 @@ fn ruler_bands(app: &VectorcraftApp, ui: &Ui, xf: &Xf, (full, rect): (egui::Rect
     let painter = ui.painter_at(rect);
     if let Some(origin) = origin_preview {
         let at = xf.to_screen(origin);
-        let color = dim_on_canvas(t, app.outline_view());
+        let color = dim_on_canvas(app, t, (app.outline_view(), fades_outside_artboards(app)));
         painter.line_segment([pos2(at.x, rect.top()), pos2(at.x, rect.bottom())], Stroke::new(1.0, color));
         painter.line_segment([pos2(rect.left(), at.y), pos2(rect.right(), at.y)], Stroke::new(1.0, color));
     }
@@ -1296,12 +1297,14 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
 const OUTLINE_CANVAS: Color32 = Color32::WHITE;
 
 /// The color of the artboards' names and the ruler origin's crosshair in Outline, on
-/// [`OUTLINE_CANVAS`].
+/// [`OUTLINE_CANVAS`], and in Overprint Preview, on its white canvas.
 const OUTLINE_DIM: Color32 = Color32::from_gray(0x4b);
 
 /// The pasteboard and the artboards' shadows and paper of document `st`, or in Outline (`outline`)
 /// the whole canvas in [`OUTLINE_CANVAS`], with no paper drawn for the artboards: no Simulate
 /// Colored Paper color, no artboard background color, and no paper with View › Hide Artboards.
+/// In Overprint Preview (and Separations Preview, which turns it on) the canvas outside the
+/// artboards is white instead of the pasteboard color, and the artboards draw no shadows.
 fn paint_paper(
     app: &VectorcraftApp,
     st: &vectorcraft_engine::DocState,
@@ -1323,11 +1326,13 @@ fn paint_paper(
     // An artboard with a background color draws its paper in that color. With Simulate Colored Paper
     // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
     // rounded. The transparency grid, while it shows, covers it as it covers the others.
-    painter.rect_filled(rect, 0.0, t.pasteboard);
     // The paper and the transparency grid are document colors: they go through the display
-    // profile as the art does. The pasteboard and the shadows are the interface's.
+    // profile as the art does. The pasteboard and the shadows are the interface's. Overprint
+    // Preview's white canvas is white paper, so it goes through the profile too.
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     let on_display = |c: Color32| crate::display_profile::color32(display.as_deref(), c);
+    let overprint = vectorcraft_render::proof::overprint_preview_on();
+    painter.rect_filled(rect, 0.0, if overprint { on_display(Color32::WHITE) } else { t.pasteboard });
     if !shows_artboards(app) {
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         painter.rect_filled(rect, 0.0, on_display(paper_color(&doc.setup)));
@@ -1338,9 +1343,12 @@ fn paint_paper(
         for ab in &doc.artboards {
             let q = xf.quad(ab.rect);
             // Hard 2 pt drop shadow, right and bottom (measured: #4d4d4d then #565656 on #606060).
-            let shift = |d: f32| q.iter().map(|p| *p + vec2(d, d)).collect::<Vec<_>>();
-            painter.add(Shape::convex_polygon(shift(2.0), Color32::from_black_alpha(26), Stroke::NONE));
-            painter.add(Shape::convex_polygon(shift(1.0), Color32::from_black_alpha(52), Stroke::NONE));
+            // Overprint Preview draws no shadows.
+            if !overprint {
+                let shift = |d: f32| q.iter().map(|p| *p + vec2(d, d)).collect::<Vec<_>>();
+                painter.add(Shape::convex_polygon(shift(2.0), Color32::from_black_alpha(26), Stroke::NONE));
+                painter.add(Shape::convex_polygon(shift(1.0), Color32::from_black_alpha(52), Stroke::NONE));
+            }
             match &grid {
                 Some((tex, cell)) => checker(painter, &q, ab.rect, xf.zoom, tex.id(), *cell),
                 None => {
@@ -1380,7 +1388,8 @@ fn backdrop(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, outline: bo
     let paper = paper_color(setup);
     let b = if shows_artboards(app) {
         crate::display_profile::Backdrop {
-            everywhere: None,
+            // In Overprint Preview the canvas around the artboards is white paper.
+            everywhere: vectorcraft_render::proof::overprint_preview_on().then_some([255; 3]),
             artboards: st.doc.artboards.iter().map(|ab| (ab.rect, rgb(artboard_paper(ab, paper)))).collect(),
             grid: shows_transparency_grid(st).then(|| (setup.grid_colors.map(|c| rgb(crate::panels::c32(&c))), setup.grid_size.cell())),
         }
@@ -1557,13 +1566,44 @@ fn artboard_outlines(app: &VectorcraftApp, ui: &Ui, painter: &egui::Painter, xf:
     let tool_selected = artboards::tool_labelled(app);
     let editing_name = ui.data(|d| d.get_temp::<ArtboardNameEdit>(name_edit_id()).map(|e| e.index));
     let unlabelled = |i: usize| editing_name == Some(i) || u64::try_from(i).ok().is_some_and(|idx| tool_selected.contains(&idx));
-    artboard_edges(app, doc, (painter, xf, t), (active_ab, dim_on_canvas(t, app.outline_view())), unlabelled);
+    artboard_edges(app, doc, (painter, xf, t), (active_ab, dim_on_canvas(app, t, (app.outline_view(), fades_outside_artboards(app)))), unlabelled);
 }
 
 /// The color of the artboards' names and the ruler origin's crosshair over the pasteboard, or over
-/// [`OUTLINE_CANVAS`] in Outline (`outline`).
-fn dim_on_canvas(t: &Tokens, outline: bool) -> Color32 {
-    if outline { OUTLINE_DIM } else { t.text_dim }
+/// [`OUTLINE_CANVAS`] in Outline (`outline`), or over Overprint Preview's white canvas while the
+/// artboards show. Over a white canvas that Fade Region Outside Artboard darkens (`faded`), they
+/// are black.
+fn dim_on_canvas(app: &VectorcraftApp, t: &Tokens, (outline, faded): (bool, bool)) -> Color32 {
+    match (white_canvas(app, outline), faded) {
+        (true, true) => Color32::BLACK,
+        (true, false) => OUTLINE_DIM,
+        (false, _) => t.text_dim,
+    }
+}
+
+/// The canvas outside the artboards is white: in Outline (`outline`), and in Overprint Preview
+/// while the artboards show.
+fn white_canvas(app: &VectorcraftApp, outline: bool) -> bool {
+    outline || (vectorcraft_render::proof::overprint_preview_on() && shows_artboards(app))
+}
+
+/// The color of the Artboard tool's names of its selected artboards over a white canvas, faded by
+/// Fade Region Outside Artboard or not: a dark blue.
+const SELECTED_NAME_ON_WHITE: [u8; 3] = [0x1a, 0x2b, 0x59];
+
+/// Over a white canvas ([`white_canvas`]), the labels among `overlays` that name an artboard (the
+/// Artboard tool's names of its selected artboards) draw in [`SELECTED_NAME_ON_WHITE`].
+fn names_on_a_white_canvas(app: &VectorcraftApp, overlays: &mut [Overlay]) {
+    if !white_canvas(app, app.outline_view()) {
+        return;
+    }
+    for o in overlays {
+        if let Overlay::Label { text, color, .. } = o
+            && artboards::names_an_artboard(text)
+        {
+            *color = SELECTED_NAME_ON_WHITE;
+        }
+    }
 }
 
 /// The edges, bleeds, marks and names of `doc`'s artboards, `active_ab` the active one, the names

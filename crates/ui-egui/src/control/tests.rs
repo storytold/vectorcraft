@@ -1257,6 +1257,7 @@ fn menu_dialogs_open_after_a_merge_on_another_thread() {
 /// leave the view off, so they apply it by command id without giving the documents new revisions.
 #[test]
 fn panels_that_redraw_apply_a_merge_on_another_thread_first() {
+    let _view = crate::dialogs::proof_setup::tests::changing_the_proof_view();
     let cases = [
         ("view.separationsPreview", json!({"on": false})),
         ("view.overprintPreview", json!({"on": false})),

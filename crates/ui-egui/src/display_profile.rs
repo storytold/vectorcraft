@@ -273,7 +273,8 @@ pub(crate) fn convert(t: Option<&DisplayTransform>, pixels: &mut [u8]) {
 /// The pasteboard and Outline's white canvas are interface colors and are not part of it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Backdrop {
-    /// View › Hide Artboards: the sRGB color of the paper that covers the whole canvas.
+    /// The sRGB color of the paper where no artboard is: with View › Hide Artboards the paper that
+    /// covers the whole canvas, and in Overprint Preview the white canvas around the artboards.
     pub(crate) everywhere: Option<[u8; 3]>,
     /// The artboards in the order they are drawn (the last on top), each with its paper's sRGB color.
     pub(crate) artboards: Vec<(Rect, [u8; 3])>,
@@ -430,9 +431,10 @@ impl<'a> Over<'a> {
         }
     }
 
-    /// The paper at pixel `i` of the row at height `y`, whose artboard on top is `owner`.
+    /// The paper at pixel `i` of the row at height `y`, whose artboard on top is `owner`: the paper
+    /// where no artboard is when there is none.
     fn paper_at(&self, owner: u32, i: usize, y: f64) -> Option<Paper> {
-        let b = self.boards.get(owner as usize)?;
+        let Some(b) = self.boards.get(owner as usize) else { return self.everywhere };
         Some(match &self.grid {
             Some((colors, cell)) => {
                 let p = self.to_doc * Point::new(i as f64 + 0.5, y);
@@ -459,7 +461,7 @@ impl<'a> Over<'a> {
                 }
                 let paper = if a == 255 {
                     None
-                } else if self.everywhere.is_some() {
+                } else if self.boards.is_empty() {
                     self.everywhere
                 } else {
                     if !found {
@@ -497,8 +499,9 @@ impl<'a> Over<'a> {
 /// [`convert`], with each translucent pixel over the paper or the transparency grid of `backdrop`
 /// blended with it in sRGB before the conversion. The canvas draws the art over the paper
 /// converted: such a pixel keeps its alpha and takes the color that, drawn over the converted
-/// paper, shows the blend converted. Opaque and fully transparent pixels, and pixels over the
-/// pasteboard, convert as [`convert`] converts them. The pixels are rows of `width`; `view` maps the
+/// paper, shows the blend converted. Translucent pixels where no artboard is are blended with the
+/// backdrop's paper there (`everywhere`) when it has one. Opaque and fully transparent pixels, and
+/// pixels over the pasteboard, convert as [`convert`] converts them. The pixels are rows of `width`; `view` maps the
 /// document to them, and the backdrop's `zoom` is the canvas's screen points per document point,
 /// in which the grid's cells are measured.
 pub(crate) fn convert_over(t: Option<&DisplayTransform>, pixels: &mut [u8], width: u32, view: Affine, backdrop: Option<(&Backdrop, f64)>) {
@@ -680,6 +683,21 @@ pub(crate) mod tests {
         let mut srgb = row(20, half_red);
         convert_over(None, &mut srgb, 20, Affine::IDENTITY, Some((&b, 1.0)));
         assert_eq!(srgb, row(20, half_red));
+    }
+
+    /// Overprint Preview's white canvas is paper too: translucent pixels around the artboards are
+    /// blended with it, and pixels on an artboard with the artboard's own paper.
+    #[test]
+    fn translucent_pixels_around_the_artboards_are_blended_with_the_white_canvas() {
+        let t = DisplayTransform::from_icc(&p3()).unwrap();
+        let half_red = [128, 0, 0, 128];
+        let dark = [40; 3];
+        let b = Backdrop { everywhere: Some([255; 3]), artboards: vec![(Rect::new(0.0, 0.0, 10.0, 1.0), dark)], grid: None };
+        let mut px = row(20, half_red);
+        convert_over(Some(&t), &mut px, 20, Affine::IDENTITY, Some((&b, 1.0)));
+        let at = |i: usize| -> [u8; 4] { px[i * 4..i * 4 + 4].try_into().unwrap() };
+        assert_near(shown_over(at(2), t.apply8(dark)), blended(&t, half_red, dark), "on the artboard");
+        assert_near(shown_over(at(15), t.apply8([255; 3])), blended(&t, half_red, [255; 3]), "around the artboards");
     }
 
     #[test]

@@ -3335,6 +3335,7 @@ fn pixel_preview_shows_the_document_pixels() {
 #[test]
 fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() {
     use crate::display_profile::{Found, Reading};
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
@@ -3513,6 +3514,88 @@ fn translucent_art_over_the_paper() {
     app.run("view.outline", json!({})).unwrap();
     upload(&mut app).expect("Outline renders again");
     assert!(app.canvas.key.as_ref().is_some_and(|k| k.outline && k.backdrop.is_none()));
+}
+
+/// With a display profile, in Overprint Preview translucent art around the artboards is blended
+/// with the white canvas before the conversion, as art over the paper is. With the preview off it
+/// converts alone, over the pasteboard.
+#[test]
+fn translucent_art_around_the_artboards_is_blended_with_overprint_previews_white_canvas() {
+    let _view = crate::dialogs::proof_setup::tests::changing_the_proof_view();
+    vectorcraft_color::cms::with_active(vectorcraft_color::cms::active(), translucent_art_around_the_artboards);
+}
+
+fn translucent_art_around_the_artboards() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.task_bar = false;
+    app.ui.view.rulers = false;
+    app.canvas.worker_started = true; // every frame on this thread
+    // Left of the artboard.
+    let outside = app.run("shape.rectangle", json!({"x": -60, "y": 100, "width": 40, "height": 40})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [outside], "color": "#00ff00"})).unwrap();
+    app.run("transparency.set", json!({"ids": [outside], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    // The whole art raster one frame uploads: its width and its pixels.
+    let upload = |app: &mut VectorcraftApp| -> Option<(usize, Vec<egui::Color32>)> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref()?.id();
+        let up = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).filter(|d| d.pos.is_none()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            (img.width(), img.pixels.clone())
+        });
+        delta.clear();
+        up
+    };
+    upload(&mut app).expect("the first frame");
+    let v = app.view_mut().unwrap();
+    (v.zoom, v.center) = (1.0, Point::new(120.0, 150.0));
+    upload(&mut app).expect("the view at 100%");
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    upload(&mut app).expect("drawn again, converted");
+    let white = t.apply8([255; 3]);
+    let over = |c: egui::Color32, under: [u8; 3]| {
+        let k = 255 - u32::from(c.a());
+        [0, 1, 2].map(|i| u32::from(c.to_array()[i]) + (u32::from(under[i]) * k + 127) / 255)
+    };
+    let plain = |s: egui::Color32| {
+        let mut px = s.to_array();
+        t.apply_premultiplied(&mut px);
+        egui::Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    // The pixel at the translucent rectangle's center, in sRGB (the display profile's preference
+    // off) and as the canvas shows it (on).
+    let pixel = |app: &mut VectorcraftApp| {
+        app.session.prefs.monitor_profile_display = false;
+        let (width, srgb) = upload(app).expect("drawn in sRGB");
+        let key = app.canvas.key.clone().unwrap();
+        let view = View { zoom: key.zoom, center: Point::new(key.cx, key.cy), rotation: key.rot, ..View::default() };
+        let (_, _, view) = frame_view(None, (key.w, key.h), &view, key.ppp);
+        let at = view * Point::new(-40.0, 120.0);
+        let at = at.y as usize * width + at.x as usize;
+        app.session.prefs.monitor_profile_display = true;
+        let (_, shown) = upload(app).expect("drawn again, converted");
+        (srgb[at], shown[at], app.canvas.key.clone().unwrap())
+    };
+    let (s, c, key) = pixel(&mut app);
+    assert!((50..=205).contains(&s.a()), "the 50% fill: {s:?}");
+    assert!(key.backdrop.as_ref().is_some_and(|b| b.everywhere.is_none()), "Preview: the pasteboard is no paper");
+    assert_eq!(c, plain(s), "over the pasteboard the art converts alone");
+    app.run("view.overprintPreview", json!({"on": true})).unwrap();
+    let (s, c, key) = pixel(&mut app);
+    assert!((50..=205).contains(&s.a()), "the 50% fill: {s:?}");
+    assert_eq!(key.backdrop.as_ref().and_then(|b| b.everywhere), Some([255; 3]), "the white canvas is paper");
+    let k = 255 - u32::from(s.a());
+    let mix = [0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (255 * k + 127) / 255).min(255) as u8);
+    let (want, got) = (t.apply8(mix), over(c, white));
+    assert!((0..3).all(|j| got[j].abs_diff(u32::from(want[j])) <= 1), "{got:?} shown, {want:?} wanted");
+    // The test tells the two apart: the fill converted alone shows another color over the white canvas.
+    let alone = over(plain(s), white);
+    assert!((0..3).any(|j| alone[j].abs_diff(got[j]) > 2), "{alone:?} and {got:?}");
 }
 
 /// View › Hide Template (#2000): a template layer's art leaves the canvas, and Show Template
@@ -6705,6 +6788,7 @@ fn canvas_look(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Vec<Color32>, 
 /// Preview the pasteboard keeps its color and the artboards their white paper.
 #[test]
 fn outline_draws_on_a_white_canvas_with_artboards_as_edges() {
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
     for brightness in crate::theme::Brightness::ALL {
@@ -6744,6 +6828,7 @@ fn outline_draws_on_a_white_canvas_with_artboards_as_edges() {
 /// artboard's color and the paper color over the whole canvas.
 #[test]
 fn outline_draws_no_colored_paper() {
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
     {
@@ -6778,11 +6863,111 @@ fn outline_draws_no_colored_paper() {
     assert_eq!(edges, 0);
 }
 
+/// In Overprint Preview, and in Separations Preview, which turns it on, the canvas outside the
+/// artboards is white instead of the pasteboard color in every interface brightness, the artboards
+/// draw no shadows, and their names draw in the dark gray that shows on white. Where the Artboard
+/// tool darkens the canvas, the names are black and the tool's names of its selected artboards dark
+/// blue. The artboards keep their paper and edges. Turning it off brings back the pasteboard, the
+/// shadows and the theme's names.
+#[test]
+fn overprint_preview_draws_a_white_canvas_without_shadows() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    // The filled shapes laid over an artboard moved down and right, as a shadow is.
+    let shadows = |app: &mut VectorcraftApp, ctx: &egui::Context| {
+        let s = shapes(app, ctx);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let quads: Vec<Vec<Pos2>> = app.session.active().unwrap().doc.artboards.iter().map(|a| xf.quad(a.rect).to_vec()).collect();
+        let moved = |p: &[Pos2]| {
+            quads.iter().any(|q| {
+                let d = p.first().zip(q.first()).map(|(a, b)| *a - *b);
+                d.is_some_and(|d| {
+                    d.x > 0.5 && (d.x - d.y).abs() < 0.01 && q.len() == p.len() && q.iter().zip(p).all(|(a, b)| (*a + d - *b).length() < 0.01)
+                })
+            })
+        };
+        s.iter().filter(|s| matches!(s, Shape::Path(p) if p.fill != Color32::TRANSPARENT && moved(&p.points))).count()
+    };
+    let rgb = |[r, g, b]: [u8; 3]| Color32::from_rgb(r, g, b);
+    let (selected_blue, dark_blue) = (rgb(vectorcraft_tools::xform::BLUE), rgb(SELECTED_NAME_ON_WHITE));
+    let _view = crate::dialogs::proof_setup::tests::changing_the_proof_view();
+    for brightness in crate::theme::Brightness::ALL {
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, brightness);
+        let t = Tokens::get(&ctx);
+        assert_ne!(t.pasteboard, Color32::WHITE, "{brightness:?}");
+        let steps = [
+            ("view.overprintPreview", false),
+            ("view.overprintPreview", true),
+            ("view.overprintPreview", false),
+            ("view.separationsPreview", true),
+            ("view.separationsPreview", false),
+        ];
+        for (command, on) in steps {
+            let case = format!("{brightness:?} {command} {on}");
+            app.run(command, json!({"on": on})).unwrap();
+            assert_eq!(vectorcraft_render::proof::overprint_preview_on(), on, "{case}");
+            let (covers, papers, edges, names) = canvas_look(&mut app, &ctx);
+            assert_eq!(papers, [Color32::WHITE; 2], "{case}: the artboards keep their paper");
+            assert_eq!(edges, 2, "{case}");
+            if on {
+                assert_eq!(covers.last(), Some(&Color32::WHITE), "{case}: the canvas is white");
+                assert!(!covers.contains(&t.pasteboard), "{case}: no pasteboard: {covers:?}");
+                assert_eq!(shadows(&mut app, &ctx), 0, "{case}: no artboard shadows");
+                assert_eq!(names, [OUTLINE_DIM; 2], "{case}: names readable on white");
+                // The Artboard tool darkens the canvas around the artboards (Fade Region Outside
+                // Artboard) and labels its selected artboard itself: the other artboard's name is
+                // black, and the tool's name dark blue.
+                app.select_tool("artboard");
+                let (_, _, _, names) = canvas_look(&mut app, &ctx);
+                assert!(names.contains(&Color32::BLACK), "{case}: names readable on the faded canvas: {names:?}");
+                assert!(names.contains(&dark_blue), "{case}: {names:?}");
+                assert!(!names.contains(&OUTLINE_DIM) && !names.contains(&selected_blue), "{case}: {names:?}");
+                app.select_tool("selection");
+            } else {
+                assert_eq!(covers.last(), Some(&t.pasteboard), "{case}: the pasteboard");
+                assert!(shadows(&mut app, &ctx) > 0, "{case}: the artboards' shadows");
+                assert_eq!(names, [t.text_dim; 2], "{case}");
+                // Over the pasteboard the Artboard tool's name keeps its blue.
+                app.select_tool("artboard");
+                let (_, _, _, names) = canvas_look(&mut app, &ctx);
+                assert!(names.contains(&selected_blue), "{case}: {names:?}");
+                app.select_tool("selection");
+            }
+        }
+    }
+}
+
+/// In Outline, where the Artboard tool's Fade Region Outside Artboard darkens the white canvas,
+/// the artboards' names are black and the tool's names of its selected artboards dark blue. With
+/// Fade Region Outside Artboard off, the names keep Outline's dark gray.
+#[test]
+fn outline_names_show_on_the_faded_canvas() {
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::apply(&ctx, crate::theme::Brightness::Dark);
+    app.view_mut().unwrap().outline = true;
+    app.select_tool("artboard");
+    assert!(app.session.prefs.fade_region_outside_artboard, "on by default");
+    let [r, g, b] = SELECTED_NAME_ON_WHITE;
+    let dark_blue = Color32::from_rgb(r, g, b);
+    let (_, _, _, names) = canvas_look(&mut app, &ctx);
+    assert!(names.contains(&Color32::BLACK) && names.contains(&dark_blue), "{names:?}");
+    assert!(!names.contains(&OUTLINE_DIM), "{names:?}");
+    app.session.prefs.fade_region_outside_artboard = false;
+    let (_, _, _, names) = canvas_look(&mut app, &ctx);
+    assert!(names.contains(&OUTLINE_DIM) && names.contains(&dark_blue), "{names:?}");
+    assert!(!names.contains(&Color32::BLACK), "{names:?}");
+}
+
 /// A split-view pane or floating window draws its own view's Outline, whatever the current view
 /// shows: the white canvas and dark gray artboard names in Outline, and the pasteboard and the
 /// theme's names in Preview.
 #[test]
 fn a_pane_draws_its_own_views_outline() {
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
     crate::doc_windows::new_window(&mut app).unwrap();
@@ -6823,6 +7008,7 @@ fn a_pane_draws_its_own_views_outline() {
 #[test]
 fn a_pane_blends_translucent_art_before_the_display_profile() {
     use crate::display_profile::{Found, Reading};
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     let half = app.run("shape.rectangle", json!({"x": 50, "y": 25, "width": 100, "height": 50})).unwrap()["id"].clone();
@@ -6892,6 +7078,7 @@ fn a_pane_blends_translucent_art_before_the_display_profile() {
 #[test]
 fn the_ruler_origin_crosshair_shows_on_the_outline_canvas() {
     use egui::Event;
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
     for outline in [false, true] {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
@@ -13921,6 +14108,7 @@ fn the_task_bar_stays_up_through_a_click_and_gives_way_to_a_drag() {
 /// the Artboard tool still shows them.
 #[test]
 fn hidden_artboards_leave_a_paper_canvas_without_edges() {
+    let _view = crate::dialogs::proof_setup::tests::keeping_the_proof_view();
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     let ctx = egui::Context::default();

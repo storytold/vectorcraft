@@ -585,7 +585,7 @@ fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> boo
         grid(&painter, &xf, st.doc.grid.spacing, st.doc.grid.subdivisions, look);
     }
     if shows_artboards(app) {
-        artboard_edges(app, &st.doc, (&painter, &xf, &t), (v.artboard, dim_on_canvas(&t, v.outline)), |_| false);
+        artboard_edges(app, &st.doc, (&painter, &xf, &t), (v.artboard, dim_on_canvas(app, &t, (v.outline, false))), |_| false);
     }
     if app.ui.view.guides_shown() {
         guides_of(app, st, (&painter, &xf, &t), rect);

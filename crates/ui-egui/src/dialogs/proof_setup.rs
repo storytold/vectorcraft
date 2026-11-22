@@ -521,6 +521,12 @@ pub(crate) mod tests {
         VIEW.read().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// Lets a test elsewhere change the proof view: the tests that change or keep it wait while the
+    /// guard lives, and dropping it puts back the default view.
+    pub(crate) fn changing_the_proof_view() -> impl Drop {
+        DefaultView::new()
+    }
+
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
         out.textures_delta.clear();
