@@ -54,6 +54,27 @@ fn a_pdf_saved_with_preserve_editing_reopens_as_the_same_document() {
 }
 
 #[test]
+fn opening_a_preserve_editing_pdf_without_editing_data_imports_its_pages() {
+    let mut s = rich();
+    assert!(!s.doc().unwrap().doc.symbols.is_empty());
+    let exported = s.execute("document.exportPdf", &json!({"preserveEditing": true})).unwrap();
+    let reopened = s
+        .execute(
+            "document.open",
+            &json!({
+                "name": "rich.pdf",
+                "dataBase64": exported["dataBase64"],
+                "cropTo": "media",
+                "editingData": false,
+            }),
+        )
+        .unwrap();
+
+    assert_eq!(reopened["restored"], false, "{reopened}");
+    assert!(s.doc().unwrap().doc.symbols.is_empty(), "the PDF page has no native symbol definitions");
+}
+
+#[test]
 fn pages_changed_elsewhere_open_as_artwork_with_a_warning() {
     let mut s = rich();
     let pdf = b64(&s.execute("document.exportPdf", &json!({"compression": {"compressText": false}})).unwrap());
