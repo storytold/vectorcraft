@@ -299,8 +299,8 @@ fn control(ui: &mut egui::Ui, d: &mut Dialog, origin: egui::Pos2, (i, n, prompt)
 }
 
 /// Screen readers call a control with no visible label of its own (an edit field, a slider or a
-/// progress bar) by the name the script gave it, or else a slider or progress bar by its text, and
-/// an edit field by the visible static text just before it in its container.
+/// progress bar) by the visible static text just before it in its container, or else by the name
+/// the script gave it, or else a slider or progress bar by its text.
 fn name_for_screen_readers(ui: &egui::Ui, r: &egui::Response, n: &UiNode, prompt: &str) {
     let label = screen_reader_name(n, prompt);
     if !label.is_empty() {
@@ -308,20 +308,20 @@ fn name_for_screen_readers(ui: &egui::Ui, r: &egui::Response, n: &UiNode, prompt
     }
 }
 
-/// The name screen readers call a list box or a drop-down list `n` by: the name the script gave it,
-/// or else the visible static text just before it. Empty for none.
+/// The name screen readers call a list box or a drop-down list `n` by: the visible static text
+/// just before it, or else the name the script gave it. Empty for none.
 fn list_name(n: &UiNode, prompt: &str) -> String {
-    if n.name.is_empty() { prompt.to_string() } else { n.name.clone() }
+    if prompt.is_empty() { n.name.clone() } else { prompt.to_string() }
 }
 
 /// The name [`name_for_screen_readers`] gives control `n`; empty for none.
 pub(crate) fn screen_reader_name(n: &UiNode, prompt: &str) -> String {
-    if !n.name.is_empty() {
-        n.name.clone()
-    } else if n.kind != UiKind::EditText {
-        n.text.clone()
-    } else {
+    if !prompt.is_empty() {
         prompt.to_string()
+    } else if !n.name.is_empty() || n.kind == UiKind::EditText {
+        n.name.clone()
+    } else {
+        n.text.clone()
     }
 }
 
