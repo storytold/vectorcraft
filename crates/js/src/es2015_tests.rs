@@ -145,6 +145,28 @@ fn global_lexical_bindings_stay_across_runs_and_cannot_be_redeclared() {
 }
 
 #[test]
+fn functions_from_earlier_runs_see_later_global_lexical_bindings() {
+    let mut realm = Realm::new();
+    let first = realm.run("function read() { return x; } function call(f) { return f(); }");
+    assert!(first.is_ok(), "{first:?}");
+    let made = realm.run("(0, eval)('function viaEval() { return x; }'); var made = new Function('return x');");
+    assert!(made.is_ok(), "{made:?}");
+    realm.set_es2015(true);
+    assert_eq!(realm.run("let x = 7; read() + call(() => x) + viaEval() + made()"), Ok(JsValue::Number(28.0)));
+    realm.set_es2015(false);
+    assert_eq!(realm.run("function later() { return x; } later() + read()"), Ok(JsValue::Number(14.0)));
+}
+
+#[test]
+fn a_global_function_that_cannot_be_declared_declares_nothing() {
+    let mut realm = es();
+    let failed = realm.run("let retained = 1; function undefined() {}");
+    assert!(matches!(&failed, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")), "{failed:?}");
+    assert_eq!(realm.run("typeof retained"), Ok(JsValue::String("undefined".into())));
+    assert_eq!(realm.run("let retained = 2; retained"), Ok(JsValue::Number(2.0)));
+}
+
+#[test]
 fn eval_code_keeps_its_let_and_const_to_itself() {
     truth("eval('let e = 1; e') === 1 && typeof e === 'undefined'");
     truth("function f() { eval('var v = 2; let l = 3;'); return v + typeof l; } f() === '2undefined'");

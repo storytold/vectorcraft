@@ -227,9 +227,10 @@ pub(crate) struct Interp {
     temp_envs: Vec<EnvId>,
     pub(crate) global: ObjId,
     pub(crate) global_env: EnvId,
-    /// With [`Options::es2015`], the declarative environment inside `global_env` that holds the
-    /// `let` and `const` names of the scripts the realm runs.
-    pub(crate) global_lex: Option<EnvId>,
+    /// The declarative environment inside `global_env` that holds the `let` and `const` names of
+    /// the scripts the realm runs with [`Options::es2015`]. Global code runs in it in either
+    /// language, so a function made by one run sees the names a later run declares.
+    pub(crate) global_lex: EnvId,
     /// The template objects tagged templates have made, by code and template index, each with
     /// its code (ECMA-262 2015 section 12.2.9.3 keeps one object for each site).
     pub(crate) template_objects: std::collections::HashMap<(usize, u32), (Rc<Code>, ObjId)>,
@@ -503,7 +504,7 @@ impl Interp {
         let mut heap = Heap::default();
         let global = heap.alloc_object(Object::new(Class::Ordinary, None));
         let global_env = heap.alloc_env(Env::Obj { object: global, with_this: false, outer: None });
-        let global_lex = options.es2015.then(|| heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(global_env) }));
+        let global_lex = heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(global_env) });
         let mut interp = Self {
             heap,
             stack: Vec::new(),
@@ -791,7 +792,7 @@ impl Interp {
         roots.objects.extend(self.intrinsics.all());
         roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
         roots.envs.push(self.global_env);
-        roots.envs.extend(self.global_lex);
+        roots.envs.push(self.global_lex);
         roots.envs.extend(self.temp_envs.iter().copied());
         // A template object stays while its code can still run.
         self.template_objects.retain(|_, (code, _)| Rc::strong_count(code) > 1);
@@ -3082,20 +3083,15 @@ impl Interp {
         self.push_code_frame(code, env, var_env, Value::Object(global), true)
     }
 
-    /// The environment global code runs in: with [`Options::es2015`], the one that holds the
-    /// scripts' `let` and `const` names, inside the global object's.
+    /// The environment global code runs in: the one that holds the scripts' `let` and `const`
+    /// names, inside the global object's.
     pub(crate) fn global_scope(&self) -> EnvId {
-        self.global_lex.unwrap_or(self.global_env)
+        self.global_lex
     }
 
-    /// Sets [`Options::es2015`], making the environment of the scripts' `let` and `const` names
-    /// the first time it is turned on.
+    /// Sets [`Options::es2015`] for the next runs.
     pub(crate) fn set_es2015(&mut self, es2015: bool) {
         self.options.es2015 = es2015;
-        if es2015 && self.global_lex.is_none() {
-            let outer = Some(self.global_env);
-            self.global_lex = Some(self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer }));
-        }
     }
 
     /// Declares a script's top-level `let` and `const` names in the global scope, uninitialized
@@ -3103,6 +3099,8 @@ impl Interp {
     /// non-configurable property of the global object (a `var` or a function another script
     /// declared, or a built-in such as `undefined`) or a `var` or function of this script that
     /// another script declared with `let` or `const` is a `SyntaxError`, and nothing is declared.
+    /// With [`Options::es2015`], a function of this script that cannot replace a property of the
+    /// global object is a `TypeError`, also before anything is declared.
     fn declare_global_lexical(&mut self, code: &Code, lex: EnvId) -> JsResult<()> {
         let lets: &[(Key, bool)] = code.top_scope.and_then(|i| code.scopes.get(i as usize)).map_or(&[], |s| &s.lets);
         let in_lex = |interp: &Self, name: &[u16]| matches!(interp.heap.env(lex), Some(Env::Decl { bindings, .. }) if bindings.contains(name));
@@ -3119,6 +3117,22 @@ impl Interp {
             if in_lex(self, name) {
                 let ident = String::from_utf16_lossy(name);
                 return Err(self.throw(ErrorType::Syntax, &format!("redeclaration of '{ident}'")));
+            }
+        }
+        if self.options.es2015 {
+            // The test `declare` makes for a function in an object environment (section 15.1.8,
+            // step 8, CanDeclareGlobalFunction).
+            for (name, _) in &code.fun_decls {
+                let replaceable = match self.find_property(global, name)? {
+                    None => true,
+                    Some(p) if p.configurable() => true,
+                    Some(Prop::Data { flags, .. }) => flags & (WRITABLE | ENUMERABLE) == WRITABLE | ENUMERABLE,
+                    Some(_) => false,
+                };
+                if !replaceable {
+                    let ident = String::from_utf16_lossy(name);
+                    return Err(self.type_error(&format!("cannot declare function {ident}")));
+                }
             }
         }
         for (name, constant) in lets {
@@ -3161,7 +3175,7 @@ impl Interp {
             self.check_eval_vars(code, env, var_env)?;
         }
         let lex = match code.top_scope {
-            _ if !is_eval && Some(env) == self.global_lex => {
+            _ if !is_eval && env == self.global_lex => {
                 self.declare_global_lexical(code, env)?;
                 env
             }
@@ -3169,8 +3183,10 @@ impl Interp {
             None => env,
         };
         // Functions close over the code's own environment with ES2015's scoping, and over its
-        // variable environment otherwise (ECMA-262 5.1 section 13).
-        let scope = if self.options.es2015 { lex } else { var_env };
+        // variable environment otherwise (ECMA-262 5.1 section 13). Global code's functions close
+        // over the global scope in either language, which sees the global object's names too.
+        let global = var_env == self.global_env && lex == self.global_lex;
+        let scope = if self.options.es2015 || global { lex } else { var_env };
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
