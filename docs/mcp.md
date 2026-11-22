@@ -10362,7 +10362,8 @@ in an encoding, and a note names every font the printer needs. The file lists th
 `%%DocumentSuppliedResources`. Type that the fonts don't carry prints as outlines, as before: type in a gradient or
 pattern, color glyphs, glyphs bent along a curved path, ruby, and with `none` a glyph the font gives no name. So does type in a
 font whose license forbids embedding, and, with `subset`, a font that may only be embedded whole; both with a warning
-naming the font. PDF output embeds font subsets with any of the three, and `none` or `complete` adds a note saying so.
+naming the font. With any of the three, PDF output embeds subsets of the fonts whose licenses allow it and draws the
+others as outlines, and `none` or `complete` adds a note saying so.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.ps","level":2,"settings":{"output":{"mode":"separations"}}}}}

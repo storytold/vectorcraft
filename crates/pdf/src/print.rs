@@ -484,7 +484,10 @@ impl<'a> Job<'a> {
         // PDF output embeds a subset of each font its license allows, as a saved PDF does;
         // PostScript output follows Fonts.
         if !postscript && set.graphics.fonts != FontDownload::Subset {
-            setting_notes.push(format!("PDF print embeds subsets of the fonts: Fonts: {} applies to PostScript output", set.graphics.fonts.label()));
+            setting_notes.push(format!(
+                "PDF print embeds subsets of the fonts whose licenses allow it and draws the others as outlines: Fonts: {} applies to PostScript output",
+                set.graphics.fonts.label()
+            ));
         }
         Ok(Self { doc, layouts, tiles, inks, document_inks, plates, sheets, warnings, setting_notes })
     }
