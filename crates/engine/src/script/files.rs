@@ -116,6 +116,7 @@ pub(crate) const NOT_WRITABLE: &str = "Script file is not open for writing";
 pub(crate) const UNENCODABLE: &str = "Script file cannot encode the text";
 pub(crate) const WRITE_FAILED: &str = "Script file could not be written";
 pub(crate) const READ_ONLY: &str = "Script file is read-only";
+pub(crate) const OPEN_FOR_WRITING: &str = "Script file is open for writing";
 pub(crate) const NOT_EMPTY: &str = "Script folder is not empty";
 pub(crate) const NAME_TAKEN: &str = "Script file name is already in use";
 pub(crate) const BAD_NAME: &str = "Script file name must be a name without a folder";
@@ -460,11 +461,12 @@ impl Disk {
     }
 
     /// The gate for a command the script runs: the places it reads and writes now, and the files of
-    /// the open documents, `documents`.
+    /// the open documents, `documents`, but not the files its `File` objects hold open for writing.
     pub(crate) fn gate(&self, documents: Vec<String>) -> crate::file_access::ScriptGate {
         // A save, export or open of a `File` the script names reads and writes as its `File` would.
         let documents = if self.exact { Vec::new() } else { documents };
-        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, also: None }
+        let held = self.open.values().filter_map(|o| o.target.clone()).collect();
+        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, held, also: None }
     }
 
     /// The files written since this was last asked, to name in the report.
@@ -684,10 +686,14 @@ impl Disk {
     }
 
     /// The real path a save or export of the document to `path` writes, as a `File` opened for
-    /// writing would write it ([`Disk::target`]), or why it may not: a folder is not a file, and a
-    /// read-only file is not written over.
+    /// writing would write it ([`Disk::target`]), or why it may not: a folder is not a file, a
+    /// read-only file is not written over, and neither is a file a `File` object holds open for
+    /// writing, whose bytes the run's end would write over the saved file.
     pub(crate) fn save_target(&self, path: &str) -> Result<std::path::PathBuf, &'static str> {
         let real = self.target(path, true)?;
+        if self.open.values().any(|o| o.target.as_deref() == Some(real.as_path())) {
+            return Err(OPEN_FOR_WRITING);
+        }
         match std::fs::metadata(&real) {
             Ok(m) if !m.is_file() => Err(NOT_REGULAR),
             Ok(m) if m.permissions().readonly() => Err(READ_ONLY),

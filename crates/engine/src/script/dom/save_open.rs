@@ -48,6 +48,9 @@ use super::{
 
 /// The most a scale factor of an export takes, in percent.
 pub const MAX_SCALE_PERCENT: f64 = 776.19;
+/// The least a scale factor of a raster export takes, in percent: `document.export` writes at least
+/// 0.01 pixels per point.
+pub const MIN_SCALE_PERCENT: f64 = 1.0;
 
 /// What the run keeps for these members: whether `userInteractionLevel` is `DONTDISPLAYALERTS`.
 #[derive(Default)]
@@ -363,8 +366,8 @@ fn raster_map(class: &str, name: &str, d: &Data, p: &mut Map<String, Value>) -> 
                 Data::Number(n) if n.is_finite() => *n,
                 _ => return Err(HostError::Type(format!("{what} must be a finite number"))),
             };
-            if n <= 0.0 || n > MAX_SCALE_PERCENT {
-                return Err(HostError::Range(format!("{what} must be more than 0 and at most 776.19")));
+            if !(MIN_SCALE_PERCENT..=MAX_SCALE_PERCENT).contains(&n) {
+                return Err(HostError::Range(format!("{what} must be at least 1 and at most 776.19")));
             }
             let key = if name == "horizontalScale" { "_h" } else { "_v" };
             p.insert(key.into(), json!(n));

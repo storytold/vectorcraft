@@ -37,12 +37,14 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
+    ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.saveAs` and `close` throw "not available yet".
+/// documents; `Document.close` throws "not available yet". `app.open` reads the file it is given.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -81,7 +83,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection typename",
+         open selection typename userInteractionLevel userInteractionLevel=",
     ),
     ("Documents.", "prototype"),
     ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
@@ -90,7 +92,7 @@ const INSIDE: &[(&str, &str)] = &[
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
          groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
+         rulerUnits selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
          views views= width",
     ),
     ("Layer.", "prototype"),
@@ -121,12 +123,27 @@ const INSIDE: &[(&str, &str)] = &[
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
+    // The enumerations of saving, exporting and opening.
+    ("", "Compatibility EPSPostScriptLevelEnum EPSPreview ExportType PDFBoxType PDFCompatibility PDFOverprint UserInteractionLevel"),
+    (
+        "Compatibility.",
+        "ILLUSTRATOR10 ILLUSTRATOR11 ILLUSTRATOR12 ILLUSTRATOR13 ILLUSTRATOR14 ILLUSTRATOR15 ILLUSTRATOR16 ILLUSTRATOR17 \
+         ILLUSTRATOR19 ILLUSTRATOR8 ILLUSTRATOR9 JAPANESEVERSION3",
+    ),
+    ("EPSPostScriptLevelEnum.", "LEVEL2 LEVEL3"),
+    ("EPSPreview.", "BWTIFF COLORTIFF None TRANSPARENTCOLORTIFF"),
+    ("ExportType.", "AutoCAD FLASH GIF JPEG PNG24 PNG8 SVG TIFF"),
+    ("PDFBoxType.", "PDFARTBOX PDFBLEEDBOX PDFBOUNDINGBOX PDFCROPBOX PDFMEDIABOX PDFTRIMBOX"),
+    ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
+    ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
+    ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`
-/// and the page item types.
+/// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`,
+/// the page item types and the save and export option classes.
 const BARE_CLASSES: &str = "BlendItem CompoundPathItem DocumentPreset EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
+     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

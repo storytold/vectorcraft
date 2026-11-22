@@ -2558,7 +2558,8 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   (`app.executeMenuCommand('…')`), each with a count and its lines, and `menuCommands.dynamic` counts the calls
   whose argument isn't a string literal.
 - `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
-  File object's `length`, `hidden` or `readonly` counts too), `filesOpened` (files opened in other apps), `network`,
+  File object's `length`, `hidden` or `readonly` counts too, and so does a document's `saveAs` or `exportFile`),
+  `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2695,8 +2696,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `exportType` is an `ExportType`: `PNG24`, `JPEG` and `SVG` take `new ExportOptionsPNG24()`, `new ExportOptionsJPEG()`
   and `new ExportOptionsSVG()` (https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/,
   https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/, https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/),
-  with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, more than 0 and at
-  most 776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
+  with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, from 1 to
+  776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
   `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
   `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
   `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
@@ -2706,7 +2707,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
   command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
   document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
-  read-only`; and the files a command reads or writes besides the one named, such as an SVG's linked files, are
+  read-only`; a file a `File` object holds open for writing throws `Script file is open for writing` on `saveAs`
+  and `exportFile`, and `Script file access denied` when a command would write it besides the file named; and the
+  files a command reads or writes besides the one named, such as an SVG's linked files, are
   read and written only where the script's folders allow. `userInteractionLevel` does not change what a command
   does or where it may read and write, since a command a script runs never shows a dialog. `exportFile` adds the
   format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with

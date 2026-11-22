@@ -271,6 +271,32 @@ fn an_open_documents_file_is_not_saved_over_without_a_grant() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A save or export to a file a `File` object holds open for writing throws, so the object's bytes
+/// written at the end of the run do not replace the saved document.
+#[test]
+fn a_file_open_for_writing_is_not_saved_over() {
+    let base = folder("openhandle");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    for (name, call) in
+        [("a.svg", "app.activeDocument.saveAs(new File(p));"), ("b.png", "app.activeDocument.exportFile(new File(p), ExportType.PNG24);")]
+    {
+        let p = quoted(&dir.join(name));
+        let log = logged(
+            &mut s,
+            &base,
+            &format!(
+                "Folder.userData; var p = {p}, w = new File(p); w.open('w'); w.write('pending');\ntry {{ {call} vc.log('ran'); }} catch (e) {{ vc.log(e.message); }}"
+            ),
+        );
+        assert!(log[0].as_str().unwrap().contains(crate::script::files::OPEN_FOR_WRITING), "{name}: {log}");
+        assert_eq!(std::fs::read_to_string(dir.join(name)).unwrap(), "pending", "{name}: the File's own bytes");
+        assert_eq!(s.active().unwrap().path, None, "{name}: the document's file is unchanged");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A file `open` reads besides the one it names, here an SVG's linked image, is read only where
 /// the script's grants allow, though it is an open document's file.
 #[test]
@@ -282,7 +308,7 @@ fn open_reads_linked_files_only_where_the_script_may() {
     std::fs::write(&linked, "<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4'><rect width='4' height='4'/></svg>").unwrap();
     s.execute("document.open", &json!({"path": linked.to_string_lossy()})).unwrap();
     assert!(s.active().unwrap().path.is_some(), "the linked file is an open document's file");
-    let href = linked.to_string_lossy().replace('\\', "/");
+    let href = linked.to_string_lossy().replace('\\', "/").replace('&', "&amp;").replace('<', "&lt;").replace('\'', "&apos;");
     std::fs::write(
         dir.join("page.svg"),
         format!("<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='50' height='50'><image x='0' y='0' width='10' height='10' xlink:href='{href}'/></svg>"),
@@ -340,6 +366,38 @@ fn an_svg_export_writes_nothing_when_one_of_its_files_is_refused() {
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
     std::fs::set_permissions(&image, perms).unwrap();
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An export does not write a file it writes besides the one named, here an SVG's image, while a
+/// `File` object holds it open for writing, and so writes nothing.
+#[test]
+fn an_svg_export_does_not_write_an_image_a_file_holds_open() {
+    let base = folder("svgheld");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let pic = base.join("outside/pic.png");
+    std::fs::write(&pic, super::links::png(2, 2, [10, 200, 30])).unwrap();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("file.place", &json!({"path": pic.to_string_lossy(), "link": false})).unwrap();
+    let svg = dir.join("a.svg");
+    let export = format!("app.activeDocument.exportFile(new File({}), ExportType.SVG, new ExportOptionsSVG());", quoted(&svg));
+    logged(&mut s, &base, &format!("Folder.userData; {export}"));
+    let mut images: Vec<PathBuf> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).filter(|p| *p != svg).collect();
+    assert_eq!(images.len(), 1, "the embedded image is written beside the SVG: {images:?}");
+    let image = images.remove(0);
+    std::fs::remove_file(&svg).unwrap();
+    let log = logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var w = new File({}); w.open('w'); w.write('pending');\ntry {{ {export} vc.log('ran'); }} catch (e) {{ vc.log(e.message); }}",
+            quoted(&image)
+        ),
+    );
+    assert!(log[0].as_str().unwrap().contains(DENIED), "{log}");
+    assert!(!svg.exists(), "the SVG is not written when its image may not be");
+    assert_eq!(std::fs::read_to_string(&image).unwrap(), "pending", "the File's own bytes");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -403,6 +461,12 @@ fn bad_arguments_are_refused_with_an_error() {
                 "var p = new ExportOptionsPNG24(); p.horizontalScale = p.verticalScale = 1e9; app.activeDocument.exportFile({f}, ExportType.PNG24, p);"
             ),
             "at most",
+        ),
+        (
+            format!(
+                "var p = new ExportOptionsPNG24(); p.horizontalScale = p.verticalScale = 0.5; app.activeDocument.exportFile({f}, ExportType.PNG24, p);"
+            ),
+            "at least 1",
         ),
         (
             format!("var p = new ExportOptionsPNG24(); p.horizontalScale = 50; app.activeDocument.exportFile({f}, ExportType.PNG24, p);"),

@@ -284,6 +284,9 @@ pub(crate) struct ScriptGate {
     pub(crate) write: ScriptScope,
     /// The paths of the open documents' files, as the documents hold them.
     pub(crate) documents: Vec<String>,
+    /// The real paths of the files the script's `File` objects hold open for writing, which a
+    /// command does not write: the run's end would write the objects' bytes over them.
+    pub(crate) held: Vec<PathBuf>,
     /// Another gate a path must pass as well ([`ScopeHandle::within_current`]).
     pub(crate) also: Option<Arc<ScriptGate>>,
 }
@@ -312,7 +315,8 @@ impl ScriptGate {
             };
             // A read-only file is not written over, also where a rename could replace it.
             let read_only = matches!(access, Access::Write) && std::fs::metadata(&real).is_ok_and(|m| m.is_file() && m.permissions().readonly());
-            !read_only && (scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)))
+            let held = matches!(access, Access::Write) && self.held.contains(&real);
+            !read_only && !held && (scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)))
         });
         if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
     }
@@ -920,8 +924,13 @@ mod tests {
     #[test]
     fn a_narrowed_scope_keeps_the_script_gates_of_both() {
         let (base, _) = folders("narrowed-gate");
-        let gate =
-            |dir: &str| ScriptGate { read: ScriptScope::of_folder(&base.join(dir)), write: ScriptScope::default(), documents: vec![], also: None };
+        let gate = |dir: &str| ScriptGate {
+            read: ScriptScope::of_folder(&base.join(dir)),
+            write: ScriptScope::default(),
+            documents: vec![],
+            held: vec![],
+            also: None,
+        };
         let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
         let reads = |saved: ScopeHandle, gate_here: Option<ScriptGate>| {
             let narrowed = match gate_here {
@@ -944,7 +953,8 @@ mod tests {
     #[test]
     fn a_scope_narrowed_several_times_keeps_every_gate() {
         let (base, _) = folders("narrowed-thrice");
-        let gate = |dir: &Path| ScriptGate { read: ScriptScope::of_folder(dir), write: ScriptScope::default(), documents: vec![], also: None };
+        let gate =
+            |dir: &Path| ScriptGate { read: ScriptScope::of_folder(dir), write: ScriptScope::default(), documents: vec![], held: vec![], also: None };
         let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
         let narrow = |saved: ScopeHandle, g: ScriptGate| with_script_gate(g, || saved.within_current());
         let reads = |h: &ScopeHandle| h.clone().run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()));
@@ -964,7 +974,13 @@ mod tests {
         let (base, _) = folders("gate-read-only");
         let out = base.join("out/kept.svg");
         std::fs::write(&out, "<svg/>").unwrap();
-        let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::of_folder(&base.join("out")), documents: vec![], also: None };
+        let gate = ScriptGate {
+            read: ScriptScope::default(),
+            write: ScriptScope::of_folder(&base.join("out")),
+            documents: vec![],
+            held: vec![],
+            also: None,
+        };
         let (kept, fresh) = (s(out.clone()), s(base.join("out/new.svg")));
         let check = |p: &str| with_script_gate(gate.clone(), || (check_write(p).is_ok(), check_read(p).is_ok()));
         assert_eq!(check(&kept), (true, true));
