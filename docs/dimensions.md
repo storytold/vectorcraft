@@ -31,7 +31,11 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   anchor, guide, grid or pixel snapping places lands on the closest point of a segment, or of a
   line of a dimension already drawn, within 8 pixels. With Smart Guides and Anchor/Path Labels
   on, a point on an anchor or a line end shows the "anchor" label, and a point on a segment or
-  line shows the "path" label. These rules apply to the Linear points.
+  line shows the "path" label. These rules apply to the Linear points. A first point picked on
+  an anchor, on a segment or on a corner of preview bounds moves with that art when the art moves
+  before the second click: the rubber band, Shift and the dimension start from where the art puts
+  the point then. When that art is deleted before the second click, the point goes back to where
+  it was picked.
   With Use Preview Bounds on (Preferences › General), a Linear point can land on a corner of the
   preview bounds of a path or compound path whose strokes or effects reach past its anchors. The
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
@@ -74,8 +78,10 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   tolerance of the level of a parallel line of a linear dimension already drawn has its line on
   that level. The other dimension, and every layer and group it is in, must be visible and
   unlocked. The tool reads at most 20,000 visible, unlocked layers, groups and objects, from the
-  frontmost back, so in a larger document a dimension past them is not a level. This is
-  VectorCraft's own rule. With
+  frontmost back, so in a larger document a dimension past them is not a level. A line that
+  moves off its level by more than 0.000001 pt across the span of both lines is not parallel. A
+  level that would put the line more than 1,000,000 pt from its points is passed over, and the
+  line goes where the pointer is. This is VectorCraft's own rule. With Smart Guides and
   Alignment Guides on, a guide runs along the level across both lines while the dimension is
   placed.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
