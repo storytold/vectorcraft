@@ -83,7 +83,8 @@ pub(crate) const DOM_PRINT: &str = "print";
 
 // The member chains that give a document, whole and as the chains are written (`[]` for an index,
 // `()` for a call): https://ai-scripting.docsforadobe.dev/jsobjref/Application/ (`activeDocument`,
-// `documents`, `open`) and https://ai-scripting.docsforadobe.dev/jsobjref/Documents/ (`add`, `getByName`).
+// `documents`, `open`) and https://ai-scripting.docsforadobe.dev/jsobjref/Documents/ (`add`, `addDocument`,
+// `addDocumentNoUI`, `getByName`).
 pub(crate) const DOM_DOCUMENTS: &[&str] = &[
     "activeDocument",
     "app.activeDocument",
@@ -91,6 +92,10 @@ pub(crate) const DOM_DOCUMENTS: &[&str] = &[
     "app.documents[]",
     "documents.add()",
     "app.documents.add()",
+    "documents.addDocument()",
+    "app.documents.addDocument()",
+    "documents.addDocumentNoUI()",
+    "app.documents.addDocumentNoUI()",
     "documents.getByName()",
     "app.documents.getByName()",
     "app.open()",

@@ -2736,7 +2736,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
   keeps the preset's value. A bad value throws an error before anything is written.
 - `Document.print(options?)` runs `file.print` on the document, with the options a script assigned over the
-  document's print settings, which stay as they are, and adds no undo step
+  document's print settings, or over the preset's when `printPreset` is assigned. The document's print settings
+  stay as they are, and `print` adds no undo step
   (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/PrintOptions/).
   `options` is a `new PrintOptions()`, whose `jobOptions`, `colorManagementOptions`, `colorSeparationOptions`,
   `coordinateOptions`, `flattenerOptions`, `fontOptions`, `pageMarksOptions`, `paperOptions` and `postScriptOptions`
@@ -2763,10 +2764,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   file it throws `Printing to a printer is not available to scripts yet`, and `app.printerList` throws an error
   that says it is not available yet. `fitToPage` set to true wins over the scale factors and the tiling mode. With
   `printAllArtboards` false, `artboardRange` picks the artboards, and without a range every artboard prints. With
-  `printAllArtboards` not assigned, an assigned `artboardRange` replaces the saved range, which prints when the
-  saved settings print a range. When the saved settings, or the preset's, ignore the artboards, an assigned
+  `printAllArtboards` not assigned, an assigned `artboardRange` replaces the range of the settings `print` starts
+  from, which prints when those settings print a range. `print` starts from the preset's settings when `printPreset`
+  is assigned, otherwise from the document's saved settings. When those settings ignore the artboards, an assigned
   `printArea` prints the artboards an assigned `artboardRange` names, or each artboard without a range. With one of
-  `horizontalScale` and `verticalScale` assigned, the other keeps the document's saved value. `print` throws before anything is written when an assigned `artboardRange` names an
+  `horizontalScale` and `verticalScale` assigned, the other keeps its value in the settings `print` starts from. `print` throws before anything is written when an assigned `artboardRange` names an
   artboard the document does not have, also with `printAllArtboards` true, when `printPreset` or `flattenerPreset`
   is not a preset's name (any case), when `colorManagementOptions.name` is not an RGB or CMYK profile's name (any
   case), when `paperOptions.name` is not a paper `file.print` knows, or when it names a paper other than `custom`

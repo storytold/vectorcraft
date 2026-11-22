@@ -22,7 +22,8 @@
 //!   ([`super::super::files`]). PostScript is written when the name ends with `.ps` or
 //!   `postScriptOptions.postScriptLevel` is set, a print-ready PDF otherwise. Printing to a printer
 //!   from a script is not available yet, so `print` without a file throws an error.
-//! - Only the properties a script assigned apply; the others keep the document's print settings
+//! - Only the properties a script assigned apply; the others keep the settings `print` starts
+//!   from: the preset's when `printPreset` is assigned, otherwise the document's print settings
 //!   (`print.setup`), which `print` leaves as they are. A property that was not assigned reads as
 //!   the default its help page gives.
 //! - A property the help pages list that is not mapped accepts the default its help page gives
@@ -30,12 +31,14 @@
 //! - `fitToPage` set to true wins over the scale factors and the tiling mode.
 //! - With `printAllArtboards` set to false, `artboardRange` picks the artboards; without a range
 //!   every artboard prints. With `printAllArtboards` not assigned, an assigned `artboardRange`
-//!   replaces the saved range, which prints when the saved settings print a range.
-//! - An assigned `printArea` prints by artboard when the saved settings, or the preset's, ignore
-//!   the artboards: the artboards an assigned `artboardRange` names, otherwise each artboard.
+//!   replaces the range of the settings `print` starts from, which prints when those settings
+//!   print a range.
+//! - An assigned `printArea` prints by artboard when the settings `print` starts from ignore the
+//!   artboards: the artboards an assigned `artboardRange` names, otherwise each artboard.
 //! - The format follows the name `jobOptions.file` gives, also when that name is a link to a file
 //!   with another extension.
-//! - With one of `horizontalScale` and `verticalScale` assigned, the other keeps the saved value.
+//! - With one of `horizontalScale` and `verticalScale` assigned, the other keeps its value in the
+//!   settings `print` starts from.
 //! - `print` throws, before anything is written, when an assigned `artboardRange` names an artboard
 //!   the document does not have, also with `printAllArtboards` true; when `printPreset` or
 //!   `flattenerPreset` is not the name of a preset (any case); when `colorManagementOptions.name` is
@@ -715,7 +718,8 @@ fn map_coordinate(h: &Host, slot: usize, job: &mut Job) -> std::result::Result<(
         job.top.insert("scaling".into(), json!(scaling));
     }
     if scaled && fit != Some(true) {
-        // Only the assigned factors are sent; with one of them, the other keeps the saved value.
+        // Only the assigned factors are sent; with one of them, the other keeps its value in the
+        // base settings (the preset's or the saved ones).
         let g = job.group("scale");
         if let Some(w) = hs {
             g.insert("width".into(), json!(w));
