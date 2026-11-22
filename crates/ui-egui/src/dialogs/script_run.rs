@@ -3,7 +3,7 @@
 //! asks while a script runs, and the dialogs a script opens with `alert`, `confirm` and `prompt`.
 //!
 //! `ui.runScript {path? | source?, name?}` shows the warning for that script; without either it
-//! asks for a `.js` or `.jsx` file (the web opens the browser's file picker). With Preferences ›
+//! asks for a `.js`, `.mjs` or `.jsx` file (the web opens the browser's file picker). With Preferences ›
 //! General › Show External Script Warning off, the chosen script runs at once. Warning fields:
 //! `name`, `script` (`script.run`'s params) and `dontShow` (true: turn the warning off).
 //!
@@ -145,7 +145,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     let path = params.get("path").and_then(Value::as_str);
     if path.is_some_and(|path| !runs(path)) {
-        return Err("Choose a .js or .jsx script".into());
+        return Err("Choose a .js, .mjs or .jsx script".into());
     }
     if !app.session.prefs.show_external_script_warning {
         return app.run("script.run", params);

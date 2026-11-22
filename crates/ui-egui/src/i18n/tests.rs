@@ -5848,7 +5848,7 @@ fn script_run_param_errors_are_translated() {
         "`args` is larger than 1 MiB",
         "`path` is empty",
         "`installed` takes a `path`, not a `source`",
-        "`path` must name a .js or .jsx file",
+        "`path` must name a .js, .mjs or .jsx file",
         "give exactly one of `path` and `source`",
     ];
     let scanned = message_literals();
@@ -5876,7 +5876,7 @@ fn script_run_param_errors_are_translated() {
         (json!({"source": "1", "args": {"x": "x".repeat(1 << 20)}}), Some("`args` is larger than 1 MiB".into())),
         (json!({"path": ""}), Some("`path` is empty".into())),
         (json!({"source": "1", "installed": true}), Some("`installed` takes a `path`, not a `source`".into())),
-        (json!({"path": "notes.txt"}), Some("`path` must name a .js or .jsx file".into())),
+        (json!({"path": "notes.txt"}), Some("`path` must name a .js, .mjs or .jsx file".into())),
         (json!({}), Some("give exactly one of `path` and `source`".into())),
         (json!({"path": "a.js", "source": "1"}), Some("give exactly one of `path` and `source`".into())),
         (json!({"path": 1}), Some("`path` must be a string".into())),

@@ -62,7 +62,8 @@ use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 use vectorcraft_js::{
-    Data, DataLimits, HostError, HostFunction, HostItem, Interrupt, LimitKind, Limits, Options, Progress, Realm, RunError, RunErrorKind,
+    Data, DataLimits, HostError, HostFunction, HostItem, Interrupt, LimitKind, Limits, LoadError, LoadedModule, ModuleLimits, Options, Progress,
+    Realm, RunError, RunErrorKind,
 };
 
 use crate::{
@@ -1575,6 +1576,19 @@ fn explained(e: &RunError) -> String {
     }
 }
 
+/// The module `specifier` names for the module `referrer` of the run of `host`, read through the
+/// run's files. Its source map is kept with the maps of the sources the run evaluates, in the order
+/// the modules are read, which is the order of their sources' tags.
+fn load_module(host: &Host, referrer: &str, specifier: &str) -> std::result::Result<LoadedModule, LoadError> {
+    let (key, read) = host.files.borrow_mut().module(referrer, specifier)?;
+    let source = read.map(|(text, map)| {
+        host.eval_maps.borrow_mut().push(map);
+        host.disk.borrow_mut().saw_code(&text.encode_utf16().collect::<Vec<u16>>());
+        text
+    });
+    Ok(LoadedModule { key, source })
+}
+
 /// The error of a run that stopped in its preprocessor lines (`f`), as the realm gives its own.
 fn preprocessor_error(f: include::Failure) -> (RunError, Option<Arc<str>>) {
     let (kind, message) = match f.kind {
@@ -1937,7 +1951,16 @@ impl Session {
         self.script_stop.clear();
         self.script_report = None;
         let mut files = include::Files::new(request.file.as_deref(), request.checked_real, include::Files::jsinclude_env());
-        let expanded = files.expand_script(&request.source);
+        // A `.mjs` script is a module, with no preprocessor lines; `module_key` names it among the
+        // modules it imports.
+        let (expanded, module_key) = if include::module_script(request.file.as_deref()) {
+            match files.module_entry(&request.source) {
+                Ok((key, expanded)) => (Ok(expanded), Some(key)),
+                Err(f) => (Err(f), None),
+            }
+        } else {
+            (files.expand_script(&request.source), None)
+        };
         let name = match &expanded {
             Ok(include::Expanded { name: Some(name), .. }) if !request.name_given => name.clone(),
             _ => request.name,
@@ -2083,7 +2106,13 @@ impl Session {
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
-                        let r = realm.start(&expanded.source);
+                        let r = match &module_key {
+                            None => realm.start(&expanded.source),
+                            Some(key) => {
+                                let limits = ModuleLimits { modules: include::MAX_FILES + 1, depth: include::MAX_DEPTH };
+                                realm.start_module(key, &expanded.source, limits, &mut |referrer, specifier| load_module(&host, referrer, specifier))
+                            }
+                        };
                         // Source that does not compile defines no code, so its map is not kept.
                         if !matches!(&r, Err(e) if e.kind == RunErrorKind::Syntax) {
                             host.script_tag.set(realm.script_tag());

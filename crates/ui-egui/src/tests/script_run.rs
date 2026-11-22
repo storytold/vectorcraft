@@ -94,7 +94,7 @@ fn only_js_and_jsx_files_are_taken() {
     let mut app = app();
     for name in ["a.txt", "a.jsxbin", "a"] {
         let e = menus::run_ui_command(&mut app, "ui.runScript", &json!({ "path": name })).unwrap().unwrap_err();
-        assert!(e.contains(".js or .jsx"), "{name}: {e}");
+        assert!(e.contains(".js, .mjs or .jsx"), "{name}: {e}");
     }
     assert!(app.ui.dialog.is_none());
 }

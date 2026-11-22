@@ -1,0 +1,299 @@
+//! Module code (ECMA-262 2015 section 15.2): the import and export declarations at the top of a
+//! module, read into a [`ModuleInfo`], and their early errors (section 15.2.1.1).
+//!
+//! A module is strict mode code throughout. An import binds its names as lexical declarations at
+//! the top of the module, so a `var`, `let`, `const`, function or another import of the same name
+//! is a redeclaration. An exported declaration is kept as the declaration; `export default` of an
+//! expression or an anonymous function binds [`DEFAULT_BINDING`]. Each exported name may be
+//! exported once, and a name an `export { … }` list exports from the module itself must be one it
+//! declares or imports.
+
+use std::collections::HashSet;
+
+use super::{Parser, Result, describe};
+use crate::ast::{
+    DEFAULT_BINDING, ExportEntry, FunctionKind, ImportEntry, ImportName, LexKind, ModuleInfo, ModuleRequest, Name, Program, Stmt, StmtId, VarDecl,
+};
+use crate::token::{Keyword, Punct, Span, Token, TokenKind};
+
+/// A name an `export { … }` list without `from` exports: the module's own binding (or import)
+/// `local`, exported as `export_name`.
+struct ClauseExport {
+    export_name: String,
+    local: String,
+    span: Span,
+}
+
+impl Parser<'_> {
+    /// Reads the source as a module: its statements, without its import and export declarations
+    /// but with the declarations they export, and what it imports and exports.
+    pub(crate) fn parse_module(mut self) -> Result<(Program, ModuleInfo, Vec<Token>)> {
+        self.module = true;
+        let mut info = ModuleInfo::default();
+        let mut clause = Vec::new();
+        let mut body = Vec::new();
+        while self.tok.kind != TokenKind::Eof {
+            if self.at_keyword(Keyword::Import) {
+                self.import_declaration(&mut info)?;
+            } else if self.at_keyword(Keyword::Export) {
+                if let Some(stmt) = self.export_declaration(&mut info, &mut clause)? {
+                    body.push(stmt);
+                }
+            } else {
+                body.push(self.parse_statement_item()?);
+            }
+        }
+        self.finish_exports(&mut info, clause)?;
+        if let Some(tokens) = &mut self.tokens {
+            tokens.push(self.tok.clone());
+        }
+        let program = Program { ast: self.ast, body, strict: true, directives: self.directives, lines: self.lines, es2015: self.es2015 };
+        Ok((program, info, self.tokens.unwrap_or_default()))
+    }
+
+    /// The current token is the contextual keyword `word` (`as` or `from`), written without escapes.
+    fn at_contextual(&self, word: &str) -> bool {
+        self.tok.ident() == Some(word) && !self.tok.escaped
+    }
+
+    fn expect_contextual(&mut self, word: &str) -> Result<()> {
+        if self.at_contextual(word) {
+            self.bump()?;
+            return Ok(());
+        }
+        Err(self.error_at_token(&self.tok, format!("expected '{word}' but found {}", describe(&self.tok))))
+    }
+
+    /// A module specifier: a string literal, added to the module's requests once. → its index.
+    fn module_specifier(&mut self, info: &mut ModuleInfo) -> Result<usize> {
+        let TokenKind::String(units) = &self.tok.kind else {
+            return Err(self.error_at_token(&self.tok, format!("expected a module specifier string but found {}", describe(&self.tok))));
+        };
+        let Ok(specifier) = String::from_utf16(units) else {
+            return Err(self.error_at_token(&self.tok, "a module specifier must be valid text"));
+        };
+        let span = self.bump()?.span;
+        if let Some(i) = info.requests.iter().position(|r| r.specifier == specifier) {
+            return Ok(i);
+        }
+        info.requests.push(ModuleRequest { specifier, span });
+        Ok(info.requests.len() - 1)
+    }
+
+    /// A name as an import or export list gives it: any identifier name, keywords included. → the
+    /// name and whether it was an identifier (not a keyword).
+    fn list_name(&mut self) -> Result<(Name, bool)> {
+        let Some(name) = self.tok.identifier_name().map(str::to_string) else {
+            return Err(self.error_at_token(&self.tok, format!("expected a name but found {}", describe(&self.tok))));
+        };
+        let ident = matches!(self.tok.kind, TokenKind::Ident(_));
+        let token = self.bump()?;
+        Ok((Name { name, span: token.span }, ident))
+    }
+
+    /// `import …;` (section 15.2.2). Each name it binds is declared in the module's scope.
+    fn import_declaration(&mut self, info: &mut ModuleInfo) -> Result<()> {
+        let import = self.bump()?;
+        if self.at(Punct::LParen) {
+            return Err(self.error_at_token(&import, "import() is not supported"));
+        }
+        if matches!(self.tok.kind, TokenKind::String(_)) {
+            self.module_specifier(info)?;
+            return self.semicolon();
+        }
+        let mut bound: Vec<(ImportName, Name)> = Vec::new();
+        let mut list = true;
+        if matches!(self.tok.kind, TokenKind::Ident(_)) {
+            let local = self.binding_identifier()?;
+            bound.push((ImportName::Name("default".into()), local));
+            list = self.eat(Punct::Comma)?;
+        }
+        if list {
+            if self.eat(Punct::Star)? {
+                self.expect_contextual("as")?;
+                let local = self.binding_identifier()?;
+                bound.push((ImportName::Namespace, local));
+            } else {
+                self.expect(Punct::LBrace)?;
+                while !self.at(Punct::RBrace) {
+                    if matches!(self.tok.kind, TokenKind::Ident(_)) && !self.next_is_as() {
+                        // A name without `as` binds itself, so it must be one a declaration may bind.
+                        let local = self.binding_identifier()?;
+                        bound.push((ImportName::Name(local.name.clone()), local));
+                    } else {
+                        let (imported, _) = self.list_name()?;
+                        self.expect_contextual("as")?;
+                        let local = self.binding_identifier()?;
+                        bound.push((ImportName::Name(imported.name), local));
+                    }
+                    if !self.eat(Punct::Comma)? {
+                        break;
+                    }
+                }
+                self.expect(Punct::RBrace)?;
+            }
+        }
+        self.expect_contextual("from")?;
+        let request = self.module_specifier(info)?;
+        self.semicolon()?;
+        for (import, local) in bound {
+            self.declare_lexical(&local, false)?;
+            info.imports.push(ImportEntry { request, import, local });
+        }
+        Ok(())
+    }
+
+    /// The token after the current one is the contextual keyword `as`.
+    fn next_is_as(&self) -> bool {
+        self.peek().is_some_and(|t| !t.escaped && t.ident() == Some("as"))
+    }
+
+    /// `export …` (section 15.2.3). → the declaration it exports, which runs in place.
+    fn export_declaration(&mut self, info: &mut ModuleInfo, clause: &mut Vec<ClauseExport>) -> Result<Option<StmtId>> {
+        let export = self.bump()?;
+        let span = export.span;
+        if self.eat(Punct::Star)? {
+            if self.at_contextual("as") {
+                self.bump()?;
+                let (name, _) = self.list_name()?;
+                self.expect_contextual("from")?;
+                let request = self.module_specifier(info)?;
+                self.semicolon()?;
+                info.exports.push(ExportEntry::Indirect { export_name: name.name, request, import: ImportName::Namespace, span: name.span });
+                return Ok(None);
+            }
+            self.expect_contextual("from")?;
+            let request = self.module_specifier(info)?;
+            self.semicolon()?;
+            info.exports.push(ExportEntry::Star { request, span });
+            return Ok(None);
+        }
+        if self.at(Punct::LBrace) {
+            self.bump()?;
+            // Each name: the name it refers to (and whether that was an identifier) and the name it
+            // is exported as.
+            let mut names: Vec<(Name, bool, Name)> = Vec::new();
+            while !self.at(Punct::RBrace) {
+                let (local, ident) = self.list_name()?;
+                let exported = if self.at_contextual("as") {
+                    self.bump()?;
+                    self.list_name()?.0
+                } else {
+                    local.clone()
+                };
+                names.push((local, ident, exported));
+                if !self.eat(Punct::Comma)? {
+                    break;
+                }
+            }
+            self.expect(Punct::RBrace)?;
+            if self.at_contextual("from") {
+                self.bump()?;
+                let request = self.module_specifier(info)?;
+                self.semicolon()?;
+                for (local, _, exported) in names {
+                    let import = ImportName::Name(local.name);
+                    info.exports.push(ExportEntry::Indirect { export_name: exported.name, request, import, span: exported.span });
+                }
+                return Ok(None);
+            }
+            self.semicolon()?;
+            for (local, ident, exported) in names {
+                // Without `from`, each name refers to a binding of the module (section 15.2.3.1).
+                if !ident || crate::token::strict_reserved(&local.name) {
+                    return Err(self.error_at_offset(local.span.start, format!("'{}' cannot be exported as a binding", local.name)));
+                }
+                clause.push(ClauseExport { export_name: exported.name, local: local.name, span: local.span });
+            }
+            return Ok(None);
+        }
+        if self.at_keyword(Keyword::Default) {
+            self.bump()?;
+            return self.export_default(info, span).map(Some);
+        }
+        let exportable = self.at_keyword(Keyword::Var) || self.at_keyword(Keyword::Function) || self.at_lexical_declaration().is_some();
+        if !exportable {
+            return Err(self.error_at_token(&self.tok, format!("expected a declaration after 'export' but found {}", describe(&self.tok))));
+        }
+        let stmt = self.parse_statement_item()?;
+        let names: Vec<Name> = match self.ast.stmt(stmt) {
+            Some(Stmt::Var(decls) | Stmt::Lexical(_, decls)) => decls.iter().map(|d| d.name.clone()).collect(),
+            Some(Stmt::FunctionDecl(fid)) => self.ast.function(*fid).and_then(|f| f.name.clone()).into_iter().collect(),
+            _ => return Err(self.error_at_offset(span.start, "expected a declaration after 'export'")),
+        };
+        for name in names {
+            info.exports.push(ExportEntry::Local { export_name: name.name.clone(), local: name.name, span: name.span });
+        }
+        Ok(Some(stmt))
+    }
+
+    /// `export default …` after `default`: a function declaration (named or not) or an expression.
+    fn export_default(&mut self, info: &mut ModuleInfo, span: Span) -> Result<StmtId> {
+        if self.at_keyword(Keyword::Class) {
+            return Err(self.error_at_token(&self.tok, "classes are not supported"));
+        }
+        if self.at_keyword(Keyword::Function) {
+            self.enter()?;
+            let result = self.default_function();
+            self.leave();
+            let (stmt, fid, local) = result?;
+            self.declare_function(fid)?;
+            info.exports.push(ExportEntry::Local { export_name: "default".into(), local, span });
+            return Ok(stmt);
+        }
+        let start = self.tok.span;
+        let value = self.parse_assignment(false)?;
+        self.semicolon()?;
+        let name = Name { name: DEFAULT_BINDING.into(), span: start };
+        let stmt = self.ast.push_stmt(Stmt::Lexical(LexKind::Const, vec![VarDecl { name, init: Some(value) }]), self.span_from(start));
+        info.exports.push(ExportEntry::Local { export_name: "default".into(), local: DEFAULT_BINDING.into(), span });
+        Ok(stmt)
+    }
+
+    /// `function name(…) {…}` or `function (…) {…}` after `export default`: a declaration of
+    /// `name`, or of [`DEFAULT_BINDING`] for a function without one.
+    fn default_function(&mut self) -> Result<(StmtId, crate::ast::FunctionId, String)> {
+        let keyword = self.expect_keyword(Keyword::Function)?;
+        let start = keyword.span;
+        let name = if matches!(self.tok.kind, TokenKind::Ident(_)) {
+            self.function_name()?
+        } else {
+            (Name { name: DEFAULT_BINDING.into(), span: start }, keyword)
+        };
+        let local = name.0.name.clone();
+        let fid = self.parse_function_rest(FunctionKind::Declaration, Some(name), start)?;
+        let stmt = self.ast.push_stmt(Stmt::FunctionDecl(fid), self.span_from(start));
+        Ok((stmt, fid, local))
+    }
+
+    /// The early errors of the exports as a whole (section 15.2.1.1): no name exported twice, and
+    /// each name an `export { … }` list takes from the module itself declared or imported there. An
+    /// exported import becomes a re-export of what it imports (section 15.2.1.16.1; a namespace
+    /// import as ECMA-262 2020 reads `export * as ns from`).
+    fn finish_exports(&self, info: &mut ModuleInfo, clause: Vec<ClauseExport>) -> Result<()> {
+        let top = self.scopes.first();
+        for c in clause {
+            let declared = top.is_some_and(|s| s.lexical.contains_key(&c.local) || s.vars.contains(&c.local));
+            if !declared {
+                return Err(self.error_at_offset(c.span.start, format!("'{}' is exported but not declared in the module", c.local)));
+            }
+            let imported = info.imports.iter().find(|i| i.local.name == c.local);
+            let entry = match imported {
+                Some(i) => ExportEntry::Indirect { export_name: c.export_name, request: i.request, import: i.import.clone(), span: c.span },
+                None => ExportEntry::Local { export_name: c.export_name, local: c.local, span: c.span },
+            };
+            info.exports.push(entry);
+        }
+        let mut seen = HashSet::new();
+        for e in &info.exports {
+            let (name, span) = match e {
+                ExportEntry::Local { export_name, span, .. } | ExportEntry::Indirect { export_name, span, .. } => (export_name, span),
+                ExportEntry::Star { .. } => continue,
+            };
+            if !seen.insert(name.as_str()) {
+                return Err(self.error_at_offset(span.start, format!("'{name}' is exported more than once")));
+            }
+        }
+        Ok(())
+    }
+}

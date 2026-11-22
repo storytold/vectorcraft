@@ -1902,6 +1902,20 @@ pub(crate) fn compile_program(program: &crate::Program, source: &Rc<Source>, kin
     c.finish(hoisted, Meta { span: (0, end), top_scope, ..Meta::default() })
 }
 
+/// Compiles a module's statements ([`crate::parse_module`]): strict code that runs in an
+/// environment of its own, as strict eval code does, and returns `undefined`.
+pub(crate) fn compile_module(program: &crate::Program, source: &Rc<Source>) -> CResult<Rc<Code>> {
+    let mut c = FnCompiler::new(&program.ast, source, CodeKind::Eval, true, 0);
+    c.es2015 = true;
+    let hoisted = c.hoist(&program.body, &[])?;
+    let top_scope = c.list_scope(&program.body, false)?;
+    c.stmts(&program.body)?;
+    c.emit(Op::Undefined);
+    c.emit(Op::Return);
+    let end = u32::try_from(source.text.len()).unwrap_or(u32::MAX);
+    c.finish(hoisted, Meta { span: (0, end), top_scope, ..Meta::default() })
+}
+
 /// The function of a `Function` constructor's source, `(function anonymous(…) {…})`: the program
 /// must be that one parenthesized function expression and nothing else. The name `anonymous` is
 /// not bound inside the function (section 15.3.2.1).

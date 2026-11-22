@@ -130,7 +130,7 @@ fn get_own_property_descriptor(interp: &mut Interp, _: Value, args: &[Value], _:
     let o = interp.to_object(&arg(args, 0))?;
     interp.rooted(&[Value::Object(o)], |interp| {
         let k = interp.to_key(&arg(args, 1))?;
-        match interp.get_own_property(o, &k)? {
+        match interp.own_property(o, &k)? {
             Some(p) => from_prop(interp, &p),
             None => Ok(Value::Undefined),
         }
@@ -265,7 +265,7 @@ fn locked(interp: &mut Interp, v: &Value, frozen: bool) -> JsResult<Value> {
     let o = *o;
     for k in interp.own_keys(o)? {
         interp.use_fuel()?;
-        let Some(prop) = interp.get_own_property(o, &k)? else { continue };
+        let Some(prop) = interp.own_property(o, &k)? else { continue };
         if prop.configurable() || (frozen && matches!(prop, Prop::Data { flags, .. } if flags & WRITABLE != 0)) {
             return Ok(Value::Bool(false));
         }
@@ -294,7 +294,7 @@ fn keys(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Valu
         let mut names = Vec::new();
         for k in interp.own_keys(o)? {
             interp.use_fuel()?;
-            if interp.get_own_property(o, &k)?.is_some_and(|p| p.enumerable()) {
+            if interp.own_property(o, &k)?.is_some_and(|p| p.enumerable()) {
                 names.push(k);
             }
         }

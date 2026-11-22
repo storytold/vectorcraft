@@ -7,6 +7,7 @@
 //! stack, and prefix operators, assignment chains, `else if` chains and labels with loops, so long
 //! runs of them do not nest at all.
 
+mod module;
 mod xml;
 
 use std::collections::{HashMap, HashSet};
@@ -101,6 +102,9 @@ pub(crate) struct Parser<'s> {
     es2015: bool,
     /// The scopes open around the current token, outermost first (only with `es2015`).
     scopes: Vec<Scope>,
+    /// Read a module ([`Parser::parse_module`]): its top-level function declarations are lexical
+    /// declarations (ECMA-262 2015 section 15.2.1.11).
+    module: bool,
 }
 
 impl<'s> Parser<'s> {
@@ -125,6 +129,7 @@ impl<'s> Parser<'s> {
             e4x: options.e4x,
             es2015: options.es2015,
             scopes: if options.es2015 { vec![Scope { function: true, ..Scope::default() }] } else { Vec::new() },
+            module: false,
         };
         parser.tok = parser.next_significant()?;
         Ok(parser)
@@ -342,6 +347,9 @@ impl<'s> Parser<'s> {
     /// body or the script, lexical in a block.
     fn declare_function(&mut self, id: crate::ast::FunctionId) -> Result<()> {
         let Some(name) = self.ast.function(id).and_then(|f| f.name.clone()) else { return Ok(()) };
+        if self.module && self.scopes.len() == 1 {
+            return self.declare_lexical(&name, true);
+        }
         match self.scopes.last_mut() {
             Some(scope) if scope.function => {
                 if scope.lexical.contains_key(&name.name) {

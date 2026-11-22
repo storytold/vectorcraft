@@ -1,4 +1,4 @@
-//! The Scripts folder: the `.js` and `.jsx` files File › Scripts lists, with each subfolder as a
+//! The Scripts folder: the `.js`, `.mjs` and `.jsx` files File › Scripts lists, with each subfolder as a
 //! submenu ([`list`]), and the read of one of them when it is chosen ([`read`]).
 //!
 //! A listing reads names and file types only, never a script's text. It follows no link: a symbolic
@@ -256,7 +256,7 @@ fn plain(path: &Path, folder: bool, shown: bool) -> bool {
         .is_ok_and(|m| !m.file_type().is_symlink() && (if folder { m.is_dir() } else { m.is_file() }) && !(shown && hidden_meta(&m)))
 }
 
-/// Is `path` a script a listing of `root` can hold now: a `.js` or `.jsx` file at most
+/// Is `path` a script a listing of `root` can hold now: a `.js`, `.mjs` or `.jsx` file at most
 /// [`MAX_DEPTH`] folders below `root`, where `root`, each folder on the way and the file are there
 /// and none is a link, and neither the file nor a folder below `root` is marked hidden or system?
 pub fn holds(root: &Path, path: &Path) -> bool {

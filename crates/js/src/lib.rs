@@ -55,8 +55,14 @@
 //! 12.3.7), default and rest parameters (section 14.1) and spread in array literals, calls and
 //! `new` (sections 12.2.5 and 12.3.6.1). Spread reads arrays by index, reading the length again
 //! before each element, strings and `String` objects by code point, and objects with a `length` by
-//! index; other values are a `TypeError`. Destructuring, `for … of`, classes,
-//! generators and modules stay syntax errors.
+//! index; other values are a `TypeError`. Destructuring, `for … of`, classes and generators stay
+//! syntax errors, and so do `import` and `export` in a script.
+//!
+//! [`parse_module`] reads a module (section 15.2): strict mode code with those forms and `import`
+//! and `export` declarations at its top. [`Realm::start_module`] and [`Realm::run_module`] run a
+//! module and the modules it imports, which the host gives through a [`ModuleLoader`]: each module
+//! once, after the modules it imports, with each import reading the exporting module's binding.
+//! Dynamic `import()` is a syntax error.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -71,6 +77,7 @@ mod heap;
 mod host;
 mod interp;
 mod lexer;
+mod module;
 mod number;
 mod number_builtins;
 mod parser;
@@ -86,13 +93,15 @@ mod xml_builtins;
 mod xpath;
 
 pub use ast::{
-    AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LexKind, LogicalOp, Name, Program,
-    Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    AssignOp, Ast, BinaryOp, CatchClause, DEFAULT_BINDING, ExportEntry, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind,
+    ImportEntry, ImportName, LexKind, LogicalOp, ModuleInfo, ModuleRequest, Name, Program, Property, PropertyKey, PropertyValue, Stmt, StmtId,
+    SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
 pub use lexer::{Goal, Lexer};
+pub use module::{LoadError, LoadedModule, ModuleLimits, ModuleLoader};
 pub use number::to_string as number_to_string;
 pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
@@ -138,6 +147,34 @@ pub fn parse(source: &str, options: &Options) -> Result<Program, SyntaxError> {
 pub fn parse_utf16(source: &[u16], options: &Options) -> Result<Program, SyntaxError> {
     check_length(source.len(), options)?;
     parser::Parser::new(source, options, false)?.parse_program().map(|(program, _)| program)
+}
+
+/// Parses `source` as a module (ECMA-262 2015 section 15.2): strict mode code with
+/// [`Options::es2015`]'s forms, `import` and `export` declarations at its top, and no preprocessor
+/// lines, whatever `options` says about those three. Gives its statements and what it imports and
+/// exports.
+pub fn parse_module(source: &str, options: &Options) -> Result<(Program, ModuleInfo), SyntaxError> {
+    let units = to_utf16(source, options)?;
+    parse_module_utf16(&units, options)
+}
+
+/// Parses `source`, in UTF-16 code units, as a module ([`parse_module`]).
+pub fn parse_module_utf16(source: &[u16], options: &Options) -> Result<(Program, ModuleInfo), SyntaxError> {
+    check_length(source.len(), options)?;
+    parser::Parser::new(source, &module_options(options), false)?.parse_module().map(|(program, info, _)| (program, info))
+}
+
+/// The tokens of `source` as [`tokenize`] gives them, with `source` read as a module
+/// ([`parse_module`]). The source must be a valid module.
+pub fn tokenize_module(source: &str, options: &Options) -> Result<Vec<Token>, SyntaxError> {
+    let units = to_utf16(source, options)?;
+    check_length(units.len(), options)?;
+    parser::Parser::new(&units, &module_options(options), true)?.parse_module().map(|(_, _, tokens)| tokens)
+}
+
+/// `options` as a module is read with them.
+pub(crate) fn module_options(options: &Options) -> Options {
+    Options { strict: true, es2015: true, preprocessor_lines: false, ..options.clone() }
 }
 
 /// The tokens of `source`, in order, as the parser reads them: preprocessor lines included, and
@@ -226,6 +263,8 @@ mod extension_tests;
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
+#[cfg(test)]
+mod module_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
