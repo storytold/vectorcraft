@@ -66,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Current Layer",
             [],
             None,
-            "{id} click a row: it alone is highlighted, and the layer it is (or the layer it is in) becomes the current layer, where new art goes. Not an undo step → {id, layer}",
+            "{id, keepRows?: bool} click a row: it alone is highlighted, and the layer it is (or the layer it is in) becomes the current layer, where new art goes. `keepRows` true leaves the highlighted rows as they are. Not an undo step → {id, layer}",
             has_doc,
             set_current
         ),
@@ -633,10 +633,13 @@ fn duplicate_rows(s: &mut Session, p: &Value) -> Result<Value> {
 fn set_current(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setCurrent";
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let keep_rows = switch_or(p, "keepRows", false, C)?;
     let st = s.doc_mut()?;
     let layer = st.doc.layer_containing(id).ok_or(EngineError::NoNode(id))?;
     st.active_layer = Some(layer);
-    st.layer_rows = vec![id];
+    if !keep_rows {
+        st.layer_rows = vec![id];
+    }
     st.revision += 1;
     Ok(json!({ "id": id.0, "layer": layer.0 }))
 }

@@ -583,6 +583,31 @@ fn done_unless_refused(r: std::result::Result<Data, HostError>) -> std::result::
     }
 }
 
+/// Makes `layer` the current layer of the active document `uid` again, with `rows` the highlighted
+/// Layers panel rows, after selecting objects made the layer of the last of them current and
+/// cleared the rows. Nothing runs when `layer` is gone. `layer.highlight` puts the rows back when
+/// they changed, and then `layer.setCurrent` with `keepRows` makes `layer` current when it is not.
+fn restore_layer(h: &Host, uid: u64, layer: Option<NodeId>, rows: &[NodeId]) -> std::result::Result<(), HostError> {
+    let Some(layer) = layer else { return Ok(()) };
+    let rows = {
+        let s = h.session.borrow();
+        let Some(st) = s.active().filter(|st| st.uid == uid) else { return Ok(()) };
+        if st.doc.node(layer).is_none() {
+            return Ok(());
+        }
+        let rows: Vec<NodeId> = rows.iter().copied().filter(|r| st.doc.node(*r).is_some()).collect();
+        (st.highlighted_rows() != rows).then(|| rows.iter().map(|r| r.0).collect::<Vec<_>>())
+    };
+    if let Some(rows) = rows {
+        command(h, "layer.highlight", &json!({"ids": rows, "mode": "set"}))?;
+    }
+    let current = h.session.borrow().active().is_some_and(|st| st.active_layer == Some(layer));
+    if !current {
+        command(h, "layer.setCurrent", &json!({"id": layer.0, "keepRows": true}))?;
+    }
+    Ok(())
+}
+
 /// Runs `f` with the document `uid` active, and makes the document that was active before active
 /// again after. With `keep_selection`, the document's selection is put back as it was when `f`'s
 /// commands changed it (commands given ids select them first), direct-selected anchors, segments,
@@ -595,10 +620,11 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, before) = {
+    let (index, active, before, layer) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-        (index, s.active_index(), s.documents()[index].selection.clone())
+        let st = &s.documents()[index];
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()))
     };
     let switch = active != Some(index);
     if switch {
@@ -613,6 +639,9 @@ fn on_doc<T>(
         };
         if let Some(doc) = doc {
             restored = restore_selection(h, &doc, &before);
+        }
+        if restored.is_ok() {
+            restored = restore_layer(h, uid, layer.0, &layer.1);
         }
     }
     // The document that was active is active again before any error is given: `f`'s error first,
@@ -854,7 +883,10 @@ impl NewDoc<'_> {
         if let Some(d) = self.preview {
             let mode = match d {
                 Data::String(s) if s == "DocumentPreviewMode.DefaultPreview" => "default",
-                Data::String(s) if s == "DocumentPreviewMode.PixelPreview" => "pixel",
+                // Pixel Preview is a setting of the app's view, which a script cannot turn on.
+                Data::String(s) if s == "DocumentPreviewMode.PixelPreview" => {
+                    return Err(HostError::Error("DocumentPreviewMode.PixelPreview is not available yet".into()));
+                }
                 Data::String(s) if s == "DocumentPreviewMode.OverprintPreview" => "overprint",
                 _ => return Err(HostError::Type("previewMode must be a DocumentPreviewMode value".into())),
             };
@@ -980,6 +1012,10 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
             let profile = e["profile"].as_str().unwrap_or_default();
             let reason = e["reason"].as_str().unwrap_or_default();
             return Err(HostError::Error(format!("the New Document profile {profile} could not be read: {reason}")));
+        }
+        // Each warning from reading the profile's file goes to the console.
+        for w in value.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+            super::each_line(&format!("addDocument: {w}"), |line, cut| h.line(super::console::Entry::Log(line), cut));
         }
         let s = h.session.borrow();
         let st = s.active().ok_or_else(|| HostError::Error(NO_ACTIVE_DOCUMENT.into()))?;
@@ -1203,10 +1239,16 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
-    for d in list {
-        let item = item_of(h, d)?;
+    // The document is read once for every object: nothing changes it while the list is checked.
+    let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
+    let locks = d.locked_artboards();
+    for v in list {
+        let item = item_of(h, v)?;
+        // A path made into a guide is not selected while Lock Guides is on, as the selection
+        // commands leave it out.
         let ok = item.doc.uid == doc.uid
-            && with_doc(h, doc, |_, st| crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id));
+            && crate::cmd::select::is_selectable(&d, isolation, &locks, item.id)
+            && !(guides_locked && crate::is_guide_path(&d, item.id));
         if !ok {
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
@@ -1689,7 +1731,8 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data, copy: bool) -> s
         if !editable(d, parent) {
             return Err(HostError::Error("the layer or group is hidden or locked".into()));
         }
-        if !editable(d, item.id) {
+        // An object on a locked artboard is not moved, as `editable` reads false for it.
+        if !editable(d, item.id) || on_locked_artboard(h, st, item.id) {
             let name = d.node(item.id).and_then(typename).unwrap_or("page item");
             return Err(HostError::Error(format!("Cannot move {name} {}", item.id.0)));
         }
@@ -1730,14 +1773,30 @@ fn place(h: &Host, doc: Doc, id: NodeId, to: &Destination) -> std::result::Resul
 }
 
 /// `move(relativeObject, insertionLocation?)`: moves the item into or beside `relativeObject`, a
-/// page item or a layer of its document (`insertionLocation` defaults to `PLACEATBEGINNING`).
+/// page item or a layer of its document (`insertionLocation` defaults to `PLACEATBEGINNING`). An
+/// object that is hidden or locked, in a hidden or locked layer or group, or on a locked artboard
+/// is refused.
 fn item_move(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     if matches!(arg(a, 1), Data::Undefined) {
         return Err(HostError::Type("move needs a relative object".into()));
     }
     let to = destination(h, item, arg(a, 1), arg(a, 2), false)?;
-    place(h, item.doc, item.id, &to)?;
+    // When the last path leaves a compound path, the compound path is deleted in the same step
+    // rather than left empty.
+    let emptied = with_doc(h, item.doc, |_, st| {
+        let parent = st.doc.parent_of(item.id).and_then(|p| st.doc.node(p))?;
+        (matches!(parent.kind, NodeKind::Compound { .. }) && parent.children().is_some_and(|c| c.len() == 1) && parent.id != to.parent)
+            .then_some(parent.id)
+    });
+    match emptied {
+        None => place(h, item.doc, item.id, &to)?,
+        Some(compound) => atomically(h, |h| {
+            place(h, item.doc, item.id, &to)?;
+            on_doc(h, item.doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": [compound.0]})))?;
+            Ok(())
+        })?,
+    }
     Ok(arg(a, 0).clone())
 }
 
@@ -1760,6 +1819,13 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER.into()));
+    }
+    // `edit.duplicate` copies only what it can select.
+    let refused = with_doc(h, item.doc, |_, st| {
+        (!editable(&st.doc, item.id) || on_locked_artboard(h, st, item.id)).then(|| st.doc.node(item.id).and_then(typename).unwrap_or("page item"))
+    });
+    if let Some(name) = refused {
+        return Err(HostError::Error(format!("Cannot duplicate {name} {}", item.id.0)));
     }
     let to = match arg(a, 1) {
         Data::Undefined => {
