@@ -74,16 +74,24 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "",
         "app Application Brush Brushes ColorModel CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
-         DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement \
-         GraphicStyle GraphicStyles Layer PageItem PageItems PathItem PathItems PathPoint PathPointSelection PathPoints \
-         PointType PolarityValues RulerUnits Spot SpotColorKind Spots StrokeCap StrokeJoin Swatch SwatchGroup SwatchGroups \
-         Swatches Symbol SymbolItem SymbolItems SymbolRegistrationPoint Symbols Transformation ZOrderMethod",
+         DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents \
+         ElementPlacement GraphicStyle GraphicStyles Layer PageItem PageItems PathItem PathItems PathPoint PathPointSelection \
+         PathPoints PointType PolarityValues RulerUnits Spot SpotColorKind Spots StrokeCap StrokeJoin Swatch SwatchGroup \
+         SwatchGroups Swatches Symbol SymbolItem SymbolItems SymbolRegistrationPoint Symbols Transformation ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
          selection typename",
+    ),
+    ("DocumentPreset.", "prototype"),
+    (
+        "DocumentPreset.prototype.",
+        "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
+         colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
+         height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
+         transparencyGrid transparencyGrid= typename units units= width width=",
     ),
     ("Documents.", "prototype"),
     ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
@@ -185,9 +193,9 @@ const INSIDE: &[(&str, &str)] = &[
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: `DocumentPreset`,
-/// the page item types other than `PathItem` and `SymbolItem`, and the color classes.
-const BARE_CLASSES: &str = "BlendItem CMYKColor CompoundPathItem DocumentPreset EnvelopeItem GradientColor GraphItem GrayColor GroupItem \
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// other than `PathItem` and `SymbolItem`, and the color classes.
+const BARE_CLASSES: &str = "BlendItem CMYKColor CompoundPathItem EnvelopeItem GradientColor GraphItem GrayColor GroupItem \
      IntertwineItem LabColor MeshItem NoColor PatternColor PlacedDocumentItem PlacedItem RGBColor RasterItem RepeatItem SpotColor \
      TextFrame cmykColor";
 

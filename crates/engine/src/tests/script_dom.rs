@@ -838,6 +838,84 @@ fn headless_add_document_dialog_fails_without_creating() {
 }
 
 #[test]
+fn setting_selected_keeps_how_the_other_objects_are_selected() {
+    let (mut s, a, b) = doc();
+    let c = rect(&mut s, 200.0, 100.0, 50.0, 50.0);
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+    let anchors = s.active().unwrap().selection.anchors.get(&a).cloned();
+    assert!(anchors.is_some());
+    log(
+        &mut s,
+        "var p = app.activeDocument.pageItems;\
+         for (var i = 0; i < p.length; i++) { if (p[i].left == 200) p[i].selected = true; if (p[i].left == 100) p[i].selected = false; }",
+    );
+    let sel = &s.active().unwrap().selection;
+    assert_eq!(sel.objects, vec![a, c]);
+    assert_eq!(sel.anchors.get(&a).cloned(), anchors, "the direct-selected anchors stay");
+}
+
+#[test]
+fn add_document_takes_only_a_document_preset() {
+    let mut s = Session::new();
+    for source in [
+        "app.documents.addDocument('Print', {width: 500});",
+        "app.documents.addDocument('Print', {});",
+        "app.documents.addDocument('Print', {typename: 'DocumentPreset', width: 500});",
+        "var p = new DocumentPreset(); var q = {}; for (var k in p) q[k] = p[k]; app.documents.addDocument('Print', q);",
+        "app.documents.addDocument('Print', [612, 792]);",
+        "app.documents.addDocument('Print', 'DocumentPreset');",
+    ] {
+        let e = failure(&mut s, source);
+        assert!(e.contains("TypeError") && e.contains("presetSettings must be a DocumentPreset"), "{source}: {e}");
+    }
+    assert!(s.documents().is_empty(), "a refused preset makes no document");
+    let out = log(&mut s, "var p = new DocumentPreset(); p.width = 500; vc.log(app.documents.addDocument('Print', p).width);");
+    assert_eq!(out, vec![json!(500)]);
+}
+
+#[test]
+fn add_document_applies_the_profile_file_and_throws_when_it_cannot_be_read() {
+    let dir = std::env::temp_dir().join(format!("vc-script-add-document-profile-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut s = Session::new();
+    s.attach_new_doc_profiles(dir.clone());
+    // A profile with no file gives the defaults.
+    let out = log(&mut s, "vc.log(app.documents.addDocument('Web').typename);");
+    assert_eq!(out, vec![json!("Document")]);
+    assert_eq!(s.doc().unwrap().links_from, None);
+    // A script reads the profile's file in the app's own folder.
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    let file = dir.join("Print.vectorcraft").to_string_lossy().to_string();
+    log(&mut s, "app.documents.addDocument('Print');");
+    assert_eq!(s.doc().unwrap().links_from.as_deref(), Some(file.as_str()));
+    while !s.documents().is_empty() {
+        s.execute("file.close", &json!({})).unwrap();
+    }
+    std::fs::write(dir.join("Print.vectorcraft"), b"not a document").unwrap();
+    // file.new itself makes the document with the defaults and reports the profile it could not read.
+    let r = s.execute("file.new", &json!({"preset": "Letter"})).unwrap();
+    assert_eq!(r["profileError"]["profile"], "Print", "{r}");
+    s.execute("file.close", &json!({})).unwrap();
+    let recent = s.execute("file.newPresets", &json!({"category": "Recent"})).unwrap();
+    let e = failure(&mut s, "app.documents.addDocument('Print');");
+    assert!(e.contains("Error: the New Document profile Print could not be read"), "{e}");
+    assert!(s.documents().is_empty(), "the document made with the defaults is put back");
+    // A script that catches the error finds nothing changed.
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.width = 333;\
+         try { app.documents.addDocument('Print', p); } catch (e) { vc.log(e.name); } vc.log(app.documents.length);",
+    );
+    assert_eq!(out, vec![json!("Error"), json!(0)]);
+    assert_eq!(s.execute("file.newPresets", &json!({"category": "Recent"})).unwrap(), recent, "the Recent sizes are as they were");
+    // A startup preset with no profile reads no file.
+    let out = log(&mut s, "vc.log(app.documents.addDocument('Basic RGB').documentColorSpace);");
+    assert_eq!(out, vec![json!("DocumentColorSpace.RGB")]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn wrappers_go_stale_after_delete_and_undo() {
     let (mut s, _, _) = doc();
     let e = failure(&mut s, "var i = app.activeDocument.pageItems[0]; i.remove(); i.name;");
@@ -895,6 +973,30 @@ fn remove_refuses_hidden_or_locked_art_as_remove_all_does() {
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     log(&mut s, "app.activeDocument.pageItems[0].remove();");
     assert!(s.active().unwrap().doc.node(b).is_none());
+}
+
+/// Art on a locked artboard stays: `remove()` and `removeAll()` throw and delete nothing.
+#[test]
+fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
+    let (mut s, a, b) = doc();
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.activeDocument.pageItems[1].remove();");
+    assert!(e.contains(&format!("cannot delete objects on a locked artboard: {}", b.0)), "{e}");
+    let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
+    assert!(e.contains("cannot delete objects on a locked artboard") && e.contains(&a.0.to_string()), "{e}");
+    assert!(s.active().unwrap().doc.node(a).is_some() && s.active().unwrap().doc.node(b).is_some());
+    assert_eq!(undo_steps(&s), steps);
+    lock(&mut s, false);
+    let out = log(&mut s, "var p = app.activeDocument.pageItems; p[1].remove(); p.removeAll(); vc.log(p.length);");
+    assert_eq!(out, vec![json!(0)]);
 }
 
 #[test]
