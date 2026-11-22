@@ -114,14 +114,10 @@ fn a_computed_name_that_throws_stops_the_literal() {
 }
 
 #[test]
-fn a_default_after_a_shorthand_property_is_a_syntax_error() {
-    syntax("({ a = 1 })");
-    syntax("var a; ({ a = 1 });");
-    syntax("({ get = 1 })");
-}
-
-#[test]
 fn bad_object_literal_forms_are_syntax_errors() {
+    syntax("({ m() {} } = {});");
+    syntax("var a; [{ m() {} }] = [];");
+    syntax("for ({ m() {} } of []) ;");
     for src in ["({ if })", "({ this })", "({ 1 })", "({ 'a' })", "({ [a] })", "({ [a }: 1 })", "({ get [a]: 1 })", "({ a() })"] {
         syntax(src);
     }
@@ -142,6 +138,29 @@ fn proto_sets_the_prototype_once() {
     truth("var __proto__ = 2; var o = { __proto__: null, ['__proto__']: 1, __proto__ }; Object.getPrototypeOf(o) === null");
     syntax("({ __proto__: null, __proto__: null })");
     syntax("({ __proto__: null, '__proto__': null })");
+}
+
+#[test]
+fn a_destructuring_pattern_may_name_proto_twice() {
+    // The value read is an own property named `__proto__`.
+    truth("var v = { ['__proto__']: 1 }; var a, b; ({ __proto__: a, __proto__: b } = v); a === 1 && b === 1");
+    truth("var v = { ['__proto__']: 1 }; var a, b; [{ __proto__: a, __proto__: b }] = [v]; a === 1 && b === 1");
+    truth("var f = ({ __proto__: a, __proto__: b }) => a + b; f({ ['__proto__']: 1 }) === 2");
+    truth("var r; for ({ __proto__: r, __proto__: r } of [{ ['__proto__']: 3 }]) ; r === 3");
+    truth("var { __proto__: x, __proto__: y } = { ['__proto__']: 4 }; x === 4 && y === 4");
+    // The same literal is still an error where it stays a literal, nested or not.
+    for src in [
+        "var a, b; ({ __proto__: a, __proto__: b });",
+        "[{ __proto__: 1, __proto__: 2 }];",
+        "var b; ({ a: b = { __proto__: 1, __proto__: 2 } } = {});",
+        "var b; ({ [{ __proto__: 1, __proto__: 2 }]: b } = {});",
+        "var a; ({ __proto__: a, __proto__: a } = { b: { __proto__: 1, __proto__: 2 } });",
+    ] {
+        match es().run(src) {
+            Err(RunError { kind: RunErrorKind::Syntax, message, .. }) => assert!(message.contains("'__proto__' twice"), "{src}: {message}"),
+            other => panic!("{src}: {other:?}"),
+        }
+    }
 }
 
 #[test]
@@ -223,6 +242,38 @@ fn bind_stays_within_the_heap_limit() {
         let used = realm.interp().heap.bytes;
         assert!(r.is_ok() || matches!(&r, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Heap)), "{options:?}: {r:?}");
         assert!(used <= limit, "{options:?}: {used} of {limit}");
+    }
+}
+
+#[test]
+fn computed_keys_stay_within_the_heap_limit() {
+    let setup = "var ks = [], ss = [], out; for (var i = 0; i < 64; i++) { ks.push('key' + i); ss.push(Symbol()); } true";
+    let literal = |keys: &str| (0..64).map(|i| format!("[{keys}[{i}]]: {i}")).collect::<Vec<_>>().join(", ");
+    for go in [
+        format!("function go() {{ out = {{ {} }}; return true; }} true", literal("ks")),
+        format!("function go() {{ out = {{ {} }}; return true; }} true", literal("ss")),
+    ] {
+        // The bytes the object a run of `go` keeps in `out` holds, measured without a limit.
+        let ready = || {
+            let mut realm = es();
+            assert_eq!(realm.run(setup), Ok(JsValue::Bool(true)));
+            assert_eq!(realm.run(&go), Ok(JsValue::Bool(true)));
+            realm.collect_garbage();
+            realm
+        };
+        let mut realm = ready();
+        let before = realm.interp().heap.bytes;
+        assert_eq!(realm.run("go()"), Ok(JsValue::Bool(true)));
+        realm.collect_garbage();
+        let kept = realm.interp().heap.bytes - before;
+        // With one byte less than that, the run ends at the limit and the heap stays within it.
+        let mut realm = ready();
+        let limit = realm.interp().heap.bytes + kept - 1;
+        realm.set_limits(Limits { heap_bytes: limit, ..Limits::default() });
+        let e = realm.run("go()").unwrap_err();
+        let used = realm.interp().heap.bytes;
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
+        assert!(used <= limit, "{used} of {limit}");
     }
 }
 
@@ -336,6 +387,36 @@ fn object_literal_functions_are_named_after_their_property() {
     truth("var o = { p: function named() {} }; o.p.name === 'named'");
     truth("var f = function () {}; var o = { f }; o.f.name === 'f' && ({ g: f }).g.name === 'f'");
     truth("var o = { xs: (0, function () {}) }; o.xs.name === ''");
+}
+
+#[test]
+fn symbol_keys_name_functions_after_their_description() {
+    truth(&format!("var s = Symbol('s'); var o = {{ [s]: () => 0 }}; {}", name_is("o[s]", "[s]")));
+    truth(&format!("var s = Symbol(''); var o = {{ [s]() {{}} }}; {}", name_is("o[s]", "[]")));
+    truth(&format!("var e = Symbol(); var o = {{ [e]: function () {{}} }}; {}", name_is("o[e]", "")));
+    let accessors = |key: &str| format!("var k = {key}; var d = Object.getOwnPropertyDescriptor({{ get [k]() {{}}, set [k](v) {{}} }}, k);");
+    truth(&format!("{} {} && {}", accessors("Symbol('a')"), name_is("d.get", "get [a]"), name_is("d.set", "set [a]")));
+    truth(&format!("{} {} && {}", accessors("Symbol()"), name_is("d.get", "get "), name_is("d.set", "set ")));
+    truth(&format!("var o = {{ [Symbol.iterator]() {{}} }}; {}", name_is("o[Symbol.iterator]", "[Symbol.iterator]")));
+}
+
+#[test]
+fn a_default_value_takes_the_name_of_its_target() {
+    truth(&format!("var {{ a = function () {{}} }} = {{}}; {}", name_is("a", "a")));
+    truth(&format!("let [b = () => 0] = []; {}", name_is("b", "b")));
+    truth(&format!("const {{ x: y = function () {{}} }} = {{}}; {}", name_is("y", "y")));
+    truth(&format!("var c; ({{ c = function () {{}} }} = {{}}); {}", name_is("c", "c")));
+    truth(&format!("var d; [d = () => 0] = []; {}", name_is("d", "d")));
+    truth(&format!("var e; ({{ k: e = function () {{}} }} = {{}}); {}", name_is("e", "e")));
+    truth(&format!("function f({{ p = () => 0 }}) {{ return p; }} {}", name_is("f({})", "p")));
+    truth(&format!("var got; for (const [q = function () {{}}] of [[]]) got = q; {}", name_is("got", "q")));
+    truth(&format!("var got; try {{ throw {{}}; }} catch ({{ r = () => 0 }}) {{ got = r; }} {}", name_is("got", "r")));
+    // A parenthesized or property target, a function with its own name and a value that is
+    // given keep the names they have.
+    truth("var t; [(t) = function () {}] = []; t.name === ''");
+    truth("var o = {}; [o.p = function () {}] = []; o.p.name === ''");
+    truth("var { g = function h() {} } = {}; g.name === 'h'");
+    truth("var given = (0, function () {}); var { k = function () {} } = { k: given }; k === given && k.name === ''");
 }
 
 #[test]

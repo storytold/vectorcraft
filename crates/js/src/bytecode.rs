@@ -71,9 +71,6 @@ pub(crate) enum Op {
     /// `object key` → `object name`: checks that the object can have properties and turns the key
     /// into a property name, before the right-hand side of an assignment runs.
     ToKey,
-    /// `key` → `name`: turns an object literal's computed name into a property name, an E4X
-    /// name object included (ECMA-262 2015 section 12.2.6.8).
-    ToPropertyKey,
     /// `object` → `object`: throws a `TypeError` when it is `undefined` or `null`, before the
     /// right-hand side of an assignment to one of its properties runs.
     CheckObject,
@@ -130,11 +127,6 @@ pub(crate) enum Op {
     /// `object function` → `object`.
     InitGetter(u32),
     InitSetter(u32),
-    /// `object name value` → `object`: a computed name's property in an object literal.
-    InitPropKey,
-    /// `object name function` → `object`.
-    InitGetterKey,
-    InitSetterKey,
     /// `object value` → `object`: `__proto__: value` sets the object's prototype to the value
     /// when it is an object or `null` (ECMA-262 2015 section B.3.1).
     InitProto,
@@ -222,6 +214,29 @@ pub(crate) enum Op {
     ToStr,
     /// Pushes the template object of `templates[i]`, the same object for each evaluation.
     TemplateObject(u32),
+    /// `value` → its Iterator Record (GetIterator, ECMA-262 11th edition section 7.4.1).
+    GetIterator,
+    /// `record` → `record value`, or jumps with `record` when the iterator is done.
+    IterStep(u32),
+    /// `record x₁…xₙ` → `record x₁…xₙ value`: the next value, `undefined` once it is done.
+    IterValue(u32),
+    /// `record` → `record`: steps the iterator without reading the result's `value`, for a hole
+    /// in an array pattern.
+    IterSkip,
+    /// `record x₁…xₙ` → `record x₁…xₙ array`: the values left, in an array.
+    IterRest(u32),
+    /// `record` → nothing: closes the iterator unless it is done (IteratorClose).
+    IterClose,
+    /// `record exception` → throws the exception after closing the iterator unless it is done.
+    IterCloseThrow,
+    /// `value` → `value`: a `TypeError` when it is `undefined` or `null`.
+    RequireObjectCoercible,
+    /// `object key x₁…xₙ` → `object key x₁…xₙ object[key]`: an object pattern's property.
+    PatternGet(u32),
+    /// `object key value` → `object`: a property with a computed name.
+    InitIndex,
+    /// `object key function` → `object`: a getter (`true`) or a setter with a computed name.
+    InitAccessorIndex(bool),
 }
 
 /// The names a block declares, entered with [`Op::PushBlock`].
@@ -313,9 +328,13 @@ pub(crate) struct Code {
     pub(crate) arrow: bool,
     /// The code reads `this` or calls `eval`, itself or in an arrow function inside it.
     pub(crate) uses_this: bool,
-    /// The function has default or rest parameters: its parameters start uninitialized, its
-    /// code initializes them and then enters its body with [`Op::BodyEnv`].
+    /// The function has default, rest or destructured parameters: its parameters start
+    /// uninitialized, its code initializes them and then enters its body with [`Op::BodyEnv`].
     pub(crate) param_init: bool,
+    /// The names the destructured parameters bind, which start uninitialized beside the
+    /// parameters. A destructured parameter's own entry in `params` is a name no script can
+    /// write.
+    pub(crate) pattern_names: Vec<Key>,
     /// The code was read with [`crate::Options::es2015`]: its function's `length` can be
     /// redefined, as ECMA-262 2015 section 19.2.4.1 has it.
     pub(crate) es2015: bool,
@@ -345,6 +364,15 @@ impl NamePrefix {
             NamePrefix::None => &[],
             NamePrefix::Get => GET,
             NamePrefix::Set => SET,
+        }
+    }
+
+    /// The prefix with the space that follows it, as text.
+    pub(crate) fn text(self) -> &'static str {
+        match self {
+            NamePrefix::None => "",
+            NamePrefix::Get => "get ",
+            NamePrefix::Set => "set ",
         }
     }
 }
@@ -394,7 +422,6 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::Dup => e(1, 2),
         Op::Dup2 => e(2, 4),
         Op::Swap | Op::ToKey => e(2, 2),
-        Op::ToPropertyKey => e(1, 1),
         Op::Rot3 => e(3, 3),
         Op::GetVarThis(_) => e(0, 2),
         Op::SetVar(_) | Op::GetMember(_) | Op::DeleteMember(_) | Op::IncMember { .. } => e(1, 1),
@@ -402,7 +429,6 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::GetMemberThis(_) => e(1, 2),
         Op::SetMember(_) | Op::GetIndex | Op::DeleteIndex | Op::IncIndex { .. } | Op::Binary(_) => e(2, 1),
         Op::ArrayPush | Op::InitProp(_) | Op::InitGetter(_) | Op::InitSetter(_) | Op::InitProto => e(2, 1),
-        Op::InitPropKey | Op::InitGetterKey | Op::InitSetterKey => e(3, 1),
         Op::SetFunctionName(_) => e(1, 1),
         Op::SetFunctionNameKey(_) => e(2, 2),
         Op::GetIndexThis => e(2, 2),
@@ -432,7 +458,13 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
         Op::ArraySpread | Op::NewSpread => e(2, 1),
         Op::CallSpread(_) => e(3, 1),
-        Op::ToStr => e(1, 1),
+        Op::ToStr | Op::GetIterator | Op::IterSkip | Op::RequireObjectCoercible => e(1, 1),
+        Op::IterStep(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::IterValue(n) | Op::IterRest(n) => e(n.checked_add(1).ok_or("operand too large")?, n.checked_add(2).ok_or("operand too large")?),
+        Op::PatternGet(n) => e(n.checked_add(2).ok_or("operand too large")?, n.checked_add(3).ok_or("operand too large")?),
+        Op::IterClose => e(1, 0),
+        Op::IterCloseThrow => end(2),
+        Op::InitIndex | Op::InitAccessorIndex(_) => e(3, 1),
     })
 }
 

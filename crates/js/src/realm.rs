@@ -109,7 +109,9 @@ impl Interrupt {
     }
 }
 
-/// A value passed between a script and the host. An object is given by its class name.
+/// A value passed between a script and the host. An object is given by its class name, and a
+/// Symbol by its description; a Symbol the host passes in is a new Symbol each time, and one a
+/// host function returns in a realm without [`Options::es2015`] throws a `TypeError`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsValue {
     Undefined,
@@ -118,6 +120,7 @@ pub enum JsValue {
     Number(f64),
     String(String),
     Object(String),
+    Symbol(Option<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

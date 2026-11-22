@@ -238,6 +238,13 @@ pub(crate) enum Class {
     RegExp(Rc<crate::regexp_vm::Regex>),
     /// A `Date` object and its time value.
     Date(f64),
+    /// A Symbol object made by ToObject, with its Symbol (ECMA-262 11th edition, section 19.4).
+    Symbol(crate::symbol::Sym),
+    /// An Array Iterator or a String Iterator and how far it has gone (sections 22.1.5 and 21.1.5).
+    Iterator(Box<crate::builtins::iterator::IterState>),
+    /// The Iterator Record of a `for-of` loop, an array pattern or a spread in progress, on the
+    /// operand stack only.
+    IterRecord(Box<crate::iteration::IterRecord>),
     ForIn(Box<ForIn>),
     /// The `Math` object (section 15.8).
     Math,
@@ -323,7 +330,7 @@ impl Class {
             Class::XmlFilter(_) => "Object",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) => "Object",
+            Class::Ordinary | Class::ForIn(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
@@ -342,11 +349,13 @@ pub(crate) struct Object {
     pub(crate) proto: Option<ObjId>,
     pub(crate) extensible: bool,
     pub(crate) props: PropMap<Prop>,
+    /// The properties whose keys are Symbols, once the object has one.
+    pub(crate) syms: Option<Box<crate::symbol::SymProps>>,
 }
 
 impl Object {
     pub(crate) fn new(class: Class, proto: Option<ObjId>) -> Self {
-        Self { class, proto, extensible: true, props: PropMap::default() }
+        Self { class, proto, extensible: true, props: PropMap::default(), syms: None }
     }
 }
 
@@ -426,6 +435,8 @@ pub(crate) const XML_LIST_BYTES: usize = 96;
 pub(crate) const XML_REF_BYTES: usize = 8;
 /// The estimated bytes of a namespace an XML node holds.
 pub(crate) const XML_NS_BYTES: usize = 48;
+/// The estimated bytes of a Symbol without its description.
+pub(crate) const SYMBOL_BYTES: usize = 48;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
 
@@ -594,13 +605,31 @@ impl StringSizes {
             self.bytes += string_bytes(k.len());
         }
     }
+
+    /// Adds a Symbol and its description, once however many values and keys share it.
+    fn add_symbol(&mut self, s: &crate::symbol::Sym) {
+        if self.seen.insert(s.addr()) {
+            self.bytes += SYMBOL_BYTES;
+            if let Some(d) = s.description() {
+                self.add(d);
+            }
+        }
+    }
 }
 
 fn mark_value(v: &Value, work: &mut Vec<u32>, strings: &mut StringSizes) {
     match v {
         Value::Object(o) => work.push(o.0),
         Value::String(s) => strings.add(s),
+        Value::Symbol(s) => strings.add_symbol(s),
         _ => {}
+    }
+}
+
+fn mark_prop(prop: &Prop, work: &mut Vec<u32>, strings: &mut StringSizes) {
+    match prop {
+        Prop::Data { value, .. } => mark_value(value, work, strings),
+        Prop::Accessor { get, set, .. } => work.extend(get.iter().chain(set.iter()).map(|f| f.0)),
     }
 }
 
@@ -632,6 +661,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.names.len()
             + code.functions.len()
             + code.params.len()
+            + code.pattern_names.len()
             + code.vars.len()
             + 2 * code.fun_decls.len()
             + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
@@ -651,7 +681,7 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(pattern);
             strings.add(flags);
         }
-        let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
+        let keys = code.names.iter().chain(&code.params).chain(&code.pattern_names).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
         for k in keys.chain(&code.self_name).chain(&code.decl_name).chain(&code.rest) {
             strings.add_key(k);
         }
@@ -671,10 +701,12 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
     }
     for (k, prop) in o.props.iter() {
         strings.add_key(k);
-        match prop {
-            Prop::Data { value, .. } => mark_value(value, work, strings),
-            Prop::Accessor { get, set, .. } => work.extend(get.iter().chain(set.iter()).map(|f| f.0)),
-        }
+        mark_prop(prop, work, strings);
+    }
+    let syms = o.syms.as_ref().map_or(0, |m| m.len());
+    for (k, prop) in o.syms.iter().flat_map(|m| m.iter()) {
+        strings.add_symbol(k);
+        mark_prop(prop, work, strings);
     }
     let mut extra = 0;
     match &o.class {
@@ -701,6 +733,20 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(state.object.iter().map(|o| o.0));
             strings.bytes += state.keys.iter().map(|k| string_bytes(k.len())).sum::<usize>();
         }
+        Class::Symbol(s) => strings.add_symbol(s),
+        Class::IterRecord(r) => {
+            mark_value(&r.iterator, work, strings);
+            mark_value(&r.next, work, strings);
+            match &r.walk {
+                Some(crate::iteration::Walk::Array(a, _)) => work.push(a.0),
+                Some(crate::iteration::Walk::String(s, _)) => strings.add(s),
+                None => {}
+            }
+        }
+        Class::Iterator(state) => match &**state {
+            crate::builtins::iterator::IterState::Array { target, .. } => work.extend(target.iter().map(|o| o.0)),
+            crate::builtins::iterator::IterState::String { text, .. } => text.iter().for_each(|s| strings.add(s)),
+        },
         Class::Xml(node) => {
             work.extend(node.parent.iter().chain(&node.attrs).chain(&node.children).map(|o| o.0));
             strings.add(&node.value);
@@ -727,7 +773,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
         }
         _ => {}
     }
-    OBJECT_BYTES + PROP_BYTES * o.props.len() + extra
+    OBJECT_BYTES + PROP_BYTES * (o.props.len() + syms) + extra
 }
 
 fn add_name(name: &XmlName, strings: &mut StringSizes) {

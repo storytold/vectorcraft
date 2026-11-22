@@ -209,6 +209,8 @@ pub(crate) fn find(interp: &mut Interp, hay: &[u16], needle: &[u16], from: usize
 /// `String(value)` and `new String(value)` (sections 15.5.1 and 15.5.2).
 fn string_ctor(interp: &mut Interp, _: Value, args: &[Value], construct: bool) -> JsResult<Value> {
     let s = match args.first() {
+        // `String(symbol)` gives `Symbol(description)` (ECMA-262 11th edition, section 21.1.1.1).
+        Some(Value::Symbol(sym)) if !construct => return interp.descriptive_string(sym),
         Some(v) => interp.to_str(v)?,
         None => Str::from(""),
     };

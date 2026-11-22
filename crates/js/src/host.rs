@@ -243,6 +243,7 @@ impl Interp {
                 Ok(Data::String(s.to_rust_string()))
             }
             Value::Object(id) => self.read_object(*id, r),
+            Value::Symbol(_) => Err(self.data_error(r, ErrorType::Type, "is a Symbol, not plain data")),
         }
     }
 
@@ -268,6 +269,14 @@ impl Interp {
                 return Err(self.data_error(r, ErrorType::Type, &what));
             }
         };
+        // Each Symbol key the scan may visit takes a unit of fuel first.
+        let syms = self.object(id)?.syms.as_ref().map_or(0, |m| m.len());
+        if syms > 0 {
+            crate::regexp_vm::use_fuel_n(self, syms as u64)?;
+        }
+        if self.object(id)?.syms.as_ref().is_some_and(|m| m.iter().any(|(_, p)| p.enumerable())) {
+            return Err(self.data_error(r, ErrorType::Type, "has a Symbol-keyed property, not plain data"));
+        }
         r.ancestors.push(id);
         let out = match shape {
             Shape::Array(length) => self.read_array(id, length, r),
@@ -528,7 +537,14 @@ impl Interp {
 
     /// `v` as the string `String(v)` gives, within the limits of a crossing.
     fn read_text(&mut self, v: &Value, r: &mut Reading) -> JsResult<Data> {
-        let s = self.to_str(v)?;
+        let s = match v {
+            // `String(symbol)` gives `Symbol(description)` (ECMA-262 11th edition, section 21.1.1.1).
+            Value::Symbol(k) => match self.descriptive_string(k)? {
+                Value::String(s) => s,
+                _ => return Err(Abrupt::Internal("a Symbol's descriptive string is not a string".into())),
+            },
+            _ => self.to_str(v)?,
+        };
         self.charge_reading(r, s.len().saturating_mul(3).saturating_add(2))?;
         Ok(Data::String(s.to_rust_string()))
     }

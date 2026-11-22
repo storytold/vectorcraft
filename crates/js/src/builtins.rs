@@ -3,7 +3,8 @@
 //! `Array`, the error constructors, `Math`, `JSON`, the global functions and constants, Annex
 //! B's `escape` and `unescape`, and the prototypes primitive values look properties up on, with
 //! `Boolean.prototype`'s `toString` and `valueOf`. `String`, `Number`, `RegExp` and `Date` are in
-//! their own modules.
+//! their own modules. A realm with [`crate::Options::es2015`] also has `Symbol` (in `symbol`) and
+//! the iterators of arrays, strings and `arguments` objects (in `iterator`).
 //!
 //! Every loop in a built-in takes a unit of fuel for each step, and every string, array, object
 //! or property it makes is checked against the heap limit before it is made, so no built-in can
@@ -12,9 +13,11 @@
 mod array;
 pub(crate) mod extensions;
 mod global;
+pub(crate) mod iterator;
 mod json;
 mod math;
 mod object;
+mod symbol;
 
 use std::rc::Rc;
 
@@ -243,6 +246,10 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     crate::number_builtins::install(interp)?;
     crate::regexp_builtins::install(interp)?;
     crate::date_builtins::install(interp)?;
+    if interp.options.es2015 {
+        symbol::install(interp, object)?;
+        iterator::install(interp)?;
+    }
     if interp.options.e4x {
         crate::xml_builtins::install(interp)?;
     }
@@ -471,7 +478,9 @@ fn object_ctor(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResu
     interp.to_object(&v).map(Value::Object)
 }
 
-/// `Object.prototype.toString` (section 15.2.4.2).
+/// `Object.prototype.toString` (section 15.2.4.2). In a realm with [`crate::Options::es2015`], a
+/// string `@@toStringTag` takes the place of the class name (ECMA-262 11th edition, section
+/// 19.1.3.6).
 fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     // With `$.localize` on, a localization object gives its text for the current locale.
     if interp.localization.enabled()
@@ -485,6 +494,13 @@ fn object_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> J
         Value::Null => "Null",
         _ => {
             let o = interp.to_object(&this)?;
+            // The tag's getter can run script that collects, and the object of a primitive is
+            // reachable from nowhere else.
+            let tag = interp.rooted(&[Value::Object(o)], |i| i.string_tag_of(o))?;
+            if let Some(tag) = tag {
+                let roots = [Value::String(tag.clone())];
+                return interp.rooted(&roots, |i| i.wrap_str("[object ", Some(&tag), "]"));
+            }
             interp.heap.object(o).map_or("Object", |o| o.class.name())
         }
     };
@@ -532,9 +548,9 @@ fn object_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> Js
 }
 
 fn has_own_property(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let k = interp.to_key(&arg(args, 0))?;
+    let k = interp.to_prop_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_property(o, &k)?.is_some()))
+    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some()))
 }
 
 fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -551,9 +567,9 @@ fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) ->
 }
 
 fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let k = interp.to_key(&arg(args, 0))?;
+    let k = interp.to_prop_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_property(o, &k)?.is_some_and(|p| p.enumerable())))
+    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some_and(|p| p.enumerable())))
 }
 
 // ---- Function ----
