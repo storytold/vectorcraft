@@ -401,7 +401,7 @@ fn double_clicking_the_hand_zoom_and_transform_tools() {
     let v = *app.view().unwrap();
     assert_eq!((v.center.x, v.center.y, v.zoom), (150.0, 100.0, 2.0));
     app.run("tool.options", json!({"tool": "zoom"})).unwrap();
-    assert_eq!(app.view().unwrap().zoom, 1.0);
+    assert_eq!(app.view().unwrap().zoom, crate::state::zoom_baseline(app.print_ppi()));
     // The transform tools open their dialogs, like Object › Transform: not with nothing selected.
     assert_eq!(app.run("tool.options", json!({"tool": "rotate"})), Err("nothing selected".into()));
     assert!(app.ui.dialog.is_none());

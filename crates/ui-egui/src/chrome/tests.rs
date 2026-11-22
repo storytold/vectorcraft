@@ -1473,7 +1473,7 @@ fn the_artboard_navigator_goes_to_artboards_and_fitting_shows_the_current_one() 
     app.run("view.fitArtboard", json!({})).unwrap();
     assert_eq!(at(&app), (1, Point::new(320.0, 50.0)));
     app.run("view.actualSize", json!({})).unwrap();
-    assert_eq!((at(&app).1, app.view().unwrap().zoom), (Point::new(320.0, 50.0), 1.0));
+    assert_eq!((at(&app).1, app.view().unwrap().zoom), (Point::new(320.0, 50.0), crate::state::zoom_baseline(app.print_ppi())));
     click(&mut app, buttons[0]);
     assert_eq!(at(&app), (0, Point::new(100.0, 50.0)), "first");
     // The command also takes an index, clamped to the last artboard.

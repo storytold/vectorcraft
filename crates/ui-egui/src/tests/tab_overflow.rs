@@ -91,6 +91,8 @@ fn the_tab_that_does_not_fit_whole_fills_the_rest_of_the_strip() {
 #[test]
 fn inactive_tabs_show_the_name_alone_so_more_tabs_fit() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    // The titles' widths are measured at 100% with one document point per screen point.
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     for i in 0..12 {
         app.run("file.new", json!({"width": 100, "height": 100, "name": format!("Tab test {i}")})).unwrap();
     }

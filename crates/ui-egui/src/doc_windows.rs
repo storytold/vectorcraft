@@ -68,6 +68,14 @@ pub struct DocWindow {
     /// While its OS window's tab is dragged: where the pointer is from the window's top-left
     /// corner, on the screen.
     grab: Option<egui::Vec2>,
+    /// The density of the display that shows its OS window ([`crate::services::screen_ppi_at`]),
+    /// while the window is on a display the host listed; `None` before that, while it is on none
+    /// of them, and inside the main window, where the window counts the main window's density.
+    ppi: Option<crate::ScreenPpi>,
+    /// The last frame drew it as an OS window of its own.
+    os: bool,
+    /// A display that shows its OS window has been read since it opened.
+    was_read: bool,
 }
 
 /// [`DocWindow::fit`]: a body size, and a view's zoom and center.
@@ -75,7 +83,61 @@ type Fit = (egui::Vec2, f64, vectorcraft_geom::Point);
 
 impl DocWindow {
     fn new((uid, view): (u64, u32), place: egui::Rect) -> Self {
-        Self { uid, view, place, number: 0, generation: 0, screen: None, focused: false, body: None, fit: None, grab: None }
+        Self {
+            uid,
+            view,
+            place,
+            number: 0,
+            generation: 0,
+            screen: None,
+            focused: false,
+            body: None,
+            fit: None,
+            grab: None,
+            ppi: None,
+            os: false,
+            was_read: false,
+        }
+    }
+}
+
+/// The density of the display that shows floating window `x`'s OS window: read once the window
+/// was found on a display, unread until then; `None` for a window inside the main window, which
+/// counts the main window's density, and for the window Presentation Mode shows there.
+fn window_ppi(app: &VectorcraftApp, x: &DocWindow) -> Option<crate::ScreenPpi> {
+    if presenting(app) && current(app).and_then(|w| key(app, w)) == Some((x.uid, x.view)) {
+        return None;
+    }
+    x.ppi.or(x.os.then_some(crate::ScreenPpi::Unread))
+}
+
+/// [`window_ppi`] for window `w`; `None` for a window that does not float.
+pub(crate) fn screen_ppi(app: &VectorcraftApp, w: Win) -> Option<crate::ScreenPpi> {
+    let (u, n) = key(app, w)?;
+    window_ppi(app, app.ui.floating.iter().find(|x| x.uid == u && x.view == n)?)
+}
+
+/// A floating window ([`views::key`]) with the density of the display that shows it
+/// ([`window_ppi`]).
+pub(crate) type FloatingPpi = ((u64, u32), Option<crate::ScreenPpi>);
+
+/// Each floating window with the density of the display that shows it.
+pub(crate) fn floating_ppi(app: &VectorcraftApp) -> Vec<FloatingPpi> {
+    app.ui.floating.iter().map(|x| ((x.uid, x.view), window_ppi(app, x))).collect()
+}
+
+/// Forgets the densities found for the floating windows' displays.
+pub(crate) fn forget_ppi(app: &mut VectorcraftApp) {
+    for x in &mut app.ui.floating {
+        x.ppi = None;
+    }
+}
+
+/// Sets the density of the display that shows floating window `key`'s ([`views::key`]) OS window.
+#[cfg(test)]
+pub(crate) fn set_window_ppi(app: &mut VectorcraftApp, (uid, view): (u64, u32), ppi: Option<f64>) {
+    if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == uid && x.view == view) {
+        x.ppi = Some(crate::ScreenPpi::Read(ppi));
     }
 }
 
@@ -101,6 +163,14 @@ pub struct Windows {
     /// in ([`crate::canvas::note_drop`]): each window's view ([`views::key`]), the part of its pane
     /// inside its rulers and scroll bars in the main window's points, and the layer it drew in.
     pub(crate) drops: Vec<((u64, u32), egui::Rect, egui::LayerId)>,
+    /// The main window's density and the floating windows' ([`floating_ppi`]) when the views were
+    /// last settled each frame ([`VectorcraftApp::settle_screen_ppi_if_changed`]).
+    pub(crate) settled: Option<(crate::ScreenPpi, Vec<FloatingPpi>)>,
+    /// Display Print Size at 100% Zoom was off when the views were last settled each frame.
+    pub(crate) print_size_off: bool,
+    /// The last density the host read for the main window's display; the main window's views
+    /// count from it while its display has not answered.
+    pub(crate) main_read: Option<crate::ScreenPpi>,
 }
 
 impl Windows {
@@ -382,6 +452,8 @@ struct Shown {
     body: Option<egui::Rect>,
     /// [`DocWindow::fit`] after this frame.
     fit: Option<Fit>,
+    /// The density of the display that shows its OS window, when it was found on one.
+    ppi: Option<crate::ScreenPpi>,
 }
 
 /// Draw the floating document windows, after the main window's canvas. Call once per frame from
@@ -452,7 +524,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     for w in app.ui.floating.clone() {
         let Some(win) = find(app, (w.uid, w.view)) else { continue };
         let raised = raise == Some((w.uid, w.view));
-        let shown = if native { os_window(app, ctx, &w, (win, blocked), raised) } else { app_window(app, ctx, &w, (win, blocked), raised) };
+        let mut shown = if native { os_window(app, ctx, &w, (win, blocked), raised) } else { app_window(app, ctx, &w, (win, blocked), raised) };
+        take_window_ppi(app, ctx, ((w.uid, w.view), native), win, &mut shown);
         if blocked {
             continue;
         }
@@ -540,6 +613,46 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, (win, blocked): (Win, bool)
     (pressed, rect, fit)
 }
 
+/// Takes the density of the display that `shown`, floating window `key`'s ([`views::key`]) window
+/// `win`, was found on, and whether it is an OS window of its own (`os`), and settles the views
+/// when the density changed ([`VectorcraftApp::settle_window_ppi`]). A view that still has the
+/// zoom its window fitted it to at the window's present size keeps that zoom, and keeps fitting
+/// the window.
+fn take_window_ppi(app: &mut VectorcraftApp, ctx: &egui::Context, ((uid, number), os): ((u64, u32), bool), win: Win, shown: &mut Shown) {
+    let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == uid && x.view == number) else { return };
+    x.os = os;
+    // Drawn inside the main window, it counts the main window's density.
+    if !os {
+        shown.ppi = None;
+        if x.ppi.take().is_some() {
+            app.settle_window_ppi(win, true);
+        }
+        return;
+    }
+    // Off every display the host listed (moved past their edges, or its display went), it is
+    // unread: its view counts from the density it was shown at until a display is found again.
+    if shown.ppi.is_none() {
+        if x.ppi.take().is_some() {
+            app.settle_window_ppi(win, true);
+            ctx.request_repaint();
+        }
+        return;
+    }
+    if x.ppi == shown.ppi {
+        return;
+    }
+    // Its first reading, or a fit made this frame, is a baseline; a move from a display read
+    // before keeps the zoom percentage.
+    let first = !x.was_read;
+    let fitted_now = shown.fit.is_some() && shown.fit != x.fit;
+    x.ppi = shown.ppi;
+    x.was_read |= matches!(shown.ppi, Some(crate::ScreenPpi::Read(_)));
+    let size = shown.body.map(|b| b.size());
+    let following = view(app, win).is_some_and(|v| v.fitted && shown.fit.is_some_and(|(s, z, c)| Some(s) == size && z == v.zoom && c == v.center));
+    app.settle_window_ppi(win, !(following && (first || fitted_now)));
+    ctx.request_repaint();
+}
+
 /// Window `win`'s floating window `w` as an OS window of its own, `blocked` by a modal or not;
 /// `raise` brings it to the front. Its tab is at the top of the window, above its body.
 fn os_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (win, blocked): (Win, bool), raise: bool) -> Shown {
@@ -595,7 +708,8 @@ fn os_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (win,
                 (events, Some(inp.modifiers))
             });
         }
-        Shown { close, activate, over_strip, dock, focused, body: Some(rect), fit }
+        let ppi = crate::services::screen_ppi_at(&app.services.screens, ui.ctx());
+        Shown { close, activate, over_strip, dock, focused, body: Some(rect), fit, ppi }
     });
     if !forwarded.0.is_empty() {
         crate::panel_docking::forward_keys(app, ctx, forwarded.0, forwarded.1);
@@ -676,7 +790,7 @@ fn app_window(app: &mut VectorcraftApp, ctx: &egui::Context, w: &DocWindow, (win
     let moved = mover.map_or((false, false), |r| (r.dragged(), r.drag_stopped()));
     let pointer = ctx.input(|inp| inp.pointer.latest_pos());
     let over_strip = !blocked && (moved.0 || moved.1) && app.canvas.windows.strip.zip(pointer).is_some_and(|(strip, p)| strip.contains(p));
-    Shown { close: !open, activate, over_strip, dock: over_strip && moved.1, focused: false, body: rect, fit }
+    Shown { close: !open, activate, over_strip, dock: over_strip && moved.1, focused: false, body: rect, fit, ppi: None }
 }
 
 /// The host's rewrites of raw input ([`crate::services::Services::native_input_hook`]) for the

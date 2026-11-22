@@ -30,6 +30,12 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
         _ => st.doc.artboards.get(current).or(st.doc.artboards.first()).map(|a| a.rect),
     };
     let Some(target) = target else { return };
+    // A fit to the window is made for the display the window is on now; Actual Size counts from
+    // the density the view counts from, which a reading still to come rescales (Display Print
+    // Size at 100% Zoom).
+    if let Some(w) = crate::doc_windows::current(app) {
+        app.settle_window_ppi(w, how == "view.actualSize");
+    }
     let zoom = if how == "view.actualSize" {
         actual_size_zoom(app.print_ppi())
     } else {
@@ -39,6 +45,8 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     v.center = target.center();
     v.fitted = true;
     v.zoom = zoom;
+    // Actual Size is a percentage; the other fits are made for the window.
+    v.fit_zoom = (how != "view.actualSize").then_some(zoom);
 }
 
 /// The zoom at which `target`, turned `rotation` degrees with the view, fits in `rect` (points of

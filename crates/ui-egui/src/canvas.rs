@@ -51,8 +51,10 @@ use fill::fill_uncovered;
 #[cfg(test)]
 use fill::{fill_view, polygon_area};
 #[cfg(test)]
+use grid::PIXEL_GRID;
+#[cfg(test)]
 use grid::ruler_rects;
-use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, rulers_hidden, textured_quad, view_bounds};
+use grid::{LineLook, PIXEL_GRID_ZOOM, checker, clip_segment, grid, pixel_grid, ruler_input, rulers, rulers_hidden, textured_quad, view_bounds};
 pub(crate) use grid::{RulerScale, checker_texture, checker_tile, ruler_label, ruler_origin_dragging};
 #[cfg(test)]
 pub(crate) use grid::{TRANSPARENCY_GRID, vertical_label_height};
@@ -410,12 +412,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         grid(&painter, &xf, doc.grid.spacing, doc.grid.subdivisions, look);
     }
     // The pixel grid (Guides & Grid › Show Pixel Grid (Above 600% Zoom)): in Pixel Preview from
-    // 600% zoom, a line at every document pixel over the art, so the pixels it rasterizes to show.
+    // 600% zoom as the zoom field counts it, a line at every document pixel over the art, so the
+    // pixels it rasterizes to show.
     let revolve_edit = app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active);
     let view_info = app.view_info();
     if !presenting {
-        if app.ui.view.pixel_preview && v.zoom >= PIXEL_GRID_ZOOM && app.session.prefs.show_pixel_grid {
-            grid(&painter, &xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false });
+        let shown = crate::state::zoom_display_percent(v.zoom, app.print_ppi()) / 100.0;
+        if app.ui.view.pixel_preview && shown >= PIXEL_GRID_ZOOM - 1e-9 && app.session.prefs.show_pixel_grid {
+            pixel_grid(&painter, &xf);
         }
         artboard_outlines(app, ui, &painter, &xf, &t);
         if app.ui.view.guides_shown() {

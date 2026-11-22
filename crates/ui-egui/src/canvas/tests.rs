@@ -4822,6 +4822,8 @@ fn pixel_grid_shows_in_pixel_preview_from_600_percent() {
         (lines.len(), lines.first().is_some_and(|&i| i > image))
     };
     app.ui.view.pixel_preview = true;
+    // One document point per screen point at 100%, so 600% is a zoom of 6.
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     app.view_mut().unwrap().zoom = 8.0;
     let (n, over) = pixel_lines(&mut app);
     assert!(n >= 150, "a line every 8 px across the 800 × 600 canvas: {n}");
@@ -4830,6 +4832,20 @@ fn pixel_grid_shows_in_pixel_preview_from_600_percent() {
     assert_eq!(pixel_lines(&mut app).0, 0, "below 600%: none");
     app.view_mut().unwrap().zoom = 6.0;
     assert!(pixel_lines(&mut app).0 >= 200, "from 600%");
+    // With Display Print Size at 100% Zoom on, 600% counts from Actual Size, as the zoom field
+    // shows it: 96 points to an inch make a zoom of 6 show as 450%, and 8 as 600%.
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    assert_eq!(pixel_lines(&mut app).0, 0, "450%: none");
+    app.view_mut().unwrap().zoom = 8.0;
+    assert!(pixel_lines(&mut app).0 >= 150, "600%");
+    // At 2.5× UI Scaling the lines are 3.2 interface points apart, and still drawn.
+    ctx.set_zoom_factor(2.5);
+    pixel_lines(&mut app);
+    assert!(pixel_lines(&mut app).0 > 0, "600% at 2.5× UI Scaling");
+    ctx.set_zoom_factor(1.0);
+    pixel_lines(&mut app);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    app.view_mut().unwrap().zoom = 6.0;
     app.ui.view.pixel_preview = false;
     assert_eq!(pixel_lines(&mut app).0, 0, "out of Pixel Preview: none");
     app.ui.view.pixel_preview = true;
@@ -6035,7 +6051,7 @@ fn scrolls_and_pans_move_a_lowered_frame_by_whole_pixels() {
 /// another document, or when the device pixels a point changed.
 #[test]
 fn a_scrolls_leftover_pixel_part_carries_only_to_the_same_view() {
-    let view = View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, rotation: 0.0, artboard: 0, outline: false };
+    let view = View { zoom: 1.0, center: Point::new(100.0, 100.0), fitted: true, ..View::default() };
     let mut v = view;
     let rest = scroll_by(&mut v, 1, (1.0, 1.0), vec2(0.4, -0.3), ScrollRest::default());
     assert_eq!(v.center, view.center, "less than half a pixel does not move the view");
@@ -8535,8 +8551,9 @@ fn a_rotation_with_fingers_on_a_touch_screen_turns_nothing() {
     assert_eq!(app.view().unwrap().rotation, before, "the view does not turn");
 }
 
-/// General › Display Print Size at 100% Zoom (#394): `view.actualSize` is one document point per
-/// screen point with it off, and 96 screen points per document inch with it on.
+/// General › Display Print Size at 100% Zoom (#394, #9051): on by default, `view.actualSize` shows
+/// a document inch in 96 screen points where no display was measured; off, one document point
+/// per screen point.
 #[test]
 fn view_actual_size_follows_display_print_size() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -8544,10 +8561,10 @@ fn view_actual_size_follows_display_print_size() {
     app.canvas_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(460.0, 260.0)));
     app.run("view.setZoom", json!({"zoom": 250})).unwrap();
     app.run("view.actualSize", json!({})).unwrap();
-    assert!((app.view().unwrap().zoom - 1.0).abs() < 1e-12, "off by default: 100% is 1:1");
-    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12, "on by default: an inch is 96 screen points");
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     app.run("view.actualSize", json!({})).unwrap();
-    assert!((app.view().unwrap().zoom - 96.0 / 72.0).abs() < 1e-12, "an inch is 96 screen points");
+    assert!((app.view().unwrap().zoom - 1.0).abs() < 1e-12, "off, 100% is 1:1");
 }
 
 /// #9051: with Display Print Size on, Actual Size shows a document inch in an inch of the display
@@ -8561,7 +8578,10 @@ fn view_actual_size_fills_an_inch_of_the_measured_display() {
     let rect = egui::Rect::from_min_size(Pos2::ZERO, vec2(460.0, 260.0));
     app.canvas_rect = Some(rect);
     app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.run("view.fitArtboard", json!({})).unwrap();
+    let fitted = app.view().unwrap().zoom;
     assert!(app.set_screen_ppi(Some(127.0)));
+    assert_eq!(app.view().unwrap().zoom, fitted, "the first measurement leaves a fitted view alone");
     let inch = |v: &View| {
         let xf = Xf::new(rect, v);
         f64::from(xf.to_screen(Point::new(72.0, 0.0)).x - xf.to_screen(Point::new(0.0, 0.0)).x)
@@ -8577,12 +8597,56 @@ fn view_actual_size_fills_an_inch_of_the_measured_display() {
     assert!((inch(&first) - 91.0).abs() < 1e-3, "the other window's 100% still fills an inch");
     assert_eq!(crate::state::zoom_label(first.zoom, app.print_ppi()), "100%");
     assert_eq!(crate::state::zoom_label(app.view().unwrap().zoom, app.print_ppi()), "150%");
+    assert!(app.set_screen_ppi(None), "the window moved to a display that reports no size");
+    let first = *crate::doc_windows::view(&app, (0, 1)).unwrap();
+    assert!((first.zoom * 72.0 - 96.0).abs() < 1e-9, "100% there is 96 points to an inch: {}", first.zoom * 72.0);
+    assert!(app.set_screen_ppi(Some(91.0)), "and back");
+    let first = *crate::doc_windows::view(&app, (0, 1)).unwrap();
+    assert!((first.zoom * 72.0 - 91.0).abs() < 1e-9, "100% fills an inch again: {}", first.zoom * 72.0);
+    assert!(app.set_screen_reading(crate::ScreenPpi::Unread), "the window moved to a display that has not answered");
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.run("view.actualSize", json!({})).unwrap();
+    assert!((app.view().unwrap().zoom * 72.0 - 91.0).abs() < 1e-9, "a document opened meanwhile counts from the same density");
+    assert!(app.set_screen_ppi(Some(127.0)), "and it answers");
+    assert!((app.view().unwrap().zoom * 72.0 - 127.0).abs() < 1e-9, "both keep 100%");
+    let first = *crate::doc_windows::view(&app, (0, 1)).unwrap();
+    assert!((first.zoom * 72.0 - 127.0).abs() < 1e-9, "100% fills an inch there: {}", first.zoom * 72.0);
     app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
     let zoom = app.view().unwrap().zoom;
-    assert!(app.set_screen_ppi(Some(127.0)));
+    assert!(app.set_screen_ppi(Some(110.0)));
     assert_eq!(app.view().unwrap().zoom, zoom, "off, a move leaves the zoom alone");
     app.run("view.actualSize", json!({})).unwrap();
     assert!((app.view().unwrap().zoom - 1.0).abs() < 1e-12, "and 100% stays one point per point");
+    // Off, the densities read before are forgotten: the first reading after it is turned on again
+    // leaves the zoom chosen meanwhile alone.
+    app.settle_screen_ppi_if_changed();
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    assert!(app.set_screen_ppi(Some(91.0)));
+    assert!((app.view().unwrap().zoom - 1.0).abs() < 1e-12, "the first reading after turning it on keeps the zoom");
+}
+
+/// #9051: Actual Size chosen before the window's display is first read keeps 100% when the
+/// reading arrives, and a fit made while the window's new display is being read stays the fit
+/// when that reading arrives.
+#[test]
+fn actual_size_and_fits_made_before_a_reading_keep_their_meaning() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(460.0, 260.0)));
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.run("view.actualSize", json!({})).unwrap();
+    assert!((app.view().unwrap().zoom * 72.0 - 96.0).abs() < 1e-9, "unread, an inch is 96 points");
+    assert!(app.set_screen_ppi(Some(127.0)));
+    assert!((app.view().unwrap().zoom * 72.0 - 127.0).abs() < 1e-9, "the reading keeps 100%: {}", app.view().unwrap().zoom * 72.0);
+    assert!(app.set_screen_reading(crate::ScreenPpi::Unread), "the window moved to a display being read");
+    app.run("view.fitArtboard", json!({})).unwrap();
+    let fitted = app.view().unwrap().zoom;
+    assert!(app.set_screen_ppi(Some(190.0)));
+    assert_eq!(app.view().unwrap().zoom, fitted, "the fit was made for this display");
+    assert!(app.set_screen_reading(crate::ScreenPpi::Unread), "and to another display being read");
+    app.run("view.actualSize", json!({})).unwrap();
+    assert!(app.set_screen_ppi(Some(110.0)));
+    assert!((app.view().unwrap().zoom * 72.0 - 110.0).abs() < 1e-9, "Actual Size there is 100%: {}", app.view().unwrap().zoom * 72.0);
 }
 
 /// Fit Artboard in Window fits the artboard as a rotated view shows it: at 45° every corner is
@@ -8639,7 +8703,7 @@ fn animated_zoom_scrubs_and_holds_else_the_zoom_tool_zooms_to_an_area() {
     press(&mut app, vec2(-100.0, 0.0), 0);
     assert!((app.view().unwrap().zoom - z0).abs() < 1e-6, "and back to the left");
     press(&mut app, vec2(0.0, 0.0), 0);
-    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z0, true, None), "a click steps");
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z0, true, app.print_ppi()), "a click steps");
     let z2 = app.view().unwrap().zoom;
     press(&mut app, vec2(0.0, 0.0), 40);
     assert!(app.view().unwrap().zoom > z2 * 1.2, "held, it zooms on");
@@ -8994,9 +9058,9 @@ fn cmd_space_zooms_and_space_pans_whatever_the_tool() {
     let z0 = app.view().unwrap().zoom;
     drag(&mut app, Modifiers::COMMAND, at);
     let z1 = app.view().unwrap().zoom;
-    assert_eq!(z1, crate::state::next_zoom(z0, true, None), "Cmd+Space click zooms in");
+    assert_eq!(z1, crate::state::next_zoom(z0, true, app.print_ppi()), "Cmd+Space click zooms in");
     drag(&mut app, Modifiers::COMMAND | Modifiers::ALT, at);
-    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z1, false, None), "Cmd+Alt+Space click zooms out");
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(z1, false, app.print_ppi()), "Cmd+Alt+Space click zooms out");
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None, "the Rectangle tool drew nothing");
     // Space alone pans, with the Zoom tool too.
     app.select_tool("zoom");
@@ -9044,7 +9108,7 @@ fn space_types_a_space_while_editing_text_and_does_not_pan() {
     assert_eq!(shown(&mut app), CursorIcon::ZoomIn, "Cmd+Space shows the magnifier");
     typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
     typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
-    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true, None), "Cmd+Space click zooms in");
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true, app.print_ppi()), "Cmd+Space click zooms in");
     typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
     assert_eq!(plain(&app, id), "a ", "the text is as typed");
 }
@@ -9154,7 +9218,7 @@ fn space_shift_drag_rotates_the_view_whatever_the_tool() {
     assert_eq!((panned.rotation, panned.zoom), (v.rotation, v.zoom));
     assert_ne!(panned.center, v.center, "Space pans");
     drag(&mut app, Modifiers::COMMAND | Modifiers::SHIFT, true, c, c);
-    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(v.zoom, true, None), "Cmd+Shift+Space click zooms in");
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(v.zoom, true, app.print_ppi()), "Cmd+Shift+Space click zooms in");
     assert_eq!(app.view().unwrap().rotation, v.rotation);
     // The Rotate View tool's Shift still rounds to 15°.
     app.select_tool("rotateView");

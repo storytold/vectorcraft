@@ -17,7 +17,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                         .selected_text(egui::RichText::new(zoom_label(zoom, print)).size(11.5))
                         .width(76.0)
                         .show_ui(ui, |ui| {
-                            for z in ZOOM_STOPS.iter().rev() {
+                            // The stops the zoom range reaches, which counts from Actual Size.
+                            let (lo, hi) = (crate::state::zoom_display_percent(0.0313, print), crate::state::zoom_display_percent(640.0, print));
+                            for z in ZOOM_STOPS.iter().rev().filter(|z| (lo - 1e-6..=hi + 1e-6).contains(*z)) {
                                 if ui
                                     .selectable_label((z - shown).abs() < 0.01, zoom_label(crate::state::zoom_from_display_percent(*z, print), print))
                                     .clicked()

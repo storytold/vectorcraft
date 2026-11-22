@@ -127,12 +127,23 @@ pub(super) fn clip_segment(a: Pos2, b: Pos2, r: egui::Rect) -> Option<(Pos2, Pos
 /// (left out when they would crowd). In the Dots style, a dot where gridlines cross the
 /// subdivisions instead.
 pub(super) fn grid(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32, look: LineLook) {
+    grid_lines(p, xf, spacing, subdiv, look, 4.0);
+}
+
+/// The pixel grid (Guides & Grid › Show Pixel Grid (Above 600% Zoom)): a line at every document
+/// pixel, however close the lines are; the caller shows it from 600%.
+pub(super) fn pixel_grid(p: &egui::Painter, xf: &Xf) {
+    grid_lines(p, xf, 1.0, 1, LineLook { color: PIXEL_GRID, dots: false }, 0.0);
+}
+
+/// [`grid`], left out when its lines would be less than `crowd` screen points apart.
+fn grid_lines(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32, look: LineLook, crowd: f64) {
     // The painter clips to the canvas.
     let view = view_bounds(xf);
     let sub = spacing / subdiv.max(1) as f64;
     let step = if sub * xf.zoom >= 6.0 { sub } else { spacing };
     // Dots crowd sooner than lines.
-    if step * xf.zoom < 4.0 || (look.dots && spacing * xf.zoom < 8.0) {
+    if step * xf.zoom < crowd || (look.dots && spacing * xf.zoom < 8.0) {
         return;
     }
     let major = |v: f64| (v / spacing - (v / spacing).round()).abs() < 1e-6;

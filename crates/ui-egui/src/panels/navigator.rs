@@ -298,12 +298,19 @@ fn view_box(region: DRect, thumb: Rect, canvas: Rect, v: &crate::state::View, ui
     pts
 }
 
-/// Slider position (0..1) ↔ zoom percent on a log range, 3.13 %–64 000 %.
-pub fn zoom_to_slider(z: f64) -> f64 {
-    ((z.clamp(3.13, 64000.0)).ln() - 3.13f64.ln()) / (64000f64.ln() - 3.13f64.ln())
+/// Slider position (0..1) ↔ zoom percent on a log range from `lo` % to `hi` % ([`zoom_range`]).
+pub fn zoom_to_slider(z: f64, (lo, hi): (f64, f64)) -> f64 {
+    ((z.clamp(lo, hi)).ln() - lo.ln()) / (hi.ln() - lo.ln())
 }
-pub fn slider_to_zoom(t: f64) -> f64 {
-    (3.13f64.ln() + t.clamp(0.0, 1.0) * (64000f64.ln() - 3.13f64.ln())).exp()
+pub fn slider_to_zoom(t: f64, (lo, hi): (f64, f64)) -> f64 {
+    (lo.ln() + t.clamp(0.0, 1.0) * (hi.ln() - lo.ln())).exp()
+}
+
+/// The zoom range in the percentages the zoom field shows, with 100% at Actual Size: 3.13 %–64 000 %
+/// at one document point per screen point.
+fn zoom_range(print: Option<f64>) -> (f64, f64) {
+    let baseline = crate::state::zoom_baseline(print);
+    (3.13 / baseline, 64000.0 / baseline)
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -346,6 +353,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // The view box: the canvas's corners in the document, turned with the view, cut to the thumbnail.
     let view = app.view().copied();
+    // The zoom as the zoom field and `view.setZoom` count it, with 100% at Actual Size.
+    let print = app.print_ppi();
+    let zoom = view.map_or(100.0, |v| crate::state::zoom_display_percent(v.zoom, print));
     if let (Some(v), Some(cr)) = (view, app.canvas_rect) {
         let box_points = view_box(region, thumb, cr, &v, app.canvas_ui_zoom);
         if box_points.len() > 2 {
@@ -356,12 +366,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             && let Some(p) = resp.interact_pointer_pos()
         {
             let c = thumb_to_doc(region, thumb, p);
-            app.run("view.setZoom", json!({"zoom": v.zoom * 100.0, "center": [c.x, c.y]})).ok();
+            app.run("view.setZoom", json!({"zoom": zoom, "center": [c.x, c.y]})).ok();
         }
     }
     ui.painter().rect_stroke(thumb, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     // Zoom controls.
-    let zoom = view.map(|v| v.zoom * 100.0).unwrap_or(100.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         let mut z = None;
@@ -373,17 +382,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         let sw = (ui.available_width() - 30.0).max(40.0);
         let track = |_: f32| t.input_border;
-        let shown = widgets::SliderValue::field(zoom, 3.13..=64000.0, "%", 2);
-        if let (Some(v), phase) = widgets::color_slider_valued(ui, "nav-slider", tl!("Zoom"), Some(shown), zoom_to_slider(zoom) as f32, sw, &track)
+        let range = zoom_range(print);
+        let shown = widgets::SliderValue::field(zoom, range.0..=range.1, "%", 2);
+        if let (Some(v), phase) =
+            widgets::color_slider_valued(ui, "nav-slider", tl!("Zoom"), Some(shown), zoom_to_slider(zoom, range) as f32, sw, &track)
             && phase != widgets::Live::Idle
         {
-            z = Some(slider_to_zoom(v as f64));
+            z = Some(slider_to_zoom(v as f64, range));
         }
         if widgets::icon_button(ui, "dc-zoom-large", tl!("Zoom In"), false, 22.0).clicked() {
             app.run("view.zoomIn", json!({})).ok();
         }
         if let Some(z) = z {
-            app.run("view.setZoom", json!({"zoom": z.clamp(3.13, 64000.0)})).ok();
+            app.run("view.setZoom", json!({"zoom": z.clamp(range.0, range.1)})).ok();
         }
     });
 }
@@ -402,16 +413,28 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use super::*;
 
-    /// Screen readers get the Zoom slider's percent as the zoom field beside it shows it, on the
-    /// slider's 3.13% to 64000% range.
+    /// Screen readers get the Zoom slider's percent as the zoom field beside it shows it, counted
+    /// from Actual Size as `view.setZoom` counts it, on the zoom range: 3.13% to 64000% with
+    /// Display Print Size at 100% Zoom off, and the same zooms counted from 100% with it on, here
+    /// on a display of 127 points to an inch.
     #[test]
     fn screen_readers_get_the_zoom_the_field_shows() {
         use crate::widgets::accessibility_tests::{slider_value, tree};
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
         app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
         app.run("view.setZoom", json!({"zoom": 250})).unwrap();
         let shown = tree(|ui| show(&mut app, ui));
         assert_eq!(slider_value(&shown, "Zoom"), (Some(250.0), Some(3.13), Some(64000.0), Some("250%".to_string())));
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+        app.set_screen_ppi(Some(127.0));
+        app.run("view.setZoom", json!({"zoom": 250})).unwrap();
+        let (lo, hi) = zoom_range(app.print_ppi());
+        assert!(lo < 3.13 && hi < 64000.0, "a denser display than one point per point reaches less far in: {lo} to {hi}");
+        let shown = tree(|ui| show(&mut app, ui));
+        let (value, min, max, _) = slider_value(&shown, "Zoom");
+        assert!(value.is_some_and(|v| (v - 250.0).abs() < 1e-9), "{value:?}");
+        assert!(min.is_some_and(|m| (m - lo).abs() < 1e-6) && max.is_some_and(|m| (m - hi).abs() < 1e-6), "{min:?} to {max:?}");
     }
 
     #[test]
@@ -503,8 +526,8 @@ mod tests {
             let [points] = &drawn[..] else { panic!("UI Scaling {ui_zoom}×: one view box: {drawn:?}") };
             let region = CACHE.with(|c| c.borrow().region.unwrap().1);
             // Each canvas corner is (its offset from the canvas's center) × UI Scaling / zoom
-            // document points from the view's center.
-            let k = f64::from(ui_zoom) / 4.0;
+            // document points from the view's center, with 400% counted from Actual Size.
+            let k = f64::from(ui_zoom) / (4.0 * crate::state::zoom_baseline(app.print_ppi()));
             let want = [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()].map(|c| {
                 let d = c - canvas.center();
                 doc_to_thumb(region, thumb, Point::new(200.0 + f64::from(d.x) * k, 150.0 + f64::from(d.y) * k))
@@ -729,9 +752,11 @@ mod tests {
 
     #[test]
     fn zoom_slider_roundtrip() {
-        assert!((zoom_to_slider(3.13)).abs() < 1e-9);
-        assert!((zoom_to_slider(64000.0) - 1.0).abs() < 1e-9);
-        assert!((slider_to_zoom(zoom_to_slider(100.0)) - 100.0).abs() < 1e-6);
+        let range = zoom_range(None);
+        assert_eq!(range, (3.13, 64000.0));
+        assert!((zoom_to_slider(3.13, range)).abs() < 1e-9);
+        assert!((zoom_to_slider(64000.0, range) - 1.0).abs() < 1e-9);
+        assert!((slider_to_zoom(zoom_to_slider(100.0, range), range) - 100.0).abs() < 1e-6);
     }
 
     /// The navigator images made on this thread so far.

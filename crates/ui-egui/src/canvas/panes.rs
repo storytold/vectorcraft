@@ -522,6 +522,7 @@ fn fit_pane(v: &mut View, doc: &vectorcraft_doc::Document, rect: egui::Rect, ui_
         v.zoom = fit_zoom(rect, target, v.rotation, ui_zoom);
         v.center = target.center();
         v.fitted = true;
+        v.fit_zoom = Some(v.zoom);
     }
 }
 
@@ -545,8 +546,12 @@ fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> boo
     let Some(st) = app.session.documents().get(w.0) else { return false };
     let doc = st.doc.clone();
     let ui_zoom = ui.ctx().zoom_factor();
-    if let Some(v) = crate::doc_windows::view_mut(app, w).filter(|v| !v.fitted) {
-        fit_pane(v, &doc, rect, ui_zoom);
+    if crate::doc_windows::view(app, w).is_some_and(|v| !v.fitted) {
+        // The fit is made for the display the pane is on (Display Print Size at 100% Zoom).
+        app.settle_window_ppi(w, false);
+        if let Some(v) = crate::doc_windows::view_mut(app, w) {
+            fit_pane(v, &doc, rect, ui_zoom);
+        }
     }
     let v = crate::doc_windows::view(app, w).copied().unwrap_or_default();
     let Some(st) = app.session.documents().get(w.0) else { return false };

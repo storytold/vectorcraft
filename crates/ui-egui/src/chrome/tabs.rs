@@ -31,7 +31,7 @@ fn view_tab_name(d: &vectorcraft_engine::DocState, number: Option<u32>) -> Strin
 fn window_tab_title(app: &VectorcraftApp, w: crate::doc_windows::Win, d: &vectorcraft_engine::DocState) -> String {
     let view = crate::doc_windows::view(app, w);
     let zoom = view.map_or(1.0, |v| v.zoom);
-    view_tab_title(d, crate::doc_windows::label(app, w), zoom, view.is_some_and(|v| v.outline), app.print_ppi())
+    view_tab_title(d, crate::doc_windows::label(app, w), zoom, view.is_some_and(|v| v.outline), app.print_ppi_of(Some(w)))
 }
 
 /// The title of window `w`'s tab and floating window ([`crate::doc_windows`]).

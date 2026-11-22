@@ -36,15 +36,6 @@ pub struct Views {
     shown: HashMap<u64, u32>,
 }
 
-impl Views {
-    /// Multiplies the zoom of every view kept here by `k`, within the zoom range.
-    pub(crate) fn scale_zooms(&mut self, k: f64) {
-        for o in &mut self.others {
-            o.view.zoom = (o.view.zoom * k).clamp(0.0313, 640.0);
-        }
-    }
-}
-
 fn uid(app: &VectorcraftApp, i: usize) -> Option<u64> {
     app.session.documents().get(i).map(|d| d.uid)
 }

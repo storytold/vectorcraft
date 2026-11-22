@@ -1226,3 +1226,71 @@ fn an_os_windows_pane_is_not_a_place_to_release_art_in_the_main_windows_points()
     app_frame(&mut app, &ctx, vec![]);
     assert!(app.canvas.windows.drops.is_empty(), "nor is the main window's pane while an OS window holds the canvas");
 }
+
+/// #9051: an OS window's display is the one at the window's scale factor that covers most of it. A
+/// 1× display to the right of a 2× one on macOS starts, in pixels, inside the 2× display's pixels.
+#[test]
+fn an_os_window_finds_the_display_at_its_own_scale() {
+    use crate::ScreenPpi::Read;
+    use crate::services::{ScreenDensity, screen_ppi_at};
+    let screens = [
+        ScreenDensity { rect: [0, 0, 3024, 1964], scale: 2.0, ppi: Read(Some(127.0)) },
+        ScreenDensity { rect: [1512, 0, 1920, 1080], scale: 1.0, ppi: Read(Some(92.0)) },
+    ];
+    let at = |center: Pos2, native: f32| {
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput::default();
+        let info = input.viewports.entry(egui::ViewportId::ROOT).or_default();
+        info.native_pixels_per_point = Some(native);
+        info.outer_rect = Some(egui::Rect::from_center_size(center, vec2(200.0, 100.0)));
+        let mut found = None;
+        let mut out = ctx.run_ui(input, |ui| found = screen_ppi_at(&screens, ui.ctx()));
+        out.textures_delta.clear();
+        found
+    };
+    assert_eq!(at(pos2(1800.0, 300.0), 1.0), Some(Read(Some(92.0))), "on the 1× display");
+    assert_eq!(at(pos2(700.0, 300.0), 2.0), Some(Read(Some(127.0))), "on the 2× display");
+    assert_eq!(at(pos2(2000.0, 1100.0), 1.0), Some(Read(Some(92.0))), "partly below the 1× display, its center off it");
+    assert_eq!(at(pos2(9000.0, 300.0), 1.0), None, "off every display");
+}
+
+/// #9051: with Display Print Size at 100% Zoom on, a document floating in an OS window of its own
+/// counts 100% from the display that shows that window. A move of its window to a display of
+/// another density keeps its zoom percentage; a move of the main window leaves its zoom alone and
+/// keeps the percentage of the documents under the tabs.
+#[test]
+fn a_floating_window_counts_100_percent_from_its_own_display() {
+    let mut app = app_with(2);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("view.actualSize", json!({})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let pct = |app: &VectorcraftApp, i: usize| crate::state::zoom_display_percent(app.views[i].zoom, app.print_ppi_of(Some((i, 1))));
+    let uid = app.session.documents()[1].uid;
+    set_window_ppi(&mut app, (uid, 1), Some(91.0));
+    app.settle_screen_ppi();
+    assert!((pct(&app, 1) - 100.0).abs() < 1e-9, "the floating document stays at 100%: {}", pct(&app, 1));
+    assert!((app.views[1].zoom * 72.0 - 91.0).abs() < 1e-9, "an inch of the document fills an inch of its display");
+    let (floating, tabbed, tabbed_pct) = (app.views[1].zoom, app.views[0].zoom, pct(&app, 0));
+    assert!(app.set_screen_ppi(Some(150.0)), "the main window moved to a denser display");
+    assert_eq!(app.views[1].zoom, floating, "the floating window did not move");
+    assert!(app.views[0].zoom > tabbed, "the tabbed document zooms with the denser display");
+    assert!((pct(&app, 0) - tabbed_pct).abs() < 1e-9, "and keeps its percentage");
+    // Presentation Mode shows the floating document in the main window, on the main window's
+    // display, and it keeps its 100% there.
+    app.settle_screen_ppi_if_changed();
+    app.ui.screen_mode = 3;
+    app.settle_screen_ppi_if_changed();
+    assert!((app.views[1].zoom * 72.0 - 150.0).abs() < 1e-9, "presented on the main window's display: {}", app.views[1].zoom * 72.0);
+    assert!((pct(&app, 1) - 100.0).abs() < 1e-9);
+    // Back from its own display under the tabs, a fit made there is kept.
+    app.ui.screen_mode = 0;
+    app.settle_screen_ppi_if_changed();
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    app.run("view.fitArtboard", json!({})).unwrap();
+    let fitted = app.views[1].zoom;
+    app.settle_screen_ppi_if_changed();
+    assert_eq!(app.views[1].zoom, fitted, "the fit is made for the main window's display");
+}

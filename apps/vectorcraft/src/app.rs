@@ -208,9 +208,9 @@ impl App {
         }
         if let Some(w) = &self.winit_window {
             self.display_profile.tick(w, now, self.app.session.prefs.monitor_profile_display, &self.app.display_profile, ctx);
-            if let Some(read) = self.screen_density.tick(w, now)
-                && self.app.set_screen_ppi(read)
-            {
+            if let Some(read) = self.screen_density.tick(w, self.app.session.prefs.display_print_size, ctx) {
+                self.app.services.screens = read.screens;
+                self.app.set_screen_reading(read.main);
                 ctx.request_repaint();
             }
         }

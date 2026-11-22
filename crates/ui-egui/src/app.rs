@@ -333,6 +333,9 @@ impl VectorcraftApp {
         let now = now_secs();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        // A document that moved between the main window and a floating OS window, or opened, takes
+        // the density of the display that shows it.
+        self.settle_screen_ppi_if_changed();
         self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A

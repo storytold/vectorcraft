@@ -8286,13 +8286,17 @@ their own Anti-aliasing option),
 `scrubNumericFields` (on: a horizontal drag on a numeric field's label steps the field, one undo step per drag; the
 control channel's `ui.drag` scrubs), `showHomeScreen` (on by default: the Home screen while no document is open;
 off, an empty window, and the Home button or `app.home` still shows the screen), `autoCollapseIconPanels` (off by
-default: on, a click away from a panel popped out of the icon column puts it away), `displayPrintSize` (off by
-default: View › Actual Size / `view.actualSize` is one document point per screen point; on, one document inch fills
-an inch of the display that shows the main window, measured from the physical size macOS, Windows, X11 or the
-Wayland compositor reports for it and measured again when the window moves to another display, where every
-document window keeps its zoom percentage; where the system
-reports no size, as on the web, or a size no display has, an inch is 96 screen points). `uiScaling` scales the
-interface and not the art: a zoom shows the art at the same size at every UI Scaling. The tool shortcut
+default: on, a click away from a panel popped out of the icon column puts it away), `displayPrintSize` (on by
+default, also for saved preferences without the key: View › Actual Size / `view.actualSize` shows one document inch
+in an inch of the display that shows the document's window, measured from the physical size macOS, Windows, X11 or
+the Wayland compositor reports for that display. A document under the tabs counts from the main window's display,
+and a document floating in an OS window of its own counts from that window's display. A window that moves to a
+display of another density keeps its zoom percentage. Where the system reports no size, as on the web, or a size no
+display has, an inch is 96 screen points. A view whose zoom counted from 96 points keeps its zoom when the first
+measurement arrives. Off, 100% is one document point per screen point, and the desktop app does not measure the
+displays. While it is on, `ui.inspect` gives `screenPpi`, the measured density of the main window's display, and
+`printPpi`, the points an inch takes at 100% in the current window; both are null while it is off). `uiScaling`
+scales the interface and not the art: a zoom shows the art at the same size at every UI Scaling. The tool shortcut
 preference `holdToolKeys` also needs the desktop app. It is on by default: a single-key tool shortcut held for 0.25 s
 or more, or held while its tool is used, chooses the tool until the key is let go and then returns to the tool active
 before, after any drag in progress; a quicker press chooses the tool for good. With it off, every press and every key

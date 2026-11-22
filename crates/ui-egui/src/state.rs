@@ -44,11 +44,30 @@ pub struct View {
     /// document opens in Preview.
     #[serde(default)]
     pub outline: bool,
+    /// The density of the display the view was last shown on ([`crate::Services::screen_ppi`]),
+    /// which its zoom percentage counts from with Display Print Size at 100% Zoom; `None` until
+    /// the view was first shown ([`crate::VectorcraftApp::settle_screen_ppi`]).
+    #[serde(skip)]
+    pub(crate) shown_ppi: Option<crate::ScreenPpi>,
+    /// The zoom a fit to the window, or the document's saved view, gave the view. While the view
+    /// still has it, the first reading of its display leaves the zoom alone; a zoom chosen as a
+    /// percentage keeps its percentage then ([`crate::VectorcraftApp::settle_screen_ppi`]).
+    #[serde(skip)]
+    pub(crate) fit_zoom: Option<f64>,
 }
 
 impl Default for View {
     fn default() -> Self {
-        Self { zoom: 1.0, center: Point::new(306.0, 396.0), fitted: false, rotation: 0.0, artboard: 0, outline: false }
+        Self {
+            zoom: 1.0,
+            center: Point::new(306.0, 396.0),
+            fitted: false,
+            rotation: 0.0,
+            artboard: 0,
+            outline: false,
+            shown_ppi: None,
+            fit_zoom: None,
+        }
     }
 }
 
@@ -65,13 +84,16 @@ impl View {
     /// the zoom range; `None` when the canvas can't show it (a zoom or centre that isn't finite, a
     /// zoom of 0 or less).
     pub fn saved(v: &vectorcraft_engine::doc::SavedView) -> Option<Self> {
+        let zoom = v.zoom.clamp(0.0313, 640.0);
         v.is_usable().then(|| Self {
-            zoom: v.zoom.clamp(0.0313, 640.0),
+            zoom,
+            fit_zoom: Some(zoom),
             center: v.center,
             fitted: true,
             rotation: if v.rotation.is_finite() { v.rotation } else { 0.0 },
             artboard: 0,
             outline: false,
+            shown_ppi: None,
         })
     }
 
@@ -146,13 +168,14 @@ pub fn zoom_from_display_percent(pct: f64, print: Option<f64>) -> f64 {
 }
 
 /// The preset zoom stop after zoom `z` (`up`) or before it, counted in the percentages the zoom
-/// field shows with 100% at [`zoom_baseline`]`(print)`, kept in the zoom range.
+/// field shows with 100% at [`zoom_baseline`]`(print)`, kept in the zoom range. Past the last stop
+/// in that direction, the end of the zoom range.
 pub fn next_zoom(z: f64, up: bool, print: Option<f64>) -> f64 {
     let pct = zoom_display_percent(z, print);
     let stop = if up {
-        ZOOM_STOPS.iter().find(|s| **s > pct + 0.01).copied().unwrap_or(64000.0)
+        ZOOM_STOPS.iter().find(|s| **s > pct + 0.01).copied().unwrap_or_else(|| zoom_display_percent(640.0, print))
     } else {
-        ZOOM_STOPS.iter().rev().find(|s| **s < pct - 0.01).copied().unwrap_or(3.13)
+        ZOOM_STOPS.iter().rev().find(|s| **s < pct - 0.01).copied().unwrap_or_else(|| zoom_display_percent(0.0313, print))
     };
     zoom_from_display_percent(stop, print).clamp(0.0313, 640.0)
 }
@@ -1629,8 +1652,11 @@ mod tests {
         }
         assert_eq!(zoom_label(zoom_from_display_percent(100.0, dense), dense), "100%");
         let thin = print_ppi(true, Some(40.0));
-        assert!(next_zoom(0.04, false, thin) >= 0.0313, "the last stop down stays in the zoom range");
+        assert!(next_zoom(0.0313, false, thin) >= 0.0313, "the last stop down stays in the zoom range");
         assert!(next_zoom(600.0, true, print_ppi(true, Some(900.0))) <= 640.0, "and the last stop up");
+        let reference = print_ppi(true, None);
+        assert!(next_zoom(0.0313, false, reference) <= 0.0313, "past the last stop, zooming out does not zoom in");
+        assert!(next_zoom(640.0, true, thin) >= 640.0, "nor zooming in out");
     }
 
     #[test]
