@@ -5,15 +5,13 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const REV: &str = "8f6ad14b58ca2efee67aac5d0f5573bad6a5ca81";
-const STREAM_REV: &str = "8f6ad14b58ca2efee67aac5d0f5573bad6a5ca81";
+const REV: &str = "205042e406b630cda653990649264a78fea6296b";
 const PACKAGES: &[(&str, &str, &str)] = &[
     ("craft-pdf", "0.1.0", REV),
     ("krilla", "0.8.2", REV),
     ("hayro-syntax", "0.7.2", REV),
     ("hayro-interpret", "0.7.0", REV),
-    // Share the vendored JBIG2 package pulled in by craft-stream-codecs.
-    ("hayro-jbig2", "0.3.0", STREAM_REV),
+    ("hayro-jbig2", "0.3.0", REV),
     ("hayro-cmap", "0.1.0", REV),
     ("hayro-postscript", "0.1.0", REV),
 ];
