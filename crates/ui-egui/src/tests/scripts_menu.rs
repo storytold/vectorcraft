@@ -263,13 +263,20 @@ fn the_read_after_a_script_that_left_the_folder_asks_for_a_frame() {
     read(&app);
     std::fs::remove_file(&gone).unwrap();
     let (tx, frames) = std::sync::mpsc::channel();
-    ctx().set_request_repaint_callback(move |_| {
-        let _ = tx.send(());
+    let test = std::thread::current().id();
+    // The observer sees every request; the repaint callback drops one no sooner than the first read's, still pending.
+    ctx().set_repaint_observer(move |_| {
+        // The read's lane asks from a thread of its own.
+        if std::thread::current().id() != test {
+            let _ = tx.send(());
+        }
     });
     assert!(menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": gone })).unwrap().is_err());
     // With the app's copy of the context dropped, only the queue's wake can still ask for a frame.
     app.ui_ctx = None;
-    assert_eq!(frames.recv_timeout(Duration::from_secs(10)), Ok(()), "the finished read asks for a frame so an idle window takes it in");
+    let asked = frames.recv_timeout(Duration::from_secs(10));
+    ctx().set_repaint_observer(|_| {});
+    assert_eq!(asked, Ok(()), "the finished read asks for a frame so an idle window takes it in");
     scripts_menu::finish();
     let _ = std::fs::remove_dir_all(dir);
 }
