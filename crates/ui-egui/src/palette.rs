@@ -434,6 +434,19 @@ fn kind_of(id: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// The order of a result's kind when everything else ties: a tool, a command of the menu bar (`in_menu`), a panel, an
+/// effect, a filter plug-in, then a command with no item in the menu bar.
+fn tie_order(id: &str, in_menu: bool) -> u8 {
+    match id.split_once(':').map(|(kind, _)| kind) {
+        Some("tool") => 0,
+        Some("panel") => 2,
+        Some("effect") => 3,
+        Some("plugin") => 4,
+        _ if in_menu => 1,
+        _ => 5,
+    }
+}
+
 /// Where result `d` lives, as its row shows it: a tool's place on the toolbars ([`tool_home`]),
 /// the menu path of the item of the menu bar that runs it (`home`, with the item's label when it
 /// differs from the result's), or "No menu item".
@@ -540,7 +553,8 @@ fn entries(app: &VectorcraftApp, lang: Lang) -> Vec<HelpEntry> {
                 .with_path(segments)
                 .with_home(home_text(app, d, home))
                 .with_icon(IconSpec::svg(IconId::new(kind_of(&d.id).0)))
-                .with_ids(std::iter::once(d.id.clone()).chain(wrapped));
+                .with_ids(std::iter::once(d.id.clone()).chain(wrapped))
+                .with_tie_order(tie_order(&d.id, home.is_some()));
             let description = description(params);
             if description.is_empty() { entry } else { entry.with_words(description) }
         })
