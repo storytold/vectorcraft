@@ -292,6 +292,91 @@ fn tandem_keeps_ratios() {
     assert!(Mode::Rgb.tandem() && Mode::Cmyk.tandem() && !Mode::Hsb.tandem() && !Mode::Grayscale.tandem());
 }
 
+/// The painted bar of the Color panel's Cyan slider, found by its row's "C" label.
+fn cyan_bar(app: &mut VectorcraftApp, ctx: &egui::Context) -> Rect {
+    fn collect(s: &egui::Shape, texts: &mut Vec<(String, Rect)>, bars: &mut Vec<Rect>) {
+        match s {
+            egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Rect(r) => bars.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, texts, bars)),
+            _ => {}
+        }
+    }
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+    out.textures_delta.clear();
+    let (mut texts, mut bars) = (vec![], vec![]);
+    for c in &out.shapes {
+        collect(&c.shape, &mut texts, &mut bars);
+    }
+    let c = texts.iter().find(|(text, _)| text == "C").expect("the Cyan label").1;
+    bars.iter()
+        .filter(|r| (r.height() - 7.0).abs() < 0.01 && r.width() > 40.0 && (r.center().y - c.center().y).abs() < 8.0)
+        .max_by(|a, b| a.width().total_cmp(&b.width()))
+        .copied()
+        .expect("the Cyan slider's bar")
+}
+
+/// Cmd/Ctrl-dragging a color slider moves the other components in proportion, as Shift does: the
+/// issue's C100 M50 Y0 K25 dragged to C50 becomes M25, K12.5 and keeps Y0.
+#[test]
+fn ctrl_or_shift_drag_moves_the_other_color_sliders_in_tandem() {
+    for mods in [egui::Modifiers::COMMAND, egui::Modifiers::SHIFT] {
+        let mut app = app();
+        app.ui.color_mode = Some(Mode::Cmyk);
+        let ctx = egui::Context::default();
+        app.run("paint.setFill", json!({"color": {"c": 1.0, "m": 0.5, "y": 0.0, "k": 0.25}})).unwrap();
+        let bar = cyan_bar(&mut app, &ctx);
+        let from = egui::pos2(bar.right() - 1.0, bar.center().y);
+        let to = egui::pos2(bar.left() + bar.width() * 0.5, bar.center().y);
+        let button = |pressed, pos| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: mods };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)], mods);
+        frame(&mut app, &ctx, vec![button(true, from)], mods);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)], mods);
+        frame(&mut app, &ctx, vec![button(false, to)], mods);
+        frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+        match crate::panels::current_paints(&app).0.color().expect("a solid fill") {
+            Color::Cmyk { c, m, y, k } => {
+                assert!((c - 0.5).abs() < 0.01, "{mods:?}: C {c}");
+                assert!((m - 0.25).abs() < 0.01, "{mods:?}: M {m}");
+                assert!(y.abs() < 0.001, "{mods:?}: Y {y}");
+                assert!((k - 0.125).abs() < 0.01, "{mods:?}: K {k}");
+            }
+            _ => panic!("the fill stays a CMYK color"),
+        }
+    }
+}
+/// Proof against the §9166 report: while the modifier stays down, dragging the component to 0 and
+/// back to its start restores the whole colour, because the tandem scales the colour the drag
+/// started on.
+#[test]
+fn ctrl_or_shift_drag_returns_to_the_color_it_started_from() {
+    for mods in [egui::Modifiers::COMMAND, egui::Modifiers::SHIFT] {
+        let mut app = app();
+        app.ui.color_mode = Some(Mode::Cmyk);
+        let ctx = egui::Context::default();
+        app.run("paint.setFill", json!({"color": {"c": 1.0, "m": 0.5, "y": 0.0, "k": 0.25}})).unwrap();
+        let bar = cyan_bar(&mut app, &ctx);
+        let right = egui::pos2(bar.right() - 1.0, bar.center().y);
+        let left = egui::pos2(bar.left() + 1.0, bar.center().y);
+        let button = |pressed, pos| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: mods };
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(right)], mods);
+        frame(&mut app, &ctx, vec![button(true, right)], mods);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(left)], mods);
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(right)], mods);
+        frame(&mut app, &ctx, vec![button(false, right)], mods);
+        frame(&mut app, &ctx, vec![], egui::Modifiers::NONE);
+        match crate::panels::current_paints(&app).0.color().expect("a solid fill") {
+            Color::Cmyk { c, m, y, k } => {
+                assert!((c - 1.0).abs() < 0.001, "{mods:?}: C returns to 100: {c}");
+                assert!((m - 0.5).abs() < 0.001, "{mods:?}: M returns to 50: {m}");
+                assert!(y.abs() < 0.001, "{mods:?}: Y stays 0: {y}");
+                assert!((k - 0.25).abs() < 0.001, "{mods:?}: K returns to 25: {k}");
+            }
+            _ => panic!("the fill stays a CMYK color"),
+        }
+    }
+}
+
 #[test]
 fn the_mode_follows_the_colours_model() {
     let cmyk = Color::cmyk(0.1, 0.2, 0.3, 0.4);
