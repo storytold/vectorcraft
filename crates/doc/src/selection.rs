@@ -20,8 +20,9 @@ pub struct Selection {
     /// `objects` with no entry here is fully selected; `segments` distinguishes segment picks.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub anchors: BTreeMap<NodeId, BTreeSet<AnchorRef>>,
-    /// Explicitly selected segments. Their endpoints in `anchors` move with them, but are not
-    /// selected anchor points: Delete cuts connections and their anchor squares stay hollow.
+    /// Explicitly selected segments. Their endpoints in `anchors` move with them (the arrow keys
+    /// bend a curved one instead), but are not selected anchor points: Delete cuts connections and
+    /// their anchor squares stay hollow.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub segments: BTreeMap<NodeId, BTreeSet<SegmentRef>>,
     /// Key object for Align, one object of a selection of two or more. [`Selection::prune`] clears
