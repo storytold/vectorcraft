@@ -10,7 +10,8 @@
 //! spectrum or a chip paints the inactive proxy; Shift-clicking the spectrum cycles the modes;
 //! Cmd/Ctrl-clicking it applies Complement and Cmd/Ctrl+Shift-clicking it applies Invert, both to
 //! the inactive proxy when Alt is also held;
-//! Shift-dragging a slider moves the others in tandem; RGB and HSB show the out-of-gamut warning;
+//! Shift- or Cmd/Ctrl-dragging a slider moves the others in tandem; RGB and HSB show the
+//! out-of-gamut warning;
 //! Hide Options leaves just the proxy and the spectrum (the app keeps it between sessions too).
 //! Unchecking Show Recent Colors hides the Recent Colors row while applied colors still join the
 //! list (the app keeps it between sessions too).
@@ -382,8 +383,9 @@ pub fn convert_to(mode: Mode, c: &Color) -> Color {
     }
 }
 
-/// Shift-drag of slider `i` to `v`: the other sliders move with it keeping their ratios, stopping
-/// where one reaches its maximum. With slider `i` at 0 the others move by the same amount.
+/// Shift- or Cmd/Ctrl-drag of slider `i` to `v`: the other sliders move with it keeping their
+/// ratios, stopping where one reaches its maximum. With slider `i` at 0 the others move by the same
+/// amount.
 pub fn tandem(mode: Mode, comps: &[f32], i: usize, v: f32) -> Vec<f32> {
     let old = comps.get(i).copied().unwrap_or(0.0);
     if old <= 0.0 {
@@ -757,9 +759,9 @@ pub(crate) fn show_sized(app: &mut VectorcraftApp, ui: &mut Ui, height: f32) {
                 });
             }
         });
-        // Sliders (Shift-drag moves them in tandem).
+        // Sliders (Shift- or Cmd/Ctrl-drag moves them in tandem).
         ui.vertical(|ui| {
-            let shift = ui.input(|i| i.modifiers.shift);
+            let tandem_drag = ui.input(|i| i.modifiers.shift || i.modifiers.command);
             let field_w = 48.0;
             let slider_w = (ui.available_width() - field_w - 24.0).max(60.0);
             if let Some(tint) = tgt.tint() {
@@ -789,13 +791,25 @@ pub(crate) fn show_sized(app: &mut VectorcraftApp, ui: &mut Ui, height: f32) {
                     {
                         // In percent the slider picks whole percents.
                         let nv = if percent { from_percent((nv * 100.0).round()) } else { mode.value_at(i, nv) };
-                        let c2 = if shift && mode.tandem() {
-                            tandem(mode, &comps, i, nv)
+                        // A tandem drag measures from the colour it started on, not from the frame
+                        // before: dragging the component back to where it started restores every
+                        // other component, as Illustrator does until the modifier is let go.
+                        let base_key = ui.scope_id().with(("color-tandem-base", i));
+                        let c2 = if tandem_drag && mode.tandem() {
+                            let base = ui.ctx().data(|d| d.get_temp::<Vec<f32>>(base_key)).unwrap_or_else(|| {
+                                ui.ctx().data_mut(|d| d.insert_temp(base_key, comps.clone()));
+                                comps.clone()
+                            });
+                            tandem(mode, &base, i, nv)
                         } else {
+                            ui.ctx().data_mut(|d| d.remove_temp::<Vec<f32>>(base_key));
                             let mut c2 = comps.clone();
                             c2[i] = nv;
                             c2
                         };
+                        if phase == Live::Released {
+                            ui.ctx().data_mut(|d| d.remove_temp::<Vec<f32>>(base_key));
+                        }
                         new = Some((from_components(mode, &c2), phase, c2));
                     }
                     if let Some(fv) = widgets::plain_field_named(ui, ("color-field", i), Some(lbl), field_v as f64, suffix, 0, field_w)
