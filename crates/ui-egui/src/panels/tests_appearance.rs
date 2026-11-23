@@ -10,6 +10,7 @@ use vectorcraft_engine::Session;
 use super::*;
 use crate::tests::panel_harness::Panel;
 use crate::tests::synthetic::key_frame;
+use craft::ui::contract::Role;
 
 pub(super) fn app_with_rect() -> VectorcraftApp {
     let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
@@ -171,7 +172,7 @@ fn stroke_panel_shows_the_active_rows_weight() {
     let mut app = app_with_rect();
     run(&mut app, "appearance.addStroke", json!({})); // [Fill, Stroke 1 pt, Stroke 1 pt]
     run(&mut app, "stroke.set", json!({"item": 1, "weight": 6}));
-    let six = Unit::Points.number(6.0);
+    let six = Unit::Points.format(6.0);
     let mut panel = Panel::new(app, stroke::show);
     // PLAN: assumed the weight field's accessible name
     let weight = |panel: &mut Panel| {
@@ -353,17 +354,38 @@ fn stack_items(app: &VectorcraftApp) -> Vec<(bool, Option<f32>)> {
 const DELETE: &str = "Delete Selected Item";
 const DUPLICATE: &str = "Duplicate Selected Item";
 
+/// A point of the row named by the link `name`, past the link's text: a press on the link follows it, so
+/// production's tests pressed rows there.
+pub(super) fn row_spot(panel: &mut Panel, name: &str) -> egui::Pos2 {
+    panel.frame();
+    let link = panel.rect_role(name, Role::LINK);
+    egui::pos2(link.right() + 8.0, link.center().y)
+}
+
+/// Clicks the row named by the link `name` past its text, with `mods` held.
+pub(super) fn click_row(panel: &mut Panel, name: &str, mods: egui::Modifiers) {
+    let at = row_spot(panel, name);
+    panel.click_at_with(at, mods);
+}
+
+/// Drags the row named by the link `from`, pressed past its text, onto the control named `to`.
+pub(super) fn drag_row(panel: &mut Panel, from: &str, to: &str, mods: egui::Modifiers) {
+    let from = row_spot(panel, from);
+    let to = panel.rect(to).center();
+    panel.drag_between(from, to, mods);
+}
+
 /// "drop on footer button": fill and stroke rows dropped on Delete Selected Item are removed, on
 /// Duplicate Selected Item copied, as rows dropped on the Layers panel's buttons are.
 #[test]
 fn rows_dropped_on_delete_are_removed_and_on_duplicate_copied() {
     // [Fill, Stroke]: dropping the stroke on Delete leaves the fill.
     let mut panel = appearance_panel(app_with_rect(), &[]);
-    panel.drag("Stroke:", DELETE, egui::Modifiers::NONE);
+    drag_row(&mut panel, "Stroke:", DELETE, egui::Modifiers::NONE);
     assert_eq!(stack_items(&panel.app()), [(true, None)]);
     // Dropping the fill on Duplicate adds one copy of it.
     let mut panel = appearance_panel(app_with_rect(), &[]);
-    panel.drag("Fill:", DUPLICATE, egui::Modifiers::NONE);
+    drag_row(&mut panel, "Fill:", DUPLICATE, egui::Modifiers::NONE);
     let items = stack_items(&panel.app());
     assert_eq!(items.iter().filter(|(f, _)| *f).count(), 2, "{items:?}");
     assert_eq!(items.len(), 3, "{items:?}");
@@ -378,23 +400,23 @@ fn dropping_a_selected_row_acts_on_the_selection() {
         let mut app = app_with_rect();
         run(&mut app, "effect.apply", json!({"effect": "distort.twist", "item": null}));
         let mut panel = appearance_panel(app, &[]);
-        panel.click_with("Stroke:", egui::Modifiers::NONE);
-        panel.click_with("Fill:", egui::Modifiers::COMMAND);
+        click_row(&mut panel, "Stroke:", egui::Modifiers::NONE);
+        click_row(&mut panel, "Fill:", egui::Modifiers::COMMAND);
         panel
     };
     // The stroke is in the selection: the fill and the stroke go, Twist stays.
     let mut panel = setup();
-    panel.drag("Stroke:", DELETE, egui::Modifiers::NONE);
+    drag_row(&mut panel, "Stroke:", DELETE, egui::Modifiers::NONE);
     assert!(stack_items(&panel.app()).is_empty());
     assert_eq!(object_effects(&panel.app()), ["distort.twist"]);
     // Twist is not: only it goes.
     let mut panel = setup();
-    panel.drag("Twist", DELETE, egui::Modifiers::NONE);
+    drag_row(&mut panel, "Twist", DELETE, egui::Modifiers::NONE);
     assert_eq!(stack_items(&panel.app()).len(), 2);
     assert!(object_effects(&panel.app()).is_empty());
     // Onto Duplicate, the selected rows are both copied.
     let mut panel = setup();
-    panel.drag("Stroke:", DUPLICATE, egui::Modifiers::NONE);
+    drag_row(&mut panel, "Stroke:", DUPLICATE, egui::Modifiers::NONE);
     assert_eq!(stack_items(&panel.app()).len(), 4);
 }
 
@@ -429,9 +451,9 @@ fn contents_rows_and_drops_elsewhere_change_nothing() {
         panel.drag("Contents", button, egui::Modifiers::NONE);
         assert_eq!(first_selected(&panel.app()).unwrap().appearance, before, "{button}");
     }
-    panel.drag("Fill:", "Contents", egui::Modifiers::NONE);
+    drag_row(&mut panel, "Fill:", "Contents", egui::Modifiers::NONE);
     assert_eq!(first_selected(&panel.app()).unwrap().appearance, before);
-    panel.drag("Fill:", DELETE, egui::Modifiers::NONE);
+    drag_row(&mut panel, "Fill:", DELETE, egui::Modifiers::NONE);
     assert!(first_selected(&panel.app()).unwrap().appearance.items.is_empty());
 }
 
@@ -470,8 +492,8 @@ fn ctrl_clicking_an_effect_of_another_list_starts_a_new_selection() {
     let mut app = rect_with_three_effects();
     run(&mut app, "effect.apply", json!({"effect": "distort.roughen", "item": 1}));
     let mut panel = appearance_panel(app, &[appearance::RowKey::Item(1)]);
-    panel.click_with("Outer Glow", egui::Modifiers::NONE);
-    panel.click_with("Roughen", egui::Modifiers::COMMAND);
+    click_row(&mut panel, "Outer Glow", egui::Modifiers::NONE);
+    click_row(&mut panel, "Roughen", egui::Modifiers::COMMAND);
     panel.click(DELETE);
     assert!(current_stroke_effects(&panel.app()).is_empty());
     assert_eq!(object_effects(&panel.app()).len(), 3);
@@ -482,9 +504,9 @@ fn ctrl_clicking_an_effect_of_another_list_starts_a_new_selection() {
 #[test]
 fn alt_dragging_highlighted_effects_copies_them_together() {
     let mut panel = appearance_panel(rect_with_three_effects(), &[]);
-    panel.click_with("Outer Glow", egui::Modifiers::NONE);
-    panel.click_with("Twist", egui::Modifiers::COMMAND);
-    panel.drag("Outer Glow", "Stroke:", egui::Modifiers::ALT);
+    click_row(&mut panel, "Outer Glow", egui::Modifiers::NONE);
+    click_row(&mut panel, "Twist", egui::Modifiers::COMMAND);
+    drag_row(&mut panel, "Outer Glow", "Stroke:", egui::Modifiers::ALT);
     let ids: Vec<_> = current_stroke_effects(&panel.app()).iter().map(|e| e.id.clone()).collect();
     assert_eq!(ids, ["stylize.outerGlow", "distort.twist"]);
     assert_eq!(object_effects(&panel.app()).len(), 3, "the originals stay");
@@ -496,7 +518,7 @@ fn alt_dragging_highlighted_effects_copies_them_together() {
 fn an_effects_name_edits_it_and_its_empty_space_highlights_it() {
     for m in [egui::Modifiers::NONE, egui::Modifiers::COMMAND, egui::Modifiers::SHIFT] {
         let mut panel = appearance_panel(rect_with_three_effects(), &[]);
-        panel.click_with("Outer Glow", m);
+        panel.click_role_with("Outer Glow", Role::LINK, m);
         assert!(dialog_open(&panel.app()), "{m:?}: a click on the name opens the dialog");
     }
     // PLAN: the row's empty space has no name, so the single Ctrl-click and the double-click there need a point driver on op.A15
@@ -517,7 +539,7 @@ fn transform_effect_name_edits_the_displayed_appearance_target() {
         let target = app.session.doc().unwrap().selection.subjects()[0];
         app.run("effect.apply", json!({"effect": "distort.transform", "item": null, "params": {"moveH": 12}})).unwrap();
         let mut panel = Panel::new(app, appearance::show);
-        panel.click("Transform");
+        panel.click_role("Transform", Role::LINK);
         let mut app = panel.app();
         assert!(dialog_open(&app), "Transform did not open for {target_kind}");
         assert_eq!(dialog_number(&mut app, "moveH"), 12.0);
@@ -781,7 +803,7 @@ fn transform_effect_preview_commit_cancel_and_undo_cover_artwork_targets() {
             if let Some(i) = item {
                 panel.click(if i == 0 { "Expand Fill" } else { "Expand Stroke" });
             }
-            panel.click("Transform");
+            panel.click_role("Transform", Role::LINK);
             let mut app = panel.app();
             assert!(dialog_open(&app), "{kind}: dialog did not open");
             set_dialog(&mut app, "moveH", json!(40));
@@ -907,7 +929,7 @@ fn an_opacity_row_cannot_be_deleted_duplicated_or_dragged() {
     let mut panel = appearance_panel(app, &[appearance::RowKey::Item(1)]);
     panel.frame();
     assert!(!panel.enabled(DUPLICATE), "Duplicate is greyed out");
-    panel.drag("Opacity:", "Fill:", egui::Modifiers::NONE);
+    drag_row(&mut panel, "Opacity:", "Fill:", egui::Modifiers::NONE);
     assert_eq!(stack_items(&panel.app()), before, "dragged: nothing moves");
     panel.key(egui::Key::Delete, egui::Modifiers::NONE);
     assert!(first_selected(&panel.app()).is_some(), "the object stays");
@@ -1003,9 +1025,9 @@ fn the_stroke_weight_field_edits_with_or_without_a_selection() {
 fn a_drop_on_delete_that_removes_the_active_effect_leaves_no_effect_active() {
     let mut panel = appearance_panel(rect_with_three_effects(), &[]);
     // Drop Shadow, then Outer Glow with Ctrl: both highlighted, Outer Glow active.
-    panel.click_with("Drop Shadow", egui::Modifiers::NONE);
-    panel.click_with("Outer Glow", egui::Modifiers::COMMAND);
-    panel.drag("Drop Shadow", DELETE, egui::Modifiers::NONE);
+    click_row(&mut panel, "Drop Shadow", egui::Modifiers::NONE);
+    click_row(&mut panel, "Outer Glow", egui::Modifiers::COMMAND);
+    drag_row(&mut panel, "Drop Shadow", DELETE, egui::Modifiers::NONE);
     assert_eq!(object_effects(&panel.app()), ["distort.twist"]);
     panel.click(DELETE);
     assert_eq!(object_effects(&panel.app()), ["distort.twist"], "Twist was never highlighted");
@@ -1018,9 +1040,9 @@ fn a_drop_on_delete_that_removes_the_active_effect_leaves_no_effect_active() {
 fn a_drop_on_delete_above_the_active_effect_keeps_the_highlight_on_its_rows() {
     let mut panel = appearance_panel(rect_with_three_effects(), &[]);
     // Drop Shadow, then Twist with Ctrl: both highlighted, Twist active.
-    panel.click_with("Drop Shadow", egui::Modifiers::NONE);
-    panel.click_with("Twist", egui::Modifiers::COMMAND);
-    panel.drag("Outer Glow", DELETE, egui::Modifiers::NONE);
+    click_row(&mut panel, "Drop Shadow", egui::Modifiers::NONE);
+    click_row(&mut panel, "Twist", egui::Modifiers::COMMAND);
+    drag_row(&mut panel, "Outer Glow", DELETE, egui::Modifiers::NONE);
     assert_eq!(object_effects(&panel.app()), ["stylize.dropShadow", "distort.twist"]);
     panel.click(DELETE);
     assert!(object_effects(&panel.app()).is_empty(), "both highlighted effects removed: {:?}", object_effects(&panel.app()));
@@ -1164,8 +1186,8 @@ fn reduce_to_basic_enabled_when_any_selected_subject_needs_reduction() {
 #[test]
 fn right_clicking_multi_selected_items_shows_plural_duplicate_and_delete() {
     let mut panel = appearance_panel(app_with_rect(), &[]);
-    panel.click_with("Stroke:", egui::Modifiers::NONE);
-    panel.click_with("Fill:", egui::Modifiers::COMMAND);
+    click_row(&mut panel, "Stroke:", egui::Modifiers::NONE);
+    click_row(&mut panel, "Fill:", egui::Modifiers::COMMAND);
     panel.secondary_click("Stroke:");
     assert!(panel.shows("Duplicate Items") && panel.shows("Delete Items"));
     panel.click("Duplicate Items");

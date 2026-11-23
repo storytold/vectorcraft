@@ -24,11 +24,6 @@ fn with_dialog<R>(app: &VectorcraftApp, f: impl FnOnce(&mut HostedParamDialog, &
     app.dialogs()?.with(|host| host.get_mut::<HostedParamDialog>().map(|d| f(d, &ctx)))
 }
 
-/// The open hosted dialog's field `name`, as the dialog shows it.
-pub(crate) fn dialog_field(app: &mut VectorcraftApp, name: &str) -> Option<Value> {
-    with_dialog(app, |d, _| d.json_fields()?.get(name).cloned()).flatten()
-}
-
 /// Sets the open hosted dialog's field `name`, as typing in it does.
 pub(crate) fn set_dialog_field(app: &mut VectorcraftApp, name: &str, value: Value) {
     let set = with_dialog(app, |d, ctx| d.set_json_field(ctx, name, value));
@@ -64,11 +59,12 @@ fn side_mm() -> String {
 }
 
 /// Whether a length field's `value` reads `pt` points in `unit`, to the decimals it shows: a length field's value is
-/// its number, with the unit painted after it.
+/// its number and the unit's suffix painted after it, as [`Unit::format`] writes them.
 pub(crate) fn reads(value: Option<String>, unit: Unit, pt: f64) -> bool {
     value.is_some_and(|v| {
-        let decimals = v.split_once('.').map_or(0, |(_, d)| d.len());
-        v.parse::<f64>().is_ok_and(|shown| (shown - unit.from_pt(pt)).abs() <= 0.5 * 10f64.powi(-(decimals as i32)) + 1e-9)
+        let Some(number) = v.strip_suffix(unit.suffix()).map(str::trim_end) else { return false };
+        let decimals = number.split_once('.').map_or(0, |(_, d)| d.len());
+        number.parse::<f64>().is_ok_and(|shown| (shown - unit.from_pt(pt)).abs() <= 0.5 * 10f64.powi(-(decimals as i32)) + 1e-9)
     })
 }
 
@@ -98,22 +94,39 @@ fn panels_show_millimetres_after_the_preference_changes() {
 fn dialog_lengths_show_in_the_general_unit() {
     let mut app = app_with_rect();
     general_mm(&mut app);
-    run_menu(&mut app, "object.move");
-    assert_eq!(dialog_field(&mut app, "dx"), Some(json!(Unit::Millimeters.format(0.0))), "Move");
+    // The dialog keeps its lengths in points; its fields draw them in the unit, so the window draws it.
+    let mut window = Panel::new(app, |app, ui| app.ui(ui));
+    window.room(egui::vec2(1440.0, 900.0));
+    run_menu(&mut window.app(), "object.move");
+    window.frame();
+    assert!(reads(window.value("Horizontal"), Unit::Millimeters, 0.0), "Move: {:?}", window.value("Horizontal"));
     // A typed unit wins; the move is in points.
-    set_dialog_field(&mut app, "dx", json!("10 mm"));
-    confirm_dialog(&mut app);
-    let st = app.session.active().unwrap();
-    let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
-    assert!((b.x0 - (10.0 + 10.0 * 72.0 / 25.4)).abs() < 1e-6, "{b:?}");
-    // A shape tool's size dialog and an effect's distances.
-    crate::dialogs::open_tool_dialog(&mut app, "rectangle", json!({"x": 0, "y": 0}));
-    assert_eq!(dialog_field(&mut app, "width"), Some(json!(side_mm())), "Rectangle");
-    cancel_dialog(&mut app);
-    app.run("effect.dialog", json!({"effect": "stylize.dropShadow"})).unwrap();
+    window.focus("Horizontal");
+    window.key(egui::Key::A, egui::Modifiers::COMMAND);
+    window.type_text("10 mm");
+    window.key(egui::Key::Tab, egui::Modifiers::NONE);
+    confirm_dialog(&mut window.app());
+    let square = {
+        let app = window.app();
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
+        assert!((b.x0 - (10.0 + 10.0 * 72.0 / 25.4)).abs() < 1e-6, "{b:?}");
+        st.selection.objects[0].0
+    };
+    // A shape tool's size dialog and an effect's distances, drawn in the window. The Control bar and the panels name
+    // their fields as the dialogs do, so the dialog shows its length where nothing selected shows the same one.
+    run(&mut window.app(), "select.set", json!({"ids": []}));
+    crate::dialogs::open_tool_dialog(&mut window.app(), "rectangle", json!({"x": 0, "y": 0}));
+    window.frame();
+    let shows_mm = |window: &Panel, pt: f64| window.shows_value_with(|v| reads(Some(v.to_owned()), Unit::Millimeters, pt));
+    assert!(shows_mm(&window, 100.0), "Rectangle");
+    cancel_dialog(&mut window.app());
+    run(&mut window.app(), "select.set", json!({"ids": [square]}));
+    window.app().run("effect.dialog", json!({"effect": "stylize.dropShadow"})).unwrap();
+    window.frame();
     let x = vectorcraft_effects::default_params("stylize.dropShadow").unwrap()["x"].as_f64().unwrap();
-    assert_eq!(dialog_field(&mut app, "x"), Some(json!(Unit::Millimeters.format(x))), "Drop Shadow");
-    cancel_dialog(&mut app);
+    assert!(shows_mm(&window, x), "Drop Shadow");
+    cancel_dialog(&mut window.app());
 }
 
 #[test]

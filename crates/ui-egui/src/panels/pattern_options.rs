@@ -109,16 +109,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         _ => None,
     };
     let sized = def.size_tile_to_art;
+    let canvas = crate::doc_windows::current(app).map(crate::canvas::canvas_id);
     FieldGroup::new(tl!("Pattern Options")).show(ui, |ui, _| {
         // Name commits on Enter or focus loss; Shift+Enter commits too and keeps the focus, so the
-        // renamed pattern's name stays selected for the next edit.
+        // renamed pattern's name stays selected for the next edit. Enter ends the editing: the keys go
+        // to the document canvas, as with nothing focused.
         row(ui, tl!("Name:"), |ui, label| {
             let edit = TextField::new(label.to_owned(), Bind::given(def.name.clone())).submits().select_on_focus().show(ui);
             if let Some(new) = edit.events.committed().map(|s| s.trim()).filter(|s| !s.is_empty() && *s != def.name) {
                 edits.push(json!({ "newName": new }));
             }
-            if edit.submitted && edit.submit_mods.shift {
-                focus::request(ui.ctx(), FocusTarget::Id(edit.response.id));
+            let next = if edit.submit_mods.shift { Some(edit.response.id) } else { canvas };
+            if let Some(id) = next.filter(|_| edit.submitted) {
+                focus::request(ui.ctx(), FocusTarget::Id(id));
             }
         });
         let tile = TileType::IDS.iter().position(|i| *i == def.tile_type.id()).unwrap_or(0);

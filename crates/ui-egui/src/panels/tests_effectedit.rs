@@ -6,7 +6,8 @@ use craft::ui::dialog::PromptChoice;
 use serde_json::{Value, json};
 
 use super::tests_appearance::{
-    answer_prompt, app_frame, app_with_rect, cancel_dialog, confirm_dialog, dialog_json, dialog_number, dialog_open, run, set_dialog,
+    answer_prompt, app_frame, app_with_rect, cancel_dialog, click_row, confirm_dialog, dialog_json, dialog_number, dialog_open, drag_row, row_spot,
+    run, set_dialog,
 };
 use super::*;
 use crate::tests::panel_harness::Panel;
@@ -20,7 +21,7 @@ fn an_effect_name_opens_its_dialog_prefilled_and_ok_edits_it_in_place() {
     let mut app = app_with_rect();
     run(&mut app, "effect.apply", json!({"effect": "distort.roughen", "params": {"size": 9}}));
     let mut panel = Panel::new(app, appearance::show);
-    panel.click("Roughen");
+    panel.click_role("Roughen", craft::ui::contract::Role::LINK);
     let mut app = panel.app();
     assert!(dialog_open(&app), "the effect's dialog");
     assert_eq!(dialog_number(&mut app, "size"), 9.0);
@@ -132,10 +133,11 @@ fn effect_rows_drag_to_reorder_and_into_an_item() {
     run(&mut app, "effect.apply", json!({"effect": "distort.roughen"}));
     let mut panel = Panel::new(app, appearance::show);
     let ids = |fx: Vec<vectorcraft_doc::Effect>| fx.into_iter().map(|e| e.id).collect::<Vec<_>>();
-    // PLAN: assumes a drop on a lower row lands below it (`reorder_command`, appearance-w6)
-    panel.drag("Twist", "Roughen", egui::Modifiers::NONE);
+    // Twist below Roughen: dropped on the lower half of its row.
+    let (twist, below) = (row_spot(&mut panel, "Twist"), row_spot(&mut panel, "Roughen") + egui::vec2(0.0, 6.0));
+    panel.drag_between(twist, below, egui::Modifiers::NONE);
     assert_eq!(ids(effects(&panel.app(), None)), ["distort.roughen", "distort.twist"]);
-    panel.drag("Twist", "Stroke:", egui::Modifiers::ALT);
+    drag_row(&mut panel, "Twist", "Stroke:", egui::Modifiers::ALT);
     assert_eq!(ids(effects(&panel.app(), None)), ["distort.roughen", "distort.twist"]);
     assert_eq!(ids(effects(&panel.app(), Some(1))), ["distort.twist"]);
     // Dropped effects become the selected row (their item active).
@@ -150,11 +152,11 @@ fn effect_rows_drag_to_reorder_and_into_an_item() {
 fn alt_dragging_an_item_duplicates_it_and_several_items_delete_together() {
     let mut panel = Panel::new(app_with_rect(), appearance::show); // [Fill, Stroke]
     let kinds = |panel: &Panel| first_selected(&panel.app()).unwrap().appearance.items.iter().map(|i| i.kind_name()).collect::<Vec<_>>();
-    panel.drag("Fill:", "Stroke:", egui::Modifiers::ALT);
+    drag_row(&mut panel, "Fill:", "Stroke:", egui::Modifiers::ALT);
     assert_eq!(kinds(&panel), ["fill", "stroke", "fill"]);
     // Click the stroke, Cmd-click a fill (the harness takes the topmost): both go.
-    panel.click_with("Stroke:", egui::Modifiers::NONE);
-    panel.click_with("Fill:", egui::Modifiers::COMMAND);
+    click_row(&mut panel, "Stroke:", egui::Modifiers::NONE);
+    click_row(&mut panel, "Fill:", egui::Modifiers::COMMAND);
     panel.key(egui::Key::Delete, egui::Modifiers::NONE);
     assert_eq!(kinds(&panel), ["fill"]);
     run(&mut panel.app(), "edit.undo", json!({}));

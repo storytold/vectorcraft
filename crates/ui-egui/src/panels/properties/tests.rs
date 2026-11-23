@@ -439,8 +439,10 @@ fn artboard_history_new(panel: &mut Panel) {
 }
 
 /// A key through the app's whole frame, as the window delivers it, so Undo and deletion take the
-/// route they take in production.
+/// route they take in production. A whole frame comes first: the key goes where the window's frame
+/// before it showed the canvas, not the panel's.
 fn artboard_history_key(panel: &mut Panel, ctx: &egui::Context, key: Key, modifiers: Modifiers) {
+    key_frame(&mut panel.app(), ctx, vec![]);
     for pressed in [true, false] {
         let events = vec![Event::ModifiersChanged(modifiers), Event::Key { key, physical_key: None, pressed, repeat: false, modifiers }];
         key_frame(&mut panel.app(), ctx, events);

@@ -86,10 +86,28 @@ fn panel(app: VectorcraftApp) -> Panel {
     harness(app, show)
 }
 
-/// The Layers panel above the Symbols panel: art dragged from a Layers row carries its objects
-/// (`PanelDrag::Art`), as production's art drags do.
-fn layers_and_symbols(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.allocate_ui(vec2(ui.available_width(), 500.0), |ui| super::super::layers::show(app, ui));
+/// Art carried off the canvas above the Symbols panel: a row for each named object (a layer too), whose drag
+/// carries that object (`PanelDrag::Art`) as a move carried off the canvas does; production's tests set that
+/// payload too, as no panel row carries art.
+fn art_and_symbols(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use craft::ui::contract::{ListDrag, ShowCollection as _};
+    if let Some(st) = app.session.active() {
+        let document = st.uid;
+        let mut named = Vec::new();
+        st.doc.walk(|n| {
+            if let Some(name) = &n.name {
+                named.push((name.clone(), n.id));
+            }
+        });
+        let keys: Vec<usize> = (0..named.len()).collect();
+        let rows = craft::behavior::keyed(&keys, |key: &usize| *key);
+        let ids: Vec<NodeId> = named.iter().map(|(_, id)| *id).collect();
+        ui.allocate_ui(vec2(ui.available_width(), 200.0), |ui| {
+            let _ = craft::ui::list::List::<usize>::new("Art off the canvas")
+                .drag_payload(move |drag: &ListDrag<usize>| ids.get(drag.grabbed).map(|id| PanelDrag::Art { document, ids: vec![*id] }))
+                .show_items(ui, &rows, &mut |key, _| craft::ui::list::ListRow::new(named[*key].0.clone()));
+        });
+    }
     show(app, ui);
 }
 
@@ -417,7 +435,7 @@ fn drop_to_command() {
             let mut app = setup();
             app.run("ui.panelView", json!({"panel": "symbols", "view": view})).unwrap();
             let undo = undo_len(&app);
-            let mut p = harness(app, layers_and_symbols);
+            let mut p = harness(app, art_and_symbols);
             p.drag(from, to, mods);
             check(&mut p, undo, &format!("{what}, {view}"));
         }
@@ -1546,7 +1564,7 @@ fn alt_art_drop_on_a_symbol_redefines_that_symbol_in_one_step() {
         let (app, _, placed) = alt_drop_doc(view);
         let (leaf, dot) = (symbol_art(&app, "Leaf"), symbol_art(&app, "Dot"));
         let undo = undo_len(&app);
-        let mut p = harness(app, layers_and_symbols);
+        let mut p = harness(app, art_and_symbols);
         p.drag("Art", "Leaf", Modifiers::ALT);
         let mut app = p.app();
         assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{view}: no symbol added");
@@ -1573,7 +1591,7 @@ fn an_alt_art_drop_that_cannot_redefine_changes_nothing() {
     let (app, _, _) = alt_drop_doc("thumbnail");
     let leaf = symbol_art(&app, "Leaf");
     let undo = undo_len(&app);
-    let mut p = harness(app, layers_and_symbols);
+    let mut p = harness(app, art_and_symbols);
     let cases = [("a Leaf instance", "Placed", "Leaf"), ("a layer", "Layer 1", "Leaf"), ("art released outside the list", "Art", "Symbol Options")];
     for (case, from, to) in cases {
         p.drag(from, to, Modifiers::ALT);

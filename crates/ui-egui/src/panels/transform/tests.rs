@@ -274,7 +274,8 @@ fn the_constrain_pie_angle_link_keeps_the_span() {
     let mut p = panel(app);
     p.click(LINK);
     assert!(p.app().ui.constrain_pie_angle, "a click turns it on");
-    // The click left the focus on the link.
+    // A click leaves the focus where it was, so the link takes it first, as production's test gave it.
+    p.focus(LINK);
     p.key(egui::Key::Space, egui::Modifiers::NONE);
     assert!(!p.app().ui.constrain_pie_angle, "Space turns it off");
     p.click(LINK);

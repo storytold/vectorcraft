@@ -41,7 +41,7 @@ fn mixed_weights_show_blank() {
     assert_eq!(panel.value("Weight").unwrap_or_default(), "");
     run(&mut panel.app(), "select.set", json!({ "ids": [b] }));
     panel.frame();
-    assert_eq!(panel.value("Weight").as_deref(), Some("3"), "the cache follows the selection");
+    assert_eq!(panel.value("Weight"), Some(vectorcraft_doc::Unit::Points.format(3.0)), "the cache follows the selection");
 }
 
 #[test]

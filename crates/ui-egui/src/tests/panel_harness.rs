@@ -126,11 +126,28 @@ impl Panel {
     /// Clicks the control of `role` named `name`, where nodes of other roles share the name (a section's region,
     /// heading and disclosure button).
     pub(crate) fn click_role(&mut self, name: &str, role: craft::ui::contract::Role) {
+        self.click_role_with(name, role, Modifiers::NONE);
+    }
+
+    /// [`Panel::click_role`] with `mods` held.
+    pub(crate) fn click_role_with(&mut self, name: &str, role: craft::ui::contract::Role, mods: Modifiers) {
         self.frame();
+        let target = self.look_role(name, role);
+        self.fixture.hold(mods).click(&target).hold(Modifiers::NONE);
+        self.after();
+    }
+
+    /// The control of `role` named `name` in the latest frame, where nodes of other roles share the name.
+    fn look_role(&self, name: &str, role: craft::ui::contract::Role) -> Target {
         let tree = self.fixture.tree();
         let target = self.fixture.by_role(role).into_iter().find(|t| tree.name_of(t.node) == Some(name));
-        let target = target.unwrap_or_else(|| panic!("no {role:?} named {name:?} in {:?}", self.names()));
-        self.fixture.click(&target);
+        target.unwrap_or_else(|| panic!("no {role:?} named {name:?} in {:?}", self.names()))
+    }
+
+    /// Gives the control named `name` the keyboard focus, as a screen reader's Focus action does.
+    pub(crate) fn focus(&mut self, name: &str) {
+        let target = self.find(name);
+        self.fixture.access(craft::ui::testing::focus::AccessActionKind::Focus, &target);
         self.after();
     }
 
@@ -143,7 +160,12 @@ impl Panel {
 
     /// Clicks at `pos`, where no control needs to be.
     pub(crate) fn click_at(&mut self, pos: Pos2) {
-        self.fixture.click_at(pos);
+        self.click_at_with(pos, Modifiers::NONE);
+    }
+
+    /// Clicks at `pos` with `mods` held, where no control needs to be (a row's room past its link).
+    pub(crate) fn click_at_with(&mut self, pos: Pos2, mods: Modifiers) {
+        self.fixture.hold(mods).click_at(pos).hold(Modifiers::NONE);
         self.after();
     }
 
@@ -165,9 +187,7 @@ impl Panel {
     /// the name (a slider beside its number box).
     pub(crate) fn drag_hold_role(&mut self, name: &str, role: craft::ui::contract::Role, by: Vec2) {
         self.frame();
-        let tree = self.fixture.tree();
-        let target = self.fixture.by_role(role).into_iter().find(|t| tree.name_of(t.node) == Some(name));
-        let target = target.unwrap_or_else(|| panic!("no {name:?} of the role in {:?}", self.names()));
+        let target = self.look_role(name, role);
         self.fixture.drag_hold_at(target.center(), by);
         self.after();
     }
@@ -211,8 +231,14 @@ impl Panel {
 
     /// Drags from the control named `from` and releases at `to`.
     pub(crate) fn drag_to(&mut self, from: &str, to: Pos2, mods: Modifiers) {
-        let from = self.find(from);
-        self.fixture.hold(mods).drag(&from, to - from.center()).hold(Modifiers::NONE);
+        let from = self.find(from).center();
+        self.drag_between(from, to, mods);
+    }
+
+    /// Drags from `from` and releases at `to` with `mods` held, where no control needs to be at `from` (a row's room
+    /// past its link).
+    pub(crate) fn drag_between(&mut self, from: Pos2, to: Pos2, mods: Modifiers) {
+        self.fixture.hold(mods).drag_at(from, to - from).hold(Modifiers::NONE);
         self.after();
     }
 
@@ -272,6 +298,11 @@ impl Panel {
         self.look(name).rect
     }
 
+    /// Where the control of `role` named `name` is, where nodes of other roles share the name.
+    pub(crate) fn rect_role(&self, name: &str, role: craft::ui::contract::Role) -> Rect {
+        self.look_role(name, role).rect
+    }
+
     /// The value text of the control named `name`.
     pub(crate) fn value(&self, name: &str) -> Option<String> {
         self.fixture.tree().value_of(self.look(name).node).map(str::to_owned)
@@ -284,8 +315,13 @@ impl Panel {
 
     /// Whether a control in the latest frame holds the value text `value`.
     pub(crate) fn shows_value(&self, value: &str) -> bool {
+        self.shows_value_with(|shown| shown == value)
+    }
+
+    /// Whether a control in the latest frame holds a value text that `matches`.
+    pub(crate) fn shows_value_with(&self, matches: impl Fn(&str) -> bool) -> bool {
         let tree = self.fixture.tree();
-        tree.keys().into_iter().any(|key| tree.value_of(key) == Some(value))
+        tree.keys().into_iter().any(|key| tree.value_of(key).is_some_and(&matches))
     }
 
     /// The toggle state of the control named `name`.
