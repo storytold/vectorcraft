@@ -339,18 +339,20 @@ fn app_with_worker() -> (VectorcraftApp, Arc<Mutex<Board>>) {
 }
 
 /// [`app_with_worker`], its worker busy with a job labeled `label` (none: another Copy's formats)
-/// until the sender is dropped, or for 10 s.
+/// until the sender is dropped.
 pub(super) fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Arc<Mutex<Board>>, Sender<()>) {
     let (mut app, board) = app_with_worker();
     let hold = hold_worker(&mut app, label);
     (app, board, hold)
 }
 
-/// Start a job labeled `label` that holds the worker until the sender is dropped, or for 10 s.
+/// Start a job labeled `label` that holds the worker until the sender is dropped (also when the
+/// test panics). No time limit: a test slowed past one by a loaded machine would see the held
+/// work run early.
 fn hold_worker(app: &mut VectorcraftApp, label: &str) -> Sender<()> {
     let (hold, held) = channel::<()>();
     let work = move |_: background::Writer| {
-        let _ = held.recv_timeout(std::time::Duration::from_secs(10));
+        let _ = held.recv();
         Ok(Value::Null)
     };
     background::run(app, true, label.into(), None, work, |_, r| r).unwrap();
