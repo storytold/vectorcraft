@@ -25,7 +25,8 @@
 //! [`crate::RenderOptions`] with [`active_proof`] and [`overprint_preview_on`].
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 
@@ -399,7 +400,21 @@ pub(crate) struct Prepared {
 #[derive(PartialEq)]
 struct Inputs {
     discard_white: bool,
+    /// [`images_state`]: which pixels a colorized image shows, and whether they take its color
+    /// ([`ImageBlob::takes_colorize`]), and so whether it darkens, depend on the document's images.
+    images: u64,
     plates: Option<Plates>,
+}
+
+/// A hash of `images`' keys and the address of each one's bytes and whether they are a preview
+/// ([`ImageBlob::is_proxy`]): it changes when an image is added, removed or given other bytes,
+/// without reading any pixels.
+fn images_state(images: &BTreeMap<String, ImageBlob>) -> u64 {
+    let mut h = DefaultHasher::new();
+    for (key, b) in images {
+        (key, Arc::as_ptr(&b.bytes), b.is_proxy()).hash(&mut h);
+    }
+    h.finish()
 }
 
 /// What the colors of Separations Preview's plates are made from ([`plate_color`]).
@@ -443,7 +458,7 @@ impl How<'_> {
 
     /// Change the fills, strokes and other colors of node `a`, which holds no members.
     fn apply(&self, a: &mut Arc<Node>) {
-        darken_overprints(a, self.discard_white);
+        darken_overprints(a, self.discard_white, &self.doc.images);
         if let Some((c, proof, visible)) = self.plates {
             map_node_inks(Arc::make_mut(a), &mut |col, sw, plates| plate_color(self.doc, c, proof, visible, col, sw, plates));
         }
@@ -463,6 +478,7 @@ pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions, kept: &mut Op
     let c = cms::active();
     let inputs = Inputs {
         discard_white: doc.setup.discard_white_overprint,
+        images: images_state(&doc.images),
         plates: seps.map(|(proof, _)| Plates {
             proof: proof.clone(),
             swatches: doc.swatches.clone(),

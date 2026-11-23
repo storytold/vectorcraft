@@ -2,11 +2,12 @@
 //! over the inks below instead of knocking them out ([`crate::FillLayer::overprint`]).
 //! Edit → Edit Colors → Overprint Black sets it on black fills and strokes ([`OverprintBlack`]).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
 
-use crate::{Document, Node, NodeId, NodeKind};
+use crate::{Document, ImageBlob, Node, NodeId, NodeKind};
 
 /// `Document.unknown` key of files from before per-fill/stroke overprint: the ids of objects
 /// marked Overprint Black ([`Document::migrate_overprint_black`]).
@@ -209,12 +210,38 @@ pub fn reshapes_only(id: &str) -> bool {
     ["warp.", "convertToShape.", "addon.path."].iter().any(|p| id.starts_with(p)) || RESHAPING_EFFECTS.contains(&id)
 }
 
+/// Whether `n` is an image with no pixels of its own and a colorize paint.
+pub fn is_colorized_image(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some()
+}
+
+/// The key of the pixels colorized image `n` shows in `images`: its color mask's when the mask
+/// was made for it and is there ([`Document::shown_image`]), else its own. `None` for any other
+/// node.
+pub fn colorized_shown_key(n: &Node, images: &BTreeMap<String, ImageBlob>) -> Option<String> {
+    match &n.kind {
+        NodeKind::Image(im) if is_colorized_image(n) => {
+            let mask = Document::color_mask_of(n).filter(|m| m.made_for(im) && images.contains_key(&m.key));
+            Some(mask.map_or(&im.key, |m| &m.key).clone())
+        }
+        _ => None,
+    }
+}
+
+/// Whether colorized image `n` shows pixels in `images` that don't take its colorize paint
+/// ([`ImageBlob::takes_colorize`]), so it is drawn and separated as those pixels and not as its
+/// color.
+pub fn refuses_colorize(n: &Node, images: &BTreeMap<String, ImageBlob>) -> bool {
+    colorized_shown_key(n, images).and_then(|key| images.get(&key)).is_some_and(|b| !b.takes_colorize())
+}
+
 /// Whether colorized image `n` is drawn overprinting as a whole: its color overprints
 /// ([`Node::colorize_overprints`]) with the Normal blend and is not white with `discard_white`,
-/// each of its own visible effects only reshapes it ([`reshapes_only`]), and each row that draws
-/// ([`image_row_draws`]) overprints that way too. A colorized image's color is not a fill row, so
-/// the whole node overprints or none of it does.
-pub fn image_overprints_whole(n: &Node, discard_white: bool) -> bool {
+/// the pixels it shows in `images` take its color ([`refuses_colorize`]), each of its own visible
+/// effects only reshapes it ([`reshapes_only`]), and each row that draws ([`image_row_draws`])
+/// overprints that way too. A colorized image's color is not a fill row, so the whole node
+/// overprints or none of it does.
+pub fn image_overprints_whole(n: &Node, discard_white: bool, images: &BTreeMap<String, ImageBlob>) -> bool {
     let row = |i: &crate::AppearanceItem| match i {
         crate::AppearanceItem::Fill(l) => darkens(l.overprint, l.blend, &l.paint, discard_white),
         crate::AppearanceItem::Stroke(l) => darkens(l.overprint, l.blend, &l.paint, discard_white),
@@ -224,6 +251,7 @@ pub fn image_overprints_whole(n: &Node, discard_white: bool) -> bool {
         && n.extras().colorize.as_deref().is_some_and(|p| darkens(true, n.blend, p, discard_white))
         && !paints_past
         && n.appearance.items.iter().filter(|i| image_row_draws(i)).all(row)
+        && !refuses_colorize(n, images)
 }
 
 /// Draw the overprinting fills and strokes of `a`'s subtree with Darken (those with a blend
@@ -232,13 +260,13 @@ pub fn image_overprints_whole(n: &Node, discard_white: bool) -> bool {
 /// stronger ink of each plate (and each additive channel), so a colour overprinting itself stays
 /// that colour, where Multiply would darken it. With `discard_white`
 /// (Document Setup → Discard White Overprint) white fills and strokes knock out instead. A
-/// colorized image darkens as a whole ([`image_overprints_whole`]).
-pub fn darken_overprints(a: &mut Arc<Node>, discard_white: bool) {
+/// colorized image darkens as a whole ([`image_overprints_whole`], with the document's `images`).
+pub fn darken_overprints(a: &mut Arc<Node>, discard_white: bool, images: &BTreeMap<String, ImageBlob>) {
     if !a.has_overprint() {
         return;
     }
     let n = Arc::make_mut(a);
-    let whole = image_overprints_whole(n, discard_white);
+    let whole = image_overprints_whole(n, discard_white, images);
     for it in &mut n.appearance.items {
         match it {
             crate::AppearanceItem::Fill(l) if darkens(l.overprint, l.blend, &l.paint, discard_white) => l.blend = BlendMode::Darken,
@@ -250,7 +278,7 @@ pub fn darken_overprints(a: &mut Arc<Node>, discard_white: bool) {
         n.blend = BlendMode::Darken;
     }
     for c in n.children_mut().into_iter().flatten() {
-        darken_overprints(c, discard_white);
+        darken_overprints(c, discard_white, images);
     }
 }
 
@@ -458,13 +486,29 @@ mod tests {
     fn a_white_colorized_image_knocks_out_under_discard_white() {
         let image = |color: Paint, discard_white: bool| {
             let mut a = Arc::new(colorized(color, Paint::None));
-            darken_overprints(&mut a, discard_white);
+            darken_overprints(&mut a, discard_white, &BTreeMap::new());
             a.blend
         };
         let white = Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.0));
         assert_eq!(image(white.clone(), true), BlendMode::Normal, "white knocks out, as a white fill does");
         assert_eq!(image(white, false), BlendMode::Darken);
         assert_eq!(image(cmyk(0.0, 0.0, 0.0, 1.0), true), BlendMode::Darken);
+    }
+
+    #[test]
+    fn a_colorized_image_showing_pixels_that_refuse_its_color_keeps_knocking_out() {
+        let blend = |images: &BTreeMap<String, ImageBlob>| {
+            let mut a = Arc::new(colorized(cmyk(0.0, 0.0, 0.0, 1.0), Paint::None));
+            darken_overprints(&mut a, false, images);
+            a.blend
+        };
+        let bytes = crate::links::missing_placeholder().unwrap();
+        let preview = Arc::new(bytes.clone());
+        let shown = ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() };
+        assert!(!shown.takes_colorize());
+        assert_eq!(blend(&BTreeMap::from([("pic".to_string(), shown)])), BlendMode::Normal, "a full-color preview is drawn as it is");
+        let own = ImageBlob::new("image/png", bytes);
+        assert_eq!(blend(&BTreeMap::from([("pic".to_string(), own)])), BlendMode::Darken, "the image's own pixels take the color");
     }
 
     #[test]
@@ -478,7 +522,7 @@ mod tests {
                 }
             }
             let mut a = Arc::new(n);
-            darken_overprints(&mut a, false);
+            darken_overprints(&mut a, false, &BTreeMap::new());
             a.blend
         };
         let shape = "convertToShape.rectangle";
@@ -508,7 +552,7 @@ mod tests {
                 f.effects.push(effect);
             }
             let mut a = Arc::new(n);
-            darken_overprints(&mut a, false);
+            darken_overprints(&mut a, false, &BTreeMap::new());
             a.blend
         };
         assert_eq!(blend(false, 0.0), BlendMode::Darken, "a fill with no opacity paints nothing");
@@ -523,7 +567,7 @@ mod tests {
             let mut n = colorized(cmyk(0.0, 0.0, 0.0, 1.0), Paint::None);
             n.appearance.effects.push(crate::Effect { id: id.into(), params: serde_json::json!({}), visible });
             let mut a = Arc::new(n);
-            darken_overprints(&mut a, false);
+            darken_overprints(&mut a, false, &BTreeMap::new());
             a.blend
         };
         assert_eq!(blend("stylize.dropShadow", true), BlendMode::Normal, "a drop shadow is not darkened with the image");

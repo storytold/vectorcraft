@@ -9,7 +9,9 @@ use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{BlendMode, Color, GradientKind, GradientStop, Paint};
 use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
-use vectorcraft_doc::overprint::{darken_overprints, image_overprints_whole, image_row_draws, is_black_ink, is_white};
+use vectorcraft_doc::overprint::{
+    colorized_shown_key, darken_overprints, image_overprints_whole, image_row_draws, is_black_ink, is_colorized_image, is_white, refuses_colorize,
+};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
 
 use super::{DEFAULT_FREQUENCY, InkSettings, PrintInk, PrintSettings};
@@ -251,7 +253,7 @@ impl<'a> Separator<'a> {
     fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: bool) {
         let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !(discard_white && is_white(p)) && self.no_ink(plate, p);
         let n = Arc::make_mut(a);
-        let whole = image_overprints_whole(n, discard_white) && !refuses_colorize(n, &self.doc.images);
+        let whole = image_overprints_whole(n, discard_white, &self.doc.images);
         if n.colorize_overprints() && !whole {
             n.extras_mut().colorize_overprint = false;
         }
@@ -299,7 +301,7 @@ impl<'a> Separator<'a> {
         let nodes = d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
         for n in nodes {
             self.clear_inkless_overprints(plate, n, discard_white);
-            darken_overprints(n, discard_white);
+            darken_overprints(n, discard_white, &d.images);
             self.node(plate, Arc::make_mut(n));
             keep_colorized_pixels(n, &d.images, &mut colorized);
         }
@@ -352,45 +354,21 @@ fn colorized_key(key: &str) -> String {
     format!("{key}\u{0}colorized")
 }
 
-/// Whether `n` is an image with no pixels of its own and a colorize paint.
-fn colorized(n: &Node) -> bool {
-    matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some()
-}
-
-/// The key of the pixels colorized image `n` shows in `images`: its color mask's when the mask
-/// was made for it and is there ([`Document::shown_image`]), else its own. `None` for any other
-/// node.
-fn shown_key(n: &Node, images: &BTreeMap<String, ImageBlob>) -> Option<String> {
-    match &n.kind {
-        NodeKind::Image(im) if colorized(n) => {
-            let mask = Document::color_mask_of(n).filter(|m| m.made_for(im) && images.contains_key(&m.key));
-            Some(mask.map_or(&im.key, |m| &m.key).clone())
-        }
-        _ => None,
-    }
-}
-
-/// Whether colorized image `n` shows pixels in `images` that don't take its colorize paint
-/// ([`ImageBlob::takes_colorize`]), so it is separated as those pixels and not as its color.
-fn refuses_colorize(n: &Node, images: &BTreeMap<String, ImageBlob>) -> bool {
-    shown_key(n, images).and_then(|key| images.get(&key)).is_some_and(|b| !b.takes_colorize())
-}
-
 /// Point the colorized images in `n`'s subtree at [`colorized_key`], collecting their keys in
 /// `keys`. A colorized image with a color mask is separated as it shows: its masked pixels
 /// ([`Document::shown_image`]). An image whose pixels it shows in `images` don't take its colorize
 /// paint ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it
 /// shows.
 fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>, keys: &mut BTreeSet<String>) {
-    if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
+    if !is_colorized_image(n) && n.children().is_none_or(|ch| ch.is_empty()) {
         return;
     }
     let node = Arc::make_mut(n);
-    let shown = shown_key(node, images);
+    let shown = colorized_shown_key(node, images);
     if refuses_colorize(node, images) {
         node.extras_mut().colorize = None;
     }
-    if let Some(key) = shown.filter(|_| colorized(node)) {
+    if let Some(key) = shown.filter(|_| is_colorized_image(node)) {
         if let Some(e) = node.extras_if_any() {
             e.color_mask = None;
         }

@@ -416,7 +416,7 @@ fn composite_overprints(doc: &mut Document, set: &PrintSettings) {
     let nodes = doc.layers.iter_mut().chain(symbols).chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
     for n in nodes {
         if how == PrintOverprints::Simulate {
-            darken_overprints(n, discard_white);
+            darken_overprints(n, discard_white, &doc.images);
         }
         clear_overprints(n);
     }
