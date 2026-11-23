@@ -7046,6 +7046,7 @@ axis	Y Axis	Y축
 	Show its progress, see Cancel and write log lines	진행률 표시, 취소 감지 및 로그 줄 쓰기
 	Keep settings of its own	자체 설정 보관
 	Keep a cache of its own, which you can clear	지울 수 있는 자체 캐시 보관
+	Run on its own when the selection, a document or a layer changes	선택 영역, 문서 또는 레이어가 바뀔 때 자동 실행
 	Run these commands on the document: {ids}	문서에서 다음 명령 실행: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}”의 `commandAllowlist`에 플러그인이 호출할 수 없는 `{id}`가 있습니다
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7077,6 +7078,15 @@ axis	Y Axis	Y축
 @msg	only a filter declares `inputs`	필터만 `inputs`를 선언할 수 있습니다
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs`에 알 수 없는 개체 종류 `{shown}`이(가) 있습니다. type, image 또는 symbolInstance를 사용하세요
 @msg	`inputs` lists `{shown}` twice	`inputs`에 `{shown}`이(가) 두 번 나열되어 있습니다
+@msg	`events` lists `{shown}` twice	`events`에 `{shown}`이(가) 두 번 나열되어 있습니다
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events`에 알 수 없는 이벤트 `{shown}`이(가) 있습니다. selection.changed, document.opened, document.saved 또는 layer.changed를 사용하세요
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events`에는 플러그인 API 수준 {EVENTS_API}이(가) 필요합니다. `api` {EVENTS_API}을(를) 지정하십시오
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events`에는 `events` 권한이 필요하고, `events`에는 `events` 목록이 필요합니다
+@msg	event size ({len} bytes, limit {max})	이벤트 크기({len}바이트, 제한 {max})
+@msg	the module reacts to no events	이 모듈은 어떤 이벤트에도 반응하지 않습니다
+@msg	vc_event returned {code}	vc_event가 {code}을(를) 반환했습니다
+@msg	{name}: its {event} handler failed: {e}	{name}: {event} 처리기가 실패했습니다: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: 처리기가 {count}번 연속 실패하여 VectorCraft를 다시 시작할 때까지 이벤트가 꺼집니다
 @msg	`inputs` needs `api` 2 or later	`inputs`에는 `api` 2 이상이 필요합니다
 @msg	`inputs` needs the permission `doc.read`	`inputs`에는 `doc.read` 권한이 필요합니다
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	메모리 예산(개체 {_1}에 입력 {size}바이트가 필요하지만 {left}바이트 남음)

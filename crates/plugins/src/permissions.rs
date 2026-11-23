@@ -7,7 +7,8 @@
 //! `permissions` gets the ones its kind implies ([`Permission::implied`]): what every plug-in of
 //! that kind could do before manifests listed them. `progress`, `settings`, `cache` and `commands`,
 //! which let a plug-in use the host imports of API level 2 ([`crate::host`]), are never implied: a
-//! manifest lists them.
+//! manifest lists them. Nor is `events`, which lets a plug-in of any kind react to the events its
+//! manifest names ([`crate::events`]).
 
 use serde::{Deserialize, Serialize};
 
@@ -74,10 +75,14 @@ pub enum Permission {
     /// ([`crate::host::IMPORTS`]): a filter only.
     #[serde(rename = "commands")]
     Commands,
+    /// Run on its own after the changes its manifest's `events` names ([`crate::events`]), with
+    /// `vc_event`: any kind.
+    #[serde(rename = "events")]
+    Events,
 }
 
 /// Every permission this host grants, in the order prompts list them.
-pub const ALL: [Permission; 10] = [
+pub const ALL: [Permission; 11] = [
     Permission::DocRead,
     Permission::DocWrite,
     Permission::State,
@@ -88,6 +93,7 @@ pub const ALL: [Permission; 10] = [
     Permission::Settings,
     Permission::Cache,
     Permission::Commands,
+    Permission::Events,
 ];
 
 /// The permissions of the host imports, which any kind may list and none implies; each needs plug-in
@@ -109,6 +115,7 @@ impl Permission {
             Permission::Settings => "settings",
             Permission::Cache => "cache",
             Permission::Commands => "commands",
+            Permission::Events => "events",
         }
     }
 
@@ -130,13 +137,14 @@ impl Permission {
             Permission::Settings => "Keep settings of its own",
             Permission::Cache => "Keep a cache of its own, which you can clear",
             Permission::Commands => "Run these commands",
+            Permission::Events => "Run on its own when the selection, a document or a layer changes",
         }
     }
 
     /// May a plug-in of `kind` that declares `commands` or not list it: one [`Permission::allowed`]
-    /// gives it, or one of the host imports' ([`HOST`]), which any kind may list.
+    /// gives it, one of the host imports' ([`HOST`]) or `events`, which any kind may list.
     pub fn applies(self, kind: Kind, commands: bool) -> bool {
-        HOST.contains(&self) || Permission::allowed(kind, commands).contains(&self)
+        self == Permission::Events || HOST.contains(&self) || Permission::allowed(kind, commands).contains(&self)
     }
 
     /// The permissions a manifest of `kind` without `permissions` gets. A manifest may also list

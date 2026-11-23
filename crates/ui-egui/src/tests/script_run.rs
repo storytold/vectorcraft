@@ -244,6 +244,49 @@ fn finished_background_work_waits_for_the_run_to_end() {
     assert!(app.opening.activate.is_empty());
 }
 
+/// The selection a script changes reaches a plug-in that reacts to `selection.changed` in the
+/// frame the script ends in: once it has ended, nothing asks for another frame.
+#[test]
+fn a_finished_run_delivers_its_plugin_events_in_the_frame_it_ends() {
+    use vectorcraft_plugins::wat as tpl;
+
+    /// Removes the plug-in when the test ends, failed or not: the registry serves every session in
+    /// the process.
+    struct Remove(&'static str);
+    impl Drop for Remove {
+        fn drop(&mut self) {
+            vectorcraft_plugins::registry::remove(self.0);
+        }
+    }
+
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    app.session.allow_plugin_grants_from_requests();
+    let id = "test.UI.script_run_events";
+    let _remove = Remove(id);
+    let grant = json!(["progress", "events"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Run Events","kind":"filter","api":2,"permissions":{grant},"events":["selection.changed"]}}"#);
+    // The handler writes the event it is given as a warning, which the status bar shows.
+    let warn = "(drop (call $vc_log (i32.const 1) (local.get $ep) (local.get $el))) (i32.const 0)";
+    let wasm = wat::parse_str(tpl::reacting(&manifest, tpl::HOST_IMPORTS, warn)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true})).unwrap();
+    app.poll_finished_work();
+    let source = format!("{DRAW} vc.run('select.all', {{}});");
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
+    let ctx = egui::Context::default();
+    for _ in 0..10_000 {
+        if !app.session.script_running() {
+            break;
+        }
+        app.begin_host_iteration();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
+        out.textures_delta.clear();
+    }
+    assert!(!app.session.script_running(), "the script did not end");
+    assert!(app.ui.status.starts_with("Run Events: "), "{}", app.ui.status);
+    assert!(app.ui.status.contains("selection.changed"), "{}", app.ui.status);
+}
+
 #[test]
 fn quitting_asks_to_stop_and_stop_undoes_the_run() {
     let mut app = app();

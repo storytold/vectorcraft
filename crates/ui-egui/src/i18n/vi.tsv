@@ -7103,6 +7103,7 @@ axis	Y Axis	Trục Y
 	Show its progress, see Cancel and write log lines	Hiển thị tiến độ, nhận biết yêu cầu hủy và ghi các dòng nhật ký
 	Keep settings of its own	Lưu cài đặt riêng
 	Keep a cache of its own, which you can clear	Lưu bộ nhớ đệm riêng mà bạn có thể xóa
+	Run on its own when the selection, a document or a layer changes	Tự chạy khi vùng chọn, một tài liệu hoặc một lớp thay đổi
 	Run these commands on the document: {ids}	Chạy các lệnh này trên tài liệu: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” liệt kê `{id}` trong `commandAllowlist`, lệnh mà plug-in không được gọi
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7134,6 +7135,15 @@ axis	Y Axis	Trục Y
 @msg	only a filter declares `inputs`	chỉ bộ lọc mới khai báo `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nêu một loại đối tượng không xác định `{shown}`: dùng type, image hoặc symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` liệt kê `{shown}` hai lần
+@msg	`events` lists `{shown}` twice	`events` liệt kê `{shown}` hai lần
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` nêu một sự kiện không xác định `{shown}`: dùng selection.changed, document.opened, document.saved hoặc layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` cần API plug-in cấp {EVENTS_API}: hãy đặt `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` cần quyền `events`, và `events` cần một danh sách `events`
+@msg	event size ({len} bytes, limit {max})	kích thước sự kiện ({len} byte, giới hạn {max})
+@msg	the module reacts to no events	mô-đun không phản ứng với sự kiện nào
+@msg	vc_event returned {code}	vc_event trả về {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: trình xử lý {event} của nó đã thất bại: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: các sự kiện của nó bị tắt cho đến khi VectorCraft khởi động lại, sau {count} trình xử lý thất bại liên tiếp
 @msg	`inputs` needs `api` 2 or later	`inputs` cần `api` 2 trở lên
 @msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	ngân sách bộ nhớ (đối tượng {_1} cần {size} byte đầu vào, còn lại {left})

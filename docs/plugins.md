@@ -210,6 +210,7 @@ capability model proposed for PhotoCraft plug-ins
 | `settings` | all | Keep settings of its own between runs and sessions ([settings and cache](#settings-and-cache)). Needs `api` 2. |
 | `cache` | all | Keep a cache of its own, which the user can clear ([settings and cache](#settings-and-cache)). Needs `api` 2. |
 | `commands` | filter | Run the commands its `commandAllowlist` lists on the document ([command calls](#command-calls)). Needs `api` 2. |
+| `events` | all | Run on its own when the selection, a document or a layer changes, for the `events` it names ([events](#events-api-level-2)). Needs `api` 2. |
 
 - A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
   `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`, and also `doc.write` and `state`
@@ -219,9 +220,9 @@ capability model proposed for PhotoCraft plug-ins
 - An effect, an exporter or an importer that lists permissions lists all of its implied ones (`doc.read` and
   `effect.render`; `doc.read` and `export.write`; `import.read`). An effect with commands may add `doc.write` and
   `state`, which only its commands use. A filter may list any of its three, and `commands` with a `commandAllowlist`.
-  Any kind may add `progress`, `settings` and `cache`, which no kind implies. An unknown name, a name listed twice, a
-  name that doesn't apply to the kind, more than 16 names, `progress`, `settings`, `cache` or `commands` with an `api`
-  below 2, or one of the names kept for a later plug-in API (`ui.panel`, `ui.tool`) is refused when the module is
+  Any kind may add `progress`, `settings`, `cache` and `events`, which no kind implies. An unknown name, a name listed
+  twice, a name that doesn't apply to the kind, more than 16 names, `progress`, `settings`, `cache`, `commands` or
+  `events` with an `api` below 2, or one of the names kept for a later plug-in API (`ui.panel`, `ui.tool`) is refused when the module is
   installed, and the error names it.
 - **Installing asks first.** Install Plug-in… and File › Open show the plug-in's name, id, version, the SHA-256 of
   the file and each permission in plain words, and install it once the user clicks OK, if the file still has the
@@ -371,6 +372,7 @@ pointers are offsets into the module's memory.
 | `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). |
 | `vc_alloc` | `(size) -> ptr` | A block of `size` bytes the host may write, or `0` on failure. Never freed: each run gets a fresh instance. |
 | `vc_run` | `(input, input_len, params, params_len) -> i64` | Runs the plug-in on the input JSON with the parameters JSON; returns `(len << 32) \| ptr` of the output JSON, or a negative error code. |
+| `vc_event` | `(event, event_len) -> i32` | Only in a module whose manifest lists [`events`](#events-api-level-2): reacts to the event JSON; returns `0` when it handled it, anything else when it failed. |
 
 ### Host imports (API level 2)
 
@@ -491,7 +493,8 @@ arguments as a JSON object, the params the command takes from any request:
 `-3` when the arguments are not a JSON object, `-4` when `commandAllowlist` doesn't list the id, `-5` when no command
 has the id, `-6` when a plug-in may not call the command, `-7` when the command can't run now (nothing is selected),
 `-8` when the command ran and failed, `-9` when a limit below is passed, and `-11` when nothing can be called (from
-the module's start function, in a run that isn't a filter's run on a document, or after a call in the run failed).
+the module's start function, in a run that isn't a filter's run on a document or an [event](#events-api-level-2)
+handler, or after a call in the run failed).
 
 - Every code also fails the run, whatever the plug-in does next, and the error names the call and why it failed. The
   run's calls and its output are one undo step, named after the plug-in or its command. A run that fails, traps, runs
@@ -521,6 +524,58 @@ the module's start function, in a run that isn't a filter's run on a document, o
   of its arguments and its result, and the run checks Cancel and its time budget before and after each call.
 - A filter that calls commands runs on the app's main thread, so it can't ask for a heavy budget: a manifest with
   `commandAllowlist` and `budget: "heavy"` is refused.
+
+### Events (API level 2)
+
+A plug-in of any kind whose manifest gives `"api": 2`, lists the `events` permission and names events in `events`
+exports `vc_event`, and VectorCraft calls it after each change of those kinds:
+
+```json
+{"id": "org.example.watch", "name": "Watch", "kind": "filter", "api": 2,
+ "permissions": ["doc.read", "events"], "events": ["selection.changed", "document.saved"]}
+```
+
+| Event | When | The event JSON |
+|---|---|---|
+| `selection.changed` | The selection in a document changed: other objects, anchors or segments, or nothing (`count` 0). | `{"type", "document", "count", "ids", "truncated"}`: `ids` lists the selected objects, at most 2,048 of them (`truncated` is then `true`), and is `null` without `doc.read`. |
+| `document.opened` | A file opened as a document (File › Open, Open Recent, New from Template). A new blank document is not one. | `{"type", "document"}` |
+| `document.saved` | Save or Save As wrote the document's own file. Save a Copy, a template and an export are not. | `{"type", "document"}` |
+| `layer.changed` | The current layer changed, or a layer or sublayer was added, deleted, moved or given other options. | `{"type", "document", "layer", "reasons"}`: `layer` is the current layer's id (`null` when there is none), `reasons` lists any of `current`, `added`, `deleted`, `reordered` and `options`. `reordered` means a layer's or sublayer's place among the rows beside it changed, also when an object moved past it. |
+
+`document` is a number that names the open document for the rest of the session. No event carries a path, a file name
+or the document's contents.
+
+- VectorCraft calls `vc_event(event, event_len)` in a fresh instance with the UTF-8 event JSON in a block from
+  `vc_alloc`, after the change has finished: after the command, after Undo or Redo, after the file was written or the
+  document opened. Nothing happens while a drag is still being previewed, for a failed command, or for a command that
+  leaves the document as it was (a Layer Options that sets the name it had). Installing a plug-in hands it no past
+  events, also none that were waiting for the next delivery when it was installed. A change made to a document opened
+  or created since the last delivery is an event at the next one, after that document's `document.opened`.
+- Changes between two deliveries are one event with the state they ended with. The desktop app delivers in each
+  frame, after the work that finished in the background and again at the end of the frame, after the canvas, panels
+  and dialogs have run, so a burst of selection changes in one frame is one `selection.changed` and an idle window does
+  not hold an event back. Requests through the control channel, and through MCP in remote mode, run in the desktop app
+  and are delivered by the frame too, and several of them can run in one frame. `vectorcraft-cli` and headless MCP
+  deliver after each request, also one that fails: a save in a `command.batch` whose later step fails still gives its
+  `document.saved`. Opens and saves are each their own event, in order, and are delivered even when the
+  document closed before the delivery. At most 32 events wait; past that the oldest is dropped.
+- A handler only reads. VectorCraft applies nothing it returns, and it is outside any undo step. With `commands` and a
+  `commandAllowlist`, it may [call](#command-calls) these commands, when the allowlist also names them, on the active
+  document: `dataset.list`, `graphicStyle.list`, `guide.list`, `image.info`, `object.blend.info`, `swatch.list`,
+  `symbol.list`, `text.getRange`, `transparency.info` and `variable.list`. A call of any other command fails with `-6`
+  before it runs, the error names the event (`a selection.changed handler only reads: …`), and the handler fails.
+  Afterwards VectorCraft puts back every document, its selection, current layer and undo history, which document is
+  active, and the session state a command call can change (paint defaults, the Appearance panel's active row,
+  preferences); a call that changed a document is refused the same way. An event raised while a handler runs waits
+  for the next delivery: handlers never run inside one another.
+- A handler gets at most 5,000,000 instructions and 200 ms, or its plug-in's own budget when that is smaller, for the
+  module's start function, `vc_alloc` and `vc_event` together; its settings, cache and log lines work as in a run.
+  These limits are VectorCraft's own values. A handler that returns anything but `0`, traps or runs out of budget
+  leaves the change it was told of as it is. Every failure goes to the log, and the first failure in a row also shows
+  in the status bar; after 3 failures in a row, the plug-in gets no more events until VectorCraft
+  starts again or another module is installed with its id. A warning or error line a handler writes with `vc_log`
+  shows in the status bar after the plug-in's name. `plugin.info` gives `eventsOff` and `lastEventError`.
+- In Safe Mode no handler runs. When no installed plug-in names an event, VectorCraft does not compare anything.
 
 ### Manifest
 
@@ -574,6 +629,11 @@ the module's start function, in a run that isn't a filter's run on a document, o
   it): the ids of the commands the filter may [call](#command-calls), at most 256, each once (`"commandAllowlist":
   ["select.all", "object.move"]`). An id is 1–128 characters from `A-Z a-z 0-9 . _ -` that starts with a letter, with
   no empty part between dots. A malformed list is refused when the module is installed, and the error names the id.
+- `events` (any kind at `api` 2, and only with the `events` permission, which needs it): the
+  [events](#events-api-level-2) the plug-in reacts to, any of `"selection.changed"`, `"document.opened"`,
+  `"document.saved"` and `"layer.changed"`, each at most once. The module then exports `vc_event`. An unknown or
+  repeated name, an entry that isn't a string, `api` 1, a list without the permission, the permission without a list,
+  and a missing or wrongly typed `vc_event` are refused when the module is installed, and the error names the fault.
 - `params`: in dialog order. Names are `[A-Za-z0-9_]`, not starting with `_`, and not `id`, `ids`, `params` or
   `preview`. The host validates the user's values before calling: missing values take the default, numbers are
   clamped to `min..max` (ints rounded), a wrong type or an unknown choice is an error. Numeric defaults are also clamped

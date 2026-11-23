@@ -6636,6 +6636,7 @@ arrowhead	Feather	पंख
 	Show its progress, see Cancel and write log lines	अपनी प्रगति दिखाना, रद्द करने का अनुरोध देखना और लॉग पंक्तियाँ लिखना
 	Keep settings of its own	अपनी सेटिंग्स रखना
 	Keep a cache of its own, which you can clear	अपना कैश रखना, जिसे आप साफ़ कर सकते हैं
+	Run on its own when the selection, a document or a layer changes	सिलेक्शन, कोई डॉक्यूमेंट या कोई लेयर बदलने पर अपने आप चलना
 	Run these commands on the document: {ids}	दस्तावेज़ पर ये कमांड चलाना: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” `commandAllowlist` में `{id}` सूचीबद्ध करता है, जिसे कोई प्लग-इन कॉल नहीं कर सकता
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -6667,6 +6668,15 @@ arrowhead	Feather	पंख
 @msg	only a filter declares `inputs`	केवल फ़िल्टर `inputs` घोषित करता है
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` में अज्ञात ऑब्जेक्ट प्रकार `{shown}` है: type, image या symbolInstance का उपयोग करें
 @msg	`inputs` lists `{shown}` twice	`inputs` में `{shown}` दो बार सूचीबद्ध है
+@msg	`events` lists `{shown}` twice	`events` में `{shown}` दो बार सूचीबद्ध है
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` में अज्ञात इवेंट `{shown}` है: selection.changed, document.opened, document.saved या layer.changed का उपयोग करें
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` के लिए प्लग-इन API स्तर {EVENTS_API} चाहिए: `api` {EVENTS_API} दें
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` को `events` अनुमति चाहिए, और `events` को `events` की सूची चाहिए
+@msg	event size ({len} bytes, limit {max})	इवेंट का आकार ({len} बाइट्स, सीमा {max})
+@msg	the module reacts to no events	मॉड्यूल किसी भी इवेंट पर प्रतिक्रिया नहीं करता
+@msg	vc_event returned {code}	vc_event ने {code} लौटाया
+@msg	{name}: its {event} handler failed: {e}	{name}: इसका {event} हैंडलर विफल हुआ: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: लगातार {count} हैंडलर विफल होने के बाद, VectorCraft के फिर से शुरू होने तक इसके इवेंट बंद हैं
 @msg	`inputs` needs `api` 2 or later	`inputs` के लिए `api` 2 या बाद का स्तर आवश्यक है
 @msg	`inputs` needs the permission `doc.read`	`inputs` के लिए अनुमति `doc.read` आवश्यक है
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	मेमोरी बजट (ऑब्जेक्ट {_1} को इनपुट के {size} बाइट चाहिए, {left} शेष हैं)

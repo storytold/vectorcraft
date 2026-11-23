@@ -136,6 +136,8 @@ impl Session {
             screens_hand_off: None,
             recovery: Default::default(),
             in_tool_actions: false,
+            plugin_events: Default::default(),
+            plugin_event_frames: false,
             settled_warnings: None,
             previewing: false,
             decoded_images: Default::default(),
@@ -369,6 +371,10 @@ impl Session {
             && let Some(label) = self.explicit_undo_group.clone()
         {
             self.begin_named_undo_group(label);
+        }
+        if self.depth == 0 {
+            // Inside a command, this happens once the command has finished.
+            self.plugin_events_see_new_documents();
         }
         i
     }

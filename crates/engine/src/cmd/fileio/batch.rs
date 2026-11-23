@@ -25,6 +25,7 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
     // file, format and saved state share their data with the open ones until a step changes them.
     let start = s.docs.clone();
     let active = s.active;
+    let opens = s.plugin_events_mark();
     s.batch_stash = Some(vec![]);
     let mut grouped = Vec::with_capacity(cmds.len());
     // The Type tool keeps what the steps' Undo and Redo change in it, to put back on a rollback.
@@ -39,6 +40,8 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Err(e) => {
             roll_back(s, start, &stash);
+            // The documents the steps opened are closed again: plug-ins are not told of them.
+            s.forget_plugin_opens_since(opens);
             s.notify_text_tool("batch.rollBack");
             s.active = active;
             s.sync_front_profiles();

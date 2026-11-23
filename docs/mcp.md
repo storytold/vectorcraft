@@ -13263,7 +13263,10 @@ while it runs, through `vc_call`: the calls and its output are one undo step, an
 fails leaves the documents, selections and history as they were. Without `doc.read` every call fails. A command that
 reads or writes files, uses the clipboard, changes preferences or the view, runs a script, an action or a plug-in,
 switches documents or undoes is never called; `plugin.install` refuses a manifest that lists one, and `plugin.inspect` lists such ids as
-`refusedCommands` and ids no command has as `unknownCommands` (`plugin.install` lists those too). A live-effect plug-in is an effect with
+`refusedCommands` and ids no command has as `unknownCommands` (`plugin.install` lists those too). A plug-in at API level 2
+whose manifest lists the `events` permission and `events` (in its `plugin.list` entry) is given `selection.changed`,
+`document.opened`, `document.saved` and `layer.changed` events through `vc_event` once the change has finished;
+its handler only reads, and `plugin.info` gives `eventsOff` and `lastEventError` (see `docs/plugins.md`). A live-effect plug-in is an effect with
 id `plugin.<id>`: `effect.apply`, `effect.setParams` and `effect.expandAppearance` work as for built-in effects, and
 `effect.list` lists it. One whose manifest declares `paintOutput` (at plug-in API level 2; `plugin.list` gives `api`
 and `paintOutput: true`) draws the pieces it returns with paints of their own, and `effect.expandAppearance` writes them

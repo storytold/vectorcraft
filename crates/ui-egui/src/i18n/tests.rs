@@ -949,6 +949,33 @@ fn artboard_add_button_tooltips_are_in_complete_catalogs() {
     }
 }
 
+/// Install Plug-in… lists what each permission lets a plug-in do, so each complete catalog has a
+/// row for the `events` permission's words.
+#[test]
+fn plugin_events_permission_words_are_in_complete_catalogs() {
+    let label = "Run on its own when the selection, a document or a layer changes";
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus || COMPLETE_MESSAGES.contains(&lang.code)) {
+        assert!(lang.catalog().plain(label).is_some_and(|t| !t.is_empty() && t != label), "{} is missing {label}", lang.code);
+    }
+}
+
+/// The status bar's lines for a plug-in whose event handler failed, which the engine writes after
+/// the plug-in's name, are translated in each language of [`COMPLETE_MESSAGES`].
+#[test]
+fn plugin_event_handler_failures_are_translated() {
+    let failed = "Run Events: its selection.changed handler failed: vc_event returned 3";
+    let off = "Run Events: its events are off until VectorCraft starts again, after 3 failed handlers in a row";
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in [failed, off] {
+            let shown = message(lang, s);
+            assert!(shown != s && shown.starts_with("Run Events") && shown.contains('3'), "{code}: {shown}");
+        }
+    }
+    assert_eq!(message(de(), failed), "Run Events: sein Handler für selection.changed ist fehlgeschlagen: vc_event hat 3 zurückgegeben");
+    assert_eq!(message(de(), off), "Run Events: seine Ereignisse sind aus, bis VectorCraft neu startet, nach 3 fehlgeschlagenen Handlern in Folge");
+}
+
 /// Preferences › Performance › Use Monitor Profile for Canvas and the note under it.
 #[test]
 fn monitor_profile_labels_are_in_complete_catalogs() {

@@ -55,6 +55,9 @@ impl VectorcraftApp {
         session.place_cursor_requests = true;
         // A script runs a slice per frame, so the window keeps drawing and Stop can be pressed.
         session.script_frames = true;
+        // Plug-in events are delivered by the frame: after the work that finished in the
+        // background, and at the end of the UI pass ([`VectorcraftApp::deliver_plugin_events`]).
+        session.plugin_event_frames = true;
         let views = session.documents().iter().map(View::of).collect();
         let view_uids = session.documents().iter().map(|d| d.uid).collect();
         let known = session.documents().iter().map(|d| d.uid).collect();
@@ -270,6 +273,25 @@ impl VectorcraftApp {
         plugin_runs::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
+        let _ = self.deliver_plugin_events();
+    }
+
+    /// Hands the plug-ins that react to events the changes of this frame
+    /// ([`vectorcraft_engine::Session::deliver_plugin_events`]). The last warning or error a handler
+    /// wrote, or the last handler failure, shows in the status bar after the plug-in's name. → Whether
+    /// the status bar shows one.
+    fn deliver_plugin_events(&mut self) -> bool {
+        self.session.deliver_plugin_events();
+        let shown = self
+            .session
+            .take_plugin_event_notices()
+            .into_iter()
+            .rev()
+            .find(|n| matches!(n.level, vectorcraft_plugins::LogLevel::Error | vectorcraft_plugins::LogLevel::Warn));
+        let Some(n) = shown else { return false };
+        let name = vectorcraft_plugins::permissions::display_text(&n.name, vectorcraft_plugins::permissions::MAX_SHOWN_NAME);
+        self.status(format!("{name}: {}", n.text));
+        true
     }
 
     /// The language the UI is drawn in: the Preferences dialog's choice while it is open (so a
@@ -362,8 +384,14 @@ impl VectorcraftApp {
         // them, even if the worker below finishes them during this same tick.
         ctx.data_mut(|d| d.insert_temp(egui::Id::unique("clipboard.pending-at-tick"), self.clipboard_publishing.is_pending()));
         screen_color::poll(self, ctx);
+        let script_was_running = self.session.script_running();
         self.poll_finished_work();
         crate::script_runs::poll(self);
+        if script_was_running && !self.session.script_running() {
+            // The work that waited for the script, and the plug-in events its changes give, are
+            // taken in the frame it ended in: no repaint is asked for once it has ended.
+            self.poll_finished_work();
+        }
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
@@ -670,6 +698,12 @@ impl VectorcraftApp {
         // A command run by a menu, panel or dialog in this pass may have queued its text copy
         // after the UI phase's input flush. Publish it now for the same reason as there.
         self.flush_clipboard_out(&ctx);
+        // What the canvas, a panel or a dialog changed in this pass reaches the plug-ins that react
+        // to it now, since an idle app draws no further frame; a line a handler wrote shows in the
+        // next one.
+        if !self.session.script_running() && self.deliver_plugin_events() {
+            ctx.request_repaint();
+        }
         if opening::long_operation_busy(self) {
             ctx.set_cursor_icon(egui::CursorIcon::Progress);
         }

@@ -577,6 +577,15 @@
 @msg	only a filter declares `inputs`	hanya filter yang mendeklarasikan `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` menyebut jenis objek yang tidak dikenal `{shown}`: gunakan type, image atau symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` mencantumkan `{shown}` dua kali
+@msg	`events` lists `{shown}` twice	`events` mencantumkan `{shown}` dua kali
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` menyebut peristiwa yang tidak dikenal `{shown}`: gunakan selection.changed, document.opened, document.saved atau layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` memerlukan API plug-in tingkat {EVENTS_API}: berikan `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` memerlukan izin `events`, dan `events` memerlukan daftar `events`
+@msg	event size ({len} bytes, limit {max})	ukuran peristiwa ({len} byte, batas {max})
+@msg	the module reacts to no events	modul tidak bereaksi terhadap peristiwa apa pun
+@msg	vc_event returned {code}	vc_event mengembalikan {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: handler {event}-nya gagal: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: event-nya dimatikan hingga VectorCraft dimulai lagi, setelah {count} handler gagal berturut-turut
 @msg	`inputs` needs `api` 2 or later	`inputs` memerlukan `api` 2 atau lebih baru
 @msg	`inputs` needs the permission `doc.read`	`inputs` memerlukan izin `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	anggaran memori (objek {_1} memerlukan {size} byte masukan, tersisa {left})
@@ -7394,6 +7403,7 @@ axis	Y Axis	Sumbu Y
 	Show its progress, see Cancel and write log lines	Menampilkan kemajuannya, mengenali pembatalan, dan menulis baris log
 	Keep settings of its own	Menyimpan pengaturannya sendiri
 	Keep a cache of its own, which you can clear	Menyimpan cache-nya sendiri, yang dapat Anda kosongkan
+	Run on its own when the selection, a document or a layer changes	Berjalan sendiri saat seleksi, dokumen, atau lapisan berubah
 	Run these commands on the document: {ids}	Menjalankan perintah ini pada dokumen: {ids}
 	Clear Plug-in Cache	Kosongkan cache plug-in
 # Actions panel: action sets (#3712).

@@ -34,6 +34,18 @@ pub fn module(manifest: &str, run: &str, extra: &str, pages: u32) -> String {
 /// A `vc_run` body returning the input unchanged.
 pub const ECHO: &str = "(i64.or (i64.shl (i64.extend_i32_u (local.get $il)) (i64.const 32)) (i64.extend_i32_u (local.get $in)))";
 
+/// A plug-in that reacts to events ([`crate::events`]): `manifest` (JSON that lists `events`), the
+/// module fields `imports` before the others, a `vc_event` whose body is `handler` (parameters
+/// `$ep $el`, result i32) and a `vc_run` that returns its input.
+pub fn reacting(manifest: &str, imports: &str, handler: &str) -> String {
+    let extra = format!(r#"{imports} (func (export "vc_event") (param $ep i32) (param $el i32) (result i32) {handler})"#);
+    module(manifest, ECHO, &extra, 1)
+}
+
+/// A `vc_event` body that writes the event it is given as an information log line (with
+/// [`HOST_IMPORTS`]) and returns 0.
+pub const LOG_EVENT: &str = "(drop (call $vc_log (i32.const 2) (local.get $ep) (local.get $el))) (i32.const 0)";
+
 /// A plug-in that always returns `output` (whatever it is given).
 pub fn returning(manifest: &str, output: &str) -> String {
     then_returning(manifest, "", output)

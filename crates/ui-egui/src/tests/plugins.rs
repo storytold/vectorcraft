@@ -720,3 +720,43 @@ fn installing_a_plugin_that_reports_progress_says_so() {
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.permissions.len()), Some(2));
     app.run("plugin.remove", json!({"id": id})).unwrap();
 }
+
+/// A selection made in the UI pass, after the frame's background work (as a click on the canvas or
+/// a panel makes it), reaches a plug-in that reacts to `selection.changed` before that pass ends:
+/// nothing is left for a later delivery.
+#[test]
+fn a_change_made_in_a_ui_pass_is_delivered_in_that_pass() {
+    let mut app = app();
+    app.session.allow_plugin_grants_from_requests();
+    let id = "test.UI.ui_pass_events";
+    let grant = json!(["progress", "events"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Pass Events","kind":"filter","api":2,"permissions":{grant},"events":["selection.changed"]}}"#);
+    // The handler writes the event as an information line, which the status bar does not show, so
+    // the plug-in leaves the status bar of other tests' sessions alone.
+    let wasm = wat::parse_str(tpl::reacting(&manifest, tpl::HOST_IMPORTS, tpl::LOG_EVENT)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true})).unwrap();
+    let r = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("select.none", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+    let pass = |app: &mut VectorcraftApp, select: bool| {
+        app.begin_host_iteration();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            app.tick(ui.ctx());
+            if select {
+                app.session.execute("select.set", &json!({"ids": [r]})).unwrap();
+            }
+            app.ui(ui);
+        });
+        out.textures_delta.clear();
+    };
+    // Fonts install on the first pass and are ready on the second.
+    pass(&mut app, false);
+    pass(&mut app, false);
+    pass(&mut app, true);
+    app.session.deliver_plugin_events();
+    let left: Vec<String> = app.session.take_plugin_event_notices().into_iter().filter(|n| n.plugin == id).map(|n| n.text).collect();
+    assert!(left.is_empty(), "delivered in the pass that made the change, not later: {left:?}");
+    assert_eq!(app.session.doc().unwrap().selection.objects.len(), 1, "the selection was made");
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}

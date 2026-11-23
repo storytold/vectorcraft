@@ -461,6 +461,78 @@ pub(crate) fn call(s: &mut Session, run: &Calls, id: &str, args: &Value) -> std:
     Ok(value)
 }
 
+/// The commands a plug-in's event handler may call ([`event_call`]), in order: each one only reads
+/// the document and returns what it found. Every other command is refused before it runs.
+pub(crate) const EVENT_READS: &[&str] = &[
+    "dataset.list",
+    "graphicStyle.list",
+    "guide.list",
+    "image.info",
+    "object.blend.info",
+    "swatch.list",
+    "symbol.list",
+    "text.getRange",
+    "transparency.info",
+    "variable.list",
+];
+
+/// Makes call `id` with `args` from a plug-in's handler of event `event` ([`crate::plugin_events`])
+/// as [`call`] does, for a command in [`EVENT_READS`]; any other command is refused before it runs,
+/// with an error that names the event. The call runs inside [`read_only`]: every document and the
+/// session state the commands a plug-in may call change go back to how they were afterwards, and a
+/// call that changed a document, its selection, current layer or layer rows, or which document is
+/// active, is refused.
+pub(crate) fn event_call(s: &mut Session, run: &Calls, event: &str, id: &str, args: &Value) -> std::result::Result<Value, CallFailure> {
+    if super::find_command(id).is_none() {
+        return Err(CallFailure { code: CALL_UNKNOWN_COMMAND, why: super::params::unknown_command(id).to_string() });
+    }
+    if !EVENT_READS.contains(&id) {
+        return Err(CallFailure { code: CALL_DENIED_COMMAND, why: format!("a {event} handler only reads: `{id}` is not a command it may call") });
+    }
+    let (r, changed) = read_only(s, |s| call(s, run, id, args));
+    if changed {
+        return Err(CallFailure { code: CALL_DENIED_COMMAND, why: format!("a {event} handler only reads: `{id}` changed the document") });
+    }
+    r
+}
+
+/// Runs `f` and then puts every open document (its art, selection, current layer, rows and
+/// history), which document is active and the session state the commands a plug-in may call change
+/// ([`Saved`]) back to how they were → `f`'s result, and whether `f` changed a document, its
+/// selection, current layer or layer rows, opened or closed one, or changed which one is active.
+/// A document `f` changed is given a newer revision, so it redraws.
+fn read_only<R>(s: &mut Session, f: impl FnOnce(&mut Session) -> R) -> (R, bool) {
+    let saved = Saved::of(s);
+    let pending_paint = s.pending_paint.clone();
+    let start = s.docs.clone();
+    let active = s.active;
+    let r = f(s);
+    let now = std::mem::replace(&mut s.docs, start);
+    let mut changed = s.active != active || now.len() != s.docs.len();
+    for st in &mut s.docs {
+        let Some(n) = now.iter().find(|d| d.uid == st.uid) else {
+            changed = true;
+            continue;
+        };
+        if n.revision != st.revision
+            || !Arc::ptr_eq(&n.doc, &st.doc)
+            || n.selection != st.selection
+            || n.active_layer != st.active_layer
+            || n.layer_rows != st.layer_rows
+        {
+            st.revision = st.revision.max(n.revision).saturating_add(1);
+            changed = true;
+        }
+    }
+    s.active = active;
+    saved.restore(s);
+    s.pending_paint = pending_paint;
+    if changed {
+        s.sync_front_profiles();
+    }
+    (r, changed)
+}
+
 /// Runs command `id` with `args` in `s` with no file or folder readable or writable: every path the
 /// command reaches through the checked file access ([`crate::file_access`]) is refused, whatever
 /// param carries it.
@@ -916,5 +988,51 @@ mod tests {
         assert!(!names_key("{x} on the path: the art", "the"));
         assert!(!names_key("{pathData: 1}", "path"));
         assert!(names_key("path: x", "path"));
+    }
+
+    /// Each command an event handler may call is one a plug-in may call and one the journal does
+    /// not record, listed once, in order.
+    #[test]
+    fn event_reads_are_reviewed_reads() {
+        for id in EVENT_READS {
+            let Some(spec) = crate::cmd::find_command(id) else { panic!("no command {id}") };
+            assert_eq!(denied(spec), None, "{id} is refused to every plug-in");
+            assert!(!spec.journal, "{id} is journaled");
+        }
+        assert!(EVENT_READS.windows(2).all(|w| w[0] < w[1]), "in order, once each");
+    }
+
+    /// [`read_only`] puts back what its function changed: the document, its selection, the
+    /// preferences and the paint defaults, and says that the document changed; a function that
+    /// changes nothing is no change.
+    #[test]
+    fn read_only_puts_everything_back() {
+        use serde_json::json;
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap()["id"].clone();
+        s.execute("select.none", &json!({})).unwrap();
+        let st = s.doc().unwrap();
+        let (doc, revision, history) = (st.doc.clone(), st.revision, st.history.undo.len());
+        let (prefs, paint) = (s.prefs.history_states, s.paint.clone());
+        let ((), changed) = read_only(&mut s, |s| {
+            s.execute("select.set", &json!({"ids": [id]})).unwrap();
+            s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+            s.prefs.history_states += 1;
+            s.paint.stroke_width += 3.0;
+        });
+        assert!(changed);
+        let st = s.doc().unwrap();
+        assert!(Arc::ptr_eq(&st.doc, &doc), "the same document");
+        assert!(st.selection.objects.is_empty(), "the selection as it was");
+        assert_eq!(st.history.undo.len(), history, "no undo step");
+        assert!(st.revision > revision, "a newer revision, so it redraws");
+        assert_eq!((s.prefs.history_states, &s.paint), (prefs, &paint));
+        let revision = st.revision;
+        let ((), changed) = read_only(&mut s, |s| {
+            s.execute("variable.list", &json!({})).unwrap();
+        });
+        assert!(!changed, "a read changes nothing");
+        assert_eq!(s.doc().unwrap().revision, revision);
     }
 }

@@ -219,6 +219,9 @@ fn wasm_err(e: wasmi::Error) -> Error {
 /// `vc_run(input_ptr, input_len, params_ptr, params_len) -> len << 32 | ptr` (negative: error).
 type RunArgs = (i32, i32, i32, i32);
 
+/// `vc_event(event_ptr, event_len) -> 0` (anything else: the handler failed).
+type EventArgs = (i32, i32);
+
 impl Plugin {
     /// Validates and loads a module: checks the ABI version, the exports and reads the manifest, and
     /// checks that each host import it asks for is one the host offers ([`crate::host::IMPORTS`])
@@ -269,6 +272,9 @@ impl Plugin {
         // The other exports must exist with the right types.
         live.func::<i32, i32>("vc_alloc")?;
         live.func::<RunArgs, i64>("vc_run")?;
+        if !p.manifest.events.is_empty() {
+            live.func::<EventArgs, i32>("vc_event")?;
+        }
         Ok(p)
     }
 
@@ -315,13 +321,19 @@ impl Plugin {
     /// A new instance for `run`, with the host imports of the permissions `granted` linked. When the
     /// module's start function fails, what it reported through the host imports goes to `report`.
     fn instantiate(&self, run: Run, granted: &[Permission], report: &mut Report) -> Result<Live> {
+        self.instantiate_with(run, granted, report, self.limits.fuel_base)
+    }
+
+    /// [`Plugin::instantiate`] with the start function given at most `start_fuel` instructions;
+    /// the instance's store holds what it left.
+    fn instantiate_with(&self, run: Run, granted: &[Permission], report: &mut Report, start_fuel: u64) -> Result<Live> {
         let limits =
             StoreLimitsBuilder::new().memory_size(self.limits.max_memory_bytes).memories(1).tables(4).table_elements(100_000).instances(1).build();
         let mut store = Store::new(&self.engine, Host { limits, run });
         store.limiter(|h| &mut h.limits);
         // The start function (if any) runs on one slice of fuel: it runs before `call` can check
         // the deadline or a cancel between slices, so a heavy budget would let it run for minutes.
-        store.set_fuel(self.limits.fuel_base.min(FUEL_SLICE)).map_err(wasm_err)?;
+        store.set_fuel(start_fuel.min(FUEL_SLICE)).map_err(wasm_err)?;
         let linker = host::linker(&self.engine, granted);
         let instance = match linker.instantiate_and_start(&mut store, &self.module) {
             Ok(instance) => instance,
@@ -360,16 +372,34 @@ impl Plugin {
         params: P,
         fuel: u64,
         deadline: &Deadline,
+        bridge: Option<&mut Bridge<'_>>,
+    ) -> Result<R> {
+        let mut budget = fuel;
+        self.call_budget(live, f, params, &mut budget, deadline, bridge)
+    }
+
+    /// [`Plugin::call_with`] on at most `budget` instructions, which holds what the call left
+    /// unused when it returns `Ok`, for the next call to share.
+    fn call_budget<P: WasmParams, R: WasmResults>(
+        &self,
+        live: &mut Live,
+        f: &TypedFunc<P, R>,
+        params: P,
+        budget: &mut u64,
+        deadline: &Deadline,
         mut bridge: Option<&mut Bridge<'_>>,
     ) -> Result<R> {
-        let mut left = fuel;
+        let mut left = *budget;
         let give = left.min(FUEL_SLICE);
         left -= give;
         live.store.set_fuel(give).map_err(wasm_err)?;
         let mut call = slice(live, &mut left, |store| f.call_resumable(store, params))?;
         loop {
             match call {
-                TypedResumableCall::Finished(r) => return Ok(r),
+                TypedResumableCall::Finished(r) => {
+                    *budget = left.saturating_add(live.store.get_fuel().map_err(wasm_err)?);
+                    return Ok(r);
+                }
                 TypedResumableCall::HostTrap(inv) => {
                     if inv.host_error().downcast_ref::<host::StorageStop>().is_some() {
                         return Err(stop_reason(&mut live.store));
@@ -504,5 +534,76 @@ impl Plugin {
             return Err(Error::Failed(format!("vc_run returned error code {packed}")));
         }
         live.read_packed(packed, "the output", limits.max_output_bytes)
+    }
+
+    /// Its limits for one event handler: at most [`crate::events::EVENT_FUEL`] instructions and
+    /// [`crate::events::EVENT_WALL_TIME_MS`], or its own budgets when they are smaller, and every
+    /// other limit as it is.
+    pub fn event_limits(&self) -> Limits {
+        Limits {
+            fuel_base: self.limits.fuel_base.min(crate::events::EVENT_FUEL),
+            wall_time_ms: self.limits.wall_time_ms.min(crate::events::EVENT_WALL_TIME_MS),
+            ..self.limits.clone()
+        }
+    }
+
+    /// Calls `vc_event` with `event` (the event JSON) in a fresh instance under
+    /// [`Plugin::event_limits`] → `Ok` when it returned 0, and what it reported through the host
+    /// imports. With `bridge`, each `vc_call` of a command its `commandAllowlist` names is made with
+    /// it; a failed call fails the handler. A module that doesn't react to events, an event past
+    /// [`crate::events::MAX_EVENT_BYTES`] and Safe Mode run nothing.
+    pub fn run_event(&self, event: &[u8], bridge: Option<&mut Bridge<'_>>) -> (Result<()>, Report) {
+        let mut report = Report::default();
+        if let Err(e) = crate::safe_mode::check() {
+            return (Err(e), report);
+        }
+        if self.manifest.events.is_empty() {
+            return (Err(Error::Abi("the module reacts to no events".into())), report);
+        }
+        if event.len() > crate::events::MAX_EVENT_BYTES {
+            let (len, max) = (event.len(), crate::events::MAX_EVENT_BYTES);
+            return (Err(Error::Limit(format!("event size ({len} bytes, limit {max})"))), report);
+        }
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.event_inner(event, &mut report, bridge)));
+        (run.map_err(|_| Error::Trap("the runtime panicked".into())).and_then(|r| r), report)
+    }
+
+    fn event_inner(&self, event: &[u8], report: &mut Report, bridge: Option<&mut Bridge<'_>>) -> Result<()> {
+        let limits = self.event_limits();
+        let deadline = Deadline::new(limits.wall_time_ms);
+        let m = &self.manifest;
+        let run = Run::new(&m.id, false, true, deadline).with_storage(crate::registry::storage(&m.id));
+        let mut live = self.instantiate_with(run, &m.permissions(), report, limits.fuel_base)?;
+        // The start function, `vc_alloc` and `vc_event` share the one budget.
+        let mut budget = live.store.get_fuel().map_err(wasm_err)?;
+        if bridge.is_some() {
+            live.store.data_mut().run.allow_calls(m.command_allowlist.clone());
+        }
+        let out = (|| {
+            let alloc: TypedFunc<i32, i32> = live.func("vc_alloc")?;
+            let handler: TypedFunc<EventArgs, i32> = live.func("vc_event")?;
+            // The start function may have used the time: neither call runs past it.
+            deadline.check()?;
+            let ptr = self.call_budget(&mut live, &alloc, event.len().max(1) as i32, &mut budget, &deadline, None)? as u32 as usize;
+            if ptr == 0 {
+                return Err(Error::Failed("vc_alloc returned 0 (out of memory)".into()));
+            }
+            let outside = || Error::Abi("vc_alloc returned a block outside memory".into());
+            let end = ptr.checked_add(event.len()).ok_or_else(outside)?;
+            live.memory.data_mut(&mut live.store).get_mut(ptr..end).ok_or_else(outside)?.copy_from_slice(event);
+            deadline.check()?;
+            let code = self.call_budget(&mut live, &handler, (ptr as i32, event.len() as i32), &mut budget, &deadline, bridge)?;
+            deadline.check()?;
+            if code != 0 {
+                return Err(Error::Failed(format!("vc_event returned {code}")));
+            }
+            Ok(())
+        })();
+        let state = &mut live.store.data_mut().run;
+        *report = std::mem::take(&mut state.report);
+        match (state.call_failure.take(), out) {
+            (Some(e), _) => Err(e),
+            (None, out) => out,
+        }
     }
 }

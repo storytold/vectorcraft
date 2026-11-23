@@ -12,6 +12,7 @@ pub mod guard;
 pub mod inspect;
 pub mod journal;
 pub mod link_watch;
+pub mod plugin_events;
 pub mod schemas;
 pub mod steps;
 pub mod store;
@@ -317,6 +318,12 @@ pub struct Session {
     /// While the active tool's actions run: their commands aren't "a command from outside the
     /// tool" ([`Session::after_command`]).
     pub(crate) in_tool_actions: bool,
+    /// The events plug-ins react to that wait for delivery, and how the documents were at the last
+    /// check ([`plugin_events`]).
+    pub(crate) plugin_events: plugin_events::PluginEvents,
+    /// The frontend delivers plug-in events by the frame ([`Session::deliver_plugin_events`]). Off,
+    /// each top-level command delivers them when it ends.
+    pub plugin_event_frames: bool,
     /// The warnings of the previews that settling an interaction applied, while a top-level command
     /// or the tool's actions collect them ([`Session::collect_settled_warnings`]).
     settled_warnings: Option<Vec<String>>,

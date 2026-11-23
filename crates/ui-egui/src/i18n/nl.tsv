@@ -541,6 +541,15 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	only a filter declares `inputs`	alleen een filter declareert `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` noemt een onbekend objectsoort `{shown}`: gebruik type, image of symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` noemt `{shown}` twee keer
+@msg	`events` lists `{shown}` twice	`events` noemt `{shown}` twee keer
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` noemt een onbekende gebeurtenis `{shown}`: gebruik selection.changed, document.opened, document.saved of layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` vereist plug-in-API-niveau {EVENTS_API}: geef `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` vereist de machtiging `events`, en `events` vereist een lijst `events`
+@msg	event size ({len} bytes, limit {max})	gebeurtenisgrootte ({len} bytes, limiet {max})
+@msg	the module reacts to no events	de module reageert op geen enkele gebeurtenis
+@msg	vc_event returned {code}	vc_event gaf {code} terug
+@msg	{name}: its {event} handler failed: {e}	{name}: de handler voor {event} is mislukt: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: de gebeurtenissen staan uit tot VectorCraft opnieuw start, na {count} mislukte handlers op rij
 @msg	`inputs` needs `api` 2 or later	`inputs` vereist `api` 2 of hoger
 @msg	`inputs` needs the permission `doc.read`	`inputs` vereist de machtiging `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	geheugenbudget (object {_1} heeft {size} bytes invoer nodig, {left} over)
@@ -9447,6 +9456,7 @@ axis	Y Axis	Y-as
 	Show its progress, see Cancel and write log lines	De voortgang tonen, een annulering zien en logregels schrijven
 	Keep settings of its own	Eigen instellingen bewaren
 	Keep a cache of its own, which you can clear	Een eigen cache bewaren, die u kunt legen
+	Run on its own when the selection, a document or a layer changes	Vanzelf worden uitgevoerd wanneer de selectie, een document of een laag verandert
 	Run these commands on the document: {ids}	Deze opdrachten op het document uitvoeren: {ids}
 	Clear Plug-in Cache	Plug-incache legen
 # Actions panel: action sets (#3712).

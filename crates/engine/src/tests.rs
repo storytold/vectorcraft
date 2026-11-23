@@ -145,6 +145,7 @@ mod perspgrid;
 mod pixelalign;
 mod place;
 mod placed_document;
+mod plugin_events;
 mod plugins;
 mod prefs;
 mod prefs_file;

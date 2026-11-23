@@ -7074,6 +7074,7 @@ axis	Y Axis	Ось Y
 	Show its progress, see Cancel and write log lines	Показывать свой ход выполнения, замечать отмену и записывать строки журнала
 	Keep settings of its own	Хранить собственные настройки
 	Keep a cache of its own, which you can clear	Хранить собственный кэш, который можно очистить
+	Run on its own when the selection, a document or a layer changes	Запускаться самостоятельно, когда меняется выделение, документ или слой
 	Run these commands on the document: {ids}	Выполнять в документе эти команды: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» указывает в `commandAllowlist` команду `{id}`, которую модуль вызывать не может
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7105,6 +7106,15 @@ axis	Y Axis	Ось Y
 @msg	only a filter declares `inputs`	`inputs` может объявлять только фильтр
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `inputs` указан неизвестный вид объекта `{shown}`: используйте type, image или symbolInstance
 @msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано дважды
+@msg	`events` lists `{shown}` twice	в `events` `{shown}` указано дважды
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	в `events` указано неизвестное событие `{shown}`: используйте selection.changed, document.opened, document.saved или layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	для `events` нужен уровень API модулей {EVENTS_API}: укажите `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	для `events` нужно разрешение `events`, а для `events` нужен список `events`
+@msg	event size ({len} bytes, limit {max})	размер события ({len} байт, предел {max})
+@msg	the module reacts to no events	модуль не реагирует ни на какие события
+@msg	vc_event returned {code}	vc_event вернула {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: его обработчик {event} завершился ошибкой: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: его события отключены до следующего запуска VectorCraft после {count} неудачных обработчиков подряд
 @msg	`inputs` needs `api` 2 or later	для `inputs` нужен `api` 2 или выше
 @msg	`inputs` needs the permission `doc.read`	для `inputs` нужно разрешение `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	бюджет памяти (объекту {_1} нужно {size} байт входных данных, осталось {left})

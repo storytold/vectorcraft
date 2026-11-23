@@ -1011,7 +1011,8 @@ fn open_loaded(
     st.import_losses = losses;
     st.links_from = read_from;
     let opened = &s.documents()[index];
-    let (title, file_info_title) = (opened.title(), opened.doc.info_title().to_string());
+    let (title, file_info_title, uid) = (opened.title(), opened.doc.info_title().to_string(), opened.uid);
+    s.note_plugin_event(vectorcraft_plugins::Event::DocumentOpened, uid);
     Ok(super::merge(
         json!({ "index": index, "title": title, "fileInfoTitle": file_info_title, "format": format.id, "warnings": warnings, "restored": restored }),
         links.to_json(),

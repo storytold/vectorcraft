@@ -206,6 +206,9 @@ impl Session {
             // A failed or panicked command's documents are put back: type is drawn in their
             // composite fonts again, not in those the command set.
             cmd::compositefonts::sync(self);
+            // Plug-ins still hear of what finished before the failure, such as a save in a batch
+            // whose later step failed.
+            self.plugin_events_after_command();
         }
         let r = r?;
         if self.depth == 0 {
@@ -249,6 +252,7 @@ impl Session {
             self.journal_in_undo_groups(doc, &grouped, journal);
             self.trim_histories();
             self.after_command(Some(id));
+            self.plugin_events_after_command();
         } else if matches!(id, "edit.undo" | "edit.redo") {
             // A step of `command.batch`: the tool hears of it as it does of the command alone.
             self.notify_text_tool(id);

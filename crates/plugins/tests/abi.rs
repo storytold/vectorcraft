@@ -1025,6 +1025,86 @@ fn a_plugin_reaches_only_its_own_storage() {
     registry::set_storage("test.storage.theirs", None);
 }
 
+/// The manifest of an event plug-in `id` that writes log lines and reacts to `events` (JSON list).
+fn reacting_manifest(id: &str, events: &str) -> String {
+    format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["progress","events"],"events":{events}}}"#)
+}
+
+/// A module that lists `events` needs a `vc_event` export of the right type; one that lists none
+/// may leave it out.
+#[test]
+fn an_event_plugin_exports_vc_event() {
+    let manifest = reacting_manifest("test.events.export", r#"["selection.changed"]"#);
+    let e = Plugin::load(&build(&tpl::reporting(&manifest, "", INPUT)), Limits::default()).unwrap_err();
+    assert!(e.to_string().contains("vc_event"), "{e}");
+    let wrong = format!(r#"{} (func (export "vc_event") (param i32) (result i32) (i32.const 0))"#, tpl::HOST_IMPORTS);
+    let e = Plugin::load(&build(&tpl::module(&manifest, tpl::ECHO, &wrong, 1)), Limits::default()).unwrap_err();
+    assert!(e.to_string().contains("vc_event"), "{e}");
+    assert!(Plugin::load(&build(&tpl::reacting(&manifest, tpl::HOST_IMPORTS, tpl::LOG_EVENT)), Limits::default()).is_ok());
+    assert!(Plugin::load(&ok_module(tpl::ECHO), Limits::default()).is_ok(), "no events, no vc_event");
+}
+
+/// `vc_event` is given the event JSON in its own memory and returns 0; anything else, a trap and a
+/// handler past its instruction budget fail it. A module without events runs no handler.
+#[test]
+fn vc_event_is_given_the_event_and_its_code_is_checked() {
+    let manifest = reacting_manifest("test.events.run", r#"["layer.changed"]"#);
+    let p = Plugin::load(&build(&tpl::reacting(&manifest, tpl::HOST_IMPORTS, tpl::LOG_EVENT)), Limits::default()).unwrap();
+    let event = br#"{"type":"layer.changed","document":7}"#;
+    let (r, report) = p.run_event(event, None);
+    r.unwrap();
+    assert_eq!(report.lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), [std::str::from_utf8(event).unwrap()]);
+    for (handler, says) in [
+        ("(i32.const 3)", "vc_event returned 3"),
+        ("unreachable", "trapped"),
+        // The instruction budget, or the time budget on a loaded machine.
+        ("(loop $l (br $l)) (i32.const 0)", "budget"),
+    ] {
+        let p = Plugin::load(&build(&tpl::reacting(&manifest, tpl::HOST_IMPORTS, handler)), Limits::default()).unwrap();
+        let e = p.run_event(event, None).0.unwrap_err().to_string();
+        assert!(e.contains(says), "{handler}: {e}");
+    }
+    let e = p.run_event(&vec![b' '; vectorcraft_plugins::events::MAX_EVENT_BYTES + 1], None).0.unwrap_err();
+    assert!(e.to_string().contains("event size"), "{e}");
+    let plain = Plugin::load(&ok_module(tpl::ECHO), Limits::default()).unwrap();
+    assert!(plain.run_event(event, None).0.is_err());
+    let limits = p.event_limits();
+    assert_eq!((limits.fuel_base, limits.wall_time_ms), (vectorcraft_plugins::events::EVENT_FUEL, vectorcraft_plugins::events::EVENT_WALL_TIME_MS));
+}
+
+/// The start function, `vc_alloc` and `vc_event` share one event budget: work that fits it in the
+/// handler alone fits it no longer when the start function has done as much first. The budget is
+/// 200,000 instructions, which run in far less than the 200 ms an event is given, so the run that
+/// fails is stopped by its instruction budget.
+#[test]
+fn a_handler_and_its_start_function_share_the_event_budget() {
+    let manifest = reacting_manifest("test.events.shared", r#"["layer.changed"]"#);
+    let burn = r#"(func $burn (param $k i32) (block $b (loop $l
+      (br_if $b (i32.eqz (local.get $k)))
+      (local.set $k (i32.sub (local.get $k) (i32.const 1)))
+      (br $l))))"#;
+    let plugin = |start: u32, handler: u32| {
+        let imports = format!("{} {burn} (func $s (call $burn (i32.const {start}))) (start $s)", tpl::HOST_IMPORTS);
+        let body = format!("(call $burn (i32.const {handler})) (i32.const 0)");
+        Plugin::load(&build(&tpl::reacting(&manifest, &imports, &body)), Limits { fuel_base: 200_000, ..Limits::default() }).unwrap()
+    };
+    let event = br#"{"type":"layer.changed","document":1}"#;
+    // The most loop turns, doubling, that fit the budget in the handler alone: twice as many run out
+    // of instructions.
+    let mut k = 1u32 << 8;
+    let e = loop {
+        match plugin(0, k * 2).run_event(event, None).0 {
+            Ok(()) => k *= 2,
+            Err(e) => break e.to_string(),
+        }
+        assert!(k < 1 << 30, "a handler that never runs out of its budget");
+    };
+    assert!(e.contains("instruction budget"), "{e}");
+    assert!(plugin(0, k).run_event(event, None).0.is_ok());
+    let e = plugin(k, k).run_event(event, None).0.unwrap_err().to_string();
+    assert!(e.contains("instruction budget"), "{e}");
+}
+
 /// A heavy filter installs once the user agrees, which loading a folder doesn't ask: it is skipped
 /// and reported.
 #[test]

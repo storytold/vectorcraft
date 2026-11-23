@@ -7428,6 +7428,7 @@ axis	Y Axis	Eje Y
 	Show its progress, see Cancel and write log lines	Mostrar su progreso, detectar la cancelación y escribir líneas de registro
 	Keep settings of its own	Guardar una configuración propia
 	Keep a cache of its own, which you can clear	Guardar una caché propia, que usted puede vaciar
+	Run on its own when the selection, a document or a layer changes	Ejecutarse por sí solo cuando cambia la selección, un documento o una capa
 	Run these commands on the document: {ids}	Ejecutar estos comandos en el documento: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	“{name}” incluye `{id}` en `commandAllowlist`, que un plugin no puede llamar
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7459,6 +7460,15 @@ axis	Y Axis	Eje Y
 @msg	only a filter declares `inputs`	solo un filtro declara `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` nombra un tipo de objeto desconocido `{shown}`: use type, image o symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` incluye `{shown}` dos veces
+@msg	`events` lists `{shown}` twice	`events` incluye `{shown}` dos veces
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` nombra un evento desconocido `{shown}`: use selection.changed, document.opened, document.saved o layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` necesita el nivel de API de plugins {EVENTS_API}: indique `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` necesita el permiso `events`, y `events` necesita una lista de `events`
+@msg	event size ({len} bytes, limit {max})	tamaño del evento ({len} bytes, límite {max})
+@msg	the module reacts to no events	el módulo no reacciona a ningún evento
+@msg	vc_event returned {code}	vc_event devolvió {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: su controlador de {event} falló: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: sus eventos están desactivados hasta que VectorCraft se inicie de nuevo, tras {count} controladores fallidos seguidos
 @msg	`inputs` needs `api` 2 or later	`inputs` requiere `api` 2 o posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` requiere el permiso `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	presupuesto de memoria (el objeto {_1} necesita {size} bytes de entrada, quedan {left})

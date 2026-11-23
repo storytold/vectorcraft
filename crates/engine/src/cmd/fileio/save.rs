@@ -1201,6 +1201,8 @@ impl SaveJob {
         }
         if saved {
             crate::cmd::recovery::forget(s, uid);
+            // Also when the document closed while its file was being written.
+            s.note_plugin_event(vectorcraft_plugins::Event::DocumentSaved, uid);
         }
         if let Some(path) = written {
             if native {

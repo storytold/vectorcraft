@@ -7842,6 +7842,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 	Show its progress, see Cancel and write log lines	Mostrar el progrés, detectar la cancel·lació i escriure línies de registre
 	Keep settings of its own	Desar una configuració pròpia
 	Keep a cache of its own, which you can clear	Desar una memòria cau pròpia, que podeu buidar
+	Run on its own when the selection, a document or a layer changes	Executar-se per si sol quan canvia la selecció, un document o una capa
 	Run these commands on the document: {ids}	Executar aquestes ordres al document: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	«{name}» inclou `{id}` a `commandAllowlist`, que un complement no pot cridar
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7873,6 +7874,15 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	only a filter declares `inputs`	només un filtre declara `inputs`
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` anomena un tipus d’objecte desconegut `{shown}`: feu servir type, image o symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` inclou `{shown}` dues vegades
+@msg	`events` lists `{shown}` twice	`events` inclou `{shown}` dues vegades
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` anomena un esdeveniment desconegut `{shown}`: feu servir selection.changed, document.opened, document.saved o layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` necessita el nivell d’API de complements {EVENTS_API}: indiqueu `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` necessita el permís `events`, i `events` necessita una llista d’`events`
+@msg	event size ({len} bytes, limit {max})	mida de l’esdeveniment ({len} bytes, límit {max})
+@msg	the module reacts to no events	el mòdul no reacciona a cap esdeveniment
+@msg	vc_event returned {code}	vc_event ha retornat {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: el seu gestor de {event} ha fallat: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: els seus esdeveniments estan desactivats fins que VectorCraft torni a iniciar-se, després de {count} gestors fallits seguits
 @msg	`inputs` needs `api` 2 or later	`inputs` requereix `api` 2 o posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	pressupost de memòria (l’objecte {_1} necessita {size} bytes d’entrada, en queden {left})

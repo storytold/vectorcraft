@@ -7452,6 +7452,7 @@ axis	Y Axis	osa Y
 	Show its progress, see Cancel and write log lines	Zobrazit průběh, rozpoznat zrušení a zapisovat řádky protokolu
 	Keep settings of its own	Uchovávat vlastní nastavení
 	Keep a cache of its own, which you can clear	Uchovávat vlastní mezipaměť, kterou můžete vymazat
+	Run on its own when the selection, a document or a layer changes	Spouštět se samostatně, když se změní výběr, dokument nebo vrstva
 	Run these commands on the document: {ids}	Spouštět v dokumentu tyto příkazy: {ids}
 @msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	„{name}“ uvádí v `commandAllowlist` příkaz `{id}`, který zásuvný modul nesmí volat
 @msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
@@ -7483,6 +7484,15 @@ axis	Y Axis	osa Y
 @msg	only a filter declares `inputs`	`inputs` deklaruje pouze filtr
 @msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` uvádí neznámý druh objektu `{shown}`: použijte type, image nebo symbolInstance
 @msg	`inputs` lists `{shown}` twice	`inputs` uvádí `{shown}` dvakrát
+@msg	`events` lists `{shown}` twice	`events` uvádí `{shown}` dvakrát
+@msg	`events` names an unknown event `{shown}`: use selection.changed, document.opened, document.saved or layer.changed	`events` uvádí neznámou událost `{shown}`: použijte selection.changed, document.opened, document.saved nebo layer.changed
+@msg	`events` needs plug-in API level {EVENTS_API}: give `api` {EVENTS_API}	`events` vyžaduje úroveň API zásuvných modulů {EVENTS_API}: uveďte `api` {EVENTS_API}
+@msg	`events` needs the permission `events`, and `events` needs a list of `events`	`events` potřebuje oprávnění `events` a `events` potřebuje seznam `events`
+@msg	event size ({len} bytes, limit {max})	velikost události ({len} bajtů, limit {max})
+@msg	the module reacts to no events	modul nereaguje na žádné události
+@msg	vc_event returned {code}	vc_event vrátila {code}
+@msg	{name}: its {event} handler failed: {e}	{name}: jeho obslužná rutina {event} selhala: {e}
+@msg	{name}: its events are off until VectorCraft starts again, after {count} failed handlers in a row	{name}: jeho události jsou vypnuté, dokud se VectorCraft znovu nespustí, po {count} neúspěšných obslužných rutinách za sebou
 @msg	`inputs` needs `api` 2 or later	`inputs` vyžaduje `api` 2 nebo vyšší
 @msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	rozpočet paměti (objekt {_1} potřebuje {size} bajtů vstupu, zbývá {left})
