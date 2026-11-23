@@ -522,6 +522,16 @@ impl Realm {
         }
     }
 
+    /// Adds the global properties `getters`, each read with its function, which gets `undefined` as
+    /// `this`. Assigning one, as `var name = value` at the top level does, makes it a plain global
+    /// variable that holds the value.
+    pub fn define_host_globals(&mut self, getters: Vec<(String, crate::HostFunction)>) -> Result<(), RunError> {
+        match crate::host_classes::install_globals(&mut self.interp, getters) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Sets `Folder.current` back to the host's `current`, for the next run of a realm that has
     /// `File` and `Folder` ([`Realm::define_file_classes`]); a realm without them keeps its
     /// `Folder.current`. The files an earlier run opened are no longer open. The last run's uncaught

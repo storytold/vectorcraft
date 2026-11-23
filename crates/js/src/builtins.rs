@@ -433,7 +433,7 @@ fn object_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> Js
 fn has_own_property(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let k = interp.to_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_property(o, &k)?.is_some()))
+    Ok(Value::Bool(interp.get_own_property(o, &k)?.is_some() || interp.is_host_member(o, &k)?))
 }
 
 fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -452,7 +452,7 @@ fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) ->
 fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let k = interp.to_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_property(o, &k)?.is_some_and(|p| p.enumerable())))
+    Ok(Value::Bool(interp.get_own_property(o, &k)?.is_some_and(|p| p.enumerable()) || interp.is_host_member(o, &k)?))
 }
 
 // ---- Function ----

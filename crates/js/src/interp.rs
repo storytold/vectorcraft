@@ -1432,10 +1432,15 @@ impl Interp {
         if let Some(i) = array_index(k)
             && let Some(f) = self.host_indexer(start)?
         {
-            return self.host_index(&f, start, i);
+            return self.host_index(&f, start, crate::Data::Number(f64::from(i)), false);
         }
         match self.find_property(start, k)? {
-            None | Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
+            // A name the object and its prototypes lack is the indexer's answer too.
+            None => match self.host_indexer(start)? {
+                Some(f) => self.host_index(&f, start, Self::indexer_key(k), false),
+                None => Ok(Value::Undefined),
+            },
+            Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
             Some(Prop::Data { value, .. }) => Ok(value),
             Some(Prop::Accessor { get: Some(g), .. }) => self.call(&Value::Object(g), receiver, &[]),
         }
@@ -1728,10 +1733,17 @@ impl Interp {
             Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => return self.reject(throw, &k, "it is read-only"),
             _ => {}
         }
-        let o = self.object(id)?;
-        if !o.extensible {
+        if !self.object(id)?.extensible {
+            // A name that an object of a host class with an indexer lacks is read with the indexer
+            // first, so assigning it throws what reading it throws.
+            if array_index(&k).is_none()
+                && let Some(f) = self.host_indexer(id)?
+            {
+                self.host_index(&f, id, Self::indexer_key(&k), false)?;
+            }
             return self.reject(throw, &k, "the object is not extensible");
         }
+        let o = self.object(id)?;
         if let Class::Array { length, length_writable: false } = o.class
             && array_index(&k).is_some_and(|i| i >= length)
         {
