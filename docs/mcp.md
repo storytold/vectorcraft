@@ -2943,8 +2943,9 @@ controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and s
   click for a button, a check box and a radio button, and a change for the others.
 - `addEventListener(type, handler[, capture])` registers a function for `click`, `change`, `changing` or `show`,
   and `removeEventListener` with the same arguments removes it, so that it does not run even when the event it was
-  waiting for is already running; a function registered twice for the same type and phase runs once. `show` can be registered only on the dialog, and on a control it throws an `Error`. A window or
-  control takes at most 256 handlers, past which `addEventListener` throws a `RangeError` (VectorCraft's own
+  waiting for is already running; a function registered twice for the same type and phase runs once. `show` can
+  be registered only on the dialog, and on a control it throws an `Error`. A window or control takes at most 256
+  handlers, past which `addEventListener` throws a `RangeError` (VectorCraft's own
   limit). A handler gets an event with `type`, `target`, `currentTarget`, `eventPhase`, `bubbles`, `cancelable`
   (always false), `detail` (1 for a click), `stopPropagation()` and `preventDefault()`, which does nothing. The
   containers above the control run their `capture` handlers first, then the control runs its `onClick`,

@@ -933,12 +933,16 @@ fn dispatch(i: &mut Interp, target: ObjId, ty: &str, callback: &str) -> JsResult
     r
 }
 
-/// The containers that hold `target`, innermost first.
+/// The containers that hold `target`, innermost first. A chain longer than a dialog's nesting
+/// allows comes from objects a script made to look like elements, and is a `TypeError`.
 fn containers_above(i: &mut Interp, target: ObjId) -> JsResult<Vec<ObjId>> {
     let mut above = Vec::new();
     let mut at = object_slot(i, target, PARENT)?;
     while let Some(p) = at {
         i.use_fuel()?;
+        if above.len() > MAX_DEPTH {
+            return Err(i.type_error("the event's target is not a ScriptUI window or control"));
+        }
         above.push(p);
         at = object_slot(i, p, PARENT)?;
     }
@@ -1331,7 +1335,8 @@ fn answered(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
         let value = slot(i, ev, "value")?;
         match event.as_str() {
             "click" => {
-                if !click_control(i, c, &kind)? && kind == "button" {
+                // A listener above the button that closed the dialog gives the result.
+                if !click_control(i, c, &kind)? && kind == "button" && matches!(slot(i, win, CLOSING)?, Value::Undefined) {
                     let is = |k: usize| matches!(arg(keep, k), Value::Number(n) if n == id as f64);
                     if is(2) {
                         set_slot(i, win, CLOSING, Value::Number(1.0))?;

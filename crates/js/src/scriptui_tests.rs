@@ -425,14 +425,36 @@ fn listeners_run_in_the_capture_target_and_bubbling_phases_until_one_stops() {
         "a button with a click listener does not close the dialog by itself, and the same listener is added once"
     );
     for (source, want) in [
-        ("new Window('dialog').addEventListener('mouseover', function () {})", "addEventListener: the event mouseover is not available yet"),
-        ("new Window('dialog').addEventListener('wobble', function () {})", "addEventListener: there is no event wobble"),
-        ("new Window('dialog').addEventListener('click', 'code')", "addEventListener: give the handler as a function"),
+        ("w.addEventListener('click', function () { w.close(3); })", "3"),
+        ("w.addEventListener('click', function () { w.close(3); }, true)", "3"),
+        ("w.addEventListener('click', function () {})", "1"),
+    ] {
+        let (mut r, _, _) = realm(vec![click(1)]);
+        let source = format!("var w = new Window('dialog'); w.add('button', undefined, 'OK'); {source}; String(w.show())");
+        assert_eq!(r.run(&source).unwrap(), JsValue::String(want.into()), "a dialog listener's close(result) decides what show() gives: {source}");
+    }
+    for (source, want) in [
+        ("new Window('dialog').addEventListener('mouseover', function () {})", "Error addEventListener: the event mouseover is not available yet"),
+        ("new Window('dialog').addEventListener('wobble', function () {})", "Error addEventListener: there is no event wobble"),
+        ("new Window('dialog').addEventListener('click', 'code')", "TypeError addEventListener: give the handler as a function"),
     ] {
         let (mut r, _, _) = realm(Vec::new());
-        let e = r.run(&format!("try {{ {source}; 'added' }} catch (e) {{ e.message }}")).unwrap();
+        let e = r.run(&format!("try {{ {source}; 'added' }} catch (e) {{ e.name + ' ' + e.message }}")).unwrap();
         assert_eq!(e, JsValue::String(want.into()), "{source}");
     }
+}
+
+#[test]
+fn an_event_on_objects_made_to_look_like_controls_ends_with_a_type_error() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var b = new Window('dialog').add('button', undefined, 'Go'); var ran = false; \
+             var f = {__vcKind: 'button'}; var g = {__vcKind: 'group'}; f.__vcParent = g; g.__vcParent = f; f.onClick = function () { ran = true; }; \
+             try { b.notify.call(f, 'onClick'); 'ran' } catch (e) { e.name + ' ' + ran }",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("TypeError false".into()), "a parent cycle ends at once, not when the run's fuel is gone");
 }
 
 #[test]
