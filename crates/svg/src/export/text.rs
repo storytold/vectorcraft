@@ -1,4 +1,4 @@
-use super::output::{xml_attr_escape, xml_attr_valid, xml_text};
+use super::output::{xml_attr_escape, xml_text};
 use super::{
     Affine, AppearanceItem, Arc, BTreeSet, BezPath, BlendMode, CharStyle, FillRule, FontDb, FontFace, GradientKind, HashMap, Justify, Node, NodeId,
     NodeKind, Paint, PathData, Props, Rect, StrokeAlign, Styling, TextKind, TextObject, Writer, base64_encode, css, css_string, fmt_num,
@@ -199,7 +199,7 @@ impl Writer<'_> {
                 Some(named) if !id.is_empty() && !id.contains(" data-name=\"") => format!(" data-name=\"{}\"", xml_attr_escape(named)),
                 _ => String::new(),
             };
-            format!("{name} role=\"img\" aria-label=\"{}\"", xml_attr_valid(&text))
+            format!("{name} role=\"img\" aria-label=\"{}\"", xml_attr_escape(&text))
         } else {
             String::new()
         };

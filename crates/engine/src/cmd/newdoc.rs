@@ -1002,10 +1002,11 @@ impl Session {
         let Some(bytes) = read else { return Ok(None) };
         // The color profiles the file carries are installed where missing, as opening it installs
         // them, so the new document's assigned profiles draw and are saved with it.
-        let (mut doc, _, warnings) = super::fileio::native_file(&bytes).map_err(|e| e.to_string())?;
+        let (mut doc, _, mut warnings) = super::fileio::decode_native_file(&bytes).map_err(|e| e.to_string())?;
         // Linked images in its symbols, patterns and brushes are read from their files, as placing
         // a document reads them.
         super::links::resolve(&mut doc, super::links::LinkBase::file(Some(&file)), false, false);
+        warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
         Ok(Some(ReadProfile { doc, file, warnings }))
     }
 }

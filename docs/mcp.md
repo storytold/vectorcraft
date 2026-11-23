@@ -1563,6 +1563,7 @@ are compared with the first page only. An artboard, or the page of an EPS's edit
 a point of its page's is compared on an area of the page's size. A file whose editing data is for a page of another
 size opens the same way, and its warning gives both sizes in points, with the scale of the editing data's page to the
 file's page (1:10 for a tenth of its size) when their sides are in proportion.
+Type in a font a PDF embeds and this machine lacks is drawn in glyphs built from the file's own, kept with the document (#4568); `embeddedFonts: false` (default `true`) sets it in the fallback font with the missing-font warning instead, as before. Preferences › File Handling › Use fonts embedded in imported PDFs (`pdfImportEmbeddedFonts`, on by default) is the choice `document.open` and `file.place` take when they give none; a call's own `embeddedFonts` wins. With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
 With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
 saved with Illustrator's editing data holds it in `AIPDFPrivateData` streams and opens from it as a `.ai` file does.
 
@@ -2565,8 +2566,15 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   whose argument isn't a string literal.
 - `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
   File object's `length`, `hidden` or `readonly` counts too, on any object that may be a File object; only
-  `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out; a
-  document's `saveAs` or `exportFile` counts too, and so does `print` called on `app.activeDocument`,
+  `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out, and
+  nothing is left out in a check whose files use `with`, name `eval`, `Function`, `evalFile` or `constructor` as a
+  word or as a string literal in brackets, read, call or assign a property in brackets (a `[` after a value, not an
+  array literal) when the brackets hold anything but one number or string literal (`o[k]`, `this['ev' + 'al'](s)`,
+  `this[('eval')](s)`, `this[0, 'eval'](s)`, `o[a[0]]`, or a preprocessor line inside the brackets) or the `[` opens
+  while 4,096 other `[` are open, assign a property in brackets whose name is a string literal of more than 256
+  characters, assign properties of more than 1,000 different names on members (`o.d = …`, `o['d'] = …`), or
+  assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
+  object; a document's `saveAs` or `exportFile` counts too, and so does `print` called on `app.activeDocument`,
   `app.documents[i]`, `documents.add()`, `documents.getByName()` or `app.open()`, or on a variable that holds one of
   them), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
