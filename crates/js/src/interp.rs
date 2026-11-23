@@ -1410,7 +1410,18 @@ impl Interp {
                 }
                 _ => return internal("not a declarative environment"),
             },
-            Resolved::Obj { object, .. } => self.delete(object, &name, false)?,
+            Resolved::Obj { object, with_this } => {
+                let own = self.get_own_property(object, &name)?.is_some();
+                let deleted = self.delete(object, &name, false)?;
+                // A global variable whose own property is deleted through the global environment
+                // no longer stops a `let` or `const` of its name (ECMA-262 2015 section 8.1.1.4.7).
+                // Deleting the global object's property any other way, as `delete this.x` does,
+                // or deleting a name it only inherits, keeps the record.
+                if own && deleted && !with_this && object == self.global {
+                    self.global_vars.remove(&name);
+                }
+                deleted
+            }
         };
         self.push(Value::Bool(result))
     }
@@ -1903,12 +1914,6 @@ impl Interp {
         match self.get_own_property(id, k)? {
             None => Ok(true),
             Some(p) if p.configurable() => {
-                // A deleted global variable no longer stops a `let` or `const` of its name
-                // (ECMA-262 2015 section 8.1.1.4.7), and the names kept are never more than the
-                // global object's properties.
-                if id == self.global {
-                    self.global_vars.remove(k);
-                }
                 let o = self.object_mut(id)?;
                 o.props.remove(k);
                 if let Class::Arguments(map) = &mut o.class
@@ -2346,8 +2351,9 @@ impl Interp {
         let frame = self.frame()?;
         let (code, params) = (frame.code.clone(), frame.env);
         // The parameters' values may have filled the room the call reserved, so the body's
-        // environment and declarations are checked against the heap again.
-        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES))?;
+        // environment, its scope and each declaration are checked against the heap again, each
+        // just before it is made.
+        self.reserve_heap(ENV_BYTES)?;
         // Each new environment is in the frame, where the collector finds it, before the next
         // allocation.
         let var_env = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(params) });
@@ -2357,6 +2363,7 @@ impl Interp {
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
+            self.reserve_heap(binding_bytes(name.len()).saturating_add(closure_bytes(&fcode)))?;
             let f = self.make_closure(fcode, lex)?;
             self.temp_roots.push(Value::Object(f));
             let r = self.env_insert(var_env, name.clone(), Binding::new(Value::Object(f), true, false));
@@ -2372,6 +2379,9 @@ impl Interp {
                 Some(Env::Decl { bindings, .. }) => bindings.get(v).map_or(Value::Undefined, |b| b.value.clone()),
                 _ => Value::Undefined,
             };
+            // The initial value is reachable from the parameters' environment while the heap is
+            // checked.
+            self.reserve_heap(binding_bytes(v.len()))?;
             self.env_insert(var_env, v.clone(), Binding::new(initial, true, false))?;
         }
         Ok(())
@@ -2447,7 +2457,7 @@ impl Interp {
                 // and the room is checked as each element is read. Any other object, and an array
                 // whose elements no getter reads, is checked against the length it has now.
                 let array = matches!(self.object(o)?.class, Class::Array { .. });
-                if n >= f64::from(room) && !(array && self.has_index_getter(o)?) {
+                if n > f64::from(room) && !(array && self.has_index_getter(o)?) {
                     return Err(self.throw(ErrorType::Range, "array literal too long"));
                 }
                 let n = n as u32;
@@ -2463,7 +2473,7 @@ impl Interp {
                         if i >= end {
                             return Ok(());
                         }
-                        if i.saturating_add(1) >= room {
+                        if i >= room {
                             return Err(self.throw(ErrorType::Range, "array literal too long"));
                         }
                         self.use_fuel()?;
@@ -2495,7 +2505,7 @@ impl Interp {
         let o = self.object_mut(a)?;
         let Class::Array { length, .. } = &mut o.class else { return internal("spread into something that is not an array") };
         let start = *length;
-        let Some(end) = u32::try_from(items.len()).ok().and_then(|n| start.checked_add(n)).filter(|&e| e < u32::MAX) else {
+        let Some(end) = u32::try_from(items.len()).ok().and_then(|n| start.checked_add(n)) else {
             return Err(self.throw(ErrorType::Range, "array literal too long"));
         };
         *length = end;
@@ -2507,14 +2517,26 @@ impl Interp {
     }
 
     /// Whether reading the elements of `o` by index can run code: `o` or an object it inherits
-    /// from has an accessor property with an index name. Each object takes a unit of fuel.
+    /// from has an accessor property with a getter and an index name. Each object, and each
+    /// property looked at, takes a unit of fuel.
     fn has_index_getter(&mut self, o: ObjId) -> JsResult<bool> {
         let mut cur = Some(o);
         while let Some(id) = cur {
             self.use_fuel()?;
-            let object = self.object(id)?;
-            if object.props.iter().any(|(k, p)| matches!(p, Prop::Accessor { .. }) && array_index(k).is_some()) {
-                return Ok(true);
+            // The fuel and the interrupt flag are checked at each property, so a long scan stops
+            // as soon as either ends the run.
+            let Some(object) = self.heap.object(id) else { return internal("object out of range") };
+            for (k, p) in object.props.iter() {
+                if self.fuel == 0 {
+                    return Err(Abrupt::Limit(LimitKind::Fuel));
+                }
+                self.fuel -= 1;
+                if self.interrupt.load(Ordering::Relaxed) {
+                    return Err(Abrupt::Limit(LimitKind::Interrupted));
+                }
+                if matches!(p, Prop::Accessor { get: Some(_), .. }) && array_index(k).is_some() {
+                    return Ok(true);
+                }
             }
             cur = object.proto;
         }
@@ -3443,16 +3465,22 @@ impl Interp {
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, scope)?;
             self.declare(var_env, name, Some(Value::Object(f)), configurable)?;
-            if on_global {
-                self.global_vars.insert(name.clone());
-            }
+            self.note_global_var(on_global, name)?;
         }
         for v in &code.vars {
             self.use_fuel()?;
             self.declare(var_env, v, None, configurable)?;
-            if on_global {
-                self.global_vars.insert(v.clone());
-            }
+            self.note_global_var(on_global, v)?;
+        }
+        Ok(())
+    }
+
+    /// Records `name` as a global `var` or function name when `on_global` and the global object
+    /// has it as an own property after its declaration: a `var` the 5.1 edition declares on a
+    /// name the global object only inherits makes no property, and is not recorded.
+    fn note_global_var(&mut self, on_global: bool, name: &Key) -> JsResult<()> {
+        if on_global && self.get_own_property(self.global, name)?.is_some() {
+            self.global_vars.insert(name.clone());
         }
         Ok(())
     }

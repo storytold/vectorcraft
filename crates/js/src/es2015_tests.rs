@@ -319,8 +319,29 @@ fn a_global_var_stops_a_later_let_even_on_a_configurable_property() {
     assert!(is_thrown(&realm.run("let z;"), "SyntaxError"));
     assert_eq!(realm.run("delete z"), Ok(JsValue::Bool(true)));
     assert_eq!(realm.run("let z = 3; z"), Ok(JsValue::Number(3.0)));
+    // Deleting the property itself, not through the global environment, keeps the record
+    // (ECMA-262 2015 sections 12.5.3.2 and 8.1.1.4.7).
     assert_eq!(realm.run("(0, eval)('var w = 1'); delete this.w"), Ok(JsValue::Bool(true)));
-    assert_eq!(realm.run("let w = 4; w"), Ok(JsValue::Number(4.0)));
+    assert!(is_thrown(&realm.run("let w = 4;"), "SyntaxError"));
+    assert_eq!(realm.run("(0, eval)('var u = 1'); with (this) { delete u; }"), Ok(JsValue::Bool(true)));
+    assert!(is_thrown(&realm.run("let u = 5;"), "SyntaxError"));
+    // Deleting a name the global object only inherits deletes no variable.
+    assert_eq!(realm.run("(0, eval)('var t = 1'); delete this.t; Object.prototype.t = 2; delete t"), Ok(JsValue::Bool(true)));
+    assert!(is_thrown(&realm.run("let t = 6;"), "SyntaxError"));
+}
+
+#[test]
+fn a_5_1_var_on_an_inherited_name_is_not_a_global_var() {
+    // The 5.1 edition's `var` on a name the global object only inherits makes no property, so the
+    // name does not stop a later `let` once the inherited property is gone.
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("Object.prototype.x = 1; Object.prototype.y = 1; this.y = 2; 0"), Ok(JsValue::Number(0.0)));
+    assert_eq!(realm.run("var x, y; this.hasOwnProperty('x')"), Ok(JsValue::Bool(false)));
+    assert_eq!(realm.run("delete Object.prototype.x"), Ok(JsValue::Bool(true)));
+    realm.set_es2015(true);
+    assert_eq!(realm.run("let x = 1; x"), Ok(JsValue::Number(1.0)));
+    // A `var` on an own property is still recorded.
+    assert!(is_thrown(&realm.run("let y = 3;"), "SyntaxError"));
 }
 
 #[test]
@@ -568,10 +589,21 @@ fn an_array_s_spread_is_checked_against_the_elements_it_reads() {
     let then_more = "var a = []; a.length = 4294967295; Object.defineProperty(a, 0, { get: function () { a.length = 1; return 7; } }); \
                      var b = [...a, ...[1, 2]]; b.join() === '7,1,2'";
     truth(then_more);
-    // An array no getter reads is checked when spread begins, without reading its elements.
+    // An array no getter reads is checked when spread begins, without reading its elements. An
+    // empty array has room for 4,294,967,295 elements, so only one more is too long.
     let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
-    let long = realm.run("var a = []; a.length = 4294967295; [...a]");
+    let long = realm.run("var a = []; a.length = 4294967295; [0, ...a]");
     assert!(is_thrown(&long, "RangeError"), "{long:?}");
+    let fits = realm.run("[...a]").unwrap_err();
+    assert_eq!(fits.kind, RunErrorKind::Limit(LimitKind::Fuel), "{fits:?}");
+    // A setter at an index reads nothing, so it does not put off the check.
+    let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
+    let set = realm.run("var a = []; a.length = 4294967295; Object.defineProperty(a, 0, { set: function (v) {} }); [0, ...a]");
+    assert!(is_thrown(&set, "RangeError"), "{set:?}");
+    // A getter that shrinks the array still puts off the check.
+    let most = "var a = []; a.length = 4294967295; Object.defineProperty(a, 0, { get: function () { a.length = 1; return 7; } }); \
+                var b = [0, ...a]; b.join() === '0,7'";
+    truth(most);
     // An object that is not an array is still checked against the length it has when spread
     // begins.
     throws("[0, ...{ length: 4294967295 }];", "RangeError");
@@ -587,20 +619,27 @@ fn spread_counts_each_index_name_against_the_heap() {
         assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
         measure.interp().collect_garbage();
         let base = measure.interp().heap.bytes;
-        for extra in (0..640usize).map(|k| k * 1024) {
+        let mut spread_all = 0;
+        for extra in (0..1280usize).map(|k| k * 2048) {
             let heap_bytes = base + extra;
             let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
-            if realm.run(setup).is_err() {
+            // Only the heap limit may stop the setup.
+            if let Err(e) = realm.run(setup) {
+                assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "setup at {heap_bytes}: {e:?}");
                 continue;
             }
             match realm.run(&format!("var b = {spread}; b.length")) {
-                Ok(v) => assert_eq!(v, JsValue::Number(4000.0), "{spread} at {heap_bytes}"),
+                Ok(v) => {
+                    assert_eq!(v, JsValue::Number(4000.0), "{spread} at {heap_bytes}");
+                    spread_all += 1;
+                }
                 Err(e) => assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{spread} at {heap_bytes}: {e:?}"),
             }
             // A collection counts what is live, without the bytes the spread held while it ran.
             realm.interp().collect_garbage();
             assert!(realm.interp().heap.bytes <= heap_bytes, "{spread}: {} > {heap_bytes}", realm.interp().heap.bytes);
         }
+        assert!(spread_all > 0, "{spread}: no limit in the range fit the whole spread");
     }
 }
 
@@ -623,7 +662,7 @@ fn spread_and_templates_stay_within_the_limits() {
     let e = realm.run("var s = 'x'; for (var i = 0; i < 22; i++) s += s; [...s]").unwrap_err();
     assert!(matches!(e.kind, RunErrorKind::Limit(_)), "{e:?}");
     throws("function f() {} f(...{ length: 100000 });", "RangeError");
-    throws("var a = []; a.length = 4294967294; [0, ...a];", "RangeError");
+    throws("var a = []; a.length = 4294967294; [0, 1, ...a];", "RangeError");
 }
 
 #[test]
@@ -664,10 +703,12 @@ fn a_rest_parameter_checks_the_heap_before_its_array_is_made() {
 fn a_body_after_default_parameters_checks_the_heap_before_its_scope_is_made() {
     // The default value fills the heap a little more each run, so at some count the room left
     // after it is smaller than the body's long variable names need. The call then ends with the
-    // heap limit before the heap estimate passes it.
+    // heap limit before the heap estimate passes it. Only a run that stops after `fill` has
+    // returned counts as stopped by the body.
     let vars = (0..200).map(|i| format!("v{i:0>60}")).collect::<Vec<_>>().join(", ");
     let setup = format!(
-        "var keep = []; function fill(k) {{ for (var i = 0; i < k; i++) keep.push(i); }} function f(a = fill(count)) {{ var {vars}; return 1; }} 0"
+        "var keep = [], filled = false; function fill(k) {{ for (var i = 0; i < k; i++) keep.push(i); filled = true; }} \
+         function f(a = fill(count)) {{ var {vars}; return 1; }} 0"
     );
     let mut measure = Realm::with_options(es_options(), Limits::default());
     assert_eq!(measure.run(&setup), Ok(JsValue::Number(0.0)));
@@ -677,16 +718,21 @@ fn a_body_after_default_parameters_checks_the_heap_before_its_scope_is_made() {
     for count in (0..4000).step_by(20) {
         let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
         assert_eq!(realm.run(&setup), Ok(JsValue::Number(0.0)));
-        match realm.run(&format!("var count = {count}; f()")) {
+        let result = realm.run(&format!("var count = {count}; f()"));
+        // The estimate is read before the next run, whose code may make the collector run.
+        let bytes = realm.interp().heap.bytes;
+        assert!(bytes <= heap_bytes, "{count}: {bytes} > {heap_bytes}");
+        match result {
             Ok(v) => assert_eq!(v, JsValue::Number(1.0), "{count}"),
             Err(e) => {
                 assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{count}: {e:?}");
-                stopped += 1;
+                if realm.run("filled") == Ok(JsValue::Bool(true)) {
+                    stopped += 1;
+                }
             }
         }
-        assert!(realm.interp().heap.bytes <= heap_bytes, "{count}: {} > {heap_bytes}", realm.interp().heap.bytes);
     }
-    assert!(stopped > 0, "no count reached the heap limit");
+    assert!(stopped > 0, "no count reached the heap limit after the default value was made");
 }
 
 #[test]
