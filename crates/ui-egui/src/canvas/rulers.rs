@@ -63,7 +63,10 @@ pub(crate) fn units() -> &'static [UnitKind] {
 
 /// Lengths stored in points and shown in `unit`, a bare number read as Numbers Without Units Are Points says.
 fn lengths(app: &VectorcraftApp, unit: Unit) -> LengthUnits {
-    crate::fields::bare_points(LengthUnits::new(UnitKind::Points, unit_kind(unit), PIXELS_PER_INCH), app.session.prefs.numbers_without_units_are_points)
+    crate::fields::bare_points(
+        LengthUnits::new(UnitKind::Points, unit_kind(unit), PIXELS_PER_INCH),
+        app.session.prefs.numbers_without_units_are_points,
+    )
 }
 
 /// The document's General unit as the lengths its fields show.

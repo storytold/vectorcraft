@@ -70,10 +70,9 @@ fn select_rows(app: &mut VectorcraftApp, names: &[&str]) {
     app.ui.swatches_panel.state.selection = Selection::new(keys.clone(), keys.last().cloned(), keys.first().cloned());
 }
 
-/// A click on swatch `name` with `mods` held.
+/// A click on swatch `name` with `mods` held, as the panel reports it (`used`, for the background with Alt).
 fn clicked(app: &mut VectorcraftApp, name: &str, mods: Mods) {
-    let key = key_of(app, name);
-    feed(app, PresetEvent::select(key, mods));
+    super::apply(app, name, mods.alt);
 }
 
 /// A double click on swatch `name`.

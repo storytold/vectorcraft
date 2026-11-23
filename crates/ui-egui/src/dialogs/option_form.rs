@@ -26,7 +26,6 @@ pub(super) use super::tool_options::title as tool_title;
 use super::{layer_color, live_paint_bucket, live_paint_gaps, live_paint_selection, shape_builder_options, tile_edge_color};
 use crate::VectorcraftApp;
 
-
 /// What OK does with a dialog's checked values and its extra value.
 type Run = fn(&mut VectorcraftApp, &Map<String, Value>, &Value) -> Result<Value, String>;
 

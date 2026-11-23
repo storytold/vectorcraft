@@ -270,7 +270,9 @@ fn a_finger_after_a_pen_pans_and_draws_nothing() {
     let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     let drag = |app: &mut VectorcraftApp, a: Pos2, b: Pos2| {
-        for ev in [egui::Event::PointerMoved(a), button(a, true), egui::Event::PointerMoved(a.lerp(b, 0.5)), egui::Event::PointerMoved(b), button(b, false)] {
+        for ev in
+            [egui::Event::PointerMoved(a), button(a, true), egui::Event::PointerMoved(a.lerp(b, 0.5)), egui::Event::PointerMoved(b), button(b, false)]
+        {
             frame(app, &ctx, vec![ev]);
         }
         frame(app, &ctx, vec![]);

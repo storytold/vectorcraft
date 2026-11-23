@@ -46,7 +46,8 @@ pub(super) const KIND: &str = "documentSetup";
 const TABS: [&str; 4] = ["General", "Transparency", "Type", "Color"];
 /// Dialog-only fields `document.setup` doesn't take; `gridColors.N` (a picked colour waiting to be
 /// folded into the pair) is dialog-only too.
-const UI_ONLY: [&str; 7] = ["bleedLinked", "colorMode", "convertColors", "rgbProfile", "cmykProfile", "editArtboards", "numbersWithoutUnitsArePoints"];
+const UI_ONLY: [&str; 7] =
+    ["bleedLinked", "colorMode", "convertColors", "rgbProfile", "cmykProfile", "editArtboards", "numbersWithoutUnitsArePoints"];
 /// The settings `document.setup` keeps as an object, which the rows edit as `key.part`.
 const PARTS: [(&str, [&str; 2]); 3] = [("quotes", ["double", "single"]), ("superscript", ["size", "position"]), ("subscript", ["size", "position"])];
 /// The keys a picked grid colour arrives under: the entry's index is the key's last character.

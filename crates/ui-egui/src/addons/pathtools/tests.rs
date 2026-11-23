@@ -310,7 +310,7 @@ fn a_bare_number_in_a_panels_picas_field_follows_numbers_without_units_are_point
         let mut app = app();
         app.run("document.setUnits", json!({"units": "Picas"})).unwrap();
         app.run("prefs.set", json!({"key": "numbersWithoutUnitsArePoints", "value": on})).unwrap();
-        let mut panel = Panel::new(app, |app, ui| super::corner::section(app, ui));
+        let mut panel = Panel::new(app, super::corner::section);
         panel.type_into("Radius", "12");
         let app = panel.app();
         app.session.tool_options_of("cornerTool")["radius"].as_f64().unwrap()

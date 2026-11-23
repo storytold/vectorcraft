@@ -57,4 +57,3 @@ pub(super) fn pixel_grid(app: &VectorcraftApp) -> Option<CanvasGrid> {
 pub(super) fn pref_color(hex: &str, fallback: Color32) -> Color32 {
     vectorcraft_color::Color::from_hex(hex).map_or(fallback, |c| crate::panels::c32(&c))
 }
-
