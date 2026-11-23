@@ -13,8 +13,9 @@
 //! VectorCraft's own rules, which the help pages do not state: components left out count as 0;
 //! `new cmykColor()` is the same as `new CMYKColor()`; `LabColor.l` is 0 to 100 and `a` and `b`
 //! are -128 to 128. `GrayColor.gray` runs from 0 (black) to 100 (white), as the GrayColor page
-//! says. `GradientColor`, `SpotColor` and `PatternColor` can be read from an object but not
-//! assigned yet.
+//! says. A `SpotColor` (<https://ai-scripting.docsforadobe.dev/jsobjref/SpotColor/>) can be
+//! assigned to a path's `fillColor` and `strokeColor`, not to a swatch's `color`. `GradientColor`
+//! and `PatternColor` can be read from an object but not assigned yet.
 
 use std::rc::Rc;
 
@@ -100,8 +101,20 @@ fn component(o: &[(String, Data)], class: &str, key: &str, min: f64, max: f64) -
     }
 }
 
+/// The `spot` and the `tint` (0 to 100, 0 when left out) of `d` when it is a `SpotColor`, else
+/// `None`.
+pub(super) fn spot_parts(d: &Data) -> std::result::Result<Option<(&Data, f64)>, HostError> {
+    let Data::Object(o) = d else { return Ok(None) };
+    if !matches!(o.iter().find(|(k, _)| k == "typename").map(|(_, v)| v), Some(Data::String(s)) if s == "SpotColor") {
+        return Ok(None);
+    }
+    let tint = component(o, "SpotColor", "tint", 0.0, 100.0)?;
+    let spot = o.iter().find(|(k, _)| k == "spot").map_or(&Data::Undefined, |(_, v)| v);
+    Ok(Some((spot, tint)))
+}
+
 #[allow(clippy::cast_possible_truncation)]
-fn unit(v: f64, scale: f64) -> f32 {
+pub(super) fn unit(v: f64, scale: f64) -> f32 {
     (v / scale) as f32
 }
 

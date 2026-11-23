@@ -334,10 +334,57 @@ fn a_spot_color_reads_as_a_spot_color_and_keeps_its_link() {
     let (mut s, a) = doc_with_paints();
     s.execute("paint.setFill", &json!({"ids": [a.0], "swatch": "Ink", "tint": 40})).unwrap();
     let before = node(&s, a).appearance.fill_paint();
-    let out = log(&mut s, "var p = app.activeDocument.pathItems[0]; vc.log([p.fillColor.typename, p.fillColor.tint]);");
-    assert_eq!(rounded(&out[0]), json!(["SpotColor", 40]));
-    assert!(failure(&mut s, "var p = app.activeDocument.pathItems[0]; p.fillColor = p.fillColor;").contains("SpotColor is not available yet"));
+    let out = log(&mut s, "var p = app.activeDocument.pathItems[0]; vc.log([p.fillColor.typename, p.fillColor.spot.name, p.fillColor.tint]);");
+    assert_eq!(rounded(&out[0]), json!(["SpotColor", "Ink", 40]));
+    let steps = undo_steps(&s);
+    log(&mut s, "var p = app.activeDocument.pathItems[0]; p.fillColor = p.fillColor;");
+    assert_eq!(undo_steps(&s), steps, "assigning the spot color the fill has records no step");
     assert_eq!(node(&s, a).appearance.fill_paint(), before, "the fill stays linked to its swatch");
+}
+
+#[test]
+fn a_spot_color_paints_its_spot_at_its_tint() {
+    let (mut s, a) = doc_with_paints();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pathItems[0], c = new SpotColor(); c.spot = d.spots.getByName('Ink'); c.tint = 50;\
+         p.fillColor = c; p.strokeColor = c; vc.log([p.fillColor.typename, p.fillColor.spot.name, p.fillColor.tint, p.strokeColor.tint]);",
+    );
+    assert_eq!(rounded(&out[0]), json!(["SpotColor", "Ink", 50, 50]));
+    let n = node(&s, a);
+    for paint in [n.appearance.fill_paint(), n.appearance.stroke_paint()] {
+        match paint {
+            Paint::Solid { swatch: Some(name), tint, .. } => assert!(name == "Ink" && (tint - 0.5).abs() < 1e-6, "{name} at {tint}"),
+            p => panic!("the paint is {p:?}"),
+        }
+    }
+}
+
+#[test]
+fn a_spot_color_without_a_spot_of_the_document_is_refused() {
+    let (mut s, _) = doc_with_paints();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let layers = |s: &Session| s.documents().iter().map(|d| format!("{:?}", d.doc.layers)).collect::<Vec<_>>();
+    let before = layers(&s);
+    let steps = undo_steps(&s);
+    for (source, part) in [
+        ("app.documents[0].pathItems[0].fillColor = new SpotColor();", "SpotColor.spot must be a Spot"),
+        ("var a = app.documents[0], c = new SpotColor(); c.spot = a.swatches.getByName('Ink'); a.pathItems[0].fillColor = c;", "must be a Spot"),
+        (
+            "var a = app.documents[0], c = new SpotColor(); c.spot = a.spots.getByName('Ink'); c.tint = 101; a.pathItems[0].fillColor = c;",
+            "SpotColor.tint",
+        ),
+        (
+            "var a = app.documents[0], b = app.documents[1], c = new SpotColor(); c.spot = a.spots.getByName('Ink'); b.pathItems[0].fillColor = c;",
+            "Cross-document",
+        ),
+    ] {
+        let e = failure(&mut s, source);
+        assert!(e.contains(part), "{source}: {e}");
+    }
+    assert_eq!(layers(&s), before);
+    assert_eq!(undo_steps(&s), steps);
 }
 
 #[test]
@@ -718,7 +765,7 @@ fn bad_color_components_throw_and_change_nothing() {
         ("app.activeDocument.pathItems[0].fillColor = {typename: 'Foo'};", "color object"),
         ("app.activeDocument.pathItems[0].fillColor = 5;", "color object"),
         ("app.activeDocument.pathItems[0].fillColor = new GradientColor();", "not available yet"),
-        ("app.activeDocument.pathItems[0].strokeColor = new SpotColor();", "not available yet"),
+        ("app.activeDocument.pathItems[0].strokeColor = new SpotColor();", "SpotColor.spot must be a Spot"),
     ] {
         let e = failure(&mut s, source);
         assert!(e.contains(part), "{source}: {e}");

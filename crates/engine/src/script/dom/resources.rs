@@ -24,7 +24,8 @@
 //!   or deletion that `vc.run` makes, leaves the object stale, and every member then throws
 //!   `Stale Swatch` (`Stale Symbol`, and so on).
 //! - `swatches` lists the swatches in the Swatches panel's order: None, Registration, the other
-//!   ungrouped swatches, then each color group's. `swatchGroups` lists the color groups only.
+//!   ungrouped swatches, then each color group's. `spots` lists Registration and the spot colors in
+//!   the same order. `swatchGroups` lists the color groups only.
 //! - `swatches.add()` saves the current fill (a color, gradient or pattern) as a swatch, or black
 //!   when the fill is None; `spots.add()` saves the current fill, in the document's color space
 //!   unless it is Lab, or black when it is not a solid color, as a spot color. `getSelected()` gives
@@ -34,10 +35,13 @@
 //!   `graphicStyles.removeAll()` keeps it.
 //! - `SwatchGroup.remove()` deletes the group and its swatches; `removeAll()` deletes its swatches
 //!   and keeps the group. A group holds solid colors only.
-//! - A spot's color must be in the document's color space (RGB or CMYK) or Lab. `colorType` reads
-//!   `ColorModel.SPOT` and takes only that value. `spotKind` reads `SpotColorKind.SPOTCMYK` for a
-//!   gray spot. `getInternalColor()` gives the components on the scale of the color classes
-//!   (0 to 255 for RGB, 0 to 100 for CMYK and gray, L*a*b* as is).
+//! - `Spot.color` takes an RGB, CMYK or Lab color in a document of either color space, and the
+//!   spot keeps that color space. `colorType` reads `ColorModel.SPOT`, or
+//!   `ColorModel.REGISTRATION` for Registration, and takes only that value. `spotKind` reads
+//!   `SpotColorKind.SPOTCMYK` for a gray spot. `getInternalColor()` gives the components on the
+//!   scale of the color classes (0 to 255 for RGB, 0 to 100 for CMYK and gray, L*a*b* as is).
+//! - A `SpotColor` assigned to a path's `fillColor` or `strokeColor` links the paint to its `spot`,
+//!   a Spot of the path's document, at its `tint`; reading the paint back gives that `spot`.
 //! - `symbols.add(art)` keeps the art where it is and does not make it an instance.
 //!   `Symbol.remove()` and `symbols.removeAll()` turn the instances into plain art.
 //! - `applyTo` and `mergeTo` take one page item of the same document that can be edited;
@@ -278,11 +282,16 @@ fn find_swatch<'a>(d: &'a Document, name: &str) -> Option<(&'a Swatch, Option<&'
     all_swatches(d).into_iter().find(|(w, _)| w.name == name)
 }
 
+/// Whether `spots` lists `w`: a spot color, or Registration.
+fn is_spot(w: &Swatch) -> bool {
+    w.spot || w.name == swatch::REGISTRATION
+}
+
 /// The names of the resources of `kind` in `d`, in their panel's order.
 fn names(d: &Document, kind: Kind) -> Vec<String> {
     match kind {
         Kind::Swatch => all_swatches(d).into_iter().map(|(w, _)| w.name.clone()).collect(),
-        Kind::Spot => all_swatches(d).into_iter().filter(|(w, _)| w.spot).map(|(w, _)| w.name.clone()).collect(),
+        Kind::Spot => all_swatches(d).into_iter().filter(|(w, _)| is_spot(w)).map(|(w, _)| w.name.clone()).collect(),
         Kind::Group => d.swatch_groups.iter().map(|g| g.name.clone()).collect(),
         Kind::Symbol => d.symbols.iter().map(|s| s.name.clone()).collect(),
         Kind::Style => d.graphic_styles.iter().map(|g| g.name.clone()).collect(),
@@ -294,7 +303,7 @@ fn names(d: &Document, kind: Kind) -> Vec<String> {
 fn exists(d: &Document, kind: Kind, name: &str) -> bool {
     match kind {
         Kind::Swatch => find_swatch(d, name).is_some(),
-        Kind::Spot => find_swatch(d, name).is_some_and(|(w, _)| w.spot),
+        Kind::Spot => find_swatch(d, name).is_some_and(|(w, _)| is_spot(w)),
         Kind::Group => d.swatch_groups.iter().any(|g| g.name == name),
         Kind::Symbol => d.symbols.iter().any(|s| s.name == name),
         Kind::Style => d.graphic_style(name).is_some(),
@@ -645,24 +654,41 @@ fn res_remove(h: &Host, kind: Kind, a: &[Data]) -> Answer {
 fn swatch_color(h: &Host, kind: Kind, a: &[Data]) -> Answer {
     let r = this_res(h, a, kind)?;
     let w = swatch_now(h, &r, kind)?;
-    if w.spot && w.tint_of().is_none() {
+    if is_spot(&w) && w.tint_of().is_none() {
         let spot = resource_ref(h, r.doc.uid, Kind::Spot, &w.name)?;
         return Ok(Data::Object(vec![("typename".into(), text("SpotColor")), ("spot".into(), spot), ("tint".into(), num(100.0))]));
     }
-    let color = colors::of_paint(&w.paint);
-    let base = match &w.paint {
-        Paint::Solid { swatch: Some(base), .. } => {
-            with_doc(h, r.doc, |_, st| find_swatch(&st.doc, base).is_some_and(|(b, _)| b.spot)).then(|| base.clone())
-        }
+    paint_color(h, r.doc, &w.paint)
+}
+
+/// What reading `paint` in the document `doc` gives: a new color object, whose `spot` names the
+/// Spot when `paint` is linked to one.
+pub(super) fn paint_color(h: &Host, doc: Doc, paint: &Paint) -> Answer {
+    let color = colors::of_paint(paint);
+    let base = match paint {
+        Paint::Solid { swatch: Some(base), .. } => with_doc(h, doc, |_, st| exists(&st.doc, Kind::Spot, base)).then(|| base.clone()),
         _ => None,
     };
     match (color, base) {
         (Data::Object(mut o), Some(base)) => {
-            o.insert(1, ("spot".into(), resource_ref(h, r.doc.uid, Kind::Spot, &base)?));
+            o.insert(1, ("spot".into(), resource_ref(h, doc.uid, Kind::Spot, &base)?));
             Ok(Data::Object(o))
         }
         (color, _) => Ok(color),
     }
+}
+
+/// The name of the Spot that the `spot` of a `SpotColor` assigned to a page item of the document
+/// `doc` names.
+pub(super) fn assigned_spot(h: &Host, spot: &Data, doc: Doc) -> std::result::Result<String, HostError> {
+    if handle_of(spot, Kind::Spot.class()).is_none() {
+        return Err(HostError::Type("SpotColor.spot must be a Spot".into()));
+    }
+    let r = resource_of(h, spot, Kind::Spot)?;
+    if r.doc.uid != doc.uid {
+        return Err(HostError::Error(CROSS_DOCUMENT.into()));
+    }
+    Ok(r.name)
 }
 
 /// `Spot.color`: the spot's own color, as a new color object.
@@ -685,12 +711,8 @@ fn set_swatch_color(h: &Host, kind: Kind, a: &[Data]) -> Answer {
         Paint::Solid { .. } => return Err(HostError::Error(format!("{} is a tint of another swatch; change that swatch's color", r.name))),
         _ => return Err(HostError::Error(format!("{} is not a solid color", r.name))),
     };
-    if w.spot {
-        let cmyk = is_cmyk(h, r.doc);
-        if !fits_spot(cmyk, color) {
-            let space = if cmyk { "a CMYKColor" } else { "an RGBColor" };
-            return Err(HostError::Error(format!("a spot's color must be {space} in this document, or a LabColor")));
-        }
+    if w.spot && matches!(color, Color::Gray { .. }) {
+        return Err(HostError::Error("a spot's color must be an RGBColor, a CMYKColor or a LabColor".into()));
     }
     if now == color {
         return Ok(Data::Undefined);
@@ -699,22 +721,28 @@ fn set_swatch_color(h: &Host, kind: Kind, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
+/// The `ColorModel` of the Spot `name`: Registration's own, or `SPOT`.
+fn spot_model(name: &str) -> &'static str {
+    if name == swatch::REGISTRATION { "ColorModel.REGISTRATION" } else { "ColorModel.SPOT" }
+}
+
 fn spot_color_type(h: &Host, kind: Kind, a: &[Data]) -> Answer {
-    this_res(h, a, kind)?;
-    Ok(text("ColorModel.SPOT"))
+    Ok(text(spot_model(&this_res(h, a, kind)?.name)))
 }
 
 fn spot_set_color_type(h: &Host, kind: Kind, a: &[Data]) -> Answer {
-    match arg(a, 1) {
-        Data::String(s) if s == "ColorModel.SPOT" => {
-            this_res(h, a, kind)?;
-            Ok(Data::Undefined)
-        }
-        Data::String(s) if s == "ColorModel.PROCESS" || s == "ColorModel.REGISTRATION" => {
-            Err(HostError::Error("a Spot stays a spot color; edit it through its Swatch".into()))
-        }
-        _ => Err(HostError::Type("colorType must be a ColorModel value".into())),
+    let model = match arg(a, 1) {
+        Data::String(s) if ["ColorModel.SPOT", "ColorModel.PROCESS", "ColorModel.REGISTRATION"].contains(&s.as_str()) => s.as_str(),
+        _ => return Err(HostError::Type("colorType must be a ColorModel value".into())),
+    };
+    let r = this_res(h, a, kind)?;
+    if model == spot_model(&r.name) {
+        return Ok(Data::Undefined);
     }
+    if r.name == swatch::REGISTRATION {
+        return Err(reserved(&r.name));
+    }
+    Err(HostError::Error("a Spot stays a spot color; edit it through its Swatch".into()))
 }
 
 fn spot_color_of(h: &Host, kind: Kind, a: &[Data]) -> std::result::Result<Color, HostError> {

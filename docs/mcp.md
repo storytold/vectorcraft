@@ -2727,7 +2727,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest
   decimals, at least 4, that give the stored value back, so assigning a color read from a path leaves the path as it
   was. Reading `fillColor` or `strokeColor` gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
-  global or spot swatch reads as a `SpotColor` with its `tint`); assigning one of those throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
+  global or spot swatch reads as a `SpotColor` with its `tint`, and with its `spot` when the swatch is a spot color or
+  Registration). Assigning a `SpotColor` (https://ai-scripting.docsforadobe.dev/jsobjref/SpotColor/) links the fill or
+  stroke to its `spot`, a `Spot` of the path's document, at its `tint` (0 to 100, 0 when left out), with `paint.setFill`
+  or `paint.setStroke`; assigning a `GradientColor` or `PatternColor` throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
   art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
   stroke; a new-art gradient goes on the bounds of the path, or of the compound path or compound shape whose paint
   it shows, and a new-art pattern with a placement of its own, or one missing from the document, throws an error.
@@ -2753,7 +2756,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `swatchGroups.add()` runs `swatch.newGroup`, `symbols.add(sourceArt, registrationPoint?)` runs `symbol.new` with
   `keepArt: true` (the default point is `SymbolRegistrationPoint.SYMBOLCENTERPOINT`), and `symbolItems.add(symbol)`
   runs `symbol.place`. `swatches.getSelected()` gives `[]`. A `Swatch` (https://ai-scripting.docsforadobe.dev/jsobjref/Swatch/)
-  has `name` and `color` (`swatch.edit`) and `remove()` (`swatch.delete`); a spot swatch's `color` reads as a
+  has `name` and `color` (`swatch.edit`) and `remove()` (`swatch.delete`); the `color` of a spot swatch or of Registration reads as a
   `SpotColor` with its `spot` and a `tint` of 100, and a tint of a spot as that `spot` at its `tint`. A `Spot` (https://ai-scripting.docsforadobe.dev/jsobjref/Spot/) has
   `name`, `color`, `colorType`, `spotKind`, `getInternalColor()` and `remove()`. A `SwatchGroup`
   (https://ai-scripting.docsforadobe.dev/jsobjref/SwatchGroup/) has `name` (`swatch.renameGroup`), `addSwatch(swatch)`
@@ -2773,8 +2776,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   and `removeAll()` keeps them; the Default Graphic Style cannot be renamed or removed, and
   `graphicStyles.removeAll()` keeps it. A color group takes solid
   colors only; `SwatchGroup.remove()` deletes the group with its swatches, and its `removeAll()` deletes the swatches
-  and keeps the group. A spot's color is in the document's color space or Lab, its `colorType` takes only
-  `ColorModel.SPOT`, a gray spot's `spotKind` is `SpotColorKind.SPOTCMYK`, and `getInternalColor()` gives the
+  and keeps the group. `spots` lists Registration and the spot colors. `Spot.color` takes an `RGBColor`, a `CMYKColor`
+  or a `LabColor` in a document of either color space, and the spot keeps that color space. A spot's `colorType` reads
+  and takes only `ColorModel.SPOT` (`ColorModel.REGISTRATION` for Registration), a gray spot's `spotKind` is
+  `SpotColorKind.SPOTCMYK`, and `getInternalColor()` gives the
   components on the color classes' scales. `symbols.add` leaves the source art as it is, and removing a symbol turns
   its instances into plain art. `applyTo` and `mergeTo` take one page item of the same document that can be edited,
   and `Brush.applyTo` a path that is not a guide, a clipping path or a path in a compound path; applying the brush a

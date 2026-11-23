@@ -738,14 +738,32 @@ fn path_set_stroked(h: &super::Host, a: &[Data]) -> Answer {
 }
 
 fn path_fill_color(h: &super::Host, a: &[Data]) -> Answer {
-    Ok(colors::of_paint(&this_look(h, a)?.1.fill))
+    let (item, look) = this_look(h, a)?;
+    super::resources::paint_color(h, item.doc, &look.fill)
 }
 
 fn path_stroke_color(h: &super::Host, a: &[Data]) -> Answer {
-    Ok(colors::of_paint(&this_look(h, a)?.1.stroke))
+    let (item, look) = this_look(h, a)?;
+    super::resources::paint_color(h, item.doc, &look.stroke)
+}
+
+/// Links the fill (`fill`) or the stroke to the Spot `spot` at `tint` (0 to 100), unless it is
+/// linked to it at that tint already.
+fn set_spot_color(h: &super::Host, a: &[Data], fill: bool, spot: &Data, tint: f64) -> Answer {
+    let (item, look) = this_look(h, a)?;
+    let name = super::resources::assigned_spot(h, spot, item.doc)?;
+    let now = if fill { &look.fill } else { &look.stroke };
+    let same = matches!(now, Paint::Solid { swatch: Some(n), tint: t, .. } if *n == name && *t == colors::unit(tint, 100.0));
+    if !same {
+        edit_path(h, item, if fill { "paint.setFill" } else { "paint.setStroke" }, json!({"swatch": name, "tint": tint}))?;
+    }
+    Ok(Data::Undefined)
 }
 
 fn set_color(h: &super::Host, a: &[Data], fill: bool) -> Answer {
+    if let Some((spot, tint)) = colors::spot_parts(arg(a, 1))? {
+        return set_spot_color(h, a, fill, spot, tint);
+    }
     let color = colors::assigned(arg(a, 1), if fill { "fillColor" } else { "strokeColor" })?;
     let (item, look) = this_look(h, a)?;
     let now = if fill { &look.fill } else { &look.stroke };

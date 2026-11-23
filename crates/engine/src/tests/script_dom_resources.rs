@@ -165,7 +165,7 @@ fn hostile_names_and_values_are_refused_without_change() {
 }
 
 #[test]
-fn spots_keep_their_kind_and_their_document_color_space() {
+fn spots_keep_their_kind_and_their_color_space() {
     let (mut s, _) = doc();
     let out = log(
         &mut s,
@@ -177,7 +177,7 @@ fn spots_keep_their_kind_and_their_document_color_space() {
     assert_eq!(
         out,
         vec![
-            json!(1),
+            json!(2),
             json!("Spot"),
             json!("ColorModel.SPOT"),
             json!("SpotColorKind.SPOTRGB"),
@@ -189,18 +189,62 @@ fn spots_keep_their_kind_and_their_document_color_space() {
     );
     let before = resources(&s);
     for (script, message) in [
-        ("var p = app.activeDocument.spots[0]; p.color = new CMYKColor();", "must be an RGBColor"),
-        ("app.activeDocument.spots[0].colorType = ColorModel.PROCESS;", "stays a spot color"),
-        ("app.activeDocument.spots[0].colorType = 3;", "ColorModel value"),
+        ("var p = app.activeDocument.spots.getByName('Pea'); p.color = new GrayColor();", "must be an RGBColor, a CMYKColor or a LabColor"),
+        ("app.activeDocument.spots.getByName('Pea').colorType = ColorModel.PROCESS;", "stays a spot color"),
+        ("app.activeDocument.spots.getByName('Pea').colorType = 3;", "ColorModel value"),
     ] {
         let e = failure(&mut s, script);
         assert!(e.contains(message), "{script}: {e}");
     }
     assert_eq!(resources(&s), before);
-    log(&mut s, "var p = app.activeDocument.spots[0]; var l = new LabColor(); l.l = 50; p.color = l;");
-    assert_eq!(log(&mut s, "vc.log(app.activeDocument.spots[0].spotKind);"), vec![json!("SpotColorKind.SPOTLAB")]);
+    log(&mut s, "var p = app.activeDocument.spots.getByName('Pea'); var l = new LabColor(); l.l = 50; p.color = l;");
+    assert_eq!(log(&mut s, "vc.log(app.activeDocument.spots.getByName('Pea').spotKind);"), vec![json!("SpotColorKind.SPOTLAB")]);
     log(&mut s, "app.activeDocument.spots.removeAll();");
     assert!(!swatch_names(&mut s).contains(&"Pea".to_string()));
+}
+
+#[test]
+fn a_spot_takes_a_cmyk_color_in_an_rgb_document() {
+    let (mut s, _) = doc();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.spots.add(); p.name = 'Pea'; var c = new CMYKColor(); c.cyan = 35; c.yellow = 50; p.color = c;\
+         var q = app.activeDocument.spots.getByName('Pea'); vc.log(q.color.typename); vc.log([q.color.cyan, q.color.yellow]); vc.log(q.spotKind);",
+    );
+    assert_eq!(out, vec![json!("CMYKColor"), json!([35, 50]), json!("SpotColorKind.SPOTCMYK")]);
+    let d = &s.active().unwrap().doc;
+    let cmyk =
+        matches!(d.swatch("Pea").map(|w| &w.paint), Some(vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Cmyk { .. }, .. }));
+    assert!(cmyk, "the spot keeps its CMYK color in the RGB document");
+    let steps = undo_steps(&s);
+    log(&mut s, "var p = app.activeDocument.spots.getByName('Pea'); p.color = p.color;");
+    assert_eq!(undo_steps(&s), steps, "assigning the color the spot has records no step");
+}
+
+#[test]
+fn spots_list_registration_and_keep_it() {
+    let (mut s, _) = doc();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, r = d.spots.getByName('[Registration]'); vc.log(r.typename); vc.log(r.colorType);\
+         vc.log(d.spots[0].name); vc.log(d.spots.length); r.colorType = ColorModel.REGISTRATION;\
+         vc.log(d.swatches.getByName('[Registration]').color.spot.name);",
+    );
+    assert_eq!(out, vec![json!("Spot"), json!("ColorModel.REGISTRATION"), json!("[Registration]"), json!(1), json!("[Registration]")]);
+    let before = resources(&s);
+    let steps = undo_steps(&s);
+    for script in [
+        "app.activeDocument.spots.getByName('[Registration]').name = 'R';",
+        "app.activeDocument.spots.getByName('[Registration]').remove();",
+        "app.activeDocument.spots.getByName('[Registration]').color = new CMYKColor();",
+        "app.activeDocument.spots.getByName('[Registration]').colorType = ColorModel.SPOT;",
+    ] {
+        assert!(failure(&mut s, script).contains("is built in"), "{script}");
+    }
+    log(&mut s, "app.activeDocument.spots.removeAll();");
+    assert_eq!(resources(&s), before);
+    assert_eq!(undo_steps(&s), steps, "removeAll with only Registration left records no step");
+    assert_eq!(log(&mut s, "vc.log(app.activeDocument.spots.length);"), vec![json!(1)]);
 }
 
 #[test]
