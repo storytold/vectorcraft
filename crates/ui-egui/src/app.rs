@@ -320,6 +320,11 @@ impl VectorcraftApp {
         prefs_dialog::draft_language(self).unwrap_or_else(|| i18n::Lang::from_pref(&self.session.prefs.interface_language))
     }
 
+    /// A window's raw input, before egui and the keys read it (the host's `raw_input_hook`).
+    pub fn raw_input(&self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        crate::type_editing::keep_layout_text(self, ctx, raw);
+    }
+
     /// What the runtime gets before each frame, from `embed::before_input`: the commands the last
     /// frame fired run first, so the input reflects them; then the theme, the scale, the zoom
     /// stops and the scrub choice from the preferences, the command states and the host with

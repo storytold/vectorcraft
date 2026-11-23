@@ -179,11 +179,11 @@ fn role(title: &str) -> MenuRole {
 }
 
 /// The hash of what the catalog's rows depend on, which moves its generation: `plays` are the
-/// actions' function keys, a row each.
-fn generation(listed: &Listed, plays: &[(String, craft::keymap::Chord)]) -> u64 {
+/// actions' function keys, a row each, and `type_keys` the chords the Type tool's commands take.
+fn generation(listed: &Listed, plays: &[(String, craft::keymap::Chord)], type_keys: &[(&str, Vec<Binding>)]) -> u64 {
     let mut h = DefaultHasher::new();
     (crate::i18n::current().code(), plugin_revision(), crate::scripts_menu::revision(), vectorcraft_text::FontDb::global().generation()).hash(&mut h);
-    (listed, plays).hash(&mut h);
+    (listed, plays, type_keys).hash(&mut h);
     h.finish()
 }
 
@@ -242,11 +242,14 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     let bar = MenuBar::new(menus);
     let options = LayoutOptions::new(APP_NAME).label(&translate_label);
     let laid = layout(&bar, target, &options).bar;
-    match AppCatalog::new(defs, generation(&listed, &crate::panels::actions::function_keys(&app.ui.actions))) {
+    let type_keys = crate::type_editing::app_keys(&defs, &app.shortcut_overrides);
+    match AppCatalog::new(defs, generation(&listed, &crate::panels::actions::function_keys(&app.ui.actions), &type_keys)) {
         Ok(catalog) => {
-            // While a text field has the keys no shortcut runs, as in production; the text-editing chords still edit it.
+            // While a text field has the keys no shortcut runs, as in production; the text-editing chords still edit it,
+            // and the Type tool's commands run while it types.
             let catalog = catalog.typing_rule(TypingRule::AllWait);
-            app.menus.catalog = Some(UNROUTED.iter().fold(catalog, |catalog, id| catalog.replace_defaults(id.as_str(), Vec::new())));
+            let catalog = UNROUTED.iter().fold(catalog, |catalog, id| catalog.replace_defaults(id.as_str(), Vec::new()));
+            app.menus.catalog = Some(type_keys.into_iter().fold(catalog, |catalog, (id, keys)| catalog.replace_defaults(id, keys)));
         }
         // A refused catalog is a bug in the rows; the last good one keeps the commands working.
         Err(e) => eprintln!("menu catalog refused: {e:?}"),

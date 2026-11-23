@@ -415,6 +415,7 @@ impl eframe::App for WebShell {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         raw.events.extend(self.host.pointers.borrow_mut().take());
         if let Some(app) = &mut self.app {
+            app.raw_input(ctx, raw);
             embed::before_input(ctx, |out| app.frame_input(out));
         }
     }

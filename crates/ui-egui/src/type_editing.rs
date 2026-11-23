@@ -8,6 +8,7 @@
 // PLAN: assumed `craft = { workspace = true }` in this crate's Cargo.toml (owner: hub-w1); `craft_ui` does not re-export
 // the editor input types, so they come through the `craft::behavior` facade.
 use craft::behavior::{EditCommand, EditorInput, Granularity, Metrics, MoveMods, NavMove, PartKey, Sense, SurroundingUnit as ImeUnit, TextPos};
+use craft::keymap::{Binding, Chord, CommandDef, CommandRef, KeyInput, Layout, Overrides};
 use craft::ui::contract::{
     CommandSet, Commands as _, Common, Component, Cx, EditorStep, Focus as _, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Props as _,
     Remember as _, Role, Show as _,
@@ -15,6 +16,7 @@ use craft::ui::contract::{
 use craft::ui::primitives::{EditorPurpose, EditorState};
 use craft::ui::runtime::focus::{self, FocusTarget, KeyUse};
 use craft::ui::runtime::pending::Pending;
+use craft::ui::runtime::windows::WindowHost;
 use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::{Rect, Response, Vec2};
 use serde_json::json;
@@ -28,10 +30,10 @@ use crate::panels::character::{Face, text_copy, text_key, text_paste, toggle_fac
 /// The part key of the editor part.
 const EDITOR: PartKey = PartKey::new("editor");
 
-/// The commands of a Type session: the commit chord, the formatting toggles and the characters Alt chords type on
-/// Windows and Linux. They sit in a typing scope so they reach the editor before an app shortcut on the same chord and
-/// the keymap lets the Alt chords through. Option types these characters natively on macOS, so they have no default
-/// there.
+/// The commands of a Type session: the commit chord, the formatting toggles, the characters Alt chords type on
+/// Windows and Linux, and the Type tool's app commands. They sit in a typing scope so they reach the editor before an
+/// app shortcut on the same chord and run while it types, where no other shortcut does. Option types these characters
+/// natively on macOS, so they have no default there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, CommandSet)]
 #[command(prefix = "typeEditor", scope = "typeEditor", typing)]
 #[non_exhaustive]
@@ -84,6 +86,90 @@ pub(crate) enum TypeEditorCommand {
     /// Type a closing single quote.
     #[command(label = "Type Closing Single Quote", default = "Alt+Shift+]", no_default_on = "mac")]
     CloseSingleQuote,
+    // The Type tool's app commands ([`APP_COMMANDS`]), whose keys work while it types; their chords are the app
+    // command's ([`app_keys`]).
+    #[command(label = "Show Hidden Characters")]
+    HiddenCharacters,
+    #[command(label = "Align left")]
+    AlignLeft,
+    #[command(label = "Align center")]
+    AlignCenter,
+    #[command(label = "Align right")]
+    AlignRight,
+    #[command(label = "Justify with last line aligned left")]
+    JustifyLeft,
+    #[command(label = "Justify all lines")]
+    JustifyAll,
+    #[command(label = "Highlight Font Name")]
+    HighlightFontName,
+    #[command(label = "Highlight Kerning")]
+    HighlightKerning,
+    #[command(label = "Underline")]
+    Underline,
+    #[command(label = "Superscript")]
+    Superscript,
+    #[command(label = "Subscript")]
+    Subscript,
+    #[command(label = "Toggle Line Composer")]
+    LineComposer,
+    #[command(label = "Hyphenate")]
+    Hyphenate,
+    #[command(label = "Increase Font Size")]
+    SizeIncrease,
+    #[command(label = "Decrease Font Size")]
+    SizeDecrease,
+    #[command(label = "Increase Font Size by Five Steps")]
+    SizeIncreaseByFive,
+    #[command(label = "Decrease Font Size by Five Steps")]
+    SizeDecreaseByFive,
+    #[command(label = "Reset Tracking and Kerning")]
+    ResetTracking,
+    #[command(label = "Reset Horizontal Scale")]
+    ResetHorizontalScale,
+    #[command(label = "Create Outlines")]
+    CreateOutlines,
+}
+
+/// The app command each of the Type tool's commands in [`TypeEditorCommand`] runs: production ran their chords while
+/// the tool typed, where a text field runs no shortcut (`TypingRule::AllWait`).
+// shortcut: only the Type tool's commands with a default chord are here; a chord the user gives another type command
+// runs only outside typing, add it here if that is asked for.
+const APP_COMMANDS: [(TypeEditorCommand, &str); 20] = [
+    (TypeEditorCommand::HiddenCharacters, "type.hiddenCharacters"),
+    (TypeEditorCommand::AlignLeft, "type.alignLeft"),
+    (TypeEditorCommand::AlignCenter, "type.alignCenter"),
+    (TypeEditorCommand::AlignRight, "type.alignRight"),
+    (TypeEditorCommand::JustifyLeft, "type.justifyLeft"),
+    (TypeEditorCommand::JustifyAll, "type.justifyAll"),
+    (TypeEditorCommand::HighlightFontName, "type.highlightFontName"),
+    (TypeEditorCommand::HighlightKerning, "type.highlightKerning"),
+    (TypeEditorCommand::Underline, "type.underline"),
+    (TypeEditorCommand::Superscript, "type.superscript"),
+    (TypeEditorCommand::Subscript, "type.subscript"),
+    (TypeEditorCommand::LineComposer, "type.lineComposer"),
+    (TypeEditorCommand::Hyphenate, "type.hyphenate"),
+    (TypeEditorCommand::SizeIncrease, "type.size.increase"),
+    (TypeEditorCommand::SizeDecrease, "type.size.decrease"),
+    (TypeEditorCommand::SizeIncreaseByFive, "type.size.increaseByFive"),
+    (TypeEditorCommand::SizeDecreaseByFive, "type.size.decreaseByFive"),
+    (TypeEditorCommand::ResetTracking, "type.resetTracking"),
+    (TypeEditorCommand::ResetHorizontalScale, "type.resetHorizontalScale"),
+    (TypeEditorCommand::CreateOutlines, "type.createOutlines"),
+];
+
+/// Each of the Type tool's commands with the chords of its app command among `defs`, the user's own (`overrides`)
+/// included, for the catalog's `replace_defaults`: a chord moved or taken away moves with it.
+pub(crate) fn app_keys(defs: &[CommandDef], overrides: &Overrides) -> Vec<(&'static str, Vec<Binding>)> {
+    APP_COMMANDS
+        .iter()
+        .map(|(command, id)| {
+            let keys = match overrides.get(id) {
+                Some(texts) => texts.iter().filter_map(|text| Binding::parse(text).ok()).collect(),
+                None => defs.iter().find(|def| def.command.id == *id).map(|def| def.defaults.clone()).unwrap_or_default(),
+            };
+            (command.id(), keys)
+        })
+        .collect()
 }
 
 // PLAN: `#[command(scope = ..)]` takes a string literal, so the scope is named here once and the set's own constant is
@@ -92,25 +178,68 @@ pub(crate) enum TypeEditorCommand {
 pub(crate) const TYPE_EDITOR_SCOPE: craft::ui::runtime::commands::CommandScope = <TypeEditorCommand as CommandSet>::SCOPE;
 
 impl TypeEditorCommand {
-    /// The character the command types, `None` for the commit and the formatting toggles.
-    fn character(self) -> Option<char> {
+    /// The character the command types, with the text its key types without Alt; `None` for the other commands.
+    fn character(self) -> Option<(char, &'static str)> {
         Some(match self {
-            Self::Bullet => '\u{2022}',
-            Self::Copyright => '\u{00A9}',
-            Self::Ellipsis => '\u{2026}',
-            Self::Paragraph => '\u{00B6}',
-            Self::Section => '\u{00A7}',
-            Self::Trademark => '\u{2122}',
-            Self::Registered => '\u{00AE}',
-            Self::EnDash => '\u{2013}',
-            Self::EmDash => '\u{2014}',
-            Self::OpenDoubleQuote => '\u{201C}',
-            Self::CloseDoubleQuote => '\u{201D}',
-            Self::OpenSingleQuote => '\u{2018}',
-            Self::CloseSingleQuote => '\u{2019}',
-            Self::Commit | Self::Bold | Self::Italic => return None,
+            Self::Bullet => ('\u{2022}', "8"),
+            Self::Copyright => ('\u{00A9}', "gG"),
+            Self::Ellipsis => ('\u{2026}', ";"),
+            Self::Paragraph => ('\u{00B6}', "7"),
+            Self::Section => ('\u{00A7}', "6"),
+            Self::Trademark => ('\u{2122}', "2"),
+            Self::Registered => ('\u{00AE}', "rR"),
+            Self::EnDash => ('\u{2013}', "-"),
+            Self::EmDash => ('\u{2014}', "_"),
+            Self::OpenDoubleQuote => ('\u{201C}', "["),
+            Self::CloseDoubleQuote => ('\u{201D}', "{"),
+            Self::OpenSingleQuote => ('\u{2018}', "]"),
+            Self::CloseSingleQuote => ('\u{2019}', "}"),
+            _ => return None,
         })
     }
+
+    /// The app command the command runs, `None` for the editor's own.
+    pub(crate) fn app_command(self) -> Option<&'static str> {
+        APP_COMMANDS.iter().find(|(command, _)| *command == self).map(|(_, id)| *id)
+    }
+}
+
+/// Before the keys read a window's input while the Type tool types in it: the press of a chord that types a character
+/// goes when the text that came with it is other than its key's own (Alt+G typing ğ on a Turkish layout), so that text
+/// is typed as it came, as production typed what the layout typed; with its key's own text or none it types its
+/// character. An input method's text after the press is typed whatever the press binds.
+pub(crate) fn keep_layout_text(app: &VectorcraftApp, ctx: &egui::Context, raw: &mut egui::RawInput) {
+    let platform = crate::keymap::platform();
+    let host = WindowHost::of(ctx);
+    if platform.is_mac() || !app.session.tool_wants_text() || raw.viewport_id != host.key_window() || !host.typing() {
+        return;
+    }
+    let chords: Vec<(Chord, &str)> = TypeEditorCommand::defs()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|def| {
+            let (_, own) = TypeEditorCommand::from_ref(&def.command)?.character()?;
+            Some(def.defaults.into_iter().map(move |b| (b.trigger.chord, own)))
+        })
+        .flatten()
+        .collect();
+    let layout = Layout::default();
+    let events = &raw.events;
+    let own_of = |e: &egui::Event| {
+        let input = KeyInput::from_egui(e, platform).filter(|_| matches!(e, egui::Event::Key { pressed: true, .. }))?;
+        layout.candidates(&input).iter().find_map(|c| chords.iter().find(|(chord, _)| chord == c).map(|(_, own)| *own))
+    };
+    let dropped: Vec<bool> = events
+        .iter()
+        .enumerate()
+        .map(|(j, e)| {
+            own_of(e).is_some_and(|own| {
+                matches!(events.get(j + 1), Some(egui::Event::Text(t)) if !t.is_empty() && !(t.chars().count() == 1 && own.contains(t.as_str())))
+            })
+        })
+        .collect();
+    let mut dropped = dropped.into_iter();
+    raw.events.retain(|_| !dropped.next().unwrap_or(false));
 }
 
 /// End an IME composition outside the IME (a click away, the editor losing the keys): the marked text stays as typed.
@@ -153,12 +282,14 @@ pub(crate) struct TypeEditor<'a> {
     common: Common,
     app: &'a mut VectorcraftApp,
     caret: Rect,
+    /// The window's context, which the app commands run in.
+    ctx: egui::Context,
 }
 
 impl<'a> TypeEditor<'a> {
     /// A part for the tool's caret at `caret`, the instance of [`TypeEditorCommand`]'s scope while it has the keys.
-    fn new(app: &'a mut VectorcraftApp, caret: Rect) -> Self {
-        TypeEditor { common: Common::new(), app, caret }.label("Type").command_scope(TYPE_EDITOR_SCOPE)
+    fn new(app: &'a mut VectorcraftApp, caret: Rect, ctx: egui::Context) -> Self {
+        TypeEditor { common: Common::new(), app, caret, ctx }.label("Type").command_scope(TYPE_EDITOR_SCOPE)
     }
 
     /// Applies one input of the editor part to the engine tool; a Paste types `pasted`, the text the paste delivered,
@@ -227,7 +358,7 @@ impl<'a> TypeEditor<'a> {
     /// Runs one command of [`TypeEditorCommand`].
     fn run(&mut self, command: TypeEditorCommand, view: ViewInfo) {
         let app = &mut *self.app;
-        if let Some(c) = command.character() {
+        if let Some((c, _)) = command.character() {
             let r = app.session.tool_typed_text(&c.to_string(), view);
             crate::canvas::apply_requests(app, r);
             return;
@@ -325,7 +456,13 @@ impl Component for TypeEditor<'_> {
         for step in steps {
             match step {
                 EditorStep::Input(input) if self.app.session.tool_wants_text() => self.apply(input, view, pasted.clone()),
-                EditorStep::Command(command, _) => self.run(command, view),
+                EditorStep::Command(command, mut fired) => match command.app_command() {
+                    Some(id) => {
+                        fired.command = CommandRef::new(id);
+                        crate::shortcuts::run_fired(self.app, &self.ctx, &fired);
+                    }
+                    None => self.run(command, view),
+                },
                 _ => {}
             }
         }
@@ -358,7 +495,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some(target) = app.session.tool_ime_target(view) else { return };
     let Some(canvas_view) = app.canvas_view() else { return };
     let caret = Rect::from_two_pos(canvas_view.to_screen(a), canvas_view.to_screen(b)).expand2(egui::vec2(1.0, 0.0));
-    let out = ui.scope_builder(egui::UiBuilder::new().max_rect(caret), |ui| TypeEditor::new(app, caret).id_salt(target).show(ui)).inner;
+    let out =
+        ui.scope_builder(egui::UiBuilder::new().max_rect(caret), |ui| TypeEditor::new(app, caret, ui.ctx().clone()).id_salt(target).show(ui)).inner;
     // Typing goes to the edit that starts, as a click on the part would take the keys.
     if out.unfocused_start {
         focus::request(ui.ctx(), FocusTarget::Id(out.response.id));

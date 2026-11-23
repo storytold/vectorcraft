@@ -49,10 +49,11 @@ pub(crate) fn app_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, ra
 pub(crate) fn part_frame(
     app: &mut crate::VectorcraftApp,
     ctx: &egui::Context,
-    raw: egui::RawInput,
+    mut raw: egui::RawInput,
     mut draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui),
 ) -> egui::FullOutput {
     app.adopt_context(ctx);
+    app.raw_input(ctx, &mut raw);
     embed::before_input(ctx, |out| app.frame_input(out));
     let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
     embed::before_input(ctx, |out| app.frame_input(out));

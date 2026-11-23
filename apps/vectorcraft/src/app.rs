@@ -46,6 +46,7 @@ impl eframe::App for App {
         // The characters Alt + keypad codes typed (#5108).
         #[cfg(windows)]
         super::windows_alt_codes::raw_input_hook(raw);
+        self.app.raw_input(ctx, raw);
         file_access::unconfined(|| embed::before_input(ctx, |out| self.app.frame_input(out)));
         BEACON.enter(Stage::Idle);
     }

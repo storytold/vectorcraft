@@ -1322,9 +1322,10 @@ fn set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
     }
     // The type editor's own commands (Commit on Cmd+Enter) give up a chord the user binds, as production's editor let
-    // any bound command run instead.
+    // any bound command run instead. The Type tool's app commands there take their app command's chords.
     for b in keymap.bindings(&command).into_iter().filter(|b| b.trigger.press == PressKind::Single) {
-        for editor in keymap.holders(&b.trigger.chord).into_iter().filter(|h| TypeEditorCommand::from_ref(h).is_some()) {
+        let own = |h: &craft::keymap::CommandRef| TypeEditorCommand::from_ref(h).is_some_and(|c| c.app_command().is_none());
+        for editor in keymap.holders(&b.trigger.chord).into_iter().filter(own) {
             let k = entry_key(&editor);
             if keymap.remove(&editor, &b) && !removed.contains(&k) {
                 removed.push(k);
