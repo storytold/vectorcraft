@@ -36,7 +36,7 @@ pub const THAI_FAMILIES: &[&str] = &[
 ];
 
 /// The families tried first for character `c`, in a script whose text only fonts made for it set
-/// well (Thai, Lao, Khmer, Myanmar, Devanagari); none for other characters.
+/// well (Thai, Lao, Khmer, Myanmar, Devanagari, Tamil); none for other characters.
 pub(super) fn script_families(c: char) -> &'static [&'static str] {
     use unicode_script::{Script, UnicodeScript};
     match c.script() {
@@ -54,6 +54,7 @@ pub(super) fn script_families(c: char) -> &'static [&'static str] {
             "Mangal",
         ],
         Script::Gujarati => &["Gujarati Sangam MN", "GujaratiMT", "Nirmala UI", "Shruti", "Noto Sans Gujarati", "Noto Sans Gujarati UI"],
+        Script::Tamil => &["Nirmala UI", "Tamil Sangam MN", "Tamil MN", "Noto Sans Tamil", "Noto Sans Tamil UI", "Lohit Tamil", "Latha"],
         _ => &[],
     }
 }
@@ -170,6 +171,14 @@ mod tests {
     fn gujarati_prefers_fonts_made_for_it() {
         assert_eq!(script_families('ગ').first(), Some(&"Gujarati Sangam MN"));
         assert!(script_families('ગ').contains(&"Nirmala UI"));
+    }
+
+    /// Tamil takes a font made for it, not whichever face covering it loaded first.
+    #[test]
+    fn tamil_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('த').first(), Some(&"Nirmala UI"));
+        assert!(script_families('த').contains(&"Noto Sans Tamil"));
+        assert!(script_families('ௐ').contains(&"Noto Sans Tamil"));
     }
 
     #[test]
