@@ -106,6 +106,12 @@ pub struct DimensionTool {
     /// The document's next object id at the dimension's first preview: the id its preview takes
     /// (`dimension.create` gives the dimension the next id). The preview is not a level.
     preview_id: u64,
+    /// The dimension drawn already under the press under way, when a drag from there moves it
+    /// ([`dimension_under`]).
+    grab: Option<NodeId>,
+    /// While a dimension drawn already is dragged: its id, where the press was and its recipe
+    /// then. `pending` holds it where the pointer puts it.
+    moving: Option<(NodeId, Point, Dimension)>,
 }
 
 /// What a linear dimension between `a` and `b` measures with the pointer at `p` while it is
@@ -151,6 +157,11 @@ fn constrained(cx: &ToolContext, last: Point, at: Point) -> Point {
 
 /// Nearest editable segment, with bounded work and no snapping to dimension artwork itself.
 pub fn pick(cx: &ToolContext, p: Point) -> Option<SegmentRef> {
+    pick_among(cx, p, cx.doc.layers.iter().rev().map(|n| n.as_ref()))
+}
+
+/// [`pick`] among `roots`, topmost first, and what they hold.
+fn pick_among<'a>(cx: &ToolContext, p: Point, roots: impl Iterator<Item = &'a Node>) -> Option<SegmentRef> {
     let mut best = None;
     let mut dist = cx.tol(8.0);
     let mut budget = 20_000usize;
@@ -180,7 +191,7 @@ pub fn pick(cx: &ToolContext, p: Point) -> Option<SegmentRef> {
             }
         }
     }
-    for n in cx.doc.layers.iter().rev() {
+    for n in roots {
         visit(n, p, &mut budget, &mut dist, &mut best);
     }
     best
@@ -536,6 +547,117 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
     best.end.map(|(_, q)| (q, true)).or_else(|| best.line.map(|(_, q)| (q, false)))
 }
 
+/// The dimension drawn already that a drag from `p` moves, and how far `p` lies from its lines
+/// and label (0 inside the label's bounds): the dimension holding the topmost object the canvas
+/// hits within 8 pixels of `p`, when it can be edited. The hit takes in what the dimension paints
+/// (stroke widths and arrowheads), the clipping masks over it and isolation mode. A dimension that
+/// a geometry effect on it, on a part of it or on a group around it draws elsewhere is not taken
+/// where effects are drawn.
+fn dimension_under(cx: &ToolContext, p: Point) -> Option<(NodeId, f64)> {
+    use vectorcraft_geom::kurbo::ParamCurveNearest;
+    fn art(n: &Node, p: Point, budget: &mut usize, near: &mut f64) {
+        if *budget == 0 || !n.visible {
+            return;
+        }
+        *budget -= 1;
+        if let NodeKind::Text(_) = &n.kind
+            && let Some(r) = n.geometric_bounds()
+        {
+            let (dx, dy) = ((r.x0 - p.x).max(p.x - r.x1).max(0.0), (r.y0 - p.y).max(p.y - r.y1).max(0.0));
+            *near = near.min(dx.hypot(dy));
+        }
+        if let Some(path) = n.path_data() {
+            for sp in &path.subpaths {
+                for i in 0..sp.segment_count() {
+                    if *budget == 0 {
+                        return;
+                    }
+                    *budget -= 1;
+                    let d = sp.segment(i).nearest(p, 1e-4).distance_sq.sqrt();
+                    if d.is_finite() {
+                        *near = near.min(d);
+                    }
+                }
+            }
+        }
+        for c in n.children().into_iter().flatten() {
+            art(c, p, budget, near);
+        }
+    }
+    if !cx.doc.dimensions {
+        return None;
+    }
+    let opt = vectorcraft_doc::hit::HitOptions { tol: cx.tol(8.0), ..cx.hit_options() };
+    let hit = vectorcraft_doc::hit::hit_test(cx.doc, p, opt)?;
+    let chain: Vec<NodeId> = hit.ancestry.iter().copied().chain([hit.leaf]).collect();
+    // The innermost dimension holding the object hit: the one that draws it.
+    let at = chain.iter().rposition(|id| cx.doc.node(*id).is_some_and(|n| n.extras().dimension.is_some()))?;
+    let id = *chain.get(at)?;
+    // In isolation mode only a dimension at or inside the isolated object is moved: one around an
+    // isolated part of it is outside the editing scope.
+    let scope_at = opt.scope.and_then(|s| chain.iter().position(|a| *a == s));
+    if scope_at.is_some_and(|i| i > at) {
+        return None;
+    }
+    // Where a geometry effect on the dimension, on a part of it or on a group around it draws it is
+    // not where its recipe puts it, so a drag there could not follow the pointer. In outline, and
+    // below a layer whose Preview is off, the canvas draws no effects and the recipe is what it
+    // hits.
+    let nodes: Vec<&Node> = chain.iter().filter_map(|id| cx.doc.node(*id)).collect();
+    let below = scope_at.map_or(0, |i| i + 1);
+    let outline = opt.outline || nodes.iter().skip(below).any(|n| matches!(n.kind, NodeKind::Layer { preview: false, .. }));
+    let item_geometry = |n: &Node| n.appearance.items.iter().any(|item| item.visible() && vectorcraft_effects::has_geometry(item.effects()));
+    let displaced = nodes.iter().enumerate().any(|(i, n)| vectorcraft_effects::has_geometry(&n.appearance.effects) || (i >= at && item_geometry(n)));
+    // The parts of the dimension the press did not land on count too: a geometry effect on any of
+    // them is drawn elsewhere as well.
+    let parts_displaced = cx.doc.node(id).is_some_and(|d| {
+        d.try_walk(&mut |n| {
+            if vectorcraft_effects::has_geometry(&n.appearance.effects) || item_geometry(n) {
+                std::ops::ControlFlow::Break(())
+            } else {
+                std::ops::ControlFlow::Continue(())
+            }
+        })
+        .is_break()
+    });
+    if !outline && (displaced || parts_displaced) {
+        return None;
+    }
+    let n = cx.doc.node(id).filter(|_| cx.doc.is_editable(id))?;
+    let (mut budget, mut near) = (20_000usize, f64::INFINITY);
+    art(n, p, &mut budget, &mut near);
+    Some((id, near))
+}
+
+/// Where [`Dimension::place`] puts dimension `d`, grabbed at `start`, for the pointer at `p`: the
+/// line of a linear dimension moves as far across as the pointer moved, the arc of an angular one
+/// grows or shrinks by as much as the pointer moved away from or toward the vertex, and a radius
+/// or diameter line turns about the center by the angle the pointer turned through, so the part
+/// grabbed stays under the pointer wherever it was grabbed.
+fn grabbed_to(d: &Dimension, start: Point, p: Point) -> Point {
+    let handle = d.handle();
+    match d.mode {
+        DimensionMode::Linear => handle + (p - start),
+        DimensionMode::Angular => {
+            let out = handle - d.vertex;
+            let r = out.hypot() + p.distance(d.vertex) - start.distance(d.vertex);
+            if out.hypot() > 1e-9 { d.vertex + out / out.hypot() * r.max(12.0) } else { handle }
+        }
+        DimensionMode::Radius | DimensionMode::Diameter => {
+            let (from, to) = (start - d.a, p - d.a);
+            if to.hypot() <= 1e-9 {
+                return handle;
+            }
+            // Grabbed at the center: the line turns toward the pointer.
+            if from.hypot() <= 1e-9 {
+                return p;
+            }
+            let v = handle - d.a;
+            d.a + Vec2::from_angle(v.atan2() + to.atan2() - from.atan2()) * v.hypot()
+        }
+    }
+}
+
 /// The line of a linear dimension already drawn: its ends and its direction.
 type DimensionLine = ((Point, Point), Vec2);
 
@@ -576,7 +698,10 @@ fn dimension_lines(doc: &vectorcraft_doc::Document, preview: (u64, [Point; 2])) 
 /// Where the line of the linear dimension `d`, placed through `p`, lands on the level of one of
 /// the `levels` that runs parallel to it, within `reach` of `p` across the line: the point to
 /// place `d` through, and the ends of that other line. The nearest level wins, then the line
-/// nearest `p` along it (none nearer than a line that `p` lies across).
+/// nearest `p` along it (none nearer than a line that `p` lies across). A line runs parallel when
+/// it moves off its level by no more than 1e-6 pt across the span that both lines cover, so a line
+/// at a slight angle to `d` is not a level however near its first end lies. A level that would put
+/// the line past the limits a dimension allows is passed over.
 fn line_level(levels: &[DimensionLine], d: &Dimension, p: Point, reach: f64) -> Option<(Point, (Point, Point))> {
     if d.mode != DimensionMode::Linear {
         return None;
@@ -584,14 +709,21 @@ fn line_level(levels: &[DimensionLine], d: &Dimension, p: Point, reach: f64) -> 
     let (u, normal) = (d.direction(), d.normal());
     let mut best: Option<(f64, f64, f64, (Point, Point))> = None;
     for &(ends, direction) in levels {
-        if u.cross(direction).abs() > 1e-6 {
+        let along_u = [ends.0, ends.1, d.a, d.b].map(|q| (q - ends.0).dot(u));
+        let span = along_u.iter().fold(f64::NEG_INFINITY, |m, s| m.max(*s)) - along_u.iter().fold(f64::INFINITY, |m, s| m.min(*s));
+        let drift = u.cross(direction).abs() * span;
+        if !drift.is_finite() || drift > 1e-6 {
             continue;
         }
         let shift = (ends.0 - p).dot(normal);
         let (s0, s1) = ((ends.0 - p).dot(u), (ends.1 - p).dot(u));
         let along = if s0 * s1 <= 0.0 { 0.0 } else { s0.abs().min(s1.abs()) };
         if shift.is_finite() && along.is_finite() && shift.abs() <= reach && best.is_none_or(|(s, a, _, _)| (shift.abs(), along) < (s, a)) {
-            best = Some((shift.abs(), along, shift, ends));
+            let mut placed = d.clone();
+            placed.place(p + normal * shift);
+            if placed.validate().is_ok() {
+                best = Some((shift.abs(), along, shift, ends));
+            }
         }
     }
     best.map(|(_, _, shift, ends)| (p + normal * shift, ends))
@@ -816,6 +948,9 @@ impl DimensionTool {
         p
     }
     fn preview(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        if self.moving.is_some() {
+            return self.reposition(cx, p);
+        }
         self.level_guide = None;
         let Some(d) = &mut self.pending else { return vec![] };
         if matches!(d.mode, DimensionMode::Radius | DimensionMode::Diameter)
@@ -856,15 +991,10 @@ impl DimensionTool {
             if !self.began {
                 self.preview_id = cx.doc.peek_next_id();
             }
-            let (from, at) = match cx.interaction_doc {
-                Some(began) => (began, (cx.revision.0, 0, std::ptr::from_ref(began).addr())),
-                None => (cx.doc, (cx.revision.0, cx.revision.1, 0)),
-            };
-            if !self.began || (cx.smart_guides && self.levels_at != at) {
-                self.levels = dimension_lines(from, (self.preview_id, [d.a, d.b]));
-                self.levels_at = at;
-            }
+            let points = [d.a, d.b];
+            self.read_levels(cx, (self.preview_id, points));
         }
+        let Some(d) = &mut self.pending else { return vec![] };
         let level = if cx.smart_guides { line_level(&self.levels, d, p, cx.snap_tol()) } else { None };
         d.place(level.map_or(p, |(on_level, _)| on_level));
         if d.validate().is_err() {
@@ -877,6 +1007,51 @@ impl DimensionTool {
             self.began = true;
         }
         actions.push(Action::Preview("dimension.create".into(), Self::params(d)));
+        actions
+    }
+    /// Reads `levels` at the first preview and, with Smart Guides on, again when the document they
+    /// come from has changed since: while an interaction is in progress, the document as it began.
+    /// `skip` names the dimension being placed or moved, which is not a level: its id and the
+    /// points it measures.
+    fn read_levels(&mut self, cx: &ToolContext, skip: (u64, [Point; 2])) {
+        let (from, at) = match cx.interaction_doc {
+            Some(began) => (began, (cx.revision.0, 0, std::ptr::from_ref(began).addr())),
+            None => (cx.doc, (cx.revision.0, cx.revision.1, 0)),
+        };
+        if !self.began || (cx.smart_guides && self.levels_at != at) {
+            self.levels = dimension_lines(from, skip);
+            self.levels_at = at;
+        }
+    }
+    /// Moves the dimension drawn already that a drag picked up ([`Self::moving`]) as
+    /// [`grabbed_to`] says, and what it measures stays. With Smart Guides on, a linear
+    /// dimension's line lands on the level of a parallel dimension line, as when it is placed.
+    fn reposition(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        self.level_guide = None;
+        let Some((id, start, from)) = self.moving.clone() else { return vec![] };
+        let at = grabbed_to(&from, start, p);
+        if from.mode == DimensionMode::Linear {
+            self.read_levels(cx, (id.0, [from.a, from.b]));
+        }
+        // The levels are measured across from the line through `at` and, along it, from the
+        // pointer, which may be far from the line's middle.
+        let dir = from.direction();
+        let along = at + dir * (p - at).dot(dir);
+        let level = if cx.smart_guides { line_level(&self.levels, &from, along, cx.snap_tol()) } else { None };
+        let at = level.map_or(at, |(on_level, _)| on_level);
+        let mut d = from;
+        d.place(at);
+        if d.validate().is_err() {
+            return vec![];
+        }
+        self.pending = Some(d);
+        self.level_guide = level.map(|(_, ends)| ends);
+        let mut actions = vec![];
+        if !self.began {
+            actions.push(Action::Begin("Update Dimensions".into()));
+            self.began = true;
+        }
+        actions.push(Action::Preview("dimension.update".into(), json!({"ids":[id.0],"at":[at.x,at.y]})));
         actions
     }
     /// Places the pending dimension at `p` and commits it.
@@ -906,6 +1081,8 @@ impl DimensionTool {
         self.second = None;
         self.level_guide = None;
         self.levels.clear();
+        self.grab = None;
+        self.moving = None;
     }
     /// A plain click: picks a point or a line, or measures a circle's radius.
     fn click(&mut self, cx: &ToolContext, p: Point, target: Option<Target>, mods: Mods) -> Vec<Action> {
@@ -1038,12 +1215,41 @@ impl Tool for DimensionTool {
                     && (anchor_under(cx, ev.pos).is_some()
                         || preview_corner(cx, ev.pos, &mut self.preview_boxes).is_some()
                         || on_dimensions(cx, ev.pos).is_some_and(|(_, end)| end));
-                self.press = Some((ev.pos, self.target(cx, ev.pos)));
+                let target = self.target(cx, ev.pos);
+                // A press on a dimension drawn already, nearer to its lines and label than to any
+                // segment of the art, moves that dimension when it drags. A click there still
+                // picks a point.
+                self.grab = None;
+                if self.points.is_empty()
+                    && self.lines.is_empty()
+                    && let Some((id, d)) = dimension_under(cx, ev.pos)
+                {
+                    // In isolation mode only art inside the isolated object competes for the press.
+                    let edge = match cx.hit_options().scope.and_then(|s| cx.doc.node(s)) {
+                        Some(isolated) => pick_among(cx, ev.pos, std::iter::once(isolated)),
+                        None => pick(cx, ev.pos),
+                    };
+                    let art = edge.and_then(|e| nearest_on(cx, &e, ev.pos)).map(|q| q.distance(ev.pos));
+                    if art.is_none_or(|a| d < a) {
+                        self.grab = Some(id);
+                    }
+                }
+                self.press = Some((ev.pos, target));
                 vec![]
             }
             PointerKind::Drag => {
                 if self.pending.is_some() && !self.dragging && self.press.is_some() {
                     return self.preview(cx, ev.pos);
+                }
+                if self.pending.is_none()
+                    && let (Some((start, _)), Some(id)) = (self.press.as_ref(), self.grab)
+                    && start.distance(ev.pos) > cx.tol(if self.press_on_anchor { ANCHOR_REACH } else { 3.0 })
+                    && let Some(d) = cx.doc.node(id).and_then(|n| n.extras().dimension.as_deref())
+                {
+                    self.moving = Some((id, *start, d.clone()));
+                    self.pending = Some(d.clone());
+                    self.dragging = true;
+                    self.grab = None;
                 }
                 if self.pending.is_none()
                     && let Some((start, Some(target))) = self.press.clone()
@@ -1169,8 +1375,9 @@ impl Tool for DimensionTool {
             out.extend(self.snap.guides().iter().cloned());
         }
         // A dimension line placed on the level of another: one alignment guide across both lines,
-        // unless Alignment Guides are off.
-        if cx.alignment_guides
+        // unless Smart Guides or Alignment Guides are off.
+        if cx.smart_guides
+            && cx.alignment_guides
             && let (Some(d), Some((c, e))) = (&self.pending, self.level_guide)
         {
             let (a, b) = d.line_ends();
@@ -1232,6 +1439,79 @@ mod tests {
             let (at, ends) = line_level(&levels, &d, pt(250.0, 172.0), 4.0).expect("on the level");
             assert!(at.distance(pt(250.0, 170.0)) < 1e-9, "{at:?}");
             assert_eq!(ends, across.0);
+        }
+    }
+
+    /// A line at a slight angle is not a level, even where its first end lies within reach across
+    /// the line: it moves off the level by 9 pt across the span. A line exactly parallel is.
+    #[test]
+    fn a_line_at_a_slight_angle_is_not_a_level() {
+        let pt = Point::new;
+        let d =
+            DimensionTool::default().recipe(DimensionMode::Linear, pt(10_000_050.0, 200.0), pt(10_000_150.0, 200.0), pt(10_000_100.0, 200.0), None);
+        let (from, to) = (pt(100.0, 170.0), pt(10_000_100.0, 179.0));
+        let slanted = ((from, to), (to - from) / (to - from).hypot());
+        assert!(line_level(&[slanted], &d, pt(10_000_100.0, 168.0), 4.0).is_none());
+        let parallel = ((from, pt(10_000_100.0, 170.0)), Vec2::new(1.0, 0.0));
+        let (at, _) = line_level(&[parallel], &d, pt(10_000_100.0, 168.0), 4.0).expect("on the level");
+        assert!(at.distance(pt(10_000_100.0, 170.0)) < 1e-9, "{at:?}");
+    }
+
+    /// The span a level is checked across runs from the lowest to the highest point of both lines
+    /// along the dimension, whichever end of the other line comes first, and has no lower bound.
+    #[test]
+    fn a_level_is_checked_across_the_whole_span_of_both_lines() {
+        let pt = Point::new;
+        let level = |from: Point, to: Point| ((from, to), (to - from) / (to - from).hypot());
+        // 0.00000075 pt off across 100 pt drifts 0.0000015 pt across the 200 pt both lines cover.
+        let d = DimensionTool::default().recipe(DimensionMode::Linear, pt(-100.0, 200.0), pt(100.0, 200.0), pt(0.0, 200.0), None);
+        let (a, b) = (pt(0.0, 170.0), pt(100.0, 170.000_000_75));
+        for slanted in [level(a, b), level(b, a)] {
+            assert!(line_level(&[slanted], &d, pt(0.0, 168.0), 4.0).is_none(), "{slanted:?}");
+        }
+        // 0.0000005 pt off across the 0.1 pt both lines cover is within the tolerance.
+        let d = DimensionTool::default().recipe(DimensionMode::Linear, pt(0.0, 200.0), pt(0.1, 200.0), pt(0.05, 200.0), None);
+        let (a, b) = (pt(0.0, 170.0), pt(0.1, 170.000_000_5));
+        for short in [level(a, b), level(b, a)] {
+            let (at, _) = line_level(&[short], &d, pt(0.05, 168.0), 4.0).expect("on the level");
+            assert!((at.y - 170.0).abs() < 1e-6, "{at:?}");
+        }
+    }
+
+    /// A level that would put the line past the largest distance a dimension allows is passed
+    /// over: the preview goes where the pointer is, with no level guide, or onto a level further
+    /// off within reach that keeps the line within the limit.
+    #[test]
+    fn a_level_past_the_distance_limit_is_passed_over() {
+        use vectorcraft_doc::{Node, NodeKind};
+        let pt = Point::new;
+        let (mut d, _) = doc_with_rect();
+        let l = d.layers[0].id;
+        let add_level = |d: &mut vectorcraft_doc::Document, y: f64| {
+            let id = d.alloc_id();
+            let mut drawn = Node::new(id, NodeKind::Group { children: vec![], clip: false });
+            drawn.extras_mut().dimension =
+                Some(Box::new(DimensionTool::default().recipe(DimensionMode::Linear, pt(300.0, y), pt(380.0, y), pt(340.0, y), None)));
+            d.insert(Some(l), usize::MAX, drawn).unwrap();
+        };
+        let (s, p) = (Selection::default(), paint());
+        let ev = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y);
+        // The points are at y = 400, so a line at y = 1,000,401 is 1,000,001 pt from them.
+        add_level(&mut d, 1_000_401.0);
+        for (also, offset) in [(None, 999_999.0), (Some(1_000_396.0), 999_996.0)] {
+            if let Some(y) = also {
+                add_level(&mut d, y);
+            }
+            let c = cx(&d, &s, &p);
+            let mut t = DimensionTool::default();
+            for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+                t.pointer(&c, &ev(PointerKind::Down, x, y));
+                t.pointer(&c, &ev(PointerKind::Up, x, y));
+            }
+            let acts = t.pointer(&c, &ev(PointerKind::Move, 420.0, 1_000_399.0));
+            let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+            assert_eq!(params["offset"], json!(offset));
+            assert_eq!(t.level_guide.is_some(), also.is_some());
         }
     }
 

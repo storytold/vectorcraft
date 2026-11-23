@@ -1710,8 +1710,16 @@ fn transform_rejects_a_mistyped_reflect_copy_or_origin_before_editing() {
     assert_eq!(applied["isError"], false, "{applied}");
     let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
     assert_eq!(applied["applied"], json!(["move"]));
-    let applied = call(&mut s, 21, "transform", json!({"ids": [second], "rotate": 90, "origin": null}));
+    let unturned = inspect(&mut s, 21)["layers"].clone();
+    let applied = call(&mut s, 22, "transform", json!({"ids": [second], "rotate": 90, "origin": null}));
     assert_eq!(applied["isError"], false, "{applied}");
+    let turned = inspect(&mut s, 23)["layers"].clone();
+    assert_ne!(turned, unturned, "the rotation must change the path");
+    // A null `origin` turns about the same default pivot as an omitted one.
+    assert_eq!(call(&mut s, 24, "undo", json!({}))["isError"], false);
+    let applied = call(&mut s, 25, "transform", json!({"ids": [second], "rotate": 90}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    assert_eq!(inspect(&mut s, 26)["layers"], turned);
     // The schema allows null for every argument but `ids`.
     let tools = tool_definitions();
     let props = &tools.iter().find(|t| t["name"] == "transform").unwrap()["inputSchema"]["properties"];

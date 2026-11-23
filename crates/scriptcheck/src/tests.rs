@@ -564,6 +564,95 @@ fn setting_a_files_length_or_flags_writes_it() {
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[2, 3, 4, 5, 6, 7, 8, 10, 12][..]));
 }
 
+/// `new Folder(…)` and the `Folder` places always give a Folder object, which has no `length`,
+/// `hidden` or `readonly` setter. `Folder(…)` gives a File object when the path names a file,
+/// `Folder.selectDialog()` gives a File or Folder object, and a variable assigned another variable
+/// may hold either, so setting those writes. Removing a folder still writes.
+#[test]
+fn setting_a_folders_length_or_flags_does_not_write() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "d.length = 0;\n",
+        "d.hidden = true;\n",
+        "Folder.temp.length = 0;\n",
+        "(new Folder(q)).length = 0;\n",
+        "(Folder.desktop)['readonly'] = true;\n",
+        "Folder(p).readonly = true;\n",
+        "var e = Folder.selectDialog();\n",
+        "e.length = 0;\n",
+        "var g = (d);\n",
+        "g['length'] = 0;\n",
+        "var h = Folder(p);\n",
+        "h.hidden = true;\n",
+        "(Folder(p)).length = 0;\n",
+        "d.remove();\n",
+        "Folder.current.hidden = true;\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[7, 9, 11, 13, 14, 15, 16][..])]);
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[7, 9, 11, 13, 14, 15, 16][..]));
+}
+
+/// A File object assigned to a function's own variable, its parameter or a `catch` block's
+/// parameter ends with them; one assigned to an outer variable stays. Such a variable or parameter
+/// starts without what the outer variable of the same name was assigned.
+#[test]
+fn a_file_in_a_local_variable_leaves_an_outer_folder_alone() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "function f(e) { var d = new File(q); e = new File(q); d.length = 0; }\n",
+        "var e = new Folder(p);\n",
+        "try { x(); } catch (d) { d = new File(q); }\n",
+        "d.length = 0; e.hidden = true;\n",
+        "var g = new Folder(p);\n",
+        "function h() { g = y(); g = new File(q); }\n",
+        "g.length = 0;\n",
+        "var k = new File(q);\n",
+        "function m(n) { var k = new Folder(p); k.length = 0; n = new Folder(p); n.hidden = true; }\n",
+        "try { x(); } catch (k) { k = new Folder(p); k.readonly = true; }\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[2, 8][..])]);
+}
+
+/// The check reads branches and function bodies in order, so a variable that any assignment gives an
+/// object that may be a File object keeps counting as one, in the same file, in a function the code
+/// after it assigns, and across included files.
+#[test]
+fn a_variable_that_may_hold_a_file_counts_as_one() {
+    let r = report(concat!(
+        "var d;\n",
+        "if (c) { d = new File(p); } else { d = new Folder(p); }\n",
+        "d.length = 0;\n",
+        "function w() { h.hidden = true; }\n",
+        "var h = new Folder(q);\n",
+        "if (c) h = File(p);\n",
+        "var k = new Folder(q);\n",
+        "k.length = 0;\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[3, 4][..])]);
+    for lib in ["d = new File(q);\n", "d = Folder.selectDialog();\n", "var x = new File(q); d = x;\n"] {
+        let mut m = mem(&[("lib.jsxinc", lib)]);
+        let r = check("main.jsx", b"#include 'lib.jsxinc'\nvar d = new Folder(p);\nd.length = 0;\n", Some(&mut m), &Limits::default());
+        let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+        assert_eq!(outside, [("filesWritten", &[3][..])], "{lib}");
+    }
+    // The function that may give `d` a File object only does so once `e` holds one, which the
+    // second scan learns.
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "function write() { d.length = 0; }\n",
+        "function assign() { d = e; }\n",
+        "var e = new File(q);\n",
+    ));
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[2][..])]);
+    let mut m = mem(&[("lib.jsxinc", "d = Folder.temp;\n")]);
+    let r = check("main.jsx", b"#include 'lib.jsxinc'\nvar d = new Folder(p);\nd.length = 0;\n", Some(&mut m), &Limits::default());
+    assert!(r.outside.is_empty(), "{:?}", r.outside);
+}
+
 #[test]
 fn a_function_after_a_line_that_ends_a_statement_is_a_declaration() {
     let r = report("var n = 1\nfunction File() {}\nFile('x');\nvar m = 2 /* a\n */ function Socket() {}\nnew Socket();\n");

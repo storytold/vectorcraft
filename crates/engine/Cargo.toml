@@ -19,6 +19,7 @@ bundled-fonts = ["vectorcraft-text/bundled-fonts"]
 heif = ["dep:heic-rs", "dep:rayon"]
 
 [dependencies]
+craft-codepage = { workspace = true }
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
 craft-proof = { workspace = true }

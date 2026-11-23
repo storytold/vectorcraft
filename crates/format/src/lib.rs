@@ -623,7 +623,7 @@ fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize
     let mut doc = f.document;
     for (k, img) in f.images {
         let bytes = bytes_of(&img).ok_or_else(|| FormatError::BadImage(k.clone()))?;
-        let mut blob = ImageBlob { mime: img.mime, bytes, proxy: None };
+        let mut blob = ImageBlob { mime: img.mime, bytes, proxy: None, file_font: Default::default() };
         // Until the linked file is read, the preview stands in for it.
         if img.proxy {
             blob.proxy = Some(blob.bytes.clone());
@@ -674,6 +674,11 @@ fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize
     // Untrusted: the type's sizes, leading, baseline shifts and scales, its indents and paragraph
     // spacing, and its tab stops, each within its range (after the depth limit: the walk recurses).
     doc.keep_type_values_in_range();
+    // Untrusted, and unset in a file saved after a dimension was pasted into a document that had
+    // none: the flag is set when some object is a dimension (after the depth limit too).
+    let mut dimensions = false;
+    doc.walk(|n| dimensions |= n.extras().dimension.is_some());
+    doc.dimensions = dimensions;
     // Untrusted: ruby ranges over the type's text, clamped to it (after the depth limit too).
     doc.fix_ruby();
     // Untrusted: the raster effects resolution, within 1 to 2400 ppi (72 when it isn't finite).
