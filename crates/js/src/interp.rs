@@ -2455,6 +2455,9 @@ impl Interp {
         };
         // The most elements the array has room for.
         let room = u32::MAX.saturating_sub(current);
+        // An array, or a proxy of one, is tested before any trap runs, since a trap may revoke
+        // the proxy. Its `length` is read without asking whether it has one.
+        let array = boxed.is_none() && self.is_array(&v)?;
         let items: Vec<Value> = match boxed.as_ref().unwrap_or(&v) {
             Value::String(s) => {
                 let units = crate::string_builtins::flat_charged(self, s)?;
@@ -2471,10 +2474,8 @@ impl Interp {
                 }
                 out
             }
-            Value::Object(o) if self.has_property(*o, &key("length"))? => {
+            Value::Object(o) if array || self.has_property(*o, &key("length"))? => {
                 let o = *o;
-                // Tested before any trap reads `length`, which may revoke the proxy.
-                let array = self.is_array(&Value::Object(o))?;
                 let len = self.get_from(o, &key("length"), &v)?;
                 // ToLength (ECMA-262 2015 section 7.1.15): a negative or NaN length reads nothing.
                 let n = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);

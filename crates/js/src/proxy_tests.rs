@@ -503,6 +503,12 @@ fn spread_lets_a_proxy_shrink_the_array_it_reads() {
         "var made = Proxy.revocable([], { get: function (t, k) { if (k === 'length') { made.revoke(); return 0; } return t[k]; } });
          [...made.proxy].length === 0",
     );
+    // A proxy of an array is not asked whether it has a `length`.
+    truth(
+        "var asked = false;
+         var p = new Proxy([1, 2], { has: function (t, k) { asked = true; return k in t; } });
+         [...p].join() === '1,2' && !asked",
+    );
     // Without a proxy or a getter, the length is refused at once.
     let src = "var a = []; a.length = 4294967295; [...a]";
     match es().run(src) {
