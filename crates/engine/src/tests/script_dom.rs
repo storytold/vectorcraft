@@ -101,6 +101,21 @@ fn page_items_are_live_and_typed_for_all_node_kinds() {
 }
 
 #[test]
+fn page_items_list_the_art_inside_a_blend() {
+    let (mut s, a, b) = doc();
+    log(&mut s, "app.activeDocument.pageItems[0].name = 'first';");
+    s.execute("object.blend.make", &json!({"ids": [a.0, b.0], "steps": 2})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems, t = [];\
+         for (var i = 0; i < p.length; i++) t.push(p[i].typename);\
+         vc.log(t.join(','));\
+         vc.log(p.getByName('first').parent.typename); vc.log(p.index('first').typename);",
+    );
+    assert_eq!(out, vec![json!("BlendItem,PathItem,PathItem"), json!("BlendItem"), json!("PathItem")]);
+}
+
+#[test]
 fn page_item_geometry_uses_document_coordinates_with_y_up() {
     let (mut s, _, _) = doc();
     let out = log(
@@ -206,6 +221,42 @@ fn page_item_properties_join_one_undo_step() {
     }
 }
 
+/// An opacity a graph mark already has still replaces the opacity another mark of its series left on
+/// the graph, as `object.setProps` does.
+#[test]
+fn an_opacity_a_graph_mark_already_has_replaces_the_one_its_series_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4";
+    let r = s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let kept =
+        |s: &Session| s.active().unwrap().doc.node(id).unwrap().extras().graph.as_deref().unwrap().series_paints.first().and_then(|p| p.opacity);
+    let series = |s: &Session| {
+        let n = s.active().unwrap().doc.node(id).unwrap().clone();
+        let group = n.children().unwrap().iter().find(|c| c.extras().series_index == Some(0)).unwrap().clone();
+        group.children().unwrap().iter().map(|m| m.id).collect::<Vec<_>>()
+    };
+    let marks = series(&s);
+    s.execute("object.setProps", &json!({"id": marks[0].0, "opacity": 50})).unwrap();
+    assert_eq!(kept(&s), Some(0.5));
+    s.execute("object.setProps", &json!({"id": series(&s)[1].0, "name": "mark"})).unwrap();
+    log(&mut s, "app.activeDocument.pageItems.getByName('mark').opacity = 100;");
+    assert_eq!(kept(&s), None);
+}
+
+/// Assigning an item the opacity it reports, rounded to four decimals, changes nothing.
+#[test]
+fn assigning_the_reported_opacity_changes_nothing() {
+    let (mut s, a, _) = doc();
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 100.0 / 3.0})).unwrap();
+    let (before, steps) = (s.active().unwrap().doc.node(a).unwrap().opacity, undo_steps(&s));
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0]; vc.log(i.opacity); i.opacity = i.opacity;");
+    assert_eq!(out, vec![json!(33.3333)]);
+    assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, before);
+    assert_eq!(undo_steps(&s), steps);
+}
+
 #[test]
 fn selection_assignment_is_atomic_across_invalid_items() {
     let (mut s, a, b) = doc();
@@ -227,6 +278,25 @@ fn selection_assignment_is_atomic_across_invalid_items() {
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     let e = failure(&mut s, "app.activeDocument.selection = app.documents[0].pageItems[0];");
     assert!(e.contains("Cannot select"), "{e}");
+}
+
+#[test]
+fn a_guide_path_is_not_selected_while_guides_are_locked() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    // The assignment and `selected` refuse the guide path, and the selection stays as it was.
+    for source in ["app.activeDocument.selection = app.activeDocument.pageItems[0];", "app.activeDocument.pageItems[0].selected = true;"] {
+        let e = failure(&mut s, source);
+        assert!(e.contains(&format!("Cannot select PathItem {}", a.0)), "{source}: {e}");
+        assert_eq!(s.active().unwrap().selection.objects, vec![b], "{source}");
+    }
+    // With the guides unlocked, the guide path is selected.
+    s.execute("view.guides.lock", &json!({"locked": false})).unwrap();
+    log(&mut s, "app.activeDocument.selection = app.activeDocument.pageItems[0];");
+    assert_eq!(s.active().unwrap().selection.objects, vec![a]);
 }
 
 #[test]
@@ -419,6 +489,30 @@ fn a_path_inside_a_compound_path_is_not_reordered() {
 }
 
 #[test]
+fn moving_the_last_path_out_of_a_compound_path_deletes_the_compound_path() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = layer_order(&s)[0];
+    let layer = s.active().unwrap().doc.layers[0].id;
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, c = d.pageItems[0], m = [d.pageItems[1], d.pageItems[2]];\
+         m[0].move(c, ElementPlacement.PLACEBEFORE); vc.log(d.pageItems.length);\
+         m[1].move(c, ElementPlacement.PLACEBEFORE); vc.log(d.pageItems.length);\
+         try { c.name; } catch (e) { vc.log(e.message); }",
+    );
+    assert_eq!(out, vec![json!(3), json!(2), json!("Stale page item")]);
+    let doc = &s.active().unwrap().doc;
+    assert!(doc.node(compound).is_none(), "the empty compound path is deleted");
+    // Each path went directly above the compound path, the second above the first.
+    assert_eq!(layer_order(&s), [b, a]);
+    assert!([a, b].iter().all(|id| doc.parent_of(*id) == Some(layer)));
+    assert_eq!(undo_steps(&s), steps + 1, "the run is one undo step");
+}
+
+#[test]
 fn a_copy_of_an_object_with_a_large_id_is_the_copy() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -572,6 +666,37 @@ fn an_edit_keeps_a_layers_panel_target() {
     log(&mut s, "app.activeDocument.pageItems[1].duplicate();");
     let sel = &s.active().unwrap().selection;
     assert_eq!((sel.target, sel.objects.len(), sel.objects.contains(&b)), (Some(layer), 4, true));
+}
+
+#[test]
+fn an_edit_keeps_the_current_layer() {
+    let (mut s, a, b) = doc();
+    let first = s.active().unwrap().doc.layers[0].id;
+    let back = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let layer = |s: &Session| (s.active().unwrap().active_layer, s.active().unwrap().highlighted_rows());
+    assert_eq!(layer(&s), (Some(back), vec![back]));
+    // Moving an object of the first layer selects it for the command; the new layer stays current.
+    log(&mut s, "app.activeDocument.pageItems[0].left = 50;");
+    assert_eq!(layer(&s), (Some(back), vec![back]));
+    assert_eq!(s.active().unwrap().selection.objects, vec![b]);
+    // With nothing selected and no row highlighted, the layer stays current and no row is highlighted.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("layer.setCurrent", &json!({"id": back.0})).unwrap();
+    s.execute("layer.highlight", &json!({"ids": [], "mode": "set"})).unwrap();
+    assert_eq!(layer(&s), (Some(back), vec![]));
+    log(&mut s, "app.activeDocument.pageItems[1].left = 120;");
+    assert_eq!(layer(&s), (Some(back), vec![]));
+    assert!(s.active().unwrap().selection.objects.is_empty());
+    // Targeting a layer makes it current and leaves another layer's row highlighted; both stay.
+    s.execute("layer.highlight", &json!({"ids": [first.0], "mode": "set"})).unwrap();
+    s.execute("layer.target", &json!({"id": back.0})).unwrap();
+    assert_eq!(layer(&s), (Some(back), vec![first]));
+    log(&mut s, "app.activeDocument.pageItems[0].left = 70;");
+    assert_eq!(layer(&s), (Some(back), vec![first]));
+    // Assigning the selection makes the layer of the selected object current, as a click does.
+    log(&mut s, "app.activeDocument.selection = app.activeDocument.pageItems[0];");
+    assert_eq!(s.active().unwrap().active_layer, Some(first));
+    assert_eq!(s.active().unwrap().selection.objects, vec![a]);
 }
 
 /// A document with a rectangle at the bottom of the stack, then a dynamic symbol instance of two
@@ -914,6 +1039,43 @@ fn add_document_applies_the_profile_file_and_throws_when_it_cannot_be_read() {
 }
 
 #[test]
+fn add_document_names_a_color_profile_of_the_profile_file_that_cannot_be_used() {
+    let dir = std::env::temp_dir().join(format!("vc-script-add-document-warning-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut s = Session::new();
+    s.attach_new_doc_profiles(dir.clone());
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    while !s.documents().is_empty() {
+        s.execute("file.close", &json!({})).unwrap();
+    }
+    let file = dir.join("Print.vectorcraft");
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    let broken = format!("Script profile broken {}", std::process::id());
+    v["profiles"] = json!({ &broken: {"mime": "application/vnd.iccprofile", "data": "AAAA"} });
+    std::fs::write(&file, serde_json::to_vec(&v).unwrap()).unwrap();
+    let r = run(&mut s, "vc.log(app.documents.addDocument('Print').typename);").unwrap();
+    assert_eq!(r["log"], json!(["Document"]));
+    let lines = r["console"]["lines"].as_array().cloned().unwrap_or_default();
+    let named = lines.iter().filter_map(Value::as_str).any(|l| l.starts_with("addDocument: ") && l.contains(&broken));
+    assert!(named, "{lines:?}");
+    assert_eq!(s.documents().len(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn add_document_refuses_pixel_preview() {
+    let mut s = Session::new();
+    let e = failure(&mut s, "var p = new DocumentPreset(); p.previewMode = DocumentPreviewMode.PixelPreview; app.documents.addDocument('Web', p);");
+    assert!(e.contains("DocumentPreviewMode.PixelPreview is not available yet"), "{e}");
+    assert!(s.documents().is_empty());
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.previewMode = DocumentPreviewMode.DefaultPreview; vc.log(app.documents.addDocument('Web', p).typename);",
+    );
+    assert_eq!(out, vec![json!("Document")]);
+}
+
+#[test]
 fn document_preset_values_count_toward_the_data_a_run_passes() {
     // A 64 KiB title, set once, then read or handed to addDocument 32 times: 2 MiB, over a 1 MiB limit.
     crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(1 << 20)));
@@ -1016,9 +1178,81 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
     let doc = &s.active().unwrap().doc;
     assert!(doc.node(a).is_some() && doc.node(b).is_some() && doc.node(c).is_some());
     assert_eq!(undo_steps(&s), steps);
+    // `editable` is false for art on the locked artboard and true for art on the unlocked one.
+    let editable = "var p = app.activeDocument.pageItems; vc.log([p[0].editable, p[1].editable, p[2].editable]);";
+    assert_eq!(log(&mut s, editable), vec![json!([false, false, true])]);
     lock(&mut s, false);
+    assert_eq!(log(&mut s, editable), vec![json!([true, true, true])]);
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p[1].remove(); p.removeAll(); vc.log(p.length);");
     assert_eq!(out, vec![json!(0)]);
+}
+
+#[test]
+fn move_and_duplicate_refuse_art_on_a_locked_artboard() {
+    let (mut s, a, b) = doc();
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let (order, steps) = (layer_order(&s), undo_steps(&s));
+    let e = failure(&mut s, "var p = app.activeDocument.pageItems; p[0].move(p[1], ElementPlacement.PLACEBEFORE);");
+    assert!(e.contains(&format!("Cannot move PathItem {}", a.0)), "{e}");
+    assert_eq!((layer_order(&s), undo_steps(&s)), (order.clone(), steps));
+    // `duplicate` refuses it too, with or without a relative object.
+    for source in ["app.activeDocument.pageItems[0].duplicate();", "var p = app.activeDocument.pageItems; p[0].duplicate(p[1]);"] {
+        let e = failure(&mut s, source);
+        assert!(e.contains(&format!("Cannot duplicate PathItem {}", a.0)), "{source}: {e}");
+    }
+    assert_eq!((layer_order(&s), undo_steps(&s)), (order, steps));
+    lock(&mut s, false);
+    log(&mut s, "var p = app.activeDocument.pageItems; p[0].move(p[1], ElementPlacement.PLACEBEFORE);");
+    assert_eq!(layer_order(&s), [b, a]);
+}
+
+#[test]
+fn duplicate_refuses_hidden_or_locked_art() {
+    let (mut s, a, b) = doc();
+    for (on, off) in [
+        (json!({"ids": [b.0], "locked": true}), json!({"ids": [b.0], "locked": false})),
+        (json!({"ids": [b.0], "visible": false}), json!({"ids": [b.0], "visible": true})),
+    ] {
+        s.execute("object.setProps", &on).unwrap();
+        let (order, steps) = (layer_order(&s), undo_steps(&s));
+        // With no argument and with a relative object.
+        for source in ["app.activeDocument.pageItems[1].duplicate();", "var p = app.activeDocument.pageItems; p[1].duplicate(p[0]);"] {
+            let e = failure(&mut s, source);
+            assert!(e.contains(&format!("Cannot duplicate PathItem {}", b.0)), "{on} {source}: {e}");
+        }
+        assert_eq!((layer_order(&s), undo_steps(&s)), (order, steps), "{on}");
+        s.execute("object.setProps", &off).unwrap();
+    }
+    log(&mut s, "app.activeDocument.pageItems[1].duplicate();");
+    let order = layer_order(&s);
+    assert_eq!(order.len(), 3);
+    assert!(order.contains(&a) && order.contains(&b));
+}
+
+/// Reading `editable` on every member of a group on a locked artboard measures the group once.
+#[test]
+fn editable_measures_a_group_on_a_locked_artboard_once() {
+    let (mut s, a, b) = doc();
+    let mut ids = vec![a.0, b.0];
+    ids.extend((0..20).map(|i| rect(&mut s, 10.0 + f64::from(i), 200.0, 5.0, 5.0).0));
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let before = vectorcraft_doc::locked_artboard_measures();
+    let out = log(&mut s, "var p = app.activeDocument.pageItems, n = 0; for (var i = 0; i < p.length; i++) if (!p[i].editable) n++; vc.log(n);");
+    assert_eq!(out, vec![json!(23)], "the group and its 22 members are on the locked artboard");
+    assert_eq!(vectorcraft_doc::locked_artboard_measures() - before, 1);
 }
 
 #[test]
