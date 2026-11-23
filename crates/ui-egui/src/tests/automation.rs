@@ -579,23 +579,29 @@ fn a_pass_with_injected_input_runs_inside_the_roots() {
     }
     let (mut app, tx, base) = confined("synthetic");
     let ctx = crate::testing::ui_context();
-    let (req, _reply) = ControlRequest::new("ui.key", json!({"key": "Escape"}));
-    tx.send(req).unwrap();
-    app.run_control(&ctx);
     let outside = base.join("outside/b.svg");
-    let pass = |app: &mut VectorcraftApp, dropped: bool| {
+    // The OS holds the file over the window in the pass before it drops it (`hovered`), as a desktop drag does.
+    let pass = |app: &mut VectorcraftApp, hovered: bool, dropped: bool| {
         let mut raw = egui::RawInput::default();
+        if hovered {
+            raw.hovered_files.push(egui::HoveredFile { path: Some(outside.clone()), mime: String::new() });
+        }
         if dropped {
             raw.dropped_files.push(std::sync::Arc::new(Dropped(outside.clone())));
         }
         crate::testing::app_frame(app, &ctx, raw);
         app.session.documents().len()
     };
-    assert_eq!(pass(&mut app, true), 0, "the pass carrying the key is confined");
+    pass(&mut app, true, false);
+    let (req, _reply) = ControlRequest::new("ui.key", json!({"key": "Escape"}));
+    tx.send(req).unwrap();
+    app.run_control(&ctx);
+    assert_eq!(pass(&mut app, false, true), 0, "the pass carrying the key is confined");
     for _ in 0..4 {
-        pass(&mut app, false);
+        pass(&mut app, false, false);
     }
-    assert_eq!(pass(&mut app, true), 1, "the person's pass is not");
+    pass(&mut app, true, false);
+    assert_eq!(pass(&mut app, false, true), 1, "the person's pass is not");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -1394,8 +1400,9 @@ fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
     std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
     finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
     let person = crate::control::inspect(&app, &ctx);
-    // The report names the file by its real path (on macOS the temp folder is reached through a link).
-    let bad = std::fs::canonicalize(base.join("outside/bad.jsxinc")).unwrap();
+    // The report names the file by its real path (on macOS the temp folder is reached through a link), as people
+    // read it (on Windows without the `\\?\` prefix).
+    let bad = vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(base.join("outside/bad.jsxinc")).unwrap());
     assert_eq!(person["scriptReport"]["file"], json!(s(bad)), "{person}");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");

@@ -2,10 +2,10 @@
 //! Linked Files, Embed ICC Profiles, Create PDF-Compatible File, Use Compression and Preview; the
 //! web's Save As dialog shows them too.
 
-use craft::ui::dialog::{OpenDialog, StandardPrompt};
+use craft::ui::dialog::OpenDialog;
 use serde_json::{Value, json};
 
-use crate::dialogs::confirm::{REPLACE_FILES, ReplaceFiles};
+use crate::dialogs::confirm::REPLACE_FILES;
 use crate::tests_svg::app;
 use crate::{VectorcraftApp, dialogs};
 
@@ -58,7 +58,7 @@ pub(super) fn answer(app: &mut VectorcraftApp, fields: &[(&str, Value)], ok: boo
 
 /// The files the replace question open now names.
 pub(super) fn replace_files(app: &VectorcraftApp) -> Option<Vec<String>> {
-    app.dialogs()?.with(|host| host.get::<StandardPrompt>().and_then(|p| p.tag_as::<ReplaceFiles>()).map(|r| r.files.clone()))
+    dialogs::confirm::open_replace_files(app)
 }
 
 /// Add artboards B and C, a rectangle on each.
