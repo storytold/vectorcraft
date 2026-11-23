@@ -12,13 +12,17 @@ fn luminance(c: &Color) -> f32 {
     0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-fn map_color(c: &Color, mode: Colorization, key: &Color) -> Color {
-    // Black ink alone is its own tint: its amount is the tint, not how light it displays (100% K
-    // displays lighter than black).
-    let light = match *c {
+/// How light `c` is for colorization, 0 black to 1 white. Black ink alone is its own tint: its
+/// amount is the tint, not how light it displays (100% K displays lighter than black).
+fn lightness(c: &Color) -> f32 {
+    match *c {
         Color::Cmyk { c, m, y, k } if c == 0.0 && m == 0.0 && y == 0.0 => 1.0 - k,
         _ => luminance(c),
-    };
+    }
+}
+
+fn map_color(c: &Color, mode: Colorization, key: &Color) -> Color {
+    let light = lightness(c);
     // A process or gray stroke color's tints and shades stay in its model.
     let (white, black) = match key {
         Color::Cmyk { .. } => (Color::cmyk(0.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0)),
@@ -47,45 +51,61 @@ fn map_color(c: &Color, mode: Colorization, key: &Color) -> Color {
     }
 }
 
-fn map_paint(p: &mut Paint, mode: Colorization, key: &Color) {
+/// The swatch a stroke paint links to and its tint, for colorization: Tints of a linked color are
+/// tints of its swatch (a spot color's tints print on its own plate).
+type Link<'a> = Option<(&'a str, f32)>;
+
+fn map_paint(p: &mut Paint, mode: Colorization, key: &Color, link: Link<'_>) {
     if let Paint::Solid { color, .. } = p {
-        *p = Paint::solid(map_color(color, mode, key));
+        *p = match (mode, link) {
+            (Colorization::Tints, Some((swatch, tint))) => {
+                let t = (1.0 - lightness(color)).clamp(0.0, 1.0);
+                Paint::Solid { color: key.tinted(t), swatch: Some(swatch.to_string()), tint: tint * t }
+            }
+            _ => Paint::solid(map_color(color, mode, key)),
+        };
     }
 }
 
 /// Recolour `n` (recursively) for a stroke painted `stroke`, and strip brushes from its strokes so
-/// brush output never recurses. Non-solid stroke paints leave the art's colours alone. Type is
+/// brush output never recurses. Non-solid stroke paints leave the art's colours alone. Under Tints,
+/// a stroke color linked to a swatch gives tints of that swatch, linked to it, as a spot color's
+/// tints are (the art's darkest parts the stroke's own tint, white none of it). Type is
 /// recolored like paths: its characters' solid fills and strokes as well as its own.
 pub fn colorize(n: &mut Node, mode: Colorization, stroke: &Paint) {
     let key = match (mode, stroke.color()) {
         (Colorization::None, _) | (_, None) => None,
         (_, Some(c)) => Some(c),
     };
-    fn walk(n: &mut Node, mode: Colorization, key: Option<Color>) {
+    let link = match stroke {
+        Paint::Solid { swatch: Some(s), tint, .. } => Some((s.as_str(), *tint)),
+        _ => None,
+    };
+    fn walk(n: &mut Node, mode: Colorization, key: Option<Color>, link: Link<'_>) {
         for it in &mut n.appearance.items {
             match it {
                 AppearanceItem::Fill(f) => {
                     if let Some(k) = &key {
-                        map_paint(&mut f.paint, mode, k);
+                        map_paint(&mut f.paint, mode, k, link);
                     }
                 }
                 AppearanceItem::Stroke(s) => {
                     s.brush = None;
                     if let Some(k) = &key {
-                        map_paint(&mut s.paint, mode, k);
+                        map_paint(&mut s.paint, mode, k, link);
                     }
                 }
             }
         }
         if let (Some(k), NodeKind::Text(t)) = (&key, &mut n.kind) {
             for r in &mut t.runs {
-                map_paint(&mut r.style.fill, mode, k);
-                map_paint(&mut r.style.stroke, mode, k);
+                map_paint(&mut r.style.fill, mode, k, link);
+                map_paint(&mut r.style.stroke, mode, k, link);
             }
         }
         if let Some(ch) = n.children_mut() {
             for c in ch.iter_mut() {
-                walk(Arc::make_mut(c), mode, key);
+                walk(Arc::make_mut(c), mode, key, link);
             }
         }
         // A mask's art is drawn too: a brush on its strokes would run this brush again. Its colours
@@ -94,7 +114,7 @@ pub fn colorize(n: &mut Node, mode: Colorization, stroke: &Paint) {
             strip_brushes(Arc::make_mut(&mut m.art));
         }
     }
-    walk(n, mode, key);
+    walk(n, mode, key, link);
 }
 
 /// Mixed into a stroke's seed for its hue jitter, so the amounts come from a sequence of their own

@@ -17,10 +17,12 @@ pub mod corners;
 pub mod decode;
 pub mod depth;
 pub mod dimension;
+pub mod flare;
 pub mod graph;
 mod halftone_radii;
 pub mod hit;
 mod id_index;
+pub mod image_quad;
 pub use id_index::{path_lookups, tree_walks};
 pub mod inks;
 mod inline;
@@ -132,12 +134,12 @@ pub use text::GlyphForm;
 pub use text::PATH_LEAD_MAX;
 pub use text::WarichuAlign;
 pub use text::{
-    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
-    JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign,
-    RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
-    VerticalAlign, WrapShape,
+    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FILE_FONT_MIME, FileFont, FileFontFace, FileFonts,
+    FirstBaseline, HyphenationOptions, InlineArt, JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection,
+    ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind,
+    TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign, WrapShape,
 };
-pub use text::{CharClass, CompositeClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet};
+pub use text::{CharClass, CompositeClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet, KinsokuSet};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;
@@ -159,6 +161,9 @@ mod records;
 mod stored_art;
 mod units;
 
+#[cfg(any(test, feature = "locked-artboard-count"))]
+#[doc(hidden)]
+pub use artboard::locked_artboard_measures;
 pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, RetiredArtboardId, VIDEO_PIXEL_ASPECT_RANGE, VIDEO_SAFE_INSETS};
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
@@ -170,7 +175,7 @@ use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use stored_art::{StoredPlace, StoredRoot};
-pub use units::{ColorMode, Unit, decimal_point, finite_in_every_unit, parse_number};
+pub use units::{ColorMode, Unit, arithmetic_signs, decimal_point, finite_in_every_unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {
@@ -217,6 +222,10 @@ pub struct Document {
     /// Type › Composite Fonts…: the composite fonts defined in the document, by name.
     #[serde(default, skip_serializing_if = "skip::is_empty_vec")]
     pub composite_fonts: Shared<Vec<CompositeFont>>,
+    /// Type › Kinsoku Shori Settings…: the custom Kinsoku Shori sets defined in the document, by
+    /// name. A paragraph using one holds a copy of it ([`ParaStyle::kinsoku_set`]).
+    #[serde(default, skip_serializing_if = "skip::is_empty_vec", deserialize_with = "text::read_kinsoku_sets")]
+    pub kinsoku_sets: Shared<Vec<KinsokuSet>>,
     /// Threaded text: area-type frames one story flows through, in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text_threads: Vec<Vec<NodeId>>,

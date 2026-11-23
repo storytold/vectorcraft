@@ -197,6 +197,14 @@ pub(super) fn focus_swatch(app: &VectorcraftApp, ui: &Ui, active: Option<&str>) 
     active.filter(|_| changed).map(str::to_string)
 }
 
+/// Whether the panel's selection is still the one it showed last: neither another document nor
+/// other art has been selected since, which [`focus_swatch`] clears it for on the next frame.
+pub(super) fn selection_is_current(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    let art: Option<SelectedArt> = app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect()));
+    let (last_art, _): (Option<Option<SelectedArt>>, Option<String>) = pstate(ctx, "swatch-focus");
+    last_art.is_none_or(|l| l == art)
+}
+
 /// The swatch the active paint comes from: a linked colour's global swatch (a tint's tint swatch
 /// when there is one), a process colour's swatch of that colour (a colour no swatch has: none, so
 /// text in a colour of its own highlights nothing), a gradient's gradient swatch, or None; nothing

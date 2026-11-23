@@ -347,7 +347,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     edit(app, json!({"reverse": true}), Live::Released);
                 }
             });
-            let radial = kind.is_centered() && placed;
+            // The default gradient (with nothing selected, or the Live Paint Bucket's) fits each object and has no aspect.
+            let radial = kind.is_centered() && placed && app.session.gradient_edit_has_objects(!app.session.fill_active);
             ui.horizontal(|ui| {
                 icons::icon(ui, "scaling", 15.0, if radial { t.icon } else { t.text_disabled }).on_hover_text(tl!("Aspect Ratio"));
                 // A mirrored conic's negative aspect shows as its size; an edit keeps the mirror.
@@ -707,9 +708,11 @@ fn ramp_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool) 
 }
 
 /// The stop's eyedropper: the Eyedropper tool samples the next colour clicked on the art into the
-/// selected stop, then hands back to the current tool.
+/// selected stop, then hands back to the current tool (or, while a pick is already armed, to the
+/// tool that armed it).
 pub(crate) fn stop_eyedropper(app: &mut VectorcraftApp) {
-    let back = app.session.tool_id();
+    let tool = app.session.tool_id();
+    let back = (tool == "eyedropper").then(|| app.session.tool_returns_to()).flatten().unwrap_or_else(|| tool.to_string());
     app.select_tool("eyedropper");
     app.session.set_tool_option("stop", &json!(back));
 }

@@ -388,11 +388,23 @@ fn row_effects_of(fx: &[Effect]) -> Vec<Effect> {
 /// appearance, so the effects never pass round a symbol that holds itself. Without `doc`, no
 /// instance in the art takes them.
 pub(crate) fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
+    add_instance_rows(doc, n, art, true);
+}
+
+/// [`add_instance_row_effects`] for Direct Selection's parts of a symbol instance's art: live
+/// objects (blends, envelopes, repeats) are left as they are, without the effects, so that every
+/// object keeps its place in the art and the child indices that pick a part still lead to it.
+pub fn add_instance_row_effects_to_parts(doc: Option<&Document>, n: &Node, art: &mut Node) {
+    add_instance_rows(doc, n, art, false);
+}
+
+/// [`add_instance_row_effects`], evaluating live objects in the art only with `live`.
+fn add_instance_rows(doc: Option<&Document>, n: &Node, art: &mut Node, live: bool) {
     let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
     let fill = active_fill(n).map_or(vec![], |f| row_effects_of(&f.effects));
     let stroke = active_stroke(n).map_or(vec![], |s| row_effects_of(&s.effects));
     if !fill.is_empty() || !stroke.is_empty() {
-        add_row_effects(doc, symbol, art, &fill, &stroke);
+        add_row_effects(doc, symbol, art, &fill, &stroke, live);
     }
 }
 
@@ -413,8 +425,9 @@ fn places_symbol(doc: &Document, from: &str, to: &str, seen: &mut HashSet<String
 }
 
 /// [`add_instance_row_effects`] of `fill` and `stroke` to `n` and the art in it, the art of an
-/// instance of the symbol named `outer`.
-fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Effect], stroke: &[Effect]) {
+/// instance of the symbol named `outer`. Without `live`, live objects are left as they are
+/// ([`add_instance_row_effects_to_parts`]).
+fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Effect], stroke: &[Effect], live: bool) {
     match &n.kind {
         NodeKind::Path { clipping: true, .. } | NodeKind::Path { guide: true, .. } | NodeKind::RulerGuide { .. } => return,
         NodeKind::SymbolInstance { symbol, .. } => {
@@ -425,7 +438,12 @@ fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Ef
             }
             return;
         }
-        _ if vectorcraft_doc::live::is_live(n) => *n = evaluated(doc, n),
+        _ if vectorcraft_doc::live::is_live(n) => {
+            if !live {
+                return;
+            }
+            *n = evaluated(doc, n);
+        }
         _ => {}
     }
     let takes = |i: &AppearanceItem| {
@@ -445,7 +463,7 @@ fn add_row_effects(doc: Option<&Document>, outer: &str, n: &mut Node, fill: &[Ef
     let clips = n.clips();
     for (i, c) in n.children_mut().into_iter().flatten().enumerate() {
         if !(clips && i == 0) {
-            add_row_effects(doc, outer, Arc::make_mut(c), fill, stroke);
+            add_row_effects(doc, outer, Arc::make_mut(c), fill, stroke, live);
         }
     }
 }
@@ -1248,15 +1266,20 @@ fn as_art_opts(
     let fx = geometry_effects(n);
     let mut art = match &n.kind {
         NodeKind::Image(im) => {
-            let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
+            // A distorted image's frame joins its corners.
+            let frame = match n.image_frame().filter(|_| n.is_distorted_image()) {
+                Some(bp) => PathData::from_bezpath(&bp),
+                None => shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf),
+            };
             let mut image = Node::new(n.id, n.kind.clone());
             // Its pixels draw as the image's do: colorized by a grayscale image's fill color,
-            // smoothed or not, and with its color mask's masked pixels.
+            // smoothed or not, with its color mask's masked pixels, and distorted.
             {
                 let mut e = image.extras_mut();
                 e.colorize = n.extras().colorize.clone();
                 e.pixelated = n.extras().pixelated;
                 e.color_mask = n.extras().color_mask.clone();
+                e.image_quad = n.extras().image_quad.clone();
             }
             let clipped = || {
                 let mut clip = Node::path(n.id, frame.clone(), Appearance::default());
@@ -1276,6 +1299,17 @@ fn as_art_opts(
                 clipped()
             } else {
                 let opaque = std::cell::OnceCell::new();
+                // A distorted image's opaque area, traced in its pixels, goes to the page through
+                // its projective map.
+                let opaque_on_page = || match n.image_map().filter(|_| n.is_distorted_image()) {
+                    Some(map) => {
+                        let plain = ImageObject { xf: Affine::IDENTITY, ..(**im).clone() };
+                        let piece = f64::from(im.width.max(im.height).max(1)) / 64.0;
+                        opaque_area(&[symbols, paint_doc], &plain)
+                            .map(|p| vectorcraft_doc::live::map_nonlinear(&p, piece, |q| map.apply(q).unwrap_or(q)))
+                    }
+                    None => opaque_area(&[symbols, paint_doc], im),
+                };
                 let rows = |items: Vec<AppearanceItem>| {
                     let mut out = vec![];
                     let mut items = items.into_iter().peekable();
@@ -1285,7 +1319,7 @@ fn as_art_opts(
                         while let Some(next) = items.next_if(|i| follows_opaque_area(i) == follows) {
                             run.push(next);
                         }
-                        let path = if follows { opaque.get_or_init(|| opaque_area(&[symbols, paint_doc], im)).as_ref() } else { None };
+                        let path = if follows { opaque.get_or_init(opaque_on_page).as_ref() } else { None };
                         let path = path.unwrap_or(&frame);
                         if !path.is_empty() {
                             out.push(Arc::new(Node::path(n.id, path.clone(), Appearance { items: run, ..Default::default() })));
@@ -3505,7 +3539,7 @@ pub(crate) fn follow_boxes(ap: &mut Appearance, from: Rect, to: Rect) {
 
 /// The map that takes box `from` onto box `to` along each axis (along an axis `from` has no extent
 /// on, a move from its center to `to`'s).
-fn box_map(from: Rect, to: Rect) -> vectorcraft_geom::Affine {
+pub(crate) fn box_map(from: Rect, to: Rect) -> vectorcraft_geom::Affine {
     let axis = |a0: f64, a1: f64, b0: f64, b1: f64| {
         if (a1 - a0).abs() > 1e-12 {
             let s = (b1 - b0) / (a1 - a0);
@@ -3718,8 +3752,21 @@ fn restore_warped_images(n: &mut Node, warped: &WarpedImages, cut: bool) {
         // The pieces start from the image as it was placed when it took its first warp.
         let first = warps.first().map(|(_, at)| ImageObject { xf: *at, ..(**own).clone() });
         let map = warped_map(warps, own.xf);
+        // A placement with no inverse cannot take a distorted image's corners back.
+        let det = own.xf.determinant();
+        let back = warps.first().filter(|_| det.is_finite() && det != 0.0).map(|(_, at)| *at * own.xf.inverse()).filter(Affine::is_finite);
+        let distorted = image.extras().image_quad.is_some();
         *c = Arc::new(match (first, map) {
-            (Some(first), Some(map)) if cut => {
+            (Some(first), Some(map)) if cut && (back.is_some() || !distorted) => {
+                // A distorted image's corners go back to where they stood at its first warp, as
+                // its placement does: the moves since then are in `map`.
+                if let Some(back) = back
+                    && let Some(q) = image.extras_if_any().and_then(|e| e.image_quad.as_mut())
+                {
+                    for p in q.iter_mut() {
+                        *p = back * *p;
+                    }
+                }
                 let pixelated = image.extras().pixelated;
                 vectorcraft_doc::live::mesh_warp_image(&image, &first, &*map, WARP_IMAGE_CELLS, pixelated, false)
             }
@@ -3786,6 +3833,12 @@ fn copy_placed(n: &mut Node, m: Affine, copies: usize, scaling: vectorcraft_doc:
                 NodeKind::Image(im) => im.xf = xf * im.xf,
                 NodeKind::SymbolInstance { xf: at, .. } => *at = xf * *at,
                 _ => {}
+            }
+            // A distorted image's corners move with it.
+            if let Some(q) = one.extras_if_any().and_then(|e| e.image_quad.as_mut()) {
+                for p in q.iter_mut() {
+                    *p = xf * *p;
+                }
             }
             // The placed gradients of its own fills and strokes move with it, as a path's do.
             if xf != Affine::IDENTITY && one.appearance.has_positioned_gradient() {

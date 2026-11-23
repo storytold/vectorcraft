@@ -670,6 +670,34 @@ fn area_type() -> TextObject {
 }
 
 #[test]
+fn a_wrap_object_below_every_area_type_object_makes_no_outline() {
+    use crate::{Appearance, Document, Node, NodeKind};
+    let mut d = Document::new(300.0, 300.0);
+    let l = d.layers[0].id;
+    let wrap = |d: &mut Document, r: Rect| {
+        let id = d.alloc_id();
+        let mut n = Node::path(id, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art());
+        n.extras_mut().wrap = Some(TextWrap::default());
+        n
+    };
+    // Bottom to top: a wrap object, the area type, then a wrap object.
+    let below = wrap(&mut d, Rect::new(0.0, 0.0, 250.0, 250.0));
+    d.insert(Some(l), 9, below).unwrap();
+    let id = d.alloc_id();
+    d.insert(Some(l), 9, Node::new(id, NodeKind::Text(Box::new(area_type())))).unwrap();
+    let above = wrap(&mut d, Rect::new(60.0, 40.0, 80.0, 60.0));
+    d.insert(Some(l), 9, above).unwrap();
+    wrap::OUTLINES_MADE.with(|c| c.set(0));
+    let mut sources = 0;
+    wrap_sources(&d, |_, objects, shapes| {
+        sources += 1;
+        assert_eq!((objects.len(), shapes.len()), (1, 1));
+    });
+    assert_eq!(sources, 1);
+    assert_eq!(wrap::OUTLINES_MADE.with(|c| c.get()), 1, "only the wrap object above the type is outlined");
+}
+
+#[test]
 fn area_resizes_its_frame_and_keeps_its_type() {
     let mut t = area_type();
     assert_eq!(t.bounds(), Some(Rect::new(40.0, 40.0, 160.0, 80.0)));
@@ -772,4 +800,31 @@ fn auto_alignment_saves_readable_by_older_builds() {
     assert_eq!(serde_json::from_str::<ParaStyle>(&json).unwrap(), p);
     // Files from before the flag keep their alignment.
     assert_eq!(serde_json::from_str::<ParaStyle>(r#"{"justify":"Center"}"#).unwrap().justify, Justify::Center);
+}
+
+#[test]
+fn file_fonts_draw_type_only_while_its_text_is_the_files() {
+    use super::file_fonts::*;
+    use super::*;
+    // The hash is the same everywhere and in every version (saved files carry it).
+    assert_eq!(text_hash([""]), 0xcbf2_9ce4_8422_2325);
+    assert_eq!(text_hash(["Ham", "burg"]), text_hash(["Hamburg"]));
+    assert_ne!(text_hash(["Hamburg"]), text_hash(["Hamburh"]));
+    let font = FileFont { family: "Source Serif 9".into(), style: "Regular".into(), key: "k".into() };
+    let mut t = TextObject::point(Point::ZERO, "Ham", CharStyle::default());
+    t.runs.push(TextRun::new("burg", CharStyle::default()));
+    assert!(t.file_fonts_in_use().is_empty());
+    t.file_fonts = Some(Box::new(FileFonts::new(vec![font.clone()], "Hamburg")));
+    assert_eq!(t.file_fonts_in_use(), std::slice::from_ref(&font));
+    // Saved and read back.
+    let json = serde_json::to_string(&t).unwrap();
+    assert!(json.contains(r#""fileFonts":{"fonts":[{"family":"Source Serif 9","style":"Regular","key":"k"}]"#), "{json}");
+    assert_eq!(serde_json::from_str::<TextObject>(&json).unwrap(), t);
+    // Edited: none.
+    t.runs[1].text.push('s');
+    assert!(t.file_fonts_in_use().is_empty());
+    // A file's list past the cap: the first ones.
+    t.runs[1].text.pop();
+    t.file_fonts.as_mut().unwrap().fonts = vec![font; MAX_FILE_FONTS + 5];
+    assert_eq!(t.file_fonts_in_use().len(), MAX_FILE_FONTS);
 }

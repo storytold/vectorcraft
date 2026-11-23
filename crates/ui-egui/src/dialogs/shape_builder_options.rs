@@ -159,6 +159,22 @@ mod tests {
         assert_eq!(opts["openFilledAsClosed"], true);
     }
 
+    /// Double-clicking the Fill Area tool opens the Shape Builder Tool Options, whose Gap
+    /// Detection the active Fill Area tool takes on OK.
+    #[test]
+    fn the_fill_area_tool_opens_the_shape_builder_options() {
+        let mut a = app();
+        a.select_tool("fillArea");
+        let r = a.run("tool.options", json!({"tool": "fillArea"})).unwrap();
+        assert_eq!(r["dialog"], json!(KIND));
+        let d = a.ui.dialog.as_mut().unwrap();
+        d.fields.insert("gapDetection".into(), json!(true));
+        d.fields.insert("gapLength".into(), json!(6));
+        super::super::confirm(&mut a).unwrap();
+        let opts = a.session.tool_options_of("fillArea");
+        assert_eq!((opts["gapDetection"].clone(), opts["gapLength"].clone()), (json!(true), json!(6.0)));
+    }
+
     #[test]
     fn double_clicking_the_tool_opens_its_options_and_ok_keeps_them() {
         let mut app = app();

@@ -262,6 +262,9 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         o.remove(ASKED);
         o.remove(DROPPED);
     }
+    if matches!(read, Read::ForUser { .. }) {
+        crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
+    }
     match read {
         Read::ForUser { dropped } if crate::placing::available(app) => {
             let r = crate::placing::start(app, &p, dropped);
@@ -553,12 +556,17 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
             });
             // Placing shows its own errors in the status bar.
             let _ = place_file(app, &p, Read::ForUser { dropped: false });
-        } else if crate::placing::available(app) {
-            if let Err(e) = crate::placing::start(app, p, false) {
-                app.status(e);
-            }
         } else {
-            let _ = engine(app, "file.place", p);
+            // An embedded PDF takes the `pdfTextAs` preference, as one placed from the Place dialog.
+            let mut p = p.clone();
+            crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
+            if crate::placing::available(app) {
+                if let Err(e) = crate::placing::start(app, &p, false) {
+                    app.status(e);
+                }
+            } else {
+                let _ = engine(app, "file.place", &p);
+            }
         }
     });
 }
@@ -742,8 +750,9 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
             }
             DropTarget::Open => match path.as_deref() {
                 Some(path) if app.services.read.is_some() => io::open_path(app, path).map(|_| ()),
-                _ => io::open_bytes(app, &name, &bytes, path.clone()).map(|_| {
-                    if let Some(path) = &path {
+                _ => io::open_bytes(app, &name, &bytes, path.clone()).map(|r| {
+                    // A document that asks a question first goes on the recent files once it opens.
+                    if let Some(path) = path.as_ref().filter(|_| !io::asks_first(&r)) {
                         io::note_recent(app, path);
                     }
                 }),

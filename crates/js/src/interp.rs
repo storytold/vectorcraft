@@ -48,6 +48,14 @@ fn internal<T>(message: &str) -> JsResult<T> {
     Err(Abrupt::Internal(message.into()))
 }
 
+/// The hash an error the interpreter throws keeps of its description ([`Interp::throw`]).
+fn description_hash(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::hash::DefaultHasher::new();
+    text.hash(&mut h);
+    h.finish()
+}
+
 /// The kinds of error object the engine throws.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ErrorType {
@@ -58,6 +66,21 @@ pub(crate) enum ErrorType {
     Syntax,
     Type,
     Uri,
+}
+
+impl ErrorType {
+    /// The `name` the prototype of this kind of error has before a script changes it.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            ErrorType::Error => "Error",
+            ErrorType::Eval => "EvalError",
+            ErrorType::Range => "RangeError",
+            ErrorType::Reference => "ReferenceError",
+            ErrorType::Syntax => "SyntaxError",
+            ErrorType::Type => "TypeError",
+            ErrorType::Uri => "URIError",
+        }
+    }
 }
 
 /// The objects the interpreter itself refers to.
@@ -538,15 +561,34 @@ impl Interp {
 
     pub(crate) fn error_object(&mut self, t: ErrorType, message: &str) -> ObjId {
         let proto = self.intrinsics.error_proto(t);
-        let mut o = Object::new(Class::Error, Some(proto));
+        let mut o = Object::new(Class::Error(None), Some(proto));
         if !message.is_empty() {
             o.props.insert(key("message"), Prop::Data { value: Value::str(message), flags: HIDDEN });
         }
         self.heap.alloc_object(o)
     }
 
+    /// An error of the interpreter's or a host function's own, marked as such with a hash of the
+    /// description it has with its kind's own name ([`Self::thrown_by_script`]), so a name a script
+    /// gave the kind's prototype before the error was made counts as the script's text.
     pub(crate) fn throw(&mut self, t: ErrorType, message: &str) -> Abrupt {
-        Abrupt::Throw(Value::Object(self.error_object(t, message)))
+        let o = self.error_object(t, message);
+        let own = if message.is_empty() { t.name().to_string() } else { format!("{}: {message}", t.name()) };
+        if let Some(object) = self.heap.object_mut(o) {
+            object.class = Class::Error(Some(description_hash(&own)));
+        }
+        Abrupt::Throw(Value::Object(o))
+    }
+
+    /// Is the text [`Self::describe`] gives for the thrown value `v` the script's own? It is unless
+    /// `v` is an error the interpreter or a host function threw, with its name and message as they
+    /// were then: a value the script threw, an error it made, and an error whose name or message it
+    /// changed all hold its own text.
+    pub(crate) fn thrown_by_script(&mut self, v: &Value) -> bool {
+        let Value::Object(o) = v else { return true };
+        let Some(Class::Error(Some(hash))) = self.heap.object(*o).map(|o| &o.class) else { return true };
+        let hash = *hash;
+        description_hash(&self.describe(v)) != hash
     }
 
     pub(crate) fn type_error(&mut self, message: &str) -> Abrupt {
@@ -819,7 +861,7 @@ impl Interp {
         let passed = matches!((&v, std::mem::replace(&mut self.passing, Value::Undefined)), (Value::Object(a), Value::Object(b)) if *a == b);
         if !passed
             && let Value::Object(o) = v
-            && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error))
+            && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error(_)))
         {
             self.last_error = v.clone();
         }

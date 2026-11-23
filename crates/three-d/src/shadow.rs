@@ -369,7 +369,7 @@ pub fn inflate_shadowed(
 /// [`crate::revolve`] gives one.
 pub fn revolve_shadowed(path: &PathData, bounds: Rect, options: Revolve) -> Result<(Vec<Face>, SolidFaces), String> {
     let mut kept = vec![];
-    let (faces, lost) = crate::revolve_sweep(path, options.fill_rule, bounds, options, true, Some(&mut kept))?;
+    let (faces, lost) = crate::revolve_sweep(path, options.fill_rule, bounds, options, true, Some(&mut kept), None)?;
     let projection = Some(crate::revolve_projection(bounds, options.sanitized()));
     Ok((faces, SolidFaces { faces: lost.map_or(Ok(kept), Err), projection }))
 }

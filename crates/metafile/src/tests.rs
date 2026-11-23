@@ -288,6 +288,82 @@ fn emf_clips_gradients_and_images() {
     assert_eq!((count(&k, 35), count(&k, 36)), (3, 3));
 }
 
+/// An image changed by Perspective Distort is written as the clipped pieces of its mesh where
+/// the format clips (EMF), and as one image at the placement nearest its corners, with a warning,
+/// where it does not (WMF).
+#[test]
+fn a_distorted_image_is_its_mesh_with_clips_and_its_nearest_parallelogram_without() {
+    let mut d = doc_with(100.0, 100.0, vec![]);
+    let img = image_node(&mut d, png(4, 4, [10, 20, 30, 255]), 4, 4, Affine::scale(10.0));
+    add(&mut d, img);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(16.0, 0.0), (24.0, 0.0), (40.0, 40.0), (0.0, 40.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let images = |ops: &[crate::scene::Op]| ops.iter().filter(|o| matches!(o, crate::scene::Op::Image { .. })).count();
+    let warned = |w: &[String]| w.iter().any(|w| w.contains("Perspective Distort or Free Distort"));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(images(&ops) > 2 && !warned(&warnings), "{} images, {warnings:?}", images(&ops));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, false).run();
+    assert!(images(&ops) == 1 && warned(&warnings), "{} images, {warnings:?}", images(&ops));
+    // Without clips, the image is placed by the affine map nearest its corners.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(id).unwrap()).unwrap();
+    let placed = ops.iter().find_map(|o| match o {
+        crate::scene::Op::Image { xf, .. } => Some(*xf),
+        _ => None,
+    });
+    assert!(placed.unwrap().as_coeffs().iter().zip(near.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9), "{placed:?} against {near:?}");
+}
+
+/// Each piece of a distorted image's mesh in EMF stores the pixels inside its clips, not the
+/// whole image, placed where the uncropped piece puts them.
+#[test]
+fn the_pieces_of_a_distorted_image_store_only_the_pixels_they_show() {
+    let mut pixels = vec![];
+    for y in 0..64u8 {
+        for x in 0..64u8 {
+            pixels.extend_from_slice(&[x * 4, y * 4, 0, 255]);
+        }
+    }
+    let img =
+        craft_image_codecs::Image::from_raw(64, 64, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, pixels).unwrap();
+    let bytes = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    let mut d = doc_with(100.0, 100.0, vec![]);
+    let n = image_node(&mut d, bytes, 64, 64, Affine::scale(1.5));
+    add(&mut d, n);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(30.0, 0.0), (66.0, 0.0), (96.0, 96.0), (0.0, 96.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let art = vectorcraft_doc::image_quad::distorted_art(d.node(id).unwrap()).unwrap();
+    let whole: Vec<Affine> = vectorcraft_doc::image_quad::distorted_pieces(&art)
+        .iter()
+        .filter_map(|p| match &p.children()?.get(1)?.kind {
+            NodeKind::Image(im) => Some(im.xf),
+            _ => None,
+        })
+        .collect();
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    let parts: Vec<(&craft_metafile::write::Image, Affine)> = ops
+        .iter()
+        .filter_map(|o| match o {
+            crate::scene::Op::Image { image, xf, .. } => Some((&**image, *xf)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(parts.len(), whole.len());
+    assert!(parts.len() > 8, "{}", parts.len());
+    let stored: u64 = parts.iter().map(|(i, _)| u64::from(i.width) * u64::from(i.height)).sum();
+    assert!(stored * 4 < 64 * 64 * parts.len() as u64, "{stored} pixels in {} pieces", parts.len());
+    for ((part, xf), full) in parts.iter().zip(&whole) {
+        // The part's first pixel names where it starts in the image.
+        let (x0, y0) = (f64::from(part.rgba[0] / 4), f64::from(part.rgba[1] / 4));
+        let want = *full * Affine::translate((x0, y0));
+        assert!(xf.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{xf:?} against {want:?}");
+        // Each row runs on from that pixel.
+        let last = (part.width as usize - 1) * 4;
+        assert_eq!(f64::from(part.rgba[last] / 4), x0 + f64::from(part.width - 1));
+    }
+}
+
 #[test]
 fn type_is_written_as_outlines() {
     let t = TextObject::point(Point::new(10.0, 50.0), "Hi", CharStyle { fill: red(), ..CharStyle::default() });
@@ -318,7 +394,7 @@ fn ruby_is_written_with_its_type() {
     let reading = contours(&lay.ruby);
     assert!(reading >= 3, "the reading has ink: {reading}");
     let doc = |ruby: bool| doc_with(100.0, 100.0, vec![Node::new(NodeId(0), NodeKind::Text(Box::new(typed(ruby))))]);
-    let moves = |d: &Document| count(&kinds(&emf_records(&emf(d).bytes)), crate::emf::MOVETOEX);
+    let moves = |d: &Document| count(&kinds(&emf_records(&emf(d).bytes)), 27 /* EMR_MOVETOEX */);
     assert_eq!(moves(&doc(true)), moves(&doc(false)) + reading, "the reading's contours are written");
     assert!(wmf(&doc(true)).bytes.len() > wmf(&doc(false)).bytes.len(), "WMF writes the reading too");
 }
@@ -335,7 +411,6 @@ fn wmf_placeable_header_checksum_and_record_sizes() {
     assert_eq!(u16_at(b, 14), 1440);
     let xor = (0..10).fold(0u16, |a, i| a ^ u16_at(b, 2 * i));
     assert_eq!(u16_at(b, 20), xor, "the checksum");
-    assert_eq!(crate::wmf::checksum(&b[..20]), xor);
     // The WMF header: a memory metafile of 9 words, its size in words, the largest record.
     assert_eq!([u16_at(b, 22), u16_at(b, 24), u16_at(b, 26)], [1, 9, 0x0300]);
     assert_eq!(u32_at(b, 28) as usize * 2, b.len() - 22);
@@ -355,12 +430,12 @@ fn wmf_placeable_header_checksum_and_record_sizes() {
 
 #[test]
 fn wmf_sizes_fit_sixteen_bits() {
-    assert_eq!(crate::wmf::units_per_inch(612.0, 792.0), 1440);
-    let inch = crate::wmf::units_per_inch(3000.0, 1000.0);
-    assert!(inch < 1440 && f64::from(inch) * 3000.0 / 72.0 <= 32767.0);
+    let ordinary = wmf(&doc_with(612.0, 792.0, Vec::new())).bytes;
+    assert_eq!(u16_at(&ordinary, 14), 1440);
     let d = doc_with(3000.0, 1000.0, vec![path(shapes::rectangle(Rect::new(0.0, 0.0, 3000.0, 1000.0)), red(), Paint::None, 0.0)]);
     let b = wmf(&d).bytes;
-    assert_eq!(u16_at(&b, 14), inch);
+    let inch = u16_at(&b, 14);
+    assert!(inch < 1440 && f64::from(inch) * 3000.0 / 72.0 <= 32767.0);
     assert!(u16_at(&b, 10) <= 32767);
 }
 
@@ -407,10 +482,7 @@ fn export_baking_each_region(doc: &Document, region: Rect, kind: Kind) -> Result
     let baked = vectorcraft_effects::bake_document_placing_symbols(doc, kind == Kind::Emf, layers);
     let doc = baked.as_ref().unwrap_or(doc);
     let (ops, mut warnings) = crate::scene::Scene::new(doc, r, kind == Kind::Emf).run();
-    let bytes = match kind {
-        Kind::Emf => crate::emf::write(&ops, r, doc.info_title()),
-        Kind::Wmf => crate::wmf::write(&ops, r, &mut warnings),
-    };
+    let bytes = crate::encode::write(ops, r, kind, doc.info_title(), &mut warnings)?;
     Ok(Output { bytes, warnings })
 }
 

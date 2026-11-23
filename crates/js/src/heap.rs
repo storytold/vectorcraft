@@ -215,7 +215,9 @@ pub(crate) enum Class {
         length_writable: bool,
     },
     Function(Func),
-    Error,
+    /// An error object. One the interpreter threw itself holds a hash of the description it had
+    /// then ([`crate::interp::Interp::describe`]); one a script made holds `None`.
+    Error(Option<u64>),
     Arguments(Box<ArgMap>),
     /// A `Boolean` object made by ToObject, with its primitive value.
     Boolean(bool),
@@ -313,7 +315,7 @@ impl Class {
             Class::Ordinary | Class::ForIn(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
-            Class::Error => "Error",
+            Class::Error(_) => "Error",
             Class::Arguments(_) => "Arguments",
             Class::Boolean(_) => "Boolean",
             Class::Number(_) => "Number",

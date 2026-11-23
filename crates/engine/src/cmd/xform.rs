@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Free Distort",
             [],
             None,
-            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), angle?: degrees (counter-clockwise; `from`, or the selection bounds, is then a box in the frame turned by it, as a rotated bounding box is; default 0), ids?} projective warp of anchors and handles; a linked opacity mask's art is warped with its object, an unlinked one stays; each warped object's bounding box (the objects inside groups and the art of linked masks too) turns as the warp turns the art at its center (object.resetBoundingBox squares it again); corners where the box already stands change nothing and add no undo step",
+            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), angle?: degrees (counter-clockwise; `from`, or the selection bounds, is then a box in the frame turned by it, as a rotated bounding box is; default 0), ids?} projective warp of anchors and handles; an image's four corners go exactly where the warp takes them and its pixels are drawn in perspective between them (an error, and nothing changes, when an image's corners would fold over, fall on one line, cross the warp's horizon or lie too close together for a perspective map); a linked opacity mask's art is warped with its object, an unlinked one stays; each warped object's bounding box (the objects inside groups and the art of linked masks too) turns as the warp turns the art at its center (object.resetBoundingBox squares it again); corners where the box already stands change nothing and add no undo step",
             has_doc,
             distort
         ),
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Sample Color",
             [],
             None,
-            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
+            "{color (#rrggbbaa and #rgba are refused), stroke?: bool (default: whichever proxy is active), ids?, stop?: index, clearStroke?: bool} sample a color into the active fill/stroke (and the selection; `ids: []` changes only the paint default, and so does a sample without ids while the Live Paint Bucket is the active tool, `stop` included); `clearStroke: true` requires `stroke: false`, `ids: []` and no `stop`, and clears the default stroke after sampling an image into the fill; with `stop`, recolor that stop of the gradient behind the proxy instead (paint.editGradient); with `stop` and objects in `ids`, whatever tool is active, the stops come from the topmost fill (or stroke) of the first object that paint.editGradient edits for those ids (a compound path for its member); in a CMYK document an RGB color is stored as CMYK through the color settings, as paint.setFill stores it",
             has_doc,
             sample_color
         ),
@@ -86,6 +86,15 @@ impl Projective {
         Self { m: [a, b, p0.x, d, e, p0.y, g, h], src, pre: bx.to_doc().inverse() }
     }
 
+    /// Whether `p` maps in front of the warp's horizon, on the side the box's own corners are.
+    fn in_front(&self, p: Point) -> bool {
+        let [.., g, h] = self.m;
+        let p = self.pre * p;
+        let u = if self.src.width().abs() > 1e-12 { (p.x - self.src.x0) / self.src.width() } else { 0.0 };
+        let v = if self.src.height().abs() > 1e-12 { (p.y - self.src.y0) / self.src.height() } else { 0.0 };
+        g * u + h * v + 1.0 > 1e-9
+    }
+
     pub fn apply(&self, p: Point) -> Point {
         let [a, b, c, d, e, f, g, h] = self.m;
         let p = self.pre * p;
@@ -138,6 +147,15 @@ fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
         // A clip group is bounded by its clip path.
         NodeKind::Group { children, clip: true } => warp_children(children, pr, |i| i == 0),
         NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => warp_children(children, pr, |i| i >= skip),
+        // An image's corners follow the warp exactly ([`Node::set_image_corners`]); [`distort`]
+        // has checked that they stay convex.
+        NodeKind::Image(_) => {
+            let b = n.geometric_bounds();
+            if let Some(q) = n.image_corners() {
+                let _ = n.set_image_corners(q.map(|p| pr.apply(p)));
+            }
+            b
+        }
         _ => {
             // No editable points: the affine approximation (which maps the gradients too).
             let b = n.geometric_bounds();
@@ -157,6 +175,21 @@ fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
     before
 }
 
+/// Whether the warp from `src` to `q` ([`Projective::from_box`]) takes the corners of `src` to `q`,
+/// within a millionth of `q`'s shortest side plus the rounding error of coordinates as far from `q`'s
+/// first corner as the others. The warp is solved and measured with `src` and `q` moved to the
+/// origin, so coordinates far from it do not widen the allowance.
+fn reaches_corners(src: OrientedBox, q: [Point; 4]) -> bool {
+    let origin = q[0].to_vec2();
+    let q = q.map(|p| p - origin);
+    let src = OrientedBox { rect: src.rect - src.rect.origin().to_vec2(), ..src };
+    let pr = Projective::from_box(src, q);
+    let side = (0..4).map(|i| q[i].distance(q[(i + 1) % 4])).fold(f64::INFINITY, f64::min);
+    let far = q.iter().map(|p| p.x.abs().max(p.y.abs())).fold(0.0, f64::max);
+    let tol = side * 1e-6 + far * 1e-12;
+    side.is_finite() && side > 0.0 && src.corners().iter().zip(q).all(|(c, want)| pr.apply(*c).distance(want) <= tol)
+}
+
 /// Warps each of `children` and returns the union of the pre-warp bounds of those `counts` picks
 /// by index.
 fn warp_children(children: &mut [Arc<Node>], pr: &Projective, counts: impl Fn(usize) -> bool) -> Option<Rect> {
@@ -164,6 +197,76 @@ fn warp_children(children: &mut [Arc<Node>], pr: &Projective, counts: impl Fn(us
         let b = warp_node(Arc::make_mut(c), pr);
         if counts(i) { vectorcraft_geom::union_opt(acc, b) } else { acc }
     })
+}
+
+/// The first image in `n` (its children and the art of linked opacity masks, as [`warp_node`]
+/// reaches them) whose corners `pr` would fold, collapse or carry past the warp's horizon, with
+/// why.
+fn unwarpable_image(n: &Node, pr: &Projective) -> Option<(vectorcraft_doc::NodeId, Unwarpable)> {
+    if let (Some(q), NodeKind::Image(im)) = (n.image_corners(), &n.kind) {
+        if !q.iter().all(|p| pr.in_front(*p)) {
+            return Some((n.id, Unwarpable::Horizon));
+        }
+        if let Err(e) = vectorcraft_doc::image_quad::check_for(im, &q.map(|p| pr.apply(p))) {
+            return Some((
+                n.id,
+                match e {
+                    vectorcraft_doc::image_quad::QuadError::NotFinite | vectorcraft_doc::image_quad::QuadError::NotConvex => Unwarpable::NotConvex,
+                    vectorcraft_doc::image_quad::QuadError::TooNarrow => Unwarpable::TooNarrow,
+                },
+            ));
+        }
+    }
+    warped_parts(n).into_iter().find_map(|c| unwarpable_image(c, pr))
+}
+
+/// The first image in `n` that [`warp_node`] reaches (its children and the art of linked opacity
+/// masks).
+fn first_image(n: &Node) -> Option<vectorcraft_doc::NodeId> {
+    if matches!(n.kind, NodeKind::Image(_)) {
+        return Some(n.id);
+    }
+    warped_parts(n).into_iter().find_map(first_image)
+}
+
+/// The objects inside `n` that [`warp_node`] warps point by point: the children of layers, groups
+/// and compound paths, and the art of a linked opacity mask on those, paths and images. Other
+/// objects (blends, envelopes, repeats and the rest) take the warp's affine approximation whole.
+fn warped_parts(n: &Node) -> Vec<&Node> {
+    let inside = matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Compound { .. });
+    let mask_too = inside || matches!(n.kind, NodeKind::Path { .. } | NodeKind::Image(_));
+    let children = n.children().filter(|_| inside).into_iter().flatten().map(|c| &**c);
+    let mask = n.extras().mask.as_deref().filter(|m| mask_too && m.linked).map(|m| &*m.art);
+    children.chain(mask).collect()
+}
+
+/// The error of `command` on image `id`, which is distorted (Perspective Distort or Free Distort)
+/// in a way the command cannot keep.
+pub(crate) fn distorted_image_error(command: &str, id: vectorcraft_doc::NodeId) -> EngineError {
+    bad(command, format!("object {} is an image changed by Perspective Distort or Free Distort, which this command does not work on", id.0))
+}
+
+/// Why an image cannot follow the corners of a distort.
+#[derive(Clone, Copy)]
+enum Unwarpable {
+    /// Its corners would fold over, meet or fall on one line.
+    NotConvex,
+    /// A corner would cross the warp's horizon.
+    Horizon,
+    /// Its corners would be too close together for a perspective map to place them.
+    TooNarrow,
+}
+
+/// The error of `object.distort` when image `id` cannot follow its corners.
+fn unwarpable_error(id: vectorcraft_doc::NodeId, why: Unwarpable) -> EngineError {
+    const C: &str = "object.distort";
+    match why {
+        Unwarpable::NotConvex => bad(C, format!("image {} cannot be distorted this way: its corners would not make a convex shape", id.0)),
+        Unwarpable::Horizon => bad(C, format!("image {} cannot be distorted this way: its corners would cross the warp's horizon", id.0)),
+        Unwarpable::TooNarrow => {
+            bad(C, format!("image {} cannot be distorted this way: its corners would be too close together for a perspective map", id.0))
+        }
+    }
 }
 
 fn distort(s: &mut Session, p: &Value) -> Result<Value> {
@@ -208,6 +311,26 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(ids_json);
     }
     let pr = Projective::from_box(src, [tl, tr, br, bl]);
+    // An image's corners follow the handles exactly, so they must stay a convex shape: nothing
+    // changes when one would not.
+    let doc = &s.doc()?.doc;
+    // Corners that do not make a convex shape give no perspective map (the warp falls back to an
+    // affine one), so an image cannot follow them.
+    if vectorcraft_doc::image_quad::check(&[tl, tr, br, bl]).is_err()
+        && let Some(id) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_image)
+    {
+        return Err(unwarpable_error(id, Unwarpable::NotConvex));
+    }
+    // Corners so close together that the map falls back to an affine one: the box's corners do
+    // not reach the handles, so an image cannot follow them either.
+    if !reaches_corners(src, [tl, tr, br, bl])
+        && let Some(id) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_image)
+    {
+        return Err(unwarpable_error(id, Unwarpable::TooNarrow));
+    }
+    if let Some((id, why)) = ids.iter().filter_map(|id| doc.node(*id)).find_map(|n| unwarpable_image(n, &pr)) {
+        return Err(unwarpable_error(id, why));
+    }
     s.edit("Free Distort", |d, _| {
         for id in &ids {
             if let Some(n) = d.node_mut(*id) {
@@ -233,6 +356,7 @@ pub struct FillAttrs {
 
 impl FillAttrs {
     pub const ALL: Self = Self { color: true, transparency: true, overprint: true };
+    pub const NONE: Self = Self { color: false, transparency: false, overprint: false };
 }
 
 impl Default for FillAttrs {
@@ -260,6 +384,8 @@ pub struct StrokeAttrs {
 
 impl StrokeAttrs {
     pub const ALL: Self = Self { color: true, transparency: true, overprint: true, weight: true, cap: true, join: true, miter: true, dash: true };
+    pub const NONE: Self =
+        Self { color: false, transparency: false, overprint: false, weight: false, cap: false, join: false, miter: false, dash: false };
 }
 
 impl Default for StrokeAttrs {
@@ -403,9 +529,15 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => {
             let i = v.as_u64().map(index).ok_or_else(|| bad(C, "`stop` must be a stop index"))?;
             let color = super::paint::new_color(s, p, color_value(c).ok_or_else(|| bad(C, format!("bad color {c}")))?);
-            let (fill, stroke_paint) = s.proxy_paints();
-            let Paint::Gradient(g) = (if stroke { stroke_paint } else { fill }) else {
-                return Err(bad(C, "the paint behind the proxy is not a gradient"));
+            let (paint, source) = match given_stop_paint(s, p, stroke)? {
+                Some(paint) => (paint, "the paint of the first object in `ids`"),
+                None => {
+                    let (fill, stroke_paint) = s.proxy_paints();
+                    (if stroke { stroke_paint } else { fill }, "the paint behind the proxy")
+                }
+            };
+            let Paint::Gradient(g) = paint else {
+                return Err(bad(C, format!("{source} is not a gradient")));
             };
             let mut stops = g.gradient.stops;
             let n = stops.len();
@@ -422,6 +554,24 @@ fn sample_color(s: &mut Session, p: &Value) -> Result<Value> {
         s.paint.stroke = Paint::None;
     }
     Ok(result)
+}
+
+/// The paint whose gradient `paint.sampleColor` recolors a stop of when `p` gives `stop` and
+/// objects in `ids`: the fill (or stroke, `stroke`) of the first object `paint.editGradient` edits
+/// for those ids (a compound path for its member, a group's painted objects, not the art of a graph
+/// design in a series). None without `stop` or without objects in `ids`: the gradient behind the
+/// proxy is used.
+fn given_stop_paint(s: &Session, p: &Value, stroke: bool) -> Result<Option<Paint>> {
+    const C: &str = "paint.sampleColor";
+    if p.get("stop").is_none_or(Value::is_null) || p.get("ids").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+        return Ok(None);
+    }
+    let q = json!({ "ids": p.get("ids"), "stroke": stroke });
+    let item = super::appearance::item_target(s, &q, C)?.of_kind(s, !stroke);
+    let ids = super::appearance::drop_design_art_rows(s, item.targets_for(s, &q, !stroke)?, item, !stroke, C)?;
+    let d = &s.doc()?.doc;
+    let Some(n) = ids.first().and_then(|id| d.node(*id)) else { return Ok(None) };
+    Ok(Some(super::paint::proxy_paint(n, stroke, None)))
 }
 
 // ---------- artboards ----------

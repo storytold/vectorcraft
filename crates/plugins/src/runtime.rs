@@ -4,6 +4,7 @@ use wasmi::{
     Config, CustomFuelCosts, EnforcedLimits, Engine, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall, Val,
     WasmParams, WasmResults,
 };
+use wasmparser::{Validator, WasmFeatures};
 
 use crate::host::{self, Bridge, Deadline, Host, Report, Run};
 use crate::manifest::{MAX_MANIFEST_BYTES, Manifest};
@@ -26,6 +27,44 @@ const FUEL_COSTS: CustomFuelCosts = CustomFuelCosts { bytes_copied_per_fuel: 64,
 
 /// Bytes a bulk memory instruction copies or fills for each unit of fuel.
 pub const BYTES_COPIED_PER_FUEL: u32 = FUEL_COSTS.bytes_copied_per_fuel;
+
+/// The WebAssembly proposals a plug-in may use, as `docs/plugins.md` lists them. `GC_TYPES` lets
+/// reference types use `funcref` and `externref`; the garbage collection proposal stays off. Every
+/// proposal not listed here is off, whatever wasmi's defaults and crate features turn on.
+const WASM_FEATURES: WasmFeatures = WasmFeatures::MUTABLE_GLOBAL
+    .union(WasmFeatures::SIGN_EXTENSION)
+    .union(WasmFeatures::SATURATING_FLOAT_TO_INT)
+    .union(WasmFeatures::MULTI_VALUE)
+    .union(WasmFeatures::BULK_MEMORY)
+    .union(WasmFeatures::REFERENCE_TYPES)
+    .union(WasmFeatures::GC_TYPES)
+    .union(WasmFeatures::TAIL_CALL)
+    .union(WasmFeatures::EXTENDED_CONST)
+    .union(WasmFeatures::FLOATS);
+
+/// Validates `bytes` with only [`WASM_FEATURES`] on, before wasmi reads the module. A module that
+/// uses any other proposal is refused with the validator's error, which names the proposal.
+fn check_features(bytes: &[u8]) -> Result<()> {
+    Validator::new_with_features(WASM_FEATURES).validate_all(bytes).map(|_| ()).map_err(|e| Error::Module(e.to_string()))
+}
+
+/// Sets each WebAssembly proposal that wasmi's `Config` has a setter for in this build on or off,
+/// to match [`WASM_FEATURES`].
+fn set_features(config: &mut Config) -> &mut Config {
+    config
+        .wasm_mutable_global(true)
+        .wasm_sign_extension(true)
+        .wasm_saturating_float_to_int(true)
+        .wasm_multi_value(true)
+        .wasm_bulk_memory(true)
+        .wasm_reference_types(true)
+        .wasm_tail_call(true)
+        .wasm_extended_const(true)
+        .floats(true)
+        .wasm_multi_memory(false)
+        .wasm_custom_page_sizes(false)
+        .wasm_wide_arithmetic(false)
+}
 
 /// Instructions a heavy filter's run may use besides [`Limits::fuel_per_byte`] for each byte of
 /// input ([`crate::Budget::Heavy`]): 20 times a light one's. Its output's size can't add to it:
@@ -152,6 +191,27 @@ fn charge(live: &mut Live, left: &mut u64, cost: u64) -> Result<()> {
     live.store.set_fuel(held - (cost - from_left)).map_err(wasm_err)
 }
 
+/// Resumes a run's call with `step`: the store's storage calls may also pay from `left`
+/// ([`host::Run::fuel_left`]), and what they took from it comes off `left` when the call pauses →
+/// the pause, or the error the call ended with ([`run_err`]).
+fn slice<T>(live: &mut Live, left: &mut u64, step: impl FnOnce(&mut Store<Host>) -> std::result::Result<T, wasmi::Error>) -> Result<T> {
+    live.store.data_mut().run.fuel_left = *left;
+    let paused = step(&mut live.store);
+    *left = std::mem::take(&mut live.store.data_mut().run.fuel_left);
+    paused.map_err(|e| run_err(&mut live.store, e))
+}
+
+/// Why a storage call ended a run of `store` ([`host::Run::storage_stop`]).
+fn stop_reason(store: &mut Store<Host>) -> Error {
+    store.data_mut().run.storage_stop.take().unwrap_or_else(|| Error::Limit("instruction budget".into()))
+}
+
+/// The error `e` that a run of `store` ended with: a storage call's reason ([`host::StorageStop`])
+/// or [`wasm_err`]'s.
+fn run_err(store: &mut Store<Host>, e: wasmi::Error) -> Error {
+    if e.downcast_ref::<host::StorageStop>().is_some() { stop_reason(store) } else { wasm_err(e) }
+}
+
 fn wasm_err(e: wasmi::Error) -> Error {
     if e.as_trap_code() == Some(wasmi::TrapCode::OutOfFuel) { Error::Limit("instruction budget".into()) } else { Error::Trap(e.to_string()) }
 }
@@ -171,8 +231,9 @@ impl Plugin {
         if !bytes.starts_with(b"\0asm") {
             return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into()));
         }
+        check_features(bytes)?;
         let mut config = Config::default();
-        config
+        set_features(&mut config)
             .consume_fuel(true)
             .fuel_cost(FUEL_COSTS)
             .enforced_limits(EnforcedLimits::strict())
@@ -266,7 +327,7 @@ impl Plugin {
             Ok(instance) => instance,
             Err(e) => {
                 *report = std::mem::take(&mut store.data_mut().run.report);
-                return Err(wasm_err(e));
+                return Err(run_err(&mut store, e));
             }
         };
         let memory =
@@ -281,7 +342,9 @@ impl Plugin {
     /// for it. It charges a `memory.fill` or `memory.copy` for its whole length before writing, so
     /// up to that cost can be left in the store at a pause. Each slice tops the store up to the
     /// slice size, keeping that fuel, and a run ends with the instruction budget only when the
-    /// store's fuel and the rest of the budget together can't pay for the next instruction.
+    /// store's fuel and the rest of the budget together can't pay for the next instruction. A
+    /// storage call pays for its bytes ([`host::STORAGE_BYTES_PER_FUEL`]) from the store's fuel and
+    /// the rest of the budget as it is made, and one they can't pay for ends the run.
     fn call<P: WasmParams, R: WasmResults>(&self, live: &mut Live, f: &TypedFunc<P, R>, params: P, fuel: u64, deadline: &Deadline) -> Result<R> {
         self.call_with(live, f, params, fuel, deadline, None)
     }
@@ -303,11 +366,14 @@ impl Plugin {
         let give = left.min(FUEL_SLICE);
         left -= give;
         live.store.set_fuel(give).map_err(wasm_err)?;
-        let mut call = f.call_resumable(&mut live.store, params).map_err(wasm_err)?;
+        let mut call = slice(live, &mut left, |store| f.call_resumable(store, params))?;
         loop {
             match call {
                 TypedResumableCall::Finished(r) => return Ok(r),
                 TypedResumableCall::HostTrap(inv) => {
+                    if inv.host_error().downcast_ref::<host::StorageStop>().is_some() {
+                        return Err(stop_reason(&mut live.store));
+                    }
                     let pending = live.store.data_mut().run.pending.take();
                     let (Some((id, args, size)), Some(bridge)) = (pending, bridge.as_deref_mut()) else {
                         return Err(Error::Trap("unexpected host trap".into()));
@@ -321,7 +387,7 @@ impl Plugin {
                     charge(live, &mut left, returned as u64 / 64)?;
                     deadline.check()?;
                     vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
-                    call = inv.resume(&mut live.store, &[Val::I32(code)]).map_err(wasm_err)?;
+                    call = slice(live, &mut left, |store| inv.resume(store, &[Val::I32(code)]))?;
                 }
                 TypedResumableCall::OutOfFuel(inv) => {
                     let need = inv.required_fuel();
@@ -335,7 +401,7 @@ impl Plugin {
                     let fill = total.min(FUEL_SLICE.max(need)).max(held);
                     left -= fill - held;
                     live.store.set_fuel(fill).map_err(wasm_err)?;
-                    call = inv.resume(&mut live.store).map_err(wasm_err)?;
+                    call = slice(live, &mut left, |store| inv.resume(store))?;
                 }
             }
         }

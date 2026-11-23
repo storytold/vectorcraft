@@ -6,7 +6,7 @@
 //!   tool clicked.
 //! - **Paint**: colours, gradients (stops resampled to a common set when their counts differ),
 //!   opacity, stroke weight, dashes, miter limit, width profiles and the pen pressure, tilt,
-//!   bearing and rotation that brushes read interpolate; what can't
+//!   bearing, rotation and wheel that brushes read interpolate; what can't
 //!   (caps, joins, brushes, fonts, symbols, text content) switches halfway.
 //! - **Groups** pair their children in stacking order; the children one group has more of grow
 //!   out of the other group's centre. Compound paths stay compound paths.
@@ -429,8 +429,8 @@ fn lerp_angle(x: Option<&AngleProfile>, y: Option<&AngleProfile>, t: f64) -> Opt
 }
 
 /// Interpolate a stroke's paint, weight, opacity, miter limit, dashes, arrowhead scale, width
-/// profile and the pen pressure, tilt, bearing and rotation its brush reads into `o` (a copy of
-/// the nearer stroke, so caps, joins, alignment, arrowheads and brushes switch halfway).
+/// profile and the pen pressure, tilt, bearing, rotation and wheel its brush reads into `o` (a
+/// copy of the nearer stroke, so caps, joins, alignment, arrowheads and brushes switch halfway).
 fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     let tf = t as f32;
     o.paint = lerp_paint(&x.paint, &y.paint, tf);
@@ -444,6 +444,7 @@ fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     o.tilt = lerp_pressure(x.tilt.as_ref(), y.tilt.as_ref(), t);
     o.bearing = lerp_angle(x.bearing.as_ref(), y.bearing.as_ref(), t);
     o.rotation = lerp_angle(x.rotation.as_ref(), y.rotation.as_ref(), t);
+    o.wheel = lerp_pressure(x.wheel.as_ref(), y.wheel.as_ref(), t);
 }
 
 /// Interpolate appearance stacks: item by item when their structure matches, else the top fill
@@ -755,9 +756,9 @@ fn reorient_dash(d: &mut Dash, o: Orient, lens: &[f64]) {
 }
 
 /// A key's stroke read along its subpaths turned as `o` says (`lens`: their lengths): its width
-/// profile (whose sides swap when reversed), pen pressure, tilt, bearing and rotation, its dashes,
-/// a gradient along the path or across it (whose sides swap when reversed). Its arrowheads stay as
-/// they are.
+/// profile (whose sides swap when reversed), pen pressure, tilt, bearing, rotation and wheel, its
+/// dashes, a gradient along the path or across it (whose sides swap when reversed). Its arrowheads
+/// stay as they are.
 fn reorient_stroke(s: &mut StrokeLayer, o: Orient, lens: &[f64]) {
     if o.is_identity() {
         return;
@@ -805,7 +806,7 @@ fn reorient_stroke(s: &mut StrokeLayer, o: Orient, lens: &[f64]) {
         let out = reoriented(&pts, o, |f| p.at(f), |v| v, |(l, r)| (r, l));
         p.points = out.into_iter().map(|(t, (l, r))| (t, l, r)).collect();
     }
-    for p in [&mut s.pressure, &mut s.tilt].into_iter().flatten() {
+    for p in [&mut s.pressure, &mut s.tilt, &mut s.wheel].into_iter().flatten() {
         let out = reoriented(&p.points, o, |f| p.at(f), same, same);
         p.points = out;
     }
@@ -842,8 +843,8 @@ fn reorient_strokes(n: &mut Node, o: Orient) {
 
 /// Turn the strokes of path or compound path `n` for Reverse Path Direction, before its subpaths
 /// flagged in `reversed` are reversed with [`SubPath::reverse`] (a closed one then starts at its
-/// last anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing and
-/// rotation then run the new way, so the stroke draws as it did. A compound path's subpaths are
+/// last anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing,
+/// rotation and wheel then run the new way, so the stroke draws as it did. A compound path's subpaths are
 /// its members' subpaths in order. A stroke reads one profile along every subpath, so it turns
 /// only when all of them turn alike. Arrowheads stay at the path's start and end.
 pub fn reverse_stroke_records(n: &mut Node, reversed: &[bool]) {
@@ -1154,6 +1155,23 @@ impl Lerp {
                     (NodeKind::Image(o), NodeKind::Image(x), NodeKind::Image(y)) => o.xf = lerp_affine(x.xf, y.xf, t),
                     (NodeKind::PlacedDocument(o), NodeKind::PlacedDocument(x), NodeKind::PlacedDocument(y)) => o.xf = lerp_affine(x.xf, y.xf, t),
                     _ => {}
+                }
+                // Between distorted images, each step's corners lie between the keys' corners. A
+                // step whose corners would fold keeps the nearer key's.
+                if (a.is_distorted_image() || b.is_distorted_image())
+                    && let (Some(qa), Some(qb)) = (a.image_corners(), b.image_corners())
+                {
+                    let near = if t < 0.5 { qa } else { qb };
+                    if n.set_image_corners([0, 1, 2, 3].map(|i| qa[i].lerp(qb[i], t))).is_err() && n.set_image_corners(near).is_err() {
+                        // Corners from a transform that collapses the image fail the check too: the
+                        // step is then placed as the nearer key is.
+                        if let (NodeKind::Image(o), NodeKind::Image(k)) = (&mut n.kind, &base.kind) {
+                            o.xf = k.xf;
+                        }
+                        if n.extras().image_quad != base.extras().image_quad {
+                            n.extras_mut().image_quad = base.extras().image_quad.clone();
+                        }
+                    }
                 }
                 n.extras_mut().mask = None;
                 n
@@ -2296,6 +2314,54 @@ mod tests {
         assert_eq!(m.subpaths[0].anchors[0].p, Point::new(55.0, 0.0));
     }
 
+    /// A step between two distorted images has its corners between the keys' corners.
+    #[test]
+    fn steps_between_distorted_images_have_corners_between_theirs() {
+        let image = |q: [(f64, f64); 4]| {
+            let im = crate::ImageObject {
+                key: "k".into(),
+                width: 10,
+                height: 10,
+                xf: Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let mut n = Node::new(NodeId(1), NodeKind::Image(Box::new(im)));
+            n.set_image_corners(q.map(|(x, y)| Point::new(x, y))).unwrap();
+            n
+        };
+        let a = image([(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        let b = image([(200.0, 0.0), (300.0, 0.0), (280.0, 100.0), (220.0, 100.0)]);
+        let mid = Lerp::new(&a, &b, (None, None)).at(0.5);
+        let want = [(120.0, 0.0), (180.0, 0.0), (190.0, 100.0), (110.0, 100.0)];
+        let got = mid.image_corners().unwrap();
+        for (g, (x, y)) in got.iter().zip(want) {
+            assert!(g.distance(Point::new(x, y)) < 1e-9, "{got:?}");
+        }
+        // Toward a key flipped left to right, the middle step's corners would meet: each step
+        // there keeps the nearer key's corners, whether that key is distorted or not.
+        let flipped = image([(60.0, 0.0), (40.0, 0.0), (0.0, 100.0), (100.0, 100.0)]);
+        let mirror = image([(100.0, 0.0), (0.0, 0.0), (0.0, 100.0), (100.0, 100.0)]);
+        assert!(!mirror.is_distorted_image());
+        for (b, t) in [(&flipped, 0.5), (&mirror, 0.5), (&mirror, 0.45)] {
+            let got = Lerp::new(&a, b, (None, None)).at(t).image_corners().unwrap();
+            let near = (if t < 0.5 { &a } else { b }).image_corners().unwrap();
+            assert!(got.iter().zip(near).all(|(g, w)| g.distance(w) < 1e-9), "{t}: {got:?} against {near:?}");
+        }
+        // Toward an image whose transform has no height, neither the step's corners nor the
+        // nearer key's pass the check: the step is placed as that key is.
+        let mut flat = image([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+        let collapsed = Affine::new([-3.0, 0.0, 0.0, 0.0, 100.0, 0.0]);
+        if let NodeKind::Image(im) = &mut flat.kind {
+            im.xf = collapsed;
+        }
+        let step = Lerp::new(&a, &flat, (None, None)).at(0.5);
+        let NodeKind::Image(im) = &step.kind else { panic!("an image") };
+        assert_eq!(im.xf, collapsed);
+        assert!(!step.is_distorted_image() && step.extras().image_quad.is_none());
+    }
+
     fn key(x: f64) -> Arc<Node> {
         Arc::new(Node::path(NodeId(1), vectorcraft_geom::shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0)), Appearance::default()))
     }
@@ -3012,6 +3078,48 @@ mod tests {
         let rot = |t: f64, f: f64| stroke(&blend.at(t)).rotation.as_ref().map_or(0.0, |p| p.unwrapped_at(f));
         assert!((vectorcraft_geom::normalize_deg(rot(1.0, 0.25)) + 90.0).abs() < 1e-6, "{:?}", s.rotation);
         assert!((rot(0.5, 0.499) - rot(0.5, 0.501)).abs() < 1.0, "no jump where the key started: {:?}", stroke(&blend.at(0.5)).rotation);
+    }
+
+    #[test]
+    fn a_stylus_wheel_recording_turns_with_the_gradient_and_dashes_of_its_stroke() {
+        let keyed = |path: PathData, edit: &dyn Fn(&mut StrokeLayer)| {
+            let mut ap = Appearance::default();
+            ap.set_stroke(Paint::solid(Color::BLACK));
+            if let Some(s) = ap.stroke_mut() {
+                edit(s);
+            }
+            Node::path(NodeId(1), path, ap)
+        };
+        let stroke = |n: &Node| n.appearance.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+        let wheel = |s: &StrokeLayer, f: f64| s.wheel.as_ref().map_or(PressureProfile::MID, |p| p.at(f));
+        let light = |s: &StrokeLayer, u: f32| match &s.paint {
+            Paint::Gradient(g) => g.gradient.sample(u).0.to_rgb().iter().sum::<f32>(),
+            p => panic!("a gradient: {p:?}"),
+        };
+        let recorded = |s: &mut StrokeLayer| {
+            s.wheel = Some(PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] });
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+            s.gradient_mode = StrokeGradientMode::Along;
+            s.dash = Some(Dash { pattern: vec![1.0, 2.0, 3.0, 1.5], offset: 0.75, align_corners: false });
+        };
+        // An open key clicked at its last anchor: the wheel runs the other way with the gradient
+        // along it, and the dashes are read from its end.
+        let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 13.0, 0.0)], false));
+        let key = keyed(line(100.0), &recorded);
+        let s = stroke(&Lerp::new(&keyed(line(0.0), &|_| {}), &key, (None, Some(1))).at(1.0));
+        assert!((wheel(&s, 0.0) - 1.0).abs() < 1e-9 && wheel(&s, 1.0).abs() < 1e-9, "{:?}", s.wheel);
+        assert!(light(&s, 0.0) < 0.01 && light(&s, 1.0) > 2.99, "{:?}", s.paint);
+        assert_ne!(s.dash, stroke(&key).dash, "the dashes turn too");
+        // A closed key started half way round starts its wheel recording there, stepping where its
+        // own start was, as its gradient does.
+        let square = |x: f64| shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0));
+        let key = keyed(square(100.0), &recorded);
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &key, (Some(0), Some(2))).at(1.0));
+        assert!((wheel(&s, 0.25) - 0.75).abs() < 1e-9 && (wheel(&s, 0.75) - 0.25).abs() < 1e-9, "{:?}", s.wheel);
+        assert!((light(&s, 0.25) - 0.75).abs() < 0.02 && (light(&s, 0.75) - 2.25).abs() < 0.02, "{:?}", s.paint);
+        // Half way through, a key without a recording counts as the wheel half way.
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &key, (Some(0), Some(2))).at(0.5));
+        assert!((wheel(&s, 0.25) - 0.625).abs() < 1e-9, "{:?}", s.wheel);
     }
 
     #[test]

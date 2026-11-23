@@ -2,8 +2,10 @@
 //! (Small and Large List View), shown on a square or on type; a style with no fill and no stroke
 //! shows the shape outlined in black and filled with white, under a red slash. Clicking a style applies it to the
 //! selection (Alt-click adds it on top); Shift-click adds to the panel's selection every style from
-//! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one;
-//! double-click opens Graphic Style Options. Dragging a style moves it in the list (dropped on
+//! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one. The
+//! style last clicked into the selection is the one the Symbol Styler and the Symbol Sprayer's User
+//! Defined Style apply. Double-click opens
+//! Graphic Style Options. Dragging a style moves it in the list (dropped on
 //! another style with Alt held, replaces that style with its look), applies it
 //! to the art it is dropped on (`canvas::panel_drop`), or, dropped on New Graphic Style, adds a
 //! copy of it and of the styles highlighted with it at the end of the list; art dragged off the
@@ -14,6 +16,7 @@
 //! the same tiles ([`picker`]). Graphic style libraries open in library panels
 //! ([`GraphicStyleLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -23,7 +26,10 @@ use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer, StyleLibrary};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer,
+    StyleLibrary,
+};
 use vectorcraft_engine::cmd::stylelib;
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 use vectorcraft_geom::{Affine, Point, shapes};
@@ -483,21 +489,84 @@ fn zone_input(ui: &Ui, zone: &Response, d: &Document, ev: &mut Events) {
     }
 }
 
+/// An item's right-click context menu in the Graphic Styles panel.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str, sel: &[String]) {
+    let is_default = name == DEFAULT_GRAPHIC_STYLE;
+    let is_multi = sel.len() > 1 && sel.contains(&name.to_string());
+    let targets: Vec<String> = if is_multi {
+        let doc = app.session.active().map(|st| st.doc.clone());
+        if let Some(d) = &doc { d.graphic_styles.iter().filter(|g| sel.contains(&g.name)).map(|g| g.name.clone()).collect() } else { sel.to_vec() }
+    } else {
+        vec![name.to_string()]
+    };
+    let doomed: Vec<String> = targets.iter().filter(|s| *s != DEFAULT_GRAPHIC_STYLE).cloned().collect();
+
+    let can_options = !is_default && !is_multi;
+    if menu_item(ui, tl!("Graphic Style Options…"), can_options, false) {
+        if let Err(e) = app.run("ui.graphicStyleOptions", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    let duplicate_label = if is_multi { tl!("Duplicate Graphic Styles") } else { tl!("Duplicate Graphic Style") };
+    if menu_item(ui, duplicate_label, true, false) {
+        duplicate(app, ui.ctx(), &targets);
+        ui.close();
+    }
+    let delete_label = if is_multi { tl!("Delete Graphic Styles") } else { tl!("Delete Graphic Style") };
+    let can_delete = !is_default && !doomed.is_empty();
+    if menu_item(ui, delete_label, can_delete, false) {
+        let res = if doomed.len() == 1 {
+            app.run("graphicStyle.delete", json!({ "name": doomed[0] }))
+        } else {
+            app.run("graphicStyle.delete", json!({ "names": doomed }))
+        };
+        if res.is_ok() {
+            set_pstate(ui.ctx(), "gs-sel", Vec::<String>::new());
+        }
+        ui.close();
+    }
+    ui.separator();
+    let has_art_sel = selection_len(app) > 0;
+    if menu_item(ui, tl!("Redefine Graphic Style"), has_art_sel, false) {
+        if let Err(e) = app.run("graphicStyle.redefine", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    let is_linked = app.session.selection_graphic_style().is_some_and(|(g, linked)| linked && g.name == name);
+    if menu_item(ui, tl!("Break Link to Graphic Style"), is_linked, false) {
+        if let Err(e) = app.run("graphicStyle.breakLink", json!({})) {
+            app.status(e);
+        }
+        ui.close();
+    }
+}
+
 /// The thumbnail grid (Thumbnail View and the Control bar's picker), `sel` outlined.
-fn tiles(app: &VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &[String], ev: &mut Events) {
+fn tiles(app: &mut VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &mut Vec<String>, ev: &mut Events, in_panel: bool) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = vec2(3.0, 3.0);
         for (i, g) in s.d.graphic_styles.iter().enumerate() {
             let (r, resp) = ui.allocate_exact_size(vec2(TILE, TILE), Sense::click_and_drag());
             s.paint(app, ui, r, i);
             outline(ui, r, sel.contains(&g.name), resp.hovered());
-            cell_input(ui, &resp.on_hover_text(&g.name), s.d, i, false, ev);
+            let resp = resp.on_hover_text(&g.name);
+            cell_input(ui, &resp, s.d, i, false, ev);
+            if in_panel {
+                if resp.secondary_clicked() && !sel.contains(&g.name) {
+                    *sel = vec![g.name.clone()];
+                    set_pstate(ui.ctx(), "gs-anchor", g.name.clone());
+                    set_pstate(ui.ctx(), "gs-sel", sel.clone());
+                }
+                resp.context_menu(|ui| item_context_menu(app, ui, &g.name, sel));
+            }
         }
     });
 }
 
 /// The list views' rows (`row`: height and thumbnail side), `sel` highlighted.
-fn rows(app: &VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &[String], row: (f32, f32), ev: &mut Events) {
+fn rows(app: &mut VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &mut Vec<String>, row: (f32, f32), ev: &mut Events) {
     let t = Tokens::get(ui.ctx());
     let (h, side) = row;
     for (i, g) in s.d.graphic_styles.iter().enumerate() {
@@ -511,7 +580,14 @@ fn rows(app: &VectorcraftApp, ui: &mut Ui, s: &Shown, sel: &[String], row: (f32,
         s.paint(app, ui, th, i);
         ui.painter().rect_stroke(th, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
         ui.painter().text(pos2(th.right() + 8.0, r.center().y), egui::Align2::LEFT_CENTER, &g.name, egui::FontId::proportional(12.0), t.text);
+        let resp = resp.on_hover_text(&g.name);
         cell_input(ui, &resp, s.d, i, true, ev);
+        if resp.secondary_clicked() && !sel.contains(&g.name) {
+            *sel = vec![g.name.clone()];
+            set_pstate(ui.ctx(), "gs-anchor", g.name.clone());
+            set_pstate(ui.ctx(), "gs-sel", sel.clone());
+        }
+        resp.context_menu(|ui| item_context_menu(app, ui, &g.name, sel));
     }
 }
 
@@ -551,6 +627,11 @@ fn act(app: &mut VectorcraftApp, ui: &Ui, s: &Shown, ev: Events, picker: bool) {
         Some(Click::Pick(name, m)) => {
             let order: Vec<&str> = s.d.graphic_styles.iter().map(|g| g.name.as_str()).collect();
             let sel = super::swatches::click_selection(ui, "gs-anchor", selected(ui.ctx(), s.d), &order, &name, m);
+            // The style clicked into the selection is the one the Symbol Styler and the Symbol
+            // Sprayer's User Defined Style apply (the two share it).
+            if sel.contains(&name) {
+                app.run("tool.setOption", json!({"tool": "symbolStyler", "values": {"style": name}})).ok();
+            }
             set_pstate(ui.ctx(), "gs-sel", sel);
             // A plain click also applies the style (with nothing selected the next object drawn
             // takes it); Shift and Cmd/Ctrl clicks only select.
@@ -580,7 +661,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let looks = look_hashes(ui.ctx(), app);
     let shown = Shown { d: &doc, looks: &looks, preview: pstate(ui.ctx(), "gs-preview") };
-    let sel = selected(ui.ctx(), &doc);
+    let mut sel = selected(ui.ctx(), &doc);
     let view = app.ui.graphic_styles_view;
     let mut ev = Events::default();
     // In a sized panel the list fills the space above the footer (#2992), as the Artboards list
@@ -601,8 +682,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 return;
             }
             match view.row() {
-                Some(row) => rows(app, ui, &shown, &sel, row, &mut ev),
-                None => tiles(app, ui, &shown, &sel, &mut ev),
+                Some(row) => rows(app, ui, &shown, &mut sel, row, &mut ev),
+                None => tiles(app, ui, &shown, &mut sel, &mut ev, true),
             }
         });
         // The drop zone is the part of the list on screen: when the list shrinks to its rows,
@@ -666,8 +747,9 @@ pub(crate) fn picker(app: &mut VectorcraftApp, ui: &mut Ui) {
     let looks = look_hashes(ui.ctx(), app);
     let shown = Shown { d: &doc, looks: &looks, preview: pstate(ui.ctx(), "gs-preview") };
     let mut ev = Events::default();
+    let mut sel = Vec::new();
     ui.set_max_width(6.0 * (TILE + 3.0));
-    tiles(app, ui, &shown, &[], &mut ev);
+    tiles(app, ui, &shown, &mut sel, &mut ev, false);
     act(app, ui, &shown, ev, true);
 }
 
@@ -920,9 +1002,15 @@ impl LibraryKind for GraphicStyleLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.style_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a style's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|s| found(&s.style().name)).map(|s| Row { name: &s.style().name, item: Some(s) }).collect()
+    }
+    /// A built-in library's style in the UI language; a User Defined or loaded library's style as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, STYLE_LIBRARIES.iter().any(|b| b.id == id)).into()
     }
     /// The style on the Graphic Styles panel's preview shape.
     fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, s: &LibStyle, selected: bool, hovered: bool) {
@@ -1682,15 +1770,23 @@ mod tests {
             selected(&ctx, &app.session.active().unwrap().doc.clone())
         };
         let linked = |app: &VectorcraftApp| app.session.selection_graphic_style().map(|(g, _)| g.name.clone());
-        // A plain click applies the style and selects it alone.
+        let styler = |app: &VectorcraftApp| app.session.tool_options_of("symbolStyler")["style"].as_str().map(str::to_string);
+        // A plain click applies the style and selects it alone; the Symbol Styler takes it.
         assert_eq!(click(&mut app, 0, egui::Modifiers::NONE), [n[0].clone()]);
         assert_eq!(linked(&app).as_ref(), Some(&n[0]));
+        assert_eq!(styler(&app).as_ref(), Some(&n[0]));
         // Shift-click selects from that style to the clicked one, and applies nothing.
         assert_eq!(click(&mut app, 3, egui::Modifiers::SHIFT), n[..4]);
         assert_eq!(linked(&app).as_ref(), Some(&n[0]));
-        // Cmd/Ctrl-click removes a selected style and adds it back.
+        assert_eq!(styler(&app).as_ref(), Some(&n[3]));
+        // Cmd/Ctrl-click removes a selected style and adds it back; the Styler keeps its style
+        // while one is removed.
         assert_eq!(click(&mut app, 2, egui::Modifiers::COMMAND), [n[0].clone(), n[1].clone(), n[3].clone()]);
+        assert_eq!(styler(&app).as_ref(), Some(&n[3]));
         assert_eq!(click(&mut app, 2, egui::Modifiers::COMMAND), [n[0].clone(), n[1].clone(), n[3].clone(), n[2].clone()]);
+        assert_eq!(styler(&app).as_ref(), Some(&n[2]));
+        // The Symbol Sprayer's User Defined Style applies the same style.
+        assert_eq!(app.session.tool_options_of("symbolSprayer")["style"].as_str(), Some(n[2].as_str()));
         // Shift-click extends from the style Cmd/Ctrl-clicked last.
         click(&mut app, 0, egui::Modifiers::NONE);
         click(&mut app, 2, egui::Modifiers::COMMAND);
@@ -1732,5 +1828,185 @@ mod tests {
         frame_with(&ctx, click(true), |ui| picker(&mut app, ui));
         frame_with(&ctx, click(false), |ui| picker(&mut app, ui));
         assert_eq!(app.session.selection_graphic_style().map(|(g, linked)| (g.name.clone(), linked)), Some((name, true)));
+    }
+
+    #[test]
+    fn right_click_context_menu_in_graphic_styles_panel() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Style A"})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Style B"})).unwrap();
+
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        // Initially "Style B" was added last; "Style A" is unselected.
+        let pos_a = h.get_by_label("Style A").rect().center();
+
+        // 1. Right-click unselected "Style A"
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Right-clicking unselected "Style A" selects it.
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert_eq!(selected(&h.ctx, &doc), vec!["Style A"]);
+
+        // Context menu items are displayed
+        let options = h.get_by_label("   Graphic Style Options…");
+        let duplicate = h.get_by_label("   Duplicate Graphic Style");
+        let delete = h.get_by_label("   Delete Graphic Style");
+        let redefine = h.get_by_label("   Redefine Graphic Style");
+        let break_link = h.get_by_label("   Break Link to Graphic Style");
+
+        assert!(!options.accesskit_node().is_disabled());
+        assert!(!duplicate.accesskit_node().is_disabled());
+        assert!(!delete.accesskit_node().is_disabled());
+        assert!(!redefine.accesskit_node().is_disabled()); // Art is selected
+        assert!(break_link.accesskit_node().is_disabled()); // Art not linked to Style A
+
+        // 2. Click "Duplicate Graphic Style"
+        duplicate.click();
+        h.run_steps(3);
+
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert!(doc.graphic_style("Style A copy").is_some());
+        assert_eq!(selected(&h.ctx, &doc), vec!["Style A copy"]);
+
+        // 3. Apply Style A to the active art and verify Break Link
+        h.state_mut().run("graphicStyle.apply", json!({"name": "Style A"})).unwrap();
+        // Modify appearance so style is out of sync (not linked)
+        h.state_mut().run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+        h.run_steps(2);
+
+        let pos_a = h.get_by_label("Style A").rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let break_link = h.get_by_label("   Break Link to Graphic Style");
+        assert!(break_link.accesskit_node().is_disabled(), "Break link is disabled when style is out of sync");
+
+        // Close menu
+        h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Reapply Style A so it is in sync
+        h.state_mut().run("graphicStyle.apply", json!({"name": "Style A"})).unwrap();
+        h.run_steps(2);
+
+        let pos_a = h.get_by_label("Style A").rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let break_link = h.get_by_label("   Break Link to Graphic Style");
+        assert!(!break_link.accesskit_node().is_disabled(), "Break link is enabled when style is in sync");
+        break_link.click();
+        h.run_steps(3);
+
+        assert!(h.state().session.selection_graphic_style().is_none());
+
+        // 4. Right-click Style A and click "Delete Graphic Style"
+        let pos_a = h.get_by_label("Style A").rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let delete = h.get_by_label("   Delete Graphic Style");
+        assert!(!delete.accesskit_node().is_disabled());
+        delete.click();
+        h.run_steps(3);
+
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert!(doc.graphic_style("Style A").is_none());
+
+        // Verify one undo step restores it
+        h.state_mut().run("edit.undo", json!({})).unwrap();
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert!(doc.graphic_style("Style A").is_some());
+    }
+
+    #[test]
+    fn right_click_context_menu_default_style_disables_options_and_delete() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+
+        let app = app();
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        let pos_def = h.get_by_label(DEFAULT_GRAPHIC_STYLE).rect().center();
+        h.event(egui::Event::PointerMoved(pos_def));
+        h.event(egui::Event::PointerButton { pos: pos_def, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_def, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let options = h.get_by_label("   Graphic Style Options…");
+        let duplicate = h.get_by_label("   Duplicate Graphic Style");
+        let delete = h.get_by_label("   Delete Graphic Style");
+
+        assert!(options.accesskit_node().is_disabled(), "Options disabled on Default Graphic Style");
+        assert!(!duplicate.accesskit_node().is_disabled(), "Duplicate enabled on Default Graphic Style");
+        assert!(delete.accesskit_node().is_disabled(), "Delete disabled on Default Graphic Style");
+    }
+
+    #[test]
+    fn right_click_context_menu_preserves_multiselection_and_works_in_list_view() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+
+        let mut app = app();
+        app.ui.graphic_styles_view = View::SmallList;
+        app.run("graphicStyle.new", json!({"name": "Style 1"})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Style 2"})).unwrap();
+
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        set_pstate(&h.ctx, "gs-sel", vec!["Style 1".to_string(), "Style 2".to_string()]);
+        h.run_steps(1);
+
+        let pos_2 = h.get_by_label("Style 2").rect().center();
+        h.event(egui::Event::PointerMoved(pos_2));
+        h.event(egui::Event::PointerButton { pos: pos_2, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_2, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert_eq!(selected(&h.ctx, &doc), vec!["Style 1", "Style 2"]);
+
+        let options = h.get_by_label("   Graphic Style Options…");
+        let duplicate = h.get_by_label("   Duplicate Graphic Styles");
+        let delete = h.get_by_label("   Delete Graphic Styles");
+
+        assert!(options.accesskit_node().is_disabled(), "Options disabled on multi-selection");
+        assert!(!duplicate.accesskit_node().is_disabled());
+        assert!(!delete.accesskit_node().is_disabled());
+
+        duplicate.click();
+        h.run_steps(3);
+
+        let doc = h.state().session.active().unwrap().doc.clone();
+        assert!(doc.graphic_style("Style 1 copy").is_some());
+        assert!(doc.graphic_style("Style 2 copy").is_some());
     }
 }

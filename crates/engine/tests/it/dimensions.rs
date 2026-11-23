@@ -118,6 +118,68 @@ fn each_arrow_style_draws_its_stroke_arrowhead_at_both_ends() {
     }
 }
 
+/// `arrowHead` draws any built-in stroke arrowhead at both ends of the dimension line, and the
+/// native file keeps it. The saved `arrowStyle` stays one of the four values versions without
+/// `arrowHead` read, and a dimension saved without `arrowHead` draws its arrow style. Options
+/// without a stroke head are saved without `arrowHead`. A custom arrowhead, an unknown name and an
+/// overlong name are refused.
+#[test]
+fn every_stroke_arrowhead_draws_as_a_dimension_arrowhead() {
+    use vectorcraft_doc::{Arrowhead, dimension::ArrowStyle};
+    let ends = |s: &Session, id: u64| -> Vec<_> {
+        let n = s.doc().unwrap().doc.node(NodeId(id)).unwrap();
+        let children = n.children().unwrap();
+        let strokes = children.iter().filter_map(|n| n.appearance.stroke().map(|s| (s.start_arrow.clone(), s.end_arrow.clone())));
+        strokes.filter(|(a, b)| a.is_some() || b.is_some()).collect()
+    };
+    let mut s = session();
+    let mut made = vec![];
+    for head in Arrowhead::ALL {
+        let name = serde_json::to_value(&head).unwrap();
+        let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":name}}))["id"].as_u64().unwrap();
+        let drawn = ends(&s, id);
+        assert!(!drawn.is_empty() && drawn.iter().all(|h| *h == (Some(head.clone()), Some(head.clone()))), "{name}: {drawn:?}");
+        let saved = serde_json::to_value(&recipe(&s, id).options).unwrap();
+        assert_eq!((&saved["arrowStyle"], &saved["arrowHead"]), (&json!("filled"), &name));
+        made.push((id, head));
+    }
+    let bytes = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let mut reopened = Session::new();
+    reopened.add_document(vectorcraft_format::load(&bytes).unwrap(), None);
+    for (id, head) in made {
+        assert_eq!(recipe(&reopened, id).options.arrowhead(), Some(head));
+    }
+    // A dimension saved before `arrowHead` existed.
+    let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"arrowStyle":"open"}}))["id"].as_u64().unwrap();
+    let mut file: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    fn drop_head(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                m.remove("arrowHead");
+                m.values_mut().for_each(drop_head);
+            }
+            Value::Array(a) => a.iter_mut().for_each(drop_head),
+            _ => {}
+        }
+    }
+    drop_head(&mut file);
+    let mut older = Session::new();
+    older.add_document(vectorcraft_format::load(&serde_json::to_vec(&file).unwrap()).unwrap(), None);
+    let o = recipe(&older, id).options;
+    assert_eq!((o.arrow_style, o.arrow_head.clone(), o.arrowhead()), (ArrowStyle::Open, None, Some(Arrowhead::TriangleOpen)));
+    // Without a stroke head, the saved and recorded options carry no `arrowHead`, and a null one
+    // is still taken.
+    let saved = serde_json::to_value(&recipe(&s, id).options).unwrap();
+    assert!(saved.get("arrowHead").is_none(), "{saved}");
+    assert!(s.execute("dimension.create", &json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":null}})).is_ok());
+    let custom = json!({"Custom":{"name":"Dot","path":{"subpaths":[]}}});
+    for bad in [json!("Custom"), json!("Arrowhead"), json!("barbed"), json!(3), json!("Barbed".repeat(20)), custom] {
+        let p = json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":bad}});
+        assert!(s.execute("dimension.create", &p).is_err(), "{bad}");
+    }
+    assert!(s.execute("dimension.create", &json!({"a":[0,0],"b":[72,0],"options":{"arrowStyle":"Barbed"}})).is_err());
+}
+
 #[test]
 fn dimension_angles_circles_arcs_and_curves() {
     let mut s = session();
@@ -2015,18 +2077,19 @@ fn a_dimension_line_placed_beside_another_lands_on_its_level() {
     run(&mut s, "object.lock", json!({}));
     assert_eq!(level_next(&mut s, plain, 172.5), (pt(200.0, 172.5), pt(300.0, 172.5)));
     // A dimension of the right edge has a vertical line, which is not parallel to the first: the
-    // pointer 2.5 points below the first line's level places it where the pointer is.
+    // pointer 2.5 points right of the first line's left end, within reach across the vertical
+    // line, places it where the pointer is.
     let (mut s, _) = level_start(plain);
     linear_click(&mut s, plain, 300.0, 200.0);
     linear_click(&mut s, plain, 300.0, 300.0);
-    linear_click(&mut s, plain, 330.0, 172.5);
+    linear_click(&mut s, plain, 102.5, 172.5);
     let id = s.doc().unwrap().selection.objects[0].0;
-    assert_eq!(recipe(&s, id).line_ends(), (pt(330.0, 200.0), pt(330.0, 300.0)));
+    assert_eq!(recipe(&s, id).line_ends(), (pt(102.5, 200.0), pt(102.5, 300.0)));
 }
 
 /// While a dimension is placed with its line on the level of another, one alignment guide runs
-/// along the level across both lines. Off the level, after a dropped press and with Alignment
-/// Guides off, no guide shows.
+/// along the level across both lines. Off the level, after a dropped press and with Smart Guides
+/// or Alignment Guides off, no guide shows.
 #[test]
 fn a_dimension_line_on_another_level_shows_one_guide_across_both() {
     let plain = ViewInfo::default();
@@ -2035,7 +2098,10 @@ fn a_dimension_line_on_another_level_shows_one_guide_across_both() {
     linear_click(&mut s, plain, 200.0, 200.0);
     linear_click(&mut s, plain, 300.0, 200.0);
     let guides = guide_lines(&mut s, plain, 250.0, 172.5);
-    assert!(guides.iter().any(|(a, b)| near(*a, pt(100.0, 170.0)) && near(*b, pt(300.0, 170.0))), "{guides:?}");
+    assert!(matches!(guides.as_slice(), [(a, b)] if near(*a, pt(100.0, 170.0)) && near(*b, pt(300.0, 170.0))), "{guides:?}");
+    // Smart Guides turned off before the next pointer move: the guide goes.
+    let off = ViewInfo { smart_guides: false, ..plain };
+    assert!(s.overlays(off).iter().all(|o| !matches!(o, vectorcraft_engine::tools::Overlay::Line { .. })), "{:?}", s.overlays(off));
     assert!(guide_lines(&mut s, plain, 250.0, 180.0).is_empty(), "no guide off the level");
     // A press on the level that the app drops cancels the preview, and its guide goes with it.
     assert!(!guide_lines(&mut s, plain, 250.0, 172.5).is_empty());
@@ -2051,6 +2117,328 @@ fn a_dimension_line_on_another_level_shows_one_guide_across_both() {
     linear_click(&mut s, plain, 250.0, 172.5);
     let id = s.doc().unwrap().selection.objects[0].0;
     assert_eq!(recipe(&s, id).line_ends(), (pt(200.0, 170.0), pt(300.0, 170.0)));
+}
+
+/// A drag with the Dimension tool from a dimension already drawn moves its line as far across as
+/// the pointer moved, keeps what it measures and its link to the art, and is one undo step. A
+/// click on its line does not move it, and neither does Escape during the drag.
+#[test]
+fn dragging_a_placed_dimension_with_the_dimension_tool_moves_its_line() {
+    let plain = ViewInfo::default();
+    let pt = vectorcraft_geom::Point::new;
+    let (mut s, first) = level_start(plain);
+    let (count, label) = (s.doc().unwrap().doc.node_count(), text(&s, first));
+    let drag = |s: &mut Session, from: (f64, f64), to: (f64, f64)| {
+        for (kind, (x, y)) in [(PointerKind::Move, from), (PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+            s.pointer(&PointerEvent::new(kind, x, y), plain).unwrap();
+        }
+    };
+    // Dragged up and to the side: the line goes up as far as the pointer, and stays over the
+    // points it measures.
+    drag(&mut s, (150.0, 170.0), (180.0, 130.0));
+    assert!(!s.in_interaction());
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 130.0), pt(200.0, 130.0)));
+    assert_eq!((recipe(&s, first).a, recipe(&s, first).b), (pt(100.0, 200.0), pt(200.0, 200.0)));
+    assert_eq!((s.doc().unwrap().doc.node_count(), text(&s, first)), (count, label));
+    // One undo step puts it back.
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 170.0), pt(200.0, 170.0)));
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 130.0), pt(200.0, 130.0)));
+    // Still linked: moving the art moves its points, and the line keeps its distance from them.
+    let art = s.doc().unwrap().doc.layers[0].children().unwrap()[0].id.0;
+    run(&mut s, "select.set", json!({"ids":[art]}));
+    run(&mut s, "object.move", json!({"dx":0,"dy":10}));
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 140.0), pt(200.0, 140.0)));
+    run(&mut s, "object.move", json!({"dx":0,"dy":-10}));
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "dimension.update", json!({"ids":[first],"at":[150,170]}));
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 170.0), pt(200.0, 170.0)));
+    // A click on the line picks a point there and leaves the dimension where it is.
+    linear_click(&mut s, plain, 150.0, 170.0);
+    s.tool_key(ToolKey::Escape, Mods::default(), plain).unwrap();
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 170.0), pt(200.0, 170.0)));
+    // Escape during the drag leaves it where it was.
+    ev(&mut s, PointerKind::Down, 150.0, 170.0);
+    ev(&mut s, PointerKind::Drag, 150.0, 120.0);
+    assert!(s.in_interaction());
+    s.tool_key(ToolKey::Escape, Mods::default(), plain).unwrap();
+    ev(&mut s, PointerKind::Up, 150.0, 120.0);
+    assert!(!s.in_interaction());
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 170.0), pt(200.0, 170.0)));
+    // A locked dimension is not moved: the drag from its line drags out nothing either.
+    run(&mut s, "select.set", json!({"ids":[first]}));
+    run(&mut s, "object.lock", json!({}));
+    drag(&mut s, (150.0, 170.0), (150.0, 130.0));
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 170.0), pt(200.0, 170.0)));
+    assert_eq!(s.doc().unwrap().doc.node_count(), count);
+}
+
+/// A dimension moved with the Dimension tool lands on the level of a parallel dimension line
+/// within the Smart Guides snapping tolerance, and its own line before the drag is not a level.
+#[test]
+fn a_dimension_moved_beside_another_lands_on_its_level() {
+    let plain = ViewInfo::default();
+    let pt = vectorcraft_geom::Point::new;
+    let (mut s, first) = level_start(plain);
+    linear_click(&mut s, plain, 200.0, 200.0);
+    linear_click(&mut s, plain, 300.0, 200.0);
+    linear_click(&mut s, plain, 250.0, 150.0);
+    let second = s.doc().unwrap().selection.objects[0].0;
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(recipe(&s, second).line_ends(), (pt(200.0, 150.0), pt(300.0, 150.0)));
+    let drag = |s: &mut Session, from: (f64, f64), to: (f64, f64)| {
+        for (kind, (x, y)) in [(PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+            s.pointer(&PointerEvent::new(kind, x, y), plain).unwrap();
+        }
+    };
+    // 3.5 points off its own level, with no other level there: where the pointer puts it.
+    drag(&mut s, (150.0, 170.0), (150.0, 166.5));
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 166.5), pt(200.0, 166.5)));
+    // 2.5 points below the first line's new level: on it.
+    drag(&mut s, (250.0, 150.0), (250.0, 169.0));
+    assert_eq!(recipe(&s, second).line_ends(), (pt(200.0, 166.5), pt(300.0, 166.5)));
+}
+
+/// `dimension.update` with `at` puts a linear dimension's line, an angular dimension's arc or a
+/// radius line through the point, and keeps what each measures; a bad `at` changes nothing.
+#[test]
+fn dimension_update_at_moves_the_line_through_the_point() {
+    let mut s = session();
+    let line = edge(&mut s);
+    let linear = dim(&mut s, line);
+    let label = text(&s, linear);
+    run(&mut s, "dimension.update", json!({"ids":[linear],"at":[130,50]}));
+    let d = recipe(&s, linear);
+    assert!((d.line_ends().0.y - 50.0).abs() < 1e-9 && (d.line_ends().1.y - 50.0).abs() < 1e-9, "{:?}", d.line_ends());
+    assert_eq!(text(&s, linear), label);
+    let angular = run(&mut s, "dimension.create", json!({"mode":"angular","a":[100,0],"vertex":[0,0],"b":[0,100]}))["id"].as_u64().unwrap();
+    run(&mut s, "dimension.update", json!({"ids":[angular],"at":[60,0]}));
+    assert!((recipe(&s, angular).offset - 60.0).abs() < 1e-9);
+    let circle = run(&mut s, "shape.ellipse", json!({"x":100,"y":100,"width":144,"height":144}))["id"].as_u64().unwrap();
+    let radius = run(&mut s, "dimension.create", json!({"mode":"radius","source":{"kind":"circle","node":circle}}))["id"].as_u64().unwrap();
+    run(&mut s, "dimension.update", json!({"ids":[radius],"at":[172,400]}));
+    let d = recipe(&s, radius);
+    assert!(d.b.distance(vectorcraft_geom::Point::new(172.0, 244.0)) < 1e-6, "turned toward the point: {:?}", d.b);
+    assert!((d.a.distance(d.b) - 72.0).abs() < 1e-6, "the radius stays");
+    let before = recipe(&s, linear);
+    for bad in [json!([1]), json!("x"), json!([0, 1e12])] {
+        assert!(s.execute("dimension.update", &json!({"ids":[linear],"at":bad})).is_err(), "{bad}");
+        assert_eq!(recipe(&s, linear), before);
+    }
+}
+
+/// A dimension dragged with the Dimension tool follows the part grabbed: a diameter grabbed on its
+/// far half turns that half toward the pointer, and an angular arc grabbed away from its middle
+/// grows by as much as the pointer moved away from the vertex.
+#[test]
+fn a_dragged_dimension_follows_the_part_grabbed() {
+    let plain = ViewInfo::default();
+    let mut s = session();
+    let circle = run(&mut s, "shape.ellipse", json!({"x":100,"y":100,"width":144,"height":144}))["id"].as_u64().unwrap();
+    let diameter = run(&mut s, "dimension.create", json!({"mode":"diameter","source":{"kind":"circle","node":circle}}))["id"].as_u64().unwrap();
+    run(&mut s, "dimension.update", json!({"ids":[diameter],"at":[244,172]}));
+    let angular =
+        run(&mut s, "dimension.create", json!({"mode":"angular","a":[500,400],"vertex":[400,400],"b":[400,500],"offset":60}))["id"].as_u64().unwrap();
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", plain).unwrap();
+    let drag = |s: &mut Session, from: (f64, f64), to: (f64, f64)| {
+        for (kind, (x, y)) in [(PointerKind::Move, from), (PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+            s.pointer(&PointerEvent::new(kind, x, y), plain).unwrap();
+        }
+    };
+    // Grabbed left of the center and dragged up: the left half goes up, the right half down.
+    drag(&mut s, (120.0, 172.0), (120.0, 152.0));
+    let d = recipe(&s, diameter);
+    assert!(d.b.y > 172.0 + 1.0, "the half not grabbed turns away from the pointer: {:?}", d.b);
+    assert!((d.a.distance(d.b) - 72.0).abs() < 1e-6, "the radius stays");
+    // Grabbed at the center: it turns toward the pointer.
+    drag(&mut s, (172.0, 172.0), (172.0, 100.0));
+    assert!(recipe(&s, diameter).b.distance(vectorcraft_geom::Point::new(172.0, 100.0)) < 1e-6, "{:?}", recipe(&s, diameter).b);
+    // Grabbed 10° from the arc's start and dragged 20 points straight away from the vertex.
+    let (sin, cos) = 10f64.to_radians().sin_cos();
+    drag(&mut s, (400.0 + 60.0 * cos, 400.0 + 60.0 * sin), (400.0 + 80.0 * cos, 400.0 + 80.0 * sin));
+    assert!((recipe(&s, angular).offset - 80.0).abs() < 1e-6, "the arc's radius: {}", recipe(&s, angular).offset);
+}
+
+/// The Dimension tool takes a drag only from a dimension the canvas hits: one painted wider than
+/// the reach is taken by its stroke, while one outside isolation mode, around an isolated part of
+/// it, clipped away where the press is or drawn elsewhere by a geometry effect stays put. With
+/// Real-time Drawing off the dimension being dragged is outlined.
+#[test]
+fn a_dimension_is_dragged_only_where_the_canvas_hits_it() {
+    use vectorcraft_engine::tools::Overlay;
+    let plain = ViewInfo::default();
+    let pt = vectorcraft_geom::Point::new;
+    let at_170 = (pt(100.0, 170.0), pt(200.0, 170.0));
+    let drag = |s: &mut Session, from: (f64, f64), to: (f64, f64)| {
+        for (kind, (x, y)) in [(PointerKind::Move, from), (PointerKind::Down, from), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+            s.pointer(&PointerEvent::new(kind, x, y), plain).unwrap();
+        }
+    };
+    // A 30-point line: a press 13 points from its middle is on its stroke.
+    let (mut s, first) = level_start(plain);
+    run(&mut s, "dimension.update", json!({"ids":[first],"options":{"lineWeight":30}}));
+    drag(&mut s, (115.0, 183.0), (115.0, 143.0));
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 130.0), pt(200.0, 130.0)));
+    // Outside the isolated group: not moved.
+    let (mut s, first) = level_start(plain);
+    let rect = run(&mut s, "shape.rectangle", json!({"x":400,"y":50,"width":50,"height":50}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    let group = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "object.isolate", json!({"id": group}));
+    run(&mut s, "select.none", json!({}));
+    drag(&mut s, (150.0, 170.0), (150.0, 130.0));
+    assert_eq!(recipe(&s, first).line_ends(), at_170);
+    // In a clipping mask that leaves its right half out: not taken there, taken on its left half.
+    let (mut s, first) = level_start(plain);
+    let mask = run(&mut s, "shape.rectangle", json!({"x":90,"y":140,"width":50,"height":90}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[first, mask]}));
+    run(&mut s, "object.clippingMask.make", json!({}));
+    run(&mut s, "select.none", json!({}));
+    let count = s.doc().unwrap().doc.node_count();
+    drag(&mut s, (180.0, 170.0), (180.0, 130.0));
+    assert_eq!((recipe(&s, first).line_ends(), s.doc().unwrap().doc.node_count()), (at_170, count));
+    // That press picked a point, as a click there does: Escape drops it.
+    s.tool_key(ToolKey::Escape, Mods::default(), plain).unwrap();
+    drag(&mut s, (120.0, 170.0), (120.0, 130.0));
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 130.0), pt(200.0, 130.0)));
+    // In a group whose Transform effect draws it 50 points lower: not taken where it is drawn.
+    let (mut s, first) = level_start(plain);
+    run(&mut s, "select.set", json!({"ids":[first]}));
+    let group = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "effect.apply", json!({"effect":"distort.transform","ids":[group],"params":{"moveV":50}}));
+    run(&mut s, "select.none", json!({}));
+    drag(&mut s, (150.0, 220.0), (150.0, 260.0));
+    assert_eq!(recipe(&s, first).line_ends(), at_170);
+    // In Outline view the canvas draws no effects: taken where its recipe puts it.
+    s.tool_key(ToolKey::Escape, Mods::default(), plain).unwrap();
+    let outline = ViewInfo { outline: true, ..plain };
+    for (kind, y) in [(PointerKind::Move, 170.0), (PointerKind::Down, 170.0), (PointerKind::Drag, 130.0), (PointerKind::Up, 130.0)] {
+        s.pointer(&PointerEvent::new(kind, 150.0, y), outline).unwrap();
+    }
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 130.0), pt(200.0, 130.0)));
+    // A Transform effect on its parts draws them 50 points lower: not taken where they are drawn.
+    let (mut s, first) = level_start(plain);
+    let parts: Vec<u64> = s.doc().unwrap().doc.node(NodeId(first)).unwrap().children().unwrap().iter().map(|c| c.id.0).collect();
+    run(&mut s, "effect.apply", json!({"effect":"distort.transform","ids":parts,"params":{"moveV":50}}));
+    run(&mut s, "select.none", json!({}));
+    drag(&mut s, (150.0, 220.0), (150.0, 260.0));
+    assert_eq!(recipe(&s, first).line_ends(), at_170);
+    // With one of its parts isolated, the dimension around it is outside the editing scope.
+    let (mut s, first) = level_start(plain);
+    let part = {
+        let doc = &s.doc().unwrap().doc;
+        let parts = doc.node(NodeId(first)).unwrap().children().unwrap();
+        // The dimension line, which the press below lands on.
+        let line = parts.iter().find(|c| c.geometric_bounds().is_some_and(|r| r.x0 < 150.0 && r.x1 > 150.0 && r.y0 < 171.0 && r.y1 > 169.0));
+        line.unwrap().id.0
+    };
+    run(&mut s, "object.isolate", json!({"id": part}));
+    run(&mut s, "select.none", json!({}));
+    drag(&mut s, (150.0, 170.0), (150.0, 130.0));
+    assert_eq!(recipe(&s, first).line_ends(), at_170);
+    // Real-time Drawing off: the dimension is outlined where the drag puts it, and other selected
+    // art, which the drag does not move, is not.
+    let (mut s, first) = level_start(plain);
+    let rect = run(&mut s, "shape.rectangle", json!({"x":400,"y":400,"width":50,"height":50}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[first, rect]}));
+    run(&mut s, "prefs.set", json!({"key": "realTimeDrawing", "value": false}));
+    for (kind, y) in [(PointerKind::Move, 170.0), (PointerKind::Down, 170.0), (PointerKind::Drag, 110.0)] {
+        s.pointer(&PointerEvent::new(kind, 150.0, y), plain).unwrap();
+    }
+    let boxes: Vec<vectorcraft_geom::Rect> = s
+        .overlays(plain)
+        .into_iter()
+        .filter_map(|o| if let Overlay::Path { path, .. } = o { Some(vectorcraft_geom::kurbo::Shape::bounding_box(&path)) } else { None })
+        .collect();
+    assert!(boxes.iter().any(|r| r.y0 < 111.0 && r.y1 > 109.0 && r.width() >= 99.0), "the dragged dimension is outlined at its new place");
+    assert!(!boxes.iter().any(|r| r.x1 > 399.0), "the rectangle is not outlined: {boxes:?}");
+}
+
+/// A geometry effect on a part of a dimension other than the one pressed keeps the Dimension tool
+/// from dragging it, and the effect stays on that part.
+#[test]
+fn a_geometry_effect_on_another_part_keeps_the_dimension_in_place() {
+    let plain = ViewInfo::default();
+    let pt = vectorcraft_geom::Point::new;
+    let (mut s, first) = level_start(plain);
+    let extension = {
+        let doc = &s.doc().unwrap().doc;
+        let parts = doc.node(NodeId(first)).unwrap().children().unwrap();
+        // The extension line at x = 100, which the press below on the dimension line misses.
+        let line = parts.iter().find(|c| c.geometric_bounds().is_some_and(|r| r.x1 < 101.0 && r.height() > 10.0));
+        line.unwrap().id.0
+    };
+    run(&mut s, "effect.apply", json!({"effect":"distort.transform","ids":[extension],"params":{"moveH":-60}}));
+    run(&mut s, "select.none", json!({}));
+    for (kind, y) in [(PointerKind::Move, 170.0), (PointerKind::Down, 170.0), (PointerKind::Drag, 130.0), (PointerKind::Up, 130.0)] {
+        s.pointer(&PointerEvent::new(kind, 150.0, y), plain).unwrap();
+    }
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 170.0), pt(200.0, 170.0)));
+    let kept = s.doc().unwrap().doc.node(NodeId(extension)).is_some_and(|n| !n.appearance.effects.is_empty());
+    assert!(kept, "the extension line keeps its effect");
+}
+
+/// In isolation mode, art outside the isolated group does not take a press on a dimension inside
+/// it: the drag moves the dimension.
+#[test]
+fn art_outside_isolation_does_not_take_the_press_on_a_dimension() {
+    let plain = ViewInfo::default();
+    let pt = vectorcraft_geom::Point::new;
+    let (mut s, first) = level_start(plain);
+    // A line across the dimension line, outside the group isolated below. The press, a point below
+    // the dimension line, is nearer to it than to the dimension line.
+    run(&mut s, "path.create", json!({"d": "M150 100 L150 250"}));
+    run(&mut s, "select.set", json!({"ids":[first]}));
+    let group = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "object.isolate", json!({"id": group}));
+    run(&mut s, "select.none", json!({}));
+    for (kind, y) in [(PointerKind::Move, 171.0), (PointerKind::Down, 171.0), (PointerKind::Drag, 131.0), (PointerKind::Up, 131.0)] {
+        s.pointer(&PointerEvent::new(kind, 150.0, y), plain).unwrap();
+    }
+    assert_eq!(recipe(&s, first).line_ends(), (pt(100.0, 130.0), pt(200.0, 130.0)));
+}
+
+/// A dimension pasted into a document that had none is dragged with the Dimension tool like one
+/// drawn there.
+#[test]
+fn a_dimension_pasted_into_another_document_is_dragged() {
+    let plain = ViewInfo::default();
+    let (mut s, first) = level_start(plain);
+    run(&mut s, "select.set", json!({"ids":[first]}));
+    run(&mut s, "edit.copy", json!({}));
+    run(&mut s, "file.new", json!({"width": 612, "height": 792}));
+    run(&mut s, "edit.paste", json!({}));
+    let pasted = s.doc().unwrap().selection.objects[0].0;
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", plain).unwrap();
+    let (a, b) = recipe(&s, pasted).line_ends();
+    let mid = a.midpoint(b);
+    for (kind, y) in [(PointerKind::Move, mid.y), (PointerKind::Down, mid.y), (PointerKind::Drag, mid.y - 40.0), (PointerKind::Up, mid.y - 40.0)] {
+        s.pointer(&PointerEvent::new(kind, mid.x, y), plain).unwrap();
+    }
+    let (a2, b2) = recipe(&s, pasted).line_ends();
+    assert!((a2.y - (a.y - 40.0)).abs() < 1e-6 && (b2.y - (b.y - 40.0)).abs() < 1e-6, "{:?} → {:?}", (a, b), (a2, b2));
+}
+
+/// A file that holds a dimension but was saved without the document's dimension flag (as one saved
+/// after a dimension was pasted into a document that had none) opens with its dimension dragged
+/// by the Dimension tool.
+#[test]
+fn a_dimension_in_a_file_saved_without_the_flag_is_dragged() {
+    let plain = ViewInfo::default();
+    let pt = vectorcraft_geom::Point::new;
+    let (s, first) = level_start(plain);
+    let mut doc = s.doc().unwrap().doc.as_ref().clone();
+    doc.dimensions = false;
+    let mut reopened = Session::new();
+    reopened.add_document(vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap(), None);
+    reopened.select_tool("dimension", plain).unwrap();
+    for (kind, y) in [(PointerKind::Move, 170.0), (PointerKind::Down, 170.0), (PointerKind::Drag, 130.0), (PointerKind::Up, 130.0)] {
+        reopened.pointer(&PointerEvent::new(kind, 150.0, y), plain).unwrap();
+    }
+    assert_eq!(recipe(&reopened, first).line_ends(), (pt(100.0, 130.0), pt(200.0, 130.0)));
 }
 
 /// A second dimension of the same two points as a dimension already drawn lands on its level too.
@@ -2078,6 +2466,39 @@ fn a_dimension_of_the_same_points_lines_up_and_the_line_follows_the_pointer() {
     }
     let id = s.doc().unwrap().selection.objects[0].0;
     assert_eq!(recipe(&s, id).line_ends(), (pt(200.0, 186.0), pt(300.0, 186.0)));
+}
+
+/// A command that moves or hides a dimension while another is placed (Real-time Drawing on) does
+/// not leave the placed dimension on a level the committed document does not have: committed with
+/// its line near the other dimension's line as the document has it then, it is on that level, and
+/// otherwise at the pointer.
+#[test]
+fn a_dimension_placed_after_a_command_lines_up_with_the_committed_document() {
+    let plain = ViewInfo::default();
+    for (cmd, params, y) in [("dimension.update", json!({"offset": -10.0}), 192.0), ("object.hide", json!({}), 172.0)] {
+        let (mut s, first) = level_start(plain);
+        run(&mut s, "prefs.set", json!({"key": "realTimeDrawing", "value": true}));
+        // The bottom edge dragged out onto the level of the first line.
+        for (kind, y) in [(PointerKind::Move, 300.0), (PointerKind::Down, 300.0), (PointerKind::Drag, 240.0), (PointerKind::Drag, 172.0)] {
+            s.pointer(&PointerEvent::new(kind, 160.0, y), plain).unwrap();
+        }
+        let mut params = params;
+        params["ids"] = json!([first]);
+        run(&mut s, cmd, params);
+        if cmd == "dimension.update" {
+            assert_eq!(recipe(&s, first).line_ends().0.y, 190.0, "moved before the release");
+        }
+        // Released without a drag in between: the release places the dimension.
+        s.pointer(&PointerEvent::new(PointerKind::Up, 160.0, y), plain).unwrap();
+        let placed = s.doc().unwrap().selection.objects[0].0;
+        assert_ne!(placed, first, "{cmd}: a new dimension");
+        let reference = s.doc().unwrap().doc.node(NodeId(first)).map(|n| (n.visible, recipe(&s, first).line_ends().0.y));
+        let expected = match reference {
+            Some((true, level)) if (level - y).abs() <= 4.0 => level,
+            _ => y,
+        };
+        assert_eq!(recipe(&s, placed).line_ends().0.y, expected, "{cmd}: the other dimension is {reference:?}");
+    }
 }
 
 /// A dimension dragged out from a segment, with its line within the Smart Guides snapping

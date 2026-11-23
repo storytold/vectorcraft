@@ -1911,3 +1911,172 @@ fn a_file_read_again_when_placed_stays_within_the_roots_it_was_read_in() {
     assert!(app.ui.status.contains("outside the read root"), "{}", app.ui.status);
     let _ = std::fs::remove_dir_all(base);
 }
+
+/// Draws one frame of the place progress window at `time` seconds → the texts it drew.
+fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| super::show(app, ui.ctx()));
+    out.textures_delta.clear();
+    let mut texts = String::new();
+    for shape in out.shapes {
+        if let egui::epaint::Shape::Text(t) = shape.shape {
+            texts.push_str(t.galley.text());
+            texts.push('\n');
+        }
+    }
+    texts
+}
+
+/// #5930: placing a file that takes longer than 0.4 s shows a progress window with its name,
+/// an indeterminate moving bar and a Cancel button (Escape); never two modals at once.
+#[test]
+fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
+    let hold = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let hold_read = hold.clone();
+    let services = Services {
+        read: Some(Box::new(move |p: &str| {
+            while hold_read.load(std::sync::atomic::Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            std::fs::read(p).map_err(|e| e.to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.placing.off_the_ui_thread = true;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    assert_eq!(progress(&mut app, &ctx, 0.0), "", "nothing placing");
+
+    let slow_path = saved("progress", "slow.png", &picture(Png, 100, 100));
+    let p = json!({"path": slow_path, "at": [200, 150]});
+    start(&mut app, &p, false).unwrap();
+
+    // Not shown before DELAY (0.4 s)
+    assert_eq!(progress(&mut app, &ctx, 1.0), "", "not at once");
+    progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.05); // measures first
+    let texts = progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.1);
+    for want in ["Placing slow.png…", "Reading the file…", "Cancel"] {
+        assert!(texts.contains(want), "{want} in {texts}");
+    }
+    assert!(!texts.contains("Continue in Background"), "no background button in {texts}");
+    assert!(!texts.contains("waiting"), "{texts}");
+
+    // Another file queued shows more waiting
+    let next_path = saved("progress", "next.png", &picture(Png, 100, 100));
+    start(&mut app, &json!({"path": next_path, "at": [200, 150]}), false).unwrap();
+    let texts = progress(&mut app, &ctx, 2.0);
+    assert!(texts.contains("Placing slow.png…") && texts.contains("1 more file waiting"), "{texts}");
+
+    // Never two modals at once
+    app.ui.dialog = Some(crate::state::Dialog::new(crate::dialogs::save_options::KIND, json!({})));
+    assert_eq!(progress(&mut app, &ctx, 3.0), "", "never two modals at once");
+    app.ui.dialog = None;
+
+    // Release and finish
+    hold.store(false, std::sync::atomic::Ordering::SeqCst);
+    placed(&mut app);
+}
+
+/// #5930: cancelling a place aborts the operation, drops the parsed asset, leaves the document
+/// completely unmodified (no undo step added, no nodes added), and clears the status bar.
+#[test]
+fn cancelling_a_place_places_nothing() {
+    let hold = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let hold_read = hold.clone();
+    let services = Services {
+        read: Some(Box::new(move |p: &str| {
+            while hold_read.load(std::sync::atomic::Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            std::fs::read(p).map_err(|e| e.to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.placing.off_the_ui_thread = true;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+
+    let before = state(&app);
+    let initial_names = names(&app);
+    assert!(!crate::menus::enabled(&app, "file.cancelPlace"));
+
+    let slow_path = saved("cancel", "slow.png", &picture(Png, 100, 100));
+    let p = json!({"path": slow_path, "at": [200, 150]});
+    start(&mut app, &p, false).unwrap();
+
+    assert!(crate::menus::enabled(&app, "file.cancelPlace"));
+    assert!(crate::opening::long_operation_busy(&app));
+    assert!(app.ui.status.starts_with("Placing"));
+
+    // Cancel the place operation
+    let cancelled = app.run("file.cancelPlace", json!({})).unwrap();
+    assert_eq!(cancelled["cancelled"], 1);
+    assert!(app.placing.pending.is_empty());
+    assert!(!crate::opening::long_operation_busy(&app));
+    assert!(!app.ui.status.starts_with("Placing"), "{}", app.ui.status);
+    assert!(!crate::menus::enabled(&app, "file.cancelPlace"));
+
+    // Let the background reader thread finish reading and drain
+    hold.store(false, std::sync::atomic::Ordering::SeqCst);
+    app.placing.wait_for_reads();
+    poll(&mut app);
+
+    // Document must be completely unmodified
+    assert_eq!(state(&app), before, "document unmodified, no undo step added");
+    assert_eq!(names(&app), initial_names, "no document nodes mutated or added");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), 0, "no undo step added");
+}
+
+/// #5930: Escape key in the progress window cancels the place operation.
+#[test]
+fn cancelling_a_place_via_escape_key() {
+    let hold = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let hold_read = hold.clone();
+    let services = Services {
+        read: Some(Box::new(move |p: &str| {
+            while hold_read.load(std::sync::atomic::Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            std::fs::read(p).map_err(|e| e.to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.placing.off_the_ui_thread = true;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+
+    let before = state(&app);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+
+    let slow_path = saved("escape", "slow.png", &picture(Png, 100, 100));
+    let p = json!({"path": slow_path, "at": [200, 150]});
+    start(&mut app, &p, false).unwrap();
+
+    // First frame initializes the timer at 1.0 s
+    assert_eq!(progress(&mut app, &ctx, 1.0), "", "not at once");
+    // Advance time past DELAY
+    progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.05);
+    let texts = progress(&mut app, &ctx, 1.0 + crate::export_progress::DELAY + 0.1);
+    assert!(texts.contains("Placing slow.png…"));
+    assert_eq!(app.placing.pending.len(), 1);
+
+    // Send Escape event
+    let raw_input = egui::RawInput {
+        events: vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+        time: Some(1.0 + crate::export_progress::DELAY + 0.15),
+        ..Default::default()
+    };
+    let _ = ctx.run_ui(raw_input, |ui| super::show(&mut app, ui.ctx()));
+
+    // Operation was cancelled
+    assert!(app.placing.pending.is_empty(), "place was cancelled by Escape");
+
+    hold.store(false, std::sync::atomic::Ordering::SeqCst);
+    app.placing.wait_for_reads();
+    poll(&mut app);
+
+    assert_eq!(state(&app), before, "document completely unmodified");
+}

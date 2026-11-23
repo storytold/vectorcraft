@@ -127,8 +127,13 @@ const PATTERN_MODES: [(&str, &str); 3] = [("object", "Transform Object Only"), (
 /// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
 /// dropped, as the panels' fields have always done.
 pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) {
+    try_transform(app, cmd, params).ok();
+}
+
+/// [`run_transform`] that returns the command's result, for a field that shows its error.
+fn try_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
     let params = with_pattern_switches(app, params);
-    app.run(cmd, params).ok();
+    app.run(cmd, params)
 }
 
 /// `params` with the `objects` and `patterns` switches [`run_transform`] adds.
@@ -329,12 +334,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.add_space(4.0);
             let icon = icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text(tl!("Shear"));
             crate::scrub::note_label(ui, icon.rect);
-            // Shear is relative: the field rests at 0° and a new value shears by it.
-            if let Some(a) = widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, -89.0, &SHEAR_PRESETS)
+            // Shear is relative: the field rests at 0° and a new value from -359° to 359° shears
+            // by it. The field has no minimum, so `object.shear` checks every value: it refuses
+            // ±90°, ±270° and a value outside -359° to 359°, and the status bar shows its error.
+            if let Some(a) =
+                widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, f64::NEG_INFINITY, &SHEAR_PRESETS)
                 && a != 0.0
-                && a.abs() < 90.0
+                && let Err(e) = try_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}))
             {
-                run_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}));
+                app.status(e);
             }
         });
     });
@@ -433,6 +441,8 @@ pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, l
             if headed {
                 widgets::subheader(ui, tl!("Rectangle Properties:"));
             }
+            let fw = super::field_width(ui);
+            shape_angle_row(app, ui, live, &format!("{id}-rectangle"), "rectangleAngle", fw);
             corner_radius_row(app, ui, n, &format!("{id}-radius"));
         }
         LiveShape::Polygon { .. } => {
@@ -443,12 +453,62 @@ pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, l
         }
         LiveShape::Ellipse { pie, .. } => {
             widgets::subheader(ui, tl!("Ellipse Properties:"));
+            shape_angle_row(app, ui, live, &format!("{id}-ellipse"), "ellipseAngle", 60.0);
             pie_rows(app, ui, *pie, &format!("{id}-pie"));
         }
         LiveShape::Line { .. } => return line_rows(app, ui, live, &format!("{id}-line")),
         _ => return false,
     }
     true
+}
+
+/// A live rectangle's or ellipse's Angle row (Rectangle and Ellipse Angle, counterclockwise): the
+/// angle the selected shapes of its kind share, blank when they differ. `key` is the
+/// `object.setLiveShape` param an edit sets, which turns each of them about its own center.
+fn shape_angle_row(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape, id: &str, key: &str, width: f32) {
+    let angle = shared_shape_angle(app, ui.ctx(), live);
+    ui.horizontal(|ui| {
+        widgets::dim_label(ui, tl!("Angle:"));
+        if let Some(a) = widgets::mixed_field_named(ui, (id, "angle"), Some(tl!("Angle:")), angle, "°", 1, width) {
+            app.run("object.setLiveShape", json!({ key: a })).ok();
+        }
+    });
+}
+
+/// The selected live shapes of `live`'s kind, the document uid and revision they were read at, and
+/// the angle they share.
+type SharedAngle = Option<((u64, u64, std::mem::Discriminant<LiveShape>), Option<f64>)>;
+
+/// The angle ([`LiveShape::shape_angle`]) every selected live shape of `live`'s kind shares, `None`
+/// when they differ or none is selected. Measured once per (document uid, revision) and kind: the
+/// panels read it every frame, and Select All can select hundreds of thousands of shapes.
+fn shared_shape_angle(app: &VectorcraftApp, ctx: &egui::Context, live: &LiveShape) -> Option<f64> {
+    let st = app.session.active()?;
+    let key = (st.uid, st.revision, std::mem::discriminant(live));
+    if let Some((k, angle)) = pstate::<SharedAngle>(ctx, "shape-angle")
+        && k == key
+    {
+        return angle;
+    }
+    let mut angles = st
+        .selection
+        .objects
+        .iter()
+        .filter_map(|id| st.doc.node(*id)?.live_shape())
+        .filter(|l| std::mem::discriminant(*l) == key.2)
+        .filter_map(LiveShape::shape_angle);
+    // With no shape of its kind selected, the panel shows `live`'s own angle.
+    let angle = match angles.next() {
+        None => live.shape_angle(),
+        Some(first) => angles
+            .all(|a| {
+                let d = (a - first).rem_euclid(360.0);
+                d.min(360.0 - d) < 1e-9
+            })
+            .then_some(first),
+    };
+    set_pstate::<SharedAngle>(ctx, "shape-angle", Some((key, angle)));
+    angle
 }
 
 /// Whether every selected object is a live line (and one is selected).
@@ -538,6 +598,7 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
     let side = radius.map(|r| 2.0 * r * (std::f64::consts::PI / f64::from((*sides).max(3))).sin());
     let kind = super::corner_style(app, n).1;
     let kinds: Vec<&str> = CornerKind::ALL.iter().map(|k| corner_kind(*k)).collect();
+    let angle = shared_shape_angle(app, ui.ctx(), live);
     // The `object.setLiveShape` param an edited field sets.
     let mut set = None;
     egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
@@ -547,7 +608,7 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
         }
         ui.end_row();
         widgets::dim_label(ui, tl!("Angle:"));
-        if let Some(a) = widgets::plain_field_named(ui, (id, "angle"), Some(tl!("Angle:")), live.polygon_angle().unwrap_or(0.0), "°", 1, fw) {
+        if let Some(a) = widgets::mixed_field_named(ui, (id, "angle"), Some(tl!("Angle:")), angle, "°", 1, fw) {
             set = Some(("polygonAngle", json!(a)));
         }
         ui.end_row();
@@ -657,6 +718,22 @@ pub fn set_pref(app: &mut VectorcraftApp, key: &str, on: bool) {
     }
 }
 
+/// Show on Shape Creation (`showOnShapeCreation`): after a shape was drawn
+/// ([`vectorcraft_engine::Session::take_shape_drawn`]), the Transform panel shows as Window ›
+/// Transform shows it, unless it can be seen already. In Presentation Mode, or with the option off,
+/// the panels stay as they are. Called once per frame, after the canvas and the dialogs; a frame
+/// that shows the panel asks `ctx` for another, which draws it.
+pub fn show_on_shape_creation(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let drawn = app.session.take_shape_drawn();
+    if !drawn || !app.session.prefs.show_on_shape_creation || app.ui.screen_mode >= 3 || crate::panel_docking::visible(&app.ui, "transform") {
+        return;
+    }
+    match app.run("window.panel", json!({ "panel": "transform" })) {
+        Ok(_) => ctx.request_repaint(),
+        Err(e) => app.status(e),
+    }
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden: bool = pstate(ui.ctx(), "xf-hide-options");
     let has = super::selection_len(app) > 0;
@@ -664,6 +741,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let origin = app.selection_box().map(|b| panel_reference(app, ui, &b).origin());
     if menu_item(ui, if hidden { tl!("Show Options") } else { tl!("Hide Options") }, true, false) {
         set_pstate(ui.ctx(), "xf-hide-options", !hidden);
+    }
+    let on_creation = app.session.prefs.show_on_shape_creation;
+    if menu_item(ui, tl!("Show on Shape Creation"), true, on_creation) {
+        set_pref(app, "showOnShapeCreation", !on_creation);
     }
     ui.separator();
     if menu_item(ui, tl!("Flip Horizontal"), has, false) {

@@ -275,7 +275,7 @@ impl Cache {
         let opts = vectorcraft_render::RenderOptions {
             skip_templates: true,
             image_mips: true,
-            hidden: vectorcraft_engine::cmd::print_hidden(doc, key.fold_lines),
+            hidden: vectorcraft_engine::cmd::print_hidden(doc, key.fold_lines).into_iter().collect(),
             ..Default::default()
         };
         if let Some(w) = &self.worker {

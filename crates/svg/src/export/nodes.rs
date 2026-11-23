@@ -1,4 +1,4 @@
-use super::output::{sanitize_id, valid_xml_value, xml_attr_escape, xml_attr_valid};
+use super::output::{sanitize_id, valid_xml_value, xml_attr_escape};
 use super::paint::{StrokePlan, has_raster, pixel_gradient};
 use super::text::OUTLINE_TOLERANCE;
 use super::{
@@ -90,6 +90,7 @@ impl Reuse {
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. } => (self.turns, self.scales) = (false, false),
+            NodeKind::Image(_) if n.is_distorted_image() => (self.turns, self.scales) = (false, false),
             NodeKind::SymbolInstance { symbol, .. } => {
                 // A scale reaching an instance of a symbol with 9-slice guides changes how its
                 // cells are sized.
@@ -887,7 +888,7 @@ impl Writer<'_> {
                 if !valid_xml_value(url) {
                     self.warn("Link URLs containing invalid XML characters had those characters removed");
                 }
-                self.line(&format!("<a xlink:href=\"{}\">", xml_attr_valid(url)));
+                self.line(&format!("<a xlink:href=\"{}\">", xml_attr_escape(url)));
                 self.depth += 1;
                 self.node_body(n);
                 self.depth -= 1;
@@ -988,7 +989,7 @@ impl Writer<'_> {
                 self.shape(n, &d.join(" "), None, &paths, *rule, export_shape_bounds(n));
             }
             NodeKind::Text(t) => self.text_node(n, t),
-            NodeKind::Image(im) => {
+            NodeKind::Image(im) if !n.is_distorted_image() => {
                 let shown = self.doc.shown_image(n, im);
                 let im = &*shown;
                 if let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref()
@@ -1090,14 +1091,28 @@ impl Writer<'_> {
                 self.line("</g>");
                 (self.xf, self.instance_xf) = saved;
             }
-            // Live blends/envelopes/meshes export their evaluated (expanded) form.
+            // Live blends/envelopes/meshes (and distorted images) export their evaluated
+            // (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
-                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
+                let mut g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                // A distorted image inside instances that scale it is cut as finely on the page as
+                // one placed directly.
+                let stretch = vectorcraft_doc::image_quad::max_stretch(self.instance_xf);
+                if n.is_distorted_image()
+                    && (stretch - 1.0).abs() > 1e-9
+                    && let Some(art) = vectorcraft_doc::image_quad::distorted_art_at(n, vectorcraft_doc::image_quad::Density::page_at(stretch))
+                    && let NodeKind::Group { children, .. } = &mut g.kind
+                    && let [only] = &mut children[..]
+                    && only.id == n.id
+                {
+                    *only = std::sync::Arc::new(art);
+                }
                 self.share_images(&g);
                 self.node_body(&g);
             }

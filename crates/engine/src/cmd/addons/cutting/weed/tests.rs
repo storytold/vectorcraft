@@ -664,6 +664,29 @@ fn an_image_is_measured_by_its_frame_as_turned() {
 }
 
 #[test]
+fn a_distorted_image_is_measured_by_the_frame_through_its_corners() {
+    let mut s = session();
+    let im = vectorcraft_doc::ImageObject {
+        key: "image".into(),
+        width: 100,
+        height: 100,
+        xf: Affine::IDENTITY,
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    insert(&mut s, |id| {
+        let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+        n.set_image_corners([Point::new(40.0, 0.0), Point::new(60.0, 0.0), Point::new(100.0, 100.0), Point::new(0.0, 100.0)]).unwrap();
+        n
+    });
+    let (b, end) = diamond_weeding(&mut s);
+    assert!((b.x0 + 10.0).abs() < 1e-3 && (b.y1 - 110.0).abs() < 1e-3, "{b:?}");
+    // A quarter of the box down (y = 20), the line meets the side from (40, 0) to (0, 100).
+    assert!((end - 32.0).abs() < 0.01, "{end}");
+}
+
+#[test]
 fn a_placed_file_is_measured_by_the_art_it_shows() {
     let dir = crate::tests_links::Folder::new("weed-placed");
     // A file with a 60 × 40 artboard and a 20 pt wide rectangle at each side (hidden when

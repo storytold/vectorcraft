@@ -55,14 +55,18 @@ struct PathWidgets {
 
 impl PathWidgets {
     /// The widgets of path `id` at `zoom` (screen px per document point), if it has any: any path
-    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection. `id` is
-    /// editable ([`Document::is_editable`]).
-    fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool) -> Option<Self> {
+    /// with Direct Selection (`any_path`), live rectangles and polygons with Selection, when
+    /// `editable` ([`Document::editable`]) answers true for `id`.
+    fn of(doc: &Document, selection: &Selection, id: NodeId, zoom: f64, any_path: bool, editable: &impl Fn(NodeId) -> bool) -> Option<Self> {
         if selection.segments.contains_key(&id) {
             return None;
         }
         let NodeKind::Path { path, live, .. } = &doc.node(id)?.kind else { return None };
         if !any_path && !matches!(live.as_deref(), Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. })) {
+            return None;
+        }
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !editable(id) {
             return None;
         }
         let lc = LiveCorners::new(path, live.as_deref())?;
@@ -105,9 +109,10 @@ impl CornerWidgets {
     /// The widgets at `zoom` (screen px per document point), if the selection has them: on any
     /// path with Direct Selection (`any_path`), on live rectangles and polygons with Selection.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64, any_path: bool) -> Option<Self> {
-        let editable = doc.editable();
-        let paths: Vec<_> =
-            selection.objects.iter().filter(|id| editable(**id)).filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path)).collect();
+        // Made for the first path, then shared: the art on the locked artboards is measured once.
+        let locks = std::cell::OnceCell::new();
+        let editable = |id| locks.get_or_init(|| doc.editable())(id);
+        let paths: Vec<_> = selection.objects.iter().filter_map(|id| PathWidgets::of(doc, selection, *id, zoom, any_path, &editable)).collect();
         (!paths.is_empty()).then_some(Self { paths })
     }
 
@@ -132,9 +137,11 @@ impl CornerWidgets {
         Self::of(doc, selection, zoom, any_path)?.within_angle(max_angle)
     }
 
-    /// The widgets the active tool can drag (Direct Selection: `any_path`).
+    /// The widgets the active tool can drag (Direct Selection: `any_path`). The live shapes' widgets
+    /// of the other tools also need Show Shape Widgets.
     pub fn for_tool(cx: &ToolContext, any_path: bool) -> Option<Self> {
-        Self::showing(cx.doc, cx.selection, cx.zoom, any_path, cx.corner_widgets, cx.corner_widget_max_angle)
+        let on = cx.corner_widgets && (any_path || cx.shape_widgets);
+        Self::showing(cx.doc, cx.selection, cx.zoom, any_path, on, cx.corner_widget_max_angle)
     }
 
     /// The centres of the widgets that show.

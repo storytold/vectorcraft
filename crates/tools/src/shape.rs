@@ -25,7 +25,8 @@
 //! The selection keeps its bounding box and its Live Shape widgets on show with the Rectangle,
 //! Rounded Rectangle, Ellipse, Polygon and Star tools, so a shape just drawn can be adjusted at
 //! once: a drag on a live rectangle's or polygon's corner widget rounds its corners and a drag on
-//! a live ellipse's pie widget sets its pie angle, as with the Selection tool; a drag on one of the
+//! a live ellipse's pie widget sets its pie angle and a drag on a live polygon's side widget sets
+//! its number of sides, as with the Selection tool; a drag on one of the
 //! box's eight handles scales the selection, a press on the selection's centre point (Show Center)
 //! moves it, and one just outside a corner of its box turns it about that centre, as the Selection
 //! tool's handles, centre point and rotate zone do; a press anywhere else draws a new shape (#5477).
@@ -43,6 +44,7 @@ use crate::corners::{self, CornerDrag};
 use crate::guides::{DrawSnap, Leave, PointSnap, TangentLine, Targets, square};
 use crate::pie::{self, PieDrag};
 use crate::select::{MoveSnap, handle_cursor, hit_center, is_area_type, matrix_json, rotate_zone, shown_box};
+use crate::sidewidget::{self, SideDrag};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// The largest corner radius the Rounded Rectangle tool draws, points: the range of General ›
@@ -84,6 +86,7 @@ pub fn shows_shape_widgets(id: &str) -> bool {
 enum WidgetDrag {
     Corner(CornerDrag),
     Pie(PieDrag),
+    Sides(SideDrag),
 }
 
 /// A drag of the selection itself, taken by a shape tool: a handle of its box scales it, the centre
@@ -110,8 +113,7 @@ pub struct ShapeTool {
     began: bool,
     pub sides: u32,
     pub points: u32,
-    /// The anchors an ellipse made by a click has (the Ellipse dialog opens on it); 4 is a live
-    /// ellipse.
+    /// The anchors an ellipse has (the Ellipse dialog opens on it); 4 is a live ellipse.
     pub anchors: u32,
     pub corner_radius: f64,
     /// Star inner radius as a fraction of the outer radius.
@@ -177,6 +179,7 @@ fn circle_through_points(points: &[Point]) -> (String, Value) {
 struct DragOptions {
     sides: u32,
     points: u32,
+    anchors: u32,
     corner_radius: f64,
     star_ratio: f64,
 }
@@ -283,29 +286,33 @@ impl ShapeTool {
     }
 
     fn drag_options(&self) -> DragOptions {
-        DragOptions { sides: self.sides, points: self.points, corner_radius: self.corner_radius, star_ratio: self.star_ratio }
+        DragOptions { sides: self.sides, points: self.points, anchors: self.anchors, corner_radius: self.corner_radius, star_ratio: self.star_ratio }
     }
 
     /// Put back the options a canceled drag changed.
     fn restore_drag_options(&mut self, o: DragOptions) {
         self.sides = o.sides;
         self.points = o.points;
+        self.anchors = o.anchors;
         self.corner_radius = o.corner_radius;
         self.star_ratio = o.star_ratio;
     }
 
-    /// A press on a corner or pie widget of the selection: the drag adjusts it.
+    /// A press on a corner, pie or side widget of the selection: the drag adjusts it.
     fn press_widget(&mut self, cx: &ToolContext, ev: &PointerEvent) -> bool {
         if !shows_shape_widgets(self.id) {
             return false;
         }
-        self.widget = CornerDrag::hit(cx, ev, false).map(WidgetDrag::Corner).or_else(|| PieDrag::hit(cx, ev).map(WidgetDrag::Pie));
+        self.widget = CornerDrag::hit(cx, ev, false)
+            .map(WidgetDrag::Corner)
+            .or_else(|| PieDrag::hit(cx, ev).map(WidgetDrag::Pie))
+            .or_else(|| SideDrag::hit(cx, ev).map(WidgetDrag::Sides));
         self.widget.is_some()
     }
 
-    /// Is `p` over a corner or pie widget of the selection that a press would drag?
+    /// Is `p` over a corner, pie or side widget of the selection that a press would drag?
     fn over_widget(&self, cx: &ToolContext, p: Point) -> bool {
-        shows_shape_widgets(self.id) && (corners::over_widget(cx, p, false) || pie::over_widget(cx, p))
+        shows_shape_widgets(self.id) && (corners::over_widget(cx, p, false) || pie::over_widget(cx, p) || sidewidget::over_widget(cx, p))
     }
 
     /// The selection's box, while this tool shows it (the tools that draw a box, with a selection
@@ -481,10 +488,16 @@ impl ShapeTool {
             PointerKind::Drag => match w {
                 WidgetDrag::Corner(c) => c.drag(cx, ev.pos),
                 WidgetDrag::Pie(d) => d.drag(cx, ev.pos),
+                WidgetDrag::Sides(d) => d.drag(cx, ev.pos),
             },
             PointerKind::Up => match self.widget.take() {
                 Some(WidgetDrag::Corner(c)) => c.finish(),
                 Some(WidgetDrag::Pie(d)) => d.finish(),
+                Some(WidgetDrag::Sides(mut d)) => {
+                    let mut out = d.drag(cx, ev.pos);
+                    out.extend(d.finish());
+                    out
+                }
                 None => vec![],
             },
             _ => vec![],
@@ -595,6 +608,8 @@ impl ShapeTool {
                 let mut v = box_params(start, p, m, base);
                 if self.id == "roundedRectangle" {
                     v["radius"] = json!(self.corner_radius);
+                } else if self.id == "ellipse" && self.anchors != 4 {
+                    v["anchors"] = json!(self.anchors);
                 }
                 (cmd.into(), v)
             }
@@ -823,6 +838,12 @@ impl Tool for ShapeTool {
             _ => vec![],
         }
     }
+    /// Switching tools during a drag of a corner, pie or side widget cancels it, as Escape does:
+    /// the shape goes back.
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.widget.is_some() { self.key(cx, ToolKey::Escape, Mods::default()) } else { vec![] }
+    }
+
     /// ↑/↓ change a polygon's sides, a star's points or the rounded rectangle's radius while it is
     /// drawn; Escape turns a widget or selection drag back.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
@@ -838,6 +859,7 @@ impl Tool for ShapeTool {
                 (ToolKey::Escape, _) => match self.widget.take() {
                     Some(WidgetDrag::Corner(c)) if c.adjusting() => vec![Action::Cancel],
                     Some(WidgetDrag::Pie(d)) if d.adjusting() => vec![Action::Cancel],
+                    Some(WidgetDrag::Sides(d)) => d.cancel(),
                     _ => vec![],
                 },
                 _ => vec![],
@@ -872,6 +894,14 @@ impl Tool for ShapeTool {
                 self.points = self.points.saturating_sub(1).max(3);
                 true
             }
+            ("ellipse", ToolKey::Up) => {
+                self.anchors = self.anchors.saturating_add(1).min(1000);
+                true
+            }
+            ("ellipse", ToolKey::Down) => {
+                self.anchors = self.anchors.saturating_sub(1).max(2);
+                true
+            }
             ("roundedRectangle", ToolKey::Up) => {
                 self.corner_radius = (self.corner_radius + 1.0).min(MAX_CORNER_RADIUS);
                 true
@@ -883,7 +913,9 @@ impl Tool for ShapeTool {
             _ => false,
         };
         if changed {
-            let (c, v) = self.command_at(s, self.last, self.mods, cx.constrain_angle);
+            // A count-only key keeps the corner a tangent-snapped circle already showed.
+            let p = self.tangent_corner.map_or(self.last, |d| s + d);
+            let (c, v) = self.command_at(s, p, self.mods, cx.constrain_angle);
             vec![self.preview(c, v)]
         } else if key == ToolKey::Escape {
             self.start = None;
@@ -920,6 +952,7 @@ impl Tool for ShapeTool {
         match &self.widget {
             Some(WidgetDrag::Corner(c)) => c.adjusting(),
             Some(WidgetDrag::Pie(d)) => d.adjusting(),
+            Some(WidgetDrag::Sides(d)) => d.adjusting(),
             None => match &self.selection {
                 Some(SelectionDrag::Move { began, .. }) => *began,
                 Some(SelectionDrag::Rotate { .. } | SelectionDrag::Scale { .. }) => true,
@@ -940,9 +973,11 @@ impl Tool for ShapeTool {
     fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
         !self.through.is_empty()
     }
-    /// The pointer left the canvas: the circle's preview through it goes.
+    /// The pointer left the canvas: the circle's preview through it and the Smart Guide of the
+    /// hover go.
     fn hover_ended(&mut self, _cx: &ToolContext) {
         self.hover = None;
+        self.snap.clear();
     }
     /// An edit, Undo or Redo made outside the tool, or another document, drops the points placed
     /// for a circle.
@@ -956,6 +991,7 @@ impl Tool for ShapeTool {
         match &self.widget {
             Some(WidgetDrag::Corner(c)) => return c.overlays(cx),
             Some(WidgetDrag::Pie(d)) => return d.overlays(cx),
+            Some(WidgetDrag::Sides(d)) => return d.overlays(cx),
             None => {}
         }
         // A line on a common tangent shows that snap's guides, and its length and angle.
@@ -1017,7 +1053,7 @@ impl Tool for ShapeTool {
         let idle = self.start.is_none();
         match &self.widget {
             Some(WidgetDrag::Corner(_)) => return Cursor::CornerRadius,
-            Some(WidgetDrag::Pie(_)) => return Cursor::ArrowHollow,
+            Some(WidgetDrag::Pie(_) | WidgetDrag::Sides(_)) => return Cursor::ArrowHollow,
             None => {}
         }
         // Alt-dragging the selection leaves a copy behind; otherwise the arrow, hollow while the
@@ -1082,6 +1118,7 @@ impl Tool for ShapeTool {
             match key {
                 "sides" => b.sides = self.sides,
                 "points" => b.points = self.points,
+                "anchors" => b.anchors = self.anchors,
                 "cornerRadius" => b.corner_radius = self.corner_radius,
                 "starRatio" => b.star_ratio = self.star_ratio,
                 _ => {}

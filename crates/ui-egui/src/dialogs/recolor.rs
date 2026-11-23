@@ -31,10 +31,17 @@
 //! Color too. The base color can't be removed. A removed color's row goes, unless it has current
 //! colors and art or a group is open: it then keeps them, with no new color, so that art keeps its
 //! colors and the group's swatch at that place goes. Under the tools, a button switches both wheels
-//! to hue and brightness (black at the center, full brightness at the edge, at the base color's
+//! to hue and brightness (black at the center, full brightness at the edge, at the selected color's
 //! saturation; a marker drag sets hue and brightness, Add Color adds the hue and brightness clicked
-//! at the base color's saturation, and the slider under the wheel is a Saturation slider) and back;
-//! switching changes no color, and the dialog opens on hue and saturation. With art, the Prominent Colors bar under the wheel shows the new
+//! at the selected color's saturation, and the slider under the wheel is a Saturation slider) and
+//! back; switching changes no color, and the dialog opens on hue and saturation. The base color is the one the harmony rules
+//! build from, drawn with the larger marker; it stays the base when another color is selected for
+//! the sliders. A right-click on a marker or a color bar offers Set As Base Color, Select Shade (a
+//! grid of the color's hue at 7 saturations by 7 brightnesses; a click moves the marker there as a
+//! drag would), Color Picker and Remove Color; a right-click elsewhere on the wheel offers Add New
+//! Color, which adds the hue and saturation there as the Add Color tool does, and a color added on
+//! the line from the center to a marker moves with that marker when the colors are unlinked. Set
+//! Current Color As Base Color, before the color chips, makes the selected color the base. With art, the Prominent Colors bar under the wheel shows the new
 //! colors, each part as wide as its row's share of the art's uses, the largest first; dragging the
 //! edge between two parts moves width between them, and when the drag ends the rows' current
 //! colors move toward those widths (`recolor.weigh`), and the art previews them. The New Color
@@ -70,9 +77,18 @@
 //! the most used color first and repeating when the rows outnumber them, and the art previews
 //! them; OK keeps them as one undo step. A new count of Colors keeps the picks: the new rows take them again.
 //!
+//! Undo Changes and Redo Changes beside the Color Theme Picker (`ui.recolorUndo`, `ui.recolorRedo`)
+//! step back and forward through the dialog's own color edits ([`History`]), not the document's
+//! undo history; Cancel discards them and OK still records one undo step. Each opening starts
+//! with nothing to undo, and selecting another color group or Save Changes leaves nothing to undo
+//! or redo.
+//!
 //! Fields (`ui.dialog.set`): `rows` ([{from: [keys], to: key, exclude?, tint?: percent of a spot
 //! color, added?}]; a row with no current colors, `from: []`, recolors no art, and with `added: true`
-//! (a color the Add Color tool added) adds its new color to the color group; `to: null`, no new color), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
+//! (a color the Add Color tool added) adds its new color to the color group; `to: null`, no new color;
+//! `base: true`, the base color, else the first color the Edit tab shows; `tie: n` on a marker and
+//! `follows: n` on a color added on its line, which moves with it; the dialog sends `recolor.apply`
+//! the rows without these three), `colors` (null: Auto, or a count), `method`, `preserveWhite`, `preserveBlack`,
 //! `preserveGrays`, `limitTo` (library id, "document" for the document's swatches, "" for none),
 //! `group`, `groupName`, `tab` (`assign` or `edit`), `rule` (harmony id), `linked`, `preview`,
 //! `sliderMode` (`hsb`, `rgb`, `cmyk`, `lab` or `tint`; unset: the row color's own model, HSB for
@@ -207,7 +223,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         None => String::new(),
     };
     // Without art the rows are the group's colours, as they are.
-    let start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
+    let mut start: Vec<Value> = if art { vec![] } else { assign.iter().map(|k| json!({"from": [k], "to": k})).collect() };
+    number_slots(&mut start);
     // The Preserve checkboxes as they were last confirmed (#2960).
     let kept = |k: &str, default: bool| app.ui.recolor_preserve.get(k).and_then(Value::as_bool).unwrap_or(default);
     let fields = json!({
@@ -223,6 +240,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let mut rs = rows(&d);
     snap(app, &d, &mut rs);
     d.fields.insert("rows".into(), Value::Array(rs));
+    // Undo Changes has nothing to undo on a new opening.
+    app.ui.recolor_history = History { opened: Some(snapshot(&d)), ..History::default() };
     app.ui.dialog = Some(d);
     Ok(Value::Null)
 }
@@ -268,6 +287,7 @@ fn sync(app: &mut VectorcraftApp, d: &mut Dialog) {
             for (row, to) in rows.iter_mut().zip(assign) {
                 row["to"] = to;
             }
+            number_slots(&mut rows);
             snap(app, d, &mut rows);
             d.fields.insert("rows".into(), Value::Array(rows));
             // Find dims the preserved colors with the rows that aren't selected.
@@ -327,7 +347,9 @@ fn sync_weights(app: &mut VectorcraftApp, d: &mut Dialog) {
         match app.session.execute("recolor.weigh", &json!({"map": rows(d), "weights": w})) {
             Ok(r) => {
                 if let Some(m) = r["map"].as_array() {
-                    d.fields.insert("rows".into(), Value::Array(m.clone()));
+                    let mut m = m.clone();
+                    keep_marks(&rows(d), &mut m);
+                    d.fields.insert("rows".into(), Value::Array(m));
                 }
             }
             Err(e) => app.status(e.to_string()),
@@ -443,14 +465,14 @@ fn group_colors<'a>(app: &VectorcraftApp, d: &Dialog, rs: impl Iterator<Item = &
 }
 
 /// The New Color Group menu's request: save the new colors of the rows that aren't excluded and
-/// hold current colors or were added on the Edit tab (Save All Colors, in row order; a row without one gives its first current
-/// color) or of the Prominent Colors bar (Save Prominent Colors, in its order) as a new color
-/// group, a step of its own (`swatch.newGroup`).
+/// hold current colors or were added on the Edit tab (Save All Colors, in row order) or of the
+/// Prominent Colors bar (Save Prominent Colors, in its order) as a new color group, a step of its
+/// own (`swatch.newGroup`). Either way a row whose new color was removed gives none.
 fn save_group(app: &mut VectorcraftApp, d: &mut Dialog, which: &str) -> Result<(), String> {
     let rs = rows(d);
     let order: Vec<usize> = match which {
-        "prominent" => prominent_parts(d, &rs).into_iter().map(|p| p.0).collect(),
-        _ => (0..rs.len()).filter(|&i| in_group(&rs[i])).collect(),
+        "prominent" => prominent_parts(d, &rs).into_iter().map(|p| p.0).filter(|&i| to_color(&rs[i]).is_some()).collect(),
+        _ => (0..rs.len()).filter(|&i| in_group(&rs[i]) && to_color(&rs[i]).is_some()).collect(),
     };
     let colors = group_colors(app, d, order.iter().filter_map(|&i| rs.get(i)));
     if colors.is_empty() {
@@ -499,6 +521,7 @@ fn select_group(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> 
                 d.fields.insert("__newGroup".into(), json!(true));
                 d.fields.insert("groupName".into(), json!(NEW_GROUP));
             }
+            restart_history(app, d);
             return Ok(());
         }
         Value::String(n) => n.clone(),
@@ -532,12 +555,14 @@ fn select_group(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> 
         d.fields.remove(REDUCED);
     } else {
         let mut rs: Vec<Value> = assign.iter().map(|k| json!({"from": [k], "to": k})).collect();
+        number_slots(&mut rs);
         snap(app, d, &mut rs);
         d.fields.insert("rows".into(), Value::Array(rs));
         d.fields.insert("__sel".into(), json!([]));
         d.fields.remove(COMPS);
     }
     d.fields.insert("__assign".into(), Value::Array(assign));
+    restart_history(app, d);
     Ok(())
 }
 
@@ -559,6 +584,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             // Nothing changed since the last save but perhaps the name.
             let name = d.str("groupName");
             if name.trim().is_empty() || group.as_deref() == Some(name.as_str()) {
+                restart_history(app, d);
                 return Ok(());
             }
             cancel_preview(app, d);
@@ -572,6 +598,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             d.fields.insert("group".into(), name.clone());
             d.fields.insert(GROUP_LOADED.into(), name.clone());
             d.fields.insert("groupName".into(), name);
+            restart_history(app, d);
             Ok(())
         }
         Some("save") => {
@@ -589,7 +616,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
             // An excluded row leaves its swatch the color it has now, as OK's `"keep"` does: with
             // art, the swatch's color in `__assign`; without art, the swatch's color in the group,
             // which an earlier Save Changes may have changed.
-            let filled: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).collect();
+            let filled = by_place(&rs);
             let rest: Vec<Value> =
                 p["groupColors"].as_array().map(|a| a.iter().skip(filled.len()).map(|k| json!({"from": [k], "to": k})).collect()).unwrap_or_default();
             let assign: Vec<Value> =
@@ -678,6 +705,7 @@ fn group_action(app: &mut VectorcraftApp, d: &mut Dialog, action: &Value) -> Res
                     reread_rows(app, d, &rs, &before, &gone);
                 }
             }
+            restart_history(app, d);
             Ok(())
         }
         Some("delete") => {
@@ -1156,7 +1184,7 @@ fn apply_params(d: &Dialog) -> Value {
                     .chain(added)
                     .collect()
             } else {
-                let filled: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).collect();
+                let filled = by_place(&rs);
                 let rest = assign.get(filled.len()..).unwrap_or_default();
                 let took = filled.iter().map(|r| if excluded(r) { &keep } else { &r["to"] });
                 took.chain(rest).chain(added).collect()
@@ -1164,8 +1192,10 @@ fn apply_params(d: &Dialog) -> Value {
         };
         Some(json!({"group": g, "groupColors": colors, "rename": rename}))
     });
-    // A row edited with the sliders carries `model: "new"`: its art takes the mode they showed.
-    let mut p = json!({"map": rs, "method": d.str("method"), "limitTo": d.str("limitTo")});
+    // A row edited with the sliders carries `model: "new"`: its art takes the mode they showed. The
+    // Edit tab's own marks (the base color, colors tied to a marker) stay in the dialog.
+    let map: Vec<Value> = rs.iter().map(without_marks).collect();
+    let mut p = json!({"map": map, "method": d.str("method"), "limitTo": d.str("limitTo")});
     // The Global Adjust amounts, kept while the sliders show another mode; at 0% they are left out.
     let values = adjust_values(d);
     if values.iter().any(|v| *v != 0.0) {
@@ -1338,14 +1368,19 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
 /// The tabs and the controls under them. Returns the row whose new color a double-click or Pick
 /// from Swatches asked to pick in the Color Picker, with `true` for Pick from Swatches.
 fn main(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> Option<(usize, bool)> {
+    seed(app, d);
     sync(app, d);
     sync_theme(app, d);
     sync_weights(app, d);
+    // The fields as the dialog read the art are where Undo Changes starts, also when the pointer is
+    // down on the first frame and the first step is recorded only on release.
+    app.ui.recolor_history.start(d);
     if let Err(e) = run_group_action(app, d) {
         app.status(e);
     }
     let t = Tokens::get(ui.ctx());
     let picking = d.bool(THEME_PICKER);
+    let mut stepped = None;
     ui.horizontal(|ui| {
         let tab = d.str("tab");
         for (id, label) in [("assign", tl!("Assign")), ("edit", tl!("Edit"))] {
@@ -1356,6 +1391,12 @@ fn main(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> Option<(usize,
         ui.add_space(8.0);
         if widgets::icon_button(ui, "pipette", tl!("Color Theme Picker"), picking, 24.0).clicked() {
             d.fields.insert(THEME_PICKER.into(), json!(!picking));
+        }
+        let h = &app.ui.recolor_history;
+        for (back, icon, tip) in [(true, "undo-2", tl!("Undo Changes")), (false, "redo-2", tl!("Redo Changes"))] {
+            if widgets::icon_button_enabled(ui, icon, tip, false, h.can(d, back), 24.0).clicked() {
+                stepped = Some(back);
+            }
         }
         let storage = d.bool(GROUP_STORAGE);
         if widgets::icon_button(ui, "library", tl!("Show Color Groups"), storage, 24.0).clicked() {
@@ -1369,6 +1410,9 @@ fn main(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> Option<(usize,
             ui.label(egui::RichText::new(tl!("Preset:")).color(t.text_dim));
         });
     });
+    if let Some(back) = stepped {
+        app.ui.recolor_history.step(d, back);
+    }
     widgets::divider(ui);
     ui.add_space(4.0);
     if d.bool(THEME_PICKER) {
@@ -1379,7 +1423,7 @@ fn main(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> Option<(usize,
     }
     let mut rs = rows(d);
     let top = ui.cursor().top();
-    let (changed, pick) = if d.str("tab") == "edit" { (edit_tab(app, ui, d, &mut rs), None) } else { assign_tab(app, ui, d, &mut rs) };
+    let (changed, pick) = if d.str("tab") == "edit" { edit_tab(app, ui, d, &mut rs) } else { assign_tab(app, ui, d, &mut rs) };
     if d.str("tab") != "edit" {
         ui.add_space((TAB_H - (ui.cursor().top() - top)).max(0.0));
     }
@@ -1405,6 +1449,12 @@ fn main(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> Option<(usize,
         });
     }
     sync(app, d);
+    // New rows take the picks now, so that a new count of Colors is one step.
+    sync_theme(app, d);
+    // A change is a step once the pointer is up: a drag is one step from press to release.
+    if !ui.input(|i| i.pointer.any_down()) {
+        app.ui.recolor_history.note(d);
+    }
     if d.bool("__art") {
         match find_params(d) {
             // Find shows the art so with Preview off too.
@@ -1431,6 +1481,187 @@ pub(super) fn with_new_color(app: &VectorcraftApp, mut d: Dialog, i: usize, c: C
     d
 }
 
+/// The fields a step of Undo Changes and Redo Changes restores: what the art is recolored with.
+const STEP_FIELDS: [&str; 11] =
+    ["rows", "colors", "method", "preserveWhite", "preserveBlack", "preserveGrays", "limitTo", "rule", "globalAdjust", THEME_PICKS, WEIGHTS];
+/// The fields that record which reduction, picks and weights the rows already took, restored with
+/// [`STEP_FIELDS`] so that the restored rows are not reduced, picked or weighed again.
+const STEP_MARKS: [&str; 4] = ["__reduced", THEME_DONE, WEIGHED, PRESERVED];
+/// VectorCraft's own limits on the steps Undo Changes keeps: at most this many, and at most this
+/// many bytes of them as JSON; the oldest go first.
+const MAX_STEPS: usize = 64;
+const MAX_STEP_BYTES: usize = 4 << 20;
+
+type Snapshot = serde_json::Map<String, Value>;
+
+/// The open dialog's own history of color edits: Undo Changes goes back one edit and Redo Changes
+/// forward one, without touching the document's undo history. A change of [`STEP_FIELDS`] is one
+/// step once the pointer is up, so a drag is one step; a new edit after Undo Changes ends what Redo
+/// Changes could restore.
+#[derive(Clone, Debug, Default)]
+pub struct History {
+    /// The fields the dialog opened with (or had when its steps were dropped), before it read the
+    /// art, until its first frame or command.
+    opened: Option<Snapshot>,
+    /// The fields after the last step (none before the dialog's first frame).
+    base: Option<Snapshot>,
+    undo: Vec<Snapshot>,
+    redo: Vec<Snapshot>,
+}
+
+/// Drop the dialog's steps, after another color group is selected or Save Changes rewrites the
+/// group: Undo Changes and Redo Changes then have no step to go to. The fields of `d` are where
+/// Undo Changes starts again, as on a new opening, so fields set before the next frame or step
+/// (with `ui.dialog.set`) are a step back to them.
+fn restart_history(app: &mut VectorcraftApp, d: &Dialog) {
+    app.ui.recolor_history = History { opened: Some(snapshot(d)), ..History::default() };
+}
+
+/// The size of `s` as JSON, which [`MAX_STEP_BYTES`] limits.
+fn snapshot_size(s: &Snapshot) -> usize {
+    serde_json::to_vec(s).map_or(0, |b| b.len())
+}
+
+/// The fields of `d` a step restores ([`STEP_FIELDS`] and [`STEP_MARKS`]).
+fn snapshot(d: &Dialog) -> Snapshot {
+    STEP_FIELDS.iter().chain(&STEP_MARKS).filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect()
+}
+
+/// Before the first step is recorded: when fields were set after the dialog opened (with
+/// `ui.dialog.set`, before a frame drew it), the fields it opened with, as they read the art, are
+/// the step Undo Changes goes back to.
+fn seed(app: &mut VectorcraftApp, d: &Dialog) {
+    let Some(opened) = app.ui.recolor_history.opened.take() else { return };
+    if app.ui.recolor_history.base.is_some() || snapshot(d) == opened {
+        return;
+    }
+    let mut first = d.clone();
+    first.fields.remove(super::form::PREVIEWED);
+    for k in STEP_FIELDS.iter().chain(&STEP_MARKS) {
+        match opened.get(*k) {
+            Some(v) => first.fields.insert(k.to_string(), v.clone()),
+            None => first.fields.remove(*k),
+        };
+    }
+    sync(app, &mut first);
+    sync_theme(app, &mut first);
+    app.ui.recolor_history.base = Some(snapshot(&first));
+}
+
+impl History {
+    /// Take the fields of `d` as those after the last step when no step has them yet.
+    fn start(&mut self, d: &Dialog) {
+        if self.base.is_none() {
+            self.base = Some(snapshot(d));
+        }
+    }
+
+    /// Whether the fields of `d` differ from those after the last step.
+    fn pending(&self, d: &Dialog) -> bool {
+        self.base.as_ref().is_some_and(|b| STEP_FIELDS.iter().any(|k| d.fields.get(*k) != b.get(*k)))
+    }
+
+    /// Record a change of `d`'s fields since the last step as a step.
+    fn note(&mut self, d: &Dialog) {
+        if self.base.is_some() && !self.pending(d) {
+            return;
+        }
+        if let Some(before) = self.base.replace(snapshot(d)) {
+            self.undo.push(before);
+            self.redo.clear();
+            self.trim();
+        }
+    }
+
+    /// Drop the oldest steps past [`MAX_STEPS`] and [`MAX_STEP_BYTES`], keeping the newest step
+    /// even when it and the current fields alone pass the byte limit.
+    fn trim(&mut self) {
+        let extra = self.undo.len().saturating_sub(MAX_STEPS);
+        self.undo.drain(..extra);
+        let mut total: usize = self.base.iter().chain(&self.undo).map(snapshot_size).sum();
+        let mut gone = 0;
+        while total > MAX_STEP_BYTES && gone + 1 < self.undo.len() {
+            total -= snapshot_size(&self.undo[gone]);
+            gone += 1;
+        }
+        self.undo.drain(..gone);
+    }
+
+    fn can(&self, d: &Dialog, back: bool) -> bool {
+        // Before the first frame or command, fields set since the dialog opened are a step back,
+        // except rows and weights that the art's reduction is about to replace or drop ([`sync`]).
+        if self.base.is_none()
+            && let Some(opened) = &self.opened
+        {
+            let reduces = d.bool("__art") && d.fields.get("__reduced") != Some(&reduce_params(d));
+            let kept = |k: &&&str| !(reduces && (**k == "rows" || **k == WEIGHTS));
+            return back && STEP_FIELDS.iter().filter(kept).any(|k| d.fields.get(*k) != opened.get(*k));
+        }
+        if back { !self.undo.is_empty() || self.pending(d) } else { !self.redo.is_empty() && !self.pending(d) }
+    }
+
+    /// Undo Changes (`back`) or Redo Changes on `d`: give it the fields of the step before or after.
+    /// Returns false when there is none.
+    fn step(&mut self, d: &mut Dialog, back: bool) -> bool {
+        self.note(d);
+        let (from, to) = if back { (&mut self.undo, &mut self.redo) } else { (&mut self.redo, &mut self.undo) };
+        let Some(s) = from.pop() else { return false };
+        to.extend(self.base.take());
+        for k in STEP_FIELDS.iter().chain(&STEP_MARKS) {
+            match s.get(*k) {
+                Some(v) => d.fields.insert(k.to_string(), v.clone()),
+                None => d.fields.remove(*k),
+            };
+        }
+        // The rows hold no slider edit or drag, and the selection keeps to them.
+        for k in [COMPS, DRAG, BAR_DRAG, SHUFFLED] {
+            d.fields.remove(k);
+        }
+        let n = rows(d).len();
+        d.fields.insert("__sel".into(), json!(selection(d).into_iter().filter(|i| *i < n).collect::<Vec<_>>()));
+        self.base = Some(s);
+        true
+    }
+}
+
+/// Undo Changes (`ui.recolorUndo`, `back`) or Redo Changes (`ui.recolorRedo`) in the open Recolor
+/// Artwork dialog → {changed, canUndo, canRedo}.
+pub(crate) fn step(app: &mut VectorcraftApp, back: bool) -> Result<Value, String> {
+    if app.ui.dialog.as_ref().is_none_or(|d| d.kind != KIND) {
+        return Err("Recolor Artwork is not open".into());
+    }
+    let Some(mut d) = app.ui.dialog.take() else { return Err("Recolor Artwork is not open".into()) };
+    // Fields set since the last frame take effect first, as the next frame would give them.
+    seed(app, &d);
+    sync(app, &mut d);
+    sync_theme(app, &mut d);
+    sync_weights(app, &mut d);
+    let mut h = std::mem::take(&mut app.ui.recolor_history);
+    let changed = h.step(&mut d, back);
+    let r = json!({"changed": changed, "canUndo": h.can(&d, true), "canRedo": h.can(&d, false)});
+    app.ui.recolor_history = h;
+    // The art previews the step at once, as the frame after a button would preview it.
+    if changed && d.bool("__art") {
+        sync_weights(app, &mut d);
+        match find_params(&d) {
+            Some(p) => {
+                let _ = form::preview_now(app, &mut d, "Recolor Artwork", "command.batch", p);
+            }
+            None => {
+                let p = apply_params(&d);
+                form::preview_without_check(app, &mut d, "Recolor Artwork", CMD, p);
+            }
+        }
+    }
+    app.ui.dialog = Some(d);
+    Ok(r)
+}
+
+/// Whether Undo Changes (`back`) or Redo Changes can run: Recolor Artwork is open with a step to go to.
+pub(crate) fn can_step(app: &VectorcraftApp, back: bool) -> bool {
+    app.ui.dialog.as_ref().filter(|d| d.kind == KIND).is_some_and(|d| app.ui.recolor_history.can(d, back))
+}
+
 /// OK: keep the previewed recolour as one undo step (or apply it, e.g. to a colour group only; or
 /// save colours opened alone as a new colour group).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
@@ -1449,10 +1680,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         r?;
     }
     if d.bool("__newGroup") {
-        let colors = group_colors(app, &d, rows(&d).iter().filter(|r| in_group(r)));
-        return form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}));
+        let colors = group_colors(app, &d, rows(&d).iter().filter(|r| in_group(r) && to_color(r).is_some()));
+        let r = form::commit_preview(app, "swatch.newGroup", json!({"name": d.str("groupName"), "colors": colors, "keepModel": true}))?;
+        app.ui.recolor_history = History::default();
+        return Ok(r);
     }
     let r = form::commit_preview(app, CMD, apply_params(&d))?;
+    app.ui.recolor_history = History::default();
     // The Preserve checkboxes (shown with art) open as confirmed here next time (#2960).
     if d.bool("__art") {
         app.ui.recolor_preserve =
@@ -1680,7 +1914,9 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                 let p = json!({"map": rows, "order": !sb, "saturationBrightness": sb, "seed": seed});
                 match app.session.execute("recolor.randomize", &p) {
                     Ok(r) => {
-                        *rows = r["map"].as_array().cloned().unwrap_or_default();
+                        let mut shuffled = r["map"].as_array().cloned().unwrap_or_default();
+                        keep_marks(rows, &mut shuffled);
+                        *rows = shuffled;
                         if !sb {
                             d.fields.insert(SHUFFLED.into(), json!(true));
                         }
@@ -2047,6 +2283,21 @@ fn merge(rows: &mut Vec<Value>, sel: &[usize]) {
     for &i in rest.iter().rev() {
         let row = rows.remove(i);
         moved.splice(0..0, row["from"].as_array().cloned().unwrap_or_default());
+        // The base color merged into another row makes that row the base, and the colors that
+        // followed the merged row's marker follow that row's.
+        if row[BASE] == json!(true) {
+            rows[first][BASE] = json!(true);
+        }
+        if let Some(t) = row[TIE].as_u64() {
+            match rows[first][TIE].as_u64() {
+                Some(to) => {
+                    for r in rows.iter_mut().filter(|r| r[FOLLOWS].as_u64() == Some(t)) {
+                        r[FOLLOWS] = json!(to);
+                    }
+                }
+                None => rows[first][TIE] = json!(t),
+            }
+        }
     }
     if let Some(dst) = rows[first]["from"].as_array_mut() {
         dst.extend(moved);
@@ -2058,7 +2309,17 @@ fn separate(rows: &mut Vec<Value>, sel: &[usize]) {
     let mut out = vec![];
     for (i, row) in rows.drain(..).enumerate() {
         match row["from"].as_array() {
-            Some(a) if sel.contains(&i) && a.len() > 1 => out.extend(a.iter().map(|k| json!({"from": [k], "to": k}))),
+            Some(a) if sel.contains(&i) && a.len() > 1 => {
+                let at = out.len();
+                out.extend(a.iter().map(|k| json!({"from": [k], "to": k})));
+                // A separated row's marks (the base color, a marker's tie, a color it follows, its place) go
+                // to the row of its first color.
+                for k in [BASE, TIE, FOLLOWS, SLOT] {
+                    if let Some(v) = row.get(k) {
+                        out[at][k] = v.clone();
+                    }
+                }
+            }
             _ => out.push(row),
         }
     }
@@ -2089,13 +2350,29 @@ fn edit_slider_row(d: &Dialog, rows: &[Value], active: &[usize], base: Option<us
 }
 
 /// Set row `i`'s new colour to hue/saturation/brightness `hsb` ([`move_on_wheel`]: with `linked`
-/// the other rows keep their relation to it). Excluded rows stay.
+/// the other rows keep their relation to it; unlinked, the colors added on its marker's line, which
+/// follow its `tie`, and those that follow theirs, keep theirs). Excluded rows stay.
 fn move_color(rows: &mut [Value], i: usize, hsb: [f32; 3], linked: bool) {
-    let active = active_rows(rows);
+    let all = active_rows(rows);
+    let active: Vec<usize> = if linked {
+        all
+    } else {
+        // Row `i` and the rows that follow it, directly or through another follower.
+        let mut moving = vec![i];
+        let mut n = 0;
+        while let Some(&j) = moving.get(n) {
+            if let Some(t) = rows.get(j).and_then(|r| r[TIE].as_u64()) {
+                let next: Vec<usize> = all.iter().copied().filter(|&k| rows[k][FOLLOWS].as_u64() == Some(t) && !moving.contains(&k)).collect();
+                moving.extend(next);
+            }
+            n += 1;
+        }
+        all.into_iter().filter(|j| moving.contains(j)).collect()
+    };
     let Some(k) = active.iter().position(|&j| j == i) else { return };
     let before: Vec<Color> = active.iter().filter_map(|&j| to_color(&rows[j])).collect();
     let mut colors = before.clone();
-    move_on_wheel(&mut colors, k, hsb, linked);
+    move_on_wheel(&mut colors, k, hsb, true);
     for ((&j, c), old) in active.iter().zip(&colors).zip(&before) {
         if key(c) != key(old) {
             set_to(&mut rows[j], c);
@@ -2120,7 +2397,7 @@ fn wheel_axes(d: &Dialog) -> widgets::WheelAxes {
 
 /// The new color the Add Color tool gives a click at hue `h` (degrees) and `t`, the saturation (or
 /// with [`widgets::WheelAxes::HueBrightness`] the brightness) clicked: with the other component of
-/// `base` (the base color, whose other component the wheel shows; full without one), the segmented
+/// `base` (the selected color, whose other component the wheel shows; full without one), the segmented
 /// wheel's patch color with `segmented`, in `base`'s model.
 fn added_color(base: Option<Color>, h: f32, t: f32, segmented: bool, axes: widgets::WheelAxes) -> Color {
     let o = base.map_or(1.0, |b| b.to_hsb()[axes.other()]);
@@ -2174,16 +2451,244 @@ fn removed(d: &mut Dialog, base: usize) {
     d.fields.remove(COMPS);
 }
 
-/// The Edit tab. Returns true when the rows changed.
-fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> bool {
+/// A row's mark as the base color, the color the harmony rules build from (`true`).
+const BASE: &str = "base";
+/// A row's number on a marker that the colors added on its line follow.
+const TIE: &str = "tie";
+/// A row's mark as a color added on a marker's line: the marker's `tie`, which it moves with.
+const FOLLOWS: &str = "follows";
+/// A row's place when the rows were made (the group swatch it took), which it keeps when it moves.
+const SLOT: &str = "slot";
+
+/// Give each row its place in `rows` as its [`SLOT`].
+fn number_slots(rows: &mut [Value]) {
+    for (i, r) in rows.iter_mut().enumerate() {
+        r[SLOT] = json!(i);
+    }
+}
+
+/// The rows with current colors in the order of their group swatches: each row takes the swatch at
+/// its [`SLOT`], so a row moved among the color bars keeps its swatch; rows that don't all carry a
+/// place go in row order.
+fn by_place(rs: &[Value]) -> Vec<&Value> {
+    let mut filled: Vec<&Value> = rs.iter().filter(|r| !no_current(r)).collect();
+    if filled.iter().all(|r| r[SLOT].is_u64()) {
+        filled.sort_by_key(|r| r[SLOT].as_u64());
+    }
+    filled
+}
+
+/// The target of the wheel's right-click menu: `{marker, line, hs}` (row indexes and the hue and
+/// saturation clicked).
+const MENU_AT: &str = "__wheelMenu";
+/// Select Shade's grid: saturations across, from 0% to 100%, and brightnesses down, from 100%.
+const SHADE_COLS: usize = 7;
+const SHADE_ROWS: usize = 7;
+const SHADE_CELL: f32 = 16.0;
+
+/// The base color's row: the row of `active` (the rows the Edit tab shows) marked `base`, else
+/// the first of them.
+fn base_row(rows: &[Value], active: &[usize]) -> Option<usize> {
+    active.iter().copied().find(|&i| rows[i][BASE] == json!(true)).or(active.first().copied())
+}
+
+/// Whether Set As Base Color would change anything for row `i`: it is shown on the Edit tab, and it
+/// isn't the base already, or it is the base only because the marked row is hidden (excluded, or
+/// with no new color), whose mark would make it the base again once shown.
+fn can_set_base(rows: &[Value], i: usize) -> bool {
+    let active = active_rows(rows);
+    active.contains(&i) && (base_row(rows, &active) != Some(i) || rows.iter().enumerate().any(|(k, r)| k != i && r[BASE] == json!(true)))
+}
+
+/// Make row `i` the base color (Set As Base Color). Returns false when that changes nothing
+/// ([`can_set_base`]).
+fn set_base(rows: &mut [Value], i: usize) -> bool {
+    if !can_set_base(rows, i) {
+        return false;
+    }
+    for r in rows.iter_mut() {
+        if let Some(o) = r.as_object_mut() {
+            o.remove(BASE);
+        }
+    }
+    rows[i][BASE] = json!(true);
+    true
+}
+
+/// Make row `follower` move with the marker of row `leader`: the leader keeps its `tie` (a new
+/// number, past every `tie` and `follows`, when it has none, so that colors left from a removed
+/// marker follow no other) and the follower takes it as `follows`.
+fn tie_to(rows: &mut [Value], leader: usize, follower: usize) {
+    if leader == follower || leader >= rows.len() || follower >= rows.len() {
+        return;
+    }
+    let used = rows.iter().flat_map(|r| [r[TIE].as_u64(), r[FOLLOWS].as_u64()]).flatten().max();
+    let t = rows[leader][TIE].as_u64().unwrap_or_else(|| used.map_or(1, |m| m.saturating_add(1)));
+    rows[leader][TIE] = json!(t);
+    rows[follower][FOLLOWS] = json!(t);
+}
+
+/// Give each row of `after` the base, tie and follows marks of the row at its place in `before`,
+/// when the two have as many rows (the engine's `recolor.randomize` and `recolor.weigh` keep the
+/// rows in order and return them without the dialog's own marks).
+fn keep_marks(before: &[Value], after: &mut [Value]) {
+    if before.len() != after.len() {
+        return;
+    }
+    for (a, b) in after.iter_mut().zip(before) {
+        for k in [BASE, TIE, FOLLOWS, SLOT] {
+            if a.get(k).is_none()
+                && let Some(v) = b.get(k)
+            {
+                a[k] = v.clone();
+            }
+        }
+    }
+}
+
+/// `row` without the dialog's base, tie, follows and place marks.
+fn without_marks(row: &Value) -> Value {
+    let mut r = row.clone();
+    if let Some(o) = r.as_object_mut() {
+        for k in [BASE, TIE, FOLLOWS, SLOT] {
+            o.remove(k);
+        }
+    }
+    r
+}
+
+/// The saturation and brightness of Select Shade's cell in column `col` and row `row`.
+fn shade_at(col: usize, row: usize) -> [f32; 2] {
+    [col as f32 / (SHADE_COLS - 1) as f32, 1.0 - row as f32 / SHADE_ROWS as f32]
+}
+
+/// Select Shade's grid of `c`'s hue, the cell nearest `c` framed. Returns the saturation and
+/// brightness of the cell clicked.
+fn shade_grid(ui: &mut Ui, c: &Color) -> Option<[f32; 2]> {
+    let t = Tokens::get(ui.ctx());
+    let [h, s0, v0] = c.to_hsb();
+    let near = ((s0 * (SHADE_COLS - 1) as f32).round() as usize, (((1.0 - v0) * SHADE_ROWS as f32).round() as usize).min(SHADE_ROWS - 1));
+    let mut out = None;
+    egui::Grid::new("recolor-shades").spacing([2.0, 2.0]).show(ui, |ui| {
+        for row in 0..SHADE_ROWS {
+            for col in 0..SHADE_COLS {
+                let [s, v] = shade_at(col, row);
+                let (r, resp) = ui.allocate_exact_size(vec2(SHADE_CELL, SHADE_CELL), Sense::click());
+                ui.painter().rect_filled(r, 1.0, c32(&Color::from_hsb(h, s, v)));
+                if (col, row) == near {
+                    ui.painter().rect_stroke(r, 1.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
+                }
+                let name = format!("{} {}%, {} {}%", tl!("Saturation"), (s * 100.0).round(), tl!("Brightness"), (v * 100.0).round());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+                if resp.clicked() {
+                    out = Some([s, v]);
+                    ui.close();
+                }
+            }
+            ui.end_row();
+        }
+    });
+    out
+}
+
+/// What a marker's or a color bar's right-click menu, or the wheel's, chose.
+enum MenuChoice {
+    /// Set As Base Color for the row.
+    Base(usize),
+    /// Select Shade: the row's color at this saturation and brightness.
+    Shade(usize, [f32; 2]),
+    /// Color Picker for the row.
+    Picker(usize),
+    /// Remove Color for the row.
+    Remove(usize),
+    /// Add New Color at this hue and saturation, moving with the marker of the row on whose line
+    /// it is.
+    Add([f32; 2], Option<usize>),
+}
+
+/// A marker's or a color bar's right-click menu for row `i`: Set As Base Color and Remove Color
+/// (neither for the base color `base`), Select Shade and Color Picker.
+fn color_menu(ui: &mut Ui, rows: &[Value], i: usize, base: Option<usize>) -> Option<MenuChoice> {
+    let mut choice = None;
+    if widgets::menu_item_name(ui, tl!("Set As Base Color"), can_set_base(rows, i), false) {
+        choice = Some(MenuChoice::Base(i));
+    }
+    if let Some(c) = rows.get(i).and_then(to_color) {
+        // Indented like the items beside it (their check column).
+        ui.menu_button(format!("   {}", tl!("Select Shade")), |ui| {
+            if let Some(sv) = shade_grid(ui, &c) {
+                choice = Some(MenuChoice::Shade(i, sv));
+            }
+        });
+    }
+    if widgets::menu_item_name(ui, tl!("Color Picker"), true, false) {
+        choice = Some(MenuChoice::Picker(i));
+    }
+    if widgets::menu_item_name(ui, tl!("Remove Color"), Some(i) != base, false) {
+        choice = Some(MenuChoice::Remove(i));
+    }
+    choice
+}
+
+/// Carry out a right-click menu's `choice` on the rows (`base`: the base color's row; `shown`: the
+/// color whose brightness the wheel shows; `segmented`: the menu was on the segmented wheel).
+/// Returns whether the rows changed and the row whose new color the Color Picker is to edit.
+fn choose(
+    d: &mut Dialog,
+    rows: &mut Vec<Value>,
+    choice: MenuChoice,
+    base: Option<usize>,
+    shown: Option<Color>,
+    segmented: bool,
+    axes: widgets::WheelAxes,
+) -> (bool, Option<usize>) {
+    match choice {
+        MenuChoice::Base(i) => (set_base(rows, i), None),
+        MenuChoice::Shade(i, [s, v]) => {
+            let Some(h) = rows.get(i).and_then(to_color).map(|c| c.to_hsb()[0]) else { return (false, None) };
+            let before = rows.clone();
+            move_color(rows, i, [h, s, v], d.bool("linked"));
+            d.fields.insert("__sel".into(), json!([i]));
+            d.fields.remove(COMPS);
+            (*rows != before, None)
+        }
+        MenuChoice::Picker(i) => {
+            d.fields.insert("__sel".into(), json!([i]));
+            (false, Some(i))
+        }
+        MenuChoice::Remove(i) => match remove_color(rows, i, base, keeps_rows(d)) {
+            Some(b) => {
+                removed(d, b);
+                (true, None)
+            }
+            None => (false, None),
+        },
+        MenuChoice::Add([h, s], line) => {
+            let i = add_color(rows, &added_color(shown, h, s, segmented, axes));
+            if let Some(l) = line {
+                tie_to(rows, l, i);
+            }
+            d.fields.insert("__sel".into(), json!([i]));
+            d.fields.remove(COMPS);
+            (true, None)
+        }
+    }
+}
+
+/// The Edit tab. Returns whether the rows changed and the row whose new color a right-click menu's
+/// Color Picker is to edit.
+fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> (bool, Option<(usize, bool)>) {
     let top = ui.cursor().top();
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
+    let mut pick = None;
     let linked = d.bool("linked");
     let active = active_rows(rows);
-    let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
-    let slider_row = edit_slider_row(d, rows, &active, base);
-    let target = SliderTarget::at(app, d, rows, slider_row);
+    // The harmony rules build from the base color; the sliders and the Brightness slider edit the
+    // selected color (the base color when the tab does not show the first selected row).
+    let base = base_row(rows, &active);
+    let sel = edit_slider_row(d, rows, &active, base);
+    let target = SliderTarget::at(app, d, rows, sel);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Harmony Rules:")).color(t.text_dim));
         let rule = Harmony::parse(&d.str("rule")).unwrap_or(Harmony::Complementary);
@@ -2204,9 +2709,9 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
             }
             // New Color Group: save the wheel's colors or the Prominent Colors as a color group.
             let button = widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0);
-            let prominent = d.bool("__art") && !prominent_parts(d, rows).is_empty();
+            let prominent = d.bool("__art") && prominent_parts(d, rows).iter().any(|p| rows.get(p.0).and_then(to_color).is_some());
             let saved = egui::Popup::menu(&button).show(|ui| {
-                if widgets::menu_item_name(ui, tl!("Save All Colors"), rows.iter().any(in_group), false) {
+                if widgets::menu_item_name(ui, tl!("Save All Colors"), rows.iter().any(|r| in_group(r) && to_color(r).is_some()), false) {
                     return Some("all");
                 }
                 widgets::menu_item_name(ui, tl!("Save Prominent Colors"), prominent, false).then_some("prominent")
@@ -2228,6 +2733,9 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
     }
     let colors: Vec<Color> = active.iter().filter_map(|&i| to_color(&rows[i])).collect();
     let marked = base.and_then(|b| active.iter().position(|&i| i == b));
+    let selected = sel.and_then(|s| active.iter().position(|&i| i == s));
+    let shown = sel.and_then(|s| to_color(&rows[s]));
+    let mut choice = None;
     let display = d.str("display");
     let tool = d.str(WHEEL_TOOL);
     let axes = wheel_axes(d);
@@ -2265,15 +2773,56 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
             }
         });
         ui.vertical(|ui| match display.as_str() {
-            "bars" => changed |= color_bars(ui, d, rows, &active, base),
-            _ => w = widgets::wheel_of(ui, "recolor-wheel", WHEEL, &colors, marked, display == "segmented", axes),
+            "bars" => {
+                let (moved, chosen) = color_bars(ui, d, rows, &active, base);
+                changed |= moved;
+                choice = chosen;
+            }
+            _ => w = widgets::recolor_wheel(ui, "recolor-wheel", WHEEL, &colors, marked, selected, display == "segmented", axes),
         });
     });
+    // A right-click on the wheel: a marker's menu, or Add New Color elsewhere. Its target is kept
+    // while the menu stays open.
+    if let Some((hit, line, hs)) = w.secondary {
+        d.fields.insert(MENU_AT.into(), json!({"marker": hit.map(|k| active[k]), "line": line.map(|k| active[k]), "hs": hs}));
+    } else if w.response.as_ref().is_some_and(egui::Response::secondary_clicked) {
+        // A right-click off the wheel (in a corner of its square) targets nothing: its menu's Add
+        // New Color is off, and no earlier marker is changed.
+        d.fields.remove(MENU_AT);
+    }
+    if let Some(resp) = &w.response {
+        let at = d.fields.get(MENU_AT).cloned().unwrap_or_default();
+        let row = |k: &str| at[k].as_u64().map(|i| i as usize).filter(|i| active.contains(i));
+        let hs = at["hs"].as_array().and_then(|a| Some([a.first()?.as_f64()? as f32, a.get(1)?.as_f64()? as f32]));
+        resp.context_menu(|ui| match row("marker") {
+            Some(i) => choice = color_menu(ui, rows, i, base),
+            None => {
+                if widgets::menu_item_name(ui, tl!("Add New Color"), hs.is_some(), false)
+                    && let Some(hs) = hs
+                {
+                    choice = Some(MenuChoice::Add(hs, row("line")));
+                }
+            }
+        });
+    }
+    // A menu's choice changes the rows the wheel's indexes were for, so the wheel's own clicks and
+    // drags of this frame are left alone.
+    let chosen = choice.is_some();
+    if let Some(c) = choice {
+        let (did, picked) = choose(d, rows, c, base, shown, display == "segmented", axes);
+        changed |= did;
+        pick = picked.map(|i| (i, false));
+    }
+    if chosen {
+        w.pressed = None;
+        w.moved = None;
+        w.clicked = None;
+    }
     // A click with a wheel tool adds a color there, or removes the color of the marker clicked.
     let clicked = w.clicked.filter(|_| on_wheel && matches!(tool.as_str(), "add" | "remove"));
     if let Some((hit, [h, out])) = clicked {
         if tool == "add" {
-            let c = added_color(base.and_then(|b| to_color(&rows[b])), h, out, display == "segmented", axes);
+            let c = added_color(shown, h, out, display == "segmented", axes);
             let i = add_color(rows, &c);
             d.fields.insert("__sel".into(), json!([i]));
             d.fields.remove(COMPS);
@@ -2317,24 +2866,35 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
     }
     // A color added or removed above changed the rows, so the sliders and chips read them afresh.
     let active = active_rows(rows);
-    let base = selection(d).into_iter().find(|i| active.contains(i)).or(active.first().copied());
+    let base = base_row(rows, &active);
+    let sel = edit_slider_row(d, rows, &active, base);
     if d.str("sliderMode") == GLOBAL {
-        let sample = base.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
+        let sample = sel.and_then(|b| to_color(&rows[b])).unwrap_or(Color::rgb(0.8, 0.45, 0.25));
         global_sliders(ui, d, sample);
     } else {
-        changed |= sliders(app, ui, d, rows, slider_row);
+        changed |= sliders(app, ui, d, rows, sel);
     }
-    // The new colours: click one to make it the base colour.
+    // The new colours: click one to select it; Set Current Color As Base Color, before them, makes
+    // the selected one the base color, which carries a double ring as its marker does.
     let min_height = (TAB_H - (ui.cursor().top() - top)).max(0.0);
+    let mut make_base = None;
     super::modal::scrolled_rows(ui, "recolor-edit-colors", |ui| {
         // Keep the usual tab height when it fits; the empty space scrolls with the chips.
         ui.set_min_height(min_height);
         ui.horizontal_wrapped(|ui| {
+            let can = sel.is_some_and(|s| can_set_base(rows, s));
+            if widgets::icon_button_enabled(ui, "circle-dot", tl!("Set Current Color As Base Color"), false, can, 20.0).clicked() {
+                make_base = sel;
+            }
             for &i in &active {
                 let (r, resp) = ui.allocate_exact_size(vec2(28.0, 20.0), Sense::click());
                 chip(ui, r, to_color(&rows[i]).unwrap_or_default(), false);
-                if Some(i) == base {
+                if Some(i) == sel {
                     ui.painter().rect_stroke(r.expand(1.5), 2.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Outside);
+                }
+                if Some(i) == base {
+                    ui.painter().circle_stroke(r.center(), 4.0, egui::Stroke::new(1.5, egui::Color32::WHITE));
+                    ui.painter().circle_stroke(r.center(), 5.5, egui::Stroke::new(1.0, egui::Color32::BLACK));
                 }
                 if resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default()).clicked() {
                     d.fields.insert("__sel".into(), json!([i]));
@@ -2342,18 +2902,21 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
             }
         });
     });
-    changed
+    if let Some(i) = make_base {
+        changed |= set_base(rows, i);
+    }
+    (changed, pick)
 }
 
 /// The Edit tab's color bars: a solid bar per row of `active` with its new color, in row order, the
 /// base row's framed, scrolling past the wheel's height. A click on a bar selects its row (the
 /// sliders under it edit that row's new color); a drag moves the bar's row to where the line under
-/// the pointer shows, keeping every new color. A bar's right-click menu has Remove Color (not for the
-/// base row's). Returns true when the rows moved or a color was removed.
-fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>, active: &[usize], base: Option<usize>) -> bool {
+/// the pointer shows, keeping every new color. A bar's right-click menu is a marker's
+/// ([`color_menu`]). Returns true when the rows moved, and the menu's choice.
+fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut [Value], active: &[usize], base: Option<usize>) -> (bool, Option<MenuChoice>) {
     let t = Tokens::get(ui.ctx());
     let mut rects: Vec<Rect> = Vec::with_capacity(active.len());
-    let (mut dragging, mut released, mut dropped, mut remove) = (None, None, None, None);
+    let (mut dragging, mut released, mut dropped, mut choice) = (None, None, None, None);
     // The area is given its full height first: in the row beside the display buttons a scroll area
     // alone is only as tall as the room the row has.
     let area = vec2(ui.available_width(), BARS_H);
@@ -2386,8 +2949,8 @@ fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>, active: &[usiz
                 rects.push(r);
                 let resp = resp.on_hover_text(rows[i]["to"].as_str().unwrap_or_default());
                 resp.context_menu(|ui| {
-                    if widgets::menu_item_name(ui, tl!("Remove Color"), Some(i) != base, false) {
-                        remove = Some(i);
+                    if let Some(c) = color_menu(ui, rows, i, base) {
+                        choice = Some(c);
                     }
                 });
             }
@@ -2404,15 +2967,14 @@ fn color_bars(ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>, active: &[usiz
             dropped = released.zip(at);
         });
     });
-    if let Some(b) = remove.and_then(|i| remove_color(rows, i, base, keeps_rows(d))) {
-        removed(d, b);
-        return true;
+    if choice.is_some() {
+        return (false, choice);
     }
-    let Some(moved) = dropped.and_then(|(n, to)| move_bar(rows, active, n, to)) else { return false };
+    let Some(moved) = dropped.and_then(|(n, to)| move_bar(rows, active, n, to)) else { return (false, None) };
     d.fields.insert("__sel".into(), json!([moved]));
     // The slider values held are those of a row index that may now hold another row.
     d.fields.remove(COMPS);
-    true
+    (true, None)
 }
 
 /// Move the row of the `from`th active row (of `active`, ascending row indexes) to before the
@@ -2573,6 +3135,67 @@ mod tests {
         assert_eq!(apply_params(&d)["groupColors"], json!(["rgb 1 1 1", null, "rgb 3 3 3"]));
     }
 
+    /// An excluded row with current colors keeps the group's swatch at its place as it is, even
+    /// after its new color was edited or removed, and with Global Adjust on.
+    #[test]
+    fn an_excluded_row_keeps_its_group_swatch() {
+        let mut d = Dialog::new(KIND, json!({"group": "G", "groupName": "G", "__art": true, "__assign": ["rgb 1 1 1", "rgb 2 2 2", "rgb 3 3 3"]}));
+        let rs = json!([
+            {"from": ["rgb 255 0 0"], "to": "rgb 7 7 7", "exclude": true},
+            {"from": ["rgb 0 0 255"], "to": null, "exclude": true},
+            {"from": ["rgb 0 255 0"], "to": "rgb 8 8 8"},
+        ]);
+        d.fields.insert("rows".into(), rs);
+        assert_eq!(apply_params(&d)["groupColors"], json!(["keep", "keep", "rgb 8 8 8"]));
+        // Without art the rows are the group's colors.
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "G", "colors": ["#2878f0", "#ff0000"]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "G"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        let mut rs = super::rows(&d);
+        rs[0]["to"] = json!("#00ff00");
+        rs[0]["exclude"] = json!(true);
+        rs[1]["to"] = json!("#0000ff");
+        d.fields.insert("rows".into(), json!(rs));
+        d.fields.insert("globalAdjust".into(), json!({"brightness": -50}));
+        confirm(&mut app, &d).unwrap();
+        let g = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "G").unwrap();
+        let hex: Vec<String> = g.swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+        assert_eq!(hex[0], "#2878f0", "{hex:?}");
+        assert_ne!(hex[1], "#ff0000", "{hex:?}");
+    }
+
+    /// A row moved among the color bars keeps the group swatch it took when the rows were made, so
+    /// an excluded row's swatch stays as it is and the other swatches keep their places.
+    #[test]
+    fn a_moved_row_keeps_its_group_swatch() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "G", "colors": ["#ff0000", "#0000ff", "#00ff00"]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "G"})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        let mut rs = super::rows(&d);
+        rs[1]["exclude"] = json!(true);
+        rs[2]["to"] = json!("#ffff00");
+        let active = active_rows(&rs);
+        assert_eq!(active, [0, 2]);
+        // Drag the last bar (green, now yellow) above the first (red).
+        assert_eq!(move_bar(&mut rs, &active, 1, 0), Some(0));
+        d.fields.insert("rows".into(), json!(rs));
+        let colors = &apply_params(&d)["groupColors"];
+        assert_eq!(colors[1], json!("keep"), "{colors}");
+        confirm(&mut app, &d).unwrap();
+        let g = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "G").unwrap();
+        let hex: Vec<String> = g.swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect();
+        assert_eq!(hex, ["#ff0000", "#0000ff", "#ffff00"]);
+        // Rows reduced from art carry their place too, and `recolor.apply` gets none.
+        let mut rows = vec![json!({"from": ["rgb 255 0 0"], "to": "rgb 1 1 1"}), json!({"from": ["rgb 0 0 255"], "to": "rgb 2 2 2"})];
+        number_slots(&mut rows);
+        assert_eq!(rows.iter().map(|r| r[SLOT].clone()).collect::<Vec<_>>(), [json!(0), json!(1)]);
+        assert!(without_marks(&rows[0]).get(SLOT).is_none());
+    }
+
     #[test]
     fn merge_and_separate_rows() {
         let mut r = rows();
@@ -2708,6 +3331,117 @@ mod tests {
         let mut r = rows();
         apply_rule(&mut r, Harmony::Triad, 0, Color::rgb(1.0, 0.0, 0.0), &[0, 1, 2]);
         assert_eq!([&r[0]["to"], &r[1]["to"], &r[2]["to"]], ["rgb 255 0 0", "rgb 0 255 0", "rgb 0 0 255"]);
+    }
+
+    /// The base color is the row marked `base`, else the first row shown; Set As Base Color moves the
+    /// mark, and does nothing for the base row already or a row the Edit tab doesn't show.
+    #[test]
+    fn set_base_moves_the_base_mark() {
+        let mut r = rows();
+        assert_eq!(base_row(&r, &active_rows(&r)), Some(0));
+        assert!(!set_base(&mut r, 0), "the first row is the base already");
+        assert!(set_base(&mut r, 2));
+        assert_eq!(base_row(&r, &active_rows(&r)), Some(2));
+        assert!(set_base(&mut r, 1));
+        assert_eq!(r.iter().filter(|x| x[BASE] == json!(true)).count(), 1, "one base mark: {r:?}");
+        assert!(!set_base(&mut r, 1));
+        r[2]["exclude"] = json!(true);
+        assert!(!set_base(&mut r, 2), "an excluded row isn't shown");
+        assert!(!set_base(&mut r, 9));
+        // An excluded base row leaves the first row shown as the base.
+        r[1]["exclude"] = json!(true);
+        assert_eq!(base_row(&r, &active_rows(&r)), Some(0));
+        // Setting that row as the base keeps it the base once the marked row is shown again.
+        assert!(set_base(&mut r, 0), "the hidden row's mark moves to it");
+        r[1]["exclude"] = json!(false);
+        assert_eq!(base_row(&r, &active_rows(&r)), Some(0), "{r:?}");
+    }
+
+    /// Merge and Separate keep the base mark on a row of the base color's colors; Randomize's rows
+    /// (as the engine returns them) take the marks at their places again; `recolor.apply` gets no marks.
+    #[test]
+    fn the_base_mark_follows_merge_separate_and_randomize() {
+        let mut r = rows();
+        set_base(&mut r, 2);
+        merge(&mut r, &[0, 2]);
+        assert_eq!(r[0][BASE], json!(true), "merged into the first row: {r:?}");
+        let mut r = rows();
+        set_base(&mut r, 1);
+        separate(&mut r, &[1]);
+        assert_eq!(r.len(), 4);
+        assert_eq!((r[1][BASE].clone(), r[2].get(BASE)), (json!(true), None), "{r:?}");
+        // A marker's tie goes with it too.
+        let mut t = rows();
+        t[1][TIE] = json!(1);
+        separate(&mut t, &[1]);
+        assert_eq!((t[1][TIE].clone(), t[2].get(TIE)), (json!(1), None));
+        let mut t = rows();
+        t[0][TIE] = json!(1);
+        t[2][TIE] = json!(3);
+        t.push(json!({"from": [], "to": "rgb 1 2 3", "follows": 3}));
+        merge(&mut t, &[0, 2]);
+        assert_eq!((t[0][TIE].clone(), t[2][FOLLOWS].clone()), (json!(1), json!(1)), "its follower follows the row merged into: {t:?}");
+        let before = r.clone();
+        let mut shuffled: Vec<Value> = r.iter().map(without_marks).collect();
+        assert!(shuffled.iter().all(|x| x.get(BASE).is_none()));
+        keep_marks(&before, &mut shuffled);
+        assert_eq!(shuffled, before);
+        let mut fewer = vec![json!({"from": [], "to": "rgb 1 1 1"})];
+        keep_marks(&before, &mut fewer);
+        assert!(fewer[0].get(BASE).is_none(), "rows of another count take no marks");
+        let mut d = Dialog::new(KIND, json!({}));
+        d.fields.insert("rows".into(), json!(before));
+        assert!(apply_params(&d)["map"].as_array().unwrap().iter().all(|x| x.get(BASE).is_none()));
+    }
+
+    /// A color added on a marker's line moves with that marker when the colors are unlinked; it
+    /// moves alone itself, and linked colors all move together as before.
+    #[test]
+    fn a_color_added_on_a_markers_line_moves_with_it() {
+        let hue = |r: &[Value], i: usize| to_color(&r[i]).unwrap().to_hsb()[0];
+        let mut r = rows();
+        let added = add_color(&mut r, &Color::from_hsb(240.0, 0.5, 1.0));
+        tie_to(&mut r, 1, added);
+        assert_eq!((r[1][TIE].clone(), r[added][FOLLOWS].clone()), (json!(1), json!(1)));
+        move_color(&mut r, 1, [270.0, 1.0, 1.0], false);
+        assert!((hue(&r, added) - 270.0).abs() < 0.5, "the added color turns with its marker: {}", hue(&r, added));
+        assert!((hue(&r, 0) - 0.0).abs() < 0.5 && (hue(&r, 2) - 120.0).abs() < 0.5, "the others stay");
+        move_color(&mut r, added, [300.0, 0.5, 1.0], false);
+        assert!((hue(&r, 1) - 270.0).abs() < 0.5, "its marker stays");
+        // A second color tied to the same marker shares its number.
+        let next = add_color(&mut r, &Color::from_hsb(270.0, 0.2, 1.0));
+        tie_to(&mut r, 1, next);
+        assert_eq!(r[next][FOLLOWS], json!(1));
+        let other = add_color(&mut r, &Color::from_hsb(0.0, 0.2, 1.0));
+        tie_to(&mut r, 0, other);
+        assert_eq!(r[0][TIE], json!(2), "another marker takes a new number");
+        tie_to(&mut r, 0, 0);
+        assert!(r[0].get(FOLLOWS).is_none(), "a row isn't tied to itself");
+        // Colors left from a removed marker follow no marker tied later.
+        let mut r = rows();
+        let added = add_color(&mut r, &Color::from_hsb(240.0, 0.5, 1.0));
+        tie_to(&mut r, 1, added);
+        r.remove(1);
+        let next = add_color(&mut r, &Color::from_hsb(0.0, 0.5, 1.0));
+        tie_to(&mut r, 0, next);
+        assert_eq!(r[0][TIE], json!(2), "{r:?}");
+        // A color added on an added color's line moves with the first marker too.
+        let mut r = rows();
+        let added = add_color(&mut r, &Color::from_hsb(240.0, 0.5, 1.0));
+        tie_to(&mut r, 1, added);
+        let chained = add_color(&mut r, &Color::from_hsb(240.0, 0.25, 1.0));
+        tie_to(&mut r, added, chained);
+        move_color(&mut r, 1, [250.0, 1.0, 1.0], false);
+        assert!((hue(&r, chained) - 250.0).abs() < 0.5, "{r:?}");
+    }
+
+    /// Select Shade's grid runs from 0% to 100% saturation across and from 100% brightness down.
+    #[test]
+    fn the_shade_grid_spans_saturation_and_brightness() {
+        assert_eq!(shade_at(0, 0), [0.0, 1.0]);
+        assert_eq!(shade_at(SHADE_COLS - 1, 0)[0], 1.0);
+        let last = shade_at(0, SHADE_ROWS - 1)[1];
+        assert!(last > 0.0 && last < 0.2, "{last}");
     }
 
     /// A row made with New Row is not on the Edit tab while it is empty: a harmony rule gives it
@@ -3190,6 +3924,41 @@ mod tests {
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2, "a step for each group");
     }
 
+    /// A color removed on the Edit tab leaves its row with no new color, and neither Save All
+    /// Colors, Save Prominent Colors nor OK on colors opened alone puts the row's current color in
+    /// the new color group.
+    #[test]
+    fn a_removed_color_joins_no_saved_color_group() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        prominent_setup(&mut app, &ctx);
+        let last = |app: &VectorcraftApp| -> Vec<String> {
+            let doc = &app.session.doc().unwrap().doc;
+            doc.swatch_groups.last().unwrap().swatches.iter().map(|w| w.paint.color().unwrap().to_hex()).collect()
+        };
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("rows".into(), json!([{"from": [BLUE], "to": null}, {"from": [RED, PURPLE], "to": "rgb 0 255 0"}]));
+        d.fields.insert(SAVE_GROUP.into(), json!("all"));
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        frame(&mut app, &ctx, 0.11, vec![], 0);
+        assert_eq!(last(&app), ["#00ff00"], "Save All Colors");
+        let n = app.session.doc().unwrap().doc.swatch_groups.len();
+        app.ui.dialog.as_mut().unwrap().fields.insert(SAVE_GROUP.into(), json!("prominent"));
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        frame(&mut app, &ctx, 0.21, vec![], 0);
+        assert_eq!(app.session.doc().unwrap().doc.swatch_groups.len(), n + 1, "Save Prominent Colors makes a group");
+        assert_eq!(last(&app), ["#00ff00"], "Save Prominent Colors");
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("ui.recolorDialog", json!({"colors": ["#ff0000", "#0000ff"]})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("rows".into(), json!([{"from": ["rgb 255 0 0"], "to": "rgb 255 0 0"}, {"from": ["rgb 0 0 255"], "to": null}]));
+        let d = d.clone();
+        confirm(&mut app, &d).unwrap();
+        assert_eq!(last(&app), ["#ff0000"], "OK on colors opened alone");
+    }
+
     /// Save All Colors leaves out a row made with New Row while it is empty; with only empty rows
     /// it saves no group and records no step.
     #[test]
@@ -3449,6 +4218,47 @@ mod tests {
         assert_eq!(g.swatches.iter().filter_map(|w| w.paint.color()).collect::<Vec<_>>(), [Color::rgb8(255, 128, 0)]);
     }
 
+    /// Undo Changes keeps at most [`MAX_STEPS`] steps and [`MAX_STEP_BYTES`] of them, the oldest
+    /// going first; fields that change nothing make no step, and with fields larger than the limit
+    /// only the newest step is kept, so Undo Changes is never on with no step to go to.
+    #[test]
+    fn undo_changes_keeps_a_bounded_history() {
+        let mut d = Dialog::new(KIND, json!({"rows": [], "colors": null}));
+        let mut h = History::default();
+        h.note(&d);
+        h.note(&d);
+        assert!(h.undo.is_empty(), "no change, no step");
+        for n in 0..MAX_STEPS + 6 {
+            d.fields.insert("colors".into(), json!(n));
+            h.note(&d);
+        }
+        assert_eq!(h.undo.len(), MAX_STEPS, "the oldest steps go first");
+        assert_eq!(h.undo[0]["colors"], json!(5));
+        // Rows of 100 KiB each: the steps kept stay within the byte limit.
+        let big = |n: usize| json!([{"from": [format!("{n}{}", "x".repeat(100 << 10))], "to": null}]);
+        for n in 0..60 {
+            d.fields.insert("rows".into(), big(n));
+            h.note(&d);
+        }
+        let size = |s: &Snapshot| serde_json::to_vec(s).unwrap().len();
+        let total: usize = h.base.iter().chain(&h.undo).map(size).sum();
+        assert!(total <= MAX_STEP_BYTES, "{total}");
+        assert!(h.undo.len() < 60 && !h.undo.is_empty(), "{}", h.undo.len());
+        assert!(h.step(&mut d, true), "the newest step is kept");
+        assert_eq!(d.fields["rows"], big(58));
+        // Current fields past the limit alone: only the step to them is kept, so Undo Changes
+        // still goes back one step.
+        d.fields.insert("rows".into(), json!([{"from": ["x".repeat(MAX_STEP_BYTES)], "to": null}]));
+        h.note(&d);
+        assert!(h.undo.len() == 1 && h.redo.is_empty(), "{}", h.undo.len());
+        d.fields.insert("colors".into(), json!(1));
+        assert!(h.can(&d, true), "the change to colors is a step too");
+        assert!(h.step(&mut d, true), "and it is kept");
+        assert_eq!(d.fields["colors"], json!(MAX_STEPS + 5), "Undo Changes gives back the colors before it");
+        assert_eq!(h.undo.len(), 0, "the step before it went to keep the newest");
+        assert!(!h.can(&d, true));
+    }
+
     /// Sets `field` of the open dialog to `value` as `ui.dialog.set` does: a refused value leaves
     /// the dialog as it was.
     fn set(app: &mut VectorcraftApp, field: &str, value: Value) -> Result<(), String> {
@@ -3536,6 +4346,130 @@ mod tests {
         assert_eq!(group_hex(&app, "A"), Some(vec!["#ff0000".into(), "#00ff00".into()]), "other groups are left as they are");
     }
 
+    /// Without art: rows of a group picked in the list keep their swatches when a color bar moves,
+    /// at OK and at Save Changes, and an excluded row's swatch stays as it is.
+    #[test]
+    fn a_moved_row_of_a_listed_group_keeps_its_swatch_at_save_changes() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "A", "colors": ["#000000"], "keepModel": true})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "G", "colors": ["#ff0000", "#0000ff", "#00ff00"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "A"})).unwrap();
+        set(&mut app, "group", json!("G")).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        rs[1]["exclude"] = json!(true);
+        rs[2]["to"] = json!("#ffff00");
+        let active = active_rows(&rs);
+        // Drag the last bar (green, now yellow) above the first (red).
+        assert_eq!(move_bar(&mut rs, &active, 1, 0), Some(0));
+        d.fields.insert("rows".into(), Value::Array(rs));
+        assert_eq!(apply_params(d)["groupColors"][1], json!("keep"));
+        act(&mut app, &ctx, 0.1, "save").unwrap();
+        assert_eq!(group_hex(&app, "G"), Some(vec!["#ff0000".into(), "#0000ff".into(), "#ffff00".into()]));
+    }
+
+    /// Without art: selecting another color group in the list and Save Changes leave Undo Changes
+    /// and Redo Changes no step to go to, so OK gives the selected group the rows read for it.
+    #[test]
+    fn another_group_or_save_changes_leaves_nothing_to_undo() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "A", "colors": ["#ff0000", "#00ff00"], "keepModel": true})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "B", "colors": ["#0000ff", "#ffff00", "#ffffff"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "A"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let edit = |app: &mut VectorcraftApp, to: &str| {
+            let d = app.ui.dialog.as_mut().unwrap();
+            let mut rs = super::rows(d);
+            rs[0]["to"] = json!(to);
+            d.fields.insert("rows".into(), Value::Array(rs));
+        };
+        edit(&mut app, "rgb 0 0 0");
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        assert!(super::can_step(&app, true), "the edit is a step");
+
+        set(&mut app, "group", json!("B")).unwrap();
+        frame(&mut app, &ctx, 0.2, vec![], 0);
+        assert!(!super::can_step(&app, true) && !super::can_step(&app, false), "another group leaves no step");
+        assert_eq!(super::step(&mut app, true).unwrap()["changed"], json!(false));
+        assert_eq!(new_colors(&app).len(), 3, "the rows of B");
+
+        edit(&mut app, "rgb 0 128 0");
+        frame(&mut app, &ctx, 0.3, vec![], 0);
+        assert!(super::can_step(&app, true), "the edit is a step");
+        act(&mut app, &ctx, 0.4, "save").unwrap();
+        assert_eq!(group_hex(&app, "B"), Some(vec!["#008000".into(), "#ffff00".into(), "#ffffff".into()]));
+        assert!(!super::can_step(&app, true) && !super::can_step(&app, false), "Save Changes leaves no step");
+        assert_eq!(super::step(&mut app, true).unwrap()["changed"], json!(false));
+
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(group_hex(&app, "B"), Some(vec!["#008000".into(), "#ffff00".into(), "#ffffff".into()]), "OK keeps B's saved colors");
+        assert_eq!(group_hex(&app, "A"), Some(vec!["#ff0000".into(), "#00ff00".into()]), "and leaves A as it was");
+    }
+
+    /// Without art: rows set after another color group is selected, with no frame between, are a
+    /// step back to the rows read for that group.
+    #[test]
+    fn an_edit_right_after_another_group_is_a_step() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "A", "colors": ["#ff0000", "#00ff00"], "keepModel": true})).unwrap();
+        app.run("swatch.newGroup", json!({"name": "B", "colors": ["#0000ff", "#ffff00", "#ffffff"], "keepModel": true})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "A"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        set(&mut app, "group", json!("B")).unwrap();
+        assert!(!super::can_step(&app, true) && !super::can_step(&app, false), "another group leaves no step");
+        let b = new_colors(&app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let mut rs = super::rows(d);
+        rs[0]["to"] = json!("rgb 0 0 0");
+        d.fields.insert("rows".into(), Value::Array(rs));
+        assert!(super::can_step(&app, true), "the edit is a step");
+        assert_eq!(super::step(&mut app, true).unwrap()["changed"], json!(true));
+        assert_eq!(new_colors(&app), b, "Undo Changes gives back the rows read for B");
+        assert_eq!(super::step(&mut app, false).unwrap()["changed"], json!(true));
+        assert_eq!(new_colors(&app)[0], json!("rgb 0 0 0"), "Redo Changes gives back the edit");
+    }
+
+    /// With art not linked to the group: Save Changes with the rows as the last Save Changes left
+    /// them, after an edit and Undo Changes, leaves Redo Changes no step to go to either.
+    #[test]
+    fn an_unchanged_save_changes_leaves_nothing_to_redo() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        app.run("file.new", json!({"width": 300, "height": 100})).unwrap();
+        let (red, blue) = (square(&mut app, 10.0, "#ff0000"), square(&mut app, 40.0, "#0000ff"));
+        app.run("swatch.newGroup", json!({"name": "Plain", "colors": ["#ff0000", "#0000ff"], "keepModel": true})).unwrap();
+        app.run("select.set", json!({"ids": [red, blue]})).unwrap();
+        app.run("ui.recolorDialog", json!({"group": "Plain"})).unwrap();
+        frame(&mut app, &ctx, 0.0, vec![], 0);
+        let edit = |app: &mut VectorcraftApp, to: &str| {
+            let d = app.ui.dialog.as_mut().unwrap();
+            let mut rs = super::rows(d);
+            rs[0]["to"] = json!(to);
+            d.fields.insert("rows".into(), Value::Array(rs));
+        };
+        edit(&mut app, "rgb 0 128 0");
+        frame(&mut app, &ctx, 0.1, vec![], 0);
+        act(&mut app, &ctx, 0.2, "save").unwrap();
+        assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key(SAVED_ROWS), "the art kept its colors");
+        edit(&mut app, "rgb 0 0 0");
+        frame(&mut app, &ctx, 0.3, vec![], 0);
+        assert_eq!(super::step(&mut app, true).unwrap()["changed"], json!(true));
+        assert!(unchanged_since_save(app.ui.dialog.as_ref().unwrap()), "the rows are as saved");
+        assert!(super::can_step(&app, false), "the edit can be redone");
+        act(&mut app, &ctx, 0.4, "save").unwrap();
+        assert!(!super::can_step(&app, true) && !super::can_step(&app, false), "Save Changes leaves no step");
+    }
+
     /// Without art: after a group is picked in the list, the same Color Theme Picker picks that gave
     /// the group before it its colors give the new group's rows the palette of the art picked too.
     #[test]
@@ -3600,7 +4534,7 @@ mod tests {
         vectorcraft_color::Swatch { name: "Fade".into(), paint, global: false, spot: false }
     }
 
-    /// With art, the preview rewrites the group being edited, its other swatch included; Save
+    /// With art, the preview rewrites the group being edited and keeps its other swatch; Save
     /// Changes is still refused, as the group is without the preview, and Cancel leaves it as it was.
     #[test]
     fn saving_a_group_with_a_swatch_that_is_not_a_color_is_refused_while_previewing() {
@@ -3619,12 +4553,17 @@ mod tests {
         let undo = undo_len(&app);
         let d = app.ui.dialog.as_mut().unwrap();
         let mut rs = super::rows(d);
-        rs[0]["to"] = json!("rgb 0 0 0");
+        let row_of = |rs: &[Value], hex: &str| rs.iter().position(|r| super::from_colors(r).iter().any(|c| c.to_hex() == hex)).unwrap();
+        let red_row = row_of(&rs, "#ff0000");
+        rs[red_row]["to"] = json!("rgb 0 0 0");
+        let blue_to = super::to_color(&rs[row_of(&rs, "#0000ff")]).unwrap().to_hex();
         d.fields.insert("rows".into(), Value::Array(rs));
         frame(&mut app, &ctx, 0.1, vec![], 0);
         assert!(app.session.in_interaction(), "the art previews");
-        let previewed = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Mixed").map(|g| g.swatches.len());
-        assert_eq!(previewed, Some(2), "the preview's rewrite of the group leaves out its other swatch");
+        let previewed = app.session.doc().unwrap().doc.swatch_groups.iter().find(|g| g.name == "Mixed").map(|g| g.swatches.clone());
+        assert_eq!(previewed.as_ref().map(Vec::len), Some(3), "the preview's rewrite of the group keeps its other swatch");
+        assert_eq!(previewed.and_then(|s| s.last().cloned()), Some(fade_swatch()), "with its paint");
+        assert_eq!(group_hex(&app, "Mixed"), Some(vec!["#000000".into(), blue_to]), "each color swatch takes its row's new color");
         let refused: Result<(), String> = Err("color group `Mixed` holds swatches that are not colors, which Save Changes can't keep".into());
         assert_eq!(act(&mut app, &ctx, 0.2, "save"), refused);
         crate::dialogs::cancel(&mut app);

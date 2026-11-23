@@ -8,6 +8,11 @@ fn num(desc: &str) -> Value {
     json!({"type": "number", "description": desc})
 }
 
+/// A number or null.
+fn num_or_null(desc: &str) -> Value {
+    json!({"description": desc, "anyOf": [{"type": "number"}, {"type": "null"}]})
+}
+
 fn string(desc: &str) -> Value {
     json!({"type": "string", "description": desc})
 }
@@ -214,6 +219,7 @@ pub fn tool_definitions() -> Vec<Value> {
                             "tiltX": num("Pen tilt in degrees −90..90, positive leaning right (document axes); with tiltY, the tilt the Paintbrush records for Tilt and Bearing brushes. One without the other is 0"),
                             "tiltY": num("Pen tilt in degrees −90..90, positive leaning down the page"),
                             "rotation": num("Pen barrel rotation in degrees clockwise: the rotation the Paintbrush records for Rotation brushes"),
+                            "wheel": num("Airbrush pen finger wheel 0..1 (clamped): the wheel the Paintbrush records for Stylus Wheel brushes"),
                             "holdMs": num("Milliseconds the pointer then holds still, button down (0..60000): Twirl, Pucker and Bloat keep applying"),
                         }), &["kind", "x", "y"]),
                     },
@@ -470,16 +476,16 @@ pub fn tool_definitions() -> Vec<Value> {
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
-                    "dx": num("Move right"),
-                    "dy": num("Move down"),
-                    "rotate": num("Rotation in degrees counter-clockwise"),
-                    "scale": num("Uniform scale in %"),
-                    "scaleX": num("Horizontal scale in %"),
-                    "scaleY": num("Vertical scale in %"),
-                    "reflect": {"type": "string", "enum": ["vertical", "horizontal"]},
-                    "shear": num("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
-                    "origin": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
-                    "copy": {"type": "boolean"},
+                    "dx": num_or_null("Move right (null: 0)"),
+                    "dy": num_or_null("Move down (null: 0)"),
+                    "rotate": num_or_null("Rotation in degrees counter-clockwise"),
+                    "scale": num_or_null("Uniform scale in %"),
+                    "scaleX": num_or_null("Horizontal scale in %"),
+                    "scaleY": num_or_null("Vertical scale in %"),
+                    "reflect": {"anyOf": [{"type": "string", "enum": ["vertical", "horizontal"]}, {"type": "null"}]},
+                    "shear": num_or_null("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
+                    "origin": {"anyOf": [{"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, {"type": "null"}]},
+                    "copy": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
                 }),
                 &[],
             ),

@@ -25,11 +25,20 @@ pub(crate) fn has_fx(n: &Node) -> bool {
 /// effect copies it with a gradient or changes its fills and strokes ([`effects::has_transform_art`]),
 /// or is it a group or layer with an appearance of its own (see [`Renderer::draw_object_fx`])?
 pub(crate) fn has_object_fx(n: &Node) -> bool {
+    object_fx(n, true)
+}
+
+/// The alternate-art dispatches other than a group or layer's own container appearance.
+pub(super) fn has_non_container_art_fx(n: &Node) -> bool {
+    object_fx(n, false)
+}
+
+fn object_fx(n: &Node, containers: bool) -> bool {
     (effects::needs_outline(n) && (visible(&n.appearance.effects) || n.projection().is_some()))
         || effects::has_item_geometry(n)
         || effects::has_instance_row_raster(n)
         || effects::has_transform_art(n)
-        || effects::has_container_appearance(n)
+        || (containers && effects::has_container_appearance(n))
         || effects::has_crop_marks(n)
         || effects::addons::halftone::has_halftone(n)
         || effects::has_adjustment(n)

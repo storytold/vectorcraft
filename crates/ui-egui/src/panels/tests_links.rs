@@ -136,6 +136,158 @@ fn the_panel_lists_the_images_with_link_info_for_the_selected_one() {
     }
 }
 
+/// Click the flyout item `name`, checked or not (frames at `time` and just after).
+fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, time: f64) {
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>, time: f64| {
+        super::tests_appearance::frame_raw(ctx, app, egui::RawInput { events, time: Some(time), ..Default::default() }, super::links::menu)
+    };
+    let texts = frame(app, vec![], time);
+    let item = texts.iter().find(|(t, _)| t.trim_start_matches('✓').trim() == name);
+    let at = item.unwrap_or_else(|| panic!("`{name}` not drawn: {texts:?}")).1.center();
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for (i, e) in [egui::Event::PointerMoved(at), button(true), button(false)].into_iter().enumerate() {
+        frame(app, vec![e], time + 0.01 * (i + 1) as f64);
+    }
+}
+
+/// Opening the panel on the selected image (the Control bar's Linked File or Embedded label) opens
+/// Link Info when it was closed, and sets a Show filter that leaves out the image's row back to
+/// Show All; a filter that lists the row stays.
+#[test]
+fn opening_the_panel_on_the_selected_image_shows_its_row_and_link_info() {
+    let dir = Folder::new("show-selected");
+    let (mut app, linked, embedded) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let text = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.into_iter().map(|(t, _)| t).collect::<Vec<_>>().join("\n")
+    };
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Link Info", 1.0);
+    click_menu_item(&mut app, &ctx, "Show Embedded", 2.0);
+    let before = text(&mut app, 3.0);
+    assert!(!before.contains("linked.png") && !before.contains("Location"), "the filter hides the row, Link Info is closed: {before}");
+    app.run("window.panel.close", json!({"panel": super::links::ID})).ok();
+    super::links::show_selected_image(&mut app, &ctx);
+    assert!(crate::panel_docking::visible(&app.ui, super::links::ID), "status: {}", app.ui.status);
+    let after = text(&mut app, 4.0);
+    assert!(after.contains("linked.png") && after.contains("embedded.png"), "Show All lists every row: {after}");
+    assert!(after.contains("Location") && after.contains("300 × 200 px"), "Link Info shows the linked image: {after}");
+    // An embedded image under Show Embedded keeps the filter.
+    app.run("select.set", json!({"ids": [embedded]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Link Info", 5.0);
+    click_menu_item(&mut app, &ctx, "Show Embedded", 6.0);
+    super::links::show_selected_image(&mut app, &ctx);
+    assert!(crate::panel_docking::visible(&app.ui, super::links::ID), "an open panel stays open");
+    let embedded_only = text(&mut app, 7.0);
+    assert!(embedded_only.contains("embedded.png") && !embedded_only.contains("linked.png"), "Show Embedded stays: {embedded_only}");
+    assert!(embedded_only.contains("Effective PPI"), "Link Info shows the embedded image: {embedded_only}");
+}
+
+/// Opening the panel on the selected image scrolls the list to the image's row when it is out of
+/// view.
+#[test]
+fn opening_the_panel_on_the_selected_image_scrolls_to_its_row() {
+    let dir = Folder::new("show-selected-scroll");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    // The panel lists the image placed first last, below the list's view.
+    let mut first = None;
+    for i in 0..20 {
+        let path = dir.file(&format!("img{i:02}.png"), &png(10, 10));
+        let id = app.run("file.place", json!({"path": path, "at": [10 + 15 * i, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+        first.get_or_insert(id);
+    }
+    app.run("select.set", json!({"ids": [first]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // How many times the first image's name is drawn: its row while in view, and Link Info.
+    let drawn = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.iter().filter(|(t, _)| t == "img00.png").count()
+    };
+    let before = drawn(&mut app, 1.0);
+    assert_eq!(drawn(&mut app, 2.0), before, "the list stays at the top");
+    super::links::show_selected_image(&mut app, &ctx);
+    // The list scrolls over the frames after the one that asks.
+    for time in [3.0, 4.0, 5.0] {
+        drawn(&mut app, time);
+    }
+    assert_eq!(drawn(&mut app, 6.0), before + 1, "the row scrolled into view");
+}
+
+/// Opening the panel on the selected image draws a list read after the request, so a row that a
+/// file change brought into the Show filter since the list was last read is there to scroll to.
+#[test]
+fn opening_the_panel_on_the_selected_image_reads_the_list_again() {
+    let dir = Folder::new("show-selected-fresh");
+    let (mut app, linked, _) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // How many times the linked image's name is drawn: its row, and Link Info.
+    let drawn = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.iter().filter(|(t, _)| t == "linked.png").count()
+    };
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
+    assert_eq!(drawn(&mut app, 2.0), 1, "Link Info only: nothing is missing yet");
+    std::fs::remove_file(dir.0.join("linked.png")).unwrap();
+    // Within the time the panel keeps its list before it looks at the files again.
+    super::links::show_selected_image(&mut app, &ctx);
+    assert_eq!(drawn(&mut app, 2.1), 2, "the missing image's row and its Link Info are drawn");
+}
+
+/// The Show filter is set back to Show All from the rows the panel draws, not from the files as
+/// they were when the panel was asked to open: a missing image restored before the list is drawn
+/// still gets its row.
+#[test]
+fn opening_the_panel_on_the_selected_image_decides_the_filter_from_the_drawn_rows() {
+    let dir = Folder::new("show-selected-drawn");
+    let (mut app, linked, _) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let drawn = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.iter().filter(|(t, _)| t == "linked.png").count()
+    };
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
+    let bytes = std::fs::read(dir.0.join("linked.png")).unwrap();
+    std::fs::remove_file(dir.0.join("linked.png")).unwrap();
+    super::links::show_selected_image(&mut app, &ctx);
+    std::fs::write(dir.0.join("linked.png"), bytes).unwrap();
+    assert_eq!(drawn(&mut app, 2.0), 2, "the restored image's row and its Link Info are drawn");
+    assert_eq!(super::pstate::<Option<(u64, u64)>>(&ctx, "links-scroll-to"), None, "the scroll request is used on the row");
+}
+
+/// A request to show the selected image applies only in the document it was made in: drawn for
+/// another document, the panel keeps its Show filter and drops the request.
+#[test]
+fn opening_the_panel_on_the_selected_image_leaves_another_document_alone() {
+    let dir = Folder::new("show-selected-other-doc");
+    let (mut app, linked, _) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let text = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let texts = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show);
+        texts.into_iter().map(|(t, _)| t).collect::<Vec<_>>().join("\n")
+    };
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    click_menu_item(&mut app, &ctx, "Show Missing", 1.0);
+    super::links::show_selected_image(&mut app, &ctx);
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let other = text(&mut app, 2.0);
+    assert!(other.contains("Nothing matches the Show filter."), "the other document keeps Show Missing: {other}");
+    assert_eq!(super::pstate::<Option<(u64, u64)>>(&ctx, "links-scroll-to"), None, "the request is dropped");
+}
+
 /// A frame that fetches nothing keeps the stored rows and Link Info as they are, without a copy; the
 /// two-second recheck, another first selected image and an edit each store a new cache.
 #[test]
@@ -306,6 +458,13 @@ fn a_nested_rows_tooltip_names_what_holds_it() {
     // A row in the layers says only its file.
     let row = json!({"id": 9, "name": "a.png", "status": "ok", "path": "/x/a.png"});
     assert_eq!(super::links::status_tip(&row, None), "/x/a.png");
+    // The labels take the UI language's colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let french = tip(json!({"kind": "symbol", "name": "Mark", "maskOf": 7}), None);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (symbols, mask) = (crate::i18n::tr(fr, "Symbols"), crate::i18n::tr(fr, "Opacity Mask"));
+    assert_eq!(french, format!("/x/a.png\n{symbols}\u{a0}: Mark\n{mask}\u{a0}: 7"));
 }
 
 /// The tooltip of an image in the opacity mask of an object inside a symbol names that object,
@@ -435,6 +594,20 @@ fn edit_original_opens_raster_images_in_photocraft_without_system_defaults() {
     app.services.open_in_photocraft = Some(Box::new(|_: &str| Err("PhotoCraft didn't start".to_string())));
     assert!(app.run("links.editOriginal", json!({"id": linked})).is_err());
     assert_eq!(opened.borrow().len(), 4);
+}
+
+#[test]
+fn edit_original_with_chosen_editor_still_refuses_automation() {
+    let dir = Folder::new("chosen-automation");
+    let (mut app, linked, _) = app(&dir);
+    app.ui.original_editor = serde_json::from_value(json!({"path": "/Apps/Editor.exe"})).unwrap();
+    app.session.prefs.edit_original_system_defaults = false;
+    app.services.open_in_application = Some(Box::new(|_, _| panic!("automation must not launch an editor")));
+    app.ui.answering_control = true;
+    assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
+    app.ui.answering_control = false;
+    app.synthetic_frame = true;
+    assert!(app.run("links.editOriginal", json!({"id": linked})).unwrap_err().contains("only the person"));
 }
 
 /// Edit Original hands only regular image and document files to the system's default app.
@@ -569,4 +742,94 @@ fn the_links_menu_items_run_commands() {
     };
     assert!(ids("Edit").contains("links.editOriginal"));
     assert!(ids("Window").contains(super::links::ID));
+}
+
+#[test]
+fn right_click_context_menu_in_links_panel() {
+    use egui::vec2;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let dir = Folder::new("context-menu");
+    let (mut app, linked, embedded) = app(&dir);
+
+    let revealed: Rc<RefCell<Vec<String>>> = Rc::default();
+    let rev = revealed.clone();
+    app.services.reveal = Some(Box::new(move |p: &str| {
+        rev.borrow_mut().push(p.to_string());
+        Ok(())
+    }));
+
+    // Initially embedded is selected, linked is unselected
+    assert_eq!(selected(&app), vec![embedded]);
+
+    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            super::links::show(app, ui);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    let right_click = |h: &mut Harness<'static, VectorcraftApp>, label: &str| {
+        let node = h.get_all_by_label(label).find(|n| n.accesskit_node().role() == egui::accesskit::Role::ListItem).unwrap();
+        let pos = node.rect().center();
+        h.event(egui::Event::PointerMoved(pos));
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+    };
+
+    // 1. Right-click unselected "linked.png": selects it and opens context menu
+    right_click(&mut h, "linked.png");
+    assert_eq!(selected(h.state()), vec![linked], "right-clicking unselected row selects that row first");
+
+    let relink = h.get_by_label("   Relink…");
+    let go_to = h.get_by_label("   Go To Link");
+    let update = h.get_by_label("   Update Link");
+    let edit_orig = h.get_by_label("   Edit Original");
+    let show_folder = h.get_by_label("   Show in Folder");
+    let embed_img = h.get_by_label("   Embed Image");
+
+    // "Relink…" is disabled because app has no pick_open service by default
+    assert!(relink.accesskit_node().is_disabled());
+    // "Go To Link" is enabled because linked node is in canvas document
+    assert!(!go_to.accesskit_node().is_disabled());
+    // "Update Link" is disabled because linked file is not modified
+    assert!(update.accesskit_node().is_disabled());
+    // "Edit Original" and "Show in Folder" are enabled because linked file exists
+    assert!(!edit_orig.accesskit_node().is_disabled());
+    assert!(!show_folder.accesskit_node().is_disabled());
+    // "Embed Image" is enabled because it is a linked image
+    assert!(!embed_img.accesskit_node().is_disabled());
+
+    // 2. Click "Show in Folder" dispatches links.reveal
+    show_folder.click();
+    h.run_steps(2);
+    assert_eq!(revealed.borrow().len(), 1);
+    assert!(revealed.borrow()[0].ends_with("linked.png"));
+
+    // 3. Multi-selection: select both linked and embedded
+    h.state_mut().run("select.set", json!({"ids": [linked, embedded]})).unwrap();
+    assert_eq!(selected(h.state()), vec![linked, embedded]);
+
+    // Right-click "linked.png" while already selected in multi-selection: preserves selection
+    right_click(&mut h, "linked.png");
+    assert_eq!(selected(h.state()), vec![linked, embedded], "right-clicking selected row preserves multi-selection");
+
+    // 4. Click "Go To Link" focuses the art on canvas via go_to
+    let go_to_btn = h.get_by_label("   Go To Link");
+    assert!(!go_to_btn.accesskit_node().is_disabled());
+    go_to_btn.click();
+    h.run_steps(2);
+    assert_eq!(selected(h.state()), vec![linked]);
+    assert!(h.state().view().unwrap().fitted);
+
+    // 5. Right-click embedded image: displays "Unembed…" while "Edit Original" and "Show in Folder" are disabled
+    right_click(&mut h, "embedded.png");
+    assert_eq!(selected(h.state()), vec![embedded]);
+    let unembed_btn = h.get_by_label("   Unembed…");
+    assert!(!unembed_btn.accesskit_node().is_disabled());
+    assert!(h.get_by_label("   Edit Original").accesskit_node().is_disabled());
+    assert!(h.get_by_label("   Show in Folder").accesskit_node().is_disabled());
 }

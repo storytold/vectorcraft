@@ -28,6 +28,7 @@ mod commands;
 mod common;
 mod cut;
 mod freehand;
+mod quickpen;
 mod smooth;
 
 pub use commands::specs;

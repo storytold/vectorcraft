@@ -14,7 +14,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Dimension",
             [],
             None,
-            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}, freeA?, freeB?: a point that is not an anchor, {kind: onSegment, edge: {node,subpath,segment}, t: 0..1 (curve parameter)}|{kind: anchors, node, anchors: [{subpath,anchor,part?: point|in|out (the anchor, default, or its in or out handle),weight}] (2 or 3 points of one path whose weights add up to 1), across?: (2 anchors only: times the first-to-second anchor vector (x,y) turned to (-y,x), which points down when the vector points right)} (an end is an anchor or a free point, not both)}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
+            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}, freeA?, freeB?: a point that is not an anchor, {kind: onSegment, edge: {node,subpath,segment}, t: 0..1 (curve parameter)}|{kind: anchors, node, anchors: [{subpath,anchor,part?: point|in|out (the anchor, default, or its in or out handle),weight}] (2 or 3 points of one path whose weights add up to 1), across?: (2 anchors only: times the first-to-second anchor vector (x,y) turned to (-y,x), which points down when the vector points right)} (an end is an anchor or a free point, not both)}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowHead: null|a built-in stroke.set arrowhead name (Barbed, LineArrow…; drawn at both ends in place of arrowStyle's head; versions that have the stroke arrowhead but do not read arrowHead draw arrowStyle when they draw the dimension again; custom arrowheads are refused), arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
             has_doc,
             create
         ),
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Dimensions",
             [],
             None,
-            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on), offset?: pt (as in dimension.create)} restyle, turn or move existing dimensions → {ids}",
+            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on), offset?: pt (as in dimension.create), at?: [x,y] (after offset: puts a linear dimension's line through this point, gives an angular dimension's arc a radius of the point's distance from the vertex, at least 12 pt, or turns a radius or diameter line toward it; what the dimension measures does not change)} restyle, turn or move existing dimensions → {ids}",
             has_doc,
             update
         ),
@@ -159,6 +159,7 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(error("Select dimensions to update"));
     }
     let o = if p.get("options").is_some() { Some(options(s, p)?) } else { None };
+    let at = if p.get("at").is_some() { Some(point(p, "at")?) } else { None };
     // Every dimension is checked before anything changes, and an update that changes none of
     // them records no undo step.
     let mut next = Vec::with_capacity(ids.len());
@@ -178,6 +179,10 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
             }
             dim.offset = distance(p, dim.offset)?;
             dim.resolve(doc).map_err(error)?;
+            if let Some(at) = at {
+                dim.place(at);
+                dim.resolve(doc).map_err(error)?;
+            }
             if dim != old {
                 next.push((*id, dim));
             }
@@ -565,7 +570,7 @@ fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) ->
             LineType::Solid => None,
         };
         if arrows {
-            let head = o.arrow_style.arrowhead();
+            let head = o.arrowhead();
             st.start_arrow = head.clone();
             st.end_arrow = head;
             st.arrow_scale = (o.arrow_scale, o.arrow_scale);

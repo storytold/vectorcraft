@@ -25,14 +25,23 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let (rows, cols) = if at.is_some() { (1, 1) } else { (rows, cols) };
     let roots = roots_param(s, p)?;
+    // The distorted images left as they are, each with why.
+    let mut distorted = vec![];
     let (ids, index) = s.edit("Create Gradient Mesh", |d, sel| {
         let mut out = vec![];
         let mut index = None;
         let mut refused = None;
         let model = d.color_mode.model();
+        distorted.clear();
         for id in &roots {
             let Some(n) = d.node(*id).cloned() else { continue };
             let m = if let NodeKind::Image(im) = &n.kind {
+                if n.is_distorted_image() {
+                    let e = super::super::xform::distorted_image_error(C, *id);
+                    distorted.push(json!({"id": id.0, "reason": e.to_string()}));
+                    refused.get_or_insert(e);
+                    continue;
+                }
                 // An embedded image: the points take the picture's colours there.
                 match image_mesh(d, im, rows, cols) {
                     Ok(mut m) => {
@@ -40,7 +49,7 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
                         Some(m)
                     }
                     Err(why) => {
-                        refused.get_or_insert(why);
+                        refused.get_or_insert_with(|| bad(C, why));
                         continue;
                     }
                 }
@@ -60,7 +69,7 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
                 match m.add_lines_at(q, tol) {
                     Some(i) => index = Some(i),
                     None => {
-                        refused.get_or_insert("point is outside the object");
+                        refused.get_or_insert_with(|| bad(C, "point is outside the object"));
                         continue;
                     }
                 }
@@ -75,7 +84,7 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
             out.push(*id);
         }
         if out.is_empty() {
-            return Err(bad(C, refused.unwrap_or("select a path, a compound path or an embedded image")));
+            return Err(refused.unwrap_or_else(|| bad(C, "select a path, a compound path or an embedded image")));
         }
         sel.set(out.iter().copied());
         Ok((out, index))
@@ -83,6 +92,9 @@ pub(super) fn mesh_create(s: &mut Session, p: &Value) -> Result<Value> {
     let mut r = ids_json(&ids);
     if let Some(i) = index {
         r["index"] = json!(i);
+    }
+    if !distorted.is_empty() {
+        r["skipped"] = json!(distorted);
     }
     Ok(r)
 }

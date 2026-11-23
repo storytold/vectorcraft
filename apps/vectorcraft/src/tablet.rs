@@ -1,4 +1,5 @@
-//! Linux: a drawing tablet's pen pressure, tilt and barrel rotation under X11, XWayland included
+//! Linux: a drawing tablet's pen pressure, tilt, barrel rotation and airbrush finger wheel under
+//! X11, XWayland included
 //! (#764). winit 0.30 hands a pen to the window there as a mouse, without any of them, so the app
 //! reads them from XInput2 itself and writes them into the UI's [`StylusFeed`]
 //! (`Services::stylus`), which the canvas reads.
@@ -14,11 +15,17 @@
 //! - "Abs Tilt X" and "Abs Tilt Y" (a pen that has both), in degrees as they are when the range
 //!   fits in ±90, otherwise scaled to ±[`TILT_DEGREES`];
 //! - "Abs Rotary Z" (the barrel rotation of an Art Pen), scaled to a turn with the middle of the
-//!   range at 0°.
+//!   range at 0°;
+//! - "Abs Wheel" (the finger wheel of an airbrush pen), scaled from the valuator's range to 0..1.
+//!   XWayland also sends an Art Pen's barrel rotation on this valuator
+//!   (<https://github.com/mirror/xserver/blob/master/hw/xwayland/xwayland-input.c>), so under
+//!   XWayland it reads as the wheel. A tablet pad's wheel is on a device without a pressure axis,
+//!   which is not read.
 //!
 //! Any other pointer device moving sets the feed to `None`. Raw events carry only the valuators
 //! that changed, so the last value of each axis of each pen is kept; an axis the pen has that no
-//! event has carried yet reads 0 (upright, unturned), and an axis it lacks reads nothing.
+//! event has carried yet reads 0 (upright, unturned), and an axis it lacks reads nothing. The
+//! wheel reads nothing until an event carries it.
 //!
 //! The X server lists a pen's eraser end as a device of its own, whose name or XInput type contains
 //! "eraser" (xf86-input-wacom's "… Pen eraser" of type `ERASER`, xf86-input-libinput's
@@ -60,6 +67,7 @@ enum AxisKind {
     TiltX,
     TiltY,
     Rotation,
+    Wheel,
 }
 
 impl AxisKind {
@@ -70,6 +78,7 @@ impl AxisKind {
             "Abs Tilt X" => Some(Self::TiltX),
             "Abs Tilt Y" => Some(Self::TiltY),
             "Abs Rotary Z" => Some(Self::Rotation),
+            "Abs Wheel" => Some(Self::Wheel),
             _ => None,
         }
     }
@@ -81,6 +90,7 @@ impl AxisKind {
             Self::TiltX => 1,
             Self::TiltY => 2,
             Self::Rotation => 3,
+            Self::Wheel => 4,
         }
     }
 }
@@ -95,18 +105,22 @@ struct Axis {
 }
 
 impl Axis {
-    /// A raw value of this valuator as a pressure of 0..1, a tilt in degrees (−90..90) or a
-    /// rotation in degrees (−180..180, the middle of the range at 0). A value that is not a number
-    /// is a mouse's pressure, 1, or a tilt or rotation of 0.
+    /// A raw value of this valuator as a pressure of 0..1, a tilt in degrees (−90..90), a rotation
+    /// in degrees (−180..180, the middle of the range at 0) or a wheel of 0..1. A value that is not
+    /// a number is a mouse's pressure, 1, a tilt or rotation of 0, or a wheel half way.
     fn map(&self, v: f64) -> f32 {
         if !v.is_finite() {
-            return if self.kind == AxisKind::Pressure { 1.0 } else { 0.0 };
+            return match self.kind {
+                AxisKind::Pressure => 1.0,
+                AxisKind::Wheel => 0.5,
+                _ => 0.0,
+            };
         }
         let span = self.max - self.min;
         let unit = if span.is_finite() && span > 0.0 { (v - self.min) / span } else { v };
         let unit = unit.clamp(0.0, 1.0);
         match self.kind {
-            AxisKind::Pressure => unit as f32,
+            AxisKind::Pressure | AxisKind::Wheel => unit as f32,
             AxisKind::TiltX | AxisKind::TiltY if self.min >= -90.0 && self.max <= 90.0 && span > 0.0 => v.clamp(-90.0, 90.0) as f32,
             AxisKind::TiltX | AxisKind::TiltY => ((unit * 2.0 - 1.0) * TILT_DEGREES) as f32,
             AxisKind::Rotation => ((unit - 0.5) * 360.0) as f32,
@@ -173,7 +187,7 @@ enum Update {
 #[derive(Debug, Default)]
 struct Pens {
     devices: HashMap<u16, Device>,
-    last: HashMap<u16, [Option<f32>; 4]>,
+    last: HashMap<u16, [Option<f32>; 5]>,
 }
 
 impl Pens {
@@ -200,10 +214,12 @@ impl Pens {
                 }
             }
         }
-        // An axis the pen has reads 0 until an event carries it; one it lacks reads nothing.
+        // An axis the pen has reads 0 until an event carries it; one it lacks reads nothing. The
+        // wheel reads nothing until an event carries it: XWayland lists the axis for every pen.
         let value = |kind: AxisKind| device.axis(kind).map(|_| last.get(kind.slot()).copied().flatten().unwrap_or(0.0));
         let tilt = value(AxisKind::TiltX).zip(value(AxisKind::TiltY)).map(|(x, y)| [x, y]);
-        let pose = PenPose { tilt, rotation: value(AxisKind::Rotation) };
+        let wheel = device.axis(AxisKind::Wheel).and_then(|_| last.get(AxisKind::Wheel.slot()).copied().flatten());
+        let pose = PenPose { tilt, rotation: value(AxisKind::Rotation), wheel };
         Update::Set(Some(PenSample { pressure: value(AxisKind::Pressure).unwrap_or(0.0), eraser: device.eraser, pose }))
     }
 
@@ -430,7 +446,7 @@ mod tests {
         let mut pens = Pens::default();
         pens.set_devices([pen(9), Device::new(10, "Wacom Intuos Pro M Pen eraser", Some("ERASER"), pen_valuators()), mouse(12)]);
         let feed = StylusFeed::default();
-        let pose = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0) };
+        let pose = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0), wheel: None };
         pens.raw_event(&feed, 9, &[0b100], &[32767.5]);
         assert_eq!(pens.handle(9, []), Update::Set(Some(PenSample { pressure: 0.5, eraser: false, pose })));
         assert_eq!(feed.eraser(), Some(false));
@@ -479,8 +495,34 @@ mod tests {
         // A pen whose tilt and rotation no event has carried yet is upright and unturned.
         let mut fresh = Pens::default();
         fresh.set_devices([pen(9)]);
-        let upright = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0) };
+        let upright = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0), wheel: None };
         assert_eq!(fresh.handle(9, [(2, 0.0)]), Update::Set(Some(PenSample { pressure: 0.0, eraser: false, pose: upright })));
+    }
+
+    /// An airbrush pen's "Abs Wheel" valuator goes into the feed as 0..1 of its range, once an
+    /// event carries it; a pen that lists it but has not moved it reads no wheel, and a device
+    /// without a pressure axis (a tablet pad's wheel) is not a pen.
+    #[test]
+    fn an_airbrush_wheel_goes_into_the_feed() {
+        let mut valuators = pen_valuators();
+        valuators.push((6, "Abs Wheel".to_string(), 0.0, 1023.0));
+        let airbrush = Device::new(9, "Wacom Intuos Pro M Pen stylus", Some("STYLUS"), valuators);
+        let pad = Device::new(13, "Wacom Intuos Pro M Pad pad", Some("PAD"), [(6, "Abs Wheel".to_string(), 0.0, 71.0)]);
+        let mut pens = Pens::default();
+        pens.set_devices([airbrush, pad, pen(10)]);
+        let feed = StylusFeed::default();
+        pens.raw_event(&feed, 9, &[0b100], &[32767.5]);
+        assert_eq!(feed.pose().and_then(|q| q.wheel), None, "no event has carried the wheel yet");
+        pens.raw_event(&feed, 9, &[0b100_0000], &[255.75]);
+        assert_eq!(feed.pose().and_then(|q| q.wheel), Some(0.25));
+        pens.raw_event(&feed, 9, &[0b100_0000], &[5000.0]);
+        assert_eq!(feed.pose().and_then(|q| q.wheel), Some(1.0), "clamped to the range");
+        pens.raw_event(&feed, 9, &[0b100], &[100.0]);
+        assert_eq!(feed.pose().and_then(|q| q.wheel), Some(1.0), "kept while other valuators move");
+        pens.raw_event(&feed, 13, &[0b100_0000], &[30.0]);
+        assert_eq!((feed.held(), feed.pose()), (None, None), "the pad is not a pen");
+        pens.raw_event(&feed, 10, &[0b100_0000], &[512.0]);
+        assert_eq!(feed.pose().and_then(|q| q.wheel), None, "a pen without the valuator");
     }
 
     /// A device listed again unchanged keeps its last tilt and rotation; another device listed
@@ -495,7 +537,7 @@ mod tests {
         assert_eq!(pose.tilt, Some([-30.0, 45.0]));
         let other = Device::new(9, "HUION Kamvas Pen Pen (0x1)", Some("STYLUS"), pen_valuators());
         pens.set_devices([other]);
-        let upright = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0) };
+        let upright = PenPose { tilt: Some([0.0, 0.0]), rotation: Some(0.0), wheel: None };
         assert_eq!(pens.handle(9, [(2, 0.0)]), Update::Set(Some(PenSample { pressure: 0.0, eraser: false, pose: upright })));
     }
 

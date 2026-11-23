@@ -198,14 +198,24 @@ pub fn export(doc: &Document, opts: &HpglOptions) -> Result<HpglOutput, String> 
     Ok(export_regions(doc, opts, &[opts.region])?.pop().unwrap_or_default())
 }
 
+/// An error unless a plot can cover `region`: its corners are finite and it has a width and a
+/// height (either corner may come first).
+pub fn check_region(region: Rect) -> Result<(), String> {
+    let r = region.abs();
+    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0 {
+        return Err("the export region is empty".into());
+    }
+    Ok(())
+}
+
 /// Write the visible art of `doc` over each of `regions` as an HP-GL plot, one per region, as
 /// [`export`] does with `opts.region`. The plots share one pen numbering, so a color is the same
 /// pen in each, and one point budget.
 pub fn export_regions(doc: &Document, opts: &HpglOptions, regions: &[Rect]) -> Result<Vec<HpglOutput>, String> {
-    let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
-    if regions.iter().any(|r| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0) {
-        return Err("the export region is empty".into());
+    for r in regions {
+        check_region(*r)?;
     }
+    let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
     if !TOLERANCE_RANGE.contains(&opts.tolerance) {
         return Err("the curve tolerance must be from 0.01 to 10 points".into());
     }
@@ -524,47 +534,13 @@ fn plain(by_pen: &[Vec<Vec<(i64, i64)>>]) -> Vec<u8> {
 
 /// HP-GL/2: `IN;`, the palette, each pen's paths as one `PE`, `PU;SP0;`.
 fn encoded(by_pen: &[Vec<Vec<(i64, i64)>>], pens: &[[u8; 3]]) -> Vec<u8> {
-    let mut out = b"IN;".to_vec();
-    if !pens.is_empty() {
-        // Pens 1 to n on a plotter, and on a raster device (whose pens are 0 to NP − 1) too.
-        let np = (pens.len() + 1).next_power_of_two().max(2);
-        out.extend(format!("NP{np};").bytes());
-        for (i, [r, g, b]) in pens.iter().enumerate() {
-            out.extend(format!("PC{},{r},{g},{b};", i + 1).bytes());
-        }
-    }
-    let mut at: Option<(i64, i64)> = None;
-    for (i, paths) in by_pen.iter().enumerate().filter(|(_, p)| !p.is_empty()) {
-        out.extend(format!("PU;SP{};PE", i + 1).bytes());
-        for path in paths {
-            for (k, &p) in path.iter().enumerate() {
-                if k == 0 {
-                    out.push(b'<');
-                }
-                // The first move of the plot is absolute, and so is one longer than the range a
-                // device takes for each number; every other is relative.
-                match at.map(|a| (p.0 - a.0, p.1 - a.1)).filter(|d| d.0.abs() <= MAX_COORD && d.1.abs() <= MAX_COORD) {
-                    None => {
-                        out.push(b'=');
-                        pe_number(&mut out, p.0);
-                        pe_number(&mut out, p.1);
-                    }
-                    Some((dx, dy)) => {
-                        pe_number(&mut out, dx);
-                        pe_number(&mut out, dy);
-                    }
-                }
-                at = Some(p);
-            }
-        }
-        out.push(b';');
-    }
-    out.extend(b"PU;SP0;");
-    out
+    let pens: Vec<_> = pens.iter().enumerate().map(|(index, &rgb)| craft_plotter::hpgl::write::Pen { number: index + 1, rgb }).collect();
+    craft_plotter::hpgl::write::write_hpgl2(&pens, by_pen)
 }
 
 /// `v` as a base-64 PE number: the sign in the low bit, the low digits from 63 up and the last
 /// digit from 191 up.
+#[cfg(test)]
 fn pe_number(out: &mut Vec<u8>, v: i64) {
     let mut n = (v.unsigned_abs() << 1) | u64::from(v < 0);
     while n >= 64 {
@@ -963,10 +939,8 @@ impl<'a> Walk<'a> {
                     end(&mut cur, &mut out, false);
                     cur.push(p);
                 }
-                PathEl::LineTo(p) => {
-                    if cur.last() != Some(&p) {
-                        cur.push(p);
-                    }
+                PathEl::LineTo(p) if cur.last() != Some(&p) => {
+                    cur.push(p);
                 }
                 PathEl::ClosePath => {
                     let s = cur.first().copied();

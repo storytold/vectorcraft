@@ -325,8 +325,8 @@ pub(crate) fn after_command(app: &mut VectorcraftApp, id: &str, params: &Value, 
 /// replied `reply` in its document, or `None` when the command may have removed it or made it a
 /// process color: Swatch Options making it a process color, Delete Swatch naming it or its group,
 /// Merge Swatches merging it into another and Edit Color Group leaving it out of its group.
-/// `group` follows the step: New Color Group, Move Swatch, Edit Color Group and Ungroup Color
-/// Group.
+/// `group` follows the step: New Color Group, Move Swatch, Edit Color Group, Ungroup Color Group
+/// and Color Group Options.
 fn follow_step(id: &str, p: &Value, reply: &Value, name: String, group: &mut Option<String>) -> Option<String> {
     let ours = |v: &Value| v == name.as_str();
     let in_group = |key: &str| group.as_deref().is_some_and(|g| p[key] == g);
@@ -346,6 +346,7 @@ fn follow_step(id: &str, p: &Value, reply: &Value, name: String, group: &mut Opt
     let moved = match id {
         "swatch.newGroup" | "swatch.editGroup" if members("swatches") => Some(reply["name"].as_str().map(str::to_string)),
         "swatch.ungroup" if in_group("name") => Some(None),
+        "swatch.renameGroup" if in_group("group") => Some(reply["name"].as_str().map(str::to_string)),
         "swatch.move" if ours(&p["name"]) || p["names"].as_array().is_some_and(|a| a.iter().any(ours)) => {
             Some(p["group"].as_str().map(str::to_string))
         }
@@ -1566,8 +1567,8 @@ mod tests {
         assert!(linked(&app, &ctx));
     }
 
-    /// Deleting the color group that holds the spot color base's swatch ends the link; an Edit
-    /// Color Group that keeps it does not.
+    /// Deleting the color group that holds the spot color base's swatch ends the link, also under
+    /// a name Color Group Options gave it; an Edit Color Group that keeps it does not.
     #[test]
     fn a_deleted_color_group_ends_the_link() {
         let mut app = spot_app(1.0);
@@ -1599,6 +1600,16 @@ mod tests {
         ]);
         app.run("command.batch", json!({"commands": steps})).unwrap();
         assert!(!linked(&app, &ctx), "moved into a group that was deleted");
+        // Its group renamed by Color Group Options and deleted under the new name in the same batch.
+        relink(&mut app);
+        let steps = json!([
+            {"command": "swatch.newGroup", "params": {"name": "Spots", "swatches": ["Ink"]}},
+            {"command": "swatch.renameGroup", "params": {"group": "Spots", "name": "Spot Inks"}},
+            {"command": "swatch.delete", "params": {"names": ["Spot Inks"]}},
+            {"command": "swatch.new", "params": {"name": "Ink", "color": "#669933", "spot": true}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(!linked(&app, &ctx), "its group renamed, then deleted");
         // Edit Color Group that keeps it, with a new group name, keeps the link.
         relink(&mut app);
         app.run("swatch.newGroup", json!({"name": "Spots", "swatches": ["Ink"]})).unwrap();

@@ -25,8 +25,8 @@ pub struct CanvasCache {
     /// last render took more than 8 ms, the canvas draws the frame shown reprojected and renders
     /// once the view has been still for [`canvas::STILL_SECS`].
     pub waits_for_still: bool,
-    /// The cache key the canvas last asked for and when it first asked for it (seconds, egui's
-    /// input time), kept while [`Self::waits_for_still`] is set.
+    /// The cache key the canvas last asked for and when it first asked for its view (seconds,
+    /// egui's input time), kept while [`Self::waits_for_still`] is set.
     pub still: Option<(CacheKey, f64)>,
     /// The low-resolution frame that covers the parts of the canvas the frame shown leaves
     /// uncovered while it is drawn for a view it was not rendered for ([`canvas::Fill`]).

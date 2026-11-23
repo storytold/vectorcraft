@@ -175,8 +175,9 @@ fn skip_record(r: &mut Reader<'_>) -> Result<(), String> {
 /// Versions 7 and 8: the descriptor's `slices` list, each slice an object.
 fn from_descriptor(d: &[(String, Value)]) -> Result<Vec<PsdSlice>, String> {
     let Some(Value::List(list)) = field(d, "slices") else { return Err("the slices' descriptor has no list of slices".into()) };
-    if list.len() > MAX_SLICES {
-        return Err(format!("the file has {} slices, more than the {MAX_SLICES} read", list.len()));
+    let count = list.len();
+    if count > MAX_SLICES {
+        return Err(format!("the file has {count} slices, more than the {MAX_SLICES} read"));
     }
     let mut out = vec![];
     for s in list {

@@ -164,6 +164,11 @@ pub(super) fn copy_rect(app: &mut VectorcraftApp) {
     run(app, "edit.copy", json!({}));
 }
 
+/// How many times the app wrote the clipboard.
+pub(super) fn writes(board: &Rc<RefCell<Board>>) -> usize {
+    board.borrow().writes
+}
+
 pub(super) fn written(board: &Rc<RefCell<Board>>) -> Vec<&'static str> {
     board.borrow().flavours.iter().map(|f| f.mime).collect()
 }
@@ -577,6 +582,21 @@ fn text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
     run(&mut app, "edit.paste", json!({}));
     let NodeKind::Text(t) = &pasted(&app)[0].kind else { panic!("not type: {:?}", pasted(&app)[0].kind) };
     assert_eq!(t.plain_text(), "Words copied in a field");
+}
+
+/// Text a floating panel's label copies after Copy, before the formats are written: its window
+/// keeps the Copy, the formats are not written, and the system clipboard keeps the text.
+#[test]
+fn label_text_copied_before_the_formats_are_written_stays_on_the_clipboard() {
+    let (mut app, board, hold) = app_with_busy_worker("");
+    copy_rect(&mut app);
+    let ctx = egui::Context::default();
+    crate::shortcuts::note_copied_in_window(&ctx);
+    crate::panel_docking::forward_keys(&mut app, &ctx, vec![egui::Event::Copy], Some(egui::Modifiers::COMMAND));
+    assert!(app.forwarded.is_empty(), "the window's Copy stays there");
+    drop(hold);
+    background::wait_all(&mut app);
+    assert_eq!(board.borrow().writes, 0);
 }
 
 /// The Edit menu's Paste into a text field after Copy of type, before the formats are written: it

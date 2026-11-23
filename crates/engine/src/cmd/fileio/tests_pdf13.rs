@@ -167,6 +167,14 @@ fn the_flattener_preset_and_options_apply() {
 }
 
 #[test]
+fn pdf_1_3_files_flatten_without_alpha_whatever_the_options() {
+    let mut s = session();
+    let p = json!({"compatibility": "1.3", "preserveEditing": false, "flattener": {"balance": 0, "preserveAlpha": true}});
+    let (pdf, _) = export(&mut s, p);
+    assert!(pdf.starts_with(b"%PDF-1.3") && transparency(&pdf).is_empty());
+}
+
+#[test]
 fn pdf_1_3_files_are_encrypted_with_40_bit_rc4_and_can_be_linearised() {
     let mut s = session();
     let (pdf, warnings) = export(

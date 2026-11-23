@@ -354,10 +354,16 @@ fn isolation_context_item_skips_objects_outside_the_edited_symbol() {
 /// A closed path of 60 jagged anchors around (150, 150), filled so that a right-click inside it
 /// hits it, with nothing selected.
 fn jagged(app: &mut VectorcraftApp) -> NodeId {
+    ring(app, 4.0)
+}
+
+/// A closed path of 60 anchors around (150, 150), every other one `wobble` pt further out, filled
+/// so that a right-click inside it hits it, with nothing selected.
+fn ring(app: &mut VectorcraftApp, wobble: f64) -> NodeId {
     let anchors: Vec<_> = (0..60)
         .map(|i| {
             let a = f64::from(i) * std::f64::consts::TAU / 60.0;
-            let r = 60.0 + f64::from(i % 2) * 4.0;
+            let r = 60.0 + f64::from(i % 2) * wobble;
             json!({"x": 150.0 + r * a.cos(), "y": 150.0 + r * a.sin()})
         })
         .collect();
@@ -405,15 +411,59 @@ fn right_click_on_a_path_opens_the_smooth_slider() {
     assert!(anchor_total(&app) < before, "the path was smoothed: {} anchor points from {before}", anchor_total(&app));
 }
 
-/// Smooth… is listed while the selection holds a path: a path, a group of paths, a compound path,
-/// a path with type, and anchors selected with Direct Selection (whose Remove Anchor Points
-/// stays). It is left out with nothing, only type or a group of type selected.
+/// A right-click on a path lists Object › Path › Simplify… between Average… and Smooth…, as the
+/// Path menu orders them (#8344). Simplify… opens the Simplify slider at Auto-Simplify's level, as
+/// the menu item does, and adds no undo step while it is open; OK keeps the simplified path as one
+/// undo step. After the Simplify dialog was confirmed with "Open this dialog with these settings
+/// next time" ticked, Simplify… opens that dialog on its settings, as the menu item does.
 #[test]
-fn smooth_follows_the_selections_paths() {
+fn right_click_on_a_path_opens_simplify_as_the_menu_item_does() {
+    let mut app = app();
+    // A circle drawn with 60 anchors, which Auto-Simplify's tolerance refits with far fewer.
+    let id = ring(&mut app, 0.0);
+    let ctx = egui::Context::default();
+    frame(&mut app, &ctx, vec![]);
+    let p = screen(&app, 150.0, 150.0);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [id], "the path right-clicked is selected");
+    let y = |label| at(&texts, label).y;
+    assert!(y("Average…") < y("Simplify…") && y("Simplify…") < y("Smooth…"), "{texts:?}");
+    let level = crate::dialogs::simplify_slider::fields(&app)["level"].as_f64().unwrap();
+    let (undo, before) = (app.session.active().unwrap().history.undo.len(), anchor_total(&app));
+    let after = click(&mut app, &ctx, at(&texts, "Simplify…"), PointerButton::Primary);
+    assert!(!has(&after, "Arrange"), "choosing Simplify… closes the menu");
+    let open = app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.f64("level", -1.0)));
+    assert_eq!(open, Some((crate::dialogs::simplify_slider::KIND.to_string(), level)), "the slider at Auto-Simplify's level");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "no undo step while the slider is open");
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none() && !app.session.in_interaction());
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "OK keeps the result as one undo step");
+    assert!(anchor_total(&app) < before, "the path was simplified: {} anchor points from {before}", anchor_total(&app));
+
+    // The settings the Simplify dialog keeps for next time: Simplify… opens the dialog on them.
+    app.ui.simplify = json!({"tolerance": 0.5, "cornerAngle": 150, "straightLines": true, "retain": true});
+    frame(&mut app, &ctx, vec![]);
+    let texts = click(&mut app, &ctx, p, PointerButton::Secondary);
+    click(&mut app, &ctx, at(&texts, "Simplify…"), PointerButton::Primary);
+    let d = app.ui.dialog.clone().expect("the Simplify dialog");
+    assert_eq!((d.kind.as_str(), d.f64("tolerance", 0.0), d.bool("straightLines"), d.bool("retain")), ("simplify", 0.5, true, true));
+}
+
+/// Simplify… and Smooth… are listed while the selection holds a path: a path, a group of paths, a
+/// compound path, a path with type, and anchors selected with Direct Selection (whose Remove
+/// Anchor Points stays). They are left out with nothing, only type or a group of type selected.
+#[test]
+fn simplify_and_smooth_follow_the_selections_paths() {
     let mut app = app();
     let (a, b) = (rect(&mut app, 0.0, 0.0), rect(&mut app, 150.0, 0.0));
     let t = NodeId(app.run("text.create", json!({"x": 10, "y": 250, "text": "Type"})).unwrap()["id"].as_u64().unwrap());
-    let smooth = |app: &VectorcraftApp| labels(&menus::context_items(app)).contains(&"Smooth…");
+    // Both or neither, never one without the other.
+    let smooth = |app: &VectorcraftApp| {
+        let shown = labels(&menus::context_items(app));
+        let (simplify, smooth) = (shown.contains(&"Simplify…"), shown.contains(&"Smooth…"));
+        assert_eq!(simplify, smooth, "Simplify… and Smooth… follow the same rule: {shown:?}");
+        smooth
+    };
     app.run("select.none", json!({})).unwrap();
     assert!(!smooth(&app), "nothing selected");
     app.run("select.set", json!({"ids": [t.0]})).unwrap();

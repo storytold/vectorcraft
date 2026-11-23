@@ -17,7 +17,10 @@
 //! format or item when Export for Screens remembers that choice; 3D assets' mesh files go in the
 //! folder itself.
 //!
-//! Everything runs through the `assets.*` commands.
+//! Tile context menus export or remove the asset selection, rename a tile, select its source
+//! artwork on the canvas, or collect the selected artwork.
+//!
+//! Everything runs through the `assets.*` commands (canvas selection uses `select.set`).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -121,6 +124,15 @@ struct Events {
     rename: Option<(u64, String)>,
     /// Art dropped on the panel: (ids, as one asset).
     drop: Option<(Vec<NodeId>, bool)>,
+    /// A tile context-menu action, dispatched after the document borrow ends.
+    action: Option<TileAction>,
+}
+
+enum TileAction {
+    Export(Vec<u64>),
+    Remove(Vec<u64>),
+    SelectArtwork(Vec<NodeId>),
+    Collect(bool),
 }
 
 /// The asset tiles: thumbnail, name (a text field while renaming), selection.
@@ -191,8 +203,51 @@ fn tiles(ui: &mut Ui, st: &DocState, sel: &[u64], ev: &mut Events) {
             } else if resp.clicked() {
                 ev.click = Some((a.id, ui.input(|i| i.modifiers.shift || i.modifiers.command)));
             }
+            if resp.secondary_clicked() && !on {
+                ev.click = Some((a.id, false));
+            }
+            resp.context_menu(|ui| tile_context_menu(ui, st, a, sel, ev));
         }
     });
+}
+
+/// A tile's menu queues commands while the document is borrowed for drawing.
+fn tile_context_menu(ui: &mut Ui, st: &DocState, a: &ExportAsset, sel: &[u64], ev: &mut Events) {
+    let rename_id = egui::Id::unique("asset-export-rename");
+    // On the opening frame the queued selection has not been applied yet.
+    let targets = if sel.contains(&a.id) { sel.to_vec() } else { vec![a.id] };
+    let count = targets.len().to_string();
+    let export_label =
+        if targets.len() > 1 { crate::i18n::fmt(tl!("Export {count} Assets…"), &[("count", &count)]) } else { tl!("Export Asset…").to_string() };
+    let remove_label =
+        if targets.len() > 1 { crate::i18n::fmt(tl!("Remove {count} Assets"), &[("count", &count)]) } else { tl!("Remove Asset").to_string() };
+    if widgets::menu_item_name(ui, &export_label, true, false) {
+        ev.action = Some(TileAction::Export(targets.clone()));
+        ui.close();
+    }
+    if widgets::menu_item_name(ui, &remove_label, true, false) {
+        ev.action = Some(TileAction::Remove(targets));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Rename"), true, false) {
+        ui.data_mut(|d| d.insert_temp(rename_id, (a.id, a.name.clone())));
+        ui.close();
+    }
+    ui.separator();
+    if menu_item(ui, tl!("Select Artwork on Canvas"), true, false) {
+        ev.action = Some(TileAction::SelectArtwork(a.nodes.clone()));
+        ui.close();
+    }
+    ui.separator();
+    let has_art = !st.selection.is_empty();
+    if menu_item(ui, tl!("Add Selected Artwork as One Asset"), has_art, false) {
+        ev.action = Some(TileAction::Collect(true));
+        ui.close();
+    }
+    if menu_item(ui, tl!("Add Selected Artwork as Multiple Assets"), has_art, false) {
+        ev.action = Some(TileAction::Collect(false));
+        ui.close();
+    }
 }
 
 /// Art dragged off the canvas over the list: outline it; dropped, it becomes assets.
@@ -533,6 +588,18 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if export_clicked {
         export(app, sel_or_all(&sel, &all), files_each);
+    }
+    match ev.action {
+        Some(TileAction::Export(targets)) => export(app, targets, files_each),
+        Some(TileAction::Remove(targets)) => {
+            run(app, "assets.remove", json!({ "assets": targets }));
+            set_pstate(&ctx, SELECTED, Vec::<u64>::new());
+        }
+        Some(TileAction::SelectArtwork(ids)) => {
+            run(app, "select.set", json!({ "ids": ids }));
+        }
+        Some(TileAction::Collect(single)) => collect(app, &ctx, None, single),
+        None => {}
     }
 }
 

@@ -124,6 +124,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         }
         // Double-clicking a stop on the gradient annotator: its popover, next to the stop's chip.
         "gradientStop" => Dialog::new(kind, json!({"index": p.get("index").cloned().unwrap_or(json!(0)), "x": x, "y": y, "tab": "color"})),
+        // Image Trace's Ignore Color eyedropper updates the panel, not the document's paint.
+        "imageTraceIgnoreColor" => {
+            crate::panels::image_trace::apply_ignore_color_sample(app, &p);
+            return;
+        }
         // Brush Options › Key Color eyedropper: update the open dialog, do not replace it.
         "brushKeyColor" => {
             if let Some(c) = p.get("color") {
@@ -164,6 +169,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             if let Err(e) = super::slices::open_options(app) {
                 app.status(e);
             }
+            return;
+        }
+        // A click or double-click that would edit type set in fonts that aren't available.
+        vectorcraft_tools::text::MISSING_FONT_EDIT => {
+            super::confirm::ask_missing_font_edit(app, &p);
             return;
         }
         _ => return,

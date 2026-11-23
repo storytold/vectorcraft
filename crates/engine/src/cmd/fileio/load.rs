@@ -92,6 +92,13 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
     }
+    if super::cdr::is_cdr(bytes) {
+        // A template keeps its meaning from the extension.
+        return by_name.filter(|f| f.id == "cdt").or_else(|| format("cdr"));
+    }
+    if super::cdr::is_cmx(bytes) {
+        return format("cmx");
+    }
     if vectorcraft_format::sniff(bytes) {
         // A template keeps its meaning from the extension, like .ait.
         return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
@@ -133,9 +140,8 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
         return Some(f);
     }
-    // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
-    // file or byte 10 of a bare picture (version 1 by its file's name), so a format whose
-    // signature starts the file is checked first.
+    // A PICT is known by its version opcodes after the picture's frame, at byte 522 of a file or
+    // byte 10 of a bare picture, so a format whose signature starts the file is checked first.
     if vectorcraft_metafile::is_pict(bytes) {
         return format("pict");
     }
@@ -186,8 +192,11 @@ fn restore_or_import(
     let mut fallback = None;
     if let Some((intact, bytes)) = editing {
         let native = if intact { bytes() } else { None };
-        match native.and_then(|b| native_file(&b).ok()) {
-            Some((doc, _, warnings)) => return Ok((doc, warnings, true)),
+        match native.and_then(|b| decode_native_file(&b).ok()) {
+            Some((mut doc, _, mut warnings)) => {
+                warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
+                return Ok((doc, warnings, true));
+            }
             None => fallback = Some(if intact { EDITING_DAMAGED } else { EDITING_STALE }),
         }
     }
@@ -198,9 +207,9 @@ fn restore_or_import(
     Ok((doc, warnings, false))
 }
 
-/// A native file's document and details, the colour profiles it carries installed where missing
-/// (with a warning for each that can't be used).
-pub(crate) fn native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
+/// Decode a native file and install its colour profiles, preserving profile and depth warnings.
+/// The caller must assemble any external resources and bind file fonts before layout.
+pub(crate) fn decode_native_file(bytes: &[u8]) -> Result<(Document, vectorcraft_format::FileInfo, Vec<String>)> {
     let f = vectorcraft_format::load_file(bytes).map_err(err)?;
     let mut warnings = super::native::install_profiles(f.profiles);
     warnings.extend(f.depth_notes);
@@ -417,7 +426,8 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             })?
         }
         "vectorcraft" | "template" => {
-            let (d, info, warnings) = native_file(bytes)?;
+            let (mut d, info, mut warnings) = decode_native_file(bytes)?;
+            warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut d));
             native_pdf_compatible = Some(info.pdf_compatible);
             converted = info.is_old() || super::extension(name) == vectorcraft_format::LEGACY_EXTENSION;
             (d, warnings, false)
@@ -540,6 +550,14 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let i = super::affinity::import(&title, bytes)?;
             preview_only = i.preview_only;
             (i.doc, i.warnings, false)
+        }
+        "cdr" | "cdt" => {
+            let (doc, warnings) = super::cdr::import(bytes)?;
+            (doc, warnings, false)
+        }
+        "cmx" => {
+            let (doc, warnings) = super::cdr::import_cmx(bytes)?;
+            (doc, warnings, false)
         }
         // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
         // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
@@ -673,7 +691,8 @@ pub fn open_bytes(s: &mut Session, name: &str, bytes: &[u8], path: Option<String
 /// [`open_bytes`] with the `document.open` options in `p` ([`LoadOptions::from_params`]).
 pub fn open_bytes_with(s: &mut Session, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value> {
     let update_links = s.prefs.update_links == "automatically";
-    open_read(s, read_for_open(name, bytes, path, p, update_links, s.prefs.low_res_proxy_eps)?)
+    let p = s.prefs.with_pdf_font_choice(p);
+    open_read(s, read_for_open(name, bytes, path, &p, update_links, s.prefs.low_res_proxy_eps)?)
 }
 
 /// A file read for `document.open` but not opened yet ([`read_for_open`], [`open_read`]).
@@ -686,6 +705,29 @@ pub struct ReadFile {
     links: Resolved,
     /// Whether the color management policies changed the document ([`apply_policies`]).
     policy_changed: bool,
+    /// The answer to the document's profile question (`profileChoice`, or the app's prompt).
+    choice: Option<crate::cmd::colormgmt::ProfileChoice>,
+    /// What opening still has to do while the app asks about the profile ([`ReadFile::question`]):
+    /// the policies, the color mode, the linked files and the type are left for
+    /// [`ReadFile::answer`] or [`open_read`].
+    rest: Option<Rest>,
+    /// The answer that was used and the question it answered (`document.open`'s `profileChoice`
+    /// reply).
+    answered: Option<Value>,
+    /// The profile question as it was last asked ([`ReadFile::ask`]): an answer is taken only while
+    /// the question is still the same.
+    asked: Option<crate::cmd::colormgmt::ProfileQuestion>,
+    /// Update Links and the low-resolution EPS proxy setting, while the linked files and the type
+    /// are left to do after the answer ([`ReadFile::finish_read`]).
+    links_left: Option<(bool, bool)>,
+}
+
+/// The part of [`read_for_open`] a file waiting for a profile answer has left to do.
+struct Rest {
+    update_links: bool,
+    low_res_proxy_eps: bool,
+    /// The color mode `colorMode` asks for, converted after the policies.
+    color_mode: Option<vectorcraft_doc::ColorMode>,
 }
 
 /// Edit › Color Settings: the color management policies keep, take off or convert from the
@@ -714,36 +756,149 @@ impl ReadFile {
 /// reads (`importer` in `p`, or an extension only an importer lists) is read by it
 /// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
+    read_for_open_asking(name, bytes, path, p, update_links, low_res_proxy_eps, false)
+}
+
+/// [`read_for_open`]; with `ask` (the desktop app's File › Open), a document whose profile
+/// question ([`ReadFile::question`]) Edit › Color Settings asks, and that `p` gives no
+/// `profileChoice` for, stops after it is decoded: the app asks, and [`ReadFile::answer`] (or
+/// [`open_read`], with the policy's choice) does the rest.
+pub fn read_for_open_asking(
+    name: &str,
+    bytes: &[u8],
+    path: Option<String>,
+    p: &Value,
+    update_links: bool,
+    low_res_proxy_eps: bool,
+    ask: bool,
+) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let (mut loaded, policy_changed) = if opts.link_pages {
-        let mut loaded = linked_pages(name, bytes, path.as_deref(), &opts)?;
-        let changed = apply_policies(&mut loaded);
-        (loaded, changed)
+    let choice = crate::cmd::colormgmt::ProfileChoice::param(p, "document.open")?;
+    let (loaded, color_mode) = if opts.link_pages {
+        (linked_pages(name, bytes, path.as_deref(), &opts)?, None)
     } else {
         match super::importer::pick(name, bytes, p)? {
-            Some(plugin) => {
-                let mut loaded = super::importer::load(name, bytes, &plugin, p)?;
-                let changed = apply_policies(&mut loaded);
-                (loaded, changed)
-            }
-            None => {
-                // The color mode `p` asks for converts the colors after the policies did, through
-                // the profiles the document keeps.
-                let mut loaded = load_with(name, bytes, &LoadOptions { color_mode: None, ..opts.clone() })?;
-                let changed = apply_policies(&mut loaded);
-                if let Some(mode) = opts.color_mode.filter(|m| *m != loaded.doc.color_mode) {
-                    let doc = &mut loaded.doc;
-                    vectorcraft_color::cms::with_active(super::super::colormgmt::doc_cms(doc), || {
-                        super::super::colormgmt::set_color_mode(doc, mode, true, None, opts.grays);
-                    });
-                }
-                (loaded, changed)
-            }
+            Some(plugin) => (super::importer::load(name, bytes, &plugin, p)?, None),
+            // The color mode `p` asks for converts the colors after the policies did, through the
+            // profiles the document keeps.
+            None => (load_with(name, bytes, &LoadOptions { color_mode: None, ..opts.clone() })?, opts.color_mode),
         }
     };
-    let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
-    Session::refresh_text_bounds(&mut loaded.doc);
-    Ok(ReadFile { loaded, opts, path, links, policy_changed })
+    let mut file = ReadFile {
+        loaded,
+        opts,
+        path,
+        links: Resolved::default(),
+        policy_changed: false,
+        choice,
+        rest: Some(Rest { update_links, low_res_proxy_eps, color_mode }),
+        answered: None,
+        asked: None,
+        links_left: None,
+    };
+    if ask && file.choice.is_none() && file.ask().is_some() {
+        return Ok(file);
+    }
+    file.finish_read()?;
+    Ok(file)
+}
+
+impl ReadFile {
+    /// The file's name, for a prompt.
+    pub fn name(&self) -> String {
+        self.path.as_deref().map(file_name).unwrap_or_else(|| self.loaded.doc.title.clone())
+    }
+
+    /// The profile question Edit › Color Settings asks about this file before it opens (its Ask
+    /// When Opening box of that kind is on), while the file waits for the answer
+    /// ([`read_for_open_asking`]); none once it is answered or read through.
+    pub fn question(&self) -> Option<crate::cmd::colormgmt::ProfileQuestion> {
+        self.rest.as_ref()?;
+        let st = vectorcraft_color::cms::working_settings();
+        crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &st).filter(|q| q.asked(&st))
+    }
+
+    /// [`Self::question`], kept as the question asked: [`Self::answer`] takes an answer only while
+    /// the question is still the same. The app calls it when it shows the question.
+    pub fn ask(&mut self) -> Option<crate::cmd::colormgmt::ProfileQuestion> {
+        self.asked = self.question();
+        self.asked.clone()
+    }
+
+    /// Answer the profile question with `choice` and apply it: the policies (the answer in place of
+    /// the one of the document's color mode) and the color mode. The linked files and the type are
+    /// left for [`Self::finish_read`] or [`open_read`]. An error leaves the file waiting: a profile
+    /// to assign that is not one of that model, or Color Settings changed since the question was
+    /// asked ([`Self::ask`]) so that the question, its model, the profile it is about or the working
+    /// space differ.
+    pub fn answer(&mut self, choice: crate::cmd::colormgmt::ProfileChoice) -> Result<()> {
+        if let Some(asked) = &self.asked
+            && self.rest.is_some()
+        {
+            let now = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &vectorcraft_color::cms::working_settings());
+            let key = |q: &crate::cmd::colormgmt::ProfileQuestion| (q.issue, q.model, q.profile.clone(), q.working.clone());
+            if now.as_ref().map(key) != Some(key(asked)) {
+                return Err(bad("document.open", "the profile question changed since it was asked: answer the question it asks now"));
+            }
+        }
+        let before = self.choice.replace(choice);
+        let r = self.apply_answer();
+        if r.is_err() {
+            self.choice = before;
+        }
+        r
+    }
+
+    /// The rest of [`read_for_open_asking`], once: the color management policies with the profile
+    /// answer (or as the policy says without one), the color mode `colorMode` asks for, the linked
+    /// files and the type. The app runs it off the UI thread once the question is answered.
+    pub fn finish_read(&mut self) -> Result<()> {
+        self.apply_answer()?;
+        self.finish_links();
+        Ok(())
+    }
+
+    /// Read the linked files and lay out the type of a file whose profile answer is applied
+    /// ([`Self::answer`]), once. A file still waiting for its answer is left as it is.
+    fn finish_links(&mut self) {
+        let Some((update_links, low_res_proxy_eps)) = self.links_left.take() else { return };
+        let base = crate::cmd::links::LinkBase::file(self.path.as_deref());
+        self.links = crate::cmd::links::resolve(&mut self.loaded.doc, base, update_links, low_res_proxy_eps);
+        for note in Session::refresh_text_bounds(&mut self.loaded.doc) {
+            if !self.loaded.warnings.contains(&note) {
+                self.loaded.warnings.push(note);
+            }
+        }
+    }
+
+    /// The policies with the profile answer and the color mode `colorMode` asks for, once; the
+    /// linked files and the type are left for [`Self::finish_read`].
+    fn apply_answer(&mut self) -> Result<()> {
+        if self.rest.is_none() {
+            return Ok(());
+        }
+        // The question the answer was given to, for the reply's `profileChoice`.
+        let question = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &vectorcraft_color::cms::working_settings());
+        let answered = match (&self.choice, &question) {
+            (Some(c), Some(q)) if c.issue() == q.issue => Some(json!({ "issue": q.issue.id(), "model": q.to_json()["model"], "choice": c.id() })),
+            _ => None,
+        };
+        // A failure leaves the file waiting, unchanged.
+        let (notes, changed) = crate::cmd::colormgmt::apply_open_policies_choosing(&mut self.loaded.doc, self.choice.as_ref())?;
+        let Some(rest) = self.rest.take() else { return Ok(()) };
+        self.answered = answered;
+        self.loaded.warnings.extend(notes);
+        self.policy_changed = changed;
+        if let Some(mode) = rest.color_mode.filter(|m| *m != self.loaded.doc.color_mode) {
+            let doc = &mut self.loaded.doc;
+            let grays = self.opts.grays;
+            vectorcraft_color::cms::with_active(super::super::colormgmt::doc_cms(doc), || {
+                super::super::colormgmt::set_color_mode(doc, mode, true, None, grays);
+            });
+        }
+        self.links_left = Some((rest.update_links, rest.low_res_proxy_eps));
+        Ok(())
+    }
 }
 
 /// The PDF `name` (`bytes`, read from `path`) opened with `linkPages`: its pages as placed documents
@@ -757,8 +912,15 @@ fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, opts: &LoadOptions
 
 /// The second half of [`open_bytes_with`]: open a file [`read_for_open`] read as the new active
 /// document → `document.open`'s result.
-pub fn open_read(s: &mut Session, file: ReadFile) -> Result<Value> {
-    open_loaded(s, file.loaded, file.links, file.path, &file.opts, false, file.policy_changed)
+/// A file still waiting for its profile answer ([`ReadFile::question`]) opens as its policy says.
+pub fn open_read(s: &mut Session, mut file: ReadFile) -> Result<Value> {
+    file.finish_read()?;
+    let answered = file.answered.take();
+    let mut r = open_loaded(s, file.loaded, file.links, file.path, &file.opts, false, file.policy_changed)?;
+    if let Some(a) = answered {
+        r["profileChoice"] = a;
+    }
+    Ok(r)
 }
 
 /// File → New from Template: any readable file (at `path`, if it is one: its links are looked for
@@ -791,11 +953,13 @@ fn open_loaded(
     let Loaded { mut doc, format, warnings, restored, converted, native_pdf_compatible, .. } =
         loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
-    // fallbacks must ask before overwriting the richer source they could not fully read.
+    // fallbacks must ask before overwriting the richer source they could not fully read. Every
+    // warning of a `.cdr` drawing or a `.cmx` file names content the import left out or changed.
     let losses: Vec<String> = warnings
         .iter()
         .filter(|w| {
             is_loss(w)
+                || matches!(format.id, "cdr" | "cdt" | "cmx")
                 || (format.id == "eps"
                     && (matches!(w.as_str(), EDITING_DAMAGED | EDITING_STALE)
                         || w.starts_with("this file's PostScript couldn't be read")
@@ -804,9 +968,9 @@ fn open_loaded(
         .cloned()
         .collect();
     let source_path = path.clone().filter(|_| !losses.is_empty());
-    // A template (saved by Save as Template, or an .ait/.vctemplate file) opens as a new untitled
-    // document.
-    let template = as_template || doc.template || matches!(format.id, "ait" | "template");
+    // A template (saved by Save as Template, or an .ait, .vctemplate or .cdt file) opens as a new
+    // untitled document.
+    let template = as_template || doc.template || matches!(format.id, "ait" | "template" | "cdt");
     if template {
         doc.template = false;
         doc.title = s.next_untitled();
@@ -962,7 +1126,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]). An image the decoder reads and that is stored as
 /// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
 /// other samples become 8-bit RGBA. A PSD/PSB composite's stored image keeps its imported
-/// clipping path ([`image_clip`]).
+/// clipping path ([`image_clip`]), and a PNG or TIFF that keeps such a path (as Unembed writes
+/// it) is read with that path.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -1139,13 +1304,15 @@ pub fn texture_image(bytes: &[u8]) -> Result<String> {
     texture.and_then(|t| t.to_stored()).ok_or_else(|| err("the image can't be read as a texture"))
 }
 
-/// An image's encoded `bytes`, `width` × `height` pixels, ready to embed.
+/// An image's encoded `bytes`, `width` × `height` pixels, ready to embed, with the clipping path a
+/// PNG or TIFF made from a PSD or PSB file keeps ([`image_clip`]).
 fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: Option<(f64, f64)>) -> Result<RasterImage> {
     if width == 0 || height == 0 {
         return Err(err("the image is empty"));
     }
     let blob = ImageBlob::new(mime, bytes);
-    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip: None })
+    let clip = image_clip(&blob).map(|path| (path, vectorcraft_geom::FillRule::EvenOdd));
+    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip })
 }
 
 /// The keyword of the PNG text chunk holding the clipping path of the file a PNG was made from
@@ -1209,6 +1376,20 @@ pub(crate) fn image_clip(blob: &ImageBlob) -> Option<vectorcraft_geom::PathData>
         return None;
     }
     vectorcraft_geom::path::with_anchor_budget(vectorcraft_geom::path::MAX_READ_ANCHORS, || serde_json::from_slice(json).ok())
+}
+
+/// `blob` with its preview keeping the clipping path its PNG or TIFF keeps ([`image_clip`]), in a
+/// text chunk of the preview PNG as [`png_with_clip`] writes it: a document saved without its
+/// linked files holds the preview alone, and the Links commands then still know a clip group of
+/// that path as the file's. Unchanged without a preview or a clipping path.
+pub(crate) fn preview_with_clip(mut blob: ImageBlob) -> ImageBlob {
+    let Some(proxy) = blob.proxy.clone().filter(|p| !std::sync::Arc::ptr_eq(p, &blob.bytes) && png_clip(p).is_none()) else { return blob };
+    let Some(json) = image_clip(&blob).and_then(|clip| serde_json::to_string(&clip).ok()).filter(|j| j.len() <= MAX_PNG_CLIP) else {
+        return blob;
+    };
+    let png = vectorcraft_render::encode::png::with_text(proxy.to_vec(), &[(CLIP_KEYWORD, json.into())]);
+    blob.proxy = Some(std::sync::Arc::new(png));
+    blob
 }
 
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;

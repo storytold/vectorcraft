@@ -376,6 +376,28 @@ impl SnapKey {
     }
 }
 
+/// Every setting that can move a snapped drawn point besides the document: the window and the
+/// zoom, the options and tolerances [`SnapKey`] holds except the guides' color and labels, and
+/// the construction guides' angles a [`Leave::segment`] follows. A tool that keeps a hover's
+/// snapped point compares two of these to see whether a click would still snap the same way.
+#[derive(PartialEq)]
+pub(crate) struct SnapSettings {
+    screen: Option<ScreenFrame>,
+    zoom: f64,
+    view: [bool; 7],
+    snap_to_glyph: Option<GlyphSnap>,
+    alignment_lines: bool,
+    tolerances: [f64; 2],
+    angles: &'static [f64],
+}
+
+impl SnapSettings {
+    pub(crate) fn of(cx: &ToolContext) -> Self {
+        let SnapKey { screen, view, snap_to_glyph, style, tolerances, .. } = SnapKey::of(cx, &[]);
+        Self { screen, zoom: cx.zoom, view, snap_to_glyph, alignment_lines: style.lines, tolerances, angles: cx.construction_angles }
+    }
+}
+
 /// The part of the document the window shows (none headless: all of it).
 pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
     let s = cx.screen?;
@@ -384,6 +406,12 @@ pub(super) fn visible(cx: &ToolContext) -> Option<Rect> {
 }
 
 impl DrawSnap {
+    /// Whether the last hover or press still has the current targets, without gathering the art
+    /// again. A caller caching the snapped point can use this before reusing it for a cursor.
+    pub(crate) fn is_current(&self, cx: &ToolContext, exclude: &[NodeId]) -> bool {
+        self.targets.as_ref().is_some_and(|(key, _)| key.as_ref() == Some(&SnapKey::of(cx, exclude)))
+    }
+
     /// Snap the pointer hovering at `p` (the art but `exclude` as targets, the anchors of
     /// `exclude` still pulling), reusing the targets while nothing they depend on changed.
     pub fn hover(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
@@ -485,6 +513,14 @@ impl DrawSnap {
         let tol = cx.tol(*tol);
         let at = |a: Point| a.distance(q) <= 1e-9 * tol.max(1.0);
         t.nearest_point(p, tol).is_some_and(|(a, _)| at(a)) || t.crossing(p, tol).is_some_and(at)
+    }
+
+    /// Whether a point at `p` leaving `from` lands on one of the targets the last hover or press
+    /// gathered ([`Targets::snap_hit`]), whether or not its guides show. False with Smart Guides
+    /// off, with no targets, and while pixels or the grid snap instead.
+    pub(crate) fn lands_on_target(&self, cx: &ToolContext, p: Point, from: Option<&Leave>) -> bool {
+        let Some((_, PointSnap { targets: Some((t, tol)), op })) = &self.targets else { return false };
+        cx.smart_guides && !cx.snaps_to_pixel(*op) && !cx.snap_to_grid && t.snap_hit(p, from, cx.tol(*tol)).2
     }
 
     /// The guides of the last snap.
