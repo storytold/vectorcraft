@@ -802,6 +802,41 @@ fn the_overlay_limit_counts_crossing_lines_only_where_they_are_drawn() {
     assert!(!too_many_anchors(&embedded) && !too_many_marks(&embedded), "embedded images");
 }
 
+/// The overlay's limit counts the points of the members the highlight outlines: a hidden member of
+/// a group, and the art of a hidden sublayer, do not count toward it.
+#[test]
+fn the_overlay_limit_leaves_out_hidden_members() {
+    use super::outline::{too_many_anchors, too_many_marks};
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, LayerColor, NodeId};
+    use vectorcraft_geom::{PathData, SubPath};
+    let points: Vec<Point> = (0..=OVERLAY_MAX_ANCHORS).map(|i| Point::new(i as f64, 0.0)).collect();
+    let many = Arc::new(Node::path(NodeId(2), PathData::single(SubPath::polyline(&points, false)), Appearance::default()));
+    let few = Arc::new(Node::path(
+        NodeId(3),
+        vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0)),
+        Appearance::default(),
+    ));
+    for visible in [true, false] {
+        let mut member = (*many).clone();
+        member.visible = visible;
+        let group = Node::group(NodeId(1), vec![Arc::new(member), few.clone()]);
+        let mut sublayer = Node::layer(NodeId(5), "Sublayer", LayerColor::Preset(1));
+        sublayer.visible = visible;
+        if let Some(children) = sublayer.children_mut() {
+            children.push(many.clone());
+        }
+        let mut layer = Node::layer(NodeId(4), "Layer", LayerColor::Preset(0));
+        if let Some(children) = layer.children_mut() {
+            children.extend([Arc::new(sublayer), few.clone()]);
+        }
+        for (n, what) in [(&group, "a group"), (&layer, "a layer")] {
+            assert_eq!(too_many_anchors([n]), visible, "{what}, member visible: {visible}");
+            assert_eq!(too_many_marks([n]), visible, "{what}, member visible: {visible}");
+        }
+    }
+}
+
 /// View › Hide Edges hides the lines across a selected linked image along with its outline
 /// (#9080).
 #[test]
@@ -13466,8 +13501,55 @@ fn live_trace_selection_highlight_excludes_the_retained_source_rectangle() {
         };
         assert_eq!(node_outline(&group, &symbols).bounding_box(), want);
     }
+    // Without a trace the image is an ordinary hidden member, which the canvas does not draw.
     group.extras_mut().trace = None;
-    assert_eq!(node_outline(&group, &symbols).bounding_box(), vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 200.0));
+    assert_eq!(node_outline(&group, &symbols).bounding_box(), vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0));
+    // A hidden path sent to the back of a trace is not its source image, in any view.
+    let mut path =
+        Node::path(NodeId(4), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 200.0, 200.0)), Appearance::default());
+    path.visible = false;
+    let art = Node::path(NodeId(3), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0)), Appearance::default());
+    let mut group = Node::group(NodeId(1), vec![Arc::new(path), Arc::new(art)]);
+    for view in TraceView::ALL {
+        group.extras_mut().trace = Some(Box::new(json!({"view":view.id()})));
+        assert_eq!(node_outline(&group, &symbols).bounding_box(), vectorcraft_geom::Rect::new(20.0, 30.0, 80.0, 90.0), "{view:?}");
+    }
+}
+
+/// A compound path draws every path it holds, hidden ones included, so its highlight outlines them
+/// all; a group, a blend, an intertwine and a layer leave out a hidden member, and a layer the art
+/// of a hidden sublayer.
+#[test]
+fn a_compound_path_outlines_its_hidden_paths_and_a_group_does_not() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, LayerColor, NodeId};
+    use vectorcraft_geom::FillRule;
+    let rect = |id: u64, r: vectorcraft_geom::Rect, visible: bool| {
+        let mut n = Node::path(NodeId(id), vectorcraft_geom::shapes::rectangle(r), Appearance::default());
+        n.visible = visible;
+        Arc::new(n)
+    };
+    let children = || {
+        vec![rect(2, vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0), true), rect(3, vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0), false)]
+    };
+    let doc = vectorcraft_doc::Document::new(300.0, 300.0);
+    let symbols = doc.symbol_boxes();
+    let contours = |n: &Node| node_outline(n, &symbols).elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count();
+    assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Compound { children: children(), rule: FillRule::EvenOdd })), 2, "a compound path");
+    assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Blend { children: children(), spec: Default::default() })), 1, "a blend");
+    assert_eq!(contours(&Node::group(NodeId(1), children())), 1, "a group");
+    assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Intertwine { children: children() })), 1, "an intertwine");
+    let mut layer = Node::layer(NodeId(1), "Layer", LayerColor::Preset(0));
+    let mut sublayer = Node::layer(NodeId(4), "Sublayer", LayerColor::Preset(1));
+    sublayer.visible = false;
+    if let Some(c) = sublayer.children_mut() {
+        c.push(rect(5, vectorcraft_geom::Rect::new(150.0, 150.0, 200.0, 200.0), true));
+    }
+    if let Some(c) = layer.children_mut() {
+        c.extend(children());
+        c.push(Arc::new(sublayer));
+    }
+    assert_eq!(contours(&layer), 1, "a layer");
 }
 
 /// Hovering over point type shows only its baseline (not the transform bounding box), while

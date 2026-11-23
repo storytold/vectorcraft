@@ -692,6 +692,70 @@ fn a_selected_linked_image_is_crossed_and_an_embedded_one_is_not() {
     }
 }
 
+/// A selected group outlines, marks and crosses only the members the canvas draws: a hidden member
+/// and the members of a hidden group inside it leave no outline, anchors or crossing lines.
+#[test]
+fn a_selected_group_leaves_its_hidden_members_unmarked() {
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType};
+    let dir = vectorcraft_testkit::temp_dir("selection-marks-hidden");
+    let png = dir.join("red.png");
+    let pixels = [200u8, 40, 40, 255].repeat(40 * 40);
+    let image = Image::from_raw(40, 40, ChannelLayout::Rgba, SampleType::U8, pixels).unwrap();
+    std::fs::write(&png, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let left = id_of(&app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    let right = id_of(&app.run("shape.rectangle", json!({"x": 330, "y": 230, "width": 20, "height": 20})).unwrap());
+    let hidden = id_of(&app.run("shape.rectangle", json!({"x": 120, "y": 100, "width": 40, "height": 40})).unwrap());
+    let linked = NodeId(app.run("file.place", json!({"path": png, "link": true, "at": [240.0, 150.0]})).unwrap()["ids"][0].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [linked.0]})).unwrap();
+    let inner = id_of(&app.run("object.group", json!({})).unwrap());
+    app.run("select.set", json!({"ids": [left.0, right.0, hidden.0, inner.0]})).unwrap();
+    let group = id_of(&app.run("object.group", json!({})).unwrap());
+    app.session
+        .edit("Hide", |doc, _| {
+            for id in [hidden, inner] {
+                if let Some(n) = doc.node_mut(id) {
+                    n.visible = false;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.run("select.set", json!({"ids": [group.0]})).unwrap();
+    let ctx = egui::Context::default();
+    let view = xf(1.0, VIEW, 0.0);
+    let marks = picture(&ctx, 1.0, |p| paint(&mut SelectionMarks::default(), &app, p, &view, false));
+    // Whether the marks draw within a pixel of document point `q`.
+    let drawn = |q: Point| {
+        let s = view.to_screen(q);
+        (-1..=1).any(|dy| {
+            (-1..=1).any(|dx| {
+                let (x, y) = ((s.x.round() as i64 + dx) as usize, (s.y.round() as i64 + dy) as usize);
+                marks.pixels[y * marks.size.0 + x][3] > 0.0
+            })
+        })
+    };
+    let doc = &app.session.active().unwrap().doc;
+    let sides = |id: NodeId| {
+        let b = doc.node(id).unwrap().geometric_bounds().unwrap();
+        [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)]
+    };
+    for id in [left, right] {
+        let [tl, tr, br, bl] = sides(id);
+        assert!([tl, tr, br, bl, tl.midpoint(tr), br.midpoint(bl)].into_iter().all(drawn), "a visible member is outlined and marked");
+    }
+    let [tl, tr, br, bl] = doc.node(linked).unwrap().image_corners().unwrap();
+    assert!(
+        ![tl.lerp(br, 0.25), tl.lerp(br, 0.75), tr.lerp(bl, 0.25), tr.lerp(bl, 0.75)].into_iter().any(drawn),
+        "the lines across a linked image in a hidden group"
+    );
+    assert!(![tl.midpoint(tr), tr.midpoint(br)].into_iter().any(drawn), "the outline of a linked image in a hidden group");
+    let [tl, tr, br, bl] = sides(hidden);
+    assert!(![tl, tr, br, bl, tl.midpoint(tr), tr.midpoint(br), br.midpoint(bl), bl.midpoint(tl)].into_iter().any(drawn), "a hidden member");
+    assert_matches_plain(&ctx, &mut SelectionMarks::default(), &app, &view, 1.0, "a group with hidden members");
+}
+
 /// A frame of the whole canvas keeps entries for the selected objects only.
 #[test]
 fn the_canvas_drops_entries_it_does_not_draw() {

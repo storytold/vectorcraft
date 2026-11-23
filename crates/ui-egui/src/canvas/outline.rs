@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{BezPath, Color32, Node, NodeKind, PathEl, Point, Pos2, Shape, Stroke, SymbolBoxes, VectorcraftApp, Xf, pos2};
 
 pub(super) fn to_screen_path(bp: &BezPath, xf: &Xf) -> Vec<Vec<Pos2>> {
@@ -163,7 +165,7 @@ fn over_limit<'a>(nodes: impl IntoIterator<Item = &'a Node>, crosses: bool) -> b
         if n.clips() {
             return n.children().and_then(|children| children.first()).is_some_and(|clip| over(clip, left, crosses));
         }
-        !matches!(n.kind, NodeKind::Envelope { .. }) && n.editing_children().iter().any(|c| over(c, left, crosses))
+        !matches!(n.kind, NodeKind::Envelope { .. }) && drawn_children(n).any(|c| over(c, left, crosses))
     }
     let mut left = OVERLAY_MAX_ANCHORS;
     nodes.into_iter().any(|n| over(n, &mut left, crosses))
@@ -193,9 +195,23 @@ fn overlay_points(n: &Node) -> usize {
     }
 }
 
+/// The children of `n` that [`walk_drawn`] visits: [`Node::editing_children`], without the hidden
+/// members, which the canvas does not draw. An Image Trace object's hidden source image stays when
+/// the object's view shows it. Every path of a compound path stays, since the compound path draws
+/// all of them.
+fn drawn_children(n: &Node) -> impl Iterator<Item = &Arc<Node>> {
+    let members = !matches!(n.kind, NodeKind::Compound { .. });
+    let source = (n.extras().trace.is_some() && n.trace_view().shows_source())
+        .then(|| n.children().and_then(|children| children.first()))
+        .flatten()
+        .filter(|c| matches!(c.kind, NodeKind::Image(_)));
+    n.editing_children().iter().filter(move |c| !members || c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)))
+}
+
 /// [`Node::walk`] over what a selection highlight shows: an envelope's content is left out (the
-/// envelope shows its mesh instead), and a clip group or clipping layer shows only its clipping
-/// path, its first child, not the art the path clips (#2422).
+/// envelope shows its mesh instead), a clip group or clipping layer shows only its clipping path,
+/// its first child, not the art the path clips (#2422), and hidden members are left out
+/// ([`drawn_children`]).
 pub(super) fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
     f(n);
     if matches!(n.kind, NodeKind::Envelope { .. }) {
@@ -207,7 +223,7 @@ pub(super) fn walk_drawn<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
         }
         return;
     }
-    for c in n.editing_children().iter() {
+    for c in drawn_children(n) {
         walk_drawn(c, f);
     }
 }
