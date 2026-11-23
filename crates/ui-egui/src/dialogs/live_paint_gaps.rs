@@ -344,6 +344,35 @@ mod tests {
         assert_eq!(state(&app).0, before.0 + 1);
     }
 
+    /// The canvas draws the gaps Gap Options previews, in its preview color, and stops when Preview goes off.
+    #[test]
+    fn the_canvas_draws_the_previewed_gaps() {
+        let mut app = app();
+        gapped_group(&mut app);
+        let green = egui::Color32::from_rgb(0x4f, 0xff, 0x4f);
+        let drawn = |app: &mut VectorcraftApp| {
+            let ctx = app.ui_ctx.clone().unwrap();
+            let raw =
+                egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| crate::canvas::show(app, ui));
+            out.textures_delta.clear();
+            ctx.tessellate(out.shapes, out.pixels_per_point).into_iter().any(|p| match p.primitive {
+                egui::epaint::Primitive::Mesh(mesh) => mesh.vertices.iter().any(|v| v.color == green),
+                egui::epaint::Primitive::Callback(_) => false,
+            })
+        };
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        set(&app, "detect", json!(true)).unwrap();
+        set(&app, "color", json!("Green")).unwrap();
+        set(&app, "preview", json!(true)).unwrap();
+        pump_all(&mut app);
+        assert!(!overlays(&app).is_empty());
+        assert!(drawn(&mut app), "the previewed gap draws on the canvas");
+        set(&app, "preview", json!(false)).unwrap();
+        pump_all(&mut app);
+        assert!(!drawn(&mut app), "no preview, no gap");
+    }
+
     /// With Preview on, a Gap Preview Color with an alpha part is not previewed: the group keeps
     /// its own color, the gaps draw in black, OK refuses the color and Cancel rolls the preview back.
     #[test]

@@ -616,7 +616,8 @@ fn show_overlays(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass, view_in
     if app.session.tool_overlays_pending() {
         ui.ctx().request_repaint();
     }
-    let mut extra = vec![];
+    // Gap Options' Preview shows the gaps it finds.
+    let mut extra = crate::dialogs::live_paint_gaps::overlays(app);
     if app.ui.view.edges && !revolve {
         if app.ui.view.text_threads {
             extra.extend(super::marks::thread_overlays(app, space.view.zoom));
