@@ -317,7 +317,13 @@ pub(crate) fn control_bar_strip(app: &mut VectorcraftApp, ui: &mut Ui) {
     let distributes = if on_artboards(app) { artboards_distribute(app) } else { objects_aligned(app) > 1 };
     ui.horizontal(|ui| {
         bar_items(align_icons().map(|(_, b)| b)).show(ui);
-        let button = IconButton::new(IconId::new(icon)).label(name).tooltip(name).popup(PopupKind::Menu).popup_mark(PopupMark::Menu).show(ui);
+        let button = IconButton::new(IconId::new(icon))
+            .label(tl!("Align To:"))
+            .choice(name)
+            .tooltip(name)
+            .popup(PopupKind::Menu)
+            .popup_mark(PopupMark::Menu)
+            .show(ui);
         Menu::new(tl!("Align To")).opened_by(&button.response, Trigger::Press).show(ui, |ui, _| {
             for (id, _) in ALIGN_TO_COMMANDS {
                 MenuItem::command(CommandRef::new(id)).show(ui);
