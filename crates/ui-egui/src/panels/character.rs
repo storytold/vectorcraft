@@ -400,14 +400,6 @@ fn caret_kerning(app: &mut VectorcraftApp) -> Option<(f64, bool)> {
     Some((value, true))
 }
 
-/// The check marks of the Kerning menu's Auto and Optical entries for the selection's kerning
-/// `mode` (Optical on, manual value). A manual value checks neither, as it sets the spacing even
-/// with Optical on. A selection that mixes modes checks neither, and the menu still lists both.
-fn kerning_methods(mode: Option<(bool, Option<f64>)>) -> (Option<bool>, Option<bool>) {
-    let (automatic, optical) = mode.map_or((false, false), |(optical, manual)| (!optical && manual.is_none(), optical && manual.is_none()));
-    (Some(automatic), Some(optical))
-}
-
 /// The faces Type › Bold and Type › Italic switch to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Face {
@@ -937,9 +929,12 @@ const HEIGHTS: [(vectorcraft_doc::FontHeightReference, HeightReference, &str); 4
     (vectorcraft_doc::FontHeightReference::IcfBox, HeightReference::IcfBox, "icfBox"),
 ];
 
+/// Whether a style has one of the two-state attributes on.
+type IsOn = fn(&CharStyle) -> bool;
+
 /// The two-state style attributes the panel menu toggles, by `text.setFormat` key. A mixed selection
 /// reads as off, so choosing the row turns it on.
-const TOGGLES: [(&str, fn(&CharStyle) -> bool); 10] = [
+const TOGGLES: [(&str, IsOn); 10] = [
     ("allCaps", |s| s.all_caps),
     ("smallCaps", |s| s.small_caps.is_some()),
     ("underline", |s| s.underline),
@@ -990,9 +985,12 @@ pub(crate) fn face_axes(app: &VectorcraftApp) -> Option<(Vec<FontAxis>, Vec<Name
     Some((axes, craft::font_manager::axes::read_named_instances(face.file_data(), face.face_index())))
 }
 
+/// A variation axis's tag and value.
+type AxisSetting = ([u8; 4], f32);
+
 /// The axis settings the selection shares, and the axes whose settings differ. The first is `None`
 /// while the font has no visible axis.
-fn axis_values(app: &VectorcraftApp) -> (Option<Vec<([u8; 4], f32)>>, Vec<[u8; 4]>) {
+fn axis_values(app: &VectorcraftApp) -> (Option<Vec<AxisSetting>>, Vec<[u8; 4]>) {
     let Some((axes, _)) = face_axes(app) else { return (None, Vec::new()) };
     let db = vectorcraft_text::FontDb::global();
     let (mut held, mut mixed) = (Vec::new(), Vec::new());
@@ -1190,7 +1188,7 @@ pub(crate) fn controls(app: &mut VectorcraftApp, ui: &mut Ui, rows: CharacterRow
     let sets = font_menu::family_sets(Some(&document[..]), &recent[..]);
     let sample = font_menu::sample_text(app);
     let unit = type_unit(app);
-    let mut source = FontPickerSource::new(&catalog, Bind::bound(&mut settings), Bind::bound(&mut app.ui.font_filters))
+    let mut source = FontPickerSource::new(catalog, Bind::bound(&mut settings), Bind::bound(&mut app.ui.font_filters))
         .sets(&sets)
         .scripts(&FontScript::ALL)
         .filter_layout(FilterLayout::Chips);

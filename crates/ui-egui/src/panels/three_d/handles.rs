@@ -230,10 +230,8 @@ impl Component for GraphicHandles<'_> {
                         self.edit = Some(HandleEdit::Move { held: h, to: to_doc(&space.view, pos), phase: Live::Released });
                     }
                 }
-                PressPhase::Cancel { .. } => {
-                    if held.take().is_some() {
-                        self.edit = Some(HandleEdit::End);
-                    }
+                PressPhase::Cancel { .. } if held.take().is_some() => {
+                    self.edit = Some(HandleEdit::End);
                 }
                 _ => {}
             }
@@ -255,7 +253,7 @@ impl Component for GraphicHandles<'_> {
     fn access(&self, access: &mut Access, _: &Cx<'_, Self>) {
         for (index, _) in self.handles {
             let node = access.node(HANDLE.at(*index as u64), Role::BUTTON);
-            node.name = craft::ui::contract::Name::Text(format!("{} {}", tl!("Graphic"), index + 1).into());
+            node.name = craft::ui::contract::Name::Text(format!("{} {}", tl!("Graphic"), index + 1));
         }
     }
 

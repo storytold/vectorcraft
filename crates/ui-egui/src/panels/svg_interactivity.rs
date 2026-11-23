@@ -105,7 +105,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         typed = out.events.committed().filter(|js| js.as_str() != shown).cloned();
     });
     let source = keyed(events, |(e, _): &(String, String)| e.clone());
-    let selection = events.iter().any(|(e, _)| e == event).then(|| Selection::single(event.to_string())).unwrap_or_default();
+    let selection = if events.iter().any(|(e, _)| e == event) { Selection::single(event.to_string()) } else { Default::default() };
     let list = List::<String>::options(tl!("Events"))
         .selection(Bind::given(selection))
         .sizing(Sizing::Fill)

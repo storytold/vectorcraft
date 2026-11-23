@@ -43,7 +43,7 @@ fn pass_uploads(app: &mut VectorcraftApp, ctx: &egui::Context, uid: u64) -> usiz
 
 /// The active document's pending reveal request.
 fn reveal_of(app: &VectorcraftApp) -> Option<LayersReveal> {
-    app.session.active().and_then(|st| st.layers_reveal.clone())
+    app.session.active().and_then(|st| st.layers_reveal)
 }
 
 /// The panel options of the app.

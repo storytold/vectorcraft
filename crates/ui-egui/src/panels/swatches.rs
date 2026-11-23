@@ -65,9 +65,6 @@ impl View {
         (View::SmallList, "Small List View"),
         (View::LargeList, "Large List View"),
     ];
-    pub(crate) fn is_list(self) -> bool {
-        matches!(self, View::SmallList | View::LargeList)
-    }
     /// The browser's view and thumbnail zoom this mode stands for.
     pub(crate) fn preset(self) -> (PresetView, f64) {
         match self {

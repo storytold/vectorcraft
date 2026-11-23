@@ -20,7 +20,7 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
-use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
+use craft::ui::pickers::{Anchor9, ReferencePointLook};
 use craft::ui::popover::Popover;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::overlay::CloseReason;
@@ -106,11 +106,6 @@ const ANCHORS: [Anchor9; 9] = [
 /// The reference point index of `anchor`.
 fn anchor_index(anchor: Anchor9) -> usize {
     ANCHORS.iter().position(|a| *a == anchor).unwrap_or(4)
-}
-
-/// The point `index` (0 to 8) names; the centre for an index outside the grid.
-fn anchor_at(index: usize) -> Anchor9 {
-    ANCHORS.get(index).copied().unwrap_or(Anchor9::Centre)
 }
 
 /// Proportional size: the other dimension when one changes with the link on.
@@ -501,17 +496,6 @@ fn shear_field(app: &mut VectorcraftApp, ui: &mut Ui) {
         {
             let origin = gesture_origin(app);
             live_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}), live);
-        }
-    });
-}
-
-/// The reference point picker alone, for forms that have no transform fields (Artboard Options).
-pub(crate) fn reference_picker(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let at = anchor_at(app.ui.transform_panel.reference_point);
-    let out = ReferencePoint::new(tl!("Reference Point"), Bind::given(Some(at))).look(ReferencePointLook::Squares).show(ui);
-    apply_edits(app, &out, EditPath::Scope, |app, anchor, _| {
-        if let Some(anchor) = *anchor {
-            app.ui.transform_panel.reference_point = anchor_index(anchor);
         }
     });
 }

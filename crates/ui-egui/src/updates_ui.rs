@@ -170,15 +170,6 @@ pub(crate) fn open_prompt_for_test(app: &mut VectorcraftApp) {
     tests::offer(app);
 }
 
-/// Opens the result dialog of a running check for a test in another module.
-#[cfg(all(test, not(target_arch = "wasm32")))]
-pub(crate) fn open_result_window_for_test(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    app.updates_rt.updater = tests::isolated_updater(env!("CARGO_PKG_VERSION"), "result");
-    // Keeps `ctx` for the updater's threads.
-    app.updates_rt.updater.tick(ctx);
-    app.updates_rt.updater.check_now();
-}
-
 /// Closes the update prompt and the result dialog for a test in another module.
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn close_dialogs_for_test(app: &mut VectorcraftApp) {

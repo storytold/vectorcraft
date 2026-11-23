@@ -136,11 +136,6 @@ pub(crate) fn open_message(app: &mut VectorcraftApp, action: &str, message: &str
     open_or_say(app, StopMessage(prompt.button(PromptChoice::Cancel, label("Stop"))));
 }
 
-/// Whether a stop's message box is open.
-pub(crate) fn message_open(app: &VectorcraftApp) -> bool {
-    app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.is_open::<StopMessage>()))
-}
-
 /// Closes a stop's message box as Stop does; the playback keeps waiting. The closer consumes the
 /// Cancel it caused, so the pump does not read it as an answer.
 pub(crate) fn close_message(app: &VectorcraftApp) {

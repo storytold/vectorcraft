@@ -205,8 +205,8 @@ pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {
     let _ = TitleBar::new().show_titled(
         ui,
         Title::new(tl!("VectorCraft")),
-        |ui, _| leading(ui, &mut **app.borrow_mut()),
-        |ui, _| trailing(ui, &mut **app.borrow_mut()),
+        |ui, _| leading(ui, &mut app.borrow_mut()),
+        |ui, _| trailing(ui, &mut app.borrow_mut()),
     );
 }
 

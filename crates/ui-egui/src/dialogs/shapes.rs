@@ -307,8 +307,7 @@ fn grid_options(kind: &str, fields: &DialogFields) -> Map<String, Value> {
     options
 }
 
-/// The size of the arc picture in Arc Segment Tool Options, and its margin around the arc.
-const ARC_PREVIEW: egui::Vec2 = egui::vec2(160.0, 120.0);
+/// The margin around the arc in Arc Segment Tool Options' picture.
 const ARC_PREVIEW_MARGIN: f32 = 12.0;
 
 /// The arc the Arc tool draws with the options OK sets from `fields` ([`arc_options`]; a slope past -100
@@ -762,7 +761,7 @@ mod tests {
     /// the frame, and stays finite for a length of 0 or a huge one.
     #[test]
     fn the_arc_preview_follows_the_fields_and_fits_its_frame() {
-        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), ARC_PREVIEW);
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(160.0, 120.0));
         let shape = |fields: Value| arc_preview_shape(&arc_dialog(fields), 0.0, rect).expect("an arc");
         let inside = |s: &ArcPreview| {
             let room = rect.shrink(ARC_PREVIEW_MARGIN - 0.01);

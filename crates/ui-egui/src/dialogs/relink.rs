@@ -81,7 +81,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         }
     }
     let dialog = RelinkDialog::new(ids, links);
-    crate::dialogs::host::open_held(app, dialog, |app, params| relink(app, params)).ok_or("no window")?;
+    crate::dialogs::host::open_held(app, dialog, relink).ok_or("no window")?;
     Ok(Value::Null)
 }
 

@@ -9,8 +9,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_pdf::{
-    APP, ActiveProfiles, Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail, default_preset_name, leaves_out_bleed,
-    page_bleed,
+    APP, ActiveProfiles, Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail, default_preset_name,
+    leaves_out_bleed, page_bleed,
 };
 
 use super::super::flatten::{FlattenOptions, flatten_document, see_through_images};
@@ -19,7 +19,6 @@ use super::{ArtboardPick, FormatOption, Note, note_texts, write_or_return};
 use crate::EngineError;
 
 const C: &str = "document.exportPdf";
-
 
 /// The PDF options `document.formats` lists; `document.exportPdf` documents every field.
 pub(crate) const OPTIONS: &[FormatOption] = &[

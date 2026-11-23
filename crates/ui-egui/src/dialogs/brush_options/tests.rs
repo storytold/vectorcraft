@@ -428,9 +428,9 @@ fn pattern_options_tiles_open_empty_and_show_the_brushs_own_tile() {
     assert_eq!(brush_art_options::tile_choice(&d, "outerCornerTile"), "original");
     // Original stays in a corner's menu after another choice, and goes back to the corner art.
     let mut d = d;
-    brush_art_options::choose_corner(&mut d, "outerCornerTile", "autoBetween");
+    d.set("outerCornerTile", "autoBetween");
     assert!(brush_art_options::original_available(&d, "outer_corner"));
-    brush_art_options::choose_corner(&mut d, "outerCornerTile", "original");
+    d.set("outerCornerTile", "original");
     assert_eq!(brush_art_options::tile_choice(&d, "outerCornerTile"), "original");
 }
 
@@ -470,9 +470,9 @@ fn pattern_tile_menus_use_document_patterns_and_side_none_keeps_dialog_open() {
     }
     // Original stays available after a swatch is chosen, and restores the tile the dialog opened with.
     let mut d = d;
-    brush_art_options::choose_corner(&mut d, "sideTile", "Wide");
+    d.set("sideTile", "Wide");
     assert!(brush_art_options::original_available(&d, "side"));
-    brush_art_options::choose_corner(&mut d, "sideTile", "original");
+    d.set("sideTile", "original");
     let restored = brush_art_options::edited_def(&d);
     assert_eq!((&restored["side"], &restored["side_frame"]), (&before["side"], &before["side_frame"]));
     set(&mut app, json!({"sideTile": "original"}));
@@ -491,7 +491,7 @@ fn pattern_tile_menus_use_document_patterns_and_side_none_keeps_dialog_open() {
     let mut d = fields_of(&app);
     assert_eq!(brush_art_options::tile_choice(&d, "sideTile"), "pattern:Wide");
     assert!(brush_art_options::original_available(&d, "side"));
-    brush_art_options::choose_corner(&mut d, "sideTile", "original");
+    d.set("sideTile", "original");
     assert_eq!(brush_art_options::edited_def(&d)["side"], opened["side"]);
     cancel(&mut app);
     app.session

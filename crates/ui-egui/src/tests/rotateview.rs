@@ -342,8 +342,8 @@ impl Window {
         self.time += seconds;
         let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
         let raw = egui::RawInput { screen_rect: Some(rect), time: Some(self.time), events, ..Default::default() };
-        let out = crate::testing::app_frame(&mut self.app, &self.ctx, raw);
-        out
+
+        crate::testing::app_frame(&mut self.app, &self.ctx, raw)
     }
 
     /// A press and release of Escape, `seconds` after the last frame.

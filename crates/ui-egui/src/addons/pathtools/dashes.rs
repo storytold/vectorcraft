@@ -5,7 +5,7 @@ use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDi
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::addons::dialogs::{self, Confirm, Spec};
+use crate::addons::dialogs::{self, Spec};
 use crate::canvas::rulers::general_lengths;
 
 /// The command.
@@ -15,7 +15,7 @@ const DASHES: std::ops::RangeInclusive<f64> = 0.01..=1e6;
 const GAPS: std::ops::RangeInclusive<f64> = 0.0..=1e6;
 
 /// How the dialog's values reach the command.
-pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None, confirm: Confirm::Commit };
+pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None };
 
 /// The command's parameters from the dialog's fields.
 pub(crate) fn params(fields: &DialogFields) -> Value {

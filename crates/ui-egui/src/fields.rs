@@ -1,6 +1,6 @@
 //! Helpers for the number, blend and kerning fields the panels build from framework components.
 
-use craft::behavior::{Codec, NotAValue, NumberCodec, Reader};
+use craft::behavior::{NumberCodec, Reader};
 use craft::ui::contract::Entry;
 use craft::ui::patterns::blend_keys::{BlendKeyEntry, BlendShortcut, blend_entries as framework_blend_entries};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind, Units};
@@ -42,24 +42,9 @@ pub fn blend_entries() -> Vec<Entry<BlendMode>> {
     framework_blend_entries(&entries, |entry| mode_label(entry.key))
 }
 
-/// The blend modes keyed by [`blend_key`], for a form parameter (`Param::blend`).
-pub fn blend_modes() -> Vec<(BlendKeyEntry<String>, Label)> {
-    blend_table().into_iter().map(|(mode, shortcut)| (BlendKeyEntry::new(blend_key(mode), shortcut), mode_label(mode))).collect()
-}
-
 /// `mode`'s name in the interface language.
 fn mode_label(mode: BlendMode) -> Label {
     Label::from(crate::i18n::t(mode.label()))
-}
-
-/// The parameter value naming `mode` (`"multiply"`).
-pub fn blend_key(mode: BlendMode) -> String {
-    mode.label().to_ascii_lowercase()
-}
-
-/// The blend mode an effect parameter names; only a parameter called `mode` is one.
-pub fn blend_of(key: &str, value: &serde_json::Value) -> Option<BlendMode> {
-    value.as_str().filter(|_| key == "mode").and_then(BlendMode::parse)
 }
 
 /// `lengths` with `bare_points` (Numbers Without Units Are Points) applied: a bare number in a picas
@@ -85,40 +70,6 @@ fn share_of(text: &str, value: f64) -> Option<f64> {
 /// as that share of `shown` (the field's current value, in the shown unit).
 pub fn size_codec(units: &Units, lengths: LengthUnits, decimals: usize, shown: Option<f64>, bare_points: bool) -> NumberCodec {
     NumberCodec::new(length_reader(units, lengths, bare_points), decimals).or_parse(move |text| shown.and_then(|v| share_of(text, v)))
-}
-
-/// Kerning drops one pair of parentheses around its whole text, so its automatic value `(12)` reads
-/// as 12. Parentheses anywhere else are refused rather than dropped, which would read `(10+5)*2` as
-/// `10+5*2`.
-pub struct KerningCodec {
-    inner: NumberCodec,
-    /// The value is automatic kerning: shown in parentheses.
-    automatic: bool,
-}
-
-impl KerningCodec {
-    /// A kerning codec over the number codec `inner`; `automatic` shows values as `(12)`.
-    pub fn new(inner: NumberCodec, automatic: bool) -> Self {
-        KerningCodec { inner, automatic }
-    }
-}
-
-impl Codec for KerningCodec {
-    type Value = Option<f64>;
-
-    fn format(&self, v: &Option<f64>) -> String {
-        let text = self.inner.format(v);
-        if self.automatic && v.is_some() { format!("({text})") } else { text }
-    }
-
-    fn parse(&self, text: &str, start: &Option<f64>) -> Result<Option<f64>, NotAValue> {
-        let trimmed = text.trim();
-        let bare = trimmed.strip_prefix('(').and_then(|t| t.strip_suffix(')')).unwrap_or(trimmed);
-        if bare.contains(['(', ')']) {
-            return Err(NotAValue);
-        }
-        self.inner.parse(bare, start)
-    }
 }
 
 /// `v` moved `n` steps of `size` (down when negative): the first step goes to the next multiple of
@@ -237,28 +188,5 @@ mod tests {
         let stops = [1.0 / 12.0, 2.0 / 12.0, 3.0 / 12.0];
         assert_eq!(step_through(0.167, 1.0, -1.0, &stops, same), 1.0 / 12.0);
         assert_eq!(step_through(0.083, 1.0, 1.0, &stops, same), 2.0 / 12.0);
-    }
-
-    fn kerning(automatic: bool) -> KerningCodec {
-        KerningCodec::new(NumberCodec::new(Reader::new(), 0), automatic)
-    }
-
-    /// Kerning drops one pair of parentheses around its whole text, with a manual value or an
-    /// automatic one, and refuses any other parentheses; only automatic kerning shows `(value)`.
-    #[test]
-    fn only_kerning_drops_one_pair_of_parentheses_around_the_text() {
-        for automatic in [false, true] {
-            let codec = kerning(automatic);
-            let read = |text: &str| codec.parse(text, &Some(12.0)).ok().flatten();
-            assert_eq!(read("(12)"), Some(12.0));
-            assert_eq!(read(" (-25) "), Some(-25.0));
-            assert_eq!(read("(10+5)"), Some(15.0));
-            assert_eq!(read("12"), Some(12.0));
-            for text in ["(10+5)*2", "2*(10+5)", "(10)+(5)", "((12))", "(12", "12)"] {
-                assert_eq!(read(text), None, "{text}");
-            }
-        }
-        assert_eq!(kerning(true).format(&Some(12.0)), "(12)");
-        assert_eq!(kerning(false).format(&Some(12.0)), "12");
     }
 }

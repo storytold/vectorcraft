@@ -55,9 +55,12 @@ fn frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Eve
     shapes
 }
 
+/// A texture's picture: its pixels and size.
+type Picture = (Vec<Color32>, [usize; 2]);
+
 thread_local! {
     /// The last picture each texture got in the frames [`frame_in`] and [`wait_ready`] ran, as pixels and size.
-    static UPLOADED: std::cell::RefCell<std::collections::HashMap<egui::TextureId, (Vec<Color32>, [usize; 2])>> = Default::default();
+    static UPLOADED: std::cell::RefCell<std::collections::HashMap<egui::TextureId, Picture>> = Default::default();
 }
 
 /// Notes the last picture each texture got in `delta` in [`UPLOADED`], and handles the uploads.

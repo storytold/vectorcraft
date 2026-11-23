@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use vectorcraft_tools::addons::corner_tool::{ID, MAX_RADIUS, RADIUS};
 
 use crate::VectorcraftApp;
-use crate::addons::dialogs::{self, Confirm, Spec};
+use crate::addons::dialogs::{self, Spec};
 use crate::canvas::rulers::general_lengths;
 
 /// The command.
@@ -22,7 +22,7 @@ const EVERY: [(&str, &str); 3] = [("all", "All Anchors"), ("odd", "Odd-Numbered 
 const ANGLES: std::ops::RangeInclusive<f64> = 0.0..=180.0;
 
 /// How the dialog's values reach the command.
-pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None, confirm: Confirm::Commit };
+pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None };
 
 /// The command's parameters from the dialog's fields.
 pub(crate) fn params(fields: &DialogFields) -> Value {

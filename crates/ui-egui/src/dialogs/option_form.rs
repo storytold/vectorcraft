@@ -30,6 +30,9 @@ use crate::canvas::rulers::unit_kind;
 /// Pixels per inch that sizes a length shown in pixels: a pixel is a point.
 const PIXELS_PER_INCH: f64 = 72.0;
 
+/// What OK does with a dialog's checked values and its extra value.
+type Run = fn(&mut VectorcraftApp, &Map<String, Value>, &Value) -> Result<Value, String>;
+
 /// What one of the dialogs the form serves is.
 pub(super) struct OptionSpec {
     /// The dialog kind: the key automation and the host know the dialog by.
@@ -47,7 +50,7 @@ pub(super) struct OptionSpec {
     /// Whether the row of `key` takes no input with these values.
     pub inactive: fn(&Map<String, Value>, &str) -> bool,
     /// What OK does with the checked values and [`OptionForm::extra`].
-    pub run: fn(&mut VectorcraftApp, &Map<String, Value>, &Value) -> Result<Value, String>,
+    pub run: Run,
     /// What closing the dialog without OK releases (a running preview).
     pub cancelled: Option<fn(&mut VectorcraftApp)>,
 }

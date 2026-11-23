@@ -335,7 +335,7 @@ fn editing(app: &VectorcraftApp, owner: &Owner) -> bool {
 /// The side flyouts and the drawer open on: toward the canvas.
 fn opens(app: &VectorcraftApp, owner: &Owner) -> Side {
     let layout = crate::panel_docking::layout_of(&app.ui);
-    match crate::panel_docking::column_of(&layout, &owner.panel()) {
+    match crate::panel_docking::column_of(layout, &owner.panel()) {
         Some((Some((DockEdge::End, _)), _)) => Side::Start,
         _ => Side::End,
     }

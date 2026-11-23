@@ -34,8 +34,8 @@ fn typed(start: f64, text: &str, lengths: LengthUnits, codec: impl Fn(&Units) ->
     fixture.settle();
     let at = fixture.shown().center();
     fixture.click_at(at).idle(2).key(Key::A, Modifiers::COMMAND).type_text(text).idle(1).key(Key::Enter, Modifiers::NONE).idle(2);
-    let held = *value.borrow();
-    held
+
+    *value.borrow()
 }
 
 /// `typed` in a field that stores points and shows `shown`, reading with the size codec.

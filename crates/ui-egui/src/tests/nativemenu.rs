@@ -48,7 +48,7 @@ fn settings_lists_every_preferences_page() {
         .expect("the Settings submenu");
     let pages: Vec<&Item> = settings.iter().filter_map(|n| if let Node::Item(it) = n { Some(it) } else { None }).collect();
     assert_eq!(pages.len(), PREF_CATEGORIES.len());
-    assert_eq!((pages[0].label.as_str(), pages[0].shortcut.clone()), ("General…", Some(Chord::parse("Cmd+K").unwrap())));
+    assert_eq!((pages[0].label.as_str(), pages[0].shortcut), ("General…", Some(Chord::parse("Cmd+K").unwrap())));
     assert!(pages[1..].iter().all(|it| it.shortcut.is_none()));
     for (it, page) in pages.iter().zip(PREF_CATEGORIES) {
         assert_eq!(
@@ -127,8 +127,8 @@ impl Mac {
         };
         let app = &mut self.app;
         craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
-        let out = crate::testing::app_frame(app, &self.ctx, raw);
-        out
+
+        crate::testing::app_frame(app, &self.ctx, raw)
     }
 
     /// AppKit chose an item by its key equivalent `sc`. A paste the menu asks the host for

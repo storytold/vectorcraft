@@ -16,7 +16,7 @@ pub(crate) fn options() -> LayoutOptions<'static> {
 
 /// Install the native menu bar from the app's menus; `None` off macOS or when AppKit refuses it.
 /// The model is built first so the bar exists before the first frame.
-pub(crate) fn install(ctx: &egui::Context, app: &mut VectorcraftApp) -> Option<NativeMenu> {
+pub fn install(ctx: &egui::Context, app: &mut VectorcraftApp) -> Option<NativeMenu> {
     refresh(app, ctx);
     mac::install(ctx, &mac_layout(&stated(app), &options()).bar)
 }

@@ -118,9 +118,12 @@ fn name_rows(names: &&[(String, String)], _: &Env) -> Vec<PresetRow<String>> {
     names.iter().map(|(name, shown)| PresetRow::item(name.clone(), shown.clone(), 0)).collect()
 }
 
+/// What a presets row takes: the rows, the values each applies, and the built-in names.
+pub(crate) type PresetRows = (Vec<PresetRow<String>>, Vec<(String, DialogFields)>, Vec<String>);
+
 /// The presets the session lists, as what a presets row takes: the rows (the built-in ones
 /// translated), the values each applies, and the built-in names.
-pub(crate) fn preset_rows(app: &VectorcraftApp) -> (Vec<PresetRow<String>>, Vec<(String, DialogFields)>, Vec<String>) {
+pub(crate) fn preset_rows(app: &VectorcraftApp) -> PresetRows {
     let presets = app.session.flattener_presets();
     let rows = preset_names(app).into_iter().map(|(name, shown)| PresetRow::item(name, shown, 0)).collect();
     let values = presets.iter().map(|p| (p.name.clone(), option_fields(&p.options))).collect();

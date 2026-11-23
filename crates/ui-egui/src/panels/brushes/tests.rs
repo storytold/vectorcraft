@@ -2,7 +2,7 @@ use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
 
 use craft::behavior::keyed as keyed_rows;
-use craft::ui::contract::{ListDrag, Role, Show as _, ShowCollection as _};
+use craft::ui::contract::{ListDrag, Role, ShowCollection as _};
 use craft::ui::display::Picture;
 use craft::ui::list::{List, ListRow, ThumbAspect};
 use craft::ui::testing::layout::in_region;

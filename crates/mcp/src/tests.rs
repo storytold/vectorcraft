@@ -1260,7 +1260,8 @@ fn remote_rejects_uncorrelated_replies_without_replaying() {
     // The line the app sends instead of the edit's answer, made from the edit's request, and
     // whether it answers the edit: a reply with no id or a null one answers the call in flight,
     // one with another id (or the id as a string) is skipped while the call waits for its own.
-    let replies: [(fn(&Value) -> String, bool); 6] = [
+    type Reply = fn(&Value) -> String;
+    let replies: [(Reply, bool); 6] = [
         (|_| json!({"ok": true, "result": {}}).to_string(), true),
         (|_| json!({"id": null, "ok": true, "result": {}}).to_string(), true),
         (|msg| json!({"id": msg["id"].to_string(), "ok": true, "result": {}}).to_string(), false),

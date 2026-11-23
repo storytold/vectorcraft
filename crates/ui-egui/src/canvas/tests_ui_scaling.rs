@@ -23,7 +23,7 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, (native, ui_zoom): (f32,
     };
     input.viewports.entry(egui::ViewportId::ROOT).or_default().native_pixels_per_point = Some(native);
     // As the hosts run it: the zoom stops come from the preferences through the app's frame input.
-    crate::testing::part_frame(app, ctx, input, |app, ui| show(app, ui));
+    crate::testing::part_frame(app, ctx, input, show);
 }
 
 /// A 512 × 512 pt document shown at `native` device pixels a point and UI Scaling `ui_zoom`, with a

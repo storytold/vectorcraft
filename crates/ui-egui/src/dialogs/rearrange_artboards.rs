@@ -300,7 +300,9 @@ mod tests {
     /// setting the layout makes meaningless is refused.
     #[test]
     fn rearrange_fields_reach_the_command() {
-        let cases: [(u32, &[(&str, Value)], &[(f64, f64)]); 2] = [
+        type Settings<'a> = &'a [(&'a str, Value)];
+        type Positions<'a> = &'a [(f64, f64)];
+        let cases: [(u32, Settings<'_>, Positions<'_>); 2] = [
             (3, &[("layout", json!("row")), ("order", json!("rightToLeft")), ("spacing", json!(10))], &[(220.0, 0.0), (110.0, 0.0), (0.0, 0.0)]),
             (
                 4,

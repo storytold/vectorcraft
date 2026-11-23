@@ -552,7 +552,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let edited = tgt.color().map(|c| PickedColor::in_model(srgba(&c), model_values(&c)));
     let rows = shown(app, &tgt);
     let printable = gamut(app);
-    let stored: Vec<Color> = app.session.recent_colors.iter().copied().collect();
+    let stored: Vec<Color> = app.session.recent_colors.to_vec();
     let chips: Vec<Srgba> = stored.iter().map(srgba).collect();
     let before = app.ui.color_panel;
     let out = ColorPanel::new(Bind::bound(&mut app.ui.color_panel), colors)

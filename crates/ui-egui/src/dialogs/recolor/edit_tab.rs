@@ -255,7 +255,7 @@ fn tool_row(ui: &mut Ui, d: &mut Fields, display: &'static str, axes: DiscRadius
         }
         let tip = if bright { tl!("Show saturation and hue on wheel") } else { tl!("Show brightness and hue on wheel") };
         // The button is named for what a click shows next, as its tooltip says.
-        flipped = ToggleButton::new(tip.clone(), Bind::given(on_wheel && bright))
+        flipped = ToggleButton::new(tip, Bind::given(on_wheel && bright))
             .icon(IconId::new("sun"))
             .icon_only()
             .tooltip(tip)

@@ -507,7 +507,12 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The theme's colours: click one to select it.
     let chips: Vec<_> = d.colors.iter().map(|c| (Label::from(c.to_hex()), srgba(c))).collect();
     let mut chosen = Selection::single(d.sel);
-    SwatchTable::new(tl!("Theme colors"), &chips).per_row(THEME_SIZE).spacing(SwatchSpacing::Spaced).selection(Bind::bound(&mut chosen)).show_all(ui);
+    // The selection comes back through `chosen`.
+    let _ = SwatchTable::new(tl!("Theme colors"), &chips)
+        .per_row(THEME_SIZE)
+        .spacing(SwatchSpacing::Spaced)
+        .selection(Bind::bound(&mut chosen))
+        .show_all(ui);
     if let Some(&i) = chosen.items.last() {
         d.sel = i;
     }
@@ -933,7 +938,7 @@ mod tests {
         let d = five_colors(&mut app.borrow_mut());
         app.borrow_mut().ui.color_themes_panel.mode = Some(ColorPanelMode::RgbSliders);
         let mut fx = fixture(&app);
-        let g_rail = rails(&fx)[2].clone();
+        let g_rail = rails(&fx)[2];
         fx.click(&g_rail).settle();
         let now = draft(&mut app.borrow_mut());
         assert_ne!(now.colors[2], d.colors[2], "the selected color changed");
@@ -958,7 +963,7 @@ mod tests {
         five_colors(&mut app.borrow_mut());
         app.borrow_mut().ui.color_themes_panel.mode = Some(ColorPanelMode::HsbSliders);
         let mut fx = fixture(&app);
-        let (h_rail, s_rail) = (rails(&fx)[1].clone(), rails(&fx)[2].clone());
+        let (h_rail, s_rail) = (rails(&fx)[1], rails(&fx)[2]);
         fx.click(&h_rail).settle();
         let hue = app.borrow().ui.color_themes_panel.held.clone().expect("held").values.values[0];
         fx.click(&s_rail).settle();
@@ -979,7 +984,7 @@ mod tests {
         set_draft(&mut app.borrow_mut(), d);
         app.borrow_mut().ui.color_themes_panel.mode = Some(ColorPanelMode::HsbSliders);
         let mut fx = fixture(&app);
-        let h_rail = rails(&fx)[1].clone();
+        let h_rail = rails(&fx)[1];
         fx.click(&h_rail).settle();
         let held = app.borrow().ui.color_themes_panel.held.clone().expect("held");
         let base = color_of_values(&held.values);
@@ -995,7 +1000,7 @@ mod tests {
         five_colors(&mut app.borrow_mut());
         app.borrow_mut().ui.color_themes_panel.mode = Some(ColorPanelMode::CmykSliders);
         let mut fx = fixture(&app);
-        let c_rail = rails(&fx)[1].clone();
+        let c_rail = rails(&fx)[1];
         fx.click(&c_rail).settle();
         let mut app = app.borrow_mut();
         let colors = draft(&mut app).colors;

@@ -1,8 +1,8 @@
 use super::plain::{char_range_to_bytes, plain_ceil_boundary, plain_chars_after, plain_chars_before, plain_floor_boundary, plain_len};
 use super::ports::{ported, ports, ports_shown};
 use super::{
-    Action, BezPath, Cursor, Mode, Mods, NodeId, Overlay, Point, PointerEvent, PointerKind, Preedit, Range, Rect, Shape,
-    SurroundingUnit, TextKind, TextRun, Tool, ToolContext, ToolKey, TypeTool, Value, edit, json,
+    Action, BezPath, Cursor, Mode, Mods, NodeId, Overlay, Point, PointerEvent, PointerKind, Preedit, Range, Rect, Shape, SurroundingUnit, TextKind,
+    TextRun, Tool, ToolContext, ToolKey, TypeTool, Value, edit, json,
 };
 
 impl Tool for TypeTool {
@@ -681,4 +681,3 @@ impl Tool for TypeTool {
         }
     }
 }
-

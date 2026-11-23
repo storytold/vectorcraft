@@ -104,14 +104,6 @@ pub fn stored_key(key: &str) -> String {
     if key.starts_with("panel:") || key.starts_with("effect:") || key.starts_with("plugin:") { command_of(key).key() } else { key.to_string() }
 }
 
-/// An Effect menu item's [`Overrides`] key under the command its item does not run now
-/// (`effect.apply` for one that opens its dialog, and the other way round).
-pub(crate) fn other_stored_key(key: &str) -> Option<String> {
-    let effect = key.strip_prefix("effect:")?;
-    let other = if command_of(key).id == "effect.apply" { "effect.dialog" } else { "effect.apply" };
-    Some(CommandRef::with_params(other, json!({ "effect": effect })).key())
-}
-
 /// The entry key of an [`Overrides`] key.
 pub fn entry_of_stored(key: &str) -> String {
     CommandRef::parse_key(key)

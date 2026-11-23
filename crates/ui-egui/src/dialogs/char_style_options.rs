@@ -249,7 +249,7 @@ fn tri_box(ui: &mut egui::Ui, current: Option<bool>, label: Option<Label>, salt:
         check = check.label(label);
     }
     let out = check.show(ui);
-    let next = out.value().is_some().then(|| match current {
+    let next = out.value().is_some().then_some(match current {
         None => Some(true),
         Some(true) => Some(false),
         Some(false) => None,
@@ -1110,11 +1110,6 @@ impl CharStyleOptions {
     /// The style's attributes as the dialog's values set them, or why they are refused.
     pub(crate) fn edited(&self) -> Result<Map<String, Value>, String> {
         edited_attrs(self.inner.fields(), &self.opening)
-    }
-
-    /// What the dialog opened with.
-    pub(crate) fn opening(&self) -> &Opening {
-        &self.opening
     }
 
     fn command(&self, attrs: Map<String, Value>) -> Value {

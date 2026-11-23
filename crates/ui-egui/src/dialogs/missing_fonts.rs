@@ -284,10 +284,11 @@ impl StackDialog for MissingFontsDialog {
                             *search_folder = next.clone();
                             act = Some(Act::Search);
                         }
-                        if *can_pick && clicked(&Button::new(tl!("Find in Folder…")).id_salt("pick").enabled(!searching).show(ui)) {
-                            if let Some(host) = form.env.host().cloned() {
-                                *ticket = Some(host.files().pick(PickRequest::folder("fonts")));
-                            }
+                        if *can_pick
+                            && clicked(&Button::new(tl!("Find in Folder…")).id_salt("pick").enabled(!searching).show(ui))
+                            && let Some(host) = form.env.host().cloned()
+                        {
+                            *ticket = Some(host.files().pick(PickRequest::folder("fonts")));
                         }
                         if searching && clicked(&Button::new(tl!("Stop")).id_salt("stop").show(ui)) {
                             act = Some(Act::Stop);
@@ -381,7 +382,7 @@ pub(crate) fn open_next(app: &mut VectorcraftApp) {
         let Some(dialog) = dialog_for(app, uid) else { continue };
         let Some(dialogs) = app.dialogs() else { return };
         // One dialog at a time: a document that asks while another's is open waits its turn.
-        if dialogs.with(|h| h.open_unless_open(dialog)).is_err() {
+        if dialogs.with(|h| h.open_unless_open(dialog).is_err()) {
             queue_first(app, uid);
         }
         break;
@@ -487,7 +488,7 @@ fn open_searching(app: &mut VectorcraftApp, uid: u64, folder: &str) -> Result<Va
 fn show_for(app: &mut VectorcraftApp, uid: u64, dialog: MissingFontsDialog) {
     app.ui.pending_fonts.retain(|u| *u != uid);
     let Some(dialogs) = app.dialogs() else { return };
-    if dialogs.with(|h| h.open_unless_open(dialog)).is_err() {
+    if dialogs.with(|h| h.open_unless_open(dialog).is_err()) {
         queue_first(app, uid);
     }
 }

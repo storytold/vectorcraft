@@ -50,7 +50,8 @@ pub fn open(app: &mut VectorcraftApp) {
             })
             .collect();
         ui.scope(|ui| {
-            SwatchTable::new(tl!("Variations").to_owned(), &chips).show_all(ui);
+            // The chips hold no selection: a click reports one the row ignores.
+            let _ = SwatchTable::new(tl!("Variations").to_owned(), &chips).show_all(ui);
         })
         .response
     });

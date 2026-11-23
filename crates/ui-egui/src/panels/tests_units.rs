@@ -148,7 +148,7 @@ fn the_preferences_dialog_shows_the_documents_units() {
     crate::prefs_dialog::open(&mut app, Some("General"));
     assert_eq!(crate::prefs_dialog::fields(&app).unwrap()["unitsGeneral"], json!("millimeters"));
     let inc = app.session.prefs.keyboard_increment;
-    let mut p = Panel::new(app, |app, ui| crate::prefs_dialog::show(app, ui));
+    let mut p = Panel::new(app, crate::prefs_dialog::show);
     assert!(reads(p.value("Keyboard Increment"), Unit::Millimeters, inc), "Keyboard Increment in mm: {:?}", p.value("Keyboard Increment"));
     // Choosing another General unit in the dialog shows at once, and OK applies it.
     crate::prefs_dialog::set_field(&mut p.app(), "unitsGeneral", json!("inches")).unwrap();

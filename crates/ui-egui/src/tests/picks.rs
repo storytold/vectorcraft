@@ -457,7 +457,8 @@ fn keyboard_shortcuts_export_text_writes_the_format_picked_in_its_save_dialog() 
     ] {
         let mut app = app();
         let picker = scripted(&mut app);
-        let files: Rc<RefCell<Vec<(String, Vec<u8>)>>> = Default::default();
+        // Each file written: its path and bytes.
+        let files: Rc<RefCell<Vec<_>>> = Default::default();
         let f = files.clone();
         app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
             f.borrow_mut().push((path.to_string(), b.to_vec()));

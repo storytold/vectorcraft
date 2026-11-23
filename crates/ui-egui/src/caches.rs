@@ -117,7 +117,7 @@ pub struct CanvasCache {
     /// How many objects Start Global Edit would edit, for the key the Properties panel builds.
     pub(crate) global_edit_count: Option<(crate::panels::properties::GlobalEditKey, usize)>,
     /// The selected live shape's angle, for (document uid, revision, kind of shape).
-    pub shape_angle: Option<((u64, u64, std::mem::Discriminant<vectorcraft_doc::LiveShape>), Option<f64>)>,
+    pub shape_angle: Option<ShapeAngleCache>,
     /// The Image Trace presets, for the session's preset revision.
     pub(crate) trace_presets: Option<(u64, Arc<crate::panels::image_trace::PresetList>)>,
     /// What the Image Trace panel traces, for (document uid, revision).
@@ -131,25 +131,25 @@ pub struct CanvasCache {
     /// The SVG Options dialog's SVG code, for every input it reads (compared with `==`).
     pub(crate) svg_code: Option<(crate::dialogs::svg_options::SvgCodeKey, Arc<str>)>,
     /// The Export for Screens dialog's artboard thumbnails, for (document uid, revision).
-    pub artboard_thumbs: Option<((u64, u64), Vec<Option<egui::TextureHandle>>)>,
+    pub artboard_thumbs: Option<ArtboardThumbsCache>,
     /// The families the document uses, for the document's fonts key.
     pub document_families: Option<(FontsKey, Arc<[String]>)>,
     /// The families installed lately: the font generation, when it was asked, the families and
     /// the newest install time among them.
-    pub recently_added: Option<(u64, SystemTime, Arc<[String]>, Option<SystemTime>)>,
+    pub recently_added: Option<RecentlyAddedCache>,
     /// The kerning at the Type tool's caret, for (document uid, revision, text object, byte).
     pub caret_kerning: Option<((u64, u64, NodeId, usize), f64)>,
     /// The alternates the Glyphs panel found at the selection.
     pub(crate) glyphs_found: crate::panels::glyphs::Found,
     /// The faces the Glyphs panel's positional forms come from: (document uid, revision, font
     /// generation, the selection's object and range, the selected objects).
-    pub glyph_form_faces: Option<((u64, u64, u64, Option<(NodeId, usize, usize)>, Vec<NodeId>), Vec<u32>)>,
+    pub glyph_form_faces: Option<GlyphFormFacesCache>,
     /// The selected characters' outlines on the page for the alternates row: (document uid,
     /// revision, text object, range) to the quads and whether they are cut.
-    pub character_quads: Option<((u64, u64, NodeId, usize, usize), (Vec<[Point; 4]>, bool))>,
+    pub character_quads: Option<CharacterQuadsCache>,
     /// The Tabs panel's guide line, for (document uid, text object, paragraph, revision): layout is
     /// too slow to run on every frame of a stop's drag.
-    pub tabs_guide_axis: Option<((u64, NodeId, usize, u64), Option<(Point, Point, Vec2)>)>,
+    pub tabs_guide_axis: Option<TabsGuideAxisCache>,
     /// The Appearance panel's summary of the selection, which holds the document, revision and
     /// subjects it was made for.
     pub(crate) appearance_summary: Option<Arc<crate::panels::appearance::Summary>>,
@@ -256,6 +256,29 @@ pub struct SymbolInstances {
 
 /// [`CanvasCache::print_tiling`]: the print tiling of (document uid, revision).
 pub type PrintTilingCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_pdf::TilingPage>>);
+
+/// [`CanvasCache::shape_angle`]: the selected live shape's angle, for (document uid, revision, kind
+/// of shape).
+pub type ShapeAngleCache = ((u64, u64, std::mem::Discriminant<vectorcraft_doc::LiveShape>), Option<f64>);
+
+/// [`CanvasCache::artboard_thumbs`]: the artboard thumbnails of (document uid, revision).
+pub type ArtboardThumbsCache = ((u64, u64), Vec<Option<egui::TextureHandle>>);
+
+/// [`CanvasCache::recently_added`]: the font generation, when it was asked, the families and the
+/// newest install time among them.
+pub type RecentlyAddedCache = (u64, SystemTime, Arc<[String]>, Option<SystemTime>);
+
+/// [`CanvasCache::glyph_form_faces`]: the faces, for (document uid, revision, font generation, the
+/// selection's object and range, the selected objects).
+pub type GlyphFormFacesCache = ((u64, u64, u64, Option<(NodeId, usize, usize)>, Vec<NodeId>), Vec<u32>);
+
+/// [`CanvasCache::character_quads`]: the quads and whether they are cut, for (document uid,
+/// revision, text object, range).
+pub type CharacterQuadsCache = ((u64, u64, NodeId, usize, usize), (Vec<[Point; 4]>, bool));
+
+/// [`CanvasCache::tabs_guide_axis`]: the guide line, for (document uid, text object, paragraph,
+/// revision).
+pub type TabsGuideAxisCache = ((u64, NodeId, usize, u64), Option<(Point, Point, Vec2)>);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CacheKey {

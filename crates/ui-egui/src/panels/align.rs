@@ -262,13 +262,13 @@ fn command_id(b: Button) -> Option<&'static str> {
 fn align_icons() -> impl Iterator<Item = (&'static str, Button)> {
     ALIGN.iter().enumerate().flat_map(|(i, (icon, _, axis, v))| {
         let centers = (i == 3).then_some(("dc-al-center", Button::AlignCenters));
-        centers.into_iter().chain([(*icon, Button::Align(*axis, *v))])
+        centers.into_iter().chain([(*icon, Button::Align(axis, v))])
     })
 }
 
 /// The Distribute Objects buttons in the panel's order: (icon, button).
 fn distribute_icons() -> impl Iterator<Item = (&'static str, Button)> {
-    DISTRIBUTE.iter().map(|(icon, _, axis, v)| (*icon, Button::Distribute(*axis, *v)))
+    DISTRIBUTE.iter().map(|(icon, _, axis, v)| (*icon, Button::Distribute(axis, v)))
 }
 
 /// An icon button that runs the command of `b`; its label, state and click come from the command.
@@ -366,9 +366,6 @@ fn topmost(app: &VectorcraftApp) -> Option<vectorcraft_doc::NodeId> {
 fn align_to(app: &VectorcraftApp) -> AlignTo {
     if has_key(app) { AlignTo::Key } else { app.ui.align_to }
 }
-
-/// The Align To choices of the Align panel and of the Control bar's Align To menu, in their order.
-const ALIGN_TO: [AlignTo; 3] = [AlignTo::Selection, AlignTo::Key, AlignTo::Artboard];
 
 /// The icon and the translated name of Align To choice `v`; `anchor`: the key is an anchor point
 /// (Direct Selection), and the key choice is named Align to Key Anchor.

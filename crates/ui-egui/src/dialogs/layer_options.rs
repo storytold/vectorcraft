@@ -131,7 +131,7 @@ impl LayerOptionsValue {
 
     /// Whether `field` was set in the dialog.
     fn is_set(&self, field: &str) -> bool {
-        self.set.iter().any(|set| *set == field)
+        self.set.contains(&field)
     }
 
     /// The check box `key` names.

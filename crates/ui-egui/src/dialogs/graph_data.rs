@@ -390,12 +390,6 @@ fn graph_grid(app: &mut VectorcraftApp, graph: Option<u64>) -> Result<Grid, Stri
     Ok(grid_from_data(&v))
 }
 
-/// Revert: the graph's data again.
-fn revert(app: &mut VectorcraftApp, sheet: &mut Sheet, graph: Option<u64>) -> Result<(), String> {
-    replace_grid(sheet, graph_grid(app, graph)?);
-    Ok(())
-}
-
 /// Whether Import Data can ask for a file here: the host has a picker and the app can read files.
 fn can_import(app: &VectorcraftApp) -> bool {
     file_asks::can(app, craft::host::PickKind::Open) && app.services.read.is_some()

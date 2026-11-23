@@ -485,9 +485,9 @@ mod tests {
             assert!(text_style(&app).unwrap().0.features.is_empty(), "{label} off");
         }
         let mut app = selected_text();
-        for i in 0..FIGURES.len() {
+        for (i, name) in FIGURES.iter().enumerate() {
             edit(&mut app, Change::Figure(i));
-            assert_eq!(figure(&features(&app)), i, "{}", FIGURES[i]);
+            assert_eq!(figure(&features(&app)), i, "{name}");
             assert_eq!(shown_figure(&app), Some(i));
         }
         let mut app = selected_text();

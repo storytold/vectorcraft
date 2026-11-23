@@ -1081,8 +1081,8 @@ fn an_error_hides_a_sent_path_whether_or_not_a_library_was_loaded_from_it() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// A screenshot's reply, sent after its request was handled, hides a hidden library's path, and in an
-/// error the path outside the read root that the request sent.
+/// A screenshot's error, sent after its request was handled, hides a hidden library's path and the path outside the
+/// read root that the request sent, as the capture's writer hides it.
 #[test]
 fn a_screenshot_reply_hides_paths_like_any_reply() {
     let (mut app, _tx, base) = confined("deferred-reply");
@@ -1090,14 +1090,14 @@ fn a_screenshot_reply_hides_paths_like_any_reply() {
     app.ui.color_guide_limit = format!("loaded/{path}");
     let sent = s(base.join("outside/shot.png"));
     let roots = AutomationRoots::new(&[&base.join("in")], &[&base.join("out")]).unwrap();
-    let mut done = json!({"ok": true, "result": {"note": format!("from {path}")}});
-    let mut failed = json!({"ok": false, "error": format!("could not write {sent}")});
-    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
-        crate::control::hide_in_deferred_reply(&app, &mut done, &json!({"path": sent}));
-        crate::control::hide_in_deferred_reply(&app, &mut failed, &json!({"path": sent}));
+    let sent_path = json!({"path": sent});
+    // The app holds its roots for the whole process, so its hiding is read with them in force.
+    let (library, failed) = vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        let hiding = crate::control::deferred_hiding(&app);
+        (hiding.hide_error(&format!("from {path}"), &sent_path), hiding.hide_error(&format!("could not write {sent}"), &sent_path))
     });
-    assert_eq!(done["result"]["note"], "from b.svg", "{done}");
-    assert_eq!(failed["error"], "could not write shot.png", "{failed}");
+    assert_eq!(library, "from b.svg");
+    assert_eq!(failed, "could not write shot.png");
     let _ = std::fs::remove_dir_all(base);
 }
 

@@ -50,7 +50,7 @@ fn shown_label(app: &mut VectorcraftApp, id: &str) -> Option<String> {
 fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
     let raw =
         egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0))), ..Default::default() };
-    crate::testing::app_frame(app, &ctx, raw);
+    crate::testing::app_frame(app, ctx, raw);
 }
 
 /// The first open dialog and its fields.
@@ -1378,7 +1378,7 @@ fn lock_and_hide_menus_are_enabled_in_isolation_mode() {
     assert!(lock_unselected(&app), "shortcut command remains enabled in isolation");
     assert!(crate::menus::enabled(&app, "object.hide.unselected"), "Hide Unselected remains enabled in isolation");
     let chord = crate::shortcut_editor::default_of("object.hide.unselected").expect("default Hide Unselected shortcut");
-    assert_eq!(craft::menu::Chord::parse(&chord).unwrap(), craft::menu::Chord::parse("Cmd+Alt+Shift+3").unwrap());
+    assert_eq!(craft::menu::Chord::parse(chord).unwrap(), craft::menu::Chord::parse("Cmd+Alt+Shift+3").unwrap());
     app.run("object.exitIsolation", json!({})).unwrap();
     app.run("select.set", json!({"ids": [g]})).unwrap();
     assert_eq!(shown(&app), [true; 10], "after Exit Isolation Mode");

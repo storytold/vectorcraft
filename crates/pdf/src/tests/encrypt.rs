@@ -119,7 +119,6 @@ fn a_permissions_password_alone_opens_without_a_password_and_restricts() {
     }
 }
 
-
 #[test]
 fn unicode_passwords_open_aes256_files() {
     let bytes = protected(Compatibility::Pdf20, security("pässwörd", "ünïcode"), false);

@@ -84,6 +84,11 @@ craft = { workspace = true, features = ["dialogs", "update"] }
 # Cargo.lock with the time-zone crates `clock` uses.
 chrono = { workspace = true, features = ["clock"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# The status bar's Date and Time readout reads the page's clock with this crate in the web build. It
+# is MIT OR Apache-2.0 and already in the build through eframe.
+web-time = "1"
+
 # The current user's id (`geteuid`): Preview in Browser uses its temporary folder only when that
 # user owns it (src/dialogs/save_for_web.rs). Already in Cargo.lock (tempfile), so this adds no
 # new crate.

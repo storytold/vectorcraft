@@ -1108,7 +1108,6 @@ fn ime_ranges_convert_characters_to_bytes() {
     assert_eq!(char_range_to_bytes("ががく", backwards), None, "backwards");
 }
 
-
 #[test]
 fn marked_text_is_underlined_with_the_converting_clause_thick() {
     let (mut d, id, mut tool) = editing("曲");
@@ -1925,7 +1924,6 @@ fn type_on_a_path_has_its_ports_beyond_its_brackets() {
     assert!(near(port_centre(t, Port::In, 0.5), Point::new(160.0 - PORT_RISE_PX / 2.0, 300.0)), "screen pixels at 200%");
 }
 
-
 /// Deleting around a selection removes only the surrounding text, keeps the reversed selection
 /// direction, and leaves it for the following commit to replace.
 #[test]
@@ -1977,7 +1975,6 @@ fn ime_target_is_stable_within_an_edit_session() {
     assert_eq!((second.0, second.1), (first.0, first.1));
     assert_ne!(second.2, first.2, "a new edit session is a replacement epoch");
 }
-
 
 /// Deletion counts start at the caret, including when it is in a later styled run. Character
 /// units count Unicode scalars; byte units round inward instead of cutting a multibyte scalar.
@@ -2032,7 +2029,6 @@ fn a_recreated_type_tool_gets_a_new_replacement_epoch() {
     assert_eq!((a.0, a.1), (b.0, b.1), "the owner key is the document and text node");
     assert_ne!(a.2, b.2, "edit sessions are numbered process-wide, not per tool");
 }
-
 
 #[test]
 fn shift_enter_inserts_soft_return() {

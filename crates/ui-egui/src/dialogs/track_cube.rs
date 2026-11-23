@@ -397,7 +397,7 @@ pub(crate) fn row() -> Param {
             }
         });
         let mixed = now.iter().any(|m| matches!(m, Mixed::Mixed));
-        let out = TrackCube::new(tl!("Track cube"), Bind::given(now.clone())).enabled(!mixed).show(ui);
+        let out = TrackCube::new(tl!("Track cube"), Bind::given(now)).enabled(!mixed).show(ui);
         cx.gesture(&out.events);
         let was = degrees(&now);
         // What each event leaves in the cube, a cancel's restored start included.

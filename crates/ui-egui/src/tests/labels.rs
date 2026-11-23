@@ -118,14 +118,15 @@ fn effect_menu_lists_the_artistic_filters_before_blur() {
 #[test]
 fn paint_daubs_brush_type_menu_matches_illustrator() {
     use crate::dialogs::PAINT_DAUB_BRUSH_TYPE_LABELS;
-    use serde_json::Map;
+    use crate::dialogs::effect_params::{EffectCx, effect_params};
+    use craft::ui::patterns::form_dialogs::{DialogFields, ParamKind};
     use vectorcraft_effects::pixel::PAINT_DAUB_BRUSH_TYPES;
     let catalog: Vec<&str> = PAINT_DAUB_BRUSH_TYPES.iter().map(|(label, _)| *label).collect();
     assert_eq!(PAINT_DAUB_BRUSH_TYPE_LABELS.as_slice(), catalog.as_slice());
-    let params = Map::new();
-    let shown = crate::dialogs::effect_params::shown_choices("artistic.paintDaubs", "brushType", &params, false).unwrap();
-    assert_eq!(shown.len(), PAINT_DAUB_BRUSH_TYPES.len());
-    for ((label, value), (english, id)) in shown.iter().zip(PAINT_DAUB_BRUSH_TYPES.iter()) {
+    let rows = effect_params(&EffectCx::new(&app(), "artistic.paintDaubs", false), &DialogFields::new());
+    let Some(ParamKind::Choice { options, .. }) = rows.iter().find(|p| p.key == "brushType").map(|p| &p.kind) else { panic!("no Brush Type row") };
+    assert_eq!(options.len(), PAINT_DAUB_BRUSH_TYPES.len());
+    for ((value, label), (english, id)) in options.iter().zip(PAINT_DAUB_BRUSH_TYPES.iter()) {
         assert_eq!((label.as_str(), value.as_str()), (*english, *id));
     }
 }

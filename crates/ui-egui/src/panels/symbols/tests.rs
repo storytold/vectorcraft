@@ -333,6 +333,9 @@ const VIEWS: [&str; 2] = ["thumbnail", "smallList"];
 /// name.
 type Check = fn(&mut Panel, usize, &str);
 
+/// The app a table row starts from.
+type Setup = fn() -> VectorcraftApp;
+
 /// Drops on the Symbols panel, in Thumbnail View and a list view, run the command each stands for:
 /// art dragged from a Layers row onto the list makes a symbol of it (Shift at the release keeps the
 /// art as ordinary art), and onto a symbol without Alt makes a new symbol too; a symbol dragged
@@ -342,7 +345,7 @@ type Check = fn(&mut Panel, usize, &str);
 #[test]
 fn drop_to_command() {
     const EMPTY: &str = "No symbols in this document";
-    let rows: [(&str, fn() -> VectorcraftApp, &str, &str, Modifiers, Check); 11] = [
+    let rows: [(&str, Setup, &str, &str, Modifiers, Check); 11] = [
         ("art on the list", art_only, "Art", EMPTY, Modifiers::NONE, |p, undo, what| {
             let mut app = p.app();
             assert_eq!(symbols(&mut app), ["New Symbol"], "{what}");
@@ -467,7 +470,9 @@ fn footer_or_menu_row_with_modifiers_to_command() {
         app.run("select.set", json!({"ids": [leaf.0]})).unwrap();
         app
     };
-    let rows: [(&str, fn() -> VectorcraftApp, fn(&mut VectorcraftApp, &mut Ui), fn(&mut Panel), Check); 22] = [
+    type Show = fn(&mut VectorcraftApp, &mut Ui);
+    type Act = fn(&mut Panel);
+    let rows: [(&str, Setup, Show, Act, Check); 22] = [
         (
             "New Symbol with Shift",
             rect,
@@ -790,7 +795,8 @@ fn footer_or_menu_row_with_modifiers_to_command() {
 /// selected neither opens a dialog.
 #[test]
 fn dialog_fields_to_symbol_params() {
-    let rows: [(&str, fn() -> VectorcraftApp, fn(&mut VectorcraftApp, &str)); 7] = [
+    type Fill = fn(&mut VectorcraftApp, &str);
+    let rows: [(&str, Setup, Fill); 7] = [
         ("a new symbol's defaults", one_rect, |app, what| {
             app.run("ui.symbolOptions", json!({})).unwrap();
             assert_eq!(dialog_kind(app).as_deref(), Some(symbol_options::KIND), "{what}");
@@ -1463,7 +1469,7 @@ fn reset_transformation_is_enabled_for_a_transformed_instance_and_resets_it() {
     p.frame();
     assert!(p.enabled("Reset"));
     p.click("Reset");
-    assert!(close(xf(&*p.app()), master), "the Control bar's Reset resets the instance: {:?} vs {master:?}", xf(&*p.app()));
+    assert!(close(xf(&p.app()), master), "the Control bar's Reset resets the instance: {:?} vs {master:?}", xf(&p.app()));
 }
 
 /// The current symbol as `symbol.list` answers it, read by running the command.

@@ -182,8 +182,6 @@ pub(super) struct Recorded {
     /// The index in the set of the action that the recording records into; None for the new
     /// action that the recording adds.
     pub(super) into: Option<usize>,
-    /// The new action's name.
-    pub(super) name: String,
     /// The steps recorded so far.
     pub(super) steps: Vec<(String, Value)>,
 }
@@ -191,7 +189,7 @@ pub(super) struct Recorded {
 /// What Stop Playing/Recording adds to the set at index `set`; None when the recording in progress
 /// adds nothing to it.
 pub(super) fn recorded_into(app: &VectorcraftApp, set: usize) -> Option<Recorded> {
-    let (recording_set, name, _) = app.ui.recording.as_ref()?;
+    let (recording_set, _, _) = app.ui.recording.as_ref()?;
     let list = &app.ui.actions;
     let into = match app.ui.recording_into.as_deref() {
         Some(into) => {
@@ -202,7 +200,7 @@ pub(super) fn recorded_into(app: &VectorcraftApp, set: usize) -> Option<Recorded
         None => return None,
     };
     let steps = app.session.journal_for_action(recording_start(app)?);
-    Some(Recorded { into, name: name.clone(), steps })
+    Some(Recorded { into, steps })
 }
 
 /// Starts recording into the set at index `set`: Stop Playing/Recording adds an action named

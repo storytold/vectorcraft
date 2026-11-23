@@ -3678,7 +3678,7 @@ mod tests {
         let row_of = |rc: &Recolor, key: &str| rc.rows().iter().position(|r| r["from"][0] == key).unwrap();
         let (r, b) = (row_of(&rc, "rgb 255 0 0"), row_of(&rc, "rgb 0 0 255"));
         let undo = undo_len(&rc.app());
-        let fills = |rc: &Recolor| (fill_hex(&rc, red), fill_hex(&rc, blue));
+        let fills = |rc: &Recolor| (fill_hex(rc, red), fill_hex(rc, blue));
         rc.set(THEME_PICKS, json!([{"at": [107, 17]}])).unwrap();
         rc.frame();
         assert_eq!(new_colors(&rc), [json!("rgb 0 255 0"), json!("rgb 0 255 0")], "one color for both rows");
@@ -3724,7 +3724,7 @@ mod tests {
     fn colors_merged_into_a_new_row_take_its_new_color() {
         let (mut rc, [red, blue]) = theme_setup();
         let undo = undo_len(&rc.app());
-        let fills = |rc: &Recolor| (fill_hex(&rc, red), fill_hex(&rc, blue));
+        let fills = |rc: &Recolor| (fill_hex(rc, red), fill_hex(rc, blue));
         let mut rs = rc.rows();
         let at = new_row(&mut rs, &[]);
         rs[at]["to"] = json!("rgb 0 255 0");
@@ -4042,7 +4042,7 @@ mod tests {
     fn find_shows_the_selected_rows_art_and_dims_the_rest() {
         let (mut rc, [red, blue]) = theme_setup();
         let undo = undo_len(&rc.app());
-        let fills = |rc: &Recolor| (fill_hex(&rc, red), fill_hex(&rc, blue));
+        let fills = |rc: &Recolor| (fill_hex(rc, red), fill_hex(rc, blue));
         let rs = json!([{"from": ["rgb 255 0 0"], "to": "rgb 0 255 0"}, {"from": ["rgb 0 0 255"], "to": "rgb 255 255 0"}]);
         rc.set("rows", rs.clone()).unwrap();
         rc.set("__sel", json!([0])).unwrap();

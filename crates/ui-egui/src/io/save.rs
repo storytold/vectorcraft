@@ -23,6 +23,7 @@ use super::{
 use crate::file_asks::{self, Owner};
 
 /// What runs once a save is written, failed or cancelled.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) type Done = Box<dyn FnOnce(&mut VectorcraftApp, Result<Value, String>)>;
 
 /// What [`pump`] needs to go on with a document's save once its flow answers.
@@ -40,6 +41,7 @@ struct SaveDone {
     retry: Option<super::read_only_save::Retry>,
     /// The changed-on-disk question, while it is open.
     question: Option<DialogId>,
+    then: Option<Done>,
 }
 
 /// The saves of the app: one [`SaveFlow`] per document, and what the flows need to ask and write.
@@ -54,8 +56,6 @@ pub(crate) struct Saves {
     pub(crate) replace_files_ok: Vec<String>,
     #[cfg(not(target_arch = "wasm32"))]
     done: HashMap<u64, SaveDone>,
-    /// What each document's save tells once it is written, failed or cancelled ([`save_reporting`]).
-    then: HashMap<u64, Done>,
 }
 
 impl Saves {
@@ -69,7 +69,6 @@ impl Saves {
             replace_files_ok: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             done: HashMap::new(),
-            then: HashMap::new(),
         }
     }
 
@@ -86,45 +85,30 @@ impl Saves {
             flow.failed(&uid);
         }
     }
-
-    /// A write's end on the document's flow: the flow is free again, and the watcher knows the new
-    /// version of a file the document took.
-    #[cfg(not(target_arch = "wasm32"))]
-    fn written(&mut self, uid: u64, retargets: bool, out: &Result<Value, String>) {
-        let written = out.as_ref().ok().filter(|v| v.get("cancelled").is_none() && v.get("pending").is_none());
-        let flow = self.flows.entry(uid).or_default();
-        match written.and_then(|v| v["path"].as_str()) {
-            Some(path) if flow.is_busy() || retargets => flow.written(&mut self.watch, uid, Path::new(path)),
-            _ => flow.failed(&uid),
-        }
-    }
 }
 
 /// Calls the `then` of the document's save, once.
+#[cfg(not(target_arch = "wasm32"))]
 fn terminate(app: &mut VectorcraftApp, uid: u64, r: Result<Value, String>) {
-    #[cfg(not(target_arch = "wasm32"))]
-    app.saves.done.remove(&uid);
-    if let Some(then) = app.saves.then.remove(&uid) {
+    if let Some(then) = app.saves.done.remove(&uid).and_then(|d| d.then) {
         then(app, r);
     }
 }
 
-/// A save's end: the caller that waits for it is told, unless a question or a fallback picker
-/// goes on with it.
-fn finish(app: &mut VectorcraftApp, uid: u64, out: &Result<Value, String>) {
+/// A save's end: the flow is free again (and the watcher knows the new version of a file the
+/// document took), and the caller that waits for it is told, unless a question or a fallback
+/// picker goes on with it.
+#[cfg(not(target_arch = "wasm32"))]
+fn finish(app: &mut VectorcraftApp, uid: u64, retargets: bool, out: &Result<Value, String>) {
+    let written = out.as_ref().ok().filter(|v| v.get("cancelled").is_none() && v.get("pending").is_none());
+    let flow = app.saves.flows.entry(uid).or_default();
+    match written.and_then(|v| v["path"].as_str()) {
+        Some(path) if flow.is_busy() || retargets => flow.written(&mut app.saves.watch, uid, Path::new(path)),
+        _ => flow.failed(&uid),
+    }
     if !matches!(out, Ok(v) if v.get("pending").is_some()) {
         terminate(app, uid, out.clone());
     }
-}
-
-/// Cancels the document's save (its picker, a question or an options dialog); the caller that
-/// waits for it is told.
-pub(crate) fn cancel(app: &mut VectorcraftApp, uid: u64) {
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(flow) = app.saves.flows.get_mut(&uid) {
-        flow.cancel(app.host.files());
-    }
-    terminate(app, uid, Err("cancelled".into()));
 }
 
 /// Lets the save that runs again replace `files`, which the OK of the replace question allowed.
@@ -136,35 +120,11 @@ pub(crate) fn allow_replacing(app: &mut VectorcraftApp, files: &[String]) {
     }
 }
 
-/// [`save`] that calls `done` once the save is written, failed or cancelled, also after a picker or
-/// a question.
-pub(crate) fn save_reporting(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, done: Done) -> Result<Value, String> {
-    let uid = app.session.active().ok_or("no document")?.uid;
-    // Saves of one document finish in order.
-    if app.background.busy_with(uid) {
-        background::wait_all(app);
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    if app.saves.flows.get(&uid).is_some_and(|f| f.is_busy()) {
-        return Err(SAVE_IN_PROGRESS.english.into());
-    }
-    if let Some(old) = app.saves.then.remove(&uid) {
-        old(app, Err("cancelled".into()));
-    }
-    app.saves.then.insert(uid, done);
-    let r = save(app, mode, p, true);
-    if r.is_err() {
-        terminate(app, uid, r.clone());
-    }
-    r
-}
-
 /// Takes what the flows and their questions have answered since the last pass: the pick, the
 /// changed-on-disk question's answer. A save whose document closed is cancelled and forgotten.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    #[cfg(not(target_arch = "wasm32"))]
     let busy: Vec<u64> = app.saves.flows.iter().filter(|(_, f)| f.is_busy()).map(|(uid, _)| *uid).collect();
-    #[cfg(not(target_arch = "wasm32"))]
     for uid in busy {
         if !app.session.documents().iter().any(|d| d.uid == uid) {
             terminate(app, uid, Err(file_asks::closed().into()));
@@ -182,13 +142,15 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             app.status(e);
         }
     }
-    #[cfg(target_arch = "wasm32")]
-    let _ = app;
 }
 
+/// The web has no save flows: nothing answers between passes.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn pump(_: &mut VectorcraftApp, _: &egui::Context) {}
+
+#[cfg(not(target_arch = "wasm32"))]
 /// The step the document's flow has reached since the last pass: its question's answer, else its
 /// pick.
-#[cfg(not(target_arch = "wasm32"))]
 fn next_step(app: &mut VectorcraftApp, uid: u64) -> Option<SaveStep<u64>> {
     if let Some(id) = app.saves.done.get(&uid).and_then(|d| d.question) {
         let answer = app.dialogs()?.with(|host| host.take_by_id::<StandardPrompt>(id))?;
@@ -306,6 +268,7 @@ fn start_flow(app: &mut VectorcraftApp, first: &SavePlan, s: Start<'_>) -> Resul
     if matches!(step, SaveStep::Busy) {
         return Err(SAVE_IN_PROGRESS.english.into());
     }
+    let then = app.saves.done.remove(&uid).and_then(|d| d.then);
     let done = SaveDone {
         mode: s.mode,
         params: s.params.clone(),
@@ -315,6 +278,7 @@ fn start_flow(app: &mut VectorcraftApp, first: &SavePlan, s: Start<'_>) -> Resul
         retrying: s.retrying,
         retry: s.retry,
         question: None,
+        then,
     };
     app.saves.done.insert(uid, done);
     run_step(app, uid, step)
@@ -1161,10 +1125,10 @@ fn write_plan(
     };
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         let out = outcome(app, r);
+        // The desktop's flow ends with the write, unless the read-only fallback's picker took the save over.
+        #[cfg(not(target_arch = "wasm32"))]
         if !handed.get() {
-            #[cfg(not(target_arch = "wasm32"))]
-            app.saves.written(uid, retargets, &out);
-            finish(app, uid, &out);
+            finish(app, uid, retargets, &out);
         }
         out
     };

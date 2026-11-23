@@ -183,7 +183,7 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
             }
         }
         "window.workspace.reset" => {
-            let name: &str = &crate::workspaces::current_name(&app.ui);
+            let name: &str = crate::workspaces::current_name(&app.ui);
             fmt(tl!("Reset {name}"), &[("name", if crate::workspaces::is_builtin(&app.ui, name) { tl!(name) } else { name })])
         }
         // Basic and Advanced share this command id, so the label, not the id, is what translates.

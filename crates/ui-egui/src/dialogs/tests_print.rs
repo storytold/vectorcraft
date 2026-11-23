@@ -309,7 +309,7 @@ fn dragging_the_preview_moves_the_placement_on_the_paper() {
         ),
     ] {
         let before = app.session.execute("print.preview", &json!({ "settings": settings })).unwrap();
-        let (dx, dy) = (f64::from(dx), f64::from(dy));
+        let (dx, dy) = (dx, dy);
         let mut dialog_fields = super::print::fields_of(&serde_json::from_value(settings.clone()).unwrap()).unwrap();
         let placement = super::print::settings(&dialog_fields)["placement"].clone();
         super::print::move_placement(&mut dialog_fields, &before["sheets"][0], (dx, dy));

@@ -131,7 +131,7 @@ fn the_document_filter_finds_a_postscript_name_split_into_family_and_style() {
 #[test]
 fn a_filter_chosen_in_one_panels_menu_is_on_in_the_others() {
     let mut app = app_with_type(&[]);
-    let before = super::picker_settings(&mut app);
+    let before = super::picker_settings(&app);
     let mut first = super::hold(&mut app);
     assert!(!first.filters.favorites && !first.filters.variable, "off by default");
     first.filters.favorites = true;
@@ -247,7 +247,7 @@ fn a_preview_size_asked_for_sets_the_preference_and_keeps_the_preview() {
     let undo_depth = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
     let depth = undo_depth(&app);
     // The size the rows have: nothing changes.
-    let before = super::picker_settings(&mut app);
+    let before = super::picker_settings(&app);
     super::store_picker_settings(&mut app, &before, before.clone());
     assert!(!app.take_prefs_changed(), "nothing to write for the size the rows have");
     let mut after = before.clone();

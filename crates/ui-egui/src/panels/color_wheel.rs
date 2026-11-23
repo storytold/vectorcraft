@@ -386,22 +386,22 @@ fn items(set: &Settings, srgb: bool) -> Vec<Item> {
     };
     let mut out = Vec::new();
     for (id, label, view) in [("view.wheel", tl!("Wheel View"), View::Wheel), ("view.box", tl!("Box View"), View::Box)] {
-        out.push(item(id.into(), &label.to_string(), set.view == view, true, json!({ "view": view.id() })));
+        out.push(item(id.into(), label, set.view == view, true, json!({ "view": view.id() })));
     }
     for ch in Channel::ALL {
-        out.push(item(channel_row_id(ch), &ch.name().to_string(), ch == set.channel, set.view == View::Box, json!({ "channel": ch.id() })));
+        out.push(item(channel_row_id(ch), ch.name(), ch == set.channel, set.view == View::Box, json!({ "channel": ch.id() })));
     }
-    out.push(item("gamut".into(), &tl!("Show Out-of-Gamut Colors").to_string(), set.gamut, true, json!({ "gamut": !set.gamut })));
+    out.push(item("gamut".into(), tl!("Show Out-of-Gamut Colors"), set.gamut, true, json!({ "gamut": !set.gamut })));
     let on = set.sliders == Sliders::Hsl;
     let sliders = if on { Sliders::None } else { Sliders::Hsl };
-    out.push(item("sliders.hsl".into(), &tl!("HSL Sliders").to_string(), on, true, json!({ "sliders": sliders.id() })));
+    out.push(item("sliders.hsl".into(), tl!("HSL Sliders"), on, true, json!({ "sliders": sliders.id() })));
     let on = set.sliders == Sliders::Oklch;
     let sliders = if on { Sliders::None } else { Sliders::Oklch };
     // While the rows show, the item stays enabled so that they can be hidden.
-    let mut oklch = item("sliders.oklch".into(), &tl!("OKLCH Sliders").to_string(), on, on || srgb, json!({ "sliders": sliders.id() }));
+    let mut oklch = item("sliders.oklch".into(), tl!("OKLCH Sliders"), on, on || srgb, json!({ "sliders": sliders.id() }));
     oklch.hint = Some(tl!("OKLCH needs sRGB as the working RGB space").to_string());
     out.push(oklch);
-    out.push(item("harmony".into(), &tl!("Show Harmony").to_string(), set.harmony, set.view == View::Wheel, json!({ "harmony": !set.harmony })));
+    out.push(item("harmony".into(), tl!("Show Harmony"), set.harmony, set.view == View::Wheel, json!({ "harmony": !set.harmony })));
     for rule in harmony_rules() {
         out.push(item(
             rule_row_id(rule),
@@ -411,10 +411,10 @@ fn items(set: &Settings, srgb: bool) -> Vec<Item> {
             json!({ "harmonyRule": rule.id() }),
         ));
     }
-    out.push(item("vision".into(), &tl!("Show Color Vision Preview").to_string(), set.vision, true, json!({ "vision": !set.vision })));
+    out.push(item("vision".into(), tl!("Show Color Vision Preview"), set.vision, true, json!({ "vision": !set.vision })));
     out.push(item(
         "documentColors".into(),
-        &tl!("Show Document Colors").to_string(),
+        tl!("Show Document Colors"),
         set.document_colors,
         true,
         json!({ "documentColors": !set.document_colors }),
@@ -666,16 +666,6 @@ fn bind<'a>(values: Option<ModelValues>) -> Bind<'a, ModelValues> {
         Some(v) => Bind::given(v),
         None => Bind::given(Mixed::Mixed),
     }
-}
-
-/// The display sRGB bytes `rgb` shows as, 0 to 255.
-pub(crate) fn bytes(rgb: [f32; 3]) -> [u8; 3] {
-    rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
-}
-
-/// The hex text of 0 to 255 values, in the form of the Color panel's hex field (`E67828`).
-pub(crate) fn hex([r, g, b]: [u8; 3]) -> String {
-    format!("{r:02X}{g:02X}{b:02X}")
 }
 
 /// The display sRGB of `c` as simulated for protanopia, deuteranopia and tritanopia, through
@@ -1037,9 +1027,9 @@ fn hsl_rows(app: &mut VectorcraftApp, panel: &mut WheelUi, ui: &mut Ui, cx: &Pic
     // so that they differ from the box strip's HSB Hue and Saturation.
     let hsl_name = |name: &str| format!("HSL {name}");
     let rows = [
-        ("H", hsl_name(&tl!("Hue").to_string()), 360.0, ChannelUnit::Degrees),
-        ("S", hsl_name(&tl!("Saturation").to_string()), 100.0, ChannelUnit::Percent),
-        ("L", hsl_name(&tl!("Lightness").to_string()), 100.0, ChannelUnit::Percent),
+        ("H", hsl_name(tl!("Hue")), 360.0, ChannelUnit::Degrees),
+        ("S", hsl_name(tl!("Saturation")), 100.0, ChannelUnit::Percent),
+        ("L", hsl_name(tl!("Lightness")), 100.0, ChannelUnit::Percent),
     ];
     let shown = [f64::from(hsl[0]), f64::from(hsl[1]) * 100.0, f64::from(hsl[2]) * 100.0];
     // The rows read dim and take no edit without a colour to edit.

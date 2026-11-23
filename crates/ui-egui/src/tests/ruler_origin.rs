@@ -17,8 +17,7 @@ fn app() -> VectorcraftApp {
 }
 
 fn context() -> egui::Context {
-    let ctx = crate::testing::ui_context();
-    ctx
+    crate::testing::ui_context()
 }
 
 /// One frame of `draw` with `events`: the texts it painted and where. The window is wide enough for the Control bar to

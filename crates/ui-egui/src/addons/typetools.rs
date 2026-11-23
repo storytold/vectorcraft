@@ -8,7 +8,7 @@ use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::addons::dialogs::{self, Confirm, Spec};
+use crate::addons::dialogs::{self, Spec};
 use crate::menus::{c, cp};
 
 /// The command the dialog runs.
@@ -48,7 +48,7 @@ fn attribute(key: &str) -> &'static Attribute {
 }
 
 /// How the dialog's values reach the command.
-pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None, confirm: Confirm::Commit };
+pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None };
 
 /// The command's parameters from the dialog's fields; an end of the ramp not set yet is the attribute's own.
 pub(crate) fn params(fields: &DialogFields) -> Value {

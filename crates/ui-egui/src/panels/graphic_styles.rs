@@ -106,6 +106,9 @@ impl ThumbLook {
     }
 }
 
+/// [`look_hashes`] of a document and the `(uid, revision)` they were computed at.
+type Looks = ((u64, u64), Arc<Vec<u64>>);
+
 /// The Graphic Styles panel's state for the session (`UiState::graphic_styles_panel`).
 #[derive(Clone, Debug, Default)]
 pub(crate) struct GraphicStylesPanel {
@@ -118,7 +121,7 @@ pub(crate) struct GraphicStylesPanel {
     /// What the thumbnails show the styles on.
     preview: Preview,
     /// [`look_hashes`] of the active document and the `(uid, revision)` they were computed at.
-    looks: Option<((u64, u64), Arc<Vec<u64>>)>,
+    looks: Option<Looks>,
 }
 
 /// The thumbnails of the document's styles (`"vc-style-thumbs"`) or of the libraries' (`"vc-style-lib-thumbs"`): a

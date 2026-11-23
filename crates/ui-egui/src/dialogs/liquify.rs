@@ -56,7 +56,7 @@ fn check(key: &str, label: &'static str, default: bool) -> Param {
 
 /// The rows of the dialog of tool `k`, in the order the tool's options are laid out.
 fn params(k: LiquifyKind, lengths: LengthUnits) -> Vec<Param> {
-    let length = |key: &str, label: &'static str| Param::number(key, label, 50.0, 1.0, 0).length(lengths.clone());
+    let length = |key: &str, label: &'static str| Param::number(key, label, 50.0, 1.0, 0).length(lengths);
     let mut rows = vec![
         Param::section(tl!("Global Brush Dimensions")),
         length("width", tl!("Width:")),

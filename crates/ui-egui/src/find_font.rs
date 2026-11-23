@@ -76,18 +76,6 @@ pub(crate) struct FindFontDialog {
     pending: Option<Action>,
 }
 
-impl FindFontDialog {
-    /// The chosen document font's index.
-    pub(crate) fn selected(&self) -> usize {
-        self.selected
-    }
-
-    /// Whether Find in Folder… is offered: a font is missing and a folder can be picked.
-    pub(crate) fn offer_folder(&self) -> bool {
-        self.offer_folder
-    }
-}
-
 /// The document's fonts and whether Find in Folder… is offered for them.
 fn current_fonts(app: &mut VectorcraftApp) -> (Arc<Vec<Value>>, bool) {
     let can_pick = file_asks::can(app, PickKind::Folder);
@@ -1010,11 +998,11 @@ mod tests {
         // Nothing missing: no button, and no folder is asked for.
         open(&mut app);
         pump_now(&mut app);
-        assert!(!opened(&app).offer_folder());
+        assert!(!opened(&app).offer_folder);
         assert_eq!(app.run("ui.findFontsInFolder", json!({})).err().as_deref(), Some("No fonts are missing in this document"));
         app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
         pump_now(&mut app);
-        assert!(opened(&app).offer_folder(), "a missing font and a folder picker");
+        assert!(opened(&app).offer_folder, "a missing font and a folder picker");
         // Find in Folder… asks for the folder, and Missing Fonts takes Find Font's place.
         edit(&app, |d| d.pending = Some(Action::FindInFolder));
         pump_now(&mut app);

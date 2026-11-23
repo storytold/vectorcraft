@@ -7,8 +7,8 @@
 //! filters are the picker's family sets ([`family_sets`]); their families are found only while the
 //! filter is on and are cached on the canvas cache ([`document_family_set`], [`recently_added_set`]).
 //! [`font_fields`] applies a pick, an arrow step or a wheel run to the selected text (one live
-//! interaction while the row under the pointer previews, one undo step per pick), [`family_pick`] only
-//! reports the pick. [`paint_family_sample`] and [`menu_sample`] set a sample of text in a family's own
+//! interaction while the row under the pointer previews, one undo step per pick); a host that only picks a font
+//! reads the pick from a [`family_picker`] over its [`PickerHold`]. [`paint_family_sample`] and [`menu_sample`] set a sample of text in a family's own
 //! face.
 
 use std::collections::{HashMap, HashSet};
@@ -208,14 +208,6 @@ pub(crate) fn font_fields(app: &mut VectorcraftApp, ui: &mut Ui) {
     if shown != s.font_style {
         apply_font(app, &s.font_family, Some(&shown), Live::Released);
     }
-}
-
-/// The font family picker of a host that only picks a font (Glyphs panel, Composite Fonts, the dimension
-/// dialog): the family and style chosen, if any. Nothing is previewed on the document.
-pub(crate) fn family_pick(app: &mut VectorcraftApp, ui: &mut Ui, label: impl Into<Label>, family: &str) -> Option<(String, Option<String>)> {
-    let sample = sample_text(app);
-    let out = show_picker(app, ui, label, family, sample.as_deref());
-    out.picked.map(|family| (family, out.picked_style.clone()))
 }
 
 /// Sets `family` (and `style`, else the closest the family has) on the text the font fields act on, in

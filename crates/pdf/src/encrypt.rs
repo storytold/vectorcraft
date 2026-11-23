@@ -24,7 +24,6 @@ mod lexer;
 
 pub(crate) use lexer::{Lexer, Obj, Spanned, Tok, int, is_white};
 
-
 /// The standard security handler revision written for PDF version `c`: 3 (RC4, metadata always
 /// encrypted), 4 (crypt filters: RC4 or AES-128) or 6 (AES-256).
 fn revision(c: Compatibility) -> u8 {
@@ -35,7 +34,6 @@ fn revision(c: Compatibility) -> u8 {
         Compatibility::Pdf17 | Compatibility::Pdf20 => 6,
     }
 }
-
 
 // ---------- cryptography ----------
 

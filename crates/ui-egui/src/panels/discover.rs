@@ -93,8 +93,7 @@ fn refresh(app: &mut VectorcraftApp) {
                 hit.shortcut = menus::item_shortcut(app, &hit.id, &hit.params)
                     .or_else(|| menus::shortcut_of(app, &hit.id))
                     .map(|c| c.to_string())
-                    .unwrap_or_default()
-                    .into();
+                    .unwrap_or_default();
             }
             _ => {}
         }
@@ -111,7 +110,6 @@ fn refresh(app: &mut VectorcraftApp) {
 fn tool_hits(app: &VectorcraftApp) -> Vec<(HelpEntry, Hit)> {
     let lang = crate::i18n::current();
     vectorcraft_tools::catalog::all_tools()
-        .into_iter()
         .map(|tool| {
             let label: String = crate::i18n::tr(lang, tool.label).into();
             let entry = HelpEntry::new(CommandRef::with_params("learn.locateTool", json!({"tool": tool.id})), label.clone())

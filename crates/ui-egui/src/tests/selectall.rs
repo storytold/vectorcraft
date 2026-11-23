@@ -100,7 +100,7 @@ impl App {
             .and_then(|(id, n)| n.bounds().map(|b| (*id, Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))))
             .unwrap_or_else(|| {
                 let shown: Vec<_> =
-                    self.nodes.iter().filter_map(|(_, n)| n.supports_action(egui::accesskit::Action::SetValue).then(|| n.value())).collect();
+                    self.nodes.iter().filter(|&(_, n)| n.supports_action(egui::accesskit::Action::SetValue)).map(|(_, n)| n.value()).collect();
                 panic!("no field shows {text:?} in {shown:?}")
             })
     }

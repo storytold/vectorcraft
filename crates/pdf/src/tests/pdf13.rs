@@ -26,7 +26,6 @@ fn options(v: serde_json::Value) -> PdfOptions {
     PdfOptions { settings: serde_json::from_value(v).unwrap(), created: Some(0), ..PdfOptions::uncompressed() }
 }
 
-
 #[test]
 fn pdf_1_3_files_say_so_and_have_no_transparency() {
     let mut d = doc(1.0);

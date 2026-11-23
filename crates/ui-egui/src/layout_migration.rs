@@ -619,10 +619,11 @@ fn insert_column(node: &mut Node<String>, side: DockEdge, inner: bool, width: f3
                 return;
             }
             insert_column(second, side, inner, width, column, depth.saturating_add(1));
-            if waiting && column.is_none() {
-                if let SplitSize::FixedSecond(room) = size {
-                    *room += width;
-                }
+            if waiting
+                && column.is_none()
+                && let SplitSize::FixedSecond(room) = size
+            {
+                *room += width;
             }
         }
         _ => {}

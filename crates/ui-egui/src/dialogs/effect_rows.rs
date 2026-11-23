@@ -189,7 +189,7 @@ pub(super) fn textured(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
     let exts: Vec<String> = vectorcraft_engine::cmd::fileio::FORMATS
         .iter()
         .filter(|f| f.read && f.raster)
-        .flat_map(|f| vectorcraft_engine::cmd::fileio::read_extensions(f).into_iter().map(|e| e.to_string()))
+        .flat_map(|f| vectorcraft_engine::cmd::fileio::read_extensions(f).iter().map(|e| e.to_string()))
         .collect();
     let exts: Vec<&str> = exts.iter().map(String::as_str).collect();
     let picker = Param::custom("texture", lbl!("Texture:"), move |ui, fields, cx| {

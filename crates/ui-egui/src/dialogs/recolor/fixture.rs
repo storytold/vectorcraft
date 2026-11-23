@@ -5,12 +5,11 @@
 use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
 
-use craft::behavior::PartRef;
 use craft::ui::dialog::{DialogHost, DialogId, HeldOk, dialog_id};
 use craft::ui::runtime::access::Role;
 use craft::ui::testing::pointer::part_rect_of_node;
 use craft::ui::testing::{Fixture, Room, Target};
-use egui::{Event, Modifiers, PointerButton, Pos2, Rect, Vec2};
+use egui::{Event, Modifiers, PointerButton, Pos2, Rect};
 use serde_json::{Value, json};
 
 use super::{Fields, GROUP_ACTION, KIND, RecolorDialog};
@@ -180,25 +179,6 @@ impl Recolor {
         for pressed in [true, false, true, false] {
             self.fixture.frame(vec![button(pressed)]);
         }
-        self
-    }
-
-    /// The rect of part `part` of component `owner`, for a part with no access node.
-    pub(crate) fn part_rect(&self, owner: egui::Id, part: impl Into<PartRef>) -> Option<Rect> {
-        self.fixture.part_rect(owner, part)
-    }
-
-    /// A drag of the control named `label` by `by`, released.
-    pub(crate) fn drag(&mut self, label: &str, by: Vec2) -> &mut Self {
-        let target = self.target(label);
-        self.fixture.drag(&target, by);
-        self
-    }
-
-    /// A press on the control named `label`, held.
-    pub(crate) fn press(&mut self, label: &str) -> &mut Self {
-        let target = self.target(label);
-        self.fixture.press(&target);
         self
     }
 

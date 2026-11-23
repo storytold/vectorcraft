@@ -531,14 +531,6 @@ pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut DialogFields) {
     }
 }
 
-/// The custom bevel of an effect's settings `fields`, `[name, points]`, when its `bevel` is
-/// `"custom"` with points (the Bevel Shape menu lists it while a mixed selection unsets them).
-pub(crate) fn own_bevel(fields: &Map<String, Value>) -> Option<Value> {
-    let points = fields.get(BEVEL_PROFILE).filter(|v| !v.is_null())?;
-    let name = fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default();
-    (fields.get("bevel").and_then(Value::as_str) == Some("custom")).then(|| json!([name, points]))
-}
-
 /// The settings whose values differ between `before` and `after`, with their values in `after`.
 /// A change to a custom bevel (`bevel` `"custom"`, its name or its points) sends all three, so an
 /// effect of a mixed selection that had none takes the whole bevel.

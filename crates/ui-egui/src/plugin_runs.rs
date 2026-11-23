@@ -33,7 +33,6 @@ type Done = (FilterRun, Result<Vec<u8>, String>);
 
 /// A heavy filter running.
 pub struct Running {
-    id: u64,
     /// What the status bar and the progress window say: `Running “Route Paths”…`.
     pub label: String,
     /// The filter's name, quoted.
@@ -60,7 +59,6 @@ impl Running {
 #[derive(Default)]
 pub struct PluginRuns {
     pub running: Vec<Running>,
-    next_id: u64,
 }
 
 /// Do heavy filters run off the UI thread here? Not on wasm (no threads).
@@ -93,8 +91,7 @@ pub fn start(app: &mut VectorcraftApp, p: Value) -> Result<Value, String> {
     let label = format!("Running {who}…");
     let started = craft::platform::clock::monotonic_ms() / 1000.0;
     let runs = &mut app.plugin_runs;
-    runs.next_id += 1;
-    runs.running.push(Running { id: runs.next_id, label: label.clone(), who, params, progress: shown, hidden: false, started, done });
+    runs.running.push(Running { label: label.clone(), who, params, progress: shown, hidden: false, started, done });
     app.status(label.clone());
     Ok(json!({ "background": true, "status": label }))
 }

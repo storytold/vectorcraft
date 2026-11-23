@@ -201,7 +201,7 @@ fn track(key: &str, x: f32) -> Srgba {
 fn channels(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut CustomContext) -> egui::Response {
     ui.vertical(|ui| {
         for (key, label) in mode(fields).channels {
-            percent_row(ui, fields, key, *label, |x| track(key, x));
+            percent_row(ui, fields, key, label, |x| track(key, x));
         }
     })
     .response

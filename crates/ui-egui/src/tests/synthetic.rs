@@ -32,7 +32,7 @@ pub(crate) fn key_frame_output(app: &mut VectorcraftApp, ctx: &egui::Context, ev
         events,
         ..Default::default()
     };
-    crate::testing::app_frame(app, &ctx, raw)
+    crate::testing::app_frame(app, ctx, raw)
 }
 
 /// A document with one selected 10 × 10 square at (10, 10) → (app, its id).

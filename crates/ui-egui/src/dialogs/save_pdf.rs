@@ -366,7 +366,7 @@ pub(crate) fn dialog_set(app: &mut VectorcraftApp, params: &Value) -> Option<Res
     let id = open.id;
     let (top, name) =
         dialogs.with(|host| (host.open_dialogs().last().map(|d| d.id), host.get_by_id::<HostedPdfExport>(id).map(super::flatten::preset_name)));
-    let named = (params["dialog"] == "top" && top == Some(id)) || params["dialog"] == id.value().to_string();
+    let named = (params["dialog"] == "top" && top == Some(id)) || params["dialog"] == id.value();
     let (true, Some(name), Some(job)) = (named, name, open.job.as_mut()) else { return None };
     let custom = job.flattener.as_ref().and_then(|f| serde_json::to_value(f).ok());
     let set = FlattenOptions::for_export(Some(&name), custom.as_ref(), &saved).and_then(|now| {
@@ -377,7 +377,7 @@ pub(crate) fn dialog_set(app: &mut VectorcraftApp, params: &Value) -> Option<Res
     Some(set.map(|options| {
         job.flattener = Some(options);
         let shown = dialogs.with(|host| craft::automation::dialogs::inspect(host));
-        shown.as_array().and_then(|list| list.iter().find(|d| d["id"] == id.value().to_string())).cloned().unwrap_or(Value::Null)
+        shown.as_array().and_then(|list| list.iter().find(|d| d["id"] == id.value())).cloned().unwrap_or(Value::Null)
     }))
 }
 

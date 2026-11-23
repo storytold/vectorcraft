@@ -502,7 +502,8 @@ mod tests {
     /// Transform Objects off.
     #[test]
     fn a_transform_dialog_sends_its_commands_params() {
-        let rows: [(&str, Vec<(&str, Value)>, &str, Value); 5] = [
+        type Fields<'a> = Vec<(&'a str, Value)>;
+        let rows: [(&str, Fields<'_>, &str, Value); 5] = [
             ("object.reflect", vec![("axis", json!("horizontal"))], "axis", json!("horizontal")),
             ("object.reflect", vec![("axis", json!("angle")), ("angle", json!(45))], "axis", json!(45.0)),
             ("object.shear", vec![("axis", json!("vertical")), ("angle", json!(45))], "axis", json!("vertical")),

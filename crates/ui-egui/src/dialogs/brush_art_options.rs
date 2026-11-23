@@ -31,9 +31,9 @@ use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{CellMarks, Segmented, Swatch};
 use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _, clicked};
 use craft::ui::dialog::{FieldRefusal, StackDialog};
-use craft::ui::display::{Picture, PictureSize, Text};
+use craft::ui::display::{Picture, Text};
 use craft::ui::layout_components::{Row, Stack};
-use craft::ui::list::{ThumbAspect, ThumbSize};
+use craft::ui::list::ThumbAspect;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
@@ -48,7 +48,7 @@ use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization, Corn
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, PatternDef};
 
-use super::brush_options::{clamped, mode_key, stroke_preview};
+use super::brush_options::{clamped, mode_key};
 use crate::VectorcraftApp;
 
 /// Scatter values: (field, suffix), in [`Scatter::RANGES`] order.
@@ -153,11 +153,6 @@ pub(super) fn tile_choice(f: &DialogFields, key: &str) -> String {
         None if set(art) => "original".into(),
         None => "none".into(),
     }
-}
-
-/// Sets tile `key` to `choice`: the pick that marks the tile as set.
-pub(super) fn choose_corner(f: &mut DialogFields, key: &str, choice: &str) {
-    f.set(key, choice);
 }
 
 /// The most key colours offered.
@@ -426,18 +421,6 @@ pub(super) fn rows(ty: &str, object: bool) -> Vec<Param> {
     };
     rows.extend(colorization_rows());
     rows
-}
-
-/// The row of the stroke the brush would paint, on the document `doc` the dialog opened over.
-pub(super) fn preview_row(doc: Option<Arc<Document>>, ty: &str) -> Param {
-    let ty = ty.to_string();
-    Param::custom("__stroke", tl!("Preview"), move |ui, f, _| {
-        let def = edited_def(f);
-        Picture::painter(tl!("Stroke preview"), ThumbAspect::new(7, 1), |cx, rect| stroke_preview(cx, rect, doc.as_deref(), &ty, def.clone()))
-            .extent(PictureSize::Thumb(ThumbSize::Medium))
-            .show(ui)
-    })
-    .full_width()
 }
 
 /// A whole-number field bound to `f[key]`, kept within `range`, named `label`.

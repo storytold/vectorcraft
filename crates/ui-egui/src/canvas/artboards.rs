@@ -14,9 +14,6 @@ use crate::doc_windows::Win;
 /// The length on screen, in points, of each arm of an artboard's center mark (a cross), at any zoom.
 const CENTER_MARK_ARM: f32 = 6.0;
 
-/// The fade's color: black at 40% opacity, which shows each channel under it at 60% of its value.
-pub(super) const FADE_OUTSIDE: Color32 = Color32::from_black_alpha(102);
-
 fn closed(r: vectorcraft_geom::Rect) -> BezPath {
     let mut path = BezPath::new();
     path.move_to(Point::new(r.x0, r.y0));
@@ -69,14 +66,16 @@ pub(super) fn border(outline: bool) -> PageBorder {
     if outline { PageBorder::Line } else { PageBorder::DropShadow }
 }
 
-/// The pasteboard's color: white in Outline, the paper under Hide Artboards, else the interface's.
+/// The pasteboard's color: white in Outline, the paper under Hide Artboards, else User Interface › Canvas Color, or the
+/// interface's when that matches the interface brightness.
 pub(super) fn pasteboard_color(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, outline: bool) -> PasteboardColor {
     if outline {
         PasteboardColor::Custom(DataColor::new(Color32::WHITE))
     } else if !shows_artboards(app) {
         PasteboardColor::Custom(DataColor::new(paper_color(&st.doc.setup)))
     } else {
-        PasteboardColor::Default
+        crate::prefs_dialog::canvas_color(&app.session.prefs.canvas_color)
+            .map_or(PasteboardColor::Default, |c| PasteboardColor::Custom(DataColor::new(c)))
     }
 }
 

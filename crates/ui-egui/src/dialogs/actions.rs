@@ -132,13 +132,6 @@ impl<V: Fields> Form<V> {
         self.held.state()
     }
 
-    /// Applies `edit` to the values and to the values Reset returns to, for a change in the app that
-    /// the values follow (a set they name moved), so Reset does not go back to the old place.
-    pub(crate) fn follow(&mut self, edit: impl Fn(&mut V)) {
-        edit(&mut self.values);
-        edit(&mut self.opening);
-    }
-
     /// The values as JSON, by their serde names.
     pub(crate) fn json_fields(&self) -> Option<Value> {
         serde_fields(&self.values)

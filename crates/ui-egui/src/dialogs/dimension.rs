@@ -87,6 +87,9 @@ const MODES: [(&str, &str); 3] = [("linear", "Linear"), ("angular", "Angular"), 
 /// Where the floating strip sits from the canvas corner.
 const STRIP_OFFSET: egui::Vec2 = egui::vec2(24.0, 24.0);
 
+/// The option a number field edits.
+type NumSlot = fn(&mut DimensionOptions) -> &mut f64;
+
 /// A number field of the options: its labels, the number it edits and the range and unit it shows.
 #[derive(Clone, Copy)]
 struct Num {
@@ -94,7 +97,7 @@ struct Num {
     label: &'static str,
     /// The field's accessible name, which tells apart the fields that share a label.
     name: &'static str,
-    slot: fn(&mut DimensionOptions) -> &mut f64,
+    slot: NumSlot,
     min: f64,
     max: f64,
     unit: &'static str,
@@ -135,7 +138,7 @@ struct Edited {
     /// A control other than a number field changed a value.
     set: bool,
     /// The number fields' edits of the pass, with the number each one edits.
-    numbers: Vec<(fn(&mut DimensionOptions) -> &mut f64, EditResponse<Option<f64>>)>,
+    numbers: Vec<(NumSlot, EditResponse<Option<f64>>)>,
     /// A swatch asked for a colour picker.
     pick: Option<ColorRequest>,
 }

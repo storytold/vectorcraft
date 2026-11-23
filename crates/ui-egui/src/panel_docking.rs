@@ -163,7 +163,7 @@ pub(crate) fn default_workspace(fronts: &[&str]) -> Workspace<String> {
     };
     let main: Vec<&str> = DockTab::ALL.iter().map(|tab| tab.info().0).collect();
     let mut columns: Vec<Column<String>> = group(main.as_slice()).into_iter().map(|g| Column::new(vec![g])).collect();
-    let icons: Vec<Group<String>> = ICON_PANEL_GROUPS.iter().filter_map(|row| group(*row)).collect();
+    let icons: Vec<Group<String>> = ICON_PANEL_GROUPS.iter().filter_map(|row| group(row)).collect();
     if !icons.is_empty() {
         columns.push(Column::new(icons).with_iconic(true));
     }
@@ -274,9 +274,11 @@ fn edge_columns(layout: &Layout<String>, edge: DockEdge) -> &[Column<String>] {
     }
 }
 
-/// The column holding `panel`: a dock column with its dock's window edge and its index from that
-/// edge, or a floating window's column with `None`.
-pub(crate) fn column_of<'a>(layout: &'a Layout<String>, panel: &str) -> Option<(Option<(DockEdge, usize)>, &'a Column<String>)> {
+/// A dock column's window edge and its index from that edge; `None` for a floating window's column.
+pub(crate) type DockSlot = Option<(DockEdge, usize)>;
+
+/// The column holding `panel`, with its [`DockSlot`].
+pub(crate) fn column_of<'a>(layout: &'a Layout<String>, panel: &str) -> Option<(DockSlot, &'a Column<String>)> {
     let place = layout.place(&panel.to_owned())?;
     let column = layout.column(&place)?;
     let edge = match &place {
@@ -1320,12 +1322,6 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     app.dock_rt.columns = output.columns;
     app.dock_rt.windows = output.windows;
     settle(app);
-}
-
-/// Whether a modal is open: a dialog, the command palette or a native file dialog. Floating panels
-/// in OS windows of their own take no input meanwhile, as the main window behind it takes none.
-pub(crate) fn modal_open(app: &VectorcraftApp) -> bool {
-    app.any_dialog_open() || app.ui.palette_open || app.file_dialog_open()
 }
 
 /// Is a modal window open in this pass: a modal dialog, Preferences, Keyboard Shortcuts or a file

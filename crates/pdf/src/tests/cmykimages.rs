@@ -1564,7 +1564,8 @@ fn press_quality_writes_an_rgb_image_in_a_cmyk_document_as_cmyk() {
 /// out CMYK.
 #[test]
 fn press_quality_writes_cmyk_in_an_rgb_document_too() {
-    let press = || PdfOptions { settings: builtin_preset("Press Quality", APP).unwrap().settings, created: Some(1_700_000_000), ..Default::default() };
+    let press =
+        || PdfOptions { settings: builtin_preset("Press Quality", APP).unwrap().settings, created: Some(1_700_000_000), ..Default::default() };
     assert_eq!(press().settings.output.destination, DOCUMENT_CMYK);
     let ink = [0u8, 102, 255, 0];
     let tiff = ImageBlob::cmyk_tiff(&Inks::new(4, 4, flat(ink, 16)).unwrap()).unwrap();

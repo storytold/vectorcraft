@@ -765,8 +765,10 @@ fn main() -> std::process::ExitCode {
                 #[cfg(target_os = "macos")]
                 {
                     open_documents::set_ui(&cc.egui_ctx);
-                    // PLAN: menus-w7 installs the macOS menu bar into `app.services.native_menu` here unless `in_window_menus`.
-                    let _ = in_window_menus;
+                    // The macOS menu bar, installed now so winit's default menu doesn't stay up.
+                    if !in_window_menus {
+                        app.services.native_menu = vectorcraft_ui_egui::menus::native::install(&cc.egui_ctx, &mut app);
+                    }
                 }
                 #[cfg(not(target_os = "macos"))]
                 {

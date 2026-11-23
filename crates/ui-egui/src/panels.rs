@@ -832,7 +832,7 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
 /// "Recent Colors"; returns the one clicked, for the caller to apply. A cell drags its color as a
 /// solid paint, which the Swatches panel makes a swatch of.
 pub(crate) fn recent_colors(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
-    let stored: Vec<Color> = app.session.recent_colors.iter().copied().collect();
+    let stored: Vec<Color> = app.session.recent_colors.to_vec();
     let cells: Vec<(Label, Srgba)> = stored.iter().map(|c| (Label::from(c.to_hex()), srgba(c))).collect();
     // A colour no cell holds, so no cell shows as picked and every click is a pick.
     let mut picked = Srgba::BLACK.with_alpha(0.0);

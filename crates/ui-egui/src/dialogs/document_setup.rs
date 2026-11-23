@@ -486,8 +486,8 @@ fn typography() -> Vec<PropertyRow> {
         |choices: &[[char; 2]]| -> Vec<(String, String)> { choices.iter().map(|p| p.iter().collect::<String>()).map(|s| (s.clone(), s)).collect() };
     vec![
         PropertyRow::field(Param::custom("language", tl!("Language:"), language_row).companions(["quotes.double", "quotes.single"])),
-        choice("quotes.double", tl!("Double Quotes:"), quotes(&Quotes::DOUBLE_CHOICES)),
-        choice("quotes.single", tl!("Single Quotes:"), quotes(&Quotes::SINGLE_CHOICES)),
+        choice("quotes.double", tl!("Double Quotes:"), quotes(Quotes::DOUBLE_CHOICES)),
+        choice("quotes.single", tl!("Single Quotes:"), quotes(Quotes::SINGLE_CHOICES)),
         check("typographersQuotes", tl!("Use Typographer's Quotes")),
         section(tl!("Options")),
         percent("superscript.size", tl!("Superscript Size:"), 0.0),

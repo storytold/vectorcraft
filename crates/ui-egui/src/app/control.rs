@@ -99,16 +99,6 @@ impl VectorcraftApp {
         }
     }
 
-    /// The UI phase of a pass: counts the pass toward the captures' settling and issues the due
-    /// ones; a capture that expired or lost its window is answered here.
-    pub(crate) fn issue_captures(&mut self, ctx: &egui::Context) {
-        let document = self.document_identity();
-        let Some(channel) = self.channel.as_mut() else { return };
-        channel.captures.note_pass();
-        let finished = channel.captures.issue(&WindowHost::of(ctx), motion::now(), document);
-        self.finish_captures(finished);
-    }
-
     /// Replies to finished captures; a capture with a path is written by [`write_automation_file`].
     fn finish_captures(&mut self, finished: Vec<Finished>) {
         if finished.is_empty() {

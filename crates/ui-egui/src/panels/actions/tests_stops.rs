@@ -2,8 +2,7 @@ use super::tests_playback::{first_action, host_frame, on_host};
 use super::tests_support::*;
 use super::*;
 use crate::dialogs::action_playback::PlaybackDialog;
-// PLAN: assumed `action_stop::message_open(app: &VectorcraftApp) -> bool` (menus-w20 note 7).
-use crate::dialogs::action_stop::{StopMessage, message_open};
+use crate::dialogs::action_stop::StopMessage;
 use craft::automation::actions::ActionStep;
 use craft::ui::dialog::StackDialog;
 
@@ -16,6 +15,11 @@ fn set_steps(app: &mut VectorcraftApp, steps: &[(&str, Value)]) {
     for (at, (command, params)) in steps.iter().enumerate() {
         app.ui.actions.insert_step(a, at, ActionStep::new(*command, params.clone())).unwrap();
     }
+}
+
+/// Whether a stop's message box is open.
+fn message_open(app: &VectorcraftApp) -> bool {
+    app.dialogs().unwrap().with(|host| host.is_open::<StopMessage>())
 }
 
 /// Sets the answer of the stop's message box, as automation's `ui.dialog.set` does: `"proceed"` is Continue and

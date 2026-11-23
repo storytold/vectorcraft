@@ -6,7 +6,7 @@ use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDia
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::addons::dialogs::{self, Confirm, Spec};
+use crate::addons::dialogs::{self, Spec};
 use crate::canvas::rulers::general_lengths;
 
 /// The command.
@@ -19,7 +19,7 @@ const MAX_CIRCLES: u64 = 64;
 const RADIUS: f64 = 36.0;
 
 /// How the dialog's values reach the command; the preview's answer says how many circles were found.
-pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: Some(found), confirm: Confirm::Commit };
+pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: Some(found) };
 
 /// The circle number the choice holds (an option id): 0 is every circle, `k` the k-th, counted from 1.
 fn circle(fields: &DialogFields) -> u64 {
