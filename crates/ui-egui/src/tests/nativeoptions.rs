@@ -198,6 +198,8 @@ fn save_a_copy_and_save_dont_ask_and_options_reach_the_file() {
     host(&mut app);
     // Save of an untitled document goes straight to the file, as before.
     app.run("file.save", Value::Null).unwrap();
+    // The save panel's answer arrives as a frame's tick takes it.
+    pass(&mut app);
     assert!(open_dialogs(&app).is_empty());
     assert_eq!(written.borrow().len(), 1);
     app.run("file.saveAs", Value::Null).unwrap();
