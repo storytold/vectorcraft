@@ -287,7 +287,7 @@ fn startup_presets_list_names_presets_add_document_takes() {
          var d = app.documents.addDocument(n); vc.log([n, d.width === p.width && d.documentColorSpace === p.colorMode]); }",
     );
     let names: Vec<&str> = out[0].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-    // Scripts take `startupPresetsList[0]` as the print preset.
+    // VectorCraft's own order puts Print first.
     assert_eq!(names.first(), Some(&"Print"));
     // Every New Document profile and both Basic presets, each once.
     let mut sorted = names.clone();

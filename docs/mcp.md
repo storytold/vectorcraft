@@ -2743,10 +2743,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `setActivePlane(gridPlane)` and `selectPerspectivePreset(gridType, presetName)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Document/), and `app` has `getPresetSettings(preset)` and
   `startupPresetsList` (https://ai-scripting.docsforadobe.dev/jsobjref/Application/). `showPerspectiveGrid`
-  and `hidePerspectiveGrid` run `perspective.grid.show`, and `setActivePlane` runs `perspective.plane.set`; none of them adds an undo step, and
-  a failed run puts the grid back. `selectPerspectivePreset` runs `perspective.grid.preset` with a built-in or saved
-  preset of `perspective.presets.list` (its name in any case), which shows the grid and is part of the run's undo
-  step when the grid changes. The enumerations `PerspectiveGridType` (`OnePointPerspectiveGridType`,
+  and `hidePerspectiveGrid` run `perspective.grid.show`, and `setActivePlane` runs `perspective.plane.set`; none of
+  them adds an undo step, and a failed run puts the grid back. `selectPerspectivePreset` runs
+  `perspective.grid.preset` with a built-in or saved preset of `perspective.presets.list` (its name in any case),
+  which shows the grid and is part of the run's undo step when the grid changes. The enumerations
+  `PerspectiveGridType` (`OnePointPerspectiveGridType`,
   `TwoPointPerspectiveGridType`, `ThreePointPerspectiveGridType`, `InvalidPerspectiveGridType`) and
   `PerspectiveGridPlaneType` (`GRIDLEFTPLANETYPE`, `GRIDRIGHTPLANETYPE`, `GRIDFLOORPLANETYPE`,
   `INVALIDGRIDPLANETYPE`) come from https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/. A
