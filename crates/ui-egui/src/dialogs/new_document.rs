@@ -253,11 +253,14 @@ fn layout(d: &Dialog) -> (ArtboardLayout, u64, f64, bool) {
 }
 
 /// Sets one artboard layout field. A new layout or column count replaces the rows of a preset
-/// made with `file.new`'s `rows`; a new layout keeps the column count those rows showed.
+/// made with `file.new`'s `rows`; a new layout keeps the column count those rows showed. Choosing
+/// the layout that is already selected keeps the rows.
 fn set_layout(d: &mut Dialog, key: &str, v: Value) {
     let (lay, shown, ..) = layout(d);
     let mut l = d.fields.get("artboardLayout").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
+    let same = key == "layout" && v.as_str().and_then(ArtboardLayout::parse) == Some(lay);
     if let ("layout" | "columns", Some(o)) = (key, l.as_object_mut())
+        && !same
         && o.remove("rows").and_then(|r| r.as_f64()).is_some_and(|r| r.is_finite() && r >= 1.0)
         && key == "layout"
         && lay == ArtboardLayout::GridByColumn
@@ -930,7 +933,7 @@ mod tests {
         app.run("file.newDialog", json!({})).unwrap();
         let columns = |app: &VectorcraftApp| super::layout(app.ui.dialog.as_ref().unwrap()).1;
         set(&mut app, "artboards", json!(9));
-        for to in ["gridByRow", "gridByColumn", "row", "column"] {
+        for to in ["gridByRow", "row", "column"] {
             for rows in [json!(4), json!(4.0), json!(3.6)] {
                 set(&mut app, "artboardLayout", json!({"layout": "gridByColumn", "columns": 2, "rows": rows}));
                 assert_eq!(columns(&app), 3, "9 artboards in rows {rows}");
@@ -948,6 +951,24 @@ mod tests {
         assert_eq!(columns(&app), 2);
         super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!("gridByRow"));
         assert_eq!(field(&app, "artboardLayout"), json!({"layout": "gridByRow", "columns": 2}));
+    }
+
+    /// Choosing the grid by column that is already selected keeps a preset's rows, so Create puts
+    /// as many artboards in each column as before.
+    #[test]
+    fn choosing_the_selected_layout_keeps_a_presets_rows() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.newDialog", json!({})).unwrap();
+        set(&mut app, "artboards", json!(5));
+        let preset = json!({"layout": "gridByColumn", "columns": 2, "rows": 4, "spacing": 10});
+        set(&mut app, "artboardLayout", preset.clone());
+        super::set_layout(app.ui.dialog.as_mut().unwrap(), "layout", json!("gridByColumn"));
+        assert_eq!(field(&app, "artboardLayout"), preset);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.artboards.len(), 5);
+        let first: Vec<_> = st.doc.artboards.iter().filter(|a| a.rect.x0 == 0.0).map(|a| a.rect.y0).collect();
+        assert_eq!(first.len(), 4, "four artboards in the first column: {first:?}");
     }
 
     /// Columns shows what a preset's rows give the current number of artboards.
