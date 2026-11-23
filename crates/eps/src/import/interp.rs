@@ -107,6 +107,9 @@ pub(crate) struct Interp<'a> {
     /// The program is in the legacy Illustrator format: its group operators `u` … `U` (at the top
     /// level, whatever its prolog defines them as) are groups (see the module docs of `import`).
     pub illustrator: bool,
+    /// The program is one VectorCraft's legacy `.ai` writer wrote: its images, which its prolog
+    /// paints without `Interpolate`, are smoothed as the document's they were written from are.
+    pub own_legacy: bool,
     /// Procedures that are read-only: those `bind` went into inside another procedure, and those
     /// given to `readonly`, `executeonly` or `noaccess`. `bind` leaves them alone (PLRM 3rd ed.,
     /// `bind` in chapter 8), so a procedure bound when it was defined keeps the names it didn't
@@ -249,6 +252,7 @@ impl<'a> Interp<'a> {
             saved: vec![],
             out,
             illustrator: false,
+            own_legacy: false,
             readonly: HashSet::new(),
         }
     }

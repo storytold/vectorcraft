@@ -358,6 +358,7 @@ fn read_names(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncoding
     let page = Affine::new([1.0, 0.0, 0.0, -1.0, -llx, ury]);
     let mut it = Interp::new(ps, GState::default(), Out::new(doc, page, frame));
     it.illustrator = dsc.illustrator;
+    it.own_legacy = dsc.own_legacy;
     let result = it.run();
     it.release();
     let fault = it.fault.take();

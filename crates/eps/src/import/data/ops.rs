@@ -915,7 +915,9 @@ impl Interp<'_> {
         if self.g.null {
             return Ok(());
         }
-        let pixelated = !img.interpolate && coarse(xf);
+        // A file VectorCraft wrote can't say `Interpolate` (its prolog paints with `colorimage`):
+        // its images are the document's, which are smoothed.
+        let pixelated = !img.interpolate && !self.own_legacy && coarse(xf);
         // CMYK samples keep their ink amounts as a CMYK TIFF, as the PDF importer keeps an 8- or
         // 16-bit CMYK image's samples, and transparent pixels (`MaskColor`, an ImageType 3 mask)
         // become its opacity mask.

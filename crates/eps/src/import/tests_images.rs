@@ -590,6 +590,23 @@ fn coarse_images_without_interpolate_draw_hard_pixels() {
     assert_eq!(pixelated(cmyk), (true, Some(true)));
 }
 
+/// A coarse image of a legacy `.ai` VectorCraft wrote (its prolog the writer's procedure set, which
+/// paints images without `Interpolate`) is smoothed, as the image it was written from is; the same
+/// program under another prolog draws hard pixels.
+#[test]
+fn coarse_images_of_a_file_vectorcraft_wrote_stay_smooth() {
+    let file = |resources: &str| {
+        format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n{resources}%%EndComments\n\
+             100 100 scale 2 2 8 [2 0 0 -2 0 2] {{<00ffff00>}} image\nshowpage\n%%EOF\n"
+        )
+    };
+    let pixelated = |resources: &str| first_image(&import(file(resources).as_bytes()).unwrap()).extras().pixelated;
+    assert!(!pixelated(&format!("%%DocumentSuppliedResources: procset {}\n", crate::legacy_ai::PROCSET)));
+    assert!(pixelated("%%DocumentSuppliedResources: procset Another_Prolog 1.0 0\n"));
+    assert!(pixelated(""));
+}
+
 /// An image too large to read is left out, and its data is skipped, as reading it would leave
 /// the program: the art after it is read, not the data as PostScript. Here the data ends at its
 /// `~>` (an inline image of a content stream run as a file, as PDF-reading prologs write it), at
