@@ -477,7 +477,11 @@ impl VectorcraftApp {
         crate::keymap::note_os(ctx);
         prefs_dialog::apply_runtime(self, ctx);
         self.run_control(ctx);
-        if let Some(u) = self.pending_url.take() {
+        // In the next frame's first pass, as production's one-pass frames did: a second pass of the frame that asked
+        // for it (one a background run's result can bring) doesn't open it early.
+        if ctx.current_pass_index() == 0
+            && let Some(u) = self.pending_url.take()
+        {
             ctx.open_url(egui::OpenUrl::new_tab(u));
         }
         self.flush_clipboard_out();
