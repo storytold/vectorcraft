@@ -300,6 +300,24 @@ impl Component for TypeEditor<'_> {
         while let Some((command, _)) = cx.take_command::<TypeEditorCommand>() {
             fired.push(command);
         }
+        // Windows' Alt-code entry takes every Alt+digit no focused component claims, top-row digits too; production
+        // read codes from the keypad only, so the character commands claim their Alt+digit chords and run them here.
+        let digit_chords: Vec<(craft::keymap::Chord, TypeEditorCommand)> = TypeEditorCommand::defs()
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|def| {
+                let command = TypeEditorCommand::from_ref(&def.command).filter(|c| c.character().is_some())?;
+                let chord = cx.resolve_command(def.command.clone())?.chord?;
+                (chord.mods == craft::keymap::Mods::ALT && chord.key.is_digit()).then_some((chord, command))
+            })
+            .collect();
+        let chords: Vec<_> = digit_chords.iter().map(|(chord, _)| *chord).collect();
+        for &chord in &chords {
+            cx.claim(chord);
+        }
+        while let Some(chord) = cx.take_first_claimed(&chords) {
+            fired.extend(digit_chords.iter().find(|(c, _)| *c == chord).map(|(_, command)| *command));
+        }
         // A new edit takes the keys ([`show`]); a click away loses them.
         if !cx.appeared() && !cx.is_focused() {
             keep_marked_text(self.app);

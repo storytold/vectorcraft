@@ -388,6 +388,9 @@ impl CanvasTool for SessionTool<'_> {
         if claim(&mut app, EngineKey::Left) {
             claims = claims.nudges();
         }
+        if claim(&mut app, EngineKey::AltTap) {
+            claims = claims.alt_tap();
+        }
         claims
     }
 
