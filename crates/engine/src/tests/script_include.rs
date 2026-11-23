@@ -554,12 +554,12 @@ fn script_line_and_stack_are_at_the_line_of_each_file() {
     let log = run(&base, text).unwrap()["log"].clone();
     assert_eq!(log[0], json!([5, 3, 4]), "{log}");
     assert_eq!(log[1][0], 3, "{log}");
-    assert_eq!(short_stack(&log[1][1]), "[global]@main.jsx:6\nlibWhere@lib.jsxinc:3\n");
-    assert_eq!(short_stack(&log[2]), "[global]@main.jsx:7\ndeepStack@deep.jsxinc:5\n");
+    assert_eq!(short_stack(&log[1][1]), "[main.jsx]\n[global]@main.jsx:6\nlibWhere@lib.jsxinc:3\n");
+    assert_eq!(short_stack(&log[2]), "[main.jsx]\n[global]@main.jsx:7\ndeepStack@deep.jsxinc:5\n");
     assert_eq!(log[3][0], 4, "{log}");
-    assert_eq!(short_stack(&log[3][1]), "[global]@main.jsx:8\n[global]@ev.jsx:5\nevWhere@ev.jsx:3\nincWhere@inc.jsxinc:4\n");
+    assert_eq!(short_stack(&log[3][1]), "[main.jsx]\n[global]@main.jsx:8\n[global]@ev.jsx:5\nevWhere@ev.jsx:3\nincWhere@inc.jsxinc:4\n");
     // The file a frame names is the one `$.fileName` gives while that file runs.
-    let log = run(&base, "vc.log($.stack.slice(9, -3) === $.fileName);").unwrap()["log"].clone();
+    let log = run(&base, "vc.log($.stack.split('\\n')[1].slice(9, -2) === $.fileName);").unwrap()["log"].clone();
     assert_eq!(log, json!([true]));
     let _ = std::fs::remove_dir_all(base);
 }

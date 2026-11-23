@@ -63,7 +63,7 @@ fn each_member_has_its_value() {
         ("$.memCache", json!(0)),
         ("$.os", json!(os)),
         ("$.screens.length", json!(0)),
-        ("$.stack", json!("[global]@t.js:1\n")),
+        ("$.stack", json!("[t.js]\n[global]@t.js:1\n")),
         ("$.strict", json!(false)),
         ("$.version", json!(version)),
         ("typeof $.getenv + typeof $.setenv + typeof $.sleep", json!("functionfunctionfunction")),
@@ -165,8 +165,29 @@ fn getenv_reads_only_its_names_and_setenv_changes_only_the_run() {
 fn error_line_and_stack_follow_the_running_code() {
     let mut s = Session::new();
     let source = "try { null.x; } catch (e) {}\nfunction where() {\n  return [$.line, $.stack, $.error instanceof TypeError];\n}\nvc.log(where());";
-    assert_eq!(logged(&mut s, source)[0], json!([3, "[global]@t.js:5\nwhere@t.js:3\n", true]));
+    assert_eq!(logged(&mut s, source)[0], json!([3, "[t.js]\n[global]@t.js:5\nwhere@t.js:3\n", true]));
     assert_eq!(value(&mut s, "$.error"), json!(null), "each run starts without one");
+}
+
+/// `$.stack`'s first line is the run's name in square brackets, the name `script.run` reports,
+/// in a function as at the top level.
+#[test]
+fn the_stack_starts_with_the_runs_name() {
+    let mut s = Session::new();
+    let first = |s: &mut Session, params: Value| {
+        let r = s.execute("script.run", &params).unwrap_or_else(|e| panic!("{params}: {e}"));
+        let line = r["log"][0].as_str().unwrap_or_default().to_string();
+        (line, r["name"].clone())
+    };
+    let top = "vc.log($.stack.split('\\n')[0]);";
+    let (line, name) = first(&mut s, json!({"source": top, "name": "Marks.jsx"}));
+    assert_eq!((line.as_str(), name), ("[Marks.jsx]", json!("Marks.jsx")));
+    let inner = "function f() { return $.stack.split('\\n')[0]; }\nvc.log(f());";
+    assert_eq!(first(&mut s, json!({"source": inner, "name": "Marks.jsx"})).0, "[Marks.jsx]");
+    let (line, name) = first(&mut s, json!({"source": format!("#script \"Named\"\n{top}")}));
+    assert_eq!((line.as_str(), name), ("[Named]", json!("Named")), "a #script line names the run");
+    let (line, name) = first(&mut s, json!({"source": top}));
+    assert_eq!(format!("[{}]", name.as_str().unwrap_or_default()), line, "a run given no name");
 }
 
 #[test]

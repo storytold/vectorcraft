@@ -429,6 +429,12 @@ impl Realm {
         self.interp.locator = Some(locate);
     }
 
+    /// Has `$.stack` start with a line `[name]` that names the running script, before its frames;
+    /// `None` leaves the line out.
+    pub fn set_script_name(&mut self, name: Option<String>) {
+        self.interp.script_name = name;
+    }
+
     /// Which source the last error's `line` and `column` are in: 0 for the script last given to
     /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
     /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which

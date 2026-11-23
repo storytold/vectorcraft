@@ -291,6 +291,8 @@ pub(crate) struct Interp {
     pub(crate) error_tag: u32,
     /// Where `$.line` and `$.stack` find the file and line of a compiled line.
     pub(crate) locator: Option<crate::realm::SourceLocator>,
+    /// The name of the running script, which `$.stack` writes as its first line.
+    pub(crate) script_name: Option<String>,
     /// The mark of the host error ([`crate::HostError::Marked`]) whose exception or limit is
     /// propagating.
     pub(crate) thrown_mark: Option<u32>,
@@ -535,6 +537,7 @@ impl Interp {
             code_observer: None,
             error_tag: crate::realm::UNKNOWN_SOURCE,
             locator: None,
+            script_name: None,
             thrown_mark: None,
             finally_marks: Vec::new(),
             finally_sites: Vec::new(),
