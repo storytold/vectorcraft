@@ -37,6 +37,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
@@ -47,6 +48,8 @@ const INSIDE: &[(&str, &str)] = &[
     ("Object.prototype.", "toSource"),
     ("localize.", "length"),
     ("toSource.", "length"),
+    ("ExternalObject.", "length prototype search"),
+    ("ExternalObject.prototype.", "constructor terminate"),
     (
         "$.",
         "about appEncoding appEncoding= bp build buildDate colorPicker decimalPoint engineName error fileName flags \
