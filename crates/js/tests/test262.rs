@@ -416,12 +416,17 @@ fn needs_missing_builtin(sources: &[&str], missing: &HashSet<&str>) -> bool {
     needs_missing_builtin_in(sources, missing, &Options::default())
 }
 
-/// [`needs_missing_builtin`] for sources read with `options`.
+/// [`needs_missing_builtin`] for sources read with `options`. With [`Options::es2015`], a source
+/// that does not tokenize is left out of the check rather than skipping the test, so the run
+/// counts the tokenizer's error as a failure.
 fn needs_missing_builtin_in(sources: &[&str], missing: &HashSet<&str>, options: &Options) -> bool {
     let mut lists = Vec::with_capacity(sources.len());
     for source in sources {
-        let Ok(tokens) = tokenize(source, options) else { return true };
-        lists.push(tokens);
+        match tokenize(source, options) {
+            Ok(tokens) => lists.push(tokens),
+            Err(_) if options.es2015 => {}
+            Err(_) => return true,
+        }
     }
     let strings_are_code = lists.iter().any(|tokens| runs_strings_as_code(tokens));
     lists.iter().flatten().any(|t| match &t.kind {
@@ -862,6 +867,19 @@ fn a_missing_name_in_a_message_string_does_not_skip() {
     assert!(!skips(&[r#"var r = /"Map'/; var s = "say \"Map\" and \'Set\'";"#]));
     // A string in an included harness file is a message too.
     assert!(!skips(&["var x = 1;", r#"function check(v) { if (!v) throw new Test262Error("no Symbol"); }"#]));
+}
+
+#[test]
+fn a_source_that_does_not_tokenize_as_es2015_is_run_and_not_skipped() {
+    // The ES5 runs skip a test whose ES2015 syntax they cannot read. In the ES2015 subset, a
+    // source that does not tokenize is run, so the tokenizer's error is counted as a failure.
+    let missing: HashSet<&str> = ["Map"].into_iter().collect();
+    let modern = Options { es2015: true, ..Options::default() };
+    let unreadable = "var s = `never closed";
+    assert!(needs_missing_builtin(&[unreadable], &missing));
+    assert!(!needs_missing_builtin_in(&[unreadable], &missing, &modern));
+    // A missing built-in in another source still skips.
+    assert!(needs_missing_builtin_in(&[unreadable, "var m = new Map();"], &missing, &modern));
 }
 
 #[test]

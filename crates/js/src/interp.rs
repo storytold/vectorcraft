@@ -436,6 +436,14 @@ fn binding_bytes(len: usize) -> usize {
     PROP_BYTES + string_bytes(len)
 }
 
+/// The estimated bytes of the element property that spread adds at index `start + i`, its index
+/// name included.
+fn element_bytes(start: u32, i: usize) -> usize {
+    let index = u64::from(start).saturating_add(i as u64);
+    let digits = index.checked_ilog10().map_or(1, |d| d as usize + 1);
+    binding_bytes(digits)
+}
+
 /// At least the bytes that a function object made from `code` adds to the heap: the function,
 /// its prototype object, their properties and the environment holding a function expression's
 /// own name.
@@ -2290,12 +2298,17 @@ impl Interp {
     fn op_body_env(&mut self) -> JsResult<()> {
         let frame = self.frame()?;
         let (code, params) = (frame.code.clone(), frame.env);
+        // The parameters' values may have filled the room the call reserved, so the body's
+        // environment and declarations are checked against the heap again.
+        self.reserve_heap(ENV_BYTES)?;
         // Each new environment is in the frame, where the collector finds it, before the next
         // allocation.
         let var_env = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(params) });
         self.frame_mut()?.var_env = var_env;
         let lex = self.top_env(&code, var_env)?;
         self.frame_mut()?.env = lex;
+        // The declarations are checked after the `let` and `const` environment has taken its room.
+        self.reserve_heap(declaration_bytes(&code))?;
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
@@ -2338,8 +2351,8 @@ impl Interp {
     /// index (holes read as `undefined`), with its length read again before each one as its
     /// iterator reads it, a string's or a `String` object's characters by code point, and an
     /// object with a `length` by index. Any other value is a `TypeError`. Each element takes a
-    /// unit of fuel, and a concatenated string's flattened copy is counted against the heap before
-    /// it is made.
+    /// unit of fuel and is counted against the heap as it is read, with its index name and a
+    /// string's character, and a concatenated string's flattened copy is counted before it is made.
     fn op_array_spread(&mut self) -> JsResult<()> {
         let v = self.peek(0)?;
         let Value::Object(a) = self.peek(1)? else { return internal("spread into something that is not an array") };
@@ -2351,6 +2364,12 @@ impl Interp {
             },
             _ => None,
         };
+        let current = match &self.object(a)?.class {
+            Class::Array { length, .. } => *length,
+            _ => return internal("spread into something that is not an array"),
+        };
+        // The most elements the array has room for.
+        let room = u32::MAX.saturating_sub(current);
         let items: Vec<Value> = match boxed.as_ref().unwrap_or(&v) {
             Value::String(s) => {
                 let units = crate::string_builtins::flat_charged(self, s)?;
@@ -2359,9 +2378,9 @@ impl Interp {
                 let mut i = 0;
                 while let Some(&u) = units.get(i) {
                     self.use_fuel()?;
-                    held.add(self, PROP_BYTES)?;
                     let pair = (0xD800..0xDC00).contains(&u) && units.get(i + 1).is_some_and(|n| (0xDC00..0xE000).contains(n));
                     let len = if pair { 2 } else { 1 };
+                    held.add(self, element_bytes(current, out.len()).saturating_add(string_bytes(len)))?;
                     out.push(Value::String(Str::from_units(units.get(i..i + len).unwrap_or_default().to_vec())));
                     i += len;
                 }
@@ -2372,16 +2391,15 @@ impl Interp {
                 let len = self.get_from(o, &key("length"), &v)?;
                 // ToLength (ECMA-262 2015 section 7.1.15): a negative or NaN length reads nothing.
                 let n = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);
-                let current = match &self.object(a)?.class {
-                    Class::Array { length, .. } => *length,
-                    _ => return internal("spread into something that is not an array"),
-                };
-                let Some(n) = u32::MAX.checked_sub(current).filter(|room| n < f64::from(*room)).map(|_| n as u32) else {
-                    return Err(self.throw(ErrorType::Range, "array literal too long"));
-                };
                 // An array's iterator reads its length again before each element (ECMA-262 2015
-                // section 22.1.5.2.1), so a getter that shrinks or grows the array changes the count.
+                // section 22.1.5.2.1), so a getter that shrinks or grows the array changes the count,
+                // and the room is checked as each element is read. Any other object, and an array
+                // whose elements no getter reads, is checked against the length it has now.
                 let array = matches!(self.object(o)?.class, Class::Array { .. });
+                if n >= f64::from(room) && !(array && self.has_index_getter(o)?) {
+                    return Err(self.throw(ErrorType::Range, "array literal too long"));
+                }
+                let n = n as u32;
                 // The elements read so far stay reachable while a getter runs.
                 // The list is counted against the heap limit as it grows.
                 let mark = self.temp_roots.len();
@@ -2396,8 +2414,11 @@ impl Interp {
                         if i >= end {
                             return Ok(());
                         }
+                        if i.saturating_add(1) >= room {
+                            return Err(self.throw(ErrorType::Range, "array literal too long"));
+                        }
                         self.use_fuel()?;
-                        held.add(self, PROP_BYTES)?;
+                        held.add(self, element_bytes(current, i as usize))?;
                         let item = self.get_from(o, &index_key(i), &v)?;
                         self.temp_roots.push(item);
                         i += 1;
@@ -2425,6 +2446,28 @@ impl Interp {
             self.define(a, index_key(i), Prop::Data { value: item, flags: OPEN })?;
         }
         self.pop().map(drop)
+    }
+
+    /// Whether reading the elements of `o` by index can run code: `o` or an object it inherits
+    /// from has an accessor property with a getter and an index name. Each object, and each
+    /// property inspected, takes a unit of fuel.
+    fn has_index_getter(&mut self, o: ObjId) -> JsResult<bool> {
+        let mut cur = Some(o);
+        while let Some(id) = cur {
+            // The scan stops where the fuel would run out.
+            let budget = usize::try_from(self.fuel).unwrap_or(usize::MAX);
+            let object = self.object(id)?;
+            let found =
+                object.props.iter().take(budget).position(|(k, p)| matches!(p, Prop::Accessor { get: Some(_), .. }) && array_index(k).is_some());
+            let inspected = found.map_or(object.props.len(), |i| i + 1);
+            let proto = object.proto;
+            crate::regexp_vm::use_fuel_n(self, (inspected as u64).saturating_add(1))?;
+            if found.is_some() {
+                return Ok(true);
+            }
+            cur = proto;
+        }
+        Ok(false)
     }
 
     /// Takes the array of a call's or `new`'s arguments off the stack and pushes its elements.
@@ -2902,6 +2945,9 @@ impl Interp {
         let has = |interp: &Self, name: &[u16]| matches!(interp.heap.env(env), Some(Env::Decl { bindings, .. }) if bindings.contains(name));
         let lex = self.top_env(code, env)?;
         self.temp_envs.push(lex);
+        // The call reserved room for the declarations before the `let` and `const` environment
+        // took some of it.
+        self.reserve_heap(declaration_bytes(code))?;
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
@@ -3335,12 +3381,24 @@ impl Interp {
             Some(i) => self.block_env(code, i, env)?,
             None => env,
         };
+        // The caller reserved room for the declarations before the `let` and `const` names took
+        // some of it. Their environment stays reachable if the check collects.
+        self.temp_envs.push(lex);
+        let r = self.reserve_heap(declaration_bytes(code));
+        self.temp_envs.pop();
+        r?;
         // Functions close over the code's own environment with ES2015's scoping, and over its
-        // variable environment otherwise (ECMA-262 5.1 section 13). Global code's functions close
-        // over the global scope in either language, which sees the global object's names too.
-        let global = var_env == self.global_env && lex == self.global_lex;
-        let scope = if self.options.es2015 || global { lex } else { var_env };
+        // variable environment otherwise (ECMA-262 5.1 section 13). When that is the global
+        // object's, they close over the global scope inside it, which also holds the scripts'
+        // `let` and `const` names, as global code's functions do in either language.
         let on_global = var_env == self.global_env;
+        let scope = if self.options.es2015 {
+            lex
+        } else if on_global {
+            self.global_lex
+        } else {
+            var_env
+        };
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
@@ -3402,7 +3460,10 @@ impl Interp {
             }
             Some(Env::Obj { object, .. }) => {
                 let object = *object;
-                let declared = self.has_property(object, name)?;
+                // ECMA-262 2015 section 8.1.1.4.17 reads the object's own property, so a name it
+                // only inherits gets a new own property; section 10.5 of the 5.1 edition reads the
+                // inherited one as well.
+                let declared = if self.options.es2015 { self.get_own_property(object, name)?.is_some() } else { self.has_property(object, name)? };
                 let flags = WRITABLE | ENUMERABLE | configurable;
                 match value {
                     None if declared => Ok(()),
