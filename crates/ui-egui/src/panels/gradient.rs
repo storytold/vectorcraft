@@ -450,7 +450,8 @@ const REPEAT_PRESETS: [f64; 6] = [1.0, 2.0, 3.0, 4.0, 5.0, 10.0];
 /// The Presets row: a menu of the preset gradients by library (theme), then the
 /// saved ones; a choice applies to the gradient behind the active proxy, keeping its placement
 /// (`gradient.presets.apply`; a solid or no paint becomes the gradient), as the panel's other
-/// controls do: an active Appearance row stands for it only when it is a row of the proxy's kind.
+/// controls do: an active Appearance row takes the preset only when that row is a fill row with the
+/// Fill proxy in front, or a stroke row with the Stroke proxy in front.
 /// The menu shows the preset the gradient is, if any.
 fn presets_row(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPaint>) {
     let shown = g.and_then(|g| app.session.gradient_preset_name(&g.gradient)).unwrap_or_default();
