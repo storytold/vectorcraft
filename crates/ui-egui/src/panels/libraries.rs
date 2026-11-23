@@ -640,7 +640,8 @@ impl<'a> View<'a> {
             }
             (_, Some(Look::Color(color))) => {
                 let hex = color.to_hex();
-                let row = if hex.eq_ignore_ascii_case(name) { row } else { row.trailing(hex) };
+                // Named, so a screen reader reads the value with the row, as it is seen beside the name.
+                let row = if hex.eq_ignore_ascii_case(name) { row } else { row.trailing_named(hex.clone(), hex) };
                 row.thumb(ThumbSize::Small, move |cx, rect| Look::Color(color).paint(cx, rect))
             }
             (_, Some(look)) => {
