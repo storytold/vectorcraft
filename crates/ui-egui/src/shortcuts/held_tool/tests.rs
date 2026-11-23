@@ -27,6 +27,17 @@ impl Keyboard {
         crate::testing::app_frame(app, &self.ctx, egui::RawInput { events, screen_rect, time: Some(time), focused, ..Default::default() });
     }
 
+    /// [`Self::frame`] without the window's parts: the app's tick and its held tools' returns only, so a
+    /// pointer press reaches no canvas.
+    fn off_canvas(&self, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>) {
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+        let raw = egui::RawInput { events, screen_rect, time: Some(time), focused: true, ..Default::default() };
+        crate::testing::part_frame(app, &self.ctx, raw, |app, ui| {
+            app.tick(ui.ctx());
+            crate::shortcuts::follow_holds(app, ui.ctx());
+        });
+    }
+
     /// `key` pressed (or repeated while it is down) at `time`, typing `letter`.
     fn press(&self, app: &mut VectorcraftApp, time: f64, key: Key, letter: &str) {
         let press = egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
@@ -226,7 +237,8 @@ fn a_press_in_the_frame_that_lets_go_waits_for_the_canvas() {
         let at = egui::pos2(150.0, 125.0);
         let press = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE };
         let release = egui::Event::Key { key: Key::S, physical_key: Some(Key::S), pressed: false, repeat: false, modifiers: egui::Modifiers::NONE };
-        keys.frame(&mut app, 0.1, vec![egui::Event::PointerMoved(at), press, release]);
+        // The press reaches no canvas in these frames: the canvas's own press is dispatched here.
+        keys.off_canvas(&mut app, 0.1, vec![egui::Event::PointerMoved(at), press, release]);
         assert_eq!(app.session.tool_id(), "scale", "canvas {canvas}: no decision before the canvas");
         if canvas {
             let view = app.view_info();
@@ -234,7 +246,7 @@ fn a_press_in_the_frame_that_lets_go_waits_for_the_canvas() {
                 crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, 150.0, 125.0), view);
             }
         }
-        keys.frame(&mut app, 2.0, vec![]);
+        keys.off_canvas(&mut app, 2.0, vec![]);
         assert_eq!(app.session.tool_id(), if canvas { "pen" } else { "scale" }, "canvas {canvas}");
     }
 }

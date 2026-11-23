@@ -131,10 +131,12 @@ fn saved_scheme_accent_and_canvas_color_show_from_the_first_frame() {
     for _ in 0..2 {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
-        let (theme, _, accent) = crate::theme::root_theme(&app.session.prefs);
-        let (default_theme, _, default_accent) = crate::theme::root_theme(&Prefs::default());
-        assert_ne!(theme, default_theme, "the saved scheme");
-        assert!(accent.is_some() && accent != default_accent, "the saved accent");
+        let shown = crate::theme::root_theme(&app.session.prefs);
+        assert_ne!(shown.0, crate::theme::root_theme(&Prefs::default()).0, "the saved scheme");
+        // Classic keeps its own accent whatever accent is saved, as production's Classic tokens did.
+        let classic = Prefs { ui_color_scheme: "classic".into(), ui_brightness: app.session.prefs.ui_brightness.clone(), ..Prefs::default() };
+        let want = crate::theme::root_theme(&classic);
+        assert!(shown.0 == want.0 && shown.2 == want.2, "the saved accent");
         assert_eq!(canvas_color(&app.session.prefs.canvas_color), Some(egui::Color32::WHITE));
     }
 }
