@@ -13,7 +13,6 @@ use craft::keymap::{
     AssignError, Binding, CommandDef, CommandKind, ConflictKind, ForeignSet, ImportOptions, Keymap, Overrides, Policy, PressKind, Profiles, Trigger,
 };
 use craft::menu::shortcuts::{Area, DialogState, Format, HoldSetting, JSON_FORMAT, Options, Outcome, ShortcutsDialog, summary};
-use craft::ui::contract::CommandSet as _;
 use craft::ui::runtime::commands;
 use serde_json::{Value, json};
 
@@ -21,7 +20,6 @@ use crate::file_asks::{self, Owner};
 use crate::keymap::{command_of, entry_key, stored, stored_key};
 use crate::menus::Node;
 use crate::shortcut_sheet::PageSize;
-use crate::type_editing::TypeEditorCommand;
 use crate::{VectorcraftApp, menus};
 
 pub const PRESETS: &[&str] = &["VectorCraft Defaults", "Classic Defaults"];
@@ -960,6 +958,8 @@ pub(crate) struct ShortcutsDialogState {
     pub state: DialogState,
     /// The keymap the dialog edits: a copy of the window's, taken by the first [`show`].
     pub keymap: Option<Keymap>,
+    /// The window's keymap `keymap` was copied from: a plug-in installed or removed later gives the window another.
+    window: Option<Arc<Keymap>>,
     pub hold: HoldSetting,
     /// A set another app saved as text, for the review the next [`show`] opens.
     pub pending_review: Option<(ForeignSet, ImportOptions)>,
@@ -977,6 +977,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     app.shortcuts_dialog = Some(ShortcutsDialogState {
         state: DialogState::new().with_tab("tools"),
         keymap: None,
+        window: None,
         hold,
         pending_review: None,
         pending_import: None,
@@ -1021,10 +1022,24 @@ fn dialog<'a>(keymap: &'a mut Keymap, sets: &'a mut Profiles, hold: &'a mut Hold
 /// dialog, and what it reports.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some(mut current) = app.shortcuts_dialog.take() else { return };
-    if current.keymap.is_none() {
-        current.keymap = commands::keymap(ui.ctx()).map(|window| (*window).clone());
+    // A plug-in installed or removed while the dialog is open changes the window's commands: the dialog takes them,
+    // keeping its edits.
+    if let Some(window) = commands::keymap(ui.ctx()).filter(|w| current.window.as_ref().is_none_or(|was| !Arc::ptr_eq(was, w))) {
+        // shortcut: the commands are compared by count; a swap of one plug-in for another within a frame needs ids.
+        let fresh = match current.keymap.take() {
+            Some(edited) if edited.catalog().len() == window.catalog().len() => edited,
+            edited => {
+                let mut fresh = (*window).clone();
+                if let Some(edited) = edited {
+                    fresh.set_overrides(edited.overrides().clone());
+                }
+                fresh
+            }
+        };
+        current.keymap = Some(fresh);
+        current.window = Some(window);
     }
-    let ShortcutsDialogState { state, keymap: Some(keymap), hold, pending_review, pending_import, reviewed } = &mut current else {
+    let ShortcutsDialogState { state, keymap: Some(keymap), hold, pending_review, pending_import, reviewed, .. } = &mut current else {
         // The window's keymap comes with its first frame: the dialog shows from the next.
         app.shortcuts_dialog = Some(current);
         return;
@@ -1169,7 +1184,8 @@ fn dialog_closed(app: &VectorcraftApp) -> Result<(), String> {
 fn current_keymap(app: &VectorcraftApp) -> Result<Keymap, String> {
     let window = app.ui_ctx.as_ref().and_then(commands::keymap).ok_or("the window has not drawn a frame")?;
     let mut keymap = (*window).clone();
-    keymap.set_overrides((*app.shortcut_overrides).clone());
+    // Under what each Effect menu item runs now, before the next frame's menus move them there.
+    keymap.set_overrides(crate::keymap::effect_keys_in(&app.shortcut_overrides, &snapshot().effects));
     keymap.set_holds(app.session.prefs.hold_shortcuts);
     Ok(keymap)
 }
@@ -1216,7 +1232,12 @@ fn parse_trigger(text: &str) -> Result<Trigger, String> {
 
 /// Entry `key`'s shortcut and hold shortcut in `keymap`, in the crate's spelling.
 fn row_bindings(keymap: &Keymap, key: &str) -> (Option<String>, Option<String>) {
-    let bindings = keymap.bindings(&command_of(key));
+    let command = command_of(key);
+    // A command the window's keymap takes from its next frame (a plug-in installed now) has what its set gives it.
+    let bindings = match keymap.bindable(&command) {
+        Some(_) => keymap.bindings(&command),
+        None => keymap.overrides().get(&stored_key(key)).unwrap_or_default().iter().filter_map(|text| Binding::parse(text).ok()).collect(),
+    };
     let shortcut = bindings.iter().find(|b| !b.trigger.is_hold()).map(|b| b.trigger.to_string());
     let hold = bindings.iter().find(|b| b.trigger.is_hold()).map(|b| b.trigger.chord.to_string());
     (shortcut, hold)
@@ -1296,16 +1317,6 @@ fn set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         let k = entry_key(&h.command);
         if !removed.contains(&k) {
             removed.push(k);
-        }
-    }
-    // The type editor's own commands (Commit on Cmd+Enter) give up a chord the user binds, as production's editor let
-    // any bound command run instead.
-    for b in keymap.bindings(&command).into_iter().filter(|b| b.trigger.press == PressKind::Single) {
-        for editor in keymap.holders(&b.trigger.chord).into_iter().filter(|h| TypeEditorCommand::from_ref(h).is_some()) {
-            let k = entry_key(&editor);
-            if keymap.remove(&editor, &b) && !removed.contains(&k) {
-                removed.push(k);
-            }
         }
     }
     // An entry listed only with a shortcut loses its hold shortcut with its last shortcut.

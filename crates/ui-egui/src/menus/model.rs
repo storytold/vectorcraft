@@ -203,6 +203,11 @@ static UNROUTED: std::sync::LazyLock<Vec<String>> = std::sync::LazyLock::new(|| 
 });
 
 fn rebuild(app: &mut VectorcraftApp, target: Target) {
+    // A plug-in effect installed or removed, or back with other options, keeps its shortcut under what its item runs now.
+    let moved = crate::keymap::effect_keys_in(&app.shortcut_overrides, &crate::shortcut_editor::snapshot().effects);
+    if moved.iter().any(|(k, _)| app.shortcut_overrides.get(k).is_none()) {
+        app.shortcut_overrides = std::sync::Arc::new(moved);
+    }
     // The Symbols panel menu's states read the selection's instances from the walk this keeps.
     crate::panels::symbols::cache_instances(app);
     let listed = Listed::of(app);
