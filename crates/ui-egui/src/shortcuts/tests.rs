@@ -1240,9 +1240,12 @@ fn brackets_size_the_blob_brush_and_the_eraser() {
         key_frame(&mut app, &ctx, vec![text("]")]);
         key_frame(&mut app, &ctx, vec![text("]")]);
         assert_eq!(size(&mut app), before + 2.0, "{tool}");
-        // Option-8 types `[` on a Turkish Mac keyboard.
+        // Option-8 types `[` on a Turkish Mac keyboard, so the step runs on a macOS shell: elsewhere Alt+digit starts an Alt code.
+        let mac = crate::testing::ui_context();
+        craft::ui::testing::windows::set_os(&mac, craft::host::target::Os::Mac);
+        key_frame(&mut app, &mac, vec![]);
         let option_8 = egui::Event::Key { key: Key::Num8, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::ALT };
-        key_frame(&mut app, &ctx, vec![option_8, text("[")]);
+        key_frame(&mut app, &mac, vec![option_8, text("[")]);
         assert_eq!(size(&mut app), before + 1.0, "{tool}: a bracket typed with Option");
     }
     assert_eq!(app.session.paint.stroke_width, 3.0, "the stroke weight stays");
