@@ -192,7 +192,7 @@ impl VectorcraftApp {
             original_editor: Default::default(),
             screen_pick: craft::color_ui::ui::ScreenPick::new(),
             font_watch: None,
-            fonts_seen: 0,
+            fonts_changed: Default::default(),
             font_preview_owner: None,
             background: Default::default(),
             opening: Default::default(),
