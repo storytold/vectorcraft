@@ -225,10 +225,11 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
     let document_units = d.fields.get(RESET_UNITS).is_none_or(|v| values.get("unitsGeneral") != Some(v));
     app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
-    // Outside an automatic Touch switch, the task bar is set before OK can enter the Touch
-    // workspace, so it goes to the workspace being left; during one, after OK leaves it.
+    // When OK enters the Touch workspace, the task bar is set before the switch, so it goes to the
+    // workspace being left; otherwise after it, so a return from Touch gives it to the workspace
+    // returned to.
     let task_bar = d.fields.get("__taskBar").and_then(Value::as_bool);
-    let before_switch = app.ui.touch_workspace_restore.is_none();
+    let before_switch = touch_ws.is_some() && crate::workspaces::enters_touch(app, app.touch_screen);
     if before_switch && let Some(on) = task_bar {
         app.ui.task_bar = on;
     }
@@ -517,10 +518,11 @@ fn default_ui_fields(ui: &crate::UiState) -> [(&'static str, bool); 3] {
 
 /// After `prefs.reset`, alone or as a batch step, of every category or of one: the UI-only rows
 /// ([`UI_FIELDS`]) and the Edit Original app of the categories it reset take their defaults too.
-pub(crate) fn apply_prefs_resets(app: &mut VectorcraftApp) {
+/// Returns whether any reset was pending.
+pub(crate) fn apply_prefs_resets(app: &mut VectorcraftApp) -> bool {
     let resets = app.session.take_prefs_resets();
     if resets.is_empty() {
-        return;
+        return false;
     }
     let in_reset = |category: &str| resets.iter().any(|r| r.is_none_or(|c| c == category));
     for (key, value) in default_ui_fields(&app.ui) {
@@ -536,6 +538,7 @@ pub(crate) fn apply_prefs_resets(app: &mut VectorcraftApp) {
     if vectorcraft_engine::cmd::prefscmds::spec("editOriginalSystemDefaults").is_some_and(|s| in_reset(s.category)) {
         crate::original_editor::reset_saved(app);
     }
+    true
 }
 
 /// The height of the fields column under the category's name: the field list, the gap and the

@@ -170,6 +170,11 @@ pub fn builtins() -> Vec<Workspace> {
     ]
 }
 
+/// Whether [`sync_touch_workspace`] with `touch_screen` switches to the Touch workspace.
+pub fn enters_touch(app: &VectorcraftApp, touch_screen: bool) -> bool {
+    app.session.prefs.touch_workspace && touch_screen && app.ui.workspace != TOUCH
+}
+
 /// Preferences › Devices › Enable Touch Workspace (#394): on, a touch screen switches to the Touch
 /// workspace; off, or when no touch screen is reported, the workspace before that switch is
 /// restored if Touch was entered automatically. Each switch keeps the layout it leaves and brings

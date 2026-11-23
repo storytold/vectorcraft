@@ -620,6 +620,26 @@ fn ok_sets_the_task_bar_in_the_workspace_outside_touch() {
     assert!(touch.task_bar, "Touch keeps its own task bar");
 }
 
+/// A Touch return marker left over from an earlier automatic switch (Window › Workspace does not
+/// clear it) does not change where OK puts the task bar: OK enters Touch from the workspace it
+/// leaves, so that workspace takes the row and Touch keeps its own.
+#[test]
+fn ok_sets_the_task_bar_in_the_workspace_left_with_a_stale_touch_marker() {
+    let mut a = app();
+    a.touch_screen = true;
+    a.run("prefs.set", json!({"key": "touchWorkspace", "value": false})).unwrap();
+    a.ui.touch_workspace_restore = Some("Typography".into());
+    crate::workspaces::switch(&mut a.ui, "Essentials Classic").unwrap();
+    a.ui.task_bar = true;
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a);
+    confirm(&mut a).unwrap();
+    assert_eq!(a.ui.workspace, crate::workspaces::TOUCH);
+    assert!(a.ui.task_bar, "Touch keeps its own task bar");
+    let classic = a.ui.workspace_changes.iter().find(|w| w.name == "Essentials Classic").unwrap();
+    assert!(!classic.task_bar, "the workspace left takes the reset value");
+}
+
 /// A `prefs.reset` run straight on the session, outside `VectorcraftApp::run`, resets the UI-only
 /// rows by the end of the next frame.
 #[test]

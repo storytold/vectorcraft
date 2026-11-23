@@ -652,8 +652,10 @@ impl VectorcraftApp {
         // panel (Show on Shape Creation).
         panels::transform::show_on_shape_creation(self, &ctx);
         crate::toasts::show(self, &ctx);
-        // A `prefs.reset` run in this pass outside `Self::run`.
-        crate::prefs_dialog::apply_prefs_resets(self);
+        // A `prefs.reset` run in this pass outside `Self::run`; the next pass draws the reset rows.
+        if crate::prefs_dialog::apply_prefs_resets(self) {
+            ctx.request_repaint();
+        }
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {
