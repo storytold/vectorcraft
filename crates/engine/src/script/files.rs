@@ -1995,17 +1995,24 @@ fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
                 let mode = std::os::unix::fs::PermissionsExt::mode(&out.metadata()?.permissions());
                 XMP_TEMP_MODE.with(|m| m.set(Some(mode)));
             }
-            std::io::Write::write_all(&mut out, &packet)
+            std::io::Write::write_all(&mut out, &packet)?;
+            // The packet is on the disk before it takes the sidecar's name, as a saved document's is.
+            #[cfg(not(target_arch = "wasm32"))]
+            vectorcraft_format::sync_file(&out)?;
+            Ok(())
         };
         let r = write_temp();
         drop(out);
         // The replacement keeps the sidecar's permission bits, group and (Linux) access ACL, or is
         // readable by its owner alone, as a saved document is (`vectorcraft_format::keep_permissions`).
         // On Windows the only permission is the read-only attribute, and a read-only temporary file
-        // could not be removed after a failed rename. The web build has no such files. Permission
-        // bits that cannot be set fail the write, and the sidecar stays as it was.
+        // could not be removed after a failed rename. The web build has no such files. Keeping them
+        // is best effort, as for a saved document: a volume without Unix permissions (SMB, FAT) refuses them, and the
+        // update still goes through.
         #[cfg(not(target_arch = "wasm32"))]
-        let r = r.and_then(|()| vectorcraft_format::keep_permissions(&target, &temp));
+        if r.is_ok() {
+            let _ = vectorcraft_format::keep_permissions(&target, &temp);
+        }
         let r = r.and_then(|()| std::fs::rename(&temp, &target)).inspect_err(|_| {
             let _ = std::fs::remove_file(&temp);
         });
