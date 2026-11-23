@@ -1445,6 +1445,18 @@ impl Clipboard {
                                 w.name = other;
                             }
                         }
+                        // A pattern that comes in under another name than the one reserved for its
+                        // swatch, because a pattern has that name, keeps that name for its swatch
+                        // when no swatch or color group uses it.
+                        let own = name != def.name
+                            && !d.swatch_name_taken(&def.name)
+                            && choices.reserved.get(&def.name).is_some_and(|w| w.paint == pattern_paint(&def.name));
+                        if own && d.swatches.last().is_some_and(|w| w.name == name) {
+                            if let Some(w) = d.swatches.last_mut() {
+                                w.name = def.name.clone();
+                            }
+                            out.reserved_named = true;
+                        }
                         Placed::added(&def.name, name)
                     });
                     added_patterns.extend(p.new_name(&def.name));
@@ -1670,19 +1682,13 @@ impl Clipboard {
         let conflicts: BTreeSet<String> =
             if same_doc { BTreeSet::new() } else { self.conflicts(d, used).into_iter().map(|(w, _)| w.name.clone()).collect() };
         let bases: Vec<&Swatch> = self.swatches.iter().filter(|w| is_base(w) && used.has(Res::Swatch, &w.name)).collect();
-        // The swatches this import brings, for the names reserved for them.
-        let brought: Vec<&Swatch> = if choices.reserved.is_empty() {
-            vec![]
-        } else {
-            self.swatches.iter().filter(|w| if is_base(w) { used.has(Res::Swatch, &w.name) } else { used.carries(w) }).collect()
-        };
         for w in &bases {
             let p = if conflicts.contains(&w.name) && choices.of(&w.name) == SwatchChoice::Merge {
                 out.merged += 1;
                 out.merged_swatches.insert(w.name.clone());
                 Placed::Existing
             } else {
-                let (p, reserved_named) = add_swatch(d, w, w, same_doc, &choices.reserved, &brought, &out.relink);
+                let (p, reserved_named) = add_swatch(d, w, w, same_doc, &choices.reserved, &out.relink);
                 out.reserved_named |= reserved_named;
                 p
             };
@@ -1699,7 +1705,7 @@ impl Clipboard {
         for def in self.swatches.iter().filter(|w| !is_base(w) && used.carries(w)) {
             let mut w = def.clone();
             out.relink.paint(&mut w.paint);
-            let (p, reserved_named) = add_swatch(d, &w, def, same_doc, &choices.reserved, &brought, &out.relink);
+            let (p, reserved_named) = add_swatch(d, &w, def, same_doc, &choices.reserved, &out.relink);
             out.reserved_named |= reserved_named;
             out.placed(Res::Swatch, &def.name, &p);
         }
@@ -1913,17 +1919,9 @@ pub(crate) fn numbered_name(name: &str) -> bool {
 /// in `reserved`. A numbered name in `reserved` ("Ink 2") that `d` does not use is kept for the
 /// swatch it is reserved for: that swatch comes in under it, not as a numbered copy of it that `d`
 /// has, and another swatch of that name gets a number. A numbered copy in `d` whose name is
-/// reserved for another swatch that the import brings (`brought`), and that is that swatch with
-/// its links as `relink` gives them, is left to it.
-fn add_swatch(
-    d: &mut Document,
-    w: &Swatch,
-    source: &Swatch,
-    same_doc: bool,
-    reserved: &BTreeMap<String, Swatch>,
-    brought: &[&Swatch],
-    relink: &Relink,
-) -> (Placed, bool) {
+/// reserved for another swatch, and that is that swatch with its links as `relink` gives them, is
+/// left to it, whether or not the import brings that swatch.
+fn add_swatch(d: &mut Document, w: &Swatch, source: &Swatch, same_doc: bool, reserved: &BTreeMap<String, Swatch>, relink: &Relink) -> (Placed, bool) {
     let same = |n: &str| d.swatch(n).is_some_and(|t| *t == Swatch { name: n.to_string(), ..w.clone() });
     let kept = (!same_doc && numbered_name(&w.name) && !d.swatch_name_taken(&w.name)).then(|| reserved.get(&w.name)).flatten();
     let (owns, held) = (kept.is_some_and(|o| o == source), kept.is_some_and(|o| o != source));
@@ -1932,11 +1930,8 @@ fn add_swatch(
         relink.paint(&mut o.paint);
         *t == o
     };
-    let theirs = |n: &str| {
-        n != w.name
-            && copy_of(&w.name, n)
-            && reserved.get(n).is_some_and(|o| o != source && brought.contains(&o) && d.swatch(n).is_some_and(|t| is_owner(t, o)))
-    };
+    let theirs =
+        |n: &str| n != w.name && copy_of(&w.name, n) && reserved.get(n).is_some_and(|o| o != source && d.swatch(n).is_some_and(|t| is_owner(t, o)));
     let names = || d.swatches_iter().map(|t| t.name.as_str());
     let excluded = Cell::new(false);
     let found = existing(

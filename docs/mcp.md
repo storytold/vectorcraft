@@ -5839,8 +5839,11 @@ of a numbered library name, such as a color or tint "Ink 2", that the pattern's 
 document does not use it. Of two library swatches with one numbered name, the first one in the library keeps the name
 when the other is a swatch the pattern's art brings or a pattern swatch. A pattern the art is painted with keeps a
 numbered name; when the library's swatch of that name places the pattern otherwise, the swatch that comes with the
-pattern gets another name. A library color whose name the document gives another color is the document's numbered
-copy of the same color when it has one, so adding the pattern and its color again adds nothing. A pattern the document
+pattern gets another name. When the document gives that name to another pattern, the pattern comes in under a new
+number, and its swatch keeps the library swatch's name when no swatch or color group uses it. A library color whose
+name the document gives another color is the document's numbered copy of the same color when it has one, so adding the
+pattern and its color again adds nothing; a numbered copy whose name the library gives another swatch, and which is
+that swatch, is not a copy of another color, whether or not the pattern's art uses that swatch. A pattern the document
 already holds with its art linked to the document's own color of that name, or to a numbered copy of the color as
 pasting leaves it, is used as it is, unless using it would give another swatch a name the library uses. A library
 tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered
