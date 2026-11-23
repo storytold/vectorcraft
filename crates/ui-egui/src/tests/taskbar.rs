@@ -130,7 +130,9 @@ impl Rig {
 
     fn enter_value(&mut self, at: Pos2, value: &str) {
         self.fx.click_at(at);
-        // The click selected the whole field, so the text typed replaces it.
+        // A click on a field that already has the keyboard (a popover gives its first field the keyboard as it
+        // opens) places the caret: the whole field is selected, so the text typed replaces it.
+        self.fx.key(Key::A, Modifiers::COMMAND);
         self.fx.type_text(value);
         self.fx.key(Key::Enter, Modifiers::NONE);
         self.settle();
