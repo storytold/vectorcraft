@@ -658,6 +658,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.
     root.escape_leaves_fields = true;
+    // A held key repeats its command (Cmd+= keeps zooming in).
+    root.shortcuts_repeat = true;
     root
 }
 
