@@ -247,7 +247,7 @@ fn permission_words(name: &str, commands: &[String]) -> String {
 /// Installs the plug-in module that `module` names (`plugin.install`'s `path`, or `dataBase64`
 /// with `name`) → `plugin.install`'s result. A plug-in that lists permissions no person has granted
 /// it yet asks first, showing its name, id, version, file hash and what each permission lets it
-/// do, so does a filter that asks for a heavy budget, and so does a module that would take the
+/// do, so does a filter or an exporter that asks for a heavy budget, and so does a module that would take the
 /// place of another one with its id and get its settings and cache (`replace`); OK installs it if
 /// the module still has the hash the prompt showed, Cancel installs nothing → `{pending}` while it
 /// asks. The `grant` and `allowHeavy` of a request are ignored: only the dialog's OK approves.
@@ -310,13 +310,19 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
         install["grant"] = Value::Array(asked.clone());
     }
     if heavy {
-        let (minutes, times) = vectorcraft_plugins::heavy_terms();
-        paragraphs.push(crate::i18n::fmt(
+        let exporter = info["kind"] == "exporter";
+        let kind = if exporter { vectorcraft_plugins::Kind::Exporter } else { vectorcraft_plugins::Kind::Filter };
+        let (minutes, times) = vectorcraft_plugins::heavy_terms(kind);
+        let terms = if exporter {
+            tl!(
+                "Each export may take up to {minutes} minutes and do {times} times the work other exports may. It gets that budget when it exports in the background, where you can cancel it (Background Export, on the desktop)."
+            )
+        } else {
             tl!(
                 "Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it."
-            ),
-            &[("minutes", &minutes.to_string()), ("times", &times.to_string())],
-        ));
+            )
+        };
+        paragraphs.push(crate::i18n::fmt(terms, &[("minutes", &minutes.to_string()), ("times", &times.to_string())]));
         install["allowHeavy"] = json!(true);
     }
     if asks_replace {

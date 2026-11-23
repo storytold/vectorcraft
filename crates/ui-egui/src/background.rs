@@ -6,7 +6,8 @@
 //! Background.
 //!
 //! It needs a thread-safe writer from the host ([`crate::Services::write_shared`], desktop);
-//! without one (the web, which downloads) the work runs at once, as with the preference off.
+//! without one (the web, which downloads) the work runs at once, as with the preference off. Work
+//! run at once gives a heavy exporter an export's usual budget ([`run_here`]).
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -258,9 +259,19 @@ fn start(
             }
         }
     }
-    let services = &mut app.services;
-    let r = work(&mut |p: &str, b: &[u8]| crate::io::write_to(services, p, b));
+    let r = run_here(app, |app| {
+        let services = &mut app.services;
+        work(&mut |p: &str, b: &[u8]| crate::io::write_to(services, p, b))
+    });
     then(app, r)
+}
+
+/// Runs `f`, an export done at once on the UI thread, where nothing can cancel it: a heavy exporter
+/// gets an export's usual budget in it ([`vectorcraft_plugins::export::at_once`]), so the window is
+/// never held for minutes. A control client that asked to wait for the file ([`in_foreground`])
+/// gets the heavy budget, as `document.export` does where it is called.
+pub(crate) fn run_here<T>(app: &mut VectorcraftApp, f: impl FnOnce(&mut VectorcraftApp) -> T) -> T {
+    if app.background.foreground { f(app) } else { vectorcraft_plugins::export::at_once(|| f(app)) }
 }
 
 /// Run `f` on the UI thread once job `id` has finished, right after the job's own result is

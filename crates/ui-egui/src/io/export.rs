@@ -390,7 +390,7 @@ pub(crate) fn export_files(app: &mut VectorcraftApp, id: &str, params: Value) ->
     if !in_background {
         // Made at once, after the exports and saves started before it.
         background::wait_all(app);
-        let r = app.run(id, params)?;
+        let r = background::run_here(app, |app| app.run(id, params))?;
         return report_exported(app, r, &folder, hidden.as_deref(), open_location);
     }
     let export = app.session.prepare_screen_export(id, &params).map_err(|e| e.to_string()).inspect_err(|e| app.ui.status = e.clone())?;

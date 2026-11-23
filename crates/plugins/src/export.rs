@@ -12,20 +12,64 @@
 //! than a filter: [`FUEL`] instructions, plus [`Limits::fuel_per_byte`] for each byte of input,
 //! and [`WALL_TIME_MS`]. It runs where the export runs: with Background Export on the export's
 //! worker, whose Cancel stops it between two slices of the budget ([`Error::Cancelled`]).
+//!
+//! An exporter may ask for a heavy budget ([`crate::Budget::Heavy`]), for a machine file that
+//! takes far more work than drawing the document, such as an embroidery or a toolpath file:
+//! [`HEAVY_FUEL`] instructions instead of [`FUEL`], in the same time budget, which the user allows
+//! when installing it. A host that runs an export where nothing can stop it, on the thread that
+//! draws its window, runs it inside [`at_once`]: there a heavy exporter gets an export's usual
+//! budget, so the window is never held for minutes, and an export that runs out says why.
 
+use std::cell::Cell;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 
 use crate::objects::{declined, printable};
-use crate::{Error, Kind, Limits, Plugin, Result, registry};
+use crate::{Budget, Error, Kind, Limits, Plugin, Result, registry};
 
 /// Instructions an export may use, besides [`Limits::fuel_per_byte`] for each byte of the
 /// document: 200 times a filter's base budget.
 pub const FUEL: u64 = 10_000_000_000;
 
+/// Instructions an export by a heavy exporter ([`crate::Budget::Heavy`]) may use, besides
+/// [`Limits::fuel_per_byte`] for each byte of the document: 10 times an export's. Its time budget
+/// is an export's, [`WALL_TIME_MS`], which bounds it on a slow host.
+pub const HEAVY_FUEL: u64 = 100_000_000_000;
+
 /// Wall-clock budget of one export, in milliseconds.
 pub const WALL_TIME_MS: u64 = 300_000;
+
+/// The limit a heavy exporter that runs out of an export's usual budget inside [`at_once`] reports
+/// ([`Error::Limit`]), instead of "instruction budget".
+pub const AT_ONCE_LIMIT: &str = "instruction budget of an export run at once (a heavy exporter gets its larger budget only when the export runs in the background: on the desktop, with Preferences › File Handling › Enable Background Export on)";
+
+thread_local! {
+    /// Is this thread inside [`at_once`]?
+    static AT_ONCE: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Puts back what [`AT_ONCE`] held, also when the work unwinds.
+struct Restore(bool);
+
+impl Drop for Restore {
+    fn drop(&mut self) {
+        AT_ONCE.with(|a| a.set(self.0));
+    }
+}
+
+/// Runs `f` with this thread's exports run at once: a heavy exporter gets an export's usual budget
+/// in them ([`limits`]). For a host that runs an export where nothing can cancel it, such as the
+/// thread that draws its window.
+pub fn at_once<T>(f: impl FnOnce() -> T) -> T {
+    let _restore = Restore(AT_ONCE.with(|a| a.replace(true)));
+    f()
+}
+
+/// Is this thread inside [`at_once`]?
+fn is_at_once() -> bool {
+    AT_ONCE.with(Cell::get)
+}
 
 /// Most warnings an export reports.
 pub const MAX_WARNINGS: usize = 100;
@@ -72,10 +116,18 @@ pub struct Target<'a> {
     pub name: &'a str,
 }
 
-/// The limits of an export by `plugin`: its own, with the budgets of an export.
+/// The limits of an export by `plugin`: its own, with the budgets of an export. A heavy exporter
+/// gets [`Limits::heavy_export_fuel`] instead of [`Limits::export_fuel`], unless the export runs
+/// [`at_once`].
 pub fn limits(plugin: &Plugin) -> Limits {
     let own = plugin.limits();
-    Limits { fuel_base: own.export_fuel, wall_time_ms: own.export_wall_time_ms, ..own.clone() }
+    let fuel = if heavy(plugin) && !is_at_once() { own.export_fuel.max(own.heavy_export_fuel) } else { own.export_fuel };
+    Limits { fuel_base: fuel, wall_time_ms: own.export_wall_time_ms, ..own.clone() }
+}
+
+/// Does exporter `plugin` ask for a heavy budget?
+fn heavy(plugin: &Plugin) -> bool {
+    plugin.manifest().kind == Kind::Exporter && plugin.manifest().budget == Budget::Heavy
 }
 
 /// Runs exporter `plugin` on `document`, the native file's JSON, with `params` (checked against
@@ -88,7 +140,11 @@ pub fn run(plugin: &Plugin, document: &[u8], params: &Value, target: Target) -> 
     let mut params = Value::Object(m.resolve_params(params)?);
     params["_context"] = json!({"mode": "export", "extension": target.extension, "name": target.name});
     let params = serde_json::to_vec(&params).map_err(|e| Error::Params(e.to_string()))?;
-    decode(&plugin.run_limited(document, &params, &limits(plugin))?)
+    match plugin.run_limited(document, &params, &limits(plugin)) {
+        // A heavy exporter stopped by the budget it gets at once is told where it gets its own.
+        Err(Error::Limit(what)) if what == "instruction budget" && heavy(plugin) && is_at_once() => Err(Error::Limit(AT_ONCE_LIMIT.into())),
+        out => decode(&out?),
+    }
 }
 
 /// An exporter's output: `{"dataBase64": "…", "warnings"?: ["…"]}`, or `{"error": "…"}` to decline

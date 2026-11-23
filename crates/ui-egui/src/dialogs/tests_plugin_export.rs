@@ -67,6 +67,26 @@ fn an_exporter_with_parameters_asks_for_them_once_the_file_is_picked() {
     app.run("plugin.remove", json!({"id": "test.ui.params"})).unwrap();
 }
 
+/// An export the app runs at once, where nothing can cancel it, gives a heavy exporter an export's
+/// usual budget: one that needs more says where it gets its own and writes nothing. A control
+/// client that waits for the file (`wait: true`) gets the heavy budget, and the file is written.
+#[test]
+fn a_heavy_exporter_run_at_once_gets_an_export_s_usual_budget() {
+    let (mut app, written) = app_saving(1, |_| "/out/heavy.tuh".into());
+    let id = "test.ui.heavy";
+    let manifest = tpl::exporter(id, r#"["tuh"]"#, "{}").replace(r#""kind":"exporter""#, r#""kind":"exporter","budget":"heavy""#);
+    let wasm = wat::parse_str(tpl::spinning(&manifest, 1_000_000, r#"{"dataBase64":"SGk="}"#)).unwrap();
+    let limits = vectorcraft_plugins::Limits { fuel_per_byte: 0, export_fuel: 500_000, heavy_export_fuel: 100_000_000, ..Default::default() };
+    vectorcraft_plugins::registry::install(vectorcraft_plugins::Plugin::load(&wasm, limits).unwrap()).unwrap();
+    let format = format!("plugin.{id}");
+    let e = crate::io::export(&mut app, Some(&format), None, &Value::Null).unwrap_err();
+    assert!(e.contains(vectorcraft_plugins::export::AT_ONCE_LIMIT), "{e}");
+    assert!(written.borrow().is_empty(), "nothing written");
+    crate::background::in_foreground(&mut app, |app| crate::io::export(app, Some(&format), None, &Value::Null)).unwrap();
+    assert_eq!(names(&written), ["/out/heavy.tuh"]);
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
 /// `CRAFT_UI_PLUGIN_EXPORT_SHOT=<folder>` saves the pictures of the dialogs to that folder: Export As
 /// with an exporter's format chosen, then the exporter's own dialog. The plug-in is a test one with
 /// parameters a plotter's exporter could have, saved beside them (`plotter-test-exporter.wasm`) to
