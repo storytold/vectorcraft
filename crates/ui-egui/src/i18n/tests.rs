@@ -327,6 +327,8 @@ struct SourceFn<'a> {
     public: bool,
     /// Position of its `label` parameter among a call's arguments (`self` not counted).
     label: Option<usize>,
+    /// Takes `self`: called as `.name(`, so a free function of the same name (`background::run`) is not it.
+    method: bool,
     body: &'a str,
 }
 
@@ -583,7 +585,8 @@ fn source_fns(file: usize, text: &str) -> Vec<SourceFn<'_>> {
         let body = &body[..block_len(body)];
         let skip = usize::from(names.first().is_some_and(|n| n.ends_with("self")));
         let line = &text[text[..at].rfind('\n').map_or(0, |n| n + 1)..at];
-        out.push(SourceFn { file, name, public: line.contains("pub"), label: names.iter().position(|n| *n == "label").map(|k| k - skip), body });
+        let label = names.iter().position(|n| *n == "label").map(|k| k - skip);
+        out.push(SourceFn { file, name, public: line.contains("pub"), label, method: skip == 1, body });
     }
     out
 }
@@ -599,6 +602,7 @@ fn call_args<'a>(text: &'a str, g: &SourceFn) -> Vec<&'a str> {
     let call = format!("{}(", g.name);
     text.match_indices(&call)
         .filter(|(at, _)| !text[..*at].chars().next_back().is_some_and(|c| c.is_alphanumeric() || c == '_') && !text[..*at].ends_with("fn "))
+        .filter(|(at, _)| text[..*at].ends_with('.') == g.method)
         .filter_map(|(at, _)| arguments(&text[at + call.len()..]).get(k).copied())
         .collect()
 }
