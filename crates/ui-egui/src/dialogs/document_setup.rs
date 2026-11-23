@@ -46,7 +46,7 @@ pub(super) const KIND: &str = "documentSetup";
 const TABS: [&str; 4] = ["General", "Transparency", "Type", "Color"];
 /// Dialog-only fields `document.setup` doesn't take; `gridColors.N` (a picked colour waiting to be
 /// folded into the pair) is dialog-only too.
-const UI_ONLY: [&str; 6] = ["bleedLinked", "colorMode", "convertColors", "rgbProfile", "cmykProfile", "editArtboards"];
+const UI_ONLY: [&str; 7] = ["bleedLinked", "colorMode", "convertColors", "rgbProfile", "cmykProfile", "editArtboards", "numbersWithoutUnitsArePoints"];
 /// The settings `document.setup` keeps as an object, which the rows edit as `key.part`.
 const PARTS: [(&str, [&str; 2]); 3] = [("quotes", ["double", "single"]), ("superscript", ["size", "position"]), ("subscript", ["size", "position"])];
 /// The keys a picked grid colour arrives under: the entry's index is the key's last character.
@@ -63,6 +63,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let mut fields = app.session.execute("document.setup", &json!({})).map_err(|e| e.to_string())?;
     let linked = fields["bleed"].as_array().is_some_and(|b| b.windows(2).all(|w| w[0] == w[1]));
     fields["bleedLinked"] = json!(linked);
+    fields["numbersWithoutUnitsArePoints"] = json!(app.session.prefs.numbers_without_units_are_points);
     let Some(st) = app.session.active() else { return Err("no document".into()) };
     fields["gridColors"] = json!(st.doc.setup.grid_colors.map(|c| grid_color_entry(&c)));
     let (rgb, cmyk) = doc_profiles(&st.doc);
@@ -299,7 +300,8 @@ fn general() -> Vec<PropertyRow> {
 fn bleed_row(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut CustomContext) -> egui::Response {
     let mut linked = fields.bool("bleedLinked").unwrap_or(true);
     let unit = Unit::named(fields.text("units").unwrap_or_default()).unwrap_or_default();
-    let lengths = LengthUnits::new(UnitKind::Points, unit_kind(unit), 72.0);
+    let bare_points = fields.bool("numbersWithoutUnitsArePoints").unwrap_or(true);
+    let lengths = crate::fields::bare_points(LengthUnits::new(UnitKind::Points, unit_kind(unit), 72.0), bare_points);
     let parts = bleed_of(fields).map(|b| Mixed::Same(Some(b)));
     // PLAN: assumed the linked fields' output reads as `out.edit.value()`, as the shape dialog uses it.
     let out = LinkedFields::<4>::new(tl!("Bleed:"), Bind::given(parts), Bind::bound(&mut linked))

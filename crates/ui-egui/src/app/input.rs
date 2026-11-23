@@ -21,7 +21,6 @@ impl VectorcraftApp {
         if !craft::menu::bar::is_open(ctx) && !craft::menu::bar::is_focused(ctx) {
             shortcuts::escape(self, ctx);
         }
-        shortcuts::note_field_keys(self, ctx);
         shortcuts::follow_holds(self, ctx);
         shortcuts::settings_on_a_mac(self, ctx);
     }

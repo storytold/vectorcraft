@@ -214,7 +214,9 @@ impl Live<'_> {
             PrefKind::Length { min, max, measure } => {
                 // In the window's own Units choice, so a change there shows right away.
                 let shown = crate::canvas::rulers::unit_kind(vectorcraft_doc::Unit::named(self.text_of(measure.pref_key())).unwrap_or_default());
-                RowKind::length(self.num_of(key).unwrap_or(min), min..=max, LengthUnits::new(UnitKind::Points, shown, PIXELS_PER_INCH))
+                let lengths = LengthUnits::new(UnitKind::Points, shown, PIXELS_PER_INCH);
+                let lengths = crate::fields::bare_points(lengths, self.app.session.prefs.numbers_without_units_are_points);
+                RowKind::length(self.num_of(key).unwrap_or(min), min..=max, lengths)
             }
             PrefKind::Int { min, max } => RowKind::int(self.w.draft.get::<i64>(key).unwrap_or(min), min..=max),
             PrefKind::Choice(opts) => {

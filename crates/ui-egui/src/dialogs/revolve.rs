@@ -166,6 +166,7 @@ fn choices(effect: &str, key: &str) -> Vec<(String, craft::ui::runtime::env::Lab
 struct Rows<'a> {
     defaults: &'a Value,
     unit: Unit,
+    bare_points: bool,
 }
 
 impl Rows<'_> {
@@ -189,7 +190,7 @@ impl Rows<'_> {
     fn length(&self, key: &str, label: &'static str, range: (f64, f64)) -> Param {
         // Stored in points; a pixel is a point, as the rulers count it.
         let lengths = LengthUnits::new(UnitKind::Points, crate::canvas::rulers::unit_kind(self.unit), 72.0);
-        self.range(key, label, range, 1, UnitKind::Pixels).length(lengths)
+        self.range(key, label, range, 1, UnitKind::Pixels).length(crate::fields::bare_points(lengths, self.bare_points))
     }
 
     fn flag(&self, key: &str, label: &'static str) -> Param {
@@ -207,7 +208,7 @@ pub(crate) fn params(data: &Data, fields: &DialogFields, place: Place) -> Vec<Pa
     let Some(effect) = data.effect.as_deref() else { return vec![] };
     let classic = vectorcraft_effects::is_classic_three_d(effect);
     let defaults = vectorcraft_effects::default_params(effect).unwrap_or(json!({}));
-    let rows = Rows { defaults: &defaults, unit: data.unit };
+    let rows = Rows { defaults: &defaults, unit: data.unit, bare_points: data.bare_points };
     let pages = pages(effect, place);
     // Map Art takes the place of the tabs until its Done.
     if vectorcraft_effects::takes_map_art(effect) && fields.text("__page") == Some("mapArt") {

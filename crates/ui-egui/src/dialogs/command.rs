@@ -48,12 +48,11 @@ struct Open {
     token: Arc<()>,
 }
 
-/// What the rows are built against: the document's colour model, its length units and how bare numbers read.
+/// What the rows are built against: the document's colour model and its length units.
 #[derive(Clone, Copy)]
 struct Setting {
     cmyk: bool,
     units: LengthUnits,
-    bare_points: bool,
 }
 
 impl Setting {
@@ -62,7 +61,6 @@ impl Setting {
             cmyk: app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk),
             // PLAN: assumed `canvas::rulers::general_lengths(&VectorcraftApp) -> LengthUnits` (cv.B5)
             units: crate::canvas::rulers::general_lengths(app),
-            bare_points: app.session.prefs.numbers_without_units_are_points,
         }
     }
 }
@@ -226,7 +224,7 @@ fn row(command: &str, key: &str, value: &Value, setting: Setting) -> Option<Para
             let whole = n.is_i64() || n.is_u64();
             let mut param = Param::number(key, label, n.as_f64().unwrap_or(0.0), 1.0, if whole { 0 } else { 3 });
             if lengths(command).contains(&key) {
-                param = param.length(crate::fields::bare_points(setting.units, setting.bare_points));
+                param = param.length(setting.units);
                 if let Some(range) = length_range(command, key) {
                     param = param.bounds(Some(*range.start()), Some(*range.end()));
                 }

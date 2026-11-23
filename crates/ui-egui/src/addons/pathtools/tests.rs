@@ -300,3 +300,22 @@ fn a_lone_percentage_in_a_size_field_is_that_share_of_the_size() {
     let typed = readout(&app).anchor.unwrap().lengths[0];
     assert!(halved(length, typed), "the handle's Length went from {length} to {typed}");
 }
+
+/// Preferences › Units › Numbers Without Units Are Points reaches a panel's length field as it does a command
+/// dialog's: in a document in picas, `12` typed alone into the Corner Tool's Radius is 12 points while it is on and
+/// 12 picas while it is off.
+#[test]
+fn a_bare_number_in_a_panels_picas_field_follows_numbers_without_units_are_points() {
+    let radius_typed = |on: bool| {
+        let mut app = app();
+        app.run("document.setUnits", json!({"units": "Picas"})).unwrap();
+        app.run("prefs.set", json!({"key": "numbersWithoutUnitsArePoints", "value": on})).unwrap();
+        let mut panel = Panel::new(app, |app, ui| super::corner::section(app, ui));
+        panel.type_into("Radius", "12");
+        let app = panel.app();
+        app.session.tool_options_of("cornerTool")["radius"].as_f64().unwrap()
+    };
+    let (points, picas) = (radius_typed(true), radius_typed(false));
+    assert!((points - 12.0).abs() < 1e-6, "on: {points} pt");
+    assert!((picas - 144.0).abs() < 1e-6, "off: {picas} pt");
+}

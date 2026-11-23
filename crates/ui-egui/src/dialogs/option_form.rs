@@ -25,10 +25,7 @@ use super::tile_edge_color::checked;
 pub(super) use super::tool_options::title as tool_title;
 use super::{layer_color, live_paint_bucket, live_paint_gaps, live_paint_selection, shape_builder_options, tile_edge_color};
 use crate::VectorcraftApp;
-use crate::canvas::rulers::unit_kind;
 
-/// Pixels per inch that sizes a length shown in pixels: a pixel is a point.
-const PIXELS_PER_INCH: f64 = 72.0;
 
 /// What OK does with a dialog's checked values and its extra value.
 type Run = fn(&mut VectorcraftApp, &Map<String, Value>, &Value) -> Result<Value, String>;
@@ -198,7 +195,7 @@ impl OptionForm {
 /// Opens the dialog `spec` describes on `values`; `None` without a window.
 pub(super) fn open(app: &mut VectorcraftApp, spec: &'static OptionSpec, values: Map<String, Value>, extra: Value) -> Option<DialogId> {
     let dialogs = app.dialogs()?;
-    let lengths = LengthUnits::new(UnitKind::Points, unit_kind(app.session.general_unit()), PIXELS_PER_INCH);
+    let lengths = crate::canvas::rulers::general_lengths(app);
     let form = OptionForm {
         spec,
         id: dialog_id(spec.key),

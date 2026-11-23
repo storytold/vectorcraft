@@ -17,7 +17,7 @@ use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::popover::WholeWindow;
 use craft::ui::primitives::textures::Revision;
-use craft::ui::runtime::drag::{DropMark, DropTarget as FilesTarget, OsFile, OsFiles};
+use craft::ui::runtime::drag::{DropMark, DropTarget as FilesTarget, OsFile, OsFiles, WindowDropTarget};
 use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::{Response, Vec2};
 use serde_json::{Value, json};
@@ -831,6 +831,11 @@ impl FilesTarget<OsFiles> for CanvasFiles<'_> {
     fn mark(&self, _: &CanvasDrop) -> DropMark {
         DropMark::region(self.rect)
     }
+
+    // Files dropped under an alert are placed too, as production placed them.
+    fn under_modal(&self) -> bool {
+        true
+    }
 }
 
 /// Files dropped on the canvas ([`CanvasFiles`]), placed where they landed; Shift embeds them.
@@ -900,11 +905,30 @@ impl Component for WindowFiles<'_> {
     }
 
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
-        *self.out.borrow_mut() = cx.window_drop_target::<OsFiles, _>(&WholeWindow::new(cx.rect));
+        *self.out.borrow_mut() = cx.window_drop_target::<OsFiles, _>(&UnderAlerts(WholeWindow::new(cx.rect)));
     }
 
     fn finish(self, cx: Cx<'_, Self>) -> Response {
         cx.response.clone()
+    }
+}
+
+/// The whole window as the target of files dropped off every canvas, under an alert too, as production opened them.
+struct UnderAlerts(WholeWindow);
+
+impl WindowDropTarget<OsFiles> for UnderAlerts {
+    type Drop = OsFiles;
+
+    fn accept(&self, payload: &OsFiles, op: DropOperation) -> Option<OsFiles> {
+        self.0.accept(payload, op)
+    }
+
+    fn mark(&self, drop: &OsFiles) -> DropMark {
+        self.0.mark(drop)
+    }
+
+    fn under_modal(&self) -> bool {
+        true
     }
 }
 

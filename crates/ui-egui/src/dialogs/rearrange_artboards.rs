@@ -115,9 +115,10 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         values.spacing = spacing;
     }
     let artboards = app.session.active().map_or(0, |doc| doc.doc.artboards.len());
-    let unit = app.session.general_unit();
+    let lengths = LengthUnits::new(UnitKind::Points, length_kind(app.session.general_unit()), 72.0);
+    let lengths = crate::fields::bare_points(lengths, app.session.prefs.numbers_without_units_are_points);
     let dialogs = app.dialogs().ok_or("no window")?;
-    dialogs.with(|host| host.open(RearrangeArtboardsDialog { id: dialog_id(CMD), open: true, values, artboards, unit }));
+    dialogs.with(|host| host.open(RearrangeArtboardsDialog { id: dialog_id(CMD), open: true, values, artboards, lengths }));
     Ok(Value::Null)
 }
 
@@ -128,12 +129,12 @@ pub(crate) struct RearrangeArtboardsDialog {
     values: RearrangeValues,
     /// The document's artboard count, which bounds Columns.
     artboards: usize,
-    /// The unit Spacing shows in.
-    unit: Unit,
+    /// The lengths Spacing keeps and shows.
+    lengths: LengthUnits,
 }
 
 /// The rows of the dialog for a document of `artboards` artboards, Spacing shown in `unit`.
-fn body(ui: &mut egui::Ui, v: &mut RearrangeValues, artboards: usize, unit: Unit) {
+fn body(ui: &mut egui::Ui, v: &mut RearrangeValues, artboards: usize, lengths: LengthUnits) {
     Field::new(tl!("Layout:")).id_salt("layout").show(ui, |ui, _| {
         let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL
             .into_iter()
@@ -165,8 +166,7 @@ fn body(ui: &mut egui::Ui, v: &mut RearrangeValues, artboards: usize, unit: Unit
         }
     });
     Field::new(tl!("Spacing:")).id_salt("spacing").show(ui, |ui, _| {
-        let units = LengthUnits::new(UnitKind::Points, length_kind(unit), 72.0);
-        let field = NumberField::length(tl!("Spacing:"), Bind::given(Some(v.spacing)), units).show(ui);
+        let field = NumberField::length(tl!("Spacing:"), Bind::given(Some(v.spacing)), lengths).show(ui);
         if let Some(Some(spacing)) = field.edit.value().copied() {
             v.spacing = spacing;
         }
@@ -191,11 +191,11 @@ impl StackDialog for RearrangeArtboardsDialog {
     }
 
     fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<RearrangeValues>> {
-        let (artboards, unit) = (self.artboards, self.unit);
+        let (artboards, lengths) = (self.artboards, self.lengths);
         let shown = FormDialog::new(tl!("Rearrange All Artboards"), Bind::bound(&mut self.values)).opened(Bind::bound(&mut self.open)).show(
             ui,
             |ui, _, v| {
-                body(ui, v, artboards, unit);
+                body(ui, v, artboards, lengths);
                 true
             },
         );

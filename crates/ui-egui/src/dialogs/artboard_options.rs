@@ -30,7 +30,7 @@ use craft::ui::form::Field;
 use craft::ui::patterns::form_dialogs::HostRequests; // PLAN: assumed re-export of the host requests the form output carries
 use craft::ui::patterns::form_dialogs::{FormCx, FormDialog, ResetFooter, ResetPick};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
-use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::env::{Label, LengthUnits};
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::runtime::requests::ColorRequest;
 use craft::ui::text::{NumberField, TextField};
@@ -43,7 +43,6 @@ use vectorcraft_engine::cmd::newdoc::DocSettings;
 use vectorcraft_geom::{Point, Rect};
 
 use crate::VectorcraftApp;
-use crate::canvas::rulers::unit_kind;
 use crate::panels::artboards::{FILLS, fill_colors};
 // PLAN: op.A10 must derive `Debug, PartialEq` on `ArtboardSizeChoice` (the value is compared by the form).
 use crate::panels::properties::{ArtboardSizeChoice, artboard_presets, artboard_size_controls};
@@ -141,8 +140,8 @@ impl ArtboardOptionsValue {
 /// What the dialog shows but does not edit; read from the app when it opens, since a modal dialog's
 /// document, presets and preferences cannot change while it is open.
 struct Setup {
-    /// The unit the lengths show in.
-    kind: UnitKind,
+    /// The lengths the fields keep and show.
+    lengths: LengthUnits,
     /// The ruler origin X and Y count from.
     origin: Point,
     /// The size presets of the Preset menu.
@@ -385,7 +384,7 @@ fn color_row(
 /// point is the one the Transform panel shares (#1876); X and Y are where it lies on the rulers, counted
 /// from the ruler origin (#1212), and a new Width or Height keeps it where it was.
 fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &Setup) {
-    let lengths = LengthUnits::new(UnitKind::Points, s.kind, 72.0); // a document point is one pixel at 72 ppi
+    let lengths = s.lengths;
     let (was, w0, h0) = (v.placed(), v.width, v.height);
     let (choice, fit) = artboard_size_controls(ui, &s.presets, w0, h0, Some(s.fit_bounds.map(|b| b.is_some())));
     let mut refi = v.reference;
@@ -555,7 +554,7 @@ fn present(app: &mut VectorcraftApp, mut value: ArtboardOptionsValue) -> Result<
     value.seed_customs(&fills);
     let artwork = app.session.active().and_then(|st| vectorcraft_render::encode::art_bounds(&st.doc));
     let setup = Setup {
-        kind: unit_kind(app.session.general_unit()),
+        lengths: crate::canvas::rulers::general_lengths(app),
         origin: app.ruler_origin(),
         presets: artboard_presets(app),
         fills,

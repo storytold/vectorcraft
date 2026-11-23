@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use craft::keymap::{Binding, CommandDef, CommandRef, Mods, Scope};
+use craft::keymap::{Binding, CommandDef, CommandRef, Mods, Scope, TypingRule};
 use craft::menu::{Item, LayoutOptions, Menu, MenuBar, MenuRole, Node, Target, layout};
 use craft::tracked::Tracked;
 use craft::ui::list::ThumbAspect;
@@ -243,7 +243,11 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     let options = LayoutOptions::new(APP_NAME).label(&translate_label);
     let laid = layout(&bar, target, &options).bar;
     match AppCatalog::new(defs, generation(&listed, &crate::panels::actions::function_keys(&app.ui.actions))) {
-        Ok(catalog) => app.menus.catalog = Some(UNROUTED.iter().fold(catalog, |catalog, id| catalog.replace_defaults(id.as_str(), Vec::new()))),
+        Ok(catalog) => {
+            // While a text field has the keys no shortcut runs, as in production; the text-editing chords still edit it.
+            let catalog = catalog.typing_rule(TypingRule::AllWait);
+            app.menus.catalog = Some(UNROUTED.iter().fold(catalog, |catalog, id| catalog.replace_defaults(id.as_str(), Vec::new())));
+        }
         // A refused catalog is a bug in the rows; the last good one keeps the commands working.
         Err(e) => eprintln!("menu catalog refused: {e:?}"),
     }

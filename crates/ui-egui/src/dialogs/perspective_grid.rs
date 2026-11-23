@@ -135,7 +135,7 @@ fn open_on(app: &mut VectorcraftApp, def: GridDefinition, mode: GridMode) -> Res
     let dialog = GridDialog::new(
         def,
         mode,
-        general_lengths(app).pixels_per_inch,
+        (general_lengths(app).pixels_per_inch, app.session.prefs.numbers_without_units_are_points),
         app.session.perspective_presets(),
         app.session.new_perspective_preset_name(),
     );
@@ -181,6 +181,8 @@ pub(super) struct GridDialog {
     new_name: String,
     /// The document's pixels per inch, which sizes lengths shown in pixels.
     ppi: f64,
+    /// Numbers Without Units Are Points.
+    bare_points: bool,
     picker: PresetState<String>,
     held: HeldAnswer<GridDefinition>,
     /// The draft the filed answer was refused for: the reason shows until the draft changes.
@@ -189,7 +191,7 @@ pub(super) struct GridDialog {
 }
 
 impl GridDialog {
-    fn new(def: GridDefinition, mode: GridMode, ppi: f64, presets: Vec<GridDefinition>, new_name: String) -> Self {
+    fn new(def: GridDefinition, mode: GridMode, (ppi, bare_points): (f64, bool), presets: Vec<GridDefinition>, new_name: String) -> Self {
         let mut dialog = GridDialog {
             id: dialog_id(KIND),
             mode,
@@ -198,6 +200,7 @@ impl GridDialog {
             rows: Vec::new(),
             new_name,
             ppi,
+            bare_points,
             picker: PresetState::default(),
             held: HeldAnswer::new(),
             refused_at: None,
@@ -251,6 +254,7 @@ struct Pass<'p> {
     presets: &'p [GridDefinition],
     rows: &'p [PresetRow<String>],
     ppi: f64,
+    bare_points: bool,
     /// Why the app refused the last OK.
     refusal: Option<&'p Label>,
 }
@@ -303,7 +307,7 @@ impl Pass<'_> {
         choose(ui, "Units:", "units", &units, draft.def.unit(), |u| draft.set_units(u));
 
         let unit = draft.def.unit();
-        let lengths = LengthUnits::new(unit_kind(unit), unit_kind(unit), self.ppi);
+        let lengths = crate::fields::bare_points(LengthUnits::new(unit_kind(unit), unit_kind(unit), self.ppi), self.bare_points);
         let scale = draft.def.scale;
         let named = SCALES.iter().position(|(_, s)| *s == scale);
         let mut scales: Vec<Entry<usize>> = SCALES.iter().enumerate().map(|(i, (label, _))| Entry::new(i, *label)).collect();
@@ -469,6 +473,7 @@ impl StackDialog for GridDialog {
             presets: &self.presets,
             rows: &self.rows,
             ppi: self.ppi,
+            bare_points: self.bare_points,
             refusal: self.held.refusal().map(|(reason, _)| reason),
         };
         let picker = &mut self.picker;

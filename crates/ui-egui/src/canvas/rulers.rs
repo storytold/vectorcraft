@@ -61,24 +61,24 @@ pub(crate) fn units() -> &'static [UnitKind] {
     &UNITS
 }
 
-/// Lengths stored in points and shown in `unit`.
-pub(crate) fn lengths(unit: Unit) -> LengthUnits {
-    LengthUnits::new(UnitKind::Points, unit_kind(unit), PIXELS_PER_INCH)
+/// Lengths stored in points and shown in `unit`, a bare number read as Numbers Without Units Are Points says.
+fn lengths(app: &VectorcraftApp, unit: Unit) -> LengthUnits {
+    crate::fields::bare_points(LengthUnits::new(UnitKind::Points, unit_kind(unit), PIXELS_PER_INCH), app.session.prefs.numbers_without_units_are_points)
 }
 
 /// The document's General unit as the lengths its fields show.
 pub(crate) fn general_lengths(app: &VectorcraftApp) -> LengthUnits {
-    lengths(app.session.general_unit())
+    lengths(app, app.session.general_unit())
 }
 
 /// The Units ▸ Type unit as the lengths type fields show.
 pub(crate) fn type_lengths(app: &VectorcraftApp) -> LengthUnits {
-    lengths(app.session.type_unit())
+    lengths(app, app.session.type_unit())
 }
 
 /// The Units ▸ Stroke unit as the lengths stroke fields show.
 pub(crate) fn stroke_lengths(app: &VectorcraftApp) -> LengthUnits {
-    lengths(app.session.stroke_unit())
+    lengths(app, app.session.stroke_unit())
 }
 
 /// One axis counting `unit`, `per_doc` of its units to a document point, labelled with the signed position.

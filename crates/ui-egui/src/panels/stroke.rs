@@ -306,7 +306,7 @@ static BLANK_WEIGHT_STOPS: [f64; 2] = [0.25, 0.5];
 // PLAN: the sheet names `NumberField<'static, f64>`; `NumberField::length` takes `Option<f64>`.
 pub(crate) fn weight_number(app: &VectorcraftApp, weight: Option<f64>) -> NumberField<'static> {
     let unit = app.session.stroke_unit();
-    let lengths = LengthUnits::new(UnitKind::Points, shown_kind(unit), 72.0);
+    let lengths = crate::fields::bare_points(LengthUnits::new(UnitKind::Points, shown_kind(unit), 72.0), app.session.prefs.numbers_without_units_are_points);
     let ladder = LADDERS.iter().find(|(u, _)| *u == unit).or_else(|| LADDERS.iter().find(|(u, _)| *u == Unit::Points)).map(|(_, l)| l);
     let field =
         NumberField::length(tl!("Weight"), Bind::given(weight), lengths).range(0.0..=1000.0).step_arrows(StepArrows::Leading).scrub_by_label();

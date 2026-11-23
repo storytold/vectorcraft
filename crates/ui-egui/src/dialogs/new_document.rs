@@ -157,6 +157,8 @@ pub(crate) struct Setup {
     profiles: Vec<(&'static str, bool)>,
     /// Whether profiles can be edited (the web build and runs without preferences have no folder).
     has_profile_folder: bool,
+    /// Numbers Without Units Are Points.
+    bare_points: bool,
 }
 
 impl Setup {
@@ -166,6 +168,7 @@ impl Setup {
             untitled: app.session.peek_untitled().to_string(),
             profiles: newdoc::profile_names().map(|name| (name, app.session.new_doc_profile_customized(name))).collect(),
             has_profile_folder: app.session.new_doc_profile_dir().is_some(),
+            bare_points: app.session.prefs.numbers_without_units_are_points,
         }
     }
 }
@@ -278,7 +281,7 @@ impl DocumentSettings for VcNewDocument {
         let mut memory = cx.memory().clone();
         let before = values.settings.clone();
         let unit = before.units;
-        let lengths = LengthUnits::new(UnitKind::Points, unit_kind(unit), pixels_per_inch());
+        let lengths = crate::fields::bare_points(LengthUnits::new(UnitKind::Points, unit_kind(unit), pixels_per_inch()), setup.bare_points);
         let current = if before.width > before.height { Orientation::Landscape } else { Orientation::Portrait };
         let (mut turned, mut picked, mut action) = (false, None, None);
 

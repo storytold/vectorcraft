@@ -47,6 +47,8 @@ pub(crate) struct Data {
     pub effect: Option<String>,
     /// The general unit lengths are shown in.
     pub unit: Unit,
+    /// Numbers Without Units Are Points.
+    pub bare_points: bool,
     /// The Bevel Shape entries.
     pub bevels: Vec<BevelChoice>,
     /// Whether a bevels file is open (Edit Bevels… needs it). PLAN: not in the contract's `Data`.
@@ -71,6 +73,7 @@ pub(crate) fn data(app: &VectorcraftApp, effect: Option<&str>, params: &Map<Stri
     Data {
         effect: effect.map(str::to_owned),
         unit: app.session.general_unit(),
+        bare_points: app.session.prefs.numbers_without_units_are_points,
         bevels: effect.map(|e| revolve::bevel_options(app, params, e).0).unwrap_or_default(),
         bevels_file: app.session.bevels.path().is_some(),
         doc: st.map(|s| s.doc.clone()),
