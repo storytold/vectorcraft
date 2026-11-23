@@ -235,23 +235,29 @@ fn inline_label(t: &Tokens, lbl: &str) -> egui::RichText {
     egui::RichText::new(tl!(lbl)).size(12.0).color(t.text).underline()
 }
 
-/// The room the Control bar's inline X/Y/W/H fields take: their labels as drawn in the current
-/// language, the four fields, the W/H link and the item spacing ahead of each of them. With less,
-/// only the Transform link shows.
+/// The width of the 3×3 reference point locator (`2 * 9 + 5` in `widgets::reference_point`).
+const REFERENCE_LOCATOR_SIZE: f32 = 23.0;
+
+/// The room the Control bar's inline X/Y/W/H fields take: the reference point locator, their
+/// labels as drawn in the current language, the four fields, the W/H link and the item spacing
+/// ahead of each of them. With less, only the Transform link shows.
 fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
     let labels: f32 = INLINE_FIELDS.iter().map(|(_, lbl)| widgets::text_width(ui, inline_label(t, lbl))).sum();
     let fields = INLINE_FIELD_WIDTH * INLINE_FIELDS.len() as f32;
-    let items = 2 * INLINE_FIELDS.len() + 1;
-    labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
+    let items = 1 + 2 * INLINE_FIELDS.len() + 1;
+    REFERENCE_LOCATOR_SIZE + labels + fields + crate::panels::transform::CONSTRAIN_LINK_SIZE + ui.spacing().item_spacing.x * items as f32
 }
 
-/// The Control bar's inline X/Y/W/H fields for the selection's box `b`, rotated with rotated
-/// objects: X/Y are its reference point on the page (or a symbol instance's registration point),
-/// shared with the Transform panel, and W/H its own sides. Edits keep or move that point, and the
-/// Transform panel's menu choice of objects, patterns or both applies to them.
-fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, units: vectorcraft_doc::Unit, b: &vectorcraft_doc::OrientedBox) {
+/// The Control bar's inline reference point locator, X/Y/W/H fields and W/H constrain link for
+/// the selection's box `b`, rotated with rotated objects: X/Y are its reference point on the page
+/// (or a symbol instance's registration point), shared with the Transform panel, and W/H its own
+/// sides. Edits keep or move that point, and the Transform panel's menu choice of objects,
+/// patterns or both applies to them.
+fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, b: &vectorcraft_doc::OrientedBox) {
+    let units = app.session.general_unit();
     let reference = crate::panels::transform::panel_reference(app, ui, b);
     let (refi, rp) = (reference.index, reference.point);
+    crate::panels::transform::selection_reference_locator(ui, &reference);
     let origin = app.ruler_origin();
     let link = crate::panels::transform::proportional(app, ui);
     let copy = crate::panels::transform::alt_enter_copies(app, ui);
@@ -1052,9 +1058,10 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             snapping_menu(app, ui);
         }
         let Some(st) = app.session.active() else { return };
-        let count = st.selection.objects.len();
+        let sel = st.selection.objects.clone();
+        let count = sel.len();
         let units = app.session.general_unit();
-        let first = st.selection.objects.first().and_then(|id| st.doc.node(*id));
+        let first = sel.first().and_then(|id| st.doc.node(*id));
         let anchors = anchor_controls(app);
         // The label, and whether it names one selected image.
         let (label, image) = match first {
@@ -1136,7 +1143,7 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if selection_box.is_some() && ui.available_width() < inline_transform_width(ui, t) {
             left_out(ui);
         } else if let Some(b) = selection_box {
-            inline_transform_fields(app, ui, t, units, &b);
+            inline_transform_fields(app, ui, t, &b);
         }
         // Select Similar Objects comes last: it takes only the room every control ahead of it left.
         trailing_select_similar(app, ui);

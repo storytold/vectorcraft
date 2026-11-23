@@ -66,6 +66,9 @@ pub struct PanelReference {
     pub index: usize,
     /// The point on the page: that reference point, or a symbol instance's registration point.
     pub point: Point,
+    /// Whether a symbol instance's registration point decides the reference (Use Registration
+    /// Point for Symbol), so the locator shows it and offers no other point.
+    pub fixed: bool,
     /// `point` less the box's reference point `index` (zero unless the registration point lies on
     /// none of the box's nine points, as on a sheared instance).
     shift: Vec2,
@@ -92,13 +95,13 @@ impl PanelReference {
 pub fn panel_reference(app: &VectorcraftApp, ui: &Ui, bx: &OrientedBox) -> PanelReference {
     let Some(q) = symbol_registration(app) else {
         let index = reference_index(ui);
-        return PanelReference { index, point: bx.reference_point(index), shift: Vec2::ZERO };
+        return PanelReference { index, point: bx.reference_point(index), fixed: false, shift: Vec2::ZERO };
     };
     // The nearest of the box's nine points, measured in the box's own (turned) frame.
     let (local, r) = (bx.to_local(q), bx.rect);
     let third = |v: f64, start: f64, len: f64| if len > 1e-9 { ((v - start) / len * 2.0).round().clamp(0.0, 2.0) as usize } else { 1 };
     let index = third(local.y, r.y0, r.height()) * 3 + third(local.x, r.x0, r.width());
-    PanelReference { index, point: q, shift: q - bx.reference_point(index) }
+    PanelReference { index, point: q, fixed: true, shift: q - bx.reference_point(index) }
 }
 
 /// Where the registration point of the one selected symbol instance is on the page, while Use
@@ -168,6 +171,23 @@ pub fn reference_locator(ui: &mut Ui, refi: usize) {
     if let Some(i) = widgets::reference_point(ui, refi) {
         ui.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), i));
     }
+}
+
+/// The locator for a selection's reference `reference` ([`panel_reference`]): a click on it chooses
+/// another point, except while a symbol instance's registration point decides the reference (Use
+/// Registration Point for Symbol). The locator then shows that point read-only and says why: a
+/// click's choice could not move the instance, and would wait to move the next ordinary selection
+/// instead.
+pub fn selection_reference_locator(ui: &mut Ui, reference: &PanelReference) {
+    if !reference.fixed {
+        return reference_locator(ui, reference.index);
+    }
+    let why = tl!("Use Registration Point for Symbol: the registration point is the reference point");
+    ui.add_enabled_ui(false, |ui| {
+        widgets::reference_point(ui, reference.index);
+    })
+    .response
+    .on_disabled_hover_text(why);
 }
 
 /// Set artboard `index` to a new X, Y, W or H from reference point `refi` ([`artboard_rect`]) with
@@ -290,8 +310,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has = bounds.is_some();
     let rp = reference.map(|r| r.point);
     ui.horizontal(|ui| {
-        if let Some(i) = widgets::reference_point(ui, refi) {
-            ui.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), i));
+        match &reference {
+            Some(r) => selection_reference_locator(ui, r),
+            None => reference_locator(ui, refi),
         }
         ui.add_space(4.0);
         ui.add_enabled_ui(has, |ui| {

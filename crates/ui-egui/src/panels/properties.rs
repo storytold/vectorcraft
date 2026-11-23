@@ -864,9 +864,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Transform"));
     let fw = super::field_width(ui);
     ui.horizontal(|ui| {
-        if let Some(i) = widgets::reference_point(ui, refi) {
-            ui.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), i));
-        }
+        super::transform::selection_reference_locator(ui, &reference);
         ui.add_space(6.0);
         let link = super::transform::proportional(app, ui);
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
