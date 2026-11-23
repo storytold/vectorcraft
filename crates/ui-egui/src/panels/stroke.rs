@@ -109,8 +109,14 @@ fn arrow_label(a: Option<&Arrowhead>) -> &'static str {
 fn arrow_name(a: Option<&Arrowhead>) -> String {
     match a {
         Some(Arrowhead::Custom(c)) => c.name.clone(),
-        _ => tl!(arrow_label(a)).to_string(),
+        _ => builtin_arrow_name(arrow_label(a)).to_string(),
     }
+}
+
+/// A built-in arrowhead's name `label` in the interface language. Its `arrowhead` row comes first,
+/// so a name that is also an effect's (Feather) can be translated for each one.
+pub(crate) fn builtin_arrow_name(label: &str) -> &str {
+    crate::i18n::tr_ctx(crate::i18n::current(), "arrowhead", label)
 }
 
 /// The preview cache key of `a`: its name, and for a custom head its art.
@@ -500,14 +506,16 @@ pub(crate) const PROFILE_DROPDOWN_WIDTH: f32 = 100.0;
 
 /// While a width profile changes none of the strokes the Profile list edits, because each draws
 /// with a brush: whether any of them has a profile. None while a profile changes one of them.
-/// With nothing selected the list sets up the next object drawn, whose stroke is `shown` (the
-/// stroke the panels show). Otherwise it edits the strokes `stroke.set` targets
+/// With nothing selected, and while the Live Paint Bucket is active, the list sets up the next
+/// object drawn, whose stroke is `shown` (the stroke the panels show). Otherwise it edits the
+/// strokes `stroke.set` targets
 /// ([`vectorcraft_engine::Session::brushed_strokes_profiled`], cached per document revision and
 /// active Appearance row), such as a selected group's own stroke while `shown` is its first
 /// member's.
 pub(crate) fn brush_keeps_size(app: &VectorcraftApp, ctx: &egui::Context, shown: Option<&StrokeLayer>) -> Option<bool> {
     let st = app.session.active()?;
-    if st.selection.objects.is_empty() && st.selection.subjects().is_empty() {
+    let bucket = app.session.bucket_paints();
+    if bucket || (st.selection.objects.is_empty() && st.selection.subjects().is_empty()) {
         let s = shown?;
         let name = s.brush.as_deref()?;
         return super::brushes::document_brushes(st).iter().any(|b| b.name == name).then_some(s.profile.is_some());

@@ -153,6 +153,18 @@ fn preflight_panel_rechecks_missing_files_on_its_timer_and_on_request() {
     std::fs::remove_file(&path).unwrap();
 }
 
+/// The Effective PPI line writes its colon as the UI language does (#7991).
+#[test]
+fn effective_ppi_uses_the_language_colon() {
+    let values = ["150".to_string(), "300".to_string()];
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let french = effective_ppi_line(&values);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(french, format!("{}\u{a0}: 150 × 300 ppi", crate::i18n::tr(fr, "Effective PPI")));
+    assert_eq!(effective_ppi_line(&values), "Effective PPI: 150 × 300 ppi");
+}
+
 /// An optional visual QA artifact, never a checked-in snapshot or an asset shipped by the app.
 #[test]
 #[ignore = "set PREFLIGHT_PREVIEW_PATH to write an offscreen GPU render for visual review"]

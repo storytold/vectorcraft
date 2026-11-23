@@ -1993,8 +1993,7 @@ fn alt_dragged_copies_snap_by_the_anchor_pressed() {
     whole.set([b]);
     let c = cx(&d, &whole, &p);
     let mut t = DirectSelectionTool::new(false);
-    let copy =
-        |dx: f64, dy: f64| json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(dx, dy))), "copy": true});
+    let copy = |dx: f64, dy: f64| json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(dx, dy))), "copy": true, "drawBehind": true});
     // B's top-left corner, pressed 1 pt off, onto A's bottom-right one.
     let (v, labels) = drag(&mut t, &c, (301.0, 301.0), (203.0, 199.0), alt);
     assert_eq!((v, labels), (copy(-100.0, -100.0), vec!["anchor".to_string()]));
@@ -2019,11 +2018,13 @@ fn alt_during_a_drag_by_an_anchor_toggles_the_copy() {
     whole.set([b]);
     let c = cx(&d, &whole, &p);
     let mut t = DirectSelectionTool::new(false);
+    // A copy follows Draw Behind (`drawBehind`); a move sends no such key.
     let preview = |dx: f64, dy: f64, copy: bool| {
-        Action::Preview(
-            "object.transform".into(),
-            json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(dx, dy))), "copy": copy}),
-        )
+        let mut params = json!({"matrix": matrix_json(vectorcraft_geom::Affine::translate(vectorcraft_geom::Vec2::new(dx, dy))), "copy": copy});
+        if copy {
+            params["drawBehind"] = json!(true);
+        }
+        Action::Preview("object.transform".into(), params)
     };
     assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 300.0, 300.0)).is_empty());
     assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 250.0, 250.0)), vec![Action::Begin("Move".into()), preview(-50.0, -50.0, false)]);

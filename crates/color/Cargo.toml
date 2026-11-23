@@ -9,6 +9,7 @@ description = "VectorCraft color"
 workspace = true
 
 [dependencies]
+craft-cms = { workspace = true }
 kurbo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

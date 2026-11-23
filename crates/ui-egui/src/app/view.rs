@@ -122,7 +122,7 @@ impl VectorcraftApp {
             zoom: self.view().map_or(1.0, |v| v.screen_zoom(self.canvas_ui_zoom)),
             outline: self.outline_view(),
             smart_guides: self.ui.view.smart_guides,
-            guides: self.ui.view.guides,
+            guides: self.ui.view.guides_shown(),
             snap_to_grid: self.ui.view.snap_to_grid,
             pixel_preview: self.ui.view.pixel_preview,
             snap_to_pixel: self.ui.view.snap_to_pixel,
@@ -132,6 +132,7 @@ impl VectorcraftApp {
             snap_to_point: self.ui.view.snap_to_point,
             snap_to_glyph: self.ui.view.snap_to_glyph,
             corner_widgets: self.ui.view.corner_widgets && self.ui.view.edges,
+            shape_widgets: self.ui.view.shape_widgets,
             screen: self.screen_frame(),
             artboard: self.view().map_or(0, |v| v.artboard),
         }

@@ -7,6 +7,12 @@ use vectorcraft_geom::{PathData, shapes};
 use super::{TextKind, TextObject, WrapShape};
 use crate::{Document, Node, NodeId, NodeKind};
 
+#[cfg(test)]
+thread_local! {
+    /// How many wrap outlines [`each_text`] has made on this thread (for tests).
+    pub(super) static OUTLINES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Outline of a wrap object in document coordinates: its paths, or its bounds for other art.
 fn outline(n: &Node, out: &mut PathData) {
     match &n.kind {
@@ -66,10 +72,45 @@ fn collect<'a>(n: &'a Node, out: &mut Vec<Item<'a>>) {
     }
 }
 
+/// The anchors and subpaths [`outline`] would collect for wrap object `n`, counted without copying
+/// them.
+fn outline_size(n: &Node) -> (usize, usize) {
+    match &n.kind {
+        NodeKind::Path { path, guide: false, .. } => path
+            .subpaths
+            .iter()
+            .filter(|sp| sp.closed || sp.anchors.len() > 2)
+            .fold((0usize, 0usize), |(a, s), sp| (a.saturating_add(sp.anchors.len()), s.saturating_add(1))),
+        NodeKind::Compound { children, .. } | NodeKind::Group { children, clip: false } => children
+            .iter()
+            .filter(|c| c.visible)
+            .map(|c| outline_size(c))
+            .fold((0, 0), |(a, s), (ca, cs)| (a.saturating_add(ca), s.saturating_add(cs))),
+        NodeKind::Group { children, clip: true } => children.first().map_or((0, 0), |c| outline_size(c)),
+        // A rectangle of the object's bounds.
+        _ => {
+            if n.geometric_bounds().is_some() {
+                (4, 1)
+            } else {
+                (0, 0)
+            }
+        }
+    }
+}
+
 /// How much [`resolve_wrap`] would copy into the wrap shapes of every area text object in `doc`:
 /// each wrap object's outline (its anchors, plus one for the shape) once for each area text object
 /// below it in its layer.
 pub fn wrap_work(doc: &Document) -> usize {
+    work(doc, false)
+}
+
+/// [`wrap_work`], with one more for each subpath of each outline, empty ones included.
+pub fn wrap_copy_units(doc: &Document) -> usize {
+    work(doc, true)
+}
+
+fn work(doc: &Document, count_subpaths: bool) -> usize {
     let mut total = 0usize;
     for layer in &doc.layers {
         let mut items = vec![];
@@ -78,11 +119,10 @@ pub fn wrap_work(doc: &Document) -> usize {
         for it in items.iter().rev() {
             match it {
                 Item::Wrap(n) => {
-                    let mut pd = PathData::default();
-                    outline(n, &mut pd);
-                    if !pd.is_empty() {
-                        let anchors: usize = pd.subpaths.iter().map(|sp| sp.anchors.len()).sum();
-                        above = above.saturating_add(anchors.saturating_add(1));
+                    let (anchors, subpaths) = outline_size(n);
+                    if anchors > 0 {
+                        let subpaths = if count_subpaths { subpaths } else { 0 };
+                        above = above.saturating_add(anchors).saturating_add(subpaths).saturating_add(1);
                     }
                 }
                 Item::Text(_) => total = total.saturating_add(above),
@@ -99,9 +139,15 @@ fn each_text<'a>(layer: &'a Node, mut f: impl FnMut(&'a Node, &[(&'a Node, WrapS
     let mut items = vec![];
     collect(layer, &mut items);
     let mut above: Vec<(&Node, WrapShape)> = vec![];
-    for it in items.iter().rev() {
+    // A wrap object below every area text object of the layer wraps none of them: its outline is
+    // not made.
+    let first_text = items.iter().position(|it| matches!(it, Item::Text(_)));
+    for (i, it) in items.iter().enumerate().rev() {
         match it {
+            Item::Wrap(_) if first_text.is_none_or(|t| i < t) => {}
             Item::Wrap(n) => {
+                #[cfg(test)]
+                OUTLINES_MADE.with(|c| c.set(c.get() + 1));
                 let mut pd = PathData::default();
                 outline(n, &mut pd);
                 if !pd.is_empty() {

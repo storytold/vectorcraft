@@ -480,6 +480,28 @@ impl Selection {
         }
         self.target = None;
     }
+    /// Shift-clicking a range of target circles: the art of every row in `ids` (a layer: its
+    /// visible, unlocked art, its sublayers' too; anything else: itself) is selected, or joins the
+    /// selection when `add` is set. Several objects are then selected, none targeted. Art on a
+    /// locked artboard is left out, as [`Selection::toggle_target`] leaves it out.
+    pub fn target_range(&mut self, doc: &Document, ids: &[NodeId], add: bool) {
+        let locks = doc.locked_artboards();
+        let mut art = Vec::new();
+        for &id in ids {
+            match doc.node(id) {
+                Some(n) if n.is_layer() => art.extend(n.layer_art(true)),
+                Some(_) => art.push(id),
+                None => {}
+            }
+        }
+        art.retain(|i| !locks.holds_id(*i));
+        if add {
+            self.add_all(art);
+        } else {
+            self.set(art);
+        }
+        self.target = None;
+    }
     /// What appearance and transparency edits act on: the targeted object, group or layer, else
     /// the selected objects.
     pub fn subjects(&self) -> &[NodeId] {

@@ -113,15 +113,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::chrome::anchor_buttons(app, ui, anchors);
     }
     divider(ui);
+    quick_actions_section(app, ui, first.as_deref(), n_sel);
+    global_edit_row(app, ui);
+}
+
+fn quick_actions_section(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&vectorcraft_doc::Node>, n_sel: usize) {
     section_header(ui, tl!("Quick Actions"));
-    let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
-    let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
+    let is_group = matches!(first.map(|n| &n.kind), Some(NodeKind::Group { .. }));
+    let is_live = matches!(first.map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(&**l, LiveShape::Path { .. }));
     // Blend Options for one selected blend, Merge Live Paint for a Live Paint group selected with
     // more to merge into it, as the Properties panel overview lists them
     // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
     // The overview names the Blend tool; the blending page has the button for a blend selected with
     // any tool (<https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
-    let blend_options = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
+    let blend_options = n_sel == 1 && matches!(first.map(|n| &n.kind), Some(NodeKind::Blend { .. }));
     let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
     // Repeat Options for one selected repeat (radial, grid or mirror), or one object of its source
     // art in isolation mode: Object › Repeat › Options, the dialog of the repeat options pages
@@ -156,6 +161,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if multi_color(app, ui.ctx()) {
         actions.push((tl!("Recolor"), "ui.recolorDialog"));
     }
+    let is_image = n_sel == 1 && matches!(first.map(|n| &n.kind), Some(NodeKind::Image(_)));
     if is_image {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
         actions.push((tl!("Crop Image"), "ui.cropImage"));
@@ -166,10 +172,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
     // live through the Appearance panel's Effect › Path › Offset Path (#2238).
-    let type_only = app.session.active().is_some_and(|st| {
-        let mut nodes = st.selection.objects.iter().filter_map(|id| st.doc.node(*id));
-        nodes.all(|n| matches!(n.kind, NodeKind::Text(_)))
+    let (has_type, type_only) = app.session.active().map_or((false, false), |st| {
+        let mut any_type = false;
+        let mut all_type = !st.selection.objects.is_empty();
+        for id in &st.selection.objects {
+            let is_text = st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)));
+            any_type |= is_text;
+            all_type &= is_text;
+        }
+        (any_type, all_type)
     });
+    // Contextual Quick Actions for type selection (G12, Properties panel per context): Create
+    // Outlines, Retype and Find and Replace…
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
+    if has_type {
+        actions.push((tl!("Create Outlines"), "type.createOutlines"));
+        if crate::menus::enabled(app, "ui.retype") || crate::menus::enabled(app, "type.retype") {
+            actions.push((tl!("Retype"), "ui.retype"));
+        }
+        actions.push((tl!("Find and Replace…"), "ui.findAndReplace"));
+    }
     if !type_only {
         actions.push((tl!("Offset Path"), "object.path.offsetPath"));
         actions.push((tl!("Simplify"), "object.path.simplify"));
@@ -189,7 +211,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
-    global_edit_row(app, ui);
 }
 
 /// Whether Merge Live Paint can take the selection: a Live Paint group among the selected objects
@@ -377,6 +398,7 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
         crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
     });
     ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
+    crate::panels::image_trace::split_row(app, ui);
     if widgets::flat_button(ui, tl!("Image Trace"), ui.available_width()).clicked() {
         crate::panels::image_trace::open_settings(app);
     }
@@ -766,7 +788,9 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button(ui, "ruler", tl!("Show Rulers (⌘R)"), v.rulers, 26.0).clicked() {
             app.run("view.rulers", json!({})).ok();
         }
-        if widgets::icon_button(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, 26.0).clicked() {
+        // Trim View holds the grid and the guides off while it is on (#8363).
+        let shows = crate::menus::enabled(app, "view.grid");
+        if widgets::icon_button_enabled(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, shows, 26.0).clicked() {
             app.run("view.grid", json!({})).ok();
         }
         let transparency_grid = app.session.active().is_some_and(|d| d.transparency_grid);
@@ -778,7 +802,8 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Guides"));
     ui.horizontal(|ui| {
         let v = app.ui.view.clone();
-        if widgets::icon_button(ui, "layout-grid", tl!("Show Guides"), v.guides, 26.0).clicked() {
+        let shows = crate::menus::enabled(app, "view.guides");
+        if widgets::icon_button_enabled(ui, "layout-grid", tl!("Show Guides"), v.guides, shows, 26.0).clicked() {
             app.run("view.guides", json!({})).ok();
         }
         if widgets::icon_button(ui, "sparkles", tl!("Smart Guides (⌘U)"), v.smart_guides, 26.0).clicked() {

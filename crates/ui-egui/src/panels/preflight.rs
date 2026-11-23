@@ -187,7 +187,7 @@ fn results(app: &mut VectorcraftApp, ui: &mut Ui, report: &Value) {
                 }
                 if let Some(ppi) = finding["effectivePpi"].as_array() {
                     let values = ppi.iter().filter_map(Value::as_f64).map(|n| format!("{n:.0}")).collect::<Vec<_>>();
-                    dim_label(ui, &format!("{}: {} ppi", tl!("Effective PPI"), values.join(" × ")));
+                    dim_label(ui, &effective_ppi_line(&values));
                 }
                 let source = finding["sourceId"].as_u64();
                 if code == "missingLink"
@@ -218,6 +218,11 @@ fn results(app: &mut VectorcraftApp, ui: &mut Ui, report: &Value) {
     ui.separator();
     dim_label(ui, tl!("Checks update after edits. Linked files are rechecked every two seconds."));
     dim_label(ui, tl!("These checks do not certify an exported file."));
+}
+
+/// A low-resolution finding's effective resolution, one value per axis.
+fn effective_ppi_line(values: &[String]) -> String {
+    format!("{} {} ppi", crate::i18n::colon(tl!("Effective PPI")), values.join(" × "))
 }
 
 #[cfg(test)]

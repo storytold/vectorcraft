@@ -46,6 +46,7 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     assert!(libs.iter().any(|l| l["id"] == "status-effects" && l["name"] == "Status Effects"), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "textures" && l["name"] == "Textures" && l["count"] == 8), "{libs:?}");
     assert!(libs.iter().any(|l| l["id"] == "neon-glow" && l["name"] == "Neon & Glow" && l["count"] == 6), "{libs:?}");
+    assert!(libs.iter().any(|l| l["id"] == "paper-cutouts" && l["name"] == "Paper Cutouts" && l["count"] == 6), "{libs:?}");
     for l in libs {
         let id = l["id"].as_str().unwrap();
         let g = run(&mut s, "graphicStyle.library", json!({"library": id}));
@@ -89,6 +90,24 @@ fn builtin_libraries_are_listed_with_original_styles_using_catalogued_effects() 
     // By name in any case.
     assert_eq!(run(&mut s, "graphicStyle.library", json!({"library": "shadows and glows"}))["id"], "shadows-glows");
     assert!(s.execute("graphicStyle.library", &json!({"library": "nope"})).is_err());
+}
+
+#[test]
+fn paper_cutout_style_applies_to_an_object_and_undoes_together() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, 20.0, 40.0, 30.0);
+    let before = doc(&s).node(id).unwrap().appearance.clone();
+    let undo_before = undo_len(&s);
+    let result =
+        run(&mut s, "graphicStyle.addFromLibrary", json!({"library": "paper-cutouts", "name": "Coral Layers", "apply": true, "ids": [id.0]}));
+    assert_eq!((names(&result["added"]), result["applied"].as_str()), (vec!["Coral Layers"], Some("Coral Layers")));
+    assert_eq!(undo_len(&s), undo_before + 1);
+    let applied = &doc(&s).node(id).unwrap().appearance;
+    assert_eq!(applied.items.len(), 3);
+    assert_eq!(applied.effects[0].id, "stylize.dropShadow");
+    assert_eq!(applied.effects[0].params["blur"], 0.0);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(doc(&s).node(id).unwrap().appearance, before);
 }
 
 #[test]

@@ -200,7 +200,11 @@ pub(super) fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
             d.remove_temp::<egui::Pos2>(press_pos);
         });
     }
-    if !(resp.gained_focus() && !pressed || resp.double_clicked() || clicked_focus && !dragged) {
+    // Returning from a transient menu resumes its saved caret/selection. This is not the
+    // keyboard focus that starts a new numeric edit; pointer taps/double-clicks still select all.
+    // The menu helper's data borrow ends here, before TextEdit's state is loaded below.
+    let restored_focus = crate::menus::restoring_field_focus(ui.ctx(), resp.id);
+    if !(resp.gained_focus() && !pressed && !restored_focus || resp.double_clicked() || clicked_focus && !dragged) {
         return;
     }
     if let Some(st) = egui::TextEdit::load_state(ui.ctx(), resp.id) {

@@ -343,11 +343,17 @@ impl VectorcraftApp {
     /// dropped, and the system clipboard keeps that copy.
     pub(crate) fn drop_formats_after_egui_copy(&mut self, ctx: &egui::Context) {
         let copied = ctx.output(|o| o.commands.iter().any(|c| matches!(c, egui::OutputCommand::CopyText(_) | egui::OutputCommand::CopyImage(_))));
-        let publishing = &mut self.clipboard_publishing;
         if copied {
-            publishing.unwritten = None;
+            self.drop_unwritten_formats();
         }
-        if copied && publishing.pending {
+    }
+
+    /// Drop the formats of an earlier Copy or Cut that are not written yet: something else is
+    /// being copied (text through egui, the text selected in a label).
+    pub(crate) fn drop_unwritten_formats(&mut self) {
+        let publishing = &mut self.clipboard_publishing;
+        publishing.unwritten = None;
+        if publishing.pending {
             publishing.latest.fetch_add(1, Ordering::SeqCst);
             publishing.pending = false;
         }

@@ -116,6 +116,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::custom_toolbars::command(app, id, p))
         .or_else(|| crate::panels::learn::command(app, id, p))
         .or_else(|| crate::panels::discover::command(app, id, p))
+        .or_else(|| crate::panels::retype::command(app, id, p))
     {
         return Some(r);
     }
@@ -132,6 +133,26 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| run_ui_part11(app, id, p))
         .or_else(|| run_ui_part12(app, id, p))
         .or_else(|| run_ui_part13(app, id, p))
+}
+
+/// Why Show/Hide Guides and Show/Hide Grid refuse to run while Trim View is on.
+pub(crate) const TRIM_VIEW_HIDES: &str = "Trim View hides the guides and the grid; turn it off first";
+
+/// Drops the selection when it holds ruler guides or guide paths that no longer draw (Hide Guides,
+/// Trim View): their selection overlay would otherwise reveal the geometry just hidden.
+fn deselect_hidden_guides(app: &mut VectorcraftApp) {
+    let hidden_selection = !app.ui.view.guides_shown()
+        && app.session.active().is_some_and(|d| {
+            !d.selection.guides.is_empty()
+                || d.selection
+                    .objects
+                    .iter()
+                    .any(|id| matches!(d.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Path { guide: true, .. })))
+        });
+    if hidden_selection {
+        // Deselecting a document that is open cannot fail.
+        let _ = app.run("select.none", json!({}));
+    }
 }
 
 /// UI commands, part 1.
@@ -183,8 +204,11 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.reveal" => io::reveal(app),
         "file.cancelExport" => Ok(io::cancel_exports(app)),
         "file.exportInBackground" => Ok(io::hide_exports(app)),
+        "file.cancelSave" => Ok(io::cancel_saves(app)),
+        "file.saveInBackground" => Ok(io::hide_saves(app)),
         "file.cancelOpen" => Ok(crate::opening::cancel_all(app)),
         "file.openInBackground" => Ok(crate::opening::hide_all(app)),
+        "file.cancelPlace" => Ok(crate::placing::cancel_all(app)),
         id if id.starts_with("file.openRecent") => match recent_slot(app, id).filter(|path| recent_readable(path)).cloned() {
             Some(path) => io::open_reporting(app, &path),
             None => Err("no such recent file".into()),
@@ -220,6 +244,7 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "file.export.svg" => io::export(app, Some("svg"), s("path"), p),
+        "file.export.svg.browser" => crate::dialogs::svg_options::browser_preview(app, p),
         "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::open_export_for_screens(app);
             Ok(Value::Null)
@@ -287,8 +312,19 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
     };
     let r = match id {
         "view.pixelPreview" => flag(&mut app.ui.view.pixel_preview),
-        "view.trimView" => flag(&mut app.ui.view.trim_view),
+        // Trim View hides the guides while it is on (#8363), and hidden guides cannot stay selected.
+        "view.trimView" => {
+            let r = flag(&mut app.ui.view.trim_view);
+            deselect_hidden_guides(app);
+            r
+        }
         "view.cornerWidget" => flag(&mut app.ui.view.corner_widgets),
+        // Hide/Show Shape Widgets: `on` sets the state, and without it the state flips.
+        "view.shapeWidgets" => opt_bool(p, "on").map(|on| {
+            let v = &mut app.ui.view.shape_widgets;
+            *v = on.unwrap_or(!*v);
+            json!(*v)
+        }),
         // New View: the engine stores the current zoom, centre and rotation under the given name.
         "view.saved.new" if p.get("zoom").is_none() => {
             let Some(v) = app.view().copied() else { return Some(Err("no document".into())) };
@@ -334,6 +370,8 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "type.highlightKerning" => crate::panels::character::highlight(app, crate::panels::character::Field::Kerning),
         "type.highlightTracking" => crate::panels::character::highlight(app, crate::panels::character::Field::Tracking),
         "type.underline" => crate::panels::character::toggle_underline(app),
+        "type.superscript" => crate::panels::character::toggle_position(app, "superscript"),
+        "type.subscript" => crate::panels::character::toggle_position(app, "subscript"),
         "type.lineComposer" => crate::panels::paragraph::toggle_composer(app),
         "type.hyphenate" => crate::panels::paragraph::toggle_hyphenate(app),
         id if let Some((_, justify)) = crate::panels::paragraph::ALIGN_COMMANDS.iter().find(|c| c.0 == id) => {
@@ -356,6 +394,7 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
     let r = match id {
         "type.convertListToText" => crate::panels::paragraph::convert_list_to_text(app),
         id if let Some(b) = crate::panels::align::button(id) => crate::panels::align::run_button(app, b),
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::run_align_to(app, v),
         "view.gradientAnnotator" => flag(&mut app.ui.view.gradient_annotator),
         "view.livePaintGaps" => flag(&mut app.ui.view.live_paint_gaps),
         "effect.last" => match app.last_effect.clone() {
@@ -389,22 +428,12 @@ fn run_ui_part4(app: &mut VectorcraftApp, id: &str, _p: &Value) -> Option<Result
             Ok(json!(show))
         }
         "view.boundingBox" => flag(&mut app.ui.view.bounding_box),
+        // Trim View hides the guides and the grid while it is on, and their Show/Hide items wait
+        // until it is off (#8363).
+        "view.guides" | "view.grid" if app.ui.view.trim_view => Err(TRIM_VIEW_HIDES.into()),
         "view.guides" => {
             let r = flag(&mut app.ui.view.guides);
-            // Hidden ruler guides and guide paths cannot stay selected: their selection overlay
-            // would otherwise reveal geometry that Hide Guides just hid.
-            let hidden_selection = !app.ui.view.guides
-                && app.session.active().is_some_and(|d| {
-                    !d.selection.guides.is_empty()
-                        || d.selection
-                            .objects
-                            .iter()
-                            .any(|id| matches!(d.doc.node(*id).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Path { guide: true, .. })))
-                });
-            if hidden_selection {
-                // Deselecting a document that is open cannot fail.
-                let _ = app.run("select.none", json!({}));
-            }
+            deselect_hidden_guides(app);
             r
         }
         "view.smartGuides" => flag(&mut app.ui.view.smart_guides),
@@ -563,6 +592,11 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             }
         }
         "window.toolbar" => flag(&mut app.ui.toolbar),
+        "window.toolbarCompact" => opt_bool(p, "on").map(|on| {
+            let on = on.unwrap_or(!app.ui.toolbar_compact);
+            app.ui.toolbar_compact = on;
+            json!(on)
+        }),
         "window.toolbarColumns" => {
             let toolbar = match crate::custom_toolbars::target(&app.ui, p) {
                 Ok(t) => t,
@@ -633,6 +667,64 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             app.ui.task_bar_place = Default::default();
             Ok(Value::Null)
         }
+        // More Options › Bar Actions: one of the bar's actions or chips on or off.
+        "window.taskBar.actions" => match (s("action").filter(|a| crate::canvas::is_task_bar_action(a)), opt_bool(p, "visible")) {
+            (None, _) => {
+                let ids = crate::canvas::TASK_BAR_ACTIONS.iter().map(|a| a.0).chain(crate::canvas::TASK_BAR_CHIPS);
+                Err(format!("`action` must be one of {}", ids.collect::<Vec<_>>().join(", ")))
+            }
+            (_, Err(e)) => Err(e),
+            (Some(action), Ok(visible)) => {
+                let hidden = &mut app.ui.task_bar_hidden_actions;
+                let visible = visible.unwrap_or_else(|| hidden.contains(&action));
+                if visible {
+                    hidden.remove(&action);
+                } else {
+                    hidden.insert(action.clone());
+                }
+                Ok(json!({ "action": action, "visible": visible }))
+            }
+        },
+        // More Options › Reset Bar Actions: every action and chip shows again.
+        "window.taskBar.resetActions" => Ok(json!(std::mem::take(&mut app.ui.task_bar_hidden_actions))),
+        "window.quickPenToolbar" => flag(&mut app.ui.quick_pen_bar),
+        "window.quickPenToolbar.pin" => {
+            let place = &mut app.ui.quick_pen_bar_place;
+            opt_bool(p, "pinned").map(|pinned| {
+                let pinned = pinned.unwrap_or(!place.pinned);
+                if pinned && !place.pinned {
+                    place.pin_at = place.shown_at;
+                }
+                place.pinned = pinned;
+                json!(pinned)
+            })
+        }
+        "window.quickPenToolbar.reset" => {
+            app.ui.quick_pen_bar_place = Default::default();
+            Ok(Value::Null)
+        }
+        "tool.quickPen.flipArc" => {
+            // C's flip, for the toolbar's Flip Arc button: false, with nothing changed beyond the
+            // edit finished first, while the last piece of the path being drawn is not a sharp-corner
+            // arc. Input held for an edit is finished first, so the key is made now rather than
+            // held; when that fails the error is returned and the flip is not made.
+            match app.session.finish_tool_edit() {
+                Ok(reqs) => crate::canvas::apply_requests(app, Ok(reqs)),
+                Err(e) => return Some(Err(e.to_string())),
+            }
+            let view = app.view_info();
+            let key = vectorcraft_tools::ToolKey::Letter('c');
+            if app.session.tool_id() != vectorcraft_tools::quickpen::ID || !app.session.tool_claims_key(key, view) {
+                return Some(Ok(json!(false)));
+            }
+            match app.session.tool_key(key, vectorcraft_tools::Mods::default(), view) {
+                Ok(reqs) => {
+                    crate::canvas::apply_requests(app, Ok(reqs));
+                    Ok(json!(true))
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        }
         "window.dock" => {
             let ui = &mut app.ui;
             // The bars the last Tab hid show again, unless the toolbar or the Control bar was shown
@@ -698,6 +790,10 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let switched = if app.session.tool_id() == id { Ok(()) } else { app.try_select_tool(id) };
             switched.map(|()| json!({"tool": app.session.tool_id()}))
         }
+        "tool.switchSelectionTools" => {
+            let tool = if app.session.tool_id() == "selection" { "directSelection" } else { "selection" };
+            app.try_select_tool(tool).map(|()| json!({"tool": app.session.tool_id()}))
+        }
         crate::touch::TOGGLE_MODE => crate::touch::toggle_mode(app),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
@@ -711,9 +807,17 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
         "ui.cropImage" if !selected_image(app, |_| true) => Err("select an image".into()),
         "ui.cropImage" => app.try_select_tool(vectorcraft_tools::cropimage::ID).map(|()| json!({"tool": app.session.tool_id()})),
+        // Create Object Mosaic… has a dialog of its own, opened on the selected image.
+        "ui.paramDialog" if s("command").as_deref() == Some(crate::dialogs::object_mosaic::COMMAND) => {
+            crate::dialogs::object_mosaic::open(app, p.get("params").unwrap_or(&Value::Null))
+        }
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+            // Find and Replace has a dialog of its own, which stays open from match to match.
+            if cmd == crate::dialogs::find_replace::COMMAND {
+                return Some(crate::dialogs::find_replace::open(app, &fields));
+            }
             fields.insert("__command".into(), json!(cmd));
             fields.insert("__label".into(), json!(s("label").unwrap_or(cmd.clone())));
             app.ui.dialog = Some(crate::state::Dialog { kind: "command".into(), fields });
@@ -743,8 +847,13 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "help.safeMode" => crate::dialogs::safe_mode::open(app),
         "help.copyTroubleshootingInfo" => crate::troubleshooting::copy(app),
         "help.commandPalette" => {
-            app.ui.palette_open = !app.ui.palette_open;
-            app.ui.palette_query.clear();
+            crate::palette::toggle(app);
+            Ok(Value::Null)
+        }
+        // A pick of it in the search is recorded and counted first, and then cleared with the rest.
+        "help.clearRecentCommands" => {
+            app.ui.recent_commands.clear();
+            app.ui.command_uses = Default::default();
             Ok(Value::Null)
         }
         // Closing asks Save / Don't Save / Cancel for modified documents first (`unsaved`).
@@ -774,6 +883,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let names = p.get("swatches").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
             crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
         }
+        "ui.colorGroupOptions" => crate::dialogs::color_group_options::open(app, p),
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
         "ui.sampleScreenColor" => crate::screen_color::start(app, p),
         "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),
@@ -833,6 +943,10 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             crate::dialogs::saturate::open(app);
             Ok(Value::Null)
         }
+        "ui.proofSetupDialog" => {
+            crate::dialogs::proof_setup::open(app);
+            Ok(Value::Null)
+        }
         "ui.indexedColorDialog" => {
             crate::dialogs::indexed_color::open(app);
             Ok(Value::Null)
@@ -860,6 +974,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "artboard.selectAll" => crate::panels::artboards::select_all_command(app),
         "ui.layersPanelOptions" => crate::dialogs::layers_panel_options::open(app),
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
+        "ui.attributesPanelOptions" => crate::panels::attributes::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
         "ui.panelView" => crate::panels::set_view(app, p),
@@ -881,6 +996,10 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
+        "ui.tracingPresetsDialog" => {
+            crate::dialogs::tracing_presets::open(app, s("selected").as_deref());
+            Ok(Value::Null)
+        }
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
         "ui.foldPreview" => crate::addons::packaging::preview::command(app, p),
         "ui.copyScriptConsole" => crate::panels::script_console::copy(app, p),
@@ -936,6 +1055,8 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.simplifyAuto" => crate::dialogs::simplify_slider::auto(app),
         "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::more_options(app),
         "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
+        "ui.recolorUndo" => crate::dialogs::recolor::step(app, true),
+        "ui.recolorRedo" => crate::dialogs::recolor::step(app, false),
         "ui.dialogReset" => crate::dialogs::reset(app),
         "attributes.openUrl" => crate::panels::attributes::open_url(app, p),
         "ui.javascriptFilesDialog" => crate::panels::svg_interactivity::files_dialog(app, p),
@@ -968,6 +1089,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
         "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
+        crate::dialogs::SAVE_PDF_SUMMARY => crate::dialogs::save_pdf_summary(app, p),
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
             Ok(Value::Null)
@@ -1034,6 +1156,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::DELETE_SETS => crate::panels::actions::delete_sets(app, p),
         crate::panels::actions::DUPLICATE => crate::panels::actions::duplicate(app, p),
         crate::panels::actions::RESET => crate::panels::actions::reset(app, p),
+        crate::panels::actions::CLEAR => crate::panels::actions::clear(app, p),
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
         _ => return None,
     };
@@ -1052,6 +1175,11 @@ fn run_ui_part12(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.epsOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
         "ui.epsOptionsDialog" => {
             crate::dialogs::eps_options::open(app, p);
+            Ok(Value::Null)
+        }
+        "ui.hpglOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
+        "ui.hpglOptionsDialog" => {
+            crate::dialogs::hpgl_options::open(app, p);
             Ok(Value::Null)
         }
         // Save for Web: its dialog; with settings, write the files.
@@ -1121,6 +1249,11 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.livePaintGapOptions" => crate::dialogs::live_paint_gaps::open(app),
         "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
         crate::dialogs::check_spelling::COMMAND => crate::dialogs::check_spelling::open(app),
+        "ui.findAndReplace" => {
+            let empty = serde_json::Map::new();
+            crate::dialogs::find_replace::open(app, &empty)
+        }
+        "ui.retype" => crate::panel_docking::reveal_panel(app, crate::panels::retype::ID),
 
         _ => return None,
     };

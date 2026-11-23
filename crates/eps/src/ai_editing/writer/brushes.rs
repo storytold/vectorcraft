@@ -96,6 +96,7 @@ fn code(v: Variation) -> f64 {
         Variation::Fixed => 0.0,
         Variation::Random => 1.0,
         Variation::Pressure => 2.0,
+        Variation::StylusWheel => 3.0,
         Variation::Tilt => 4.0,
         Variation::Bearing => 5.0,
         Variation::Rotation => 6.0,

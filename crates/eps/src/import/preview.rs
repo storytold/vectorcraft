@@ -5,9 +5,6 @@
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::{Affine, Rect};
 
-/// Largest EPSI bitmap side read (pixels).
-const MAX_EPSI: usize = 8192;
-
 /// A preview's document and how the user is told about it.
 pub(super) struct Preview {
     pub document: Document,
@@ -89,41 +86,39 @@ fn metafile_doc(wmf: &[u8], frame: Rect) -> Option<Document> {
 
 /// The EPSI preview in `ps`'s comments (`%%BeginPreview: width height depth lines`, hex rows,
 /// 0 white and the largest value black).
+/// The shared decoder intentionally tolerates blank preview lines and CR-only line endings;
+/// unlike the former local parser, neither changes the decoded samples.
 fn epsi(ps: &[u8]) -> Option<image::RgbaImage> {
-    let text = String::from_utf8_lossy(ps);
-    let mut lines = text.lines();
-    let head = lines.find_map(|l| l.strip_prefix("%%BeginPreview:"))?;
-    let n: Vec<usize> = head.split_whitespace().map_while(|w| w.parse().ok()).collect();
-    let [w, h, depth, ..] = n[..] else { return None };
-    if !(1..=MAX_EPSI).contains(&w) || !(1..=MAX_EPSI).contains(&h) || ![1, 2, 4, 8].contains(&depth) {
-        return None;
-    }
-    let row = (w * depth).div_ceil(8);
-    let mut hex = Vec::with_capacity((row * h * 2).min(ps.len()));
-    for l in lines {
-        if l.starts_with("%%EndPreview") || hex.len() >= row * h * 2 {
-            break;
+    let bitmap = craft_eps::epsi(ps)?;
+    let rgba = bitmap.gray.into_iter().flat_map(|g| [g, g, g, 255]).collect();
+    image::RgbaImage::from_raw(bitmap.width, bitmap.height, rgba)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::epsi;
+
+    #[test]
+    fn shared_epsi_depths_keep_row_padding_and_opaque_grayscale() {
+        for (depth, row, gray) in [(1, "40", [255, 0, 255]), (2, "18", [255, 170, 85]), (4, "05a0", [255, 170, 85]), (8, "0055aa", [255, 170, 85])] {
+            let source = format!("%%BeginPreview: 3 2 {depth} 2\n% {row}\n% {row}\n%%EndPreview\n");
+            let image = epsi(source.as_bytes()).expect("ordinary EPSI preview");
+            assert_eq!(image.dimensions(), (3, 2));
+            let expected: Vec<u8> = gray.into_iter().cycle().take(6).flat_map(|g| [g, g, g, 255]).collect();
+            assert_eq!(image.as_raw(), &expected, "depth {depth}");
         }
-        hex.extend(l.strip_prefix('%')?.bytes().filter(u8::is_ascii_hexdigit));
     }
-    hex.truncate(row * h * 2);
-    // A trailing half byte would decode padded with zero: the preview is cut short, so none.
-    if hex.len() % 2 != 0 {
-        return None;
+
+    #[test]
+    fn shared_epsi_intentionally_accepts_blank_and_cr_only_lines() {
+        let ordinary = "%%BeginPreview: 3 2 2 2\n% 18\n% e4\n%%EndPreview\n";
+        let expected = epsi(ordinary.as_bytes()).expect("ordinary preview");
+        for source in [ordinary.replace('\n', "\r"), ordinary.replace("% e4", "\n% e4")] {
+            let image = epsi(source.as_bytes()).expect("documented shared decoder tolerance");
+            assert_eq!(image, expected);
+        }
+        let gray = [255, 170, 85, 0, 85, 170];
+        let rgba: Vec<u8> = gray.into_iter().flat_map(|g| [g, g, g, 255]).collect();
+        assert_eq!(expected.as_raw(), &rgba);
     }
-    let bytes = super::lex::hex_decode(&hex)?;
-    // A preview with its samples missing is none, not a blank image of the size it claims.
-    if bytes.len() < row * h {
-        return None;
-    }
-    let max = (1u32 << depth) - 1;
-    let mut img = image::RgbaImage::new(w as u32, h as u32);
-    for (x, y, px) in img.enumerate_pixels_mut() {
-        let bit = y as usize * row * 8 + x as usize * depth;
-        let byte = u32::from(bytes.get(bit / 8).copied().unwrap_or(0));
-        let v = (byte >> (8 - depth - bit % 8)) & max;
-        let grey = (255 - v * 255 / max) as u8;
-        *px = image::Rgba([grey, grey, grey, 255]);
-    }
-    Some(img)
 }

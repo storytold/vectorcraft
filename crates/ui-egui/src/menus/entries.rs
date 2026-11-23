@@ -156,9 +156,10 @@ const NOT_INSERTED_MENUS: [&str; 4] = ["VectorCraft", "File", "Window", "Help"];
 
 /// Commands whose menu items do more than run the command, which action playback does not do:
 /// Object › Image Trace › Make and Make and Expand trace off the UI thread with progress and Cancel
-/// ([`crate::trace_runs::start`]), and Object › Pattern › Make and Edit Pattern open the Pattern
-/// Options panel.
-const MENU_ONLY_COMMANDS: [&str; 4] = ["imageTrace.make", "imageTrace.makeAndExpand", "object.pattern.make", "object.pattern.edit"];
+/// ([`crate::trace_runs::start`]), Object › Pattern › Make and Edit Pattern open the Pattern
+/// Options panel, and Edit › Find Next goes on from the last Find and Replace search or opens its
+/// dialog ([`crate::dialogs::find_replace::find_next`]).
+const MENU_ONLY_COMMANDS: [&str; 5] = ["imageTrace.make", "imageTrace.makeAndExpand", "object.pattern.make", "object.pattern.edit", "edit.findNext"];
 
 /// The View menu commands that the app runs itself, not the engine, and that can be steps of an
 /// action ([`plays_in_app`]): Outline, Pixel Preview, Trim View, Presentation Mode and Screen Mode,
@@ -259,7 +260,8 @@ pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String
     for it in items {
         match it {
             Item::Cmd(l, id, p) => {
-                if *id == crate::scripts_menu::COMMAND && !crate::scripts_menu::readable(p) {
+                // A listed script or saved proof setup outside an automation read root is left out.
+                if matches!(*id, crate::scripts_menu::COMMAND | crate::dialogs::proof_setup::LOAD) && !crate::scripts_menu::readable(p) {
                     continue;
                 }
                 // The other rows keep their ids: `file.openRecent3` still opens the third file.

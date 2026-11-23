@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientKind, GradientStop, Paint};
 use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
 use vectorcraft_doc::overprint::{darken_overprints, is_black_ink, is_white};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
@@ -175,23 +175,62 @@ impl<'a> Separator<'a> {
     /// carry counts as none. A link to a swatch the document lacks separates as the color's own
     /// values, so such a black counts as unlinked.
     fn no_ink(&self, plate: &str, p: &Paint) -> bool {
-        let process = |swatch: Option<&str>| swatch.is_none_or(|n| n != REGISTRATION && self.doc.swatch(n).is_none_or(|w| !w.spot));
-        let none = |c: &Color, process: bool, ink: f32| ink <= 0.0 || (self.postscript && process && ink <= 0.005 && is_black_ink(c, 1.0, false));
         match p {
             Paint::Solid { color, swatch, tint } => {
-                none(color, process(swatch.as_deref()), self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))))
+                self.none(color, self.process(swatch.as_deref()), self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))))
             }
             Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
-                Some(f) => f.points.iter().all(|pt| none(&pt.color, true, self.ink(plate, &pt.color, None))),
-                None => {
-                    !g.gradient.stops.is_empty()
-                        && g.gradient.stops.iter().all(|s| {
-                            let ink = self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates);
-                            none(&s.color, s.plates.is_none() && process(s.swatch.as_deref()), ink)
-                        })
-                }
+                Some(f) => f.points.iter().all(|pt| self.point_none(plate, &pt.color)),
+                None => !g.gradient.stops.is_empty() && g.gradient.stops.iter().all(|s| self.stop_none(plate, s)),
             },
             _ => false,
+        }
+    }
+
+    /// Whether a color linked to swatch `swatch` separates as process inks: no link, or a link
+    /// to a process swatch or to one the document lacks, other than Registration.
+    fn process(&self, swatch: Option<&str>) -> bool {
+        swatch.is_none_or(|n| n != REGISTRATION && self.doc.swatch(n).is_none_or(|w| !w.spot))
+    }
+
+    /// Whether `ink` of color `c` (separating as process inks when `process` is true) counts as
+    /// none, as [`Self::no_ink`] says.
+    fn none(&self, c: &Color, process: bool, ink: f32) -> bool {
+        ink <= 0.0 || (self.postscript && process && ink <= 0.005 && is_black_ink(c, 1.0, false))
+    }
+
+    /// Whether gradient stop `s` puts none of ink `plate` down, as [`Self::no_ink`] says.
+    fn stop_none(&self, plate: &str, s: &GradientStop) -> bool {
+        let ink = self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates);
+        self.none(&s.color, s.plates.is_none() && self.process(s.swatch.as_deref()), ink)
+    }
+
+    /// Whether a freeform gradient's point of color `c` puts none of ink `plate` down, as
+    /// [`Self::no_ink`] says.
+    fn point_none(&self, plate: &str, c: &Color) -> bool {
+        self.none(c, true, self.ink(plate, c, None))
+    }
+
+    /// On a PostScript plate, make paper white the stops and points of overprinting gradient `p`
+    /// that put none of ink `plate` down while others do ([`Self::no_ink`]'s rule for each): the
+    /// writer leaves the plate below as it is where the gradient is paper white.
+    fn clear_inkless_stops(&self, plate: &str, p: &mut Paint) {
+        let Paint::Gradient(g) = p else { return };
+        if !self.postscript {
+            return;
+        }
+        let paper = Color::Gray { k: 0.0 };
+        match g.freeform.as_mut().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
+            Some(f) => {
+                for pt in f.points.iter_mut().filter(|pt| self.point_none(plate, &pt.color)) {
+                    pt.color = paper;
+                }
+            }
+            None => {
+                for s in g.gradient.stops.iter_mut().filter(|s| self.stop_none(plate, s)) {
+                    *s = GradientStop { color: paper, swatch: None, tint: 1.0, plates: None, ..s.clone() };
+                }
+            }
         }
     }
 
@@ -201,7 +240,9 @@ impl<'a> Separator<'a> {
     /// knock out). A writer without blending modes (PostScript) then keeps the ink below them,
     /// where it would draw their Darken as a knockout. One that puts any ink down is drawn, and on
     /// a PostScript plate its ink replaces the ink below, as a nonzero component of an overprinting
-    /// color replaces the backdrop's with overprint mode 1 (ISO 32000-1, 11.7.4.2).
+    /// color replaces the backdrop's with overprint mode 1 (ISO 32000-1, 11.7.4.2). On a
+    /// PostScript plate, the stops and points of such a gradient that put none of the ink down
+    /// become paper white ([`Self::clear_inkless_stops`]), which the writer leaves out there.
     fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: bool) {
         let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !(discard_white && is_white(p)) && self.no_ink(plate, p);
         let n = Arc::make_mut(a);
@@ -212,15 +253,21 @@ impl<'a> Separator<'a> {
             };
             if normal && inkless(it.overprint(), it.paint()) {
                 *it.paint_mut() = Paint::None;
+            } else if normal && it.overprint() {
+                self.clear_inkless_stops(plate, it.paint_mut());
             }
         }
         if let NodeKind::Text(t) = &mut n.kind {
             for r in &mut t.runs {
                 if inkless(r.style.overprint_fill, &r.style.fill) {
                     r.style.fill = Paint::None;
+                } else if r.style.overprint_fill {
+                    self.clear_inkless_stops(plate, &mut r.style.fill);
                 }
                 if inkless(r.style.overprint_stroke, &r.style.stroke) {
                     r.style.stroke = Paint::None;
+                } else if r.style.overprint_stroke {
+                    self.clear_inkless_stops(plate, &mut r.style.stroke);
                 }
             }
         }

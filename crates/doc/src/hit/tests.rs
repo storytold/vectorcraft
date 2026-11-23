@@ -1324,11 +1324,11 @@ fn evaluated_art_is_not_kept_while_a_placed_document_may_show_in_it() {
     assert_eq!(evaluated(), before + 2);
 }
 
-/// For instances of the symbol "Painted", a fill that paints the square from (300, 0) to
-/// (320, 20); nothing for anything else.
+/// For instances of the symbols whose names start with "Painted", a fill that paints the square
+/// from (300, 0) to (320, 20); nothing for anything else.
 fn painted_far_away(_: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
     match &n.kind {
-        NodeKind::SymbolInstance { symbol, .. } if symbol == "Painted" => {
+        NodeKind::SymbolInstance { symbol, .. } if symbol.starts_with("Painted") => {
             let square = shapes::rectangle(Rect::new(300.0, 0.0, 320.0, 20.0)).to_bezpath();
             vec![(square, FillRule::NonZero, AppearanceItem::Fill(crate::FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)))))]
         }
@@ -1455,8 +1455,17 @@ fn masked_square(layer: bool) -> (Document, NodeId, NodeId, NodeId) {
     }
 }
 
-const SELECTING: HitOptions =
-    HitOptions { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, clip_outlines: true, scope: None };
+const SELECTING: HitOptions = HitOptions {
+    tol: 3.0,
+    outline: false,
+    path_only: false,
+    type_path_only: false,
+    skip_guides: false,
+    clip_outlines: true,
+    area_type_interior: false,
+    ignore_layer_preview: false,
+    scope: None,
+};
 
 /// For the selection tools a clip group's clipping path is hit on its outline, within the
 /// tolerance, before the art it clips and just outside it too; inside, the art is hit.
@@ -1748,6 +1757,41 @@ fn type_path_only_picks_type_on_its_path() {
     assert_eq!(hit(Point::new(75.0, 100.0), path_only), None, "point type: past the end of its layout");
     assert_eq!(hit(Point::new(250.0, 200.5), path_only), Some((area, HitKind::Outline)), "area type: its frame");
     assert_eq!(hit(Point::new(60.0, 339.5), path_only), Some((on_path, HitKind::Outline)), "type on a path: its path");
+}
+
+/// Area type is hit on its frame's edge and where its lines are laid out, not in the empty rest of
+/// its frame: a click there reaches the art behind, in Preview and in Outline mode (#7274). The
+/// Type tool still finds the type anywhere inside its frame.
+#[test]
+fn area_type_passes_clicks_through_its_empty_frame() {
+    use crate::{CharStyle, TextKind, TextObject};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    // A filled square behind the type, its edge at x = 150 inside the frame.
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(150.0, 150.0, 350.0, 350.0)), Appearance::default_art());
+    let square_id = square.id;
+    d.insert(Some(l), 9, square).unwrap();
+    // Area type at (100, 100): a 200 × 200 frame with one 80 wide line at its top.
+    let mut area = TextObject::point(Point::new(100.0, 100.0), "Area", CharStyle { size: 20.0, ..CharStyle::default() });
+    area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)) };
+    area.cached_bounds = Some(Rect::new(0.0, 0.0, 80.0, 24.0));
+    area.cached_baselines = vec![(Point::new(0.0, 18.0), Point::new(80.0, 18.0))];
+    let area_id = d.alloc_id();
+    d.insert(Some(l), 9, Node::new(area_id, NodeKind::Text(Box::new(area)))).unwrap();
+    let outline = HitOptions { outline: true, ..Default::default() };
+    for (opt, mode) in [(HitOptions::default(), "preview"), (outline, "outline")] {
+        let hit = |p: Point| hit_test(&d, p, opt).map(|h| h.leaf);
+        assert_eq!(hit(Point::new(140.0, 110.0)), Some(area_id), "{mode}: on the line of type");
+        assert_eq!(hit(Point::new(200.0, 100.5)), Some(area_id), "{mode}: on the frame's top edge");
+        assert_eq!(hit(Point::new(299.0, 250.0)), Some(area_id), "{mode}: on the frame's right edge");
+        assert_eq!(hit(Point::new(220.0, 130.0)), None, "{mode}: the empty frame, nothing behind");
+        assert_eq!(hit(Point::new(120.0, 250.0)), None, "{mode}: the empty frame, nothing behind");
+        assert_eq!(hit(Point::new(150.0, 250.0)), Some(square_id), "{mode}: the square's edge behind the empty frame");
+    }
+    assert_eq!(hit_test(&d, Point::new(250.0, 250.0), HitOptions::default()).map(|h| h.leaf), Some(square_id), "the square's fill");
+    // The Type tool: anywhere inside the frame.
+    let typing = HitOptions { area_type_interior: true, ..Default::default() };
+    assert_eq!(hit_test(&d, Point::new(250.0, 250.0), typing).map(|h| h.leaf), Some(area_id), "type tool: inside the frame");
 }
 
 /// Type Object Selection by Path Only with the layout's baselines: every line's for point type,
@@ -2787,6 +2831,32 @@ fn a_symbol_instance_is_hit_on_the_stroke_of_its_art_past_its_box() {
     assert_eq!(at(108.0, HitOptions { outline: true, ..HitOptions::default() }), None, "Outline view");
 }
 
+/// A symbol's art on a layer of the symbol whose Preview is off is hit in outline, unless the
+/// click sets [`HitOptions::ignore_layer_preview`]: then the stroke past the instance's box hits.
+#[test]
+fn ignore_layer_preview_reaches_symbol_art_on_a_preview_off_layer() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    // A 20 pt stroke reaches 10 pt past the 0..100 square.
+    let look = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 20.0);
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look);
+    let mut layer = Node::layer(d.alloc_id(), "Art", crate::LayerColor::Preset(2));
+    if let NodeKind::Layer { children, preview, .. } = &mut layer.kind {
+        *children = vec![Arc::new(square)];
+        *preview = false;
+    }
+    let art = Node::group(d.alloc_id(), vec![Arc::new(layer)]);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Stroked".into(), art: Arc::new(art) });
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::IDENTITY;
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Stroked".into(), xf })).unwrap();
+    let at = |x: f64, opt: HitOptions| hit_test(&d, Point::new(x, 50.0), opt).map(|h| h.leaf);
+    let painted = HitOptions { ignore_layer_preview: true, ..HitOptions::default() };
+    assert_eq!(at(108.0, HitOptions::default()), None, "Preview off: in outline");
+    assert_eq!(at(108.0, painted), Some(inst), "ignore_layer_preview: on the stroke past the box");
+    assert_eq!(at(116.0, painted), None, "past the stroke");
+}
+
 /// Outside a symbol instance's box, an instance nested in its art counts where its own art is, not
 /// anywhere in its box: a click or a marquee on empty space in the nested box, where a moved
 /// clipping path shows the art past the outer box, selects nothing, and on art drawn there it
@@ -2995,6 +3065,119 @@ fn a_click_counts_the_members_of_an_intertwine_group_in_symbol_art_toward_one_li
     assert_eq!(hit, None);
     assert!(leaves <= 100, "{leaves} leaves tested");
     assert_eq!(with_art_limit(100, || at(140.0)).0, Some(id), "on the squares' paths");
+}
+
+/// Whether a symbol instance's fill or stroke effects reshape its art, for these tests: when
+/// [`painted_far_away`] gives it shapes.
+fn reshapes_when_painted(n: &Node) -> bool {
+    !painted_far_away(None, n).is_empty()
+}
+
+/// An instance of the symbol named `symbol`, not moved, whose fill has a geometry effect:
+/// [`reshapes_when_painted`] holds for it when the name starts with "Painted", so a part pick and a
+/// part outline walk its art as drawn with its fill's effects ([`InstanceArt::drawn`]).
+fn painted_instance_of(d: &mut Document, symbol: &str) -> Arc<Node> {
+    let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    n.appearance = Appearance::default_art().into();
+    let offset = crate::Effect { id: "path.offsetPath".into(), params: serde_json::json!({"offset": 10}), visible: true };
+    n.appearance.items[0].effects_mut().push(offset);
+    Arc::new(n)
+}
+
+/// Five levels of symbols: "Painted 0" is a 1 pt square, and each level above holds 8 instances
+/// of the level below whose fills have a geometry effect. Returns the id of an instance of
+/// "Painted 4" on the layer.
+fn painted_chain(d: &mut Document) -> NodeId {
+    let l = d.layers[0].id;
+    let dot = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art());
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Painted 0".into(), art: Arc::new(dot) });
+    for level in 1..5 {
+        let members = (0..8).map(|_| painted_instance_of(d, &format!("Painted {}", level - 1))).collect();
+        group_symbol(d, &format!("Painted {level}"), members);
+    }
+    let inst = instance_of(d, "Painted 4");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    id
+}
+
+/// The outline of a part of a dynamic symbol's instance visits at most the art walk's limit of
+/// objects, though the part is an instance whose art, drawn with its fill's effects, nests
+/// instances 3 levels deep, 8 at each level. Within the limit every square is outlined.
+#[test]
+fn a_parts_outline_walks_nested_reshaped_symbol_instances_within_one_limit() {
+    set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
+    let mut d = Document::new(600.0, 400.0);
+    let id = painted_chain(&mut d);
+    let n = d.node(id).unwrap();
+    let squares = |o: &BezPath| o.elements().iter().filter(|e| matches!(e, vectorcraft_geom::kurbo::PathEl::MoveTo(_))).count();
+    // Part [0] is an instance of "Painted 3": 8 × 8 × 8 squares.
+    assert_eq!(squares(&symbol_part_outline(&d, n, &[0]).unwrap()), 512, "within the limit");
+    let (outline, _, arts) = with_art_limit(100, || symbol_part_outline(&d, n, &[0]).unwrap());
+    assert!(squares(&outline) < 100, "{} squares outlined", squares(&outline));
+    assert!(arts < 100, "{arts} instances' art walked");
+}
+
+/// A part pick in a dynamic symbol's instance visits at most the art walk's limit of objects of
+/// nested instances whose art, drawn with their fills' effects, is walked: in a chain of nested
+/// instances, and in instances whose clip groups the click misses, where only the clip group
+/// itself is tested. A click on the clipped art of a nested instance is still found.
+#[test]
+fn a_part_pick_walks_nested_reshaped_symbol_instances_within_one_limit() {
+    set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
+    let mut d = Document::new(600.0, 400.0);
+    let id = painted_chain(&mut d);
+    let opt = HitOptions::default();
+    let (hit, _, arts) = with_art_limit(100, || symbol_part_at(&d, d.node(id).unwrap(), Point::new(150.0, 50.0), opt));
+    assert_eq!(hit, None);
+    assert!(arts <= 40, "chain: {arts} instances' art walked");
+    // 30 instances of a clip group whose 10 pt clipping path holds 40 squares: 42 objects each.
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default());
+    let mut members = vec![Arc::new(mask)];
+    members.extend((0..40).map(|_| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art()))));
+    let mut clip = Node::group(d.alloc_id(), members);
+    clip.set_clips(true);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Painted clip".into(), art: Arc::new(clip) });
+    let members = (0..30).map(|_| painted_instance_of(&mut d, "Painted clip")).collect();
+    group_symbol(&mut d, "Clips", members);
+    let inst = instance_of(&mut d, "Clips");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    let n = d.node(id).unwrap();
+    let (hit, _, arts) = with_art_limit(300, || symbol_part_at(&d, n, Point::new(150.0, 50.0), opt));
+    assert_eq!(hit, None);
+    assert!(arts <= 8, "clip groups: {arts} instances' art walked");
+    assert_eq!(with_art_limit(300, || symbol_part_at(&d, n, Point::new(2.0, 2.0), opt)).0, Some(vec![29]), "the clipped art");
+}
+
+/// The outline of a part of a dynamic symbol's instance leaves out the hidden objects in the art of
+/// an instance nested in the part whose fill's effects reshape it, as a part pick passes over them.
+#[test]
+fn a_parts_outline_leaves_out_hidden_art_of_nested_reshaped_symbol_instances() {
+    use vectorcraft_geom::kurbo::Shape;
+    set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let shown = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art());
+    let mut hidden = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(50.0, 50.0, 60.0, 60.0)), Appearance::default_art());
+    hidden.visible = false;
+    group_symbol(&mut d, "Painted hidden", vec![Arc::new(shown), Arc::new(hidden)]);
+    let member = painted_instance_of(&mut d, "Painted hidden");
+    group_symbol(&mut d, "Hides", vec![member]);
+    let inst = instance_of(&mut d, "Hides");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    let n = d.node(id).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(55.0, 55.0), HitOptions::default()), None, "the hidden square is not picked");
+    let outline = symbol_part_outline(&d, n, &[0]).unwrap();
+    let squares = outline.elements().iter().filter(|e| matches!(e, vectorcraft_geom::kurbo::PathEl::MoveTo(_))).count();
+    assert_eq!(squares, 1, "only the shown square is outlined");
+    assert!(outline.bounding_box().x1 <= 1.0, "the outline reaches {:?}", outline.bounding_box());
 }
 
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than

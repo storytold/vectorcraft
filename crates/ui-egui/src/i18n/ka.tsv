@@ -42,6 +42,7 @@
 	Reset Profile	პროფილის ჩამოყრა
 	Select Object on Path	ტრაექტორიაზე ობიექტის მონიშვნა
 	Weather Icons	ამინდის ხატულები
+	Media Controls	მედია მართვის საშუალებები
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' და 'arguments' მკაცრი რეჟიმის ფუნქციებში ვერ გამოიყენება
 @msg	3D effects require finite coordinates within 100 million points	3D ეფექტებს სჭირდება სასრული კოორდინატები 100 მილიონი პუნქტის ფარგლებში
 @msg	3D effects require one to ten lights	3D ეფექტებს სჭირდება ერთიდან ათამდე სინათლის წყარო
@@ -1557,6 +1558,7 @@
 @msg	the color book is cut short	ფერთა წიგნი შეკვეცილია
 @msg	the color book's names take more than {_1} MB	ფერთა წიგნის სახელები {_1} MB-ზე მეტს იკავებს
 @msg	the compound shape is too complex to expand	შედგენილი ფიგურა ზედმეტად რთულია გასაშლელად
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	ხაზი ან სხვა ღია ტრაექტორია, რომელიც ფართობს არ შემოსაზღვრავს, შედგენილ ფიგურას ფართობს არ უმატებს; მის ჩასართავად ჯერ გამოიყენეთ ობიექტი › ტრაექტორია › კონტურის ფიგურად გარდაქმნა
 @msg	the container of the listed objects is gone	ჩამოთვლილი ობიექტების კონტეინერი აღარ არსებობს
 @msg	the copy `{user_id}` can't be read as a library	ასლის `{user_id}` ბიბლიოთეკად წაკითხვა შეუძლებელია
 @msg	the copy would leave the canvas	ასლი ტილოს გარეთ გავიდოდა
@@ -1919,7 +1921,6 @@
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} ფაილებს გამჭვირვალობა არ აქვს, ფაილს კი ექნებოდა: {what}: ჯერ გააბრტყელეთ (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} გამოსახულებების გახსნა შეუძლებელია (იხ. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` შემოთავაზებულ ვარიანტებში არ არის
-@msg	{k} has control characters{_1}	{k} შეიცავს მმართველ სიმბოლოებს{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} ზედმეტად გრძელია (მაქსიმუმ {MAX_TEXT} სიმბოლო)
 @msg	{k} must be > 0	{k} უნდა იყოს > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} უნდა იყოს რიცხვი (pt) ან სიგრძე, მაგალითად "210 mm"
@@ -2291,6 +2292,19 @@
 	Paste without Formatting	ფორმატირების გარეშე ჩასმა
 	Clear	გასუფთავება
 	Find and Replace…	ძებნა და ჩანაცვლება…
+	Find and Replace	ძებნა და ჩანაცვლება
+	Find:	ძებნა:
+	Replace With:	ჩანაცვლება შემდეგით:
+	Replace & Find	ჩანაცვლება და ძებნა
+	Replace All	ყველას ჩანაცვლება
+	Match Case	რეგისტრის გათვალისწინება
+	Find Whole Word	მთელი სიტყვის ძებნა
+	Search Backwards	უკუმიმართულებით ძებნა
+	Check Hidden Layers	დამალული შრეების შემოწმება
+	Check Locked Layers	ჩაკეტილი შრეების შემოწმება
+@msg	No matches found	დამთხვევები ვერ მოიძებნა
+@msg	Matches replaced: {n}	ჩანაცვლებული დამთხვევები: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ობიექტ {_3}-ის {_1}..{_2} ბაიტებზე `find`-ის დამთხვევა არ არის
 	Find Next	შემდეგის ძებნა
 	Spelling	მართლწერა
 	Auto Spell Check	მართლწერის ავტომატური შემოწმება
@@ -2391,6 +2405,16 @@
 	To Center	ცენტრისკენ
 	To Edge	კიდისკენ
 	Create Object Mosaic…	ობიექტების მოზაიკის შექმნა…
+	Create Object Mosaic	ობიექტების მოზაიკის შექმნა
+	Current Size:	მიმდინარე ზომა:
+	New Size:	ახალი ზომა:
+	Tile Spacing:	ფილებს შორის ინტერვალი:
+	Number of Tiles:	ფილების რაოდენობა:
+	Constrain Ratio:	პროპორციის შეზღუდვა:
+	Result:	შედეგი:
+	Resize Using Percentages	ზომის შეცვლა პროცენტებით
+	Delete Raster	რასტრული გამოსახულების წაშლა
+	Use Ratio	პროპორციის გამოყენება
 	Vector Halftone…	ვექტორული ნახევარტონი…
 	Create Trim Marks	ჭრის ნიშნების შექმნა
 	Flatten Transparency…	გამჭვირვალობის გაბრტყელება…
@@ -2556,6 +2580,20 @@
 	Break Thread	დაკავშირების გაწყვეტა
 	Fit Headline	სათაურის მორგება
 	Find Font…	შრიფტის ძებნა…
+	Retype	ხელახლა აკრეფა
+	Find Matching Fonts	შესაბამისი შრიფტების ძებნა
+	Find more font matches	მეტი შესაბამისი შრიფტის ძებნა
+	Type your text to preview	აკრიფეთ ტექსტი წინასწარი ნახვისთვის
+	Select outlined text, then Find Matching Fonts.	მონიშნეთ კონტურებად გარდაქმნილი ტექსტი, შემდეგ აირჩიეთ შესაბამისი შრიფტების ძებნა.
+	No font matches the selected shapes.	არცერთი შრიფტი არ შეესაბამება მონიშნულ ფიგურებს.
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	პირველი 2048-ის შემდეგი ან 16 ჯგუფზე ღრმად მოთავსებული ფიგურები არ შედარდა.
+	Reset Retype Panel	ხელახლა აკრეფის პანელის ჩამოყრა
+	List Matching Fonts	შესაბამისი შრიფტების სია
+	Retype Preview	ხელახლა აკრეფის პანელის წინასწარი ნახვა
+@msg	`count` must be a whole number from 1 to 96	`count` უნდა იყოს მთელი რიცხვი 1-დან 96-მდე
+@msg	`size` must be small, medium or large	`size` უნდა იყოს small, medium ან large
+@msg	`text` must be a string of at most 100 characters	`text` უნდა იყოს არაუმეტეს 100 სიმბოლოს სტრიქონი
+@msg	Retype: select outlined text (paths or compound paths)	ხელახლა აკრეფა: მონიშნეთ კონტურებად გარდაქმნილი ტექსტი (კონტურები ან შედგენილი კონტურები)
 	Change Case	რეგისტრის შეცვლა
 	UPPERCASE	მთავრული
 	lowercase	პატარა ასოები
@@ -2669,6 +2707,15 @@
 	Shading Color	დაჩრდილვის ფერი
 	Black Overprint	ზედდაბეჭდილი შავი
 	Draw Hidden Faces	დამალული წახნაგების დახატვა
+	Map Art…	ნახატის მიბმა…
+	Map Art	ნახატის მიბმა
+	First Surface	პირველი ზედაპირი
+	Previous Surface	წინა ზედაპირი
+	Next Surface	შემდეგი ზედაპირი
+	Last Surface	ბოლო ზედაპირი
+	Scale to Fit	მასშტაბირება მორგებით
+	Shade Artwork	ნახატის დაჩრდილვა
+	Invisible Geometry	უხილავი გეომეტრია
 	Revolve…	ბრუნვა…
 	Inflate…	გაბერვა…
 	Materials…	მასალები…
@@ -2784,6 +2831,8 @@
 	Hide Gradient Annotator	გრადიენტის მაჩვენებლის დამალვა
 	Show Gradient Annotator	გრადიენტის მაჩვენებლის ჩვენება
 	Hide Corner Widget	კუთხის ვიჯეტის დამალვა
+	Hide Shape Widgets	ფიგურის ვიჯეტების დამალვა
+	Show Shape Widgets	ფიგურის ვიჯეტების ჩვენება
 	Show Corner Widget	კუთხის ვიჯეტის ჩვენება
 	Guides	დამხმარე ხაზები
 	Hide Guides	დამხმარე ხაზების დამალვა
@@ -2871,6 +2920,8 @@
 	Contextual Task Bar	კონტექსტური ამოცანების ზოლი
 	Pin Bar Position	ზოლის პოზიციის ჩამაგრება
 	Reset Bar Position	ზოლის პოზიციის ჩამოყრა
+	Bar Actions	ზოლის მოქმედებები
+	Reset Bar Actions	ზოლის მოქმედებების ჩამოყრა
 	Tools	ხელსაწყოები
 	Toolbars	ხელსაწყოთა ზოლები
 	Advanced	დამატებითი
@@ -2890,9 +2941,17 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	წრის ხედი
 	Box View	კვადრატის ხედი
+	Show Out-of-Gamut Colors	ფერთა გამის გარეთ მყოფი ფერების ჩვენება
 	Box Channel	კვადრატის არხი
 	Color box	ფერის კვადრატი
 	Color Wheel Options	ფერთა წრის პარამეტრები
+	Show Document Colors	დოკუმენტის ფერების ჩვენება
+	Document Colors	დოკუმენტის ფერები
+	Selection Colors	მონიშნულის ფერები
+@plural	Used {n} time|Used {n} times	გამოყენებულია {n}-ჯერ
+	Show Harmony	ჰარმონიის ჩვენება
+	Harmony Rule	ჰარმონიის წესი
+	Harmony color	ჰარმონიის ფერი
 	CSS Properties	CSS თვისებები
 	Document Info	დოკუმენტის ინფორმაცია
 	Flattener Preview	გაბრტყელების წინასწარი ნახვა
@@ -2908,6 +2967,9 @@
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
 	Navigator Panel Options	ნავიგატორის პანელის პარამეტრები
+	Attributes Panel Options	ატრიბუტების პანელის პარამეტრები
+	Number of Recent URLs:	ბოლოდროინდელი URL-ების რაოდენობა:
+@msg	`count` must be a whole number from 1 to 30	`count` უნდა იყოს მთელი რიცხვი 1-დან 30-მდე
 	Draw Dashed Lines as Solid Lines	ტირეებიანი ხაზების უწყვეტ ხაზებად დახატვა
 	Pattern Options	პატერნის პარამეტრები
 	Properties	თვისებები
@@ -3121,6 +3183,25 @@
 	Preserve Embedded Profiles	ჩაშენებული პროფილების შენარჩუნება
 	Convert to Working Space	სამუშაო სივრცეში გადაყვანა
 	Preserve Numbers	რიცხვების შენარჩუნება
+	Profile Mismatches:	პროფილების შეუსაბამობა:
+	Ask When Opening	გახსნისას კითხვა
+	Ask When Pasting	ჩასმისას კითხვა
+	Missing Profiles:	დაკარგული პროფილები:
+	Embedded Profile Mismatch	ჩაშენებული პროფილის შეუსაბამობა
+	Missing Profile	პროფილი არ არის
+	Paste Profile Mismatch	პროფილის შეუსაბამობა ჩასმისას
+	“{name}” is not tagged with a {model} profile.	„{name}“-ს არ აქვს {model} პროფილი.
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	„{name}“-ს აქვს {model} პროფილი „{profile}“, რომელიც არ არის {model} სამუშაო სივრცე „{working}“.
+	Use the embedded profile	ჩაშენებული პროფილის გამოყენება
+	Convert the colors to the working space	ფერების სამუშაო სივრცეში გადაყვანა
+	Discard the embedded profile	ჩაშენებული პროფილის უგულებელყოფა
+	Leave as is	უცვლელად დატოვება
+	Assign the working space	სამუშაო სივრცის მინიჭება
+	Assign profile:	პროფილის მინიჭება:
+	Preserve the color numbers	ფერების რიცხვების შენარჩუნება
+	Convert to keep the colors' appearance	გადაყვანა ფერების იერსახის შესანარჩუნებლად
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` გამოიყენება მხოლოდ `{key}`: "assign"-თან
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	ჩასმული ფერები მოდის დოკუმენტიდან, რომლის {model} პროფილია „{from}“; ამ დოკუმენტის პროფილია „{to}“.
 	CMYK	CMYK
 	Texture	ტექსტურა
 	Craquelure…	კრაკელიური…
@@ -3202,6 +3283,15 @@ lighting	Light	სინათლე
 	Document Raster Effects Settings Dialog	დოკუმენტის რასტრული ეფექტების პარამეტრების დიალოგი
 	Drop Shadow	ჩრდილი
 	DXF Options Dialog	DXF პარამეტრების დიალოგი
+	HP-GL Options	HP-GL-ის პარამეტრები
+	HP-GL Options Dialog	HP-GL პარამეტრების დიალოგი
+	Curve Tolerance:	მრუდების დაშვება:
+	Origin:	სათავე:
+	Pens:	კალმები:
+	One Pen per Color	თითო კალამი თითო ფერზე
+	Pen Table	კალმების ცხრილი
+	Draw the Nearest Path Next	შემდეგ უახლოესი ტრაექტორიის დახატვა
+	Draw Inner Paths First	ჯერ შიდა ტრაექტორიების დახატვა
 	Edit Toolbar	ხელსაწყოთა ზოლის რედაქტირება
 	Edit Views	ხედების რედაქტირება
 	Effect…	ეფექტი…
@@ -3281,7 +3371,7 @@ lighting	Light	სინათლე
 	Optimize to File Size…	ფაილის ზომაზე ოპტიმიზაცია…
 	Optimize to File Size	ფაილის ზომაზე ოპტიმიზაცია
 	Desired File Size:	სასურველი ფაილის ზომა:
-	Start With:	დაწყება:
+	Start With:	საწყისი:
 	Use:	გამოყენება:
 	Current Settings	მიმდინარე პარამეტრები
 	Auto Select GIF/JPEG	GIF/JPEG-ის ავტომატური არჩევა
@@ -3502,6 +3592,10 @@ lighting	Light	სინათლე
 	Add Anchor Point Tool	საყრდენი წერტილის დამატების ხელსაწყო
 	Anchor Point Tool	საყრდენი წერტილის ხელსაწყო
 	Arc Tool	რკალის ხელსაწყო
+	Three-Point Arc Tool	სამწერტილიანი რკალის ხელსაწყო
+	Three-Point Arc	სამწერტილიანი რკალი
+	Arc too large	რკალი ზედმეტად დიდია
+	Third Point Sets Direction	მესამე წერტილი მიმართულებას განსაზღვრავს
 	Area Graph Tool	ფართობითი დიაგრამის ხელსაწყო
 	Area Type Tool	არის ტექსტის ხელსაწყო
 	Artboard Tool	სამუშაო დაფის ხელსაწყო
@@ -3603,6 +3697,7 @@ lighting	Light	სინათლე
 	Save Actions…	მოქმედებების შენახვა…
 	Load Actions…	მოქმედებების ჩატვირთვა…
 	Replace Actions…	მოქმედებების ჩანაცვლება…
+	Clear Actions	მოქმედებების გასუფთავება
 	Reset Actions	მოქმედებების ჩამოყრა
 	Replace the current actions with the default set?	ჩანაცვლდეს მიმდინარე მოქმედებები ნაგულისხმევი ნაკრებით?
 	Append adds the default set after the current sets instead.	„დამატება“ ამის ნაცვლად ნაგულისხმევ ნაკრებს მიმდინარე ნაკრებების შემდეგ ამატებს.
@@ -3735,6 +3830,7 @@ digits	Malayalam	მალაიალამური
 	Roman Baseline	რომაული საბაზისო ხაზი
 	Select a text object to edit its character attributes.	სიმბოლოების ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
 	Show Options	პარამეტრების ჩვენება
+	Show on Shape Creation	ჩვენება ფიგურის შექმნისას
 	Show Recent Colors	ბოლოდროინდელი ფერების ჩვენება
 	Toggle RGB Percent	RGB-ის პროცენტებში ჩვენების გადართვა
 	Small Caps	პატარა მთავრული
@@ -3953,6 +4049,7 @@ digits	Malayalam	მალაიალამური
 	Duplicate Action or Action Set	მოქმედების ან მოქმედებების ნაკრების დუბლირება
 	Delete the action set “{name}” and its actions?	წაიშალოს მოქმედებების ნაკრები „{name}“ და მისი მოქმედებები?
 	Delete the selected action sets and their actions?	წაიშალოს მონიშნული მოქმედებების ნაკრებები და მათი მოქმედებები?
+	Delete all action sets and their actions?	წაიშალოს ყველა მოქმედებების ნაკრები და მათი მოქმედებები?
 	Delete these {n} graphic styles?	წაიშალოს ეს გრაფიკული სტილები ({n})?
 	Delete this {n} graphic style?	წაიშალოს ეს გრაფიკული სტილი ({n})?
 	Graphic Style Libraries Menu	გრაფიკული სტილების ბიბლიოთეკების მენიუ
@@ -3984,6 +4081,10 @@ digits	Malayalam	მალაიალამური
 	Rename Preset	პრესეტის სახელის შეცვლა
 	Save Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის შენახვა
 	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
+	Tracing Presets…	ვექტორიზაციის პრესეტები…
+	Import Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების იმპორტირება
+	Export Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების ექსპორტირება
+	Replace the saved presets that have these names?	ჩავანაცვლოთ ამ სახელების მქონე შენახული პრესეტები?
 	Cancel Image Trace	გამოსახულების ვექტორიზაციის გაუქმება
 	Method:	მეთოდი:
 	Pad	გაგრძელება
@@ -4000,6 +4101,8 @@ digits	Malayalam	მალაიალამური
 	Snap Curves To Lines	მრუდების ხაზებზე მიბმა
 	Tracing Result with Outlines	ვექტორიზაციის შედეგი კონტურებით
 	Source Image	საწყისი გამოსახულება
+	Split View	გაყოფილი ხედი
+	Divider	გამყოფი
 	Threshold	ზღვარი
 	Trace	ვექტორიზაცია
 	Trace the image with the Default preset	გამოსახულების ვექტორიზაცია ნაგულისხმევი პრესეტით
@@ -4115,6 +4218,15 @@ digits	Malayalam	მალაიალამური
 	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku-ის ნაკრები
 	Kinsoku Shori Type	Kinsoku Shori-ის ტიპი
+	Kinsoku Shori Settings…	Kinsoku Shori-ის პარამეტრები…
+	Kinsoku Shori Settings	Kinsoku Shori-ის პარამეტრები
+	Kinsoku Sets	Kinsoku-ის ნაკრებები
+	Kinsoku Set Base	Kinsoku-ის ნაკრების საფუძველი
+	Based on:	საფუძველი:
+	Cannot Start Line	ვერ დაიწყებს ხაზს
+	Cannot End Line	ვერ დაასრულებს ხაზს
+	Hanging Punctuation	დაკიდებული პუნქტუაცია
+	Inseparable Characters	განუყოფელი სიმბოლოები
 	Push In First	ჯერ შეტანა
 	Push Out First	ჯერ გატანა
 	Push Out Only	მხოლოდ გატანა
@@ -4662,6 +4774,7 @@ digits	Malayalam	მალაიალამური
 	Save As Preset…	შენახვა წინასწარ პარამეტრად…
 	Save Changes	ცვლილებების შენახვა
 	Save Preset…	პრესეტის შენახვა…
+	Save Summary…	შეჯამების შენახვა…
 	Vectors	ვექტორები
 	A saved copy of the selected preset	მონიშნული პრესეტის შენახული ასლი
 	Built-in presets don't change: New makes a copy you can edit.	ჩაშენებული პრესეტები არ იცვლება: „ახალი“ ქმნის რედაქტირებად ასლს.
@@ -4863,8 +4976,8 @@ digits	Malayalam	მალაიალამური
 	Collate	დაკომპლექტება
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	შედგენილი ფერები მასში გარდაიქმნება; სეპარაცია მისით ხდება, როცა ის CMYK პროფილია.
 	Convert All Spot Colors to Process	ყველა სპოტ-ფერის პროცესულად გარდაქმნა
-	Convert {name} to process	{name}-ის პროცესულად გარდაქმნა
-	Keep {name} as spot	{name}-ის სპოტ-ფერად დატოვება
+	Convert {name} to process	პროცესულად გარდაქმნა: {name}
+	Keep {name} as spot	სპოტ-ფერად დატოვება: {name}
 	Default Printer	ნაგულისხმევი პრინტერი
 	Document Ink Options	დოკუმენტის საღებავების პარამეტრები
 	Download:	ჩამოტვირთვა:
@@ -4891,10 +5004,17 @@ digits	Malayalam	მალაიალამური
 	Overprint and Transparency Flattener Options	ზედდაბეჭდვისა და გამჭვირვალობის გაბრტყელების პარამეტრები
 	Custom…	მორგებული…
 	Custom Transparency Flattener Options	გამჭვირვალობის გაბრტყელების მორგებული პარამეტრები
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF პრესეტი ინახავს გაბრტყელების პრესეტს, მაგრამ არა მორგებული… პარამეტრებს.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 ფაილები რასტრირებულ უბნებს მათ არეებზე ჭრის, ხოლო ზედდაბეჭდვა განსაზღვრავს, შენარჩუნდება თუ არა ზედდაბეჭდვები.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS-ს არ აქვს ალფა-გამჭვირვალობა, ხოლო ზედდაბეჭდვები განსაზღვრავს, შენარჩუნდება თუ არა ზედდაბეჭდვები.
 	Place the pages with the placement again	გვერდების ხელახლა განთავსება განთავსების მიხედვით
 	Placement:	განთავსება:
 	Preserve CMYK Numbers	CMYK მნიშვნელობების შენარჩუნება
+	Preserve RGB Numbers	RGB მნიშვნელობების შენარჩუნება
+	Device to Simulate:	სიმულირებადი მოწყობილობა:
+	Simulate Paper Color	ქაღალდის ფერის იმიტაცია
+	Simulate Black Ink	შავი მელნის იმიტაცია
+	Load…	ჩატვირთვა…
 	Previous page	წინა გვერდი
 	Print Layers:	შრეების ბეჭდვა:
 	Print Preset:	ბეჭდვის პრესეტი:
@@ -4967,6 +5087,10 @@ digits	Malayalam	მალაიალამური
 	Add Color Tool	ფერის დამატების ხელსაწყო
 	Remove Color Tool	ფერის წაშლის ხელსაწყო
 	Remove Color	ფერის წაშლა
+	Set As Base Color	საბაზო ფერად დაყენება
+	Select Shade	ელფერის არჩევა
+	Add New Color	ახალი ფერის დამატება
+	Set Current Color As Base Color	მიმდინარე ფერის საბაზო ფერად დაყენება
 	Find the selected colors in the artwork	მონიშნული ფერების ძებნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
@@ -4980,6 +5104,9 @@ digits	Malayalam	მალაიალამური
 	Recolor this row	ამ სტრიქონის ხელახლა შეფერადება
 	Reset the rows to the artwork's colors	სტრიქონებისთვის ნახატის ფერების დაბრუნება
 	Color Theme Picker	ფერთა თემის ამრჩევი
+	Undo Changes	ცვლილებების გაუქმება
+	Redo Changes	ცვლილებების ხელახლა შესრულება
+@msg	Recolor Artwork is not open	„ნახატის ხელახლა შეფერადება“ გახსნილი არ არის
 	Click or drag across the art to pick its colors; Shift adds more	დაწკაპეთ ან გადაატარეთ ნახატზე მისი ფერების ასაღებად; Shift ამატებს კიდევ
 	Prominent Colors	გამოკვეთილი ფერები
 	Save All Colors	ყველა ფერის შენახვა
@@ -5175,6 +5302,7 @@ antiAlias	Sharp	მკვეთრი
 	Preserve Editing Capabilities	რედაქტირების შესაძლებლობების შენარჩუნება
 	Responsive	ადაპტური
 	Show Code	კოდის ჩვენება
+	Show in Browser	ბრაუზერში ჩვენება
 	Style Attributes	სტილის ატრიბუტები
 	Style Attributes (Entity References)	სტილის ატრიბუტები (ერთეულის მიმართვები)
 	Styling:	სტილი:
@@ -5191,6 +5319,17 @@ antiAlias	Sharp	მკვეთრი
 	Swatch Name:	ფერის ნიმუშის სახელი:
 	Diameter:	დიამეტრი:
 	Symbolism Tools Options	სიმბოლოების ხელსაწყოების პარამეტრები
+	Tool:	ხელსაწყო:
+	Symbol Set Density	სიმბოლოების ნაკრების სიმჭიდროვე
+	Symbol Sprayer Options	სიმბოლოების სპრეის პარამეტრები
+	Scrunch:	შეკუმშვა:
+	Spin:	შემობრუნება:
+	Screen:	გამჭვირვალობა:
+	Stain:	შეფერადება:
+	Symbol Sizer Options	სიმბოლოების ზომის შეცვლის პარამეტრები
+	Proportional Resizing	პროპორციული ზომის შეცვლა
+	Resizing Affects Density	ზომის შეცვლა სიმჭიდროვეზე მოქმედებს
+	Show Brush Size and Intensity	ფუნჯის ზომისა და ინტენსივობის ჩვენება
 	Symbol Set Density:	სიმბოლოების ნაკრების სიმჭიდროვე:
 	Intensity:	ინტენსივობა:
 	Place PDF	PDF-ის განთავსება
@@ -5247,6 +5386,7 @@ antiAlias	Sharp	მკვეთრი
 	Width Point Edit	სიგანის წერტილის რედაქტირება
 	Art	ნახატი
 	Bearing	აზიმუტი
+	Stylus Wheel	სტილუსის ბორბალი
 	Bristle	ჯაგრისი
 	Calligraphic	კალიგრაფიული
 	Dots	წერტილები
@@ -5386,6 +5526,9 @@ theme	Appearance	იერსახე
 	embedding for preview and print	ჩაშენება გადახედვისა და ბეჭდვისთვის
 	embedding allowed	ჩაშენება დაშვებულია
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	უცნობი ტიპი
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} გამოყენება
 	substituted: shown in {family} {style} ({detail})	ჩანაცვლებულია: ნაჩვენებია შრიფტით {family} {style} ({detail})
 	missing: shown in {family} {style}	აკლია: ნაჩვენებია შრიფტით {family} {style}
 	missing	აკლია
@@ -5417,6 +5560,8 @@ theme	Appearance	იერსახე
 	Symbolism Tool	სიმბოლოების ხელსაწყო
 	Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტები
 	Live Paint Bucket	ცოცხალი შეღებვის სათლი
+	Fill Area	არის შევსება
+	Fill Area Tool	არის შევსების ხელსაწყო
 	Live Paint Bucket (Stroke)	ცოცხალი შეღებვის სათლი (კონტური)
 	Live Paint Info	ცოცხალი შეღებვის ინფორმაცია
 	Shape Builder	ფიგურების კონსტრუქტორი
@@ -5919,6 +6064,15 @@ theme	Appearance	იერსახე
 	Paste Offset	ჩასმის წანაცვლება
 	Pattern Editing	პატერნის რედაქტირება
 	Pen Tool	კალმის ხელსაწყო
+	Quick Pen Tool	სწრაფი კალმის ხელსაწყო
+	Quick Pen	სწრაფი კალამი
+	Quick Pen Toolbar	სწრაფი კალმის ხელსაწყოთა ზოლი
+	Continuous Arc	უწყვეტი რკალი
+	Sharp Corner Arc	მახვილკუთხიანი რკალი
+	Flip Arc	რკალის არეკვლა
+	Hide Toolbar	ხელსაწყოთა ზოლის დამალვა
+	Pin Toolbar Position	ხელსაწყოთა ზოლის პოზიციის ჩამაგრება
+	Reset Toolbar Position	ხელსაწყოთა ზოლის პოზიციის ჩამოყრა
 	Picas	პიკები
 	Portuguese	პორტუგალიური
 	Preserve Appearance and Overprints	იერსახისა და ზედდაბეჭდვების შენარჩუნება
@@ -5959,6 +6113,7 @@ theme	Appearance	იერსახე
 	Show Pixel Grid (Above 600% Zoom)	პიქსელური ბადის ჩვენება (600%-ზე მეტ მასშტაბზე)
 	Show Slice Numbers	ნაჭრების ნომრების ჩვენება
 	Show The Home Screen When No Documents Are Open	საწყისი ეკრანის ჩვენება, როცა დოკუმენტი არ არის გახსნილი
+	Show Tool Cards	ხელსაწყოების ბარათების ჩვენება
 	Show Tool Tips	მინიშნებების ჩვენება
 	Size/Leading	ზომა/სტრიქონთა დაშორება
 	Snapping Tolerance	მიბმის დაშვება
@@ -6032,6 +6187,11 @@ theme	Appearance	იერსახე
 	Edit Arrowheads	ისრის წვერების რედაქტირება
 	Edit Arrowheads…	ისრის წვერების რედაქტირება…
 	Reload Arrowheads	ისრის წვერების ხელახლა ჩატვირთვა
+	Bevels	წაკვეთები
+	Edit Bevels	წაკვეთების რედაქტირება
+	Edit Bevels…	წაკვეთების რედაქტირება…
+	{name} (document)	{name} (დოკუმენტი)
+	Reload Bevels	წაკვეთების ხელახლა ჩატვირთვა
 	Stroke Options	კონტურის პარამეტრები
 	Width Profiles	სიგანის პროფილები
 	Apply Graphic Style	გრაფიკული სტილის გამოყენება
@@ -6049,6 +6209,7 @@ theme	Appearance	იერსახე
 	Add to Graphic Styles	გრაფიკულ სტილებში დამატება
 	Graphic Style Library	გრაფიკული სტილების ბიბლიოთეკა
 	Add Used Colors	გამოყენებული ფერების დამატება
+	Add Selected Colors	მონიშნული ფერების დამატება
 	Delete Swatch	ფერის ნიმუშის წაშლა
 	Duplicate Swatch	ფერის ნიმუშის დუბლირება
 	Merge Swatches	ფერის ნიმუშების შერწყმა
@@ -6078,12 +6239,15 @@ theme	Appearance	იერსახე
 	Spot Colors	სპოტ-ფერები
 	Swatch Options	ფერის ნიმუშის პარამეტრები
 	Ungroup Color Group	ფერების ჯგუფის დაშლა
+	Color Group Options	ფერების ჯგუფის პარამეტრები
+	Color Group Options…	ფერების ჯგუფის პარამეტრები…
 	Copy to User Defined	მომხმარებლის განსაზღვრულში კოპირება
 	Swatch Library	ფერის ნიმუშების ბიბლიოთეკა
 	Clear All Tabs	ყველა ტაბულაციის გასუფთავება
 	Set Tab Stops	ტაბულაციის გაჩერებების დაყენება
 	Tab Stops	ტაბულაციის გაჩერებები
 	Flare	ბლიკი
+	Edit Flare	ბლიკის რედაქტირება
 	Rays	სხივები
 	Rectangle	მართკუთხედი
 	Paintbrush	ფუნჯი
@@ -6169,6 +6333,8 @@ axis	Both	ორივე
 	Show	ჩვენება
 	Copy Width Point	სიგანის წერტილის კოპირება
 	Duplicate Artboard	სამუშაო დაფის დუბლირება
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	დაწკაპეთ ამ მხარეს სამუშაო დაფის დასამატებლად; Alt-დაწკაპეთ ამ სამუშაო დაფის ნახატთან ერთად დასადუბლირებლად
+	Click to add an artboard on this side	დაწკაპეთ ამ მხარეს სამუშაო დაფის დასამატებლად
 	Area / Path Type	არის / ტრაექტორიის ტექსტი
 	Decrease Font Size	შრიფტის შემცირება
 	Increase Font Size	შრიფტის გაზრდა
@@ -6222,6 +6388,11 @@ axis	Both	ორივე
 	Image	გამოსახულება
 	Ink	მელანი
 	Lab	Lab
+	OKLCH Sliders	OKLCH სლაიდერები
+	HSL Sliders	HSL სლაიდერები
+	Chroma	ქრომა
+	The largest chroma sRGB holds at this lightness and hue	უდიდესი ქრომა, რომელსაც sRGB იტევს ამ სიღიავესა და ფერის ტონზე
+	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 	Medium	საშუალო
 	Name	სახელი
 	None	არცერთი
@@ -6310,6 +6481,8 @@ font-technology	Variable	ცვლადი
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლოდროინდელი ბრძანებები
 	No recent commands	ბოლოდროინდელი ბრძანებები არ არის
+	Type to search commands, tools, panels and effects	აკრიფეთ ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების მოსაძებნად
+	Clear Recent Commands	ბოლო ბრძანებების სიის გასუფთავება
 	Dashed Line	ტირეებიანი ხაზი
 	Panel menu	პანელის მენიუ
 	Unembed…	ჩაშენების მოხსნა…
@@ -6325,47 +6498,50 @@ font-technology	Variable	ცვლადი
 	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	იმ ღერძების კუთხე, რომელთა გასწვრივაც ისრის კლავიშები გადაადგილებენ და რომლებზეც Shift ზღუდავს ხატვას და გადაადგილებას.
 	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	კუთხის რადიუსი, რომლითაც მომრგვალებული მართკუთხედის ხელსაწყო ხატავს; ხატვისას რადიუსის შეცვლა ამ მნიშვნელობასაც ცვლის.
 	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	რამდენად გადაწევს ჩასმა ასლს მარჯვნივ და ქვემოთ, როცა პოზიცია მითითებული არ არის, მაგალითად სკრიპტიდან; აპში ჩასმა ასლს ხედის ცენტრში სვამს.
-	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	კალმის ხელსაწყოს უკრძალავს მონიშნულ კონტურზე დაწკაპუნებული საყრდენი წერტილის წაშლას ან ახლის დამატებას იქ, სადაც მის სეგმენტზე დააწკაპუნებთ.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	კალმის ხელსაწყოს უკრძალავს მონიშნულ ტრაექტორიაზე დაწკაპუნებული საყრდენი წერტილის წაშლას ან სეგმენტზე დაწკაპუნების ადგილას ახლის დამატებას.
 	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	სახატავი ხელსაწყოები ხატულის ნაცვლად ჯვრისებრ მაჩვენებელს აჩვენებენ; Caps Lock იგივეს აკეთებს, სანამ ჩართულია.
 	Shows a tip when the pointer rests on a button or field that has one.	აჩვენებს მინიშნებას, როცა მაჩვენებელი ჩერდება ღილაკზე ან ველზე, რომელსაც ის აქვს.
 	Shows a warning before a script you choose runs.	აჩვენებს გაფრთხილებას თქვენ მიერ არჩეული სკრიპტის გაშვებამდე.
 	Smooths the edges of artwork on the canvas.	ტილოზე ნახატის კიდეებს აგლუვებს.
-	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	მონიშვნა › იგივე › შევსების ფერი, კონტურის ფერი და შევსება და კონტური პოულობს მხოლოდ გლობალური ან სპოტ ნიმუშის იმავე ტონს და არა მის ნებისმიერ ტონს.
-	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	აჩვენებს საწყის ეკრანს, როცა არცერთი დოკუმენტი არ არის გახსნილი; გამორთვისას ფანჯარა ცარიელი რჩება, სანამ საწყის ეკრანზე არ დააწკაპუნებთ.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	მონიშვნა › იგივე › შევსების ფერი, კონტურის ფერი და შევსება და კონტური პოულობს გლობალური ან სპოტ-ფერის ნიმუშის მხოლოდ იმავე ტონირებას და არა მის ნებისმიერ ტონირებას.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	აჩვენებს საწყის ეკრანს, როცა არცერთი დოკუმენტი არ არის გახსნილი; გამორთვისას ფანჯარა ცარიელი რჩება, „საწყის ეკრანზე“ დაწკაპუნებამდე.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	ზომის, პოზიციისა და სწორების დროს ობიექტებს ზომავს კონტურებითა და ფორმის შემცვლელი ეფექტებით; ჩრდილები, ნათება და გაბუნდოვნება არ იზომება.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100%-იან მასშტაბზე დოკუმენტის ერთი დიუმი 72-ის ნაცვლად 96 ეკრანის პუნქტს იკავებს.
-	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	მონიშვნის ხელსაწყოთი ჯგუფზე, კონტურზე ან გამოსახულებაზე ორჯერ დაწკაპუნება მას იზოლაციის რეჟიმში ხსნის.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100%-იან მასშტაბზე დოკუმენტის ერთი დუიმი 72-ის ნაცვლად 96 ეკრანის პუნქტს იკავებს.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	მონიშვნის ხელსაწყოთი ჯგუფზე, ტრაექტორიაზე ან გამოსახულებაზე ორჯერ დაწკაპუნება მას იზოლაციის რეჟიმში ხსნის.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	პატერნის შევსებები და კონტურები ნახატთან ერთად გარდაიქმნება, თუ გარდაქმნა ან გარდაქმნის პანელის მენიუ სხვას არ აირჩევს.
-	Live corner radii scale with the art, unless the scale chooses otherwise.	დინამიკური კუთხეების რადიუსები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
-	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	კონტურის სისქე, შტრიხები და ეფექტების მანძილები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	ცოცხალი კუთხეების რადიუსები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	კონტურის სისქე, ტირეები და ეფექტების მანძილები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
 	The mouse wheel zooms the canvas instead of scrolling it.	მაუსის ბორბალი ტილოს გადახვევის ნაცვლად მასშტაბს ცვლის.
 	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	სანამ მაუსის ბორბლით მასშტაბირება გამორთულია, დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	Dragging sideways on a numeric field's label changes the field's value.	რიცხვითი ველის წარწერაზე გვერდულად გადათრევა ველის მნიშვნელობას ცვლის.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	კლავიშის ხანგრძლივი დაჭერა უშვებს ხელსაწყოს ან ბრძანებას კლავიატურის მალსახმობების დაჭერის სვეტიდან; მოკლე დაჭერა უშვებს მის ჩვეულ მალსახმობს.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	რამდენი წამი უნდა იყოს კლავიში დაჭერილი, სანამ ჩვეული მალსახმობის ნაცვლად მისი ხანგრძლივი დაჭერის მალსახმობი გაეშვება.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	როცა ღუზის წერტილებს გადაადგილებთ, ყოველი მრუდი, რომლის ერთი ბოლოც გადაადგილდა, ინარჩუნებს ფორმას თავის ბოლოებთან მიმართებით.
-	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ხელსაწყოს მალსახმობი კლავიშის დაჭერით ხელსაწყო არჩეულია მის აშვებამდე, შემდეგ კი ისევ წინა ხელსაწყო აირჩევა.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	სანამ ხელსაწყოს მალსახმობ კლავიშს დაჭერილს გიჭირავთ, ეს ხელსაწყოა არჩეული; კლავიშის აშვების შემდეგ ისევ წინა ხელსაწყო აირჩევა.
 	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ჭრის ნიშნების შექმნა რომაულის ნაცვლად იაპონური სტილის ნიშნებს ხატავს.
 	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	ახალი ნახატი მონიშნულიდან მხოლოდ შევსებასა და კონტურს იღებს; გამორთვისას იღებს მონიშნული ობიექტის მთელ იერსახეს.
 	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	სიგანის ან სიმაღლის შეცვლა გარდაქმნის პანელში, თვისებების პანელში ან მართვის ზოლში მეორესაც პროპორციულად ცვლის.
-	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	დინამიკური მართკუთხედის თვისებები ოთხივე კუთხისთვის კუთხის რადიუსის ერთ ველს აჩვენებს; გამორთვისას თითოეულ კუთხეს თავისი ველი აქვს.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	ცოცხალი მართკუთხედის თვისებები ოთხივე კუთხისთვის კუთხის რადიუსის ერთ ველს აჩვენებს; გამორთვისას თითოეულ კუთხეს თავისი ველი აქვს.
 	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	რას გარდაქმნის ცვლილებები გარდაქმნის პანელში: ობიექტს, მისი პატერნის ფილებს ან ორივეს; ნაგულისხმევი მისდევს პატერნის ფილების გარდაქმნას.
-	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	როცა სიმბოლოს ერთი ეგზემპლარია მონიშნული, გარდაქმნის პანელი სიმბოლოს რეგისტრაციის წერტილს საყრდენ წერტილად იყენებს.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	როცა სიმბოლოს ერთი ეგზემპლარია მონიშნული, გარდაქმნის პანელი სიმბოლოს რეგისტრაციის წერტილს საბაზისო წერტილად იყენებს.
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	მართკუთხედის, ელიფსის, მრავალკუთხედის, ვარსკვლავის ან ხაზის დახატვა ხსნის გარდაქმნის პანელს, თუ ის დახურულია.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	სანამ სამუშაო დაფის ხელსაწყო აქტიურია, სამუშაო დაფების გარეთ ტილოს აბნელებს.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	როცა სამუშაო დაფის გარეთ არის დაბნელება ჩართულია, სამუშაო დაფის ხელსაწყოთი გადათრევისას სამუშაო დაფების გარეთ არე ბნელი რჩება.
 	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	რამდენად ახლოს, პიქსელებში, უნდა იყოს მაჩვენებელი ობიექტთან, საყრდენ წერტილთან ან სახელურთან, რომ დაწკაპუნებამ ის მონიშნოს.
-	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	მონიშვნის ხელსაწყოს ჩარჩო მონიშნავს შეხებულ ობიექტებს თუ მხოლოდ სრულად შიგნით მყოფებს; გადათრევის მიმართულება მარჯვნივ გადათრევისას შიგნით მყოფებს მონიშნავს. E გადათრევისას წესს აბრუნებს.
-	A click selects a filled object only on its path, not inside its fill.	დაწკაპუნება შევსებულ ობიექტს მხოლოდ მის კონტურზე მონიშნავს და არა შევსების შიგნით.
-	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	რამდენად ახლოს, პიქსელებში, უნდა მივიდეს წერტილი საყრდენ წერტილთან ან სახაზავის დამხმარე ხაზთან, რომ წერტილზე მიბმამ ის მიაბას; ჩართული ჭკვიანი დამხმარე ხაზებისას მათი მიბმის დაშვება მოქმედებს.
-	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	მონიშვნის ხელსაწყოთი Cmd/Ctrl-დაწკაპუნება მაჩვენებელთან მონიშნული ობიექტის ქვეშ მყოფ ობიექტს მონიშნავს; ყოველი შემდეგი დაწკაპუნება ერთი ობიექტით ღრმად ჩადის.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	რას მონიშნავს მონიშვნის ხელსაწყოს ჩარჩო: ყველა ობიექტს, რომელსაც ეხება, თუ მხოლოდ მთლიანად შიგნით მყოფებს; „გადათრევის მიმართულება“ შიგნით მყოფებს მარჯვნივ გადათრევისას მონიშნავს. E ამ წესს გადათრევის დროს აბრუნებს.
+	A click selects a filled object only on its path, not inside its fill.	დაწკაპუნება შევსებულ ობიექტს მხოლოდ მის ტრაექტორიაზე მონიშნავს და არა შევსების შიგნით.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	რამდენად ახლოს, პიქსელებში, უნდა მივიდეს წერტილი საყრდენ წერტილთან ან სახაზავის დამხმარე ხაზთან, რომ წერტილზე მიბმამ ის მიაბას; როცა ჭკვიანი დამხმარე ხაზები ჩართულია, მოქმედებს მათი მიბმის დაშვება.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	მონიშვნის ხელსაწყოთი Cmd/Ctrl-დაწკაპუნება მაჩვენებელთან მონიშნული ობიექტის ქვეშ მყოფ ობიექტს მონიშნავს; ყოველი შემდეგი დაწკაპუნება ერთი ობიექტით უფრო ღრმად ჩადის.
 	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	გადიდება და დაპატარავება მონიშვნის ცენტრს ხედის შუაში გადაიტანს.
-	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	სამუშაო დაფის შიგნით არსებული დაბლოკილი და დამალული ნამუშევარი სხვა ნამუშევრის მსგავსად სამუშაო დაფასთან ერთად გადაადგილდება, მასშტაბირდება და კოპირდება.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	სამუშაო დაფის შიგნით არსებული ჩაკეტილი და დამალული ნახატი, დანარჩენი ნახატის მსგავსად, სამუშაო დაფასთან ერთად გადაადგილდება, მასშტაბირდება და კოპირდება.
 	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	საყრდენი წერტილებისა და მიმართულების სახელურების ბოლოების ზომა ტილოზე; უფრო დიდი საყრდენი წერტილების აღება უფრო შორიდანაც შეიძლება.
 	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	მიმართულების სახელურების ბოლოებს ხატავს სავსე წერტილებად, ღრუ წერტილებად ან უფრო დიდ სავსე წერტილებად.
 	With the Direct Selection tool, the anchor under the pointer is highlighted.	პირდაპირი მონიშვნის ხელსაწყოთი მაჩვენებლის ქვეშ მყოფი საყრდენი წერტილი გამოიკვეთება.
-	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	აჩვენებს მიმართულების სახელურებს, როცა ერთზე მეტი საყრდენი წერტილია მონიშნული; გამორთულისას ისინი მხოლოდ ერთი მონიშნული საყრდენი წერტილისას ჩანს.
-	Corner widgets hide on corners whose angle is greater than this many degrees.	კუთხის ვიჯეტები იმალება იმ კუთხეებზე, რომელთა კუთხე ამდენ გრადუსზე მეტია.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	აჩვენებს მიმართულების სახელურებს, როცა ერთზე მეტი საყრდენი წერტილია მონიშნული; გამორთვისას ისინი მხოლოდ მაშინ ჩანს, როცა ერთი საყრდენი წერტილია მონიშნული.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	კუთხის ვიჯეტები იმალება იმ კუთხეებზე, რომელთა სიდიდე ამდენ გრადუსს აღემატება.
 	The Pen tool previews the next segment from the last anchor to the pointer before you click.	კალმის ხელსაწყო დაწკაპუნებამდე აჩვენებს შემდეგ სეგმენტს ბოლო საყრდენი წერტილიდან მაჩვენებლამდე.
 	The Curvature tool previews the curve to the pointer before you place the next point.	მრუდის ხელსაწყო შემდეგი წერტილის დასმამდე აჩვენებს მრუდს მაჩვენებლამდე.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ერთეული ახალი დოკუმენტებისთვის (ჩაშენებული ზომებით, პიქსელურის გარდა) და იმ გახსნილი ფაილებისთვის, რომლებშიც ერთეული არ წერია; OK-ზე დაწკაპებისას აქტიური დოკუმენტიც ამ ერთეულს მიიღებს.
@@ -6398,34 +6574,99 @@ font-technology	Variable	ცვლადი
 	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	სწორება და განაწილება არის ტექსტს მისი გლიფების მელნით ზომავს და არა მისი ჩარჩოთი.
 	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	შემომსაზღვრელი ჩარჩო და გარდაქმნის პანელი წერტილის ტექსტს მისი გლიფების მელნით ზომავს და არა მისი em-ყუთით.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	ხატვას, გადაადგილებასა და მასშტაბირებას ბადის დაყოფებზე მიაბამს, მაშინაც კი, როცა ბადე დამალულია; სანამ ჩართულია, პიქსელზე მიბმა არ მოქმედებს.
-	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	არჩეული არ მყოფი დამხმარე ხაზების ფერი; იარლიყიანი სამუშაო დაფა საკუთარ დამხმარე ხაზებს იარლიყის ფერით ხატავს.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	მოუნიშნავი დამხმარე ხაზების ფერი; სამუშაო დაფა, რომელსაც დამხმარე ხაზების იარლიყი აქვს, საკუთარ დამხმარე ხაზებს იარლიყის ფერით ხატავს.
 	Draws guides as solid lines or as dots, including the guides already in the document.	დამხმარე ხაზებს უწყვეტი ხაზებით ან წერტილებით ხატავს, დოკუმენტში უკვე არსებულების ჩათვლით.
 	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	ჩართვისას დამხმარე ხაზები VectorCraft-ის გაშვებისას ჩაკეტილია; პარამეტრის შეცვლა მათ მაშინვე კეტავს ან ხსნის, ხოლო ხედი › დამხმარე ხაზები › დამხმარე ხაზების ჩაკეტვა კვლავ ცვლის ჩაკეტვას.
-	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	ჩართვისას სახაზავიდან გადათრევის დაწყებისას დაჭერილი Cmd/Ctrl დამხმარე ხაზს მხოლოდ აქტიურ სამუშაო დაფაზე ქმნის, სამუშაო დაფის ხელსაწყოთი კი მთელი ტილოს ხაზს.
-	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	ბადის ფერი; მთავარ ხაზებს შორის ხაზები მისი უფრო მკრთალი ელფერით იხატება.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	ჩართვისას სახაზავიდან გადათრევის დაწყებისას დაჭერილი Cmd/Ctrl დამხმარე ხაზს მხოლოდ აქტიურ სამუშაო დაფაზე ქმნის, სამუშაო დაფის ხელსაწყოთი კი — ტილოს დამხმარე ხაზს.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	ბადის ფერი; მთავარ ხაზებს შორის ხაზები მისი უფრო მკრთალი ფერით იხატება.
 	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	ბადეს ხაზებით ხატავს, ან წერტილებით მთავარი ხაზების გასწვრივ ყოველ დაყოფაზე.
 	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	მთავარ ხაზებს შორის მანძილი ყველა ღია და ახალ დოკუმენტში; VectorCraft-ის დოკუმენტი იმ ბადით იხსნება, რომლითაც შეინახა.
 	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	რამდენ ნაწილად იყოფა ბადის თითოეული მთავარი კვადრატი; ბადეზე მიბმა ამ ნაწილებზე მიაბამს, მაშინაც კი, როცა მასშტაბი მათ ხაზებს მალავს.
-	Draws the grid behind the artwork; off, the grid is drawn over it.	ბადეს ნამუშევრის უკან ხატავს; გამორთვისას ბადე მის ზემოთ იხატება.
-	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	პიქსელების წინასწარ ნახვაში 600%-იან ან მეტ მასშტაბზე აქტიური ხედი ნამუშევრის ზემოთ დოკუმენტის თითოეული პიქსელის კიდეზე ხაზს აჩვენებს.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	ბადეს ნახატის უკან ხატავს; გამორთვისას ბადე მის ზემოთ იხატება.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	„პიქსელების წინასწარ ნახვაში“ 600%-იან ან მეტ მასშტაბზე აქტიური ხედი ნახატის ზემოთ დოკუმენტის თითოეული პიქსელის კიდეზე ხაზს აჩვენებს.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	ფილის კიდისა და ფერის ნიმუშის წყვეტილი საზღვრების ფერი, რომლებიც პატერნის რედაქტირებისას ჩანს.
-	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	ხატვას, გადატანასა და გარდაქმნას ახლომდებარე გრაფიკაზე აბამს და აჩვენებს დამხმარე ხაზებსა და წარწერებს; პიქსელების წინასწარი ნახვა მათ თიშავს, ბადეზე მიბმა კი მათ ნაცვლად ბადეზე აბამს.
-	The color of Smart Guide lines and labels.	ჭკვიანი დამხმარე ხაზების ხაზებისა და წარწერების ფერი.
-	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	აჩვენებს ხაზს იმ კიდის ან ცენტრის გასწვრივ, რომელსაც გრაფიკა უსწორდება; გამორთვისას გრაფიკა მაინც სწორდება ხაზის გარეშე, გლიფზე მიბმა კი არ მოქმედებს.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	ხატვას, გადატანასა და გარდაქმნას ახლომდებარე ნახატზე აბამს და აჩვენებს დამხმარე ხაზებსა და წარწერებს; პიქსელების წინასწარი ნახვა მათ თიშავს, ბადეზე მიბმა კი მათ ნაცვლად ბადეზე აბამს.
+	The color of Smart Guide lines and labels.	ჭკვიანი დამხმარე ხაზებისა და მათი წარწერების ფერი.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	აჩვენებს ხაზს იმ კიდის ან ცენტრის გასწვრივ, რომელსაც ნახატი უსწორდება; გამორთვისას ნახატი მაინც სწორდება ხაზის გარეშე, გლიფზე მიბმა კი არ მოქმედებს.
 	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	მონიშვნის ხელსაწყოთი, სანამ არ ათრევთ, მაჩვენებლის ქვეშ მყოფ მოუნიშნავ ობიექტს მისი შრის ფერით შემოხაზავს.
-	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	გრაფიკის მასშტაბირების, მობრუნების, დახრის ან არეკვლისას მაჩვენებლის გვერდით აჩვენებს ზომას ან კუთხეს.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	ნახატის მასშტაბირების, მობრუნების, დახრის ან არეკვლისას მაჩვენებლის გვერდით აჩვენებს ზომას ან კუთხეს.
 	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	ხატვისას წერტილები ებმის არჩეული კუთხის ხაზებს, რომლებიც სეგმენტის ან ფიგურის საწყის წერტილზე გადის.
 	The set of angles the construction guides follow while Construction Guides is on.	კუთხეების ნაკრები, რომელსაც სამშენებლო დამხმარე ხაზები მიჰყვება, სანამ სამშენებლო დამხმარე ხაზები ჩართულია.
-	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	ასახელებს, რას ებმის წერტილი, მაგალითად, საყრდენ წერტილს, ტრაექტორიას ან გასწორებას; გამორთვისას წერტილები ისევე ებმის, სახელების გარეშე.
-	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	ხატვის ან გადატანისას მაჩვენებლის გვერდით აჩვენებს მანძილებს, კუთხეებს და რამდენით გადაადგილდა გრაფიკა.
-	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	გადატანილ ან ზომაშეცვლილ გრაფიკას აბამს იმავე შუალედზე, რაც ახლომდებარე ობიექტებს შორისაა, და ნიშნავს თანაბარ შუალედებს.
-	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	როცა რაიმე მონიშნულია, Alt/Option-ის დაჭერა სხვა ობიექტზე ან სამუშაო დაფაზე აჩვენებს მანძილებს მასა და მონიშნულს შორის.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	ასახელებს, რას ებმის წერტილი, მაგალითად, საყრდენ წერტილს, ტრაექტორიას ან სწორებას; გამორთვისას წერტილები ისევე ებმის, სახელების გარეშე.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	ხატვის ან გადატანისას მაჩვენებლის გვერდით აჩვენებს მანძილებს, კუთხეებს და რამდენით გადაადგილდა ნახატი.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	გადატანილ ან ზომაშეცვლილ ნახატს აბამს იმავე შუალედზე, რაც ახლომდებარე ობიექტებს შორისაა, და ნიშნავს თანაბარ შუალედებს.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	როცა რამე მონიშნულია და Alt/Option დაჭერილი გიჭირავთ, მაჩვენებელი სხვა ობიექტზე ან სამუშაო დაფაზე აჩვენებს მანძილებს მასა და მონიშნულს შორის.
 	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	მონიშნული, რომელიც თრევის დაწყების ადგილიდან მიბმის დაშვების ფარგლებში დააბრუნეთ, ზუსტად იმ ადგილზე ბრუნდება; ასლი არა.
-	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	რამდენად ახლოს უნდა მივიდეს ეკრანზე მაჩვენებელი ან გადათრეული წერტილი გრაფიკასთან, რომ ჭკვიანმა დამხმარე ხაზებმა მიაბან; მანძილი ყველა მასშტაბზე ერთნაირია.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	რამდენად ახლოს უნდა მივიდეს ეკრანზე მაჩვენებელი ან გადათრეული წერტილი ნახატთან, რომ ჭკვიანმა დამხმარე ხაზებმა მიაბან; მანძილი ყველა მასშტაბზე ერთნაირია.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	ხაზის სეგმენტის ბოლოს, ან ცენტრიდან დახატულ წრეწირს, ისე აბამს, რომ ახლომდებარე მრუდს შეეხოს.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	ხაზის სეგმენტის ბოლოს ისე აბამს, რომ ახლომდებარე სწორ სეგმენტს მართი კუთხით შეხვდეს.
+	Edit type set in fonts that aren't available?	დავარედაქტიროთ მიუწვდომელი შრიფტებით აწყობილი ტექსტი?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	ტილოზე თითოეული ნაჭრის ნომერს აჩვენებს ჩარჩოში მის ზედა მარცხენა კუთხეში; გამორთულისას ნაჭრების კონტურები კვლავ ჩანს.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	მომხმარებლისა და ობიექტის ნაჭრების კონტურებისა და მათი ნომრების ჩარჩოების ფერი; ავტომატური ნაჭრები ამ ფერის უფრო მკრთალ ელფერს იყენებს.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა გადატანის დეფისს მხოლოდ მასში აკრეფილ დეფისებთან იღებს, ან არასდროს, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	დესკტოპზე ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და ახალი საქაღალდის OK-ით დაყენებისას, უსაფრთხო რეჟიმის გარდა; ნებართვების მომთხოვნი კი მათი მიცემის შემდეგ. ვებში არ იტვირთება.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	დიდი ფილტრის ან ბრძანების პლაგინის გაშვებას მინიმუმ 250 მილიონ ინსტრუქციას აძლევს, იგივე დროის ლიმიტით; ჩვეულებრივი ბიუჯეტს ტოვებს. ცოცხალი ეფექტები, ექსპორტერები და იმპორტერები არ იცვლება.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ახალი ტექსტი იღებს ამ ენას, სანამ დოკუმენტის პარამეტრების ენაა ინგლისური: აშშ და [ჩვეულებრივი სიმბოლოს სტილი] ენას არ ადგენს; დოკუმენტში უკვე არსებული ტექსტი ინარჩუნებს თავის ენას.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	აბზაცებში, სადაც სიტყვების გადატანა ჩართულია, სიაში მოცემული სიტყვა მხოლოდ მასში აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ ისინი არ აქვს, მიუხედავად ენისა და რეგისტრისა.
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	დესკტოპის ვერსიაში ამ საქაღალდის .wasm პლაგინები იტვირთება გაშვებისას და როცა აქ ახალი საქაღალდით OK-ს დააწკაპუნებთ, გარდა უსაფრთხო რეჟიმისა; ვებ-ვერსია მათ არ ტვირთავს.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	ჩვეულებრივი ინარჩუნებს თითოეული პლაგინის საკუთარ ლიმიტებს; დიდით პლაგინის ფილტრს ან ბრძანებას შეუძლია შეასრულოს მინიმუმ 250 მილიონი ინსტრუქცია მისი შეყვანისთვის საჭირო ინსტრუქციების გარდა. დროის ლიმიტი იგივე რჩება.
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	რამდენი ინსტრუქციის გამოყენება შეუძლია პლაგინის ობიექტების ფილტრის თითოეულ გაშვებას; დიდი ჩვეულებრივზე მეტს უშვებს, იმავე 60-წამიანი ლიმიტით. მძიმე ფილტრები საკუთარ ბიუჯეტს ინარჩუნებენ.
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	სამუშაო დისკის პირველი არჩევანი: Startup, None ან საქაღალდის მისამართი; VectorCraft მას ინახავს, მაგრამ სამუშაო დისკებს ჯერ არ იყენებს.
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	სამუშაო დისკის მეორე არჩევანი: Startup, None ან საქაღალდის მისამართი; VectorCraft მას ინახავს, მაგრამ სამუშაო დისკებს ჯერ არ იყენებს.
+	How light or dark the interface is.	რამდენად ღია ან მუქია ინტერფეისი.
+	The set of colors the interface is drawn in.	ფერების ნაკრები, რომლითაც ინტერფეისი იხატება.
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	ჩართული, არჩეული ან ფოკუსში მყოფი მართვის ელემენტების ფერი; მენიუ მკრთალია, სანამ ფერის სქემას საკუთარი აქცენტის ფერი აქვს.
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	ტილოს ფერი სამუშაო დაფების გარშემო; ინტერფეისის სიკაშკაშესთან შესაბამისობა მას სიკაშკაშიდან იღებს. კონტურების ხედი მას ყოველთვის თეთრად აჩვენებს.
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	ხატულიდან გახსნილი პანელი იხურება, როცა Esc კლავიშს დააჭერთ ან მის გარეთ დააწკაპუნებთ; გამორთულისას ის ღია რჩება, სანამ ხატულაზე არ დააწკაპუნებთ.
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	ხელსაწყოთა ზოლში თითოეული ხელსაწყოების ჯგუფის სახელს მისი ხელსაწყოების ზემოთ აჩვენებს; გამორთულისას ჯგუფები ერთმანეთს მიჰყვება და მათ შორის არაფერია.
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	ამიერიდან თქვენ მიერ გახსნილი ან შექმნილი დოკუმენტები ჩანართებად იხსნება; გამორთულისას თითოეული მცურავ ფანჯარაში იხსნება. უკვე გახსნილი დოკუმენტები თავის ადგილას რჩება.
+	Makes the document tabs taller and their names larger.	დოკუმენტების ჩანართებს უფრო მაღალს, მათ სახელებს კი უფრო დიდს ხდის.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	შემდეგი გაშვებიდან სისტემა ხატავს ფანჯრის სათაურის ზოლს იქ, სადაც VectorCraft სხვა შემთხვევაში საკუთარს დახატავდა; Linux-სა და BSD-ზე უპირატესობა VECTORCRAFT_TITLEBAR ცვლადს აქვს.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	შემდეგი გაშვებიდან VectorCraft ფანჯრის სათაურის ზოლს იქაც ხატავს, სადაც მას სამუშაო გარემო დახატავდა, თუ სისტემის სათაურის ზოლი არ არის ჩართული და მას VECTORCRAFT_TITLEBAR ცვლადი არ ირჩევს.
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	ინტერფეისს ადიდებს ან ამცირებს; ტილოზე არსებული ნახატი იმავე მასშტაბზე ზომას ინარჩუნებს.
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft-ის მიერ დახატული ხელსაწყოების მაჩვენებლები ინტერფეისის მასშტაბირებასთან ერთად იზრდება და მცირდება; გამორთულისას ზომას ინარჩუნებს.
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	ინტერფეისის ენა; ავტომატური სისტემის ენას იყენებს. დიალოგი ენას იცვლის, როგორც კი რომელიმეს აირჩევთ.
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	ანიმირებული მასშტაბირება მუშაობს მხოლოდ მაშინ, როცა ეს ჩართულია; გამორთულისას ანიმირებული მასშტაბირება მკრთალია და მასშტაბირება არ ანიმირდება.
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	ბორბლით მასშტაბირება რბილად სრიალებს, მასშტაბის ხელსაწყო კი ადიდებს, როცა გვერდზე გადაათრევთ ან დაჭერილს გაჩერებთ; გამორთულისას ის ადიდებს არეს, რომელზეც გადაათრევთ.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ტილოს აჩვენებს ამ ტიპის გრაფიკული პროცესორით; ნამუშევარი ყოველთვის CPU-ზე იხატება. ავტომატური Windows-სა და macOS-ზე ინტეგრირებულს ანიჭებს უპირატესობას. ვებ-ვერსია მას არ იყენებს.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	შემდეგი გაშვებიდან ფანჯარა აჩვენებს თითოეულ კადრს ეკრანის განახლების მოლოდინის გარეშე, სადაც გრაფიკული დრაივერი ამის საშუალებას იძლევა, წამში არაუმეტეს 240 კადრისა.
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	შემდეგი გაშვებიდან დესკტოპის ვერსია ხატავს ამ ტიპის გრაფიკული პროცესორით; ავტომატური უპირატესობას ანიჭებს ეკრანის მმართველს. ვებ-ვერსია მას არ იყენებს.
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	შემდეგი გაშვებიდან ფანჯარა აჩვენებს კადრებს ეკრანის განახლების მოლოდინის გარეშე, წამში არაუმეტეს 240-ისა; გამორთულისას ტემპს ეკრანი განსაზღვრავს. უპირატესობა აქვს გაშვებისას დაყენებულ ჩვენების რეჟიმს.
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	გაუქმების ნაბიჯების მაქსიმალური რაოდენობა თითო დოკუმენტში; მცირე რიცხვი OK-ზე დაწკაპუნებისას შლის უძველეს ნაბიჯებს. ნაბიჯები შეიძლება ადრეც წაიშალოს, თუ ბევრ მეხსიერებას იკავებს.
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	აჩვენებს, როგორ იცვლება ნახატი გადათრევისას; გამორთულისას კონტურები მისდევს გადათრევას, ნახატი კი ხელის აშვებისას იცვლება. სახაზავის დამხმარე ხაზი გადათრევისას ყოველთვის მოძრაობს.
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	რამდენი სამუშაო ნაკადი ხატავს ნახატს; -1 იყენებს ერთით ნაკლებს VectorCraft-ისთვის ხელმისაწვდომ ბირთვებზე, მაქსიმუმ 8-ს, 0 კი არცერთს. ვებ-ვერსია არასდროს იყენებს.
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	შემდეგი გაშვებიდან Wayland-ის სამუშაო მაგიდაზე X11 (XWayland) ფანჯარას XWayland-ით ხსნის; სხვა არჩევანი ამას მხოლოდ მაშინ აკეთებს, როცა კალამი მიერთებულია.
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	შემდეგი გაშვებიდან დესკტოპის ვერსია კადრებს აჩვენებს ეკრანის განახლების მოლოდინის გარეშე, წამში მაქსიმუმ 240-ს; გამორთულისას ტემპს ეკრანი განსაზღვრავს.
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	დიდი ბიუჯეტი ობიექტის ფილტრის ყოველი გაშვების საბაზო ინსტრუქციებს ხუთჯერ ზრდის, შეყვანის ბაიტზე დანამატი კი იგივე რჩება; მძიმე ფილტრებს, ცოცხალ ეფექტებს, ექსპორტერებსა და იმპორტერებს თავისი ლიმიტები აქვთ.
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	ტილოზე არსებულ ნახატს და სამუშაო დაფებს გარდაქმნის ეკრანის ფერთა პროფილში, სადაც სისტემა ამას უკვე არ აკეთებს; გამორთულისას ტილო sRGB-ში იხატება.
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	დესკტოპის ვერსიაში ფაილში შენახვა ფონურ რეჟიმში იწერება, სანამ რედაქტირებას აგრძელებთ; გამორთულისას ელოდებით, სანამ ჩაიწერება.
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	დესკტოპის ვერსიაში ფაილებში ექსპორტი და შეფუთვა ფონურ რეჟიმში იწერება, სანამ რედაქტირებას აგრძელებთ, გარდა 3D ექსპორტისა; გამორთულისას მათ ელოდებით.
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	ყოველ რამდენიმე წუთში ინახავს აღდგენის ასლს ყველა დოკუმენტისთვის, რომელსაც ბოლო ასლის შემდეგ შეუნახავი ცვლილებები აქვს; გამორთულისას პერიოდული ასლები არ კეთდება.
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	რამდენი წუთი გადის აღდგენის ასლებს შორის, სანამ „აღდგენის მონაცემების ავტომატური შენახვა“ ჩართულია.
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	დესკტოპის ვერსიაში საქაღალდე, სადაც აღდგენის ასლები ინახება; დატოვეთ ცარიელი VectorCraft-ის საკუთარი საქაღალდისთვის. ვებ-ვერსია მათ ბრაუზერში ინახავს.
+	No timed recovery copies are made of documents with more than 20,000 objects.	20 000-ზე მეტი ობიექტის მქონე დოკუმენტებისთვის პერიოდული აღდგენის ასლები არ კეთდება.
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	„ბოლოს გახსნილი ფაილების გახსნა“ და „საწყისი ეკრანი“ აჩვენებს მაქსიმუმ ამდენ ბოლო ფაილს; 0 არცერთს არ აჩვენებს, VectorCraft კი მაინც იმახსოვრებს 30-მდე ფაილს.
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	დოკუმენტის გახსნისას მიბმული EPS გამოსახულება, რომელიც თავის შენახულ გადახედვას აჩვენებს, ინარჩუნებს მას EPS ფაილის ხელახლა წაკითხვის ნაცვლად; შეცვლილი ფაილები კვლავ „ბმულების განახლებას“ მისდევს.
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	„პიქსელების წინასწარ ნახვაში“ გამოსახულებები გლუვად იხატება; გამორთულისას მათი პიქსელები მკვეთრი კიდეებით ჩანს. მის გარეთ გამოსახულებები ყოველთვის გლუვდება.
+	PDF Text	PDF-ის ტექსტი
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	PDF-ის ტექსტი, რომელსაც ხსნით ან ჩაშენებთ, შემოდის რედაქტირებად ტექსტად ან კონტურებად, რომლებიც ერთნაირად ჩანს კომპიუტერზე მისი შრიფტების გარეშე.
+	Linked pages show the file's own text.	მიბმული გვერდები ფაილის საკუთარ ტექსტს აჩვენებს.
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	როცა მიბმული ფაილი იცვლება, „ავტომატურად“ მას ხელახლა კითხულობს, „შეკითხვა ცვლილებისას“ ჯერ გეკითხებათ, „ხელით“ კი უცვლელად ტოვებს და სტატუსის ზოლში შენიშვნას აჩვენებს.
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	დესკტოპის ვერსიაში საქაღალდე, საიდანაც „შაბლონიდან შექმნა…“ და „შაბლონად შენახვა…“ იწყება; დატოვეთ ცარიელი თქვენი დოკუმენტების საქაღალდეში არსებული VectorCraft Templates-ისთვის.
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„ორიგინალის რედაქტირება“ მიბმულ ფაილს მისი ტიპისთვის სისტემის ნაგულისხმევ აპში ხსნის; გამორთულისას მიბმული რასტრული გამოსახულება PhotoCraft-ში იხსნება, თუ ის დაინსტალირებულია.
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraft-ის ძველი ვერსიით შენახული ფაილი სახელის შემდეგ [Converted]-ით იხსნება, „შენახვა“ კი გეკითხებათ, სად შეინახოს; გამორთულისას „შენახვა“ ფაილს ცვლის.
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-ის ფაილები და შაბლონები შეკუმშულად, ანუ უფრო მცირე ზომით ინახება, თუ შენახვა სხვას არ მიუთითებს; შენახვები ვერსიებისთვის, რომლებიც შეკუმშულ ფაილებს ვერ ხსნის, შეუკუმშავი რჩება.
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	კოპირება და ამოჭრა სხვა აპებს ნახატის SVG კოდსაც აძლევს; დესკტოპზე კოდი ტექსტად არ კოპირდება, როცა ნახატში 1 MiB-ზე მეტი სურათია ჩაშენებული.
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows-ზე კოპირება და ამოჭრა სხვა აპებს ნახატის PDF-საც აძლევს; სხვა პლატფორმები PDF-ს ჯერ არ აკოპირებს.
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft ამ არჩევანს ინახავს, მაგრამ კოპირება და ამოჭრა ძველი ვექტორული ბუფერის ფორმატს ჯერ არ იყენებს.
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	ტრაექტორიების შენარჩუნება ან იერსახისა და ზედდაბეჭდვების შენარჩუნება ძველი ვექტორული ბუფერისთვის; VectorCraft არჩევანს ინახავს, მაგრამ ჯერ არ იყენებს.
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	ფორმატირების შენარჩუნება VectorCraft-ის ტექსტური ობიექტიდან კოპირებული ტექსტის სტილებს ინახავს ტექსტურ ობიექტში ჩასმისას; მხოლოდ ტექსტის შენარჩუნება მას ჩასმის ადგილის სტილს აძლევს.
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	ყველა შავის მდიდარ შავად ჩვენება სუფთა CMYK შავს (მხოლოდ შავი მელანი 100%-ზე) ტილოზე RGB შავად აჩვენებს; ყველა შავის ზუსტად ჩვენება მას სამუშაო CMYK სივრცით გარდაქმნის.
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	ყველა შავის მდიდარ შავად გამოტანა სუფთა CMYK შავს RGB შავად ხატავს RGB და ნაცრისფერი გრადაციების რასტრულ ექსპორტებში და ბიტმაპად ბეჭდვისას; ის არ ცვლის ვექტორულ ექსპორტებს, CMYK JPEG-ს, TIFF-სა და PSD-ს ან სხვა ბეჭდვას.
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	სენსორულ ეკრანზე გადადის სენსორულ სამუშაო სივრცეზე; პარამეტრის გამორთვისას ან სენსორული ეკრანის დაკარგვისას ბრუნდება წინა სამუშაო სივრცეზე.
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	ტილოზე ორი თითით შეხება აბრუნებს მოქმედებას, სენსორულ სამუშაო სივრცეში კი მონიშვნისა და ხატვის ხელსაწყოებს შორის გადართავს; სამი თითით შეხება ხელახლა ასრულებს. პრეზენტაციის რეჟიმში არცერთი არ მუშაობს.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	გადატანის ჩართვისას სიის სიტყვა მხოლოდ აკრეფილ დეფისებთან გადაიტანება, ან არსად, თუ არ აქვს, რეგისტრის მიუხედავად; კორეულ სიტყვებს დეფისი არ ემატება, ინდური ენების სიტყვები კი სიმბოლოთა ჯგუფის შიგნით არ გადაიტანება.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
@@ -6443,7 +6684,14 @@ font-technology	Variable	ცვლადი
 	Channel	არხი
 	Circle	წრე
 	Circle Tool	წრის ხელსაწყო
+	Curvature Circle Tool	სიმრუდის წრის ხელსაწყო
+	Cusp	წვეტი
+	Straight segment	სწორი სეგმენტი
 	Circle too large	წრე ზედმეტად დიდია
+	Show Radii	რადიუსების ჩვენება
+	Show Diameter	დიამეტრის ჩვენება
+	Anchors at Standard Positions	საყრდენი წერტილები სტანდარტულ პოზიციებზე
+	Third Point by Dragging	მესამე წერტილი გადათრევით
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
 	Gamma	გამა
@@ -6660,6 +6908,7 @@ font-technology	Variable	ცვლადი
 @msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	დოკუმენტის {title} აღდგენის მონაცემების შენახვა ვერ მოხერხდა: {e}. ასლები ინახება საქაღალდეში {folder}, რომელიც პარამეტრებშია მითითებული; სხვა საქაღალდის გამოსაყენებლად მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
 @msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	აღდგენის მონაცემების შენახვა ვერ მოხერხდა: {e}. ასლები ინახება საქაღალდეში {folder}, რომელიც აღდგენის ნაგულისხმევი საქაღალდეა; სხვა საქაღალდის გამოსაყენებლად მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
 @msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	აღდგენის მონაცემების შენახვა ვერ მოხერხდა: {e}. ასლები ინახება საქაღალდეში {folder}, რომელიც პარამეტრებშია მითითებული; სხვა საქაღალდის გამოსაყენებლად მიუთითეთ პარამეტრები → ფაილების დამუშავება → მონაცემთა აღდგენა → საქაღალდე (recoveryFolder)
+@msg	{saving} failed: {e}	{saving} — ვერ მოხერხდა: {e}
 @msg	Create Outlines: select text objects	კონტურების შექმნა: მონიშნეთ ტექსტური ობიექტები
 @msg	Create from Guides: the document has no artboard	დამხმარე ხაზებიდან შექმნა: დოკუმენტს სამუშაო დაფა არ აქვს
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	დამხმარე ხაზებიდან შექმნა: დამხმარე ხაზები {MAX_PIECES}-ზე მეტ ნაჭერს ქმნის
@@ -6685,6 +6934,7 @@ font-technology	Variable	ცვლადი
 @msg	Installed plug-in {_1}	დაინსტალირდა პლაგინი {_1}
 @msg	Internal error: {msg} (please report this bug)	შიდა შეცდომა: {msg} (გთხოვთ, შეგვატყობინოთ ამ ხარვეზის შესახებ)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	ცოცხალი შეღებვის შერწყმა: მონიშნეთ ცოცხალი შეღებვის ჯგუფი და დასამატებელი ტრაექტორიები
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` და `Edge` ცოცხალი შეღებვის ჯგუფის წახნაგებისა და კიდეების სახელებია: ტრაექტორიას სხვა სახელი დაარქვით
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	ცოცხალი შეღებვა იღებს ტრაექტორიებს და შედგენილ ტრაექტორიებს: ჯერ გადააქციეთ ტექსტი, გამოსახულებები და სხვა ობიექტები ტრაექტორიებად
 @msg	Live Paint: select paths or compound paths	ცოცხალი შეღებვა: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Live Paint: these paths are too degenerate to paint	ცოცხალი შეღებვა: ეს ტრაექტორიები ზედმეტად გადაგვარებულია შესაღებად
@@ -6717,6 +6967,7 @@ font-technology	Variable	ცვლადი
 @msg	Saved {path}	შენახულია: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	გლიფების ჩასასმელად მონიშნეთ ტექსტი ან ტექსტის ხელსაწყოთი დაწკაპეთ ტექსტში
 @msg	Shape Builder: no region under the pointer	ფიგურების კონსტრუქტორი: მაჩვენებლის ქვეშ არე არ არის
+@msg	Fill Area: no enclosed area under the pointer	არის შევსება: მაჩვენებლის ქვეშ დახურული არე არ არის
 @msg	Shape Builder: select all paths you want to merge	ფიგურების კონსტრუქტორი: მონიშნეთ ყველა ტრაექტორია, რომლის გაერთიანებაც გსურთ
 @msg	Shape Builder: select paths or compound paths	ფიგურების კონსტრუქტორი: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Show All Hidden Attributes: nothing is hidden	ყველა დამალული ატრიბუტის ჩვენება: დამალული არაფერია
@@ -6812,6 +7063,7 @@ font-technology	Variable	ცვლადი
 @msg	a freeform gradient keeps at least one point	თავისუფალი ფორმის გრადიენტი ინარჩუნებს მინიმუმ ერთ წერტილს
 @msg	a gradient needs at least two stops	გრადიენტს სჭირდება მინიმუმ ორი გადასვლის წერტილი
 @msg	a graphic style named `{to}` already exists	გრაფიკული სტილი სახელით `{to}` უკვე არსებობს
+@msg	a swatch or color group named `{name}` already exists	ფერის ნიმუში ან ფერების ჯგუფი სახელით `{name}` უკვე არსებობს
 @msg	a page is missing	გვერდი აკლია
 @msg	a page out of range	გვერდი დიაპაზონს გარეთაა
 @msg	a page tree kid isn't a reference	გვერდების ხის შვილობილი მიმართვა არ არის
@@ -6931,7 +7183,16 @@ font-technology	Variable	ცვლადი
 @msg	no anchor points selected	საყრდენი წერტილები მონიშნული არ არის
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` უნდა იყოს რიცხვების ორი ან სამი [x, y] წყვილი
 @msg	direct-select two or three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ ორი ან სამი საყრდენი წერტილი ან მიუთითეთ `points`
+@msg	the path is straight there, so no circle matches its curvature	ტრაექტორია იქ სწორია, ამიტომ არცერთი წრეწირი არ შეესაბამება მის სიმრუდეს
+@msg	the path has a cusp there, so it has no single curvature	ტრაექტორიას იქ წვეტი აქვს, ამიტომ მას ერთი სიმრუდე არ აქვს
+@msg	the path has a corner there, so it has no single curvature	ტრაექტორიას იქ კუთხე აქვს, ამიტომ მას ერთი სიმრუდე არ აქვს
+@msg	a guide has no curvature circle	დამხმარე ხაზს სიმრუდის წრე არ აქვს
+@msg	the circle that matches the path there would reach past the canvas	წრეწირი, რომელიც იქ ტრაექტორიას შეესაბამება, ტილოს გასცდებოდა
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
+@msg	`at` must be "start" or "end"	`at` უნდა იყოს "start" ან "end"
+@msg	give exactly one of `through` and `toward`	მიუთითეთ ზუსტად ერთი: `through` ან `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ამ წერტილებს რკალი არ ერგება: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
+@msg	give `at` only with `toward`	`at` მიუთითეთ მხოლოდ `toward`-თან ერთად
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
 @msg	no artboard	სამუშაო დაფა არ არის
 @msg	no artboard {i} (0-based; the document has {_1})	სამუშაო დაფა {i} არ არსებობს (0-დან ითვლება; დოკუმენტს აქვს {_1})
@@ -6972,10 +7233,12 @@ font-technology	Variable	ცვლადი
 @msg	no graphic style `{n}`	გრაფიკული სტილი `{n}` არ არის
 @msg	no interaction in progress	მიმდინარე ურთიერთქმედება არ არის
 @msg	no key object	საკვანძო ობიექტი არ არის
+@msg	Align to Key Object isn't available with the Artboard tool	„საკვანძო ობიექტზე სწორება“ სამუშაო დაფის ხელსაწყოსთან მიუწვდომელია
 @msg	no library `{key}` (see {list})	ბიბლიოთეკა `{key}` არ არის (იხ. {list})
 @msg	no native format	საკუთარი ფორმატი არ არის
 @msg	no pages	გვერდები არ არის
 @msg	no pattern `{name}`	პატერნი `{name}` არ არის
+@msg	art painted with `{name}` can't be its tile	`{name}`-ით შეღებილი ნახატი მისი ფილა ვერ იქნება
 @msg	no perspective grid preset named `{name}`	პერსპექტივის ბადის პრესეტი სახელით `{name}` არ არის
 @msg	no plug-in {0} is installed	პლაგინი {0} დაინსტალირებული არ არის
 @msg	no plug-in {id} is installed	პლაგინი {id} დაინსტალირებული არ არის
@@ -7024,6 +7287,9 @@ font-technology	Variable	ცვლადი
 @msg	no such saved selection	ასეთი შენახული მონიშვნა არ არის
 @msg	no such segment	ასეთი სეგმენტი არ არის
 @msg	no such subpath	ასეთი ქვეტრაექტორია არ არის
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` უნდა იყოს არაუმეტეს 10000 ნაწილის სია
+@msg	give either `start` for a new path or `id`, not both	მიუთითეთ ან `start` ახალი ტრაექტორიისთვის, ან `id`, მაგრამ არა ორივე
+@msg	`subpath` and `keep` need `id`	`subpath`-სა და `keep`-ს სჭირდება `id`
 @msg	no such user library	მომხმარებლის ასეთი ბიბლიოთეკა არ არის
 @msg	no such view	ასეთი ხედი არ არის
 @msg	no such width point	ასეთი სიგანის წერტილი არ არის
@@ -7103,6 +7369,7 @@ font-technology	Variable	ცვლადი
 @msg	select a Live Paint group	მონიშნეთ ცოცხალი შეღებვის ჯგუფი
 @msg	select a blend	მონიშნეთ გადასვლა
 @msg	select a clip group	მონიშნეთ მომჭრელი ჯგუფი
+@msg	select a flare	მონიშნეთ ბლიკი
 @msg	select a gradient mesh	მონიშნეთ გრადიენტული ბადე
 @msg	select a linked image: an embedded one has no file	მონიშნეთ დაკავშირებული გამოსახულება: ჩაშენებულს ფაილი არ აქვს
 @msg	select a repeat	მონიშნეთ გამეორება
@@ -7117,6 +7384,10 @@ font-technology	Variable	ცვლადი
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ეს ვექტორიზაცია {max}-ზე მეტ საყრდენ წერტილს შექმნიდა, რასაც დოკუმენტი შეუფერხებლად ვერ აჩვენებს: გაზარდეთ ხმაური, შეამცირეთ ტრაექტორიები ან ფერები, ან აირჩიეთ ნაკლები სიზუსტის პრესეტი
 @msg	select an envelope	მონიშნეთ გარსი
 @msg	select an image	მონიშნეთ გამოსახულება
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ობიექტი {_1} არის პერსპექტიული დეფორმაციით ან თავისუფალი დეფორმაციით შეცვლილი გამოსახულება, რომელზეც ეს ბრძანება არ მუშაობს
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები ამოზნექილ ფორმას ვერ შექმნის
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები დეფორმაციის ჰორიზონტს გადაკვეთს
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები პერსპექტიული ასახვისთვის ერთმანეთთან ძალიან ახლოს იქნება
 @msg	`background` must be edges, corners or colors	`background` უნდა იყოს edges, corners ან colors
 @msg	`match` must be distance or channels	`match` უნდა იყოს distance ან channels
 @msg	`{key}` must be from 0 to 100	`{key}` უნდა იყოს 0-დან 100-მდე
@@ -7162,6 +7433,7 @@ font-technology	Variable	ცვლადი
 @msg	the PDF is password-protected: give its password	PDF პაროლით არის დაცული: მიუთითეთ პაროლი
 @msg	the PDF password is wrong	PDF-ის პაროლი არასწორია
 @msg	the Save PDF dialog didn't open	PDF-ის შენახვის დიალოგი არ გაიხსნა
+@msg	the Save PDF dialog is not open	PDF-ის შენახვის დიალოგი გახსნილი არ არის
 @msg	the WMF header is damaged	WMF-ის სათაური დაზიანებულია
 @msg	the art could not be sampled	ნახატიდან ნიმუშის აღება ვერ მოხერხდა
 @msg	the art has no bounds	ნახატს საზღვრები არ აქვს
@@ -7333,6 +7605,7 @@ font-technology	Variable	ცვლადი
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	დაკავშირებული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	დოკუმენტი ადგენს ჭრისპირა არეს, რომელსაც ეს PDF/X ფაილი გამოტოვებს: ჩართეთ „დოკუმენტის ჭრისპირა არის პარამეტრების გამოყენება“
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	ობიექტები, რომლებიც ჭრის კიდეს აღწევს, მაგრამ ჭრისპირა არემდე ვერა: {n}
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
@@ -7363,6 +7636,7 @@ font-technology	Variable	ცვლადი
 @msg	onto must name a panel floating in another group	onto უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	below and above must name a panel floating in another group	below და above უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	give only one of onto, below and above	მიუთითეთ მხოლოდ ერთი: onto, below ან above
+@msg	give only one of `index`, `indices` and `t`	მიუთითეთ მხოლოდ ერთი: `index`, `indices` ან `t`
 @msg	column must be true or a number from 1	column უნდა იყოს true ან რიცხვი 1-დან
 @msg	x and y must both be numbers	x და y ორივე რიცხვი უნდა იყოს
 @msg	"{0}" is not a colour: write it as #rrggbb	"{0}" ფერი არ არის: ჩაწერეთ #rrggbb სახით
@@ -7460,6 +7734,26 @@ font-technology	Variable	ცვლადი
 @msg	the HEIC or HEIF file can't be read	HEIC ან HEIF ფაილის წაკითხვა შეუძლებელია
 @msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC ან HEIF ფაილი შეიცავს გამოსახულების ტიპს, რომლის წაკითხვაც შეუძლებელია
 @msg	HEIC and HEIF images can't be opened in this build	ამ ვერსიაში HEIC და HEIF გამოსახულებების გახსნა შეუძლებელია
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	CDR {version}-ის ნახაზების გახსნა შეუძლებელია: VectorCraft კითხულობს ვერსიებს 1-დან 27-მდე
+@msg	this CDR drawing can't be read ({why})	ამ CDR ნახაზის წაკითხვა შეუძლებელია ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR-ის ტექსტები, ბიტმაპები, გადასვლები, კონტურები, ფუნჯის შტრიხები და სხვა ობიექტები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, გამოტოვებულია
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR-ის გრადიენტული, ნიმუშის, ტექსტურის და PostScript შევსებები გამოტოვებულია
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	CDR-ის იმ ფერის მოდელების ფერები, რომლებსაც VectorCraft ვერ კითხულობს, შავად გაიხსნა
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR-ის ბიბლიოთეკის ფერები, რომლებსაც ნახაზი მხოლოდ ნომრით ინახავს, შავ სპოტ-ფერებად გაიხსნა
+@msg	CDR outline arrowheads were left out	CDR-ის მოხაზულობების ისრისპირები გამოტოვებულია
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR-ის კონვერტები არ იქნა გამოყენებული, და მათ ქვეშ მყოფი ფორმები ინარჩუნებენ თავიანთ მოხაზულობას
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR-ის ლინზები და ობიექტის გამჭვირვალობა არ იქნა გამოყენებული, და ობიექტები, რომლებზეც ისინია, გაუმჭვირვალედ ჩანს
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	ნახაზის ზედმეტად ღრმად ჩადგმული ან იმპორტის ლიმიტებს მიღმა არსებული ნაწილები გამოტოვებულია
+@msg	damaged parts of the drawing were left out	ნახაზის დაზიანებული ნაწილები გამოტოვებულია
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163 830 pt-ზე გრძელი CDR-ის გვერდები ამ სიგრძით გაიხსნა და მათ კიდეებთან ახლოს მყოფი გრაფიკა სამუშაო დაფის გარეთაა
+@msg	this CMX file can't be read ({why})	ამ CMX ფაილის წაკითხვა შეუძლებელია ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	CMX-ის ტექსტები, გამოსახულებები, მართკუთხედები, ელიფსები, ამოჭრის კონტურები და სხვა ობიექტები, რომლებსაც VectorCraft ჯერ ვერ კითხულობს, გამოტოვებულია
+@msg	CMX fills other than uniform colors were left out	CMX-ის შევსებები, გარდა ერთგვაროვანი ფერებისა, გამოტოვებულია
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	CMX-ის იმ ფერის მოდელების ფერები, რომლებსაც VectorCraft ვერ კითხულობს, შავად გაიხსნა
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX-ის ბიბლიოთეკის ფერები, რომლებსაც ფაილი მხოლოდ ნომრით ინახავს, შავ სპოტ-ფერებად გაიხსნა
+@msg	CMX outline arrowheads were left out	CMX-ის მოხაზულობების ისრისპირები გამოტოვებულია
+@msg	CMX lenses were not applied	CMX-ის ლინზები არ იქნა გამოყენებული
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163 830 pt-ზე გრძელი CMX-ის გვერდები ამ სიგრძით გაიხსნა და მათ კიდეებთან ახლოს მყოფი გრაფიკა სამუშაო დაფის გარეთაა
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD გამოსახულება ზედმეტად დიდია წასაკითხად ({_1} × {_2} პიქსელი)
 @msg	zipped 1-bit PSD image data with prediction can't be read	zip-ით შეკუმშული 1-ბიტიანი PSD გამოსახულების მონაცემების წაკითხვა პროგნოზირებით ვერ ხერხდება
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD ფაილის შრეების მონაცემები უცნობ შეკუმშვას იყენებს ({m})
@@ -7467,6 +7761,33 @@ font-technology	Variable	ცვლადი
 @msg	the PSD file's layer groups are nested too deeply	PSD ფაილის შრეების ჯგუფები ზედმეტად ღრმადაა ჩადგმული
 @msg	a layer of the PSD file is too large to read	PSD ფაილის შრე ზედმეტად დიდია წასაკითხად
 @msg	the PSD file's layers take more memory to read than allowed	PSD ფაილის შრეების წასაკითხად დაშვებულზე მეტი მეხსიერებაა საჭირო
+@msg	the layers can't be read ({e}): the file was placed as its merged image	შრეების წაკითხვა ვერ ხერხდება ({e}): ფაილი განთავსდა როგორც მისი გაერთიანებული გამოსახულება
+@msg	1 type layer came in as pixels: the text isn't editable	1 ტექსტის შრე შემოვიდა პიქსელებად: ტექსტი არ რედაქტირდება
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} ტექსტის შრე შემოვიდა პიქსელებად: ტექსტი არ რედაქტირდება
+@msg	1 adjustment layer was not applied	1 კორექციის შრე არ იქნა გამოყენებული
+@msg	{n} adjustment layers were not applied	{n} კორექციის შრე არ იქნა გამოყენებული
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 შევსების შრე არ დაიხატა (გრადიენტული ან ნიმუშის შევსება, ფერი, რომლის წაკითხვაც ვერ ხერხდება, ან ფიგურა, რომელიც პიქსელებს არ ინახავს)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} შევსების შრე არ დაიხატა (გრადიენტული ან ნიმუშის შევსება, ფერი, რომლის წაკითხვაც ვერ ხერხდება, ან ფიგურა, რომელიც პიქსელებს არ ინახავს)
+@msg	the layer effects of 1 layer weren't drawn	1 შრის შრის ეფექტები არ დაიხატა
+@msg	the layer effects of {n} layers weren't drawn	{n} შრის შრის ეფექტები არ დაიხატა
+@msg	the vector masks of 1 layer weren't applied	1 შრის ვექტორული ნიღბები არ იქნა გამოყენებული
+@msg	the vector masks of {n} layers weren't applied	{n} შრის ვექტორული ნიღბები არ იქნა გამოყენებული
+@msg	the knockout of 1 layer wasn't applied	1 შრის ამოჭრა არ იქნა გამოყენებული
+@msg	the knockout of {n} layers wasn't applied	{n} შრის ამოჭრა არ იქნა გამოყენებული
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 შრე გამოტოვებულია (დამალული შრეები და მათზე მოჭრილი შრეები)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} შრე გამოტოვებულია (დამალული შრეები და მათზე მოჭრილი შრეები)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	დაუხატავ შევსების შრეზე მოჭრილი 1 შრე გამოტოვებულია
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	დაუხატავ შევსების შრეებზე მოჭრილი {n} შრე გამოტოვებულია
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	შრეები შერევის რეჟიმებში, რომლებიც VectorCraft-ს არ აქვს ({modes}), გაერთიანდა მათ ქვემოთ მყოფ შრეებთან
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	1 შრე შერევის რეჟიმში, რომელიც VectorCraft-ს არ აქვს, შემოვიდა როგორც ჩვეულებრივი: გაერთიანებას დასაშვებზე მეტი მეხსიერება სჭირდება
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	{n} შრე შერევის რეჟიმებში, რომლებიც VectorCraft-ს არ აქვს, შემოვიდა როგორც ჩვეულებრივი: გაერთიანებას დასაშვებზე მეტი მეხსიერება სჭირდება
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	ქვედა შრეზე მოჭრილი 1 შრე შემოვიდა მოუჭრელად: გაერთიანებას დასაშვებზე მეტი მეხსიერება სჭირდება
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	ქვედა შრეზე მოჭრილი {n} შრე შემოვიდა მოუჭრელად: გაერთიანებას დასაშვებზე მეტი მეხსიერება სჭირდება
+@msg	the slices can't be read ({e}) and were left out	ნაჭრების წაკითხვა ვერ ხერხდება ({e}) და ისინი გამოტოვებულია
+@msg	1 slice lies outside the canvas or has no size and was left out	1 ნაჭერი ტილოს გარეთაა ან ზომა არ აქვს და გამოტოვებულია
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} ნაჭერი ტილოს გარეთაა ან ზომა არ აქვს და გამოტოვებულია
+@msg	1 slice would lie outside the canvas and was left out	1 ნაჭერი ტილოს გარეთ აღმოჩნდებოდა და გამოტოვებულია
+@msg	{n} slices would lie outside the canvas and were left out	{n} ნაჭერი ტილოს გარეთ აღმოჩნდებოდა და გამოტოვებულია
 @msg	the layers can't be read ({e}): the file opened as its merged image	შრეების წაკითხვა ვერ ხერხდება ({e}): ფაილი გაიხსნა როგორც მისი გაერთიანებული გამოსახულება
 @msg	{depth}-bit PSD files in this colour mode can't be read	ამ ფერის რეჟიმში {depth}-ბიტიანი PSD ფაილების წაკითხვა ვერ ხერხდება
 @msg	the PSD file is cut short	PSD ფაილი შეკვეცილია
@@ -7624,6 +7945,7 @@ font-technology	Variable	ცვლადი
 	Arrow	ისარი
 	Arrow (open)	ისარი (ღია)
 	Barbed	წვეტიანი
+arrowhead	Feather	ბუმბული
 	Half Arrow (left)	ნახევარი ისარი (მარცხენა)
 	Half Arrow (right)	ნახევარი ისარი (მარჯვენა)
 	Concave	ჩაზნექილი
@@ -7651,6 +7973,7 @@ font-technology	Variable	ცვლადი
 	Kite	ფრანი
 	Triangle to Bar	სამკუთხედიდან ზოლამდე
 	Oval	ოვალი
+	Line Arrow	ხაზოვანი ისარი
 	Complementary	დამატებითი
 	Complementary 2	დამატებითი 2
 	Split Complementary	გაყოფილი დამატებითი
@@ -7877,11 +8200,14 @@ font-technology	Variable	ცვლადი
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
 @msg	feConvolveMatrix's order	feConvolveMatrix-ის order
 @msg	feMorphology's radius	feMorphology-ის radius
-@msg	a blur's stdDeviation	დაბინდვის stdDeviation
+@msg	a blur's stdDeviation	გაბუნდოვნების stdDeviation
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` უნდა იყოს ობიექტი, რომელიც შეიცავს მხოლოდ `mode`-ს, მნიშვნელობით shaded ან wireframe
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
-@msg	bevel must be none or one of {_1}	bevel უნდა იყოს none ან ერთ-ერთი: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel უნდა იყოს none, ერთ-ერთი: {_1}, ან custom და {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom მოითხოვს {BEVEL_PROFILE}, წაკვეთის წერტილები
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} უნდა იყოს სტრიქონი
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} უნდა შეიცავდეს 2-დან {most}-მდე [x, y] წერტილს, თითოეული წილი 0-სა და 1-ს შორის, [0, 0]-დან (ბოლო წახნაგის კიდე) [1, 1]-მდე (გვერდითი კედელი)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ამ ნახატიდან სხეულების შექმნა შეუძლებელია: მისი სიმბოლოს ეგზემპლარები, გადასვლები და მომჭრელი ჯგუფები ზედმეტად ბევრ ობიექტს შეიცავს
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: სიმბოლოს „{symbol}“ ეგზემპლარიდან სხეულის შექმნა შეუძლებელია: სიმბოლოს ნახატი მიუწვდომელია
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: მომჭრელი ტრაექტორია ზედმეტად რთულია ნახატის მოსაჭრელად
@@ -7907,8 +8233,10 @@ font-technology	Variable	ცვლადი
 @msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-ის face უნდა იყოს front, back ან side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-ის {key} უნდა იყოს რიცხვი {lo}-დან {hi}-მდე
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` უნდა იყოს მასივი
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“ და „ბრუნვა“
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	გრაფიკა თავსდება ობიექტის ტიპებზე „სიბრტყე“, „ამოწევა“, „ბრუნვა“ და „გაბერვა“
 @msg	Revolve maps graphics onto its side: map them onto the front	ბრუნვა გრაფიკას თავის გვერდით ზედაპირზე ათავსებს: განათავსეთ ისინი წინა მხარეზე
+@msg	Inflate maps graphics onto its front and back, not onto a side	გაბერვა გრაფიკას წინა და უკანა მხარეზე ათავსებს და არა გვერდით ზედაპირზე
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	ობიექტი {_1}: გაბერვის უკანა მხარე გრაფიკას იღებს მხოლოდ ჩართული „ორივე მხარე“ და „თავსახური“ პარამეტრებით
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	გრაფიკა ზედმეტად რთულია ამ ზედაპირისთვის: გაამარტივეთ სიმბოლოების ნახატი ან შეამცირეთ სეგმენტები
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` იღებს მაქსიმუმ {MAX_GRAPHICS} გრაფიკას
 @msg	A plane has one face: map its graphics onto the front	სიბრტყეს ერთი მხარე აქვს: მისი გრაფიკა წინა მხარეზე განათავსეთ
@@ -8380,6 +8708,11 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @plural	{n} part of the file wasn't read|{n} parts of the file weren't read	ფაილის წაუკითხავი ნაწილები: {n}|ფაილის წაუკითხავი ნაწილები: {n}
 # Upstream sync 2026-10-16: legacy .ai export, screen color sampler, Hidden Objects, Dimension tool.
 	Color blindness – Tritanopia-type	დალტონიზმი – ტრიტანოპიის ტიპი
+	Show Color Vision Preview	ფერთა აღქმის გადახედვის ჩვენება
+	Protanopia	პროტანოპია
+	Deuteranopia	დეიტერანოპია
+	Tritanopia	ტრიტანოპია
+	Achromatopsia	აქრომატოფსია
 	Darkness	სიმუქე
 	Sample Color from Screen	ფერის აღება ეკრანიდან
 	This system has no screen color sampler	ამ სისტემას ეკრანიდან ფერის აღების საშუალება არ აქვს
@@ -8495,6 +8828,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` უნდა იყოს grayscale, rgb, hsb, cmyk ან websafe
 @msg	`view` must be wheel or box	`view` უნდა იყოს wheel ან box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` უნდა იყოს hue, saturation, brightness, red, green ან blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` უნდა იყოს none, oklch ან hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH-ს სამუშაო RGB სივრცედ sRGB სჭირდება
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	ეს PostScript ფაილია (ძველ ფორმატში ან PDF-თან თავსებადობის გარეშე შენახული .ai, ან EPS ფაილი) და არა PDF: ფაილი › გახსნა და ფაილი › განთავსება მას EPS-ად კითხულობს
 # Upstream sync 2026-10-16 (3): Intertwine, symbol registration, gradient span, data sets, Batch.
 	Intertwine	გადახლართვა
@@ -8871,6 +9206,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	no such spine point	ხერხემლის ასეთი წერტილი არ არსებობს
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` უნდა იყოს ხერხემლის წერტილების არაუმეტეს 10000 ინდექსის სია
 @msg	`with` moves points, not a handle	`with` წერტილებს გადაადგილებს და არა სახელურს
+@msg	`link` and `independent` cannot both be true	`link` და `independent` ერთდროულად ვერ იქნება true
+@msg	`link` places a handle: give `handle`	`link` სახელურს ათავსებს: მიუთითეთ `handle`
 @msg	no such spine segment	ხერხემლის ასეთი სეგმენტი არ არსებობს
 @msg	not a blend	ეს გადასვლა არ არის
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	ბრაუზერში მხოლოდ http, https და mailto URL-ები იხსნება და არა „{url}“
@@ -8902,6 +9239,9 @@ variable-list-end	{0}, {1}	{0} და {1}
 	Cancel Export	ექსპორტირების გაუქმება
 @plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}
 @msg	Export cancelled	ექსპორტირება გაუქმდა
+	Cancel Save	შენახვის გაუქმება
+@plural	{n} more save waiting|{n} more saves waiting	რიგში მომლოდინე სხვა შენახვა: {n}
+@msg	Save canceled	შენახვა გაუქმდა
 	Clear History	ისტორიის გასუფთავება
 	New Document from State	ახალი დოკუმენტი მდგომარეობიდან
 	Continue in Background	ფონურ რეჟიმში გაგრძელება
@@ -9338,6 +9678,10 @@ axis	Y Axis	Y ღერძი
 	Create New Action	ახალი მოქმედების შექმნა
 	Play Action	მოქმედების შესრულება
 	Action Set:	მოქმედებების ნაკრები:
+	Choose Align To at playback	შესრულებისას სწორების სამიზნის არჩევა
+	Align steps use the key object, key anchor or key guide when one is set.	სწორების ნაბიჯები იყენებს საკვანძო ობიექტს, საკვანძო საყრდენ წერტილს ან საკვანძო დამხმარე ხაზს, თუ ის მითითებულია.
+	With one whole object selected and no key, they use the artboard.	ერთი მთლიანი მონიშნული ობიექტისას და გასაღების გარეშე ისინი იყენებს სამუშაო დაფას.
+	Otherwise they use the selection.	სხვა შემთხვევაში ისინი იყენებს მონიშნულს.
 	Function Key:	ფუნქციური კლავიში:
 	Record	ჩაწერა
 	Create New Set	ახალი ნაკრების შექმნა
@@ -9474,6 +9818,12 @@ axis	Y Axis	Y ღერძი
 	Bus Lines	სალტის ხაზები
 	Terminal Nodes	ტერმინალური კვანძები
 
+# Original arrow art brushes.
+	Arrows	ისრები
+	Solid Arrow	მყარი ისარი
+	Open Arrow	ღია ისარი
+	Chevron Arrow	შევრონიანი ისარი
+
 	Notched Ribbon	დაკბილული ლენტი
 	Double Line	ორმაგი ხაზი
 	Wave	ტალღა
@@ -9490,6 +9840,254 @@ axis	Y Axis	Y ღერძი
 	Stars	ვარსკვლავები
 	Triangles	სამკუთხედები
 	Sparkles	ნაპერწკლები
+	Warm Gray	თბილი ნაცრისფერი
+	Cool Gray	ცივი ნაცრისფერი
+	Neutrals	ნეიტრალურები
+	Ivory	სპილოს ძვალი
+	Linen	სელი
+	Oat	შვრია
+	Greige	ნაცრისფერ-ბეჟი
+	Stone	ქვა
+	Taupe	ნაცრისფერ-ყავისფერი
+	Slate	ფიქალი
+	Clay	თიხა
+	Terracotta	ტერაკოტა
+	Ochre	ოხრა
+	Umber	უმბრა
+	Sand	ქვიშა
+	Olive	ზეთისხილისფერი
+	Moss	ხავსი
+	Rosy	ვარდისფრადი
+	Neutral	ნეიტრალური
+	Golden	ოქროსფერი
+	Pastel	პასტელური
+	Pastel Red	პასტელური წითელი
+	Pastel Orange	პასტელური ნარინჯისფერი
+	Pastel Amber	პასტელური ქარვისფერი
+	Pastel Yellow	პასტელური ყვითელი
+	Pastel Lime	პასტელური ლაიმისფერი
+	Pastel Green	პასტელური მწვანე
+	Pastel Teal	პასტელური ზღვისფერი
+	Pastel Cyan	პასტელური ცისფერი
+	Pastel Azure	პასტელური ლაჟვარდისფერი
+	Pastel Blue	პასტელური ლურჯი
+	Pastel Violet	პასტელური იისფერი
+	Pastel Magenta	პასტელური მეწამული
+	Soft Red	რბილი წითელი
+	Soft Orange	რბილი ნარინჯისფერი
+	Soft Amber	რბილი ქარვისფერი
+	Soft Yellow	რბილი ყვითელი
+	Soft Lime	რბილი ლაიმისფერი
+	Soft Green	რბილი მწვანე
+	Soft Teal	რბილი ზღვისფერი
+	Soft Cyan	რბილი ცისფერი
+	Soft Azure	რბილი ლაჟვარდისფერი
+	Soft Blue	რბილი ლურჯი
+	Soft Violet	რბილი იისფერი
+	Soft Magenta	რბილი მეწამული
+	Vivid Red	ცოცხალი წითელი
+	Vivid Orange	ცოცხალი ნარინჯისფერი
+	Vivid Amber	ცოცხალი ქარვისფერი
+	Vivid Yellow	ცოცხალი ყვითელი
+	Vivid Lime	ცოცხალი ლაიმისფერი
+	Vivid Green	ცოცხალი მწვანე
+	Vivid Teal	ცოცხალი ზღვისფერი
+	Vivid Cyan	ცოცხალი ცისფერი
+	Vivid Azure	ცოცხალი ლაჟვარდისფერი
+	Vivid Blue	ცოცხალი ლურჯი
+	Vivid Violet	ცოცხალი იისფერი
+	Vivid Magenta	ცოცხალი მეწამული
+	Deep	მუქი
+	Deep Red	მუქი წითელი
+	Deep Orange	მუქი ნარინჯისფერი
+	Deep Amber	მუქი ქარვისფერი
+	Deep Yellow	მუქი ყვითელი
+	Deep Lime	მუქი ლაიმისფერი
+	Deep Green	მუქი მწვანე
+	Deep Teal	მუქი ზღვისფერი
+	Deep Cyan	მუქი ცისფერი
+	Deep Azure	მუქი ლაჟვარდისფერი
+	Deep Blue	მუქი ლურჯი
+	Deep Violet	მუქი იისფერი
+	Deep Magenta	მუქი მეწამული
+	Gold	ოქრო
+	Silver	ვერცხლი
+	Bronze	ბრინჯაო
+	Copper	სპილენძი
+	Brass	თითბერი
+	Rose Gold	ვარდისფერი ოქრო
+	Gunmetal	ფოლადისფერი
+	Platinum	პლატინა
+	Pewter	კალა
+	Ember	ნაკვერჩხალი
+	Lagoon	ლაგუნა
+	Dusk	ბინდი
+	Clay to Teal	თიხიდან ზღვისფრამდე
+	Plum to Olive	ქლიავიდან ზეთისხილისფრამდე
+	Complementary Coral	მარჯნისფერი, დამატებითი
+	Split Complementary Coral	მარჯნისფერი, გაყოფილი დამატებითი
+	Analogous Coral	მარჯნისფერი, ანალოგიური
+	Triad Coral	მარჯნისფერი, ტრიადა
+	Tetrad Coral	მარჯნისფერი, ტეტრადა
+	Pentagram Coral	მარჯნისფერი, პენტაგრამა
+	Complementary Teal	ზღვისფერი, დამატებითი
+	Split Complementary Teal	ზღვისფერი, გაყოფილი დამატებითი
+	Analogous Teal	ზღვისფერი, ანალოგიური
+	Triad Teal	ზღვისფერი, ტრიადა
+	Tetrad Teal	ზღვისფერი, ტეტრადა
+	Pentagram Teal	ზღვისფერი, პენტაგრამა
+	Soft Spectrum	რბილი სპექტრი
+	Red to Amber	წითლიდან ქარვისფრამდე
+	Orange to Yellow	ნარინჯისფრიდან ყვითლამდე
+	Amber to Lime	ქარვისფრიდან ლაიმისფრამდე
+	Yellow to Green	ყვითლიდან მწვანემდე
+	Lime to Teal	ლაიმისფრიდან ზღვისფრამდე
+	Green to Cyan	მწვანიდან ცისფრამდე
+	Teal to Azure	ზღვისფრიდან ლაჟვარდისფრამდე
+	Cyan to Blue	ცისფრიდან ლურჯამდე
+	Azure to Violet	ლაჟვარდისფრიდან იისფრამდე
+	Blue to Magenta	ლურჯიდან მეწამულამდე
+	Violet to Red	იისფრიდან წითლამდე
+	Magenta to Orange	მეწამულიდან ნარინჯისფრამდე
+	Dawn	განთიადი
+	Noon	შუადღე
+	Sunset	მზის ჩასვლა
+	Night	ღამე
+	Overcast	მოღრუბლული
+	White to Black	თეთრიდან შავამდე
+	Light Grays	ღია ნაცრისფრები
+	Dark Grays	მუქი ნაცრისფრები
+	Warm Grays	თბილი ნაცრისფრები
+	Cool Grays	ცივი ნაცრისფრები
+	Fade to Transparent	გადასვლა გამჭვირვალემდე
+	White Fade	თეთრი გადასვლა
+	Vignette	ვინიეტი
+	Mist	ნისლი
+	Petal	ფურცელი
+	Fern	გვიმრა
+	Smoke	კვამლი
+	Honey	თაფლი
+	Seafoam	ზღვის ქაფი
+	Lavender	ლავანდა
+	Driftwood	ზღვის მიერ გამორიყული ხე
+	Ink Wash	მელნის რეცხვა
+	Tide	მოქცევა
+	Bloom	ყვავილობა
+	Dew	ცვარი
+	Pollen	მტვერი
+	Lichen	მღიერი
+	Prism Veil	პრიზმული საბურველი
+	Opal Ribbon	ოპალის ლენტი
+	Pearl Flash	მარგალიტის ელვა
+	Aurora Foil	ჩრდილოეთის ციალის ფოლგა
+	Iris Sheen	ირისის ლაპლაპი
+	Frost Spectrum	ყინვის სპექტრი
+	Silver Tide	ვერცხლისფერი მოქცევა
+	Rose Quartz Gleam	ვარდისფერი კვარცის ბზინვა
+	Moonstone Shift	მთვარის ქვის ციმციმი
+	Violet Edge	იისფერი კიდე
+	Mint Halo	პიტნისფერი შარავანდი
+	Amber Corona	ქარვისფერი გვირგვინი
+	Polar Glint	პოლარული ელვარება
+	Pastel Orbit	პასტელური ორბიტა
+	Coral and Navy	მარჯნისფერი და მუქი ლურჯი
+	Plum and Lime	ქლიავისფერი და ლაიმისფერი
+	Teal and Gold	ზღვისფერი და ოქროსფერი
+	Indigo and Peach	ინდიგო და ატმისფერი
+	Forest and Rose	ტყე და ვარდი
+	Red Glow	წითელი ნათება
+	Orange Glow	ნარინჯისფერი ნათება
+	Amber Glow	ქარვისფერი ნათება
+	Yellow Glow	ყვითელი ნათება
+	Lime Glow	ლაიმისფერი ნათება
+	Green Glow	მწვანე ნათება
+	Teal Glow	ზღვისფერი ნათება
+	Cyan Glow	ცისფერი ნათება
+	Azure Glow	ლაჟვარდისფერი ნათება
+	Blue Glow	ლურჯი ნათება
+	Violet Glow	იისფერი ნათება
+	Magenta Glow	მეწამული ნათება
+	Polka Dots	ბარდისებრი წერტილები
+	Vertical Stripes	ვერტიკალური ზოლები
+	Horizontal Stripes	ჰორიზონტალური ზოლები
+	Diagonal Stripes	დიაგონალური ზოლები
+	Checkerboard	ჭადრაკის დაფა
+	Diamonds	რომბები
+	Crosses	ჯვრები
+	Coarse Grit	მსხვილი მარცვალი
+	Stipple	წერტილოვანი დაჩრდილვა
+	Scratches	ნაკაწრები
+	Sparse Flecks	იშვიათი ლაქები
+	Dense Flecks	ხშირი ლაქები
+	Sine Bands	სინუსოიდური ზოლები
+	Ripple Lines	ტალღოვანი ხაზები
+	Interference Rings	ინტერფერენციის რგოლები
+	Offset Rings	წანაცვლებული რგოლები
+	Warped Checks	დამახინჯებული უჯრები
+	Pinched Stripes	შევიწროებული ზოლები
+	Chevron Pulse	შევრონების პულსი
+	Radiating Lenses	მანათობელი ლინზები
+	Lifted Card	აწეული ბარათი
+	Neon Tube	ნეონის მილი
+	Inner Light	შიდა სინათლე
+	Feathered	რბილი კიდეებით
+	Haze	ბურუსი
+	Double Rule	ორმაგი ხაზი (ჩარჩო)
+	Triple Rule	სამმაგი ხაზი
+	Dashed Border	შტრიხებიანი საზღვარი
+	Dotted Border	წერტილოვანი საზღვარი
+	Offset Keyline	წანაცვლებული კონტური
+	Inset Keyline	შიდა კონტური
+	Outside Stroke	გარე შტრიხი
+	Pointer	მაჩვენებელი
+	Highlighter	მარკერი
+	Sketchy Line	ესკიზური ხაზი
+	Scribble Fill	ჯღაბნით შევსება
+	Wobble	რხევა
+	Zig Zag Edge	ზიგზაგისებრი კიდე
+	Wavy Edge	ტალღოვანი კიდე
+	Puffy	გაბერილი
+	Starburst	ვარსკვლავის აფეთქება
+	Glossy	პრიალა
+	Brushed Metal	გახეხილი ლითონი
+	Spotlight	პროჟექტორი
+	Sunset Band	მზის ჩასვლის ზოლი
+	Sea Glass	ზღვის მინა
+	Pearl	მარგალიტი
+	Chrome Rim	ქრომის არშია
+	Glow Orb	მანათობელი სფერო
+	Pill Badge	კაფსულის ნიშანი
+	Round Badge	მრგვალი ნიშანი
+	Flag Wave	აფრიალებული დროშა
+	Bulge	გამობერილობა
+	Twisted	დაგრეხილი
+	Echo	ექო
+	Spiral Copies	ასლები სპირალზე
+	Multiply Tint	გამრავლების ელფერი
+	Darken Veil	ჩამუქების საბურველი
+	Ghosted	მოჩვენებითი
+	Two Tone	ორფეროვანი
+	Overlay Glaze	გადაფარვის ჭიქური
+	Screen Light	ეკრანის სინათლე
+	Soft Light Wash	რბილი სინათლის რეცხვა
+	Cyan Neon	ციანის ნეონი
+	Magenta Laser	მაჯენტას ლაზერი
+	Amber Tube	ქარვისფერი მილი
+	Electric Lime	ელექტრული ლაიმი
+	Pulse Violet	მფეთქავი იისფერი
+	Cobalt Phosphor	კობალტის ფოსფორი
+	Burst	აფეთქება
+	Rounded Square	მომრგვალებული კვადრატი
+	Sun	მზე
+	Moon	მთვარე
+	Cloud	ღრუბელი
+	Rain	წვიმა
+	Thunder	ქუხილი
+	Snow	თოვლი
+	Play	დაკვრა
+	Pause	შეჩერება
+	Skip Next	შემდეგზე გადასვლა
+	Shuffle	არევა
 	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
 @msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
 @msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)
@@ -9955,6 +10553,7 @@ breakText	Glyphs	გლიფები
 	Remove Strokes	კონტურების მოხსნა
 	Place Brush Art	ფუნჯის ნახატის განთავსება
 	Replace Brush Art	ფუნჯის ნახატის ჩანაცვლება
+	Replace Pattern Art	პატერნის ნახატის ჩანაცვლება
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	კონტურები იყენებს ამ ფუნჯს. გამოყენებულ იქნას ახალი ნახატი ამ კონტურებზე, თუ დარჩეს ისინი როგორც არის და დაემატოს ფუნჯის ასლი ახალი ნახატით?
 	Apply to Strokes	კონტურებზე გამოყენება
 	Leave Strokes	კონტურების დატოვება
@@ -9987,10 +10586,18 @@ breakText	Glyphs	გლიფები
 	Smooth Bridge…	გლუვი ხიდი…
 	Smooth Bridge	გლუვი ხიდი
 	Keep Originals	ორიგინალების შენარჩუნება
-@msg	select two circles to bridge	აირჩიეთ ორი წრე დასაკავშირებლად
+@msg	select two or more circles to bridge	აირჩიეთ ორი ან მეტი წრე დასაკავშირებლად
 @msg	one circle is inside the other	ერთი წრე მეორის შიგნითაა
 @msg	the circles are too far apart for this radius: raise the radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ რადიუსი
 @msg	the circles are too far apart for this radius	ამ რადიუსისთვის წრეები ერთმანეთისგან ძალიან შორსაა
+	Constant Gap	მუდმივი ღრეჩო
+	Reach:	მიწვდომა:
+@msg	the circles are too far apart for this gap: raise the gap	ამ ღრეჩოსთვის წრეები ერთმანეთისგან ძალიან შორსაა: გაზარდეთ ღრეჩო
+@msg	the circles are too far apart for this gap	ამ ღრეჩოსთვის წრეები ერთმანეთისგან ძალიან შორსაა
+@msg	no two circles are within reach: raise the reach	არცერთი ორი წრე არ არის მიწვდომის ფარგლებში: გაზარდეთ მიწვდომა
+@msg	select at most 2000 circles to bridge	აირჩიეთ არაუმეტეს 2000 წრე დასაკავშირებლად
+@msg	that makes too many bridges (at most 8000): lower the reach	ეს ძალიან ბევრ ხიდს ქმნის (არაუმეტეს 8000): შეამცირეთ მიწვდომა
+@msg	the bridged circles are too complex to unite	დაკავშირებული წრეები ძალიან რთულია გასაერთიანებლად
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	საერთო მხებები…
 	Common Tangents	საერთო მხებები
@@ -10014,6 +10621,8 @@ breakText	Glyphs	გლიფები
 # Path Precision Tools add-on: Tangent Circle.
 	Tangent Circle…	მხები წრე…
 	Tangent Circle	მხები წრე
+	Tangent Circle Tool	მხები წრის ხელსაწყო
+	No tangent circle here	აქ მხები წრე არ არის
 	Circle:	წრე:
 @msg	`ids` names an object twice	`ids` ერთსა და იმავე ობიექტს ორჯერ მიუთითებს
 @msg	select two or three paths or compound paths	მონიშნეთ ორი ან სამი ტრაექტორია ან შედგენილი ტრაექტორია
@@ -10029,6 +10638,16 @@ breakText	Glyphs	გლიფები
 @msg	`circle` is past the last circle found ({found})	`circle` ბოლო ნაპოვნი წრის შემდეგაა ({found})
 @msg	object {value} is not a path or compound path	ობიექტი {value} არ არის ტრაექტორია ან შედგენილი ტრაექტორია
 @msg	these shapes are too small to measure	ეს ფიგურები ზედმეტად პატარაა გასაზომად
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	შემომსაზღვრელი მართკუთხედის დამატება
+	Add Bounding Circle	შემომსაზღვრელი წრეწირის დამატება
+	Add Bounding Rectangle…	შემომსაზღვრელი მართკუთხედის დამატება…
+	Add Bounding Circle…	შემომსაზღვრელი წრეწირის დამატება…
+	One per Object	თითო თითოეულ ობიექტზე
+@msg	nothing to enclose	შემოსაზღვრელი არაფერია
+@msg	`offset` must be 0 or more	`offset` უნდა იყოს 0 ან მეტი
+@msg	the shape would have no size	ფიგურას ზომა არ ექნებოდა
+@msg	the shape would reach past the edge of the canvas	ფიგურა ტილოს კიდეს გასცდებოდა
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	დოკუმენტის ხელსაწყოები
 	Save a Timestamped Copy	ასლის შენახვა თარიღითა და დროით
@@ -10469,8 +11088,105 @@ font-script	Japanese	იაპონური
 @msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
 @msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Nature Icons	ბუნების ხატულები
+	Flower	ყვავილი
+	Tree	ხე
+	Mountain	მთა
+	Ornamental	ორნამენტული
+	Scrollwork	ხვეული
+	Filigree Arrow	ფილიგრანული ისარი
+	Petal Sweep	ფურცლების რკალი
+	Twin Curl	ორმაგი ხვეული
+	Vector Packs	ვექტორული პაკეტები
+	Compass Rose	კომპასის ვარდი
+	Botanical Sprig	ბოტანიკური ტოტი
+	Facet Diamond	წახნაგოვანი ბრილიანტი
+	Tide Crest	ტალღის ქედი
+	Leaf Vine	ფოთლების ვაზი
+	Blossom Chain	ყვავილების ჯაჭვი
+	Pennant Garland	ალმების გირლანდა
+	Lantern String	ფარნების ჯაჭვი
+	Orbit Lines	ორბიტული ხაზები
+	Petal Garland	ფურცლების გირლანდა
+	Lattice Braid	ბადის ნაწნავი
+	Facet Sweep	წახნაგოვანი მონასმი
+	Artistic Brushes	მხატვრული ფუნჯები
+	Paint	საღებავი
+	Flat Sweep	ბრტყელი მოსმა
+	Dry Drag	მშრალი მოსმა
+	Loaded Stroke	სქელი მონასმი
+	Fan Sweep	მარაოსებრი მოსმა
+	Engraving	გრავიურა
+	Fine Hatching	წვრილი შტრიხები
+	Dense Hatching	მჭიდრო შტრიხები
+	Tapered Hatching	შევიწროებული შტრიხები
+	Broken Hatching	წყვეტილი შტრიხები
+	Image Brush	გამოსახულების ფუნჯები
+	Soft Bloom	რბილი ყვავილი
+	Halftone Field	ნახევარტონური ველი
+	Solar Grain	მზის მარცვალი
+	Color Flecks	ფერადი ლაქები
+	Fine Stipple	წვრილი წერტილოვანი ტექსტურა
+	Dense Stipple	მკვრივი წერტილოვანი ტექსტურა
+	Soft Stipple	რბილი წერტილოვანი ტექსტურა
+	Bold Stipple	მსხვილი წერტილოვანი ტექსტურა
+	Paper Cutouts	ქაღალდის ამონაჭრები
+	Coral Layers	მარჯნის ფენები
+	Mint Layers	პიტნის ფენები
+	Midnight Layers	შუაღამის ფენები
+	Sunflower Sheet	მზესუმზირის ფურცელი
+	Rose Layers	ვარდისფერი ფენები
+	Monochrome Stack	მონოქრომული დასტა
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ინსტრუმენტების ზოლის ინსტრუმენტისა და მისი კლავიშების მოქმედებას მინიშნების ნაცვლად ბარათზე აჩვენებს; საჭიროა მინიშნებების ჩვენება.
+	Selects whole objects and groups to move, resize or rotate them.	მთლიანად მონიშნავს ობიექტებსა და ჯგუფებს მათი გადასაადგილებლად, ზომის შესაცვლელად ან მოსაბრუნებლად.
+	Selects anchor points and path segments to reshape a path.	მონიშნავს საყრდენ წერტილებსა და ტრაექტორიის სეგმენტებს ტრაექტორიის ფორმის შესაცვლელად.
+	Draws paths point by point, with straight segments and smooth curves.	ხატავს ტრაექტორიებს წერტილ-წერტილ, სწორი სეგმენტებითა და გლუვი მრუდებით.
+	Draws smooth curves through the points you click.	ხატავს გლუვ მრუდებს იმ წერტილებზე გავლით, რომლებზეც დააწკაპუნებთ.
+	Adds text at a point, or in a frame you drag.	ამატებს ტექსტს წერტილში ან ჩარჩოში, რომელსაც გაჭიმავთ.
+	Draws rectangles and squares.	ხატავს მართკუთხედებსა და კვადრატებს.
+	Draws rectangles with rounded corners.	ხატავს მომრგვალებულკუთხიან მართკუთხედებს.
+	Draws ellipses and circles.	ხატავს ელიფსებსა და წრეებს.
+	Draws polygons with sides of equal length.	ხატავს ტოლგვერდა მრავალკუთხედებს.
+	Draws stars.	ხატავს ვარსკვლავებს.
+	Turns objects around a reference point.	აბრუნებს ობიექტებს საორიენტაციო წერტილის გარშემო.
+	Flips objects across an axis through a reference point.	სარკისებურად ასახავს ობიექტებს საორიენტაციო წერტილზე გამავალი ღერძის მიმართ.
+	Resizes objects from a reference point.	ცვლის ობიექტების ზომას საორიენტაციო წერტილიდან.
+	Slants objects from a reference point.	ახრის ობიექტებს საორიენტაციო წერტილიდან.
+	Moves the view of the document.	გადააადგილებს დოკუმენტის ხედს.
+	Magnifies or reduces the view.	ადიდებს ან ამცირებს ხედს.
+	Copies the color and other attributes of one object to the selection.	აკოპირებს ერთი ობიექტის ფერსა და სხვა ატრიბუტებს მონიშნულზე.
+	Sets the direction and length of a gradient.	აყენებს გრადიენტის მიმართულებასა და სიგრძეს.
+	Creates, selects and resizes artboards.	ქმნის, მონიშნავს და ცვლის სამუშაო დაფების ზომას.
+	Changes the width of a stroke along its length.	ცვლის კონტურის სისქეს მისი სიგრძის გასწვრივ.
+	Bends art by dragging pins placed on it.	ღუნავს ნახატს მასზე დასმული ქინძისთავების გადათრევით.
+	Pushes the outlines of paths in the direction you drag.	უბიძგებს ტრაექტორიების მოხაზულობას გადათრევის მიმართულებით.
+	Twists the outlines of paths into swirls.	ხვევს ტრაექტორიების მოხაზულობას გრიგალებად.
+	Pulls the outlines of paths in toward the brush.	იზიდავს ტრაექტორიების მოხაზულობას ფუნჯისკენ.
+	Pushes the outlines of paths out from the brush.	უბიძგებს ტრაექტორიების მოხაზულობას ფუნჯიდან გარეთ.
+	Adds curved details along the outlines of paths.	ამატებს მრუდ დეტალებს ტრაექტორიების მოხაზულობის გასწვრივ.
+	Adds spiky details along the outlines of paths.	ამატებს წვეტიან დეტალებს ტრაექტორიების მოხაზულობის გასწვრივ.
+	Adds wrinkles along the outlines of paths.	ამატებს ნაოჭებს ტრაექტორიების მოხაზულობის გასწვრივ.
+	Moves, copies and resizes objects on the perspective grid.	გადააადგილებს, აკოპირებს და ცვლის ობიექტების ზომას პერსპექტივის ბადეზე.
+	Makes a series of steps between two or more objects.	ქმნის საფეხურების რიგს ორ ან მეტ ობიექტს შორის.
+	Places dimension lines that show measured lengths.	სვამს ზომის ხაზებს, რომლებიც გაზომილ სიგრძეებს აჩვენებს.
+	Tap	მოკლე დაჭერა
+	Clear Hold	ხანგრძლივი დაჭერის გასუფთავება
+	Hold Shortcuts	ხანგრძლივი დაჭერის მალსახმობები
+	Hold Shortcut Delay	ხანგრძლივი დაჭერის დაყოვნება
+	How hold shortcuts work	როგორ მუშაობს ხანგრძლივი დაჭერის მალსახმობები
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	დაწკაპეთ, შემდეგ დააჭირეთ კლავიშს, რომელიც ამისთვის უნდა დაიჭიროთ (Esc აუქმებს). კლავიშის ხანგრძლივი დაჭერა ამას უშვებს; მოკლე დაჭერა კლავიშის საკუთარ მალსახმობს უშვებს.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	კლავიშის მოკლე დაჭერა მის მალსახმობს უშვებს. თუ კლავიშს დაყოვნების ხანგრძლივობით დაიჭერთ, ამის ნაცვლად გაეშვება მისი „დაჭერა“ სვეტის ხელსაწყო ან ბრძანება. ხანგრძლივი დაჭერის მალსახმობი არის ასოს, ციფრის ან სასვენი ნიშნის კლავიში, ცალკე ან Shift კლავიშთან ერთად.
+@msg	Hold {_1} is already used by {_2}	ხანგრძლივი დაჭერა {_1} უკვე გამოიყენება ამისთვის: {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ხანგრძლივი დაჭერის მალსახმობი არის კლავიში, რომელიც სიმბოლოს წერს, ცალკე ან Shift კლავიშთან ერთად ({shown} შეიცავს Cmd, Ctrl ან Alt კლავიშს)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ვერ იქნება ხანგრძლივი დაჭერის მალსახმობი: გამოიყენეთ ასო, ციფრი ან სასვენი ნიშნის კლავიში
+	Dashed Arrow	წყვეტილი ისარი
 	Pressure Sensitive	წნევაზე მგრძნობიარე
 	Flex Ribbon	მოქნილი ლენტი
 	Pulse Stroke	პულსირებადი მონასმი
 	Round Flow	მრგვალი ნაკადი
 	Chisel Flow	დახრილი ნაკადი
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	ორიგინალის რედაქტირება პროგრამით:
+file-filter	Applications	აპლიკაციები

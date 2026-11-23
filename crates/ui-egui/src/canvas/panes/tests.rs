@@ -691,12 +691,16 @@ fn art_carried_through_a_tab_drops_into_a_third_documents_pane() {
     app.run("window.arrange.tile", json!({})).unwrap();
     let source = app.session.documents()[0].doc.clone();
     let third = app.session.documents()[2].doc.clone();
+    // A tab's title starts with its document's name (an inactive tab shows the name alone).
+    let names: Vec<String> = app.session.documents().iter().map(|d| d.title()).collect();
     let titles = |out: egui::FullOutput| -> Vec<egui::Rect> {
         let mut t: Vec<_> = out
             .shapes
             .iter()
             .filter_map(|s| match &s.shape {
-                Shape::Text(t) if t.galley.text().contains(" @ ") => Some(egui::Rect::from_min_size(t.pos, t.galley.size())),
+                Shape::Text(t) if names.iter().any(|n| t.galley.text().starts_with(n.as_str())) => {
+                    Some(egui::Rect::from_min_size(t.pos, t.galley.size()))
+                }
                 _ => None,
             })
             .collect();
@@ -873,6 +877,149 @@ fn other_panes_draw_their_guides_and_selected_objects() {
     });
     assert!(guides, "the guide is drawn in its pane");
     assert_ne!(layer, Color32::TRANSPARENT);
+}
+
+/// The selected objects' outlines as the panes made them on every frame before they kept them,
+/// to hold the kept outlines against.
+fn outlines_made_each_frame(st: &vectorcraft_engine::DocState, xf: &Xf) -> Vec<Shape> {
+    let mut shapes = vec![];
+    let symbols = st.doc.symbol_boxes();
+    let nodes: Vec<(vectorcraft_doc::NodeId, &vectorcraft_doc::Node)> =
+        st.selection.objects.iter().filter_map(|id| Some((*id, st.doc.node(*id)?))).collect();
+    let color = |id: vectorcraft_doc::NodeId| Stroke::new(1.0, c32(st.doc.layer_color(id)));
+    let mut stroke_path = |bp: &BezPath, s: Stroke| {
+        for line in to_screen_path(bp, xf) {
+            shapes.push(Shape::line(line, s));
+        }
+    };
+    if too_many_anchors(nodes.iter().map(|(_, n)| *n)) {
+        let bounds = nodes.iter().filter_map(|(_, n)| n.geometric_bounds_with(&symbols)).reduce(|a, b| a.union(b));
+        if let (Some(b), Some((id, _))) = (bounds, nodes.first()) {
+            stroke_path(&vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color(*id));
+        }
+        return shapes;
+    }
+    for (id, n) in nodes {
+        stroke_path(&node_outline(n, &symbols), color(id));
+    }
+    shapes
+}
+
+/// The first document's pane in a tiled pair: the outlines it keeps, after checking that they
+/// equal the outlines made afresh through its view and that the frame `drawn` holds them in order.
+fn kept_outlines<'a>(app: &'a VectorcraftApp, ctx: &egui::Context, drawn: &[Shape]) -> &'a [Shape] {
+    let pane = panes(app).1[0];
+    let xf = Xf::new(view_rects(app, pane, ctx.pixels_per_point()).1, &app.views[0]);
+    let slot = (app.session.documents()[0].uid, 1);
+    let kept = &app.canvas.panes.outlines.get(&slot).expect("the pane keeps its outlines").shapes;
+    assert_eq!(kept, &outlines_made_each_frame(&app.session.documents()[0], &xf), "the kept outlines are the ones made afresh");
+    assert!(kept.is_empty() || drawn.windows(kept.len()).any(|w| w == kept.as_slice()), "the pane draws the kept outlines");
+    kept
+}
+
+/// Run `cmd` on the first document of a tiled pair, then make the second current again.
+fn in_first(app: &mut VectorcraftApp, cmd: &str, args: serde_json::Value) -> serde_json::Value {
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let out = app.session.execute(cmd, &args).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    out
+}
+
+#[test]
+fn kept_outlines_do_not_show_for_a_new_document_that_takes_a_freed_documents_address() {
+    let affine = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    let st = vectorcraft_engine::DocState::new(vectorcraft_doc::Document::new(400.0, 300.0), None);
+    let kept = Outlines { revision: st.revision, doc: Arc::downgrade(&st.doc), selection: vec![], affine, shapes: vec![] };
+    assert!(kept.shows(&st, &affine), "the outlines show the document they were made for");
+    let freed = Arc::as_ptr(&st.doc);
+    drop(st);
+    let mut reused = false;
+    for _ in 0..64 {
+        let other = vectorcraft_engine::DocState::new(vectorcraft_doc::Document::new(400.0, 300.0), None);
+        reused |= Arc::as_ptr(&other.doc) == freed;
+        assert!(!kept.shows(&other, &affine), "a different document with the same revision, selection and mapping is not the one shown");
+    }
+    assert!(!reused, "the weak reference keeps the freed document's address from being taken");
+}
+
+#[test]
+fn other_panes_keep_their_selected_outlines_until_the_document_selection_or_view_changes() {
+    let mut app = app_with(2);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let rect = in_first(&mut app, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 80}))["id"].clone();
+    let ellipse = in_first(&mut app, "shape.ellipse", json!({"x": 200, "y": 100, "width": 90, "height": 60}))["id"].clone();
+    in_first(&mut app, "select.set", json!({"ids": [rect, ellipse]}));
+    frame(&mut app, &ctx, vec![]);
+    let drawn = frame(&mut app, &ctx, vec![]);
+    assert!(kept_outlines(&app, &ctx, &drawn).len() >= 2, "the rectangle and the ellipse are outlined");
+    let made = app.canvas.panes.outlines_made;
+    let drawn = frame(&mut app, &ctx, vec![]);
+    kept_outlines(&app, &ctx, &drawn);
+    assert_eq!(app.canvas.panes.outlines_made, made, "an unchanged frame draws the kept outlines");
+    let changed = |app: &mut VectorcraftApp, what: &str| {
+        let made = app.canvas.panes.outlines_made;
+        let drawn = frame(app, &ctx, vec![]);
+        kept_outlines(app, &ctx, &drawn);
+        assert_eq!(app.canvas.panes.outlines_made, made + 1, "{what} makes the outlines again, once");
+        let drawn = frame(app, &ctx, vec![]);
+        kept_outlines(app, &ctx, &drawn);
+        assert_eq!(app.canvas.panes.outlines_made, made + 1, "the frame after {what} draws the kept outlines");
+    };
+    in_first(&mut app, "select.set", json!({"ids": [ellipse]}));
+    changed(&mut app, "a new selection");
+    in_first(&mut app, "object.move", json!({"dx": 30, "dy": -10}));
+    changed(&mut app, "a move");
+    let layer = app.session.documents()[0].doc.layers[0].id.0;
+    in_first(&mut app, "layer.setProps", json!({"id": layer, "color": "#20a040"}));
+    changed(&mut app, "a new layer color");
+    app.views[0].center.x += 25.0;
+    changed(&mut app, "a pan");
+    app.views[0].zoom *= 1.5;
+    app.views[0].rotation = 20.0;
+    changed(&mut app, "a zoom and a turn");
+    app.ui.view.edges = false;
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.canvas.panes.outlines.is_empty(), "with Edges off no outlines are kept");
+    app.ui.view.edges = true;
+    changed(&mut app, "Edges on again");
+    in_first(&mut app, "select.none", json!({}));
+    changed(&mut app, "an empty selection");
+    let drawn = frame(&mut app, &ctx, vec![]);
+    assert!(kept_outlines(&app, &ctx, &drawn).is_empty());
+    // 30,000 rectangles have more points than the outlines are made for: the pane keeps the bounds.
+    let st = &app.session.documents()[0];
+    let rect = st.doc.node(vectorcraft_doc::NodeId(rect.as_u64().unwrap())).cloned().unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.session
+        .edit("Fill", |d, _| {
+            let layer = d.layers[0].id;
+            for _ in 0..30_000 {
+                let mut n = rect.clone();
+                n.id = d.alloc_id();
+                d.insert(Some(layer), usize::MAX, n)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    changed(&mut app, "selecting more points than are outlined");
+    let drawn = frame(&mut app, &ctx, vec![]);
+    assert_eq!(kept_outlines(&app, &ctx, &drawn).len(), 1, "one rectangle around the bounds");
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.canvas.panes.outlines.is_empty(), "Consolidate All Windows forgets the outlines");
+    // Panes that stop showing before their render arrives keep no outlines either.
+    app.run("window.arrange.tile", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.canvas.panes.outlines.len(), 1);
+    app.ui.tiled = false;
+    app.canvas.panes.shown.clear();
+    app.canvas.panes.last.clear();
+    frame(&mut app, &ctx, vec![]);
+    assert!(app.canvas.panes.outlines.is_empty(), "no pane shows, so no outlines are kept");
 }
 
 #[test]
@@ -1208,4 +1355,83 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     // The check tells the two papers and the plain conversion apart.
     assert!(differs(want, blend(s, front_paper)), "the front document's paper blends to another color");
     assert!(differs(got, over(plain(s), under)), "the art converted alone shows another color");
+}
+
+fn thread_cpu_ns() -> Option<u128> {
+    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+}
+
+/// Time a pane's selected-object outlines with every object of a document selected: 2,000 and
+/// 20,000 rectangles, 20,000 ellipses, and 150,000 rectangles (more points than are outlined, so
+/// the pane draws their bounds). Each frame is a whole egui pass that draws the outlines and the
+/// tessellation of what it drew, made afresh on every frame ([`outlines_made_each_frame`]) or
+/// drawn from the kept outlines ([`selected_objects`]). The sides alternate, and the median time
+/// per frame of 7 runs is printed.
+/// Run with `cargo test --release -p vectorcraft-ui-egui --lib pane_outlines_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; performance depends on machine load"]
+fn pane_outlines_timing() {
+    const FRAMES: u32 = 20;
+    let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+    eprintln!("{clock} per frame, median of 7 runs of {FRAMES} frames");
+    for (count, shape) in [(2_000, "shape.rectangle"), (20_000, "shape.rectangle"), (20_000, "shape.ellipse"), (150_000, "shape.rectangle")] {
+        let mut app = app_with(1);
+        let id = app.run(shape, json!({"x": 20, "y": 20, "width": 60, "height": 40})).unwrap()["id"].as_u64().unwrap();
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().unwrap();
+        app.session
+            .edit("Fill", |d, _| {
+                let layer = d.layers[0].id;
+                for _ in 1..count {
+                    let mut n = node.clone();
+                    n.id = d.alloc_id();
+                    d.insert(Some(layer), usize::MAX, n)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.selection.objects.len(), count);
+        let ctx = egui::Context::default();
+        let area = egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+        let xf = Xf { rect: area, zoom: 4.0, center: Point::new(50.0, 40.0), rot: 0.0 };
+        let mut kept = Panes::default();
+        let slot = (st.uid, 1);
+        let mut pass = |fresh: bool| {
+            let raw = egui::RawInput { screen_rect: Some(area), ..Default::default() };
+            let out = ctx.run_ui(raw, |ui| {
+                let painter = ui.painter_at(area);
+                if fresh {
+                    for s in outlines_made_each_frame(st, &xf) {
+                        painter.add(s);
+                    }
+                } else {
+                    selected_objects(&mut kept, slot, st, &painter, &xf);
+                }
+            });
+            ctx.tessellate(out.shapes, out.pixels_per_point).len()
+        };
+        assert_eq!(pass(true), pass(false), "both sides draw as much");
+        let mut time = |fresh: bool| {
+            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+            for _ in 0..FRAMES {
+                pass(fresh);
+            }
+            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+            ns as f64 / f64::from(FRAMES) / 1e6
+        };
+        let (mut fresh, mut cached) = (vec![], vec![]);
+        for _ in 0..7 {
+            fresh.push(time(true));
+            cached.push(time(false));
+        }
+        let median = |v: &mut Vec<f64>| {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        };
+        let shapes = kept.outlines.get(&slot).map_or(0, |o| o.shapes.len());
+        eprintln!("{count} x {shape} ({shapes} lines drawn)");
+        eprintln!("  made every frame: {:>9.3} ms  {fresh:.3?}", median(&mut fresh));
+        eprintln!("  kept:             {:>9.3} ms  {cached:.3?}", median(&mut cached));
+    }
 }

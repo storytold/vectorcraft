@@ -124,6 +124,54 @@ impl ArrowStyle {
     }
 }
 
+/// `arrowHead`: null, or a built-in stroke arrowhead by its name (`Barbed`, as `stroke.set` takes
+/// it). A custom arrowhead and an unknown name are refused.
+mod arrow_head {
+    use crate::Arrowhead;
+    use serde::de::{Error, IntoDeserializer, Visitor};
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Arrowhead>, D::Error> {
+        deserializer.deserialize_option(Name)
+    }
+
+    /// Reads the name where it is, without a copy of its own.
+    struct Name;
+
+    impl<'de> Visitor<'de> for Name {
+        type Value = Option<Arrowhead>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a built-in stroke arrowhead name or null")
+        }
+
+        fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+            deserializer.deserialize_str(self)
+        }
+
+        fn visit_str<E: Error>(self, name: &str) -> Result<Self::Value, E> {
+            // No built-in name is this long, so a longer one is refused without parsing it.
+            let parsed: Result<Arrowhead, serde::de::value::Error> =
+                if name.len() > 64 { Err(serde::de::value::Error::custom("too long")) } else { Arrowhead::deserialize(name.into_deserializer()) };
+            match parsed {
+                Ok(head) if !matches!(head, Arrowhead::Custom(_)) => Ok(Some(head)),
+                _ => {
+                    let shown: String = name.chars().take(64).collect();
+                    Err(E::custom(format!("Unknown arrowhead {shown}: a built-in stroke arrowhead name or null")))
+                }
+            }
+        }
+    }
+}
+
 /// Where the label sits across the dimension line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -157,6 +205,12 @@ pub struct DimensionOptions {
     pub line_type: LineType,
     pub line_color: [u8; 3],
     pub arrow_style: ArrowStyle,
+    /// A built-in stroke arrowhead drawn at both ends in place of `arrow_style`'s head. Versions
+    /// that have the stroke arrowhead but do not read this keep the saved arrows until they draw
+    /// the dimension again, and then draw `arrow_style`. Versions without the stroke arrowhead do
+    /// not open the file.
+    #[serde(deserialize_with = "arrow_head::deserialize", skip_serializing_if = "Option::is_none")]
+    pub arrow_head: Option<crate::Arrowhead>,
     pub arrow_scale: f64,
     pub extension_weight: f64,
     pub extension_type: LineType,
@@ -186,6 +240,7 @@ impl Default for DimensionOptions {
             line_type: LineType::Solid,
             line_color: [0, 0, 0],
             arrow_style: ArrowStyle::Filled,
+            arrow_head: None,
             arrow_scale: 100.0,
             extension_weight: 0.5,
             extension_type: LineType::Solid,
@@ -209,7 +264,8 @@ impl DimensionOptions {
     /// tolerantly so a newer version's options don't stop a document opening.
     pub fn from_params(v: serde_json::Value) -> Result<Self, String> {
         if let (Some(given), Ok(serde_json::Value::Object(known))) = (v.as_object(), serde_json::to_value(Self::default()))
-            && let Some(k) = given.keys().find(|k| !known.contains_key(*k))
+            // `arrowHead` is left out of the saved options when it is null.
+            && let Some(k) = given.keys().find(|k| !known.contains_key(*k) && k.as_str() != "arrowHead")
         {
             return Err(format!("Unknown dimension option {k}"));
         }
@@ -228,8 +284,16 @@ impl DimensionOptions {
         }
         Ok(f)
     }
+    /// The stroke arrowhead drawn at each end of the dimension line: `arrow_head`, or else the
+    /// arrow style's head.
+    pub fn arrowhead(&self) -> Option<crate::Arrowhead> {
+        self.arrow_head.clone().or_else(|| self.arrow_style.arrowhead())
+    }
     pub fn validate(&self) -> Result<(), String> {
         self.factor()?;
+        if matches!(self.arrow_head, Some(crate::Arrowhead::Custom(_))) {
+            return Err("A dimension's arrowhead is a built-in stroke arrowhead".into());
+        }
         if self.precision > 6 {
             return Err("Choose a precision from 0 to 6".into());
         }

@@ -239,14 +239,30 @@ fn save_for_web_in_the_smallest_window_keeps_its_settings_and_buttons_in_view() 
         if !matches!((controls, settings), (Some(c), Some(s)) if c < s) {
             wrong.push(format!("{size:?}: Preview in Browser ({controls:?}) is left of the settings ({settings:?})"));
         }
-        // Preview in Browser is right of the download speed list or on a row below it, not over it.
+        // Preview in Browser is right of the download speed list's frame or on a row below it, not
+        // over it.
         let button = text_rects(&shown, "Preview in Browser").first().copied();
-        let speed = text_rects(&shown, "56.6 Kbps").first().copied();
+        let speed = text_rects(&shown, "56.6 Kbps").first().and_then(|r| frame_around(&shown, *r));
         if !matches!((button, speed), (Some(b), Some(s)) if b.left() > s.right() + 16.0 || b.top() > s.bottom() + 8.0) {
             wrong.push(format!("{size:?}: Preview in Browser ({button:?}) clears the download speed list ({speed:?})"));
         }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// The frame of the control that drew the text at `inner`: the widest rectangle shape around it
+/// that is at most 240 by 40 pt.
+fn frame_around(shown: &Shown, inner: Rect) -> Option<Rect> {
+    fn walk(s: &Shape, inner: Rect, out: &mut Vec<Rect>) {
+        match s {
+            Shape::Rect(r) if r.rect.contains_rect(inner) && r.rect.width() <= 240.0 && r.rect.height() <= 40.0 => out.push(r.rect),
+            Shape::Vec(v) => v.iter().for_each(|s| walk(s, inner, out)),
+            _ => {}
+        }
+    }
+    let mut out = vec![];
+    shown.shapes.iter().for_each(|c| walk(&c.shape, inner, &mut out));
+    out.into_iter().max_by(|a, b| a.width().total_cmp(&b.width()))
 }
 
 /// The rectangles of the texts `label` the dialog drew.
@@ -432,18 +448,37 @@ fn texts(shown: &Shown) -> Vec<(String, Rect, Rect)> {
 
 #[test]
 fn a_dialog_with_buttons_in_its_body_scrolls_them_with_the_body() {
-    // Check Spelling draws its buttons inside its body: in a window too short for it, the heading
-    // stays in view and the buttons scroll with the body.
-    let open: Open = |app| {
-        check_spelling::open(app).unwrap();
-    };
-    let tall = show_in(open, vec2(1280.0, 900.0), false);
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1024.0, (0.6 * tall.window.height()).round()));
-    let shown = show_in(open, screen.size(), false);
-    let scrolled = show_in(open, screen.size(), true);
-    let seen = |shown: &Shown, label: &str| buttons(shown, screen, &[label]).iter().any(|(_, seen)| *seen);
-    assert!(screen.contains_rect(shown.window), "the dialog stays on the screen: {:?}", shown.window);
-    assert!(body_bar(&shown).is_some() && shown.whole == [false; 2], "only the body scrolls ({:?}, {:?})", shown.body, shown.whole);
-    assert!(seen(&shown, "Check Spelling") && seen(&scrolled, "Check Spelling"), "the heading stays in view");
-    assert!(!seen(&shown, "Cancel") && seen(&scrolled, "Cancel"), "Cancel is out of view until the body is scrolled down");
+    // Check Spelling and a stop's message box draw their buttons inside their body: in a window too
+    // short for the dialog, the heading stays in view and the buttons scroll with the body.
+    let opens: [(&str, Open, &str); 2] = [
+        (
+            "Check Spelling",
+            |app| {
+                check_spelling::open(app).unwrap();
+            },
+            "Cancel",
+        ),
+        ("Action 1", |app| action_stop::open_message(app, "Action 1", &"Check the art. ".repeat(40), true), "Stop"),
+    ];
+    let mut wrong = vec![];
+    for (heading, open, button) in opens {
+        let tall = show_in(open, vec2(1280.0, 900.0), false);
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(1024.0, (0.6 * tall.window.height()).round()));
+        let shown = show_in(open, screen.size(), false);
+        let scrolled = show_in(open, screen.size(), true);
+        let seen = |shown: &Shown, label: &str| buttons(shown, screen, &[label]).iter().any(|(_, seen)| *seen);
+        if !screen.contains_rect(shown.window) {
+            wrong.push(format!("{heading}: the dialog leaves the screen: {:?}", shown.window));
+        }
+        if body_bar(&shown).is_none() || shown.whole != [false; 2] {
+            wrong.push(format!("{heading}: not only the body scrolls ({:?}, {:?})", shown.body, shown.whole));
+        }
+        if !seen(&shown, heading) || !seen(&scrolled, heading) {
+            wrong.push(format!("{heading}: the heading leaves the view"));
+        }
+        if seen(&shown, button) || !seen(&scrolled, button) {
+            wrong.push(format!("{heading}: {button} is not out of view until the body is scrolled down"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
 }

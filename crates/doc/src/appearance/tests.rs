@@ -188,7 +188,7 @@ fn angle_profiles_join_samples_the_shorter_way_round() {
 #[test]
 fn strokes_without_pressure_round_trip_unchanged() {
     let json = serde_json::to_value(StrokeLayer::new(Paint::None, 2.0)).unwrap();
-    for key in ["pressure", "tilt", "bearing", "rotation"] {
+    for key in ["pressure", "tilt", "bearing", "rotation", "wheel"] {
         assert!(json.get(key).is_none(), "{key}");
     }
     let st: StrokeLayer = serde_json::from_value(json).unwrap();
@@ -199,19 +199,21 @@ fn strokes_without_pressure_round_trip_unchanged() {
     let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
     ap.stroke_mut().unwrap().pressure = Some(PressureProfile::sample());
     assert_eq!(ap.without_pressure().stroke().unwrap().pressure, None);
-    // The pen's tilt, bearing and rotation load, save and stay behind the same way.
+    // The pen's tilt, bearing, rotation and wheel load, save and stay behind the same way.
     let posed = StrokeLayer {
         tilt: Some(PressureProfile::sample()),
         bearing: Some(AngleProfile::sample()),
         rotation: Some(AngleProfile { points: vec![(0.0, -45.0)] }),
+        wheel: Some(PressureProfile { points: vec![(0.0, 0.25), (1.0, 0.75)] }),
         ..back
     };
+    assert_eq!(serde_json::to_value(&posed).unwrap()["wheel"], serde_json::json!({"points": [[0.0, 0.25], [1.0, 0.75]]}));
     let again: StrokeLayer = serde_json::from_value(serde_json::to_value(&posed).unwrap()).unwrap();
     assert_eq!(again, posed);
     let mut ap = Appearance::basic(Paint::None, Paint::None, 1.0);
     *ap.stroke_mut().unwrap() = posed;
     let st = ap.without_pressure().stroke().cloned().unwrap();
-    assert_eq!((st.pressure, st.tilt, st.bearing, st.rotation), (None, None, None, None));
+    assert_eq!((st.pressure, st.tilt, st.bearing, st.rotation, st.wheel), (None, None, None, None, None));
 }
 
 /// The Lens profile's widths at its middle, a quarter of the way along and past its end.
@@ -381,6 +383,15 @@ fn custom_arrowheads_carry_their_art_and_measure_it() {
     assert_eq!(head.half_width(), 2.0);
     let Arrowhead::Custom(c) = &head else { panic!("custom") };
     assert_eq!(c.stop(), 1.5, "the line stops halfway along the head");
+    // A head with a stop of its own (an Illustrator file's arrowhead) keeps it, saved and read back.
+    let stopped = (**c).clone().with_stop(0.5);
+    assert_eq!(stopped.stop(), 0.5);
+    let back: CustomArrowhead = serde_json::from_value(serde_json::to_value(&stopped).unwrap()).unwrap();
+    assert_eq!(back, stopped);
+    assert!(!serde_json::to_string(&**c).unwrap().contains("stop"), "a head without one writes none");
+    for odd in [f64::NAN, -0.5, CustomArrowhead::MAX_UNITS + 1.0] {
+        assert_eq!((**c).clone().with_stop(odd).stop(), 1.5, "{odd} is left out");
+    }
     // Saved with the stroke, art and all, beside the built-in heads' names.
     let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
     (st.start_arrow, st.end_arrow) = (Some(Arrowhead::Triangle), Some(head.clone()));
@@ -402,7 +413,7 @@ fn custom_arrowheads_out_of_bounds_draw_nothing() {
     let mut path = c.path.clone();
     path.subpaths[0].anchors[1] = vectorcraft_geom::Anchor::corner(vectorcraft_geom::Point::new(1e9, 0.0));
     // A file can hold what `new` drops: reading it drops it too.
-    let json = serde_json::to_value(CustomArrowhead { name: "Wedge".into(), path }).unwrap();
+    let json = serde_json::to_value(CustomArrowhead { name: "Wedge".into(), path, stop: None }).unwrap();
     let far: CustomArrowhead = serde_json::from_value(json).unwrap();
     assert_eq!((far.name.as_str(), far.path.subpaths.len()), ("Wedge", 0));
     assert_eq!((far.reach(), far.half_width(), far.stop()), (0.0, 0.0, 0.0));
@@ -413,7 +424,7 @@ fn custom_arrowheads_out_of_bounds_draw_nothing() {
     let mut hollow = c.path.clone();
     hollow.subpaths.extend(std::iter::repeat_n(vectorcraft_geom::SubPath::new(vec![], false), CustomArrowhead::MAX_ANCHORS));
     assert!(!CustomArrowhead::fits(&hollow), "too many subpaths");
-    let json = serde_json::to_value(CustomArrowhead { name: "Hollow".into(), path: hollow }).unwrap();
+    let json = serde_json::to_value(CustomArrowhead { name: "Hollow".into(), path: hollow, stop: None }).unwrap();
     let hollow: CustomArrowhead = serde_json::from_value(json).unwrap();
     assert!(hollow.path.subpaths.is_empty(), "too many subpaths, read back");
 }

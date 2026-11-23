@@ -209,7 +209,8 @@ pub(super) fn info_text(app: &VectorcraftApp) -> (String, Option<u64>) {
             (text, Some(next))
         }
         StatusBarShow::Undos => {
-            let text = st.map(|d| format!("{}: {}  {}: {}", tl!("Undos"), d.history.undo.len(), tl!("Redos"), d.history.redo.len()));
+            let (undos, redos) = (crate::i18n::colon(tl!("Undos")), crate::i18n::colon(tl!("Redos")));
+            let text = st.map(|d| format!("{undos} {}  {redos} {}", d.history.undo.len(), d.history.redo.len()));
             (text.unwrap_or_default(), None)
         }
         StatusBarShow::ColorProfile => (st.map(|d| color_profile_name(&d.doc)).unwrap_or_default(), None),
@@ -277,7 +278,7 @@ pub(super) fn clipped_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> e
 }
 
 /// Show `text` on hover in a tooltip that wraps to fit inside the window.
-fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
+pub(super) fn full_text_tooltip(response: egui::Response, text: impl Into<egui::WidgetText>) -> egui::Response {
     let text = text.into();
     response.on_hover_ui(|ui| {
         let margins = ui.spacing().menu_margin.sum().x + 2.0 * ui.spacing().item_spacing.x;
@@ -401,12 +402,25 @@ pub(super) fn status_readouts(app: &VectorcraftApp, ui: &mut Ui, t: &Tokens) {
         let more = busy.len() - 1;
         (if more > 0 { format!("{label}… (+{more})") } else { format!("{label}…") }, &[][..])
     } else {
-        (crate::i18n::msg(&app.ui.status), status_notes(&app.ui))
+        (status_message(app), status_notes(&app.ui))
     };
     if !message.is_empty() {
         let rect = egui::Rect::from_min_max(egui::pos2((area.left() + 18.0).min(right), area.top()), egui::pos2(right, area.bottom()));
         status_field_with_notes(ui, "message", rect, message, egui::FontId::proportional(11.0), t.text, notes);
     }
+}
+
+/// The status message in the interface language. While it is the error of the last script run
+/// and that error's message is text the script supplied, that text is shown as it is and only the
+/// words around it are translated.
+pub(crate) fn status_message(app: &VectorcraftApp) -> String {
+    let status = app.ui.status.as_str();
+    if let Some((before, kept, after)) = app.session.script_authored_failure()
+        && status.strip_prefix(before.as_str()).and_then(|rest| rest.strip_suffix(after.as_str())) == Some(kept)
+    {
+        return crate::i18n::msg_keeping(&before, kept, &after);
+    }
+    crate::i18n::msg(status)
 }
 
 /// Most notes the status message's hover and access information list.

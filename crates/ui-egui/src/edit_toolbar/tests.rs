@@ -23,34 +23,63 @@ fn slot_of(app: &VectorcraftApp, tool: &str) -> Option<usize> {
     slots(app).iter().position(|s| s.contains(&tool))
 }
 
-/// One headless frame of the toolbar, its keys handled first as in the app; returns the texts
-/// painted: (text, a point inside it, colour).
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<(String, Pos2, Color32)> {
-    fn texts(s: &egui::Shape, out: &mut Vec<(String, Pos2, Color32)>) {
-        match s {
-            egui::Shape::Text(t) => {
-                let color = t.galley.job.sections.first().map_or(t.fallback_color, |s| s.format.color);
-                out.push((t.galley.text().to_string(), t.pos + vec2(4.0, t.galley.size().y / 2.0), color));
-            }
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
+/// One headless frame of the toolbar, its keys handled first as in the app; returns what it painted.
+fn run_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::Shape> {
     let input = RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), ..Default::default() };
     let mut out = ctx.run_ui(input, |ui| {
         crate::shortcuts::handle(app, ui.ctx());
         crate::toolbar::show(app, ui);
     });
     out.textures_delta.clear();
+    out.shapes.into_iter().map(|c| c.shape).collect()
+}
+
+/// The texts `shape` paints, added to `out`: (text, a point inside it, colour).
+fn texts(s: &egui::Shape, out: &mut Vec<(String, Pos2, Color32)>) {
+    match s {
+        egui::Shape::Text(t) => {
+            let color = t.galley.job.sections.first().map_or(t.fallback_color, |s| s.format.color);
+            out.push((t.galley.text().to_string(), t.pos + vec2(4.0, t.galley.size().y / 2.0), color));
+        }
+        egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+        _ => {}
+    }
+}
+
+/// One headless frame of the toolbar, its keys handled first as in the app; returns the texts
+/// painted: (text, a point inside it, colour).
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<(String, Pos2, Color32)> {
     let mut shown = vec![];
-    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    run_frame(app, ctx, time, events).iter().for_each(|s| texts(s, &mut shown));
     shown
+}
+
+/// The fills painted over `at`, in the order they are drawn.
+fn fills_at(shapes: &[egui::Shape], at: Pos2) -> Vec<Color32> {
+    fn fills(s: &egui::Shape, at: Pos2, out: &mut Vec<Color32>) {
+        match s {
+            egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.contains(at) => out.push(r.fill),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| fills(s, at, out)),
+            _ => {}
+        }
+    }
+    let mut out = vec![];
+    shapes.iter().for_each(|s| fills(s, at, &mut out));
+    out
 }
 
 fn ctx() -> egui::Context {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     crate::theme::apply(&ctx, Default::default());
+    ctx
+}
+
+/// A context in `scheme` at brightness `b`, as Preferences sets them.
+fn ctx_in(scheme: crate::theme::Scheme, b: crate::theme::Brightness) -> egui::Context {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply_with(&ctx, b, crate::theme::Accent::default(), scheme);
     ctx
 }
 
@@ -90,6 +119,20 @@ fn cell_at(shown: &[(String, Pos2, Color32)], drawer: Rect, name: &str) -> (Pos2
         .find(|(s, p, _)| s == name && drawer.contains(*p))
         .map(|(_, p, c)| (*p, *c))
         .unwrap_or_else(|| panic!("no {name} in the drawer {drawer:?}"))
+}
+
+/// The WCAG contrast ratio of `c` drawn on `bg`, between 1 and 21.
+fn contrast(c: Color32, bg: Color32) -> f32 {
+    fn channel(v: u8) -> f32 {
+        let v = f32::from(v) / 255.0;
+        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    }
+    fn lum(c: Color32) -> f32 {
+        0.2126 * channel(c.r()) + 0.7152 * channel(c.g()) + 0.0722 * channel(c.b())
+    }
+    let (a, b) = (lum(c), lum(bg));
+    let (hi, lo) = if a > b { (a, b) } else { (b, a) };
+    (hi + 0.05) / (lo + 0.05)
 }
 
 /// The drawer frames each flyout group whole, under the heading most of its tools have: every
@@ -207,7 +250,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     assert_eq!(slots(&app)[2], ["slice"]);
     let ellipse = slot_of(&app, "ellipse").unwrap();
     app.run("toolbar.addTool", json!({"tool": "star", "slot": ellipse, "place": "group"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "star"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "curvatureCircle", "star"]);
     assert!(!slots(&app)[slot_of(&app, "rectangle").unwrap()].contains(&"star"));
     // Onto its own group: nothing changes.
     let before = slots(&app);
@@ -217,7 +260,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     assert_eq!(crate::toolbar::slots(&app)[0].0, Some("Select"));
     // Out: one tool, or its whole group; an emptied slot goes.
     app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["circle", "star"]);
+    assert_eq!(slots(&app)[ellipse], ["circle", "curvatureCircle", "star"]);
     app.run("toolbar.removeTool", json!({"tool": "addAnchor", "group": true})).unwrap();
     assert!(slot_of(&app, "pen").is_none() && slot_of(&app, "addAnchor").is_none());
     // Bad params change nothing.
@@ -335,23 +378,84 @@ fn edit_toolbar_opens_a_drawer_beside_the_toolbar() {
     assert!(!app.ui.tools_drawer && app.session.tool_id() == "artboard");
 }
 
-/// The drawer dims the tools the toolbar holds.
+/// The drawer dims the tools the toolbar holds, in the dim text colour, which stays readable
+/// against the panel; the disabled colour, at the drawer's 12.5 px, does not (#8294). Checked in
+/// every colour scheme and brightness: the dim text reaches 4.5:1 wherever the palette's own dim
+/// text does — everywhere but Classic at its middle-dark brightness, whose dim text is about 3.6:1
+/// against its panel — and the drawer never dims it further.
 #[test]
 fn tools_in_the_toolbar_are_dimmed_in_the_drawer() {
+    for scheme in crate::theme::Scheme::ALL {
+        for b in crate::theme::Brightness::ALL {
+            let mut app = app();
+            let ctx = ctx_in(scheme, b);
+            let what = format!("{scheme:?} {b:?}");
+            app.run("window.editToolbar", json!({"open": true})).unwrap();
+            frame(&mut app, &ctx, 0.0, vec![]);
+            let shown = frame(&mut app, &ctx, 0.1, vec![]);
+            let drawer = drawer_rect(&ctx).unwrap();
+            let t = Tokens::get(&ctx);
+            let dim = t.text_dim;
+            let (_, color) = cell_at(&shown, drawer, "Ellipse Tool");
+            assert_eq!(color, dim, "{what}");
+            let readable = contrast(dim, t.panel).min(4.5);
+            assert!(
+                contrast(color, t.panel) >= readable,
+                "{what}: a dimmed tool's name must stay readable: {color:?} on {:?} is {:.2}:1",
+                t.panel,
+                contrast(color, t.panel)
+            );
+            assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, dim, "{what}");
+            assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, t.text_disabled, "{what}: the disabled colour is unreadable at the drawer's size");
+        }
+    }
+    // A tool added to the toolbar is dimmed, one removed is not.
     let mut app = app();
     let ctx = ctx();
     app.run("window.editToolbar", json!({"open": true})).unwrap();
     frame(&mut app, &ctx, 0.0, vec![]);
-    let shown = frame(&mut app, &ctx, 0.1, vec![]);
+    frame(&mut app, &ctx, 0.1, vec![]);
     let drawer = drawer_rect(&ctx).unwrap();
-    let dim = Tokens::get(&ctx).text_disabled;
-    assert_eq!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
-    assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
+    let dim = Tokens::get(&ctx).text_dim;
     app.run("toolbar.addTool", json!({"tool": "artboard"})).unwrap();
     app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
     let shown = frame(&mut app, &ctx, 0.2, vec![]);
     assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
     assert_eq!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
+}
+
+/// A hovered dimmed row keeps its text readable: its hover is a recess in the panel's darker fill,
+/// not the lighter hover fill, which would leave the dim text at 4.3:1 in the default theme
+/// (#8294). Every colour scheme and brightness keeps 4.5:1 over that fill.
+#[test]
+fn a_hovered_dimmed_row_stays_readable() {
+    for scheme in crate::theme::Scheme::ALL {
+        for b in crate::theme::Brightness::ALL {
+            let mut app = app();
+            let ctx = ctx_in(scheme, b);
+            let what = format!("{scheme:?} {b:?}");
+            app.run("window.editToolbar", json!({"open": true})).unwrap();
+            frame(&mut app, &ctx, 0.0, vec![]);
+            let shown = frame(&mut app, &ctx, 0.1, vec![]);
+            let drawer = drawer_rect(&ctx).unwrap();
+            let t = Tokens::get(&ctx);
+            let (at, _) = cell_at(&shown, drawer, "Ellipse Tool");
+            let shapes = run_frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(at)]);
+            let fills = fills_at(&shapes, at);
+            assert!(fills.contains(&t.panel_darker), "{what}: a dimmed row's hover is a recess in the panel's darker fill: {fills:?}");
+            assert!(!fills.contains(&t.hover), "{what}: not the lighter hover fill, which the dim text can't hold 4.5:1 over");
+            let mut shown = vec![];
+            shapes.iter().for_each(|s| texts(s, &mut shown));
+            let (_, color) = cell_at(&shown, drawer, "Ellipse Tool");
+            assert_eq!(color, t.text_dim, "{what}");
+            assert!(
+                contrast(color, t.panel_darker) >= 4.5,
+                "{what}: a hovered dimmed tool's name must stay readable: {color:?} on {:?} is {:.2}:1",
+                t.panel_darker,
+                contrast(color, t.panel_darker)
+            );
+        }
+    }
 }
 
 /// The drawer's headings end in the UI language's colon: in French a no-break space and a colon
@@ -398,7 +502,7 @@ fn tools_drag_between_the_drawer_and_the_toolbar() {
     let drawer = drawer_rect(&ctx).unwrap();
     let (slice, _) = cell_at(&shown, drawer, "Slice Tool");
     drag(&mut app, &ctx, 2.0, slice, tools[ellipse].center());
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "slice"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "curvatureCircle", "slice"]);
     // A dimmed tool (in the toolbar already) doesn't drag.
     let before = slots(&app);
     let shown = frame(&mut app, &ctx, 2.9, vec![]);
@@ -449,7 +553,7 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     // The Tools panel's tools aren't dimmed: they aren't in this toolbar. The Show section, for
     // the controls under the Tools panel's tools, is left out.
     assert!(!shown.iter().any(|(s, p, _)| s == "Show:" && drawer.contains(*p)));
-    let dim = Tokens::get(&ctx).text_disabled;
+    let dim = Tokens::get(&ctx).text_dim;
     assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
     // Dragged onto the blank toolbar, a tool is added to it.
     let (ellipse, _) = cell_at(&shown, drawer, "Ellipse Tool");
@@ -761,6 +865,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
             "cornerTool",
             "slideAnchor",
             "sharedEdge",
+            "tangentCircle",
             "smartPen",
             contour,
             box3d,
@@ -776,7 +881,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let listed = |id: &str| {
         sections().iter().find(|(_, tools)| tools.iter().any(|t| t.id == id)).map(|(h, tools)| (*h, tools.iter().map(|t| t.id).collect::<Vec<_>>()))
     };
-    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..7].to_vec())));
+    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..8].to_vec())));
     assert_eq!(listed("smartPen"), Some(("Smart Pen", vec!["smartPen"])));
     assert_eq!(listed(contour), Some(("Contour", vec![contour])));
     assert_eq!(listed(box3d), Some(("3D Box", vec![box3d])));

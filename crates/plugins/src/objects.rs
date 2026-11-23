@@ -325,7 +325,11 @@ fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left
             o["truncated"] = json!(false);
         }
         NodeKind::Image(im) => {
-            o["transform"] = affine_json(im.xf);
+            // A distorted image: its corners, and the affine placement nearest them at its middle.
+            o["transform"] = affine_json(vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf));
+            if let Some(q) = n.image_quad() {
+                o["corners"] = json!(q.map(|p| [p.x, p.y]));
+            }
             o["pixelSize"] = json!([im.width, im.height]);
             o["colorMode"] = json!(doc.image_blob(im).map_or("unknown", color_mode));
             o["linked"] = json!(im.link.is_some());

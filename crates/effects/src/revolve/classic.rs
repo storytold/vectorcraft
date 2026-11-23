@@ -4,6 +4,8 @@
 use serde_json::Value;
 use vectorcraft_three_d::Revolve;
 
+use crate::solids::graphics::map_art;
+
 pub const CLASSIC_REVOLVE: &str = "threeD.classicRevolve";
 
 /// The numeric parameters: (key, lowest, highest, whole numbers only).
@@ -23,19 +25,28 @@ const RANGES: [(&str, f64, f64, bool); 13] = [
     ("blendSteps", 1.0, 256.0, true),
 ];
 
-const FLAGS: [&str; 3] = ["cap", "lightBehind", "preserveSpotColors"];
+const FLAGS: [&str; 5] = ["cap", "lightBehind", "preserveSpotColors", map_art::MAP_SHADE, map_art::MAP_INVISIBLE];
 
 /// The surface Revolve (Classic)'s parameters `p` sweep: Revolve's angle, cap, offset, edge,
-/// rotation and perspective, built unshaded, since the classic surfaces light its faces.
+/// rotation and perspective, built unshaded, since the classic surfaces light its faces. With
+/// mapped art its side is laid out for it.
 pub(crate) fn options(p: &Value) -> Revolve {
-    Revolve { shade: false, smooth_shading: false, lights: None, light_color: [1.0; 3], ..super::revolve_options(p) }
+    Revolve {
+        shade: false,
+        smooth_shading: false,
+        lights: None,
+        light_color: [1.0; 3],
+        map_surface: !map_art::surface_maps(p).is_empty(),
+        ..super::revolve_options(p)
+    }
 }
 
 /// Check Revolve (Classic)'s parameters `p` (its defaults filled in) beyond the checks it shares
 /// with Revolve: every key is one of its parameters, numbers are in range, flags are true or false,
-/// and the surface and shading color are named.
+/// the surface and shading color are named, and `mapArt` holds valid maps.
 pub(crate) fn validate(p: &Value) -> Result<(), String> {
-    crate::solids::classic::validate_classic(CLASSIC_REVOLVE, p, &RANGES, &FLAGS)
+    crate::solids::classic::validate_classic(CLASSIC_REVOLVE, p, &RANGES, &FLAGS)?;
+    map_art::validate(CLASSIC_REVOLVE, p)
 }
 
 #[cfg(test)]

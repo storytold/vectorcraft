@@ -300,12 +300,20 @@ pub(super) fn over_effect(parent: &Dialog, field: &str, colour: Color) -> Dialog
 /// The entry of the dialog's color list that a Color Picker opened with [`over_list_entry`] sets.
 const COLOUR_INDEX: &str = "__colourIndex";
 
+/// The list a Color Picker opened with [`over_list_entry`] puts in the dialog's field before its OK
+/// sets the entry.
+const COLOUR_LIST: &str = "__colourList";
+
 /// The Color Picker over the dialog `parent`, on `colour`, that sets entry `index` of the dialog's
 /// list of colors `field` (Document Setup's `gridColors`) with its OK and goes back to it, leaving
-/// the other entries as they are. Cancel goes back to `parent` as it was. It previews nothing.
-pub(super) fn over_list_entry(parent: &Dialog, field: &str, index: usize, colour: Color) -> Dialog {
+/// the other entries as they are. With `fill`, its OK first puts `fill` in the field and then sets
+/// the entry. Cancel goes back to `parent` as it was. It previews nothing.
+pub(super) fn over_list_entry(parent: &Dialog, field: &str, index: usize, colour: Color, fill: Option<Value>) -> Dialog {
     let mut d = over_effect(parent, field, colour);
     d.fields.insert(COLOUR_INDEX.into(), json!(index));
+    if let Some(list) = fill {
+        d.fields.insert(COLOUR_LIST.into(), list);
+    }
     d
 }
 
@@ -346,22 +354,46 @@ fn button_width(ui: &Ui) -> f32 {
     })
 }
 
-/// A compact width shared by the heading and body, bounded by the available window width.
-fn layout_size(ui: &Ui) -> (f32, f32, f32, bool) {
+/// A compact width shared by the heading and body, bounded by the available window width, and the
+/// width of the body's scroll bar column. While the body scrolls, the width leaves out that column,
+/// so the body and its bar fit in the window side by side.
+fn layout_size(ui: &Ui) -> (f32, f32, f32, bool, f32) {
     let button_w = button_width(ui);
     let values_w = PREVIEW_W + COLUMN_GAP + button_w;
     let fixed_w = SLIDER_GAP + SLIDER_W + COLUMN_GAP + values_w;
-    let stacked = ui.available_width() < MIN_FIELD + fixed_w;
-    let side = (ui.available_width() - fixed_w).clamp(MIN_FIELD, FIELD);
-    (side, values_w, button_w, stacked)
+    let fit = |room: f32| ((room - fixed_w).clamp(MIN_FIELD, FIELD), room < MIN_FIELD + fixed_w);
+    let (side, stacked) = fit(ui.available_width());
+    // The margin keeps the bar's column whenever the body may scroll, as its height is estimated.
+    if body_height(ui, side, stacked) + 40.0 > scroll_height(ui) {
+        let bar = ui.spacing().scroll.allocated_width();
+        let (side, stacked) = fit(ui.available_width() - bar);
+        (side, values_w, button_w, stacked, bar)
+    } else {
+        (side, values_w, button_w, stacked, 0.0)
+    }
+}
+
+/// The tallest the body's scrolling content is drawn.
+fn scroll_height(ui: &Ui) -> f32 {
+    (ui.ctx().content_rect().height() - 112.0).max(1.0)
+}
+
+/// How tall the body's field, slider and value columns are with a field `side` wide, `stacked` or
+/// side by side.
+fn body_height(ui: &Ui, side: f32, stacked: bool) -> f32 {
+    // Let the auto-sized window grow for the checkbox too, rather than clipping it to the
+    // scroll area's previous height while the dialog measures itself.
+    let field_h = side + 8.0 + 20.0 + 2.0 * ui.spacing().item_spacing.y;
+    if stacked { field_h + COLUMN_GAP + FIELD } else { field_h.max(FIELD) }
 }
 
 /// Full-width, draggable title band using the app's existing theme colours.
 fn header(ui: &mut Ui, title: &str) {
-    let (side, values_w, _, stacked) = layout_size(ui);
+    let (side, values_w, _, stacked, bar) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let width = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };
-    ui.set_width(width.min(ui.available_width()));
+    // The width includes the bar's column: the body measures from it and leaves the column out.
+    ui.set_width((width + bar).min(ui.available_width()));
     let margin = f32::from(super::MARGIN);
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H - margin), Sense::hover());
     let band = Rect::from_min_max(r.min - vec2(margin, margin), r.max + vec2(margin, 0.0));
@@ -385,7 +417,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
     let original = d.fields.get("original").and_then(color_value).unwrap_or(p.color);
     let gamut = gamut_fix(app, ui.ctx(), "picker-gamut", &p.color);
     super::modal::fits_itself(ui);
-    let (side, values_w, button_w, stacked) = layout_size(ui);
+    let (side, values_w, button_w, stacked, _) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let content_w = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };
     let mut pick: Option<Picked> = None;
@@ -395,11 +427,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
     let mut action = DialogAction::None;
     // Shrink the field first, then stack the columns in narrow windows. Only vertical
     // scrolling is needed, so no controls depend on a horizontal scrollbar.
-    let height = (ui.ctx().content_rect().height() - 112.0).max(1.0);
-    // Let the auto-sized window grow for the checkbox too, rather than clipping it to the
-    // scroll area's previous height while the dialog measures itself.
-    let field_h = side + 8.0 + 20.0 + 2.0 * ui.spacing().item_spacing.y;
-    let body_height = if stacked { field_h + COLUMN_GAP + FIELD } else { field_h.max(FIELD) };
+    let height = scroll_height(ui);
+    let body_height = body_height(ui, side, stacked);
     let layout = if stacked { egui::Layout::top_down(egui::Align::Min) } else { egui::Layout::left_to_right(egui::Align::Min) };
     egui::ScrollArea::vertical()
         .id_salt("cp-content")
@@ -702,8 +731,9 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Colo
         ui.add_space(4.0);
         widgets::list_box(ui, |ui| {
             let max_h = (side - 28.0).max(1.0);
-            egui::ScrollArea::vertical().id_salt("cp-swatches").max_height(max_h).show(ui, |ui| {
-                ui.set_width(list_w - 8.0);
+            // The rows take the list's width less its scroll bar's column.
+            egui::ScrollArea::vertical().id_salt("cp-swatches").max_width(list_w - 8.0).max_height(max_h).auto_shrink([false, true]).show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 let cur = d.str("library");
                 if cur.is_empty() || cur == swatchlib::DOCUMENT_SWATCHES {
                     let Some(st) = app.session.active() else {
@@ -769,6 +799,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
                 parent.fields.insert(field.to_string(), hex);
             }
             Some(index) => {
+                if let Some(list) = d.fields.get(COLOUR_LIST) {
+                    parent.fields.insert(field.to_string(), list.clone());
+                }
                 let entry = index
                     .as_u64()
                     .and_then(|i| usize::try_from(i).ok())

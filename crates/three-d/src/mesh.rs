@@ -8,7 +8,7 @@
 //! turned plane) are cut into triangles: each hole is joined to its outline by a bridge, then the
 //! outline is cut by ear clipping.
 
-use vectorcraft_geom::{FillRule, PathData, Rect};
+use vectorcraft_geom::{FillRule, PathData, Point, Rect};
 
 use crate::solid::{Face3, Keep, extrude_faces, inflate_faces, plane_faces};
 use crate::{Extrude, Facet, Inflate, Revolve, V3, View};
@@ -127,6 +127,21 @@ pub fn revolve_mesh(path: &PathData, rule: FillRule, bounds: Rect, options: Revo
     mesh(&faces)
 }
 
+/// [`revolve_mesh`], with where each corner of each triangle of the side lies on the side surface
+/// unrolled ([`crate::SurfaceCell`]), as the effect places a graphic mapped onto the side: one
+/// entry for each triangle, in order, `None` for a triangle of an end cap, of a cut side or of a
+/// contour other than the one that carries the graphics. Only a sweep with
+/// [`Revolve::map_surface`] lays out its side; without it every entry is `None`.
+pub fn revolve_mesh_surface(path: &PathData, rule: FillRule, bounds: Rect, options: Revolve) -> Result<SurfaceMesh, String> {
+    let (mut faces, mut surface) = (vec![], vec![]);
+    crate::revolve_surface_faces(path, rule, bounds, options, &mut faces, &mut surface)?;
+    mesh_on(&faces, Some(&surface))
+}
+
+/// A mesh with, for each of its triangles, the surface point of each corner, or `None`
+/// ([`revolve_mesh_surface`]).
+pub type SurfaceMesh = (Mesh, Vec<Option<[Point; 3]>>);
+
 /// The area-weighted normal of `contours` (Newell's method).
 pub(crate) fn newell(contours: &[Vec<V3>]) -> V3 {
     let mut n = V3::default();
@@ -147,9 +162,28 @@ fn up(v: V3) -> [f64; 3] {
 /// `faces` (view space) as one mesh, each cut into triangles turned to its normal, which is written
 /// at unit length whatever length it is given (a face given no normal takes its corners' own).
 fn mesh(faces: &[Face3]) -> Result<Mesh, String> {
+    mesh_on(faces, None).map(|(mesh, _)| mesh)
+}
+
+/// [`mesh`], with for each triangle where its corners lie on a surface: `surface` lists faces by
+/// their index in `faces` (in increasing order) with a surface point for each corner of the face's
+/// one contour, and a triangle of such a face takes its corners' points. `None` for a triangle of
+/// any other face. Without `surface` the list is empty.
+fn mesh_on(faces: &[Face3], surface: Option<&[(usize, [Point; 4])]>) -> Result<SurfaceMesh, String> {
+    let track = surface.is_some();
+    let surface = surface.unwrap_or_default();
     let mut out = Mesh::default();
+    let mut on = vec![];
     let mut work = 0usize;
-    for (contours, normal) in faces {
+    let mut cells = surface.iter().peekable();
+    for (k, (contours, normal)) in faces.iter().enumerate() {
+        while cells.next_if(|(i, _)| *i < k).is_some() {}
+        let cell = cells.next_if(|(i, _)| *i == k).map(|(_, uv)| uv);
+        // The surface point of a corner of a triangle: the point of the face's corner it is.
+        let point = |v: V3| {
+            let corners = contours.first()?;
+            corners.iter().zip(cell?).find(|(c, _)| c.0 == v.0 && c.1 == v.1 && c.2 == v.2).map(|(_, p)| *p)
+        };
         let geometric = newell(contours);
         let given = normal.unit();
         let n = if given.dot(given) > 0.5 { given } else { geometric.unit() };
@@ -157,20 +191,36 @@ fn mesh(faces: &[Face3]) -> Result<Mesh, String> {
             continue;
         }
         let [nx, ny, nz] = up(n);
-        for [a, b, c] in triangulate(contours, geometric, &mut work)? {
+        // A face on the surface is cut along its diagonal from corner 0 to corner 2, as the canvas
+        // cuts it to place the graphics: the surface's layout of a quad whose ends lie at different
+        // distances from the axis is not one affine map, so the other diagonal would move them.
+        let quad = match contours.as_slice() {
+            [only] if cell.is_some() => <[V3; 4]>::try_from(only.as_slice()).ok(),
+            _ => None,
+        };
+        let triangles = match quad {
+            Some([v0, v1, v2, v3]) => vec![[v0, v1, v2], [v0, v2, v3]],
+            None => triangulate(contours, geometric, &mut work)?,
+        };
+        for [a, b, c] in triangles {
             let (pa, pb, pc) = (up(a), up(b), up(c));
             let cross = V3(pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]).cross(V3(pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]));
             if cross.dot(cross) < 1e-24 {
                 continue;
             }
-            let (pb, pc) = if cross.dot(V3(nx, ny, nz)) < 0.0 { (pc, pb) } else { (pb, pc) };
+            let turned = cross.dot(V3(nx, ny, nz)) < 0.0;
+            let (pb, pc) = if turned { (pc, pb) } else { (pb, pc) };
+            let (b, c) = if turned { (c, b) } else { (b, c) };
             let base = u32::try_from(out.positions.len()).map_err(|_| "The 3D object is too complex to export".to_string())?;
             out.positions.extend([pa, pb, pc]);
             out.normals.extend([[nx, ny, nz]; 3]);
             out.triangles.push([base, base + 1, base + 2]);
+            if track {
+                on.push(point(a).zip(point(b)).zip(point(c)).map(|((a, b), c)| [a, b, c]));
+            }
         }
     }
-    Ok(out)
+    Ok((out, on))
 }
 
 /// A corner of a face: its position on the plane the face is cut in, and in 3D.
@@ -212,6 +262,12 @@ fn spend(work: &mut usize, steps: usize) -> Result<(), String> {
 /// The triangles covering one face: `contours` (outlines one way round, holes the other) on the
 /// plane across `normal` (its Newell normal).
 pub(crate) fn triangulate(contours: &[Vec<V3>], normal: V3, work: &mut usize) -> Result<Vec<[V3; 3]>, String> {
+    triangulate_keeping(contours, normal, work, false)
+}
+
+/// [`triangulate`], keeping the corners that lie straight between their neighbors as triangle
+/// corners when `keep_straight` is set.
+fn triangulate_keeping(contours: &[Vec<V3>], normal: V3, work: &mut usize, keep_straight: bool) -> Result<Vec<[V3; 3]>, String> {
     // Cut the face on the coordinate plane it is least slanted to, turned so outlines run
     // counterclockwise.
     let (ax, ay, az) = (normal.0.abs(), normal.1.abs(), normal.2.abs());
@@ -282,9 +338,28 @@ pub(crate) fn triangulate(contours: &[Vec<V3>], normal: V3, work: &mut usize) ->
             let (hole, rest) = holes[k..].split_first().ok_or_else(too_complex)?;
             ring = bridge(ring, hole, rest, work)?;
         }
-        clip(&ring, &mut out, work)?;
+        clip(&ring, &mut out, work, keep_straight)?;
     }
     Ok(out)
+}
+
+/// The triangles covering `rings`, a flat face in the art's plane (outlines with a positive signed
+/// area, holes negative), cut as a mesh's faces are: each hole bridged to the outline around it,
+/// then ear clipped. Every corner of the rings that lies straight between its neighbors (a corner
+/// a neighboring cell shares) stays a triangle corner. Each triangle runs the way its outline does,
+/// and a triangle with no area that way round is left out. The steps add to `work`, and the cut
+/// stops as soon as `work` passes `budget`. `None` when a hole crosses an outline or another hole,
+/// or when `work` passes `budget`.
+pub(crate) fn flat_triangles(rings: &[Vec<Point>], work: &mut usize, budget: usize) -> Option<Vec<[Point; 3]>> {
+    let contours: Vec<Vec<V3>> = rings.iter().map(|r| r.iter().map(|q| V3(q.x, q.y, 0.0)).collect()).collect();
+    // Counted up from MAX_WORK less the budget, the cut's own checks stop it at the budget.
+    let start = MAX_WORK - budget.min(MAX_WORK);
+    let mut spent = start.saturating_add(*work);
+    let triangles = triangulate_keeping(&contours, V3(0.0, 0.0, 1.0), &mut spent, true);
+    *work = spent.saturating_sub(start);
+    let triangles = triangles.ok()?;
+    let triangles = triangles.into_iter().map(|t| t.map(|v| Point::new(v.0, v.1)));
+    Some(triangles.filter(|[a, b, c]| (*b - *a).cross(*c - *a) > 0.0).collect())
 }
 
 /// Do segments `a`–`b` and `c`–`d` cross (touching at a shared end does not count)?
@@ -351,9 +426,10 @@ fn bridge(ring: Vec<Corner>, hole: &[Corner], others: &[Vec<Corner>], work: &mut
 }
 
 /// Cut `ring` (counterclockwise, possibly joined to its holes by bridges) into triangles by ear
-/// clipping. A corner in line with its neighbors goes without a triangle. If no ear is left (a
-/// ring that crosses itself), the rest is cut as a fan.
-fn clip(ring: &[Corner], out: &mut Vec<[V3; 3]>, work: &mut usize) -> Result<(), String> {
+/// clipping. A corner in line with its neighbors goes without a triangle, unless `keep_straight`
+/// is set and it lies straight between them: it then stays a corner of the triangles beside it. If
+/// no ear is left (a ring that crosses itself), the rest is cut as a fan.
+fn clip(ring: &[Corner], out: &mut Vec<[V3; 3]>, work: &mut usize, keep_straight: bool) -> Result<(), String> {
     let n = ring.len();
     if n < 3 {
         return Ok(());
@@ -369,14 +445,21 @@ fn clip(ring: &[Corner], out: &mut Vec<[V3; 3]>, work: &mut usize) -> Result<(),
         let turn = cross(pa, pb, pc);
         let scale = (pb.x - pa.x).hypot(pb.y - pa.y) * (pc.x - pb.x).hypot(pc.y - pb.y);
         let mut ear = false;
-        let drop = turn.abs() <= 1e-12 * scale.max(1e-300);
-        if !drop && turn > 0.0 {
+        let flat = turn.abs() <= 1e-12 * scale.max(1e-300);
+        let straight = keep_straight && flat && (pb.x - pa.x) * (pc.x - pb.x) + (pb.y - pa.y) * (pc.y - pb.y) > 0.0;
+        let drop = flat && !straight;
+        if !flat && turn > 0.0 {
             spend(work, left)?;
             ear = true;
             let mut k = next[c];
             while k != a {
                 let p = &ring[k];
                 if !same(p, pa) && !same(p, pb) && !same(p, pc) && cross(pa, pb, p) > 0.0 && cross(pb, pc, p) > 0.0 && cross(pc, pa, p) > 0.0 {
+                    ear = false;
+                    break;
+                }
+                // A kept corner on the ear's new edge would be left off every triangle.
+                if keep_straight && touches((p.x, p.y), (pc.x, pc.y), (pa.x, pa.y)) {
                     ear = false;
                     break;
                 }

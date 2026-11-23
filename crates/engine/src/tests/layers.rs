@@ -167,6 +167,183 @@ fn clicking_rows_at_any_depth_highlights_them_and_sets_the_current_layer() {
     assert_eq!(document_rows(&s), vec![g.0, c.0], "document.inspect lists the rows");
 }
 
+/// Run `layer.highlight` with `ids` and `mode` → (the rows it returned, the current layer), after
+/// checking that the call counted one revision and left the rows it returned highlighted.
+fn highlight_rows(s: &mut Session, ids: &[NodeId], mode: &str) -> (Vec<NodeId>, Option<NodeId>) {
+    let revision = s.doc().unwrap().revision;
+    let r = run(s, "layer.highlight", json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "mode": mode}));
+    let st = s.doc().unwrap();
+    assert_eq!(st.revision, revision + 1, "{mode} {ids:?}");
+    let rows: Vec<NodeId> = r["rows"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    assert_eq!(rows, st.layer_rows, "{mode} {ids:?}");
+    (rows, st.active_layer)
+}
+
+/// `layer.highlight` keeps the rows in highlight order: `set` and `add` take a repeated id once,
+/// `toggle` takes an id listed twice off and on again (or on and off, and its layer becomes the
+/// current one), unknown ids and ids after the first 100,000 are dropped, rows highlighted twice
+/// stay as they are on `add`, and `toggle` takes every copy off.
+#[test]
+fn highlighting_rows_keeps_their_order_with_repeated_unknown_and_excess_ids() {
+    let mut s = session();
+    let (layer, sub, a, g, b, c) = tree(&mut s);
+    let unknown = NodeId(9999);
+    assert_eq!(highlight_rows(&mut s, &[a, g, a, unknown, c], "set"), (vec![a, g, c], Some(layer)));
+    assert_eq!(highlight_rows(&mut s, &[g, b, a, b], "add"), (vec![a, g, c, b], Some(sub)));
+    assert_eq!(highlight_rows(&mut s, &[c, c], "toggle"), (vec![a, g, b, c], Some(layer)));
+    // `sub` goes on and off again; it was the last row added, so its layer is the current one.
+    assert_eq!(highlight_rows(&mut s, &[sub, sub], "toggle"), (vec![a, g, b, c], Some(sub)));
+    assert_eq!(highlight_rows(&mut s, &[a, unknown], "toggle"), (vec![g, b, c], Some(layer)));
+    assert_eq!(highlight_rows(&mut s, &[], "add"), (vec![g, b, c], Some(layer)));
+    assert_eq!(highlight_rows(&mut s, &[], "toggle"), (vec![g, b, c], Some(layer)));
+    s.doc_mut().unwrap().active_layer = Some(sub);
+    assert_eq!(highlight_rows(&mut s, &[], "set"), (vec![], Some(sub)), "no rows: the current layer stays");
+    let mut excess = vec![unknown; 100_000];
+    excess.push(a);
+    assert_eq!(highlight_rows(&mut s, &excess, "set"), (vec![], Some(sub)), "only the first 100,000 ids count");
+    s.doc_mut().unwrap().layer_rows = vec![a, a, g];
+    assert_eq!(highlight_rows(&mut s, &[a, c], "add"), (vec![a, a, g, c], Some(layer)));
+    assert_eq!(highlight_rows(&mut s, &[a], "toggle"), (vec![g, c], Some(layer)));
+    // The same with more than 8 ids.
+    s.doc_mut().unwrap().layer_rows = vec![a, a, g];
+    assert_eq!(highlight_rows(&mut s, &[a, c, c, c, c, c, c, c, c], "add"), (vec![a, a, g, c], Some(layer)));
+    s.doc_mut().unwrap().layer_rows = vec![a, a, g];
+    assert_eq!(highlight_rows(&mut s, &[a, b, b, b, b, b, b, b, b], "toggle"), (vec![g], Some(sub)), "`b` goes on and off 4 times");
+    assert_eq!(highlight_rows(&mut s, &[c, g, sub, g, sub, a, unknown, a, c, layer], "toggle"), (vec![g, layer], Some(layer)));
+    let revision = s.doc().unwrap().revision;
+    assert!(s.execute("layer.highlight", &json!({"ids": [b.0], "mode": "nope"})).is_err());
+    let st = s.doc().unwrap();
+    assert_eq!((st.revision, st.layer_rows.clone()), (revision, vec![g, layer]), "a bad mode changes nothing");
+}
+
+/// `layer.highlight`'s rule as a search of the highlighted rows for each id in `p`. The tests
+/// compare the command with it.
+fn highlight_by_search(st: &mut DocState, p: &Value) -> Value {
+    let mut ids: Vec<NodeId> = p["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect();
+    ids.truncate(crate::cmd::layer::MAX_ROWS);
+    let mode = p["mode"].as_str().unwrap_or("set");
+    ids.retain(|id| st.doc.node(*id).is_some());
+    let mut rows = st.highlighted_rows();
+    if mode == "set" {
+        rows.clear();
+    }
+    let mut last = None;
+    for id in ids {
+        if mode == "toggle" && rows.contains(&id) {
+            rows.retain(|r| *r != id);
+        } else if !rows.contains(&id) {
+            rows.push(id);
+            last = Some(id);
+        }
+    }
+    if let Some(layer) = last.or(rows.last().copied()).and_then(|id| st.doc.layer_containing(id)) {
+        st.active_layer = Some(layer);
+    }
+    st.layer_rows = rows;
+    st.revision += 1;
+    json!({ "rows": st.layer_rows.iter().map(|i| i.0).collect::<Vec<_>>() })
+}
+
+/// Two sessions with `n` squares on a layer and a sublayer after them, and the squares' ids.
+fn highlight_pair(n: usize) -> (Session, Session, Vec<NodeId>, NodeId) {
+    let make = || {
+        let mut s = super::large_edits::session(n, super::large_edits::square);
+        let sub = id(&run(&mut s, "layer.newSublayer", json!({"name": "Sub"})));
+        (s, sub)
+    };
+    let ((cmd, sub), (search, other)) = (make(), make());
+    assert_eq!(sub, other);
+    let squares = super::large_edits::layer(&cmd, 0).into_iter().filter(|i| *i != sub).collect();
+    (cmd, search, squares, sub)
+}
+
+/// `p` for `layer.highlight` with `ids` and `mode`.
+fn highlight_params(ids: impl IntoIterator<Item = NodeId>, mode: &str) -> Value {
+    json!({"ids": ids.into_iter().map(|i| i.0).collect::<Vec<_>>(), "mode": mode})
+}
+
+/// On 3,000 rows `layer.highlight` gives what [`highlight_by_search`] gives: the same rows in the
+/// same order, the same current layer and the same returned rows, with repeated, unknown and
+/// toggled ids.
+#[test]
+fn layer_highlight_matches_a_search_of_the_rows_for_each_id() {
+    let (mut cmd, mut search, sq, sub) = highlight_pair(3_000);
+    let unknown = NodeId(u64::MAX);
+    let steps = [
+        highlight_params(sq[..2_000].iter().copied(), "set"),
+        highlight_params(sq[1_000..].iter().copied().chain([sub, sq[0]]), "add"),
+        highlight_params([sq[5], sq[5], sub, sq[2_999], unknown, sub, sub], "toggle"),
+        highlight_params(sq[500..520].iter().chain(&sq[510..515]).copied(), "toggle"),
+        highlight_params(sq.iter().rev().step_by(7).copied(), "add"),
+        highlight_params(sq.iter().step_by(3).copied().chain([sub]), "toggle"),
+        highlight_params(Vec::new(), "add"),
+        highlight_params(sq.iter().rev().step_by(2).chain(&sq[..10]).copied(), "set"),
+        highlight_params(Vec::new(), "set"),
+    ];
+    for p in &steps {
+        let r = run(&mut cmd, "layer.highlight", p.clone());
+        let expected = highlight_by_search(search.doc_mut().unwrap(), p);
+        let (a, b) = (cmd.doc().unwrap(), search.doc().unwrap());
+        assert_eq!(r, expected, "{}", p["mode"]);
+        assert_eq!((&a.layer_rows, a.active_layer, a.revision), (&b.layer_rows, b.active_layer, b.revision), "{}", p["mode"]);
+    }
+}
+
+/// Time `layer.highlight` against [`highlight_by_search`] on one layer of 20,000 paths: `set` of
+/// all of them, `add` of 10,000 already highlighted and `toggle` of one, 7 runs each, both checked
+/// to give the same rows and current layer.
+/// Run with `cargo test --release -p vectorcraft-engine --lib layer_highlight_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn layer_highlight_timing() {
+    let (mut cmd, mut search, sq, _) = highlight_pair(20_000);
+    let steps = [
+        ("set of 20,000", highlight_params(sq.iter().copied(), "set")),
+        ("add of 10,000", highlight_params(sq[5_000..15_000].iter().copied(), "add")),
+        ("toggle of 1", highlight_params([sq[10_000]], "toggle")),
+    ];
+    let mut ms = vec![(Vec::new(), Vec::new()); steps.len()];
+    for run_no in 0..7 {
+        for (i, (_, p)) in steps.iter().enumerate() {
+            let mut time_cmd = || {
+                let start = std::time::Instant::now();
+                let r = cmd.execute("layer.highlight", p).unwrap();
+                (start.elapsed().as_secs_f64() * 1000.0, r)
+            };
+            let mut time_search = || {
+                let start = std::time::Instant::now();
+                let r = highlight_by_search(search.doc_mut().unwrap(), p);
+                (start.elapsed().as_secs_f64() * 1000.0, r)
+            };
+            // Alternate which goes first.
+            let ((tc, rc), (ts, rs)) = if run_no % 2 == 0 {
+                let c = time_cmd();
+                (c, time_search())
+            } else {
+                let s = time_search();
+                (time_cmd(), s)
+            };
+            assert_eq!(rc, rs);
+            let (a, b) = (cmd.doc().unwrap(), search.doc().unwrap());
+            assert_eq!((&a.layer_rows, a.active_layer), (&b.layer_rows, b.active_layer));
+            ms[i].0.push(ts);
+            ms[i].1.push(tc);
+        }
+    }
+    let median = |v: &[f64]| {
+        let mut v = v.to_vec();
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    for ((name, _), (search_ms, cmd_ms)) in steps.iter().zip(&ms) {
+        println!(
+            "{name}: search {:.3} ms, command {:.3} ms (median of 7); search runs {search_ms:.3?}, command runs {cmd_ms:.3?}",
+            median(search_ms),
+            median(cmd_ms)
+        );
+    }
+}
+
 fn document_rows(s: &Session) -> Vec<u64> {
     crate::inspect::document(s)["layerRows"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect()
 }
@@ -1100,6 +1277,43 @@ fn locate_object_highlights_its_row() {
     assert_eq!(run(&mut s, "layer.locate", json!({"id": b.0}))["id"], b.0);
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("layer.locate", &json!({})).is_err());
+}
+
+/// With several objects selected, Locate Object finds the frontmost one in the stacking order,
+/// whatever order they were selected in; an `id` still wins.
+#[test]
+fn locate_object_finds_the_frontmost_selected_object() {
+    let mut s = session();
+    let (_, sub, a, g, b, c) = tree(&mut s);
+    let top = id(&run(&mut s, "layer.new", json!({"top": true})));
+    let d = rect(&mut s, 400.0);
+    let locate = |s: &mut Session, ids: &[NodeId]| {
+        run(s, "select.set", json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}));
+        assert_eq!(s.doc().unwrap().selection.objects.last(), ids.last(), "selected in this order");
+        run(s, "layer.locate", json!({}))["id"].clone()
+    };
+    // In one sublayer, the group in front of the rectangle selected last.
+    assert_eq!(locate(&mut s, &[g, a]), json!(g.0));
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![g]);
+    // The sublayer sits in front of the art directly in its layer.
+    assert_eq!(locate(&mut s, &[a, c]), json!(a.0));
+    // A higher layer wins over everything below it.
+    assert_eq!(locate(&mut s, &[d, b, c]), json!(d.0));
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![d]);
+    // A group and its member: the member paints after the group it is in.
+    assert_eq!(locate(&mut s, &[b, g]), json!(b.0));
+    // Added one at a time, as by Shift-clicks.
+    run(&mut s, "select.set", json!({"ids": [d.0]}));
+    run(&mut s, "select.add", json!({"ids": [a.0]}));
+    assert_eq!(run(&mut s, "layer.locate", json!({}))["id"], d.0);
+    // An id still locates that object, behind the selection or not.
+    assert_eq!(run(&mut s, "layer.locate", json!({"id": c.0}))["id"], c.0);
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![c]);
+    // Locate Layer takes the layer of the frontmost selected object.
+    run(&mut s, "select.set", json!({"ids": [d.0, a.0]}));
+    assert_eq!(run(&mut s, "layer.locate", json!({"layersOnly": true})), json!({"id": top.0, "objectId": d.0, "ancestry": [top.0]}));
+    run(&mut s, "select.set", json!({"ids": [a.0, c.0]}));
+    assert_eq!(run(&mut s, "layer.locate", json!({"layersOnly": true}))["id"], sub.0);
 }
 
 /// Locate Layer (`layersOnly`, sent while Show Layers Only is on) highlights the innermost layer

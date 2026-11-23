@@ -202,7 +202,7 @@ fn custom_body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> 
     let (mut o, unread) = super::flatten::shown_options(&d.fields, &current);
     o.preserve_alpha = false;
     o.preserve_overprints &= overprints_kept(d);
-    super::flatten::fields_editor(ui, "eps-flattener", &mut d.fields, &mut o, &unread, true);
+    super::flatten::fields_editor(ui, "eps-flattener", &mut d.fields, &mut o, &unread, &["preserveAlpha", "preserveOverprints"]);
     if let Err(e) = &current {
         ui.label(egui::RichText::new(e).color(Tokens::get(ui.ctx()).text_dim).size(11.5));
     }

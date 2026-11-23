@@ -557,7 +557,7 @@ pub fn regions(shapes: &[Shape]) -> Vec<Region> {
 }
 
 /// [`regions`] refit to `precision`.
-pub(crate) fn regions_with(shapes: &[Shape], precision: f64) -> Vec<Region> {
+pub fn regions_with(shapes: &[Shape], precision: f64) -> Vec<Region> {
     arrangement(shapes, precision).map(|a| regions_of(&a)).unwrap_or_default()
 }
 

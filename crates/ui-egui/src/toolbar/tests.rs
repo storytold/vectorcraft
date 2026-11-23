@@ -989,6 +989,388 @@ fn a_floating_flyouts_buttons_have_tool_tips_when_tool_tips_are_on() {
     assert!(hovered_texts(&mut app, &ctx, 30.0, star).contains(&tip), "on again");
 }
 
+/// The window of the tool card tests.
+const WINDOW: egui::Vec2 = vec2(400.0, 1200.0);
+
+/// One frame with the preferences applied, as the app runs it, in a window `size` points big: the
+/// texts it paints, each with its rect.
+fn painted_in(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>, size: egui::Vec2) -> Vec<(String, egui::Rect)> {
+    painted_after(app, ctx, time, events, size, None)
+}
+
+/// [`painted_in`], with `taken` (a key the shortcuts handle before the toolbar draws) taken out of
+/// the frame's input first, as the shortcuts take it.
+fn painted_after(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    time: f64,
+    events: Vec<Event>,
+    size: egui::Vec2,
+    taken: Option<egui::Key>,
+) -> Vec<(String, egui::Rect)> {
+    fn texts(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let raw = egui::RawInput { events, time: Some(time), screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, size)), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        crate::prefs_dialog::apply_runtime(app, ui.ctx());
+        if let Some(key) = taken {
+            assert!(ui.ctx().input_mut(|i| i.consume_key(egui::Modifiers::NONE, key)), "{key:?} taken");
+        }
+        show(app, ui);
+    });
+    out.textures_delta.clear();
+    let mut shown = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    shown
+}
+
+/// [`painted_in`] in [`WINDOW`], the texts alone.
+fn painted_texts(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<String> {
+    painted_in(app, ctx, time, events, WINDOW).into_iter().map(|(s, _)| s).collect()
+}
+
+/// The description of the tool `id`, as its card shows it.
+fn described(id: &str) -> String {
+    vectorcraft_tools::catalog::tool_description(id).unwrap_or_else(|| panic!("{id} has no description")).to_string()
+}
+
+/// Rest the pointer on `at` from `t0`, in a window `size` points big, until the card of the tool
+/// `id` shows; returns the time and the rect of the card's description.
+fn until_card_in(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2, id: &str, size: egui::Vec2) -> (f64, egui::Rect) {
+    let text = described(id);
+    painted_in(app, ctx, t0, vec![Event::PointerGone], size);
+    painted_in(app, ctx, t0 + 0.1, vec![Event::PointerMoved(at)], size);
+    let mut last = vec![];
+    for i in 2..30 {
+        let time = t0 + f64::from(i) * 0.1;
+        last = painted_in(app, ctx, time, vec![], size);
+        if let Some((_, rect)) = last.iter().find(|(s, _)| *s == text) {
+            return (time, *rect);
+        }
+    }
+    last.retain(|(s, _)| !s.starts_with('⚠'));
+    panic!("no card for {id} on {at:?}: {last:?}");
+}
+
+/// Rest the pointer on `at` from `t0` for three seconds, in a window `size` points big: the texts of
+/// each frame.
+fn hovered_in(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2, size: egui::Vec2) -> Vec<Vec<(String, egui::Rect)>> {
+    painted_in(app, ctx, t0, vec![Event::PointerGone], size);
+    let moved = painted_in(app, ctx, t0 + 0.1, vec![Event::PointerMoved(at)], size);
+    std::iter::once(moved).chain((2..30).map(|i| painted_in(app, ctx, t0 + f64::from(i) * 0.1, vec![], size))).collect()
+}
+
+/// [`until_card_in`] in [`WINDOW`].
+fn until_card(app: &mut VectorcraftApp, ctx: &egui::Context, t0: f64, at: Pos2, id: &str) -> (f64, egui::Rect) {
+    until_card_in(app, ctx, t0, at, id, WINDOW)
+}
+
+/// General › Show Tool Cards: a tool's tool tip becomes a card with its name and shortcut, what it
+/// does, and one line per action of its hint, the modifier keys named for the platform.
+#[test]
+fn a_tool_card_shows_what_the_tool_does_and_what_its_keys_do() {
+    let lines = card::lines("selection", false);
+    let plain = |line: &Vec<(String, bool)>| line.iter().map(|(s, _)| s.as_str()).collect::<String>();
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert_eq!(plain(&lines[0]), "Click the object to select");
+    let shift = crate::menus::shown_shortcut("Shift+Click");
+    assert_eq!(lines[1], vec![(shift.clone(), true), (" to select multiple objects".to_string(), false)]);
+    assert!(plain(&lines[2]).ends_with(" the object to duplicate"), "{lines:?}");
+    // A segment that runs on past a key keeps its pieces on one line.
+    let warp = card::lines("warp", false);
+    assert_eq!(warp.len(), 2, "{warp:?}");
+    assert!(plain(&warp[1]).ends_with(" keeps its proportions)"), "{warp:?}");
+    // The Zoom tool's card follows the animated zoom's hint.
+    assert_ne!(card::lines("zoom", false), card::lines("zoom", true));
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    let selection = frame(&mut app, &ctx, 0.0, vec![])[0];
+    let shown = hovered_texts(&mut app, &ctx, 1.0, selection.center());
+    assert!(shown.contains(&described("selection")), "{shown:?}");
+    assert!(shown.contains(&tip(tool_info("selection").unwrap())), "{shown:?}");
+    assert!(shown.contains(&format!("{shift} to select multiple objects")), "{shown:?}");
+    // The card sits beside its button, inside the window.
+    let (_, text) = until_card(&mut app, &ctx, 10.0, selection.center(), "selection");
+    let window = egui::Rect::from_min_size(Pos2::ZERO, WINDOW);
+    assert!(text.left() >= selection.right() && window.contains_rect(text), "{text:?} beside {selection:?}");
+}
+
+/// A tool without a description keeps its one-line tool tip with the cards on; with the cards off
+/// (the default), or tool tips off, no card shows.
+#[test]
+fn tool_cards_are_off_by_default_and_fall_back_to_the_tool_tip() {
+    assert!(!Session::new().prefs.show_tool_cards, "off by default");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let ctx = egui::Context::default();
+    let rects = frame(&mut app, &ctx, 0.0, vec![]);
+    let (selection, lasso) = (rects[0].center(), rects[2].center());
+    let selection_tip = tip(tool_info("selection").unwrap());
+    let off = hovered_texts(&mut app, &ctx, 1.0, selection);
+    assert!(off.contains(&selection_tip) && !off.contains(&described("selection")), "off: the tool tip, {off:?}");
+
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    assert_eq!(vectorcraft_tools::catalog::tool_description("lasso"), None);
+    let lasso_tip = tip(tool_info("lasso").unwrap());
+    assert!(hovered_texts(&mut app, &ctx, 10.0, lasso).contains(&lasso_tip), "no description: the tool tip");
+
+    app.session.prefs.show_tool_tips = false;
+    let none = hovered_texts(&mut app, &ctx, 20.0, selection);
+    assert!(!none.contains(&described("selection")) && !none.contains(&selection_tip), "tool tips off: {none:?}");
+}
+
+/// A card that is showing goes away when tool tips are turned off, while the pointer stays on its
+/// button.
+#[test]
+fn a_shown_tool_card_goes_away_when_tool_tips_are_turned_off() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    let selection = frame(&mut app, &ctx, 0.0, vec![])[0].center();
+    let (time, _) = until_card(&mut app, &ctx, 1.0, selection, "selection");
+    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
+    let after: Vec<String> = (1..5).flat_map(|i| painted_texts(&mut app, &ctx, time + f64::from(i) * 0.1, vec![])).collect();
+    assert!(!after.contains(&described("selection")), "{after:?}");
+
+    // A card a click put away stays away while the pointer rests on its button, and shows again on
+    // the next rest when the pointer left and came back while tool tips were off.
+    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
+    let (t, _) = until_card(&mut app, &ctx, 10.0, selection, "selection");
+    let b = |pressed| Event::PointerButton { pos: selection, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    painted_texts(&mut app, &ctx, t + 0.1, vec![b(true)]);
+    painted_texts(&mut app, &ctx, t + 0.15, vec![b(false)]);
+    // Tool tips off and on again while the pointer stays: the card stays away.
+    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
+    painted_texts(&mut app, &ctx, t + 0.2, vec![]);
+    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
+    let stayed: Vec<String> = (3..30).flat_map(|i| painted_texts(&mut app, &ctx, t + f64::from(i) * 0.1, vec![])).collect();
+    assert!(!stayed.contains(&described("selection")), "{stayed:?}");
+    let t = t + 3.0;
+    app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
+    painted_texts(&mut app, &ctx, t + 0.2, vec![Event::PointerGone]);
+    // Back onto the button.
+    painted_texts(&mut app, &ctx, t + 0.3, vec![Event::PointerMoved(selection + vec2(2.0, 2.0))]);
+    painted_texts(&mut app, &ctx, t + 0.35, vec![Event::PointerMoved(selection)]);
+    app.run("prefs.set", json!({"key": "showToolTips", "value": true})).unwrap();
+    let again: Vec<String> = (4..30).flat_map(|i| painted_texts(&mut app, &ctx, t + f64::from(i) * 0.1, vec![])).collect();
+    assert!(again.contains(&described("selection")), "{again:?}");
+}
+
+/// A card never gets in the way: a press with it showing picks the tool and puts the card away at
+/// once, it stays away until the pointer leaves, a key (one the shortcuts take first too), a
+/// modifier key alone and a scroll put it away, a long press with it showing still opens a group's flyout on time, while that flyout is
+/// open the other buttons show their one-line tool tips and the flyout's rows show cards past its
+/// bar, and a press held from off the toolbar (as a drag on the canvas holds one) shows none.
+#[test]
+fn a_tool_card_never_gets_in_the_way() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    let rects = frame(&mut app, &ctx, 0.0, vec![]);
+    let (selection, direct, shapes) = (rects[0].center(), rects[1].center(), rects[3].center());
+    let has_card = |shown: &Vec<String>, id: &str| shown.contains(&described(id));
+    let b = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+
+    // A click with the card showing picks the tool and does nothing else.
+    assert_eq!(app.session.tool_id(), "selection");
+    let (t, _) = until_card(&mut app, &ctx, 1.0, direct, "directSelection");
+    assert!(!has_card(&painted_texts(&mut app, &ctx, t + 0.1, vec![b(direct, true)]), "directSelection"), "gone on the press");
+    assert!(!has_card(&painted_texts(&mut app, &ctx, t + 0.15, vec![b(direct, false)]), "directSelection"));
+    assert_eq!(app.session.tool_id(), "directSelection", "the click picked the tool");
+    assert_eq!(app.ui.flyout, None, "and did nothing else");
+    for i in 0..20 {
+        let shown = painted_texts(&mut app, &ctx, t + 0.2 + f64::from(i) * 0.1, vec![]);
+        assert!(!has_card(&shown, "directSelection"), "stays away while the pointer rests there");
+    }
+
+    // A key, a modifier key alone and a scroll each put a showing card away.
+    let key = Event::Key { key: egui::Key::X, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let scroll = wheel(selection, 10.0).pop().unwrap();
+    for (k, event) in [key, Event::ModifiersChanged(egui::Modifiers::SHIFT), scroll].into_iter().enumerate() {
+        let what = format!("{event:?}");
+        let (t, _) = until_card(&mut app, &ctx, 10.0 + 10.0 * k as f64, selection, "selection");
+        assert!(!has_card(&painted_texts(&mut app, &ctx, t + 0.1, vec![event]), "selection"), "gone on {what}");
+        // The key or the modifier comes up again.
+        let up = Event::Key { key: egui::Key::X, physical_key: None, pressed: false, repeat: false, modifiers: Default::default() };
+        painted_texts(&mut app, &ctx, t + 0.2, vec![up, Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    }
+    // So does an arrow key that the shortcuts take before the toolbar draws (it nudges the selection).
+    let (t, _) = until_card(&mut app, &ctx, 45.0, selection, "selection");
+    let arrow = Event::Key { key: egui::Key::ArrowLeft, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let shown = painted_after(&mut app, &ctx, t + 0.1, vec![arrow], WINDOW, Some(egui::Key::ArrowLeft));
+    assert!(!shown.iter().any(|(s, _)| *s == described("selection")), "gone on an arrow key the shortcuts took");
+
+    // A long press on a group's button with its card showing still opens its flyout on time.
+    let (t, _) = until_card(&mut app, &ctx, 50.0, shapes, "rectangle");
+    assert!(!has_card(&painted_texts(&mut app, &ctx, t + 0.1, vec![b(shapes, true)]), "rectangle"), "gone on the press");
+    painted_texts(&mut app, &ctx, t + 0.1 + LONG_PRESS + 0.01, vec![]);
+    assert!(app.ui.flyout.is_some(), "the long press opened the flyout");
+    assert_eq!(app.session.tool_id(), "directSelection");
+    painted_texts(&mut app, &ctx, t + 1.0, vec![b(shapes, false)]);
+    assert!(app.ui.flyout.is_some());
+
+    // While it is open, another button shows its one-line tool tip instead of a card ...
+    let shown = hovered_texts(&mut app, &ctx, 60.0, selection);
+    assert!(!has_card(&shown, "selection") && shown.contains(&tip(tool_info("selection").unwrap())), "{shown:?}");
+    // ... and its rows show theirs beside it, past its bar, when the window has room there; when
+    // it has none, a row shows no card rather than one pushed over the flyout.
+    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout is shown");
+    let row = pos2(menu.left() + 60.0, menu.top() + 45.0);
+    let narrow = vec2(menu.right() + 100.0, WINDOW.y);
+    for (k, shown) in hovered_in(&mut app, &ctx, 65.0, row, narrow).into_iter().enumerate() {
+        assert!(!shown.iter().any(|(s, _)| *s == described("roundedRectangle")), "no room: no card (frame {k})");
+    }
+    let (_, text) = until_card_in(&mut app, &ctx, 70.0, row, "roundedRectangle", vec2(menu.right() + 400.0, WINDOW.y));
+    assert!(text.left() >= menu.right(), "{text:?} beside {menu:?}");
+    let away = pos2(300.0, 1000.0);
+    painted_texts(&mut app, &ctx, 80.0, vec![Event::PointerMoved(away), b(away, true)]);
+    painted_texts(&mut app, &ctx, 80.05, vec![b(away, false)]);
+    assert_eq!(app.ui.flyout, None);
+
+    // A press held from off the toolbar, moved over a tool button, shows no card.
+    painted_texts(&mut app, &ctx, 90.0, vec![Event::PointerMoved(away), b(away, true)]);
+    painted_texts(&mut app, &ctx, 90.1, vec![Event::PointerMoved(selection)]);
+    for i in 2..30 {
+        let shown = painted_texts(&mut app, &ctx, 90.0 + f64::from(i) * 0.1, vec![]);
+        assert!(!has_card(&shown, "selection"), "no card while a button is held");
+    }
+    painted_texts(&mut app, &ctx, 93.0, vec![b(selection, false)]);
+}
+
+/// A floating flyout's buttons show cards below the strip, except while a group's flyout is open:
+/// then they show their one-line tool tips.
+#[test]
+fn a_floating_flyouts_cards_give_way_to_an_open_flyout() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let tools: Vec<String> = ["rectangle", "roundedRectangle", "star"].map(String::from).to_vec();
+    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
+    let ctx = egui::Context::default();
+    shapes_button(&mut app, &ctx);
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    let rects = frame(&mut app, &ctx, 1.0, vec![]);
+    let strip = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).unwrap();
+    let star = pos2(strip.left() + STRIP_BUTTON.x * 2.5, strip.center().y);
+    let (_, text) = until_card(&mut app, &ctx, 10.0, star, "star");
+    let window = egui::Rect::from_min_size(Pos2::ZERO, WINDOW);
+    assert!(text.top() >= strip.bottom() && window.contains_rect(text), "{text:?} below {strip:?}");
+    // A right-click on the Direct Selection group's button opens its flyout.
+    let direct = rects[1].center();
+    let r = |pressed| Event::PointerButton { pos: direct, button: PointerButton::Secondary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, 20.0, vec![Event::PointerMoved(direct), r(true)]);
+    frame(&mut app, &ctx, 20.05, vec![r(false)]);
+    assert!(app.ui.flyout.is_some());
+    let shown = hovered_texts(&mut app, &ctx, 30.0, star);
+    assert!(!shown.contains(&described("star")) && shown.contains(&tl!("Star Tool").to_string()), "{shown:?}");
+}
+
+/// A floating flyout's card goes above the strip when the window has no room below it, and when it
+/// has room neither above nor below, the button keeps its one-line tool tip.
+#[test]
+fn a_floating_flyouts_card_goes_above_or_gives_way_in_a_short_window() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let tools: Vec<String> = ["rectangle", "roundedRectangle", "star"].map(String::from).to_vec();
+    app.ui.floating_flyouts.push(crate::state::FloatingFlyout { tools, pos: [150.0, 600.0] });
+    let ctx = egui::Context::default();
+    shapes_button(&mut app, &ctx);
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    frame(&mut app, &ctx, 1.0, vec![]);
+    let strip = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).unwrap();
+    let star = pos2(strip.left() + STRIP_BUTTON.x * 2.5, strip.center().y);
+    let low = vec2(WINDOW.x, strip.bottom() + 40.0);
+    let (_, text) = until_card_in(&mut app, &ctx, 10.0, star, "star", low);
+    assert!(text.bottom() <= strip.top(), "{text:?} above {strip:?}");
+
+    app.ui.floating_flyouts[0].pos = [150.0, 150.0];
+    let short = vec2(WINDOW.x, 360.0);
+    painted_in(&mut app, &ctx, 20.0, vec![], short);
+    let strip = ctx.memory(|m| m.area_rect(floating_area("rectangle"))).unwrap();
+    let star = pos2(strip.left() + STRIP_BUTTON.x * 2.5, strip.center().y);
+    let frames = hovered_in(&mut app, &ctx, 30.0, star, short);
+    let shown: Vec<&String> = frames.iter().flatten().map(|(s, _)| s).collect();
+    assert!(!shown.contains(&&described("star")) && shown.contains(&&tl!("Star Tool").to_string()), "{shown:?}");
+}
+
+/// A flyout that opens left of its button (a toolbar docked right) shows its rows' cards on its
+/// left, clear of the button.
+#[test]
+fn a_flyout_opened_to_the_left_shows_its_cards_on_the_left() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    let size = vec2(800.0, 1200.0);
+    let anchor = egui::Rect::from_min_size(pos2(760.0, 100.0), vec2(36.0, PITCH - 1.0));
+    app.ui.flyout = Some(0);
+    ctx.data_mut(|d| {
+        d.insert_temp(egui::Id::unique("flyout-anchor"), anchor);
+        d.insert_temp(egui::Id::unique("flyout-tools"), ["rectangle", "roundedRectangle", "ellipse"].map(String::from).to_vec());
+        d.insert_temp(flyout_toolbar_id(), None::<String>);
+    });
+    painted_in(&mut app, &ctx, 0.0, vec![], size);
+    painted_in(&mut app, &ctx, 0.1, vec![], size);
+    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout is shown");
+    assert!(menu.right() <= anchor.left(), "the flyout opened left: {menu:?}");
+    let row = pos2(menu.left() + 60.0, menu.top() + 45.0);
+    let (_, text) = until_card_in(&mut app, &ctx, 1.0, row, "roundedRectangle", size);
+    assert!(text.right() <= menu.left() && !text.intersects(anchor), "{text:?} left of {menu:?}");
+}
+
+/// A long translated tool name wraps inside the card's width, so the card keeps to the room its
+/// placement checked.
+#[test]
+fn a_long_translated_name_wraps_inside_the_card() {
+    let ru = crate::i18n::Lang::from_code("ru").unwrap();
+    crate::i18n::set_current(ru);
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("prefs.set", json!({"key": "showToolCards", "value": true})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let anchor = egui::Rect::from_min_size(pos2(760.0, 100.0), vec2(36.0, PITCH - 1.0));
+    app.ui.flyout = Some(0);
+    ctx.data_mut(|d| {
+        d.insert_temp(egui::Id::unique("flyout-anchor"), anchor);
+        d.insert_temp(egui::Id::unique("flyout-tools"), ["rectangle", "roundedRectangle", "ellipse"].map(String::from).to_vec());
+        d.insert_temp(flyout_toolbar_id(), None::<String>);
+    });
+    let size = vec2(800.0, 1200.0);
+    painted_in(&mut app, &ctx, 0.0, vec![], size);
+    painted_in(&mut app, &ctx, 0.1, vec![], size);
+    let menu = ctx.memory(|m| m.area_rect(egui::Id::unique("tool-flyout"))).expect("the flyout is shown");
+    let row = pos2(menu.left() + 60.0, menu.top() + 45.0);
+    let name = tip(tool_info("roundedRectangle").unwrap());
+    let english = described("roundedRectangle");
+    let description = tl!(english.as_str()).to_string();
+    assert_ne!(description, english, "the description has a Russian row");
+    painted_in(&mut app, &ctx, 1.0, vec![Event::PointerGone], size);
+    painted_in(&mut app, &ctx, 1.1, vec![Event::PointerMoved(row)], size);
+    let mut card = None;
+    for i in 2..30 {
+        let shown = painted_in(&mut app, &ctx, 1.0 + f64::from(i) * 0.1, vec![], size);
+        if shown.iter().any(|(s, _)| *s == description) {
+            card = Some(shown);
+            break;
+        }
+    }
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let shown = card.expect("the Russian card shows");
+    let heading = shown.iter().filter(|(s, _)| *s == name).map(|(_, r)| *r).max_by(|a, b| a.left().total_cmp(&b.left()).reverse());
+    let heading = heading.expect("the card shows the name");
+    // The name sits right of the icon, inside the card's width.
+    assert!(heading.width() <= card::WIDTH - card::ICON, "{name}: {heading:?}");
+    assert!(heading.right() <= menu.left(), "{heading:?} left of {menu:?}");
+}
+
 /// Screen readers name a flyout's rows and a floating strip's buttons by their tools' tool tips,
 /// with the active tool's pressed, and name the strip's close box and both tear-off bars.
 #[test]

@@ -12,12 +12,14 @@ use crate::*;
 
 const DENIED: &str = "Script file access denied";
 
-/// A fresh folder for test `name`, with a `main` folder inside it for the script.
+/// A fresh folder for test `name`, with a `main` folder inside it for the script, by its real
+/// path: kept grants hold real paths, and a path named through a link (macOS's `/var` is
+/// `/private/var`) is refused by its names alone.
 fn folder(name: &str) -> PathBuf {
     let base = std::env::temp_dir().join(format!("vc-script-io-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(base.join("main")).unwrap();
-    base
+    std::fs::canonicalize(&base).unwrap()
 }
 
 fn write(path: &Path, bytes: &[u8]) {
@@ -416,7 +418,8 @@ fn script_file_encoding_binary_ascii() {
 }
 
 /// A script's own folder is only read: writing there, and anywhere it was not given, is refused,
-/// and with nobody to ask its file dialogs give `null`. Aliases and `execute` are not available.
+/// and with nobody to ask its file dialogs give `null`. Setting `hidden` and `createAlias` are
+/// refused there too, and `execute` is not available.
 #[test]
 fn script_file_writes_outside_its_places_and_headless_dialogs_are_refused() {
     let base = folder("writes");
@@ -452,10 +455,10 @@ fn script_file_writes_outside_its_places_and_headless_dialogs_are_refused() {
             null,
             false,
             "Script files cannot be opened in another application",
-            "Script file hidden setting cannot be changed",
+            DENIED,
             false,
             false,
-            "Script files cannot make aliases",
+            DENIED,
             ""
         ]])
     );
@@ -463,6 +466,7 @@ fn script_file_writes_outside_its_places_and_headless_dialogs_are_refused() {
     assert_eq!(r["written"], json!([]));
     assert_eq!(std::fs::read(base.join("main/keep.txt")).unwrap(), b"keep");
     assert!(!base.join("main/new.txt").exists() && !base.join("main/made").exists() && !base.join("main/c.txt").exists());
+    assert!(!base.join("main/.keep.txt").exists() && std::fs::symlink_metadata(base.join("main/l")).is_err());
     assert!(!Path::new(&outside).exists());
     let _ = std::fs::remove_dir_all(base);
 }
@@ -688,6 +692,250 @@ fn a_renamed_file_names_its_old_and_new_paths_in_written() {
         let path = r["log"][at].as_str().unwrap();
         assert!(written.contains(&path), "{path} in {written:?}");
     }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[cfg(unix)]
+const NOT_FOUND: &str = "Script file does not exist";
+#[cfg(unix)]
+const NOT_REGULAR: &str = "Script file is not a regular file";
+#[cfg(unix)]
+const TAKEN: &str = "Script file name is already in use";
+
+/// On Unix setting `hidden` renames a file with one dot added or its leading dots taken off, and the
+/// object takes the new path: a file it has open stays open and is written at the new path, a file
+/// already as asked keeps its name, and a name in use, a name of dots alone and a folder are refused.
+#[cfg(unix)]
+#[test]
+fn script_file_hidden_renames_the_file_with_a_leading_dot() {
+    let base = folder("hidden");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, u = new File(d + '/u.txt'); u.open('w'); u.write('kept');\n\
+         var before = u.fsName; u.hidden = true;\n\
+         var out = [u.name, u.hidden, u.error, new File(d + '/.u.txt').hidden, new File(before).exists];\n\
+         u.hidden = true; out.push(u.name, u.error, u.write('+'), u.close()); u.open('r'); out.push(u.read()); u.close();\n\
+         u.hidden = false; out.push(u.name, u.hidden, new File(d + '/.u.txt').exists);\n\
+         var dots = new File(d + '/...'); dots.open('w'); dots.close(); dots.hidden = false; out.push(dots.error, dots.exists);\n\
+         var v = new File(d + '/v.txt'), w = new File(d + '/.v.txt'); v.open('w'); v.close(); w.open('w'); w.write('w'); w.close();\n\
+         v.hidden = true; out.push(v.error, v.name, w.length);\n\
+         var g = new Folder(d + '/g'); g.create(); var gf = new File(g.fsName); gf.hidden = true; out.push(gf.error, g.exists);\n\
+         vc.log(out); vc.log(d);",
+    )
+    .unwrap();
+    let no_hidden = "Script file hidden setting cannot be changed";
+    assert_eq!(
+        r["log"][0],
+        json!([
+            ".u.txt",
+            true,
+            "",
+            true,
+            false,
+            ".u.txt",
+            "",
+            true,
+            true,
+            "kept+",
+            "u.txt",
+            false,
+            false,
+            no_hidden,
+            true,
+            TAKEN,
+            "v.txt",
+            1,
+            NOT_REGULAR,
+            true
+        ])
+    );
+    let d = PathBuf::from(r["log"][1].as_str().unwrap());
+    let mut names: Vec<String> = std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, ["...", ".v.txt", "g", "u.txt", "v.txt"]);
+    let written: Vec<&str> = r["written"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    for name in ["u.txt", ".u.txt"] {
+        assert!(written.contains(&d.join(name).to_string_lossy().as_ref()), "{name} in {written:?}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Setting `hidden` gives the file a new name, which must be a place the script may write too: a
+/// file allowed on its own in a save dialog keeps its name.
+#[cfg(unix)]
+#[test]
+fn script_file_hidden_needs_the_new_name_to_be_writable() {
+    let base = folder("hiddengrant");
+    let picked = base.join("picked/s.txt");
+    write(&picked, b"s");
+    let mut s = with_data(&base);
+    start_framed(
+        &mut s,
+        &base,
+        "var f = File.saveDialog('s'); f.hidden = true; var out = [f.error, f.name, f.hidden]; out.push(f.rename('t.txt'), f.error, f.name); vc.log(out);",
+    );
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![picked.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[DENIED, "s.txt", false, false, DENIED, "s.txt"]]));
+    assert!(picked.exists() && !base.join("picked/.s.txt").exists() && !base.join("picked/t.txt").exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// On Unix `createAlias` makes a link, in a place the script may write, to a file it may read: the
+/// link is an alias that resolves to the file and reads it, `hidden` tells of the link's own name,
+/// setting `hidden` and `remove` change the link alone, and writing through it to a file the script
+/// may only read is refused. A link that leads out of the script's places afterward reads nothing.
+#[cfg(unix)]
+#[test]
+fn script_file_create_alias_links_to_a_file_the_script_may_read() {
+    let base = folder("alias");
+    write(&base.join("main/keep.txt"), b"keep");
+    write(&base.join("main/.hid.txt"), b"hid");
+    write(&base.join("secret.txt"), b"secret");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, k = new File('keep.txt'), l = new File(d + '/l');\n\
+         var out = [l.createAlias(k), l.error, l.alias, l.resolve().fsName === k.fsName, l.hidden, k.alias];\n\
+         l.open('r'); out.push(l.read()); l.close();\n\
+         out.push(l.open('w'), l.error, l.open('a'), l.error);\n\
+         var h = new File(d + '/h'); out.push(h.createAlias('.hid.txt'), h.hidden, h.resolve().name);\n\
+         l.hidden = true; out.push(l.name, l.alias, l.hidden, k.exists, k.hidden);\n\
+         out.push(l.remove(), l.exists, k.exists); vc.log(out); vc.log(d);",
+    )
+    .unwrap();
+    assert_eq!(
+        r["log"][0],
+        json!([
+            true, "", true, true, false, false, "keep", false, DENIED, false, DENIED, true, false, ".hid.txt", ".l", true, true, true, false, true,
+            false, true
+        ])
+    );
+    let d = PathBuf::from(r["log"][1].as_str().unwrap());
+    assert_eq!(std::fs::read(base.join("main/keep.txt")).unwrap(), b"keep");
+    assert!(std::fs::symlink_metadata(d.join("l")).is_err() && std::fs::symlink_metadata(d.join(".l")).is_err());
+    let written: Vec<&str> = r["written"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(written.contains(&d.join("l").to_string_lossy().as_ref()), "{written:?}");
+    std::fs::remove_file(d.join("h")).unwrap();
+    std::os::unix::fs::symlink(base.join("secret.txt"), d.join("h")).unwrap();
+    let r = run_in(&mut s, &base, "var h = new File(Folder.userData.fsName + '/h'); vc.log([h.open('r'), h.error, h.alias, h.resolve()]);").unwrap();
+    assert_eq!(r["log"], json!([[false, DENIED, false, null]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `createAlias` makes nothing where the script may only read or may not go at all, at a name in use
+/// (a link that leads nowhere included), to a folder, to a file outside its places, in the settings
+/// folder or behind a link that leads out, to a file that is not there, or without a target.
+#[cfg(unix)]
+#[test]
+fn script_file_create_alias_is_refused_outside_the_scripts_places() {
+    let base = folder("aliasdenied");
+    write(&base.join("main/keep.txt"), b"keep");
+    write(&base.join("secret.txt"), b"secret");
+    write(&base.join("main/settings/Script Grants.json"), b"{\"version\": 1, \"grants\": []}");
+    std::fs::create_dir_all(base.join("main/sub")).unwrap();
+    std::fs::create_dir_all(base.join("elsewhere")).unwrap();
+    std::os::unix::fs::symlink(base.join("secret.txt"), base.join("main/out.txt")).unwrap();
+    let mut s = Session::new();
+    s.attach_script_data(base.join("main/settings/Script Data"));
+    let d = PathBuf::from(run_in(&mut s, &base, "vc.log(Folder.userData.fsName);").unwrap()["log"][0].as_str().unwrap());
+    write(&d.join("taken"), b"t");
+    std::os::unix::fs::symlink(base.join("nowhere"), d.join("dangling")).unwrap();
+    let text = format!(
+        "var d = Folder.userData.fsName, out = [];\n\
+         function a(at, to) {{ var f = new File(at); out.push(f.createAlias(to), f.error); }}\n\
+         a('own', 'keep.txt'); a(d + '/taken', 'keep.txt'); a(d + '/dangling', 'keep.txt'); a(d + '/dir', 'sub');\n\
+         a(d + '/s', {:?}); a(d + '/g', 'settings/Script Grants.json'); a(d + '/o', 'out.txt'); a(d + '/n'); a(d + '/m', 'missing.txt');\n\
+         a({:?}, 'keep.txt'); vc.log(out);",
+        base.join("secret.txt").to_string_lossy(),
+        base.join("elsewhere/x").to_string_lossy()
+    );
+    let r = run_in(&mut s, &base, &text).unwrap();
+    assert_eq!(
+        r["log"],
+        json!([[
+            false,
+            DENIED,
+            false,
+            TAKEN,
+            false,
+            TAKEN,
+            false,
+            NOT_REGULAR,
+            false,
+            DENIED,
+            false,
+            DENIED,
+            false,
+            DENIED,
+            false,
+            NOT_FOUND,
+            false,
+            NOT_FOUND,
+            false,
+            DENIED
+        ]])
+    );
+    assert!(std::fs::symlink_metadata(base.join("main/own")).is_err());
+    assert_eq!(std::fs::read_dir(base.join("elsewhere")).unwrap().count(), 0);
+    for name in ["dir", "s", "g", "o", "n", "m"] {
+        assert!(std::fs::symlink_metadata(d.join(name)).is_err(), "{name}");
+    }
+    assert_eq!(std::fs::read(d.join("taken")).unwrap(), b"t");
+    assert_eq!(std::fs::read_link(d.join("dangling")).unwrap(), base.join("nowhere"));
+    assert_eq!(r["written"], json!([]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A link put in place of the folder an alias goes in, after the alias's place was looked up, does
+/// not leave a new link where it leads.
+#[cfg(unix)]
+#[test]
+fn script_file_alias_is_not_left_behind_a_folder_replaced_by_a_link() {
+    let base = folder("aliasrace");
+    write(&base.join("main/keep.txt"), b"keep");
+    let outside = base.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let mut s = with_data(&base);
+    let to = outside.clone();
+    crate::script::files::BEFORE_ALIAS_LINK.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |at: &Path| {
+            let sub = at.parent().unwrap();
+            std::fs::rename(sub, sub.with_file_name("moved")).unwrap();
+            std::os::unix::fs::symlink(&to, sub).unwrap();
+        }));
+    });
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName; new Folder(d + '/sub').create(); var l = new File(d + '/sub/l'); vc.log([l.createAlias('keep.txt'), l.error]);",
+    );
+    crate::script::files::BEFORE_ALIAS_LINK.with(|h| h.borrow_mut().take());
+    assert_eq!(r.unwrap()["log"], json!([[false, DENIED]]));
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0, "no link is left outside the script's places");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Where a hidden file is not one whose name starts with a dot, setting `hidden` and `createAlias`
+/// set `error` and change nothing.
+#[cfg(not(unix))]
+#[test]
+fn script_file_hidden_and_aliases_are_refused_off_unix() {
+    let base = folder("hiddenoff");
+    write(&base.join("main/keep.txt"), b"keep");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName, u = new File(d + '/u.txt'); u.open('w'); u.close(); u.hidden = true; var out = [u.error, u.name];\n\
+         var l = new File(d + '/l'); out.push(l.createAlias('keep.txt'), l.error, l.exists); vc.log(out);",
+    )
+    .unwrap();
+    assert_eq!(r["log"], json!([["Script file hidden setting cannot be changed", "u.txt", false, "Script files cannot make aliases", false]]));
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -1208,6 +1456,35 @@ fn script_file_rename_does_not_move_the_settings_folder() {
     let r = pump_to_picker(&mut s).unwrap().unwrap();
     assert_eq!(r["log"], json!([[false, DENIED]]));
     assert!(base.join("cfg/settings").is_dir());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// In a folder granted in a file dialog, a file is not renamed to the name of the settings folder,
+/// and on Unix setting `hidden` does not give it that name either.
+#[test]
+fn script_file_rename_does_not_take_the_settings_folders_name() {
+    let base = folder("renamein");
+    write(&base.join("cfg"), b"c");
+    write(&base.join("x.txt"), b"x");
+    let mut s = Session::new();
+    s.attach_script_data(base.join(".cfg/Script Data"));
+    let hide =
+        if cfg!(unix) { "var h = new File(p.fsName + '/cfg'); h.hidden = true; out.push(h.error, h.name);" } else { "out.push(DENIED, 'cfg');" };
+    let denied = format!("var DENIED = {DENIED:?};");
+    start_framed(
+        &mut s,
+        &base,
+        &format!(
+            "{denied} var p = Folder.selectDialog('p'), x = new File(p.fsName + '/x.txt'), out = [x.rename('.cfg'), x.error, x.name]; {hide} vc.log(out);"
+        ),
+    );
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![base.to_string_lossy().into_owned()], always: false }));
+    let r = pump_to_picker(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!([[false, DENIED, "x.txt", DENIED, "cfg"]]));
+    assert!(!base.join(".cfg").is_file());
+    assert_eq!(std::fs::read(base.join("x.txt")).unwrap(), b"x");
+    assert_eq!(std::fs::read(base.join("cfg")).unwrap(), b"c");
     let _ = std::fs::remove_dir_all(base);
 }
 

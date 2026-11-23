@@ -41,6 +41,7 @@ pub use data::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph
 pub(crate) use data::{apply_csv, graph_csv_from_file, parse_csv};
 #[cfg(test)]
 use data::{fmt_value, to_csv};
+pub(crate) use designs::{holds_designs, redraw_detached, redraw_symbols_with_designs, redraw_with_designs, refresh_graphs};
 pub use edit::{GraphTypeSubject, graph_type_subject};
 pub(crate) use edit::{edit_graph_art, graphs_holding, keep_placed};
 pub use generate::calculated_axes;

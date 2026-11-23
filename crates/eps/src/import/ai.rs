@@ -17,6 +17,7 @@
 //! objects and points. Anything it doesn't read is an error: the caller opens the file the way it
 //! did before (the printed page, or the PDF), with a warning saying why.
 
+mod arrowhead;
 mod blend;
 mod brush;
 mod envelope;
@@ -38,11 +39,13 @@ pub(crate) use blend::{MAX_BLEND_OBJECTS, MAX_KEYS as MAX_BLEND_KEYS, PLUGIN as 
 pub(crate) use brush::{
     BrushesRead, MANAGER_NAME as BRUSH_MANAGER, brushes_kept, plugin_name as brush_plugin_name, read_brush_object, turn_over as turn_brush_art_over,
 };
+#[cfg(test)]
+pub(crate) use envelope::DASH_CHECKS_MADE;
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
-pub(crate) use envelope::MAX_CHECKED;
 pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
 pub(crate) use envelope::{GridPoint as EnvelopeGridPoint, PLUGIN as DEFORM_PLUGIN, outline as envelope_outline, upright as envelope_upright};
 pub(crate) use envelope::{MAX_ANY as ENVELOPE_MAX_ANY, MAX_SOLID as ENVELOPE_MAX_SOLID};
+pub(crate) use envelope::{MAX_CHECKED, MAX_DASH_CHECKS};
 pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 #[cfg(test)]
 pub(crate) use frames::TEXT_FRAME_SCANS;
@@ -67,7 +70,7 @@ pub use read::{
 #[cfg(test)]
 pub(crate) use style::ART_STYLE_PARSES;
 
-pub(crate) use read::is_look_slot;
+pub(crate) use read::{clip_by_type, is_look_slot};
 pub(crate) use style::{MAX_LISTED, MAX_LISTED_NAME, warp_number};
 
 #[cfg(test)]

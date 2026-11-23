@@ -187,7 +187,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             let mut reply = json!({"applied": applied, "objects": objects});
             if objects == 0 {
                 reply["note"] = json!(
-                    "no object was painted (nothing selected, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
+                    "no object was painted (nothing selected, the Live Paint Bucket is the active tool and no `ids` were given, or `ids` is empty or holds no object this paint applies to): only the paint for new art changed"
                 );
             }
             j(reply)

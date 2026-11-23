@@ -4,16 +4,19 @@
 //! baseline, text rise, is baseline shift). Each glyph stays where the file drew it: the kerning
 //! and tracking the type takes put it there (#722). Fonts are named from the file's base font name (its
 //! subset prefix dropped, the family matched against the fonts available); a font that isn't
-//! available keeps its name, and the text shows in the fallback font until it is.
+//! available keeps its name. Where the file carries that font, its glyphs make a font kept with the
+//! document ([`crate::import_fonts`]) that draws the type as the file did until its text is
+//! edited ([`keep_file_fonts`]); otherwise the text shows in the fallback font until it is.
 //!
 //! Glyphs each turned a little further along a curve (type set on a path: apps write each glyph
 //! with its own placement) make one type-on-a-path object, its path through the glyphs' baseline.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{CharStyle, LineCap, LineJoin, Node, ParaDirection, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{CharStyle, FileFont, FileFonts, LineCap, LineJoin, Node, NodeId, NodeKind, ParaDirection, TextKind, TextObject, TextRun};
 use vectorcraft_text::TextLayout;
 
 /// One glyph's placement: its baseline origin, advance direction, size and horizontal scale.
@@ -233,10 +236,8 @@ pub(crate) struct TextLine {
     slots: Vec<Option<Slot>>,
     /// Per character: authored logical order must survive visual-to-logical reconstruction.
     authored: Vec<bool>,
-    /// Fill callbacks in an authored span, for the reader's later stroke pass.
-    actual_fills: HashMap<(u128, u64, u64), Option<usize>>,
     /// The glyphs filled without a stroke, in drawing order, for a stroke drawn over them later
-    /// ([`stroke_filled`](Self::stroke_filled)).
+    /// ([`stroke_filled`](Self::stroke_filled)), those of an ActualText span among them.
     filled: Vec<Filled>,
     /// The first of [`filled`](Self::filled) a stroke may still be drawn over: a stroke matches
     /// glyphs in the order they were filled, and each at most once.
@@ -246,6 +247,10 @@ pub(crate) struct TextLine {
     pending: Option<PendingStroke>,
     /// The last glyph's placement.
     last_at: Placement,
+    /// The last glyph was drawn before a boundary of stroke passes ([`end_fills`](Self::end_fills)):
+    /// no stroke drawn since goes over it, not even as the glyph just drawn
+    /// ([`stroke_last`](Self::stroke_last)).
+    last_closed: bool,
     /// The first glyph was set vertically ([`Upright`]).
     upright: Option<Upright>,
     /// The glyphs make a column (vertical type), each below the last.
@@ -266,8 +271,13 @@ pub(crate) struct TextLine {
     /// The strokes of its glyphs' outlines drawn between them, one per glyph with ink so far
     /// (written right after the line).
     pub held: Vec<Node>,
+    /// A glyph of the line is drawn in a font the file carries for a family that isn't available
+    /// ([`keep_file_fonts`]).
+    pub file_font: bool,
     /// Whether this line holds Type 3 font glyphs.
     pub has_type3: bool,
+    /// A glyph of the line differs from the one its font keeps for the same character ([`crate::import_fonts::FileFontGlyphs::conflicts`]).
+    pub file_conflict: bool,
 }
 
 /// Where the file put a glyph: the glyph's index in the line, and its advance in the file's font
@@ -279,7 +289,9 @@ struct Slot {
 }
 
 /// A glyph filled without a stroke: its font and placement, and where its text is in the line's
-/// runs (the run's index, the text's byte offset in it and its length).
+/// runs (the run's index, the text's byte offset in it and its length). A glyph of an ActualText
+/// span has `actual`: `Some(true)` for the glyph whose run holds the replacement text,
+/// `Some(false)` for the glyphs after it, which add no text (`len` 0 for both).
 #[derive(Clone, Copy, Debug)]
 struct Filled {
     font: u128,
@@ -287,6 +299,60 @@ struct Filled {
     run: usize,
     start: usize,
     len: usize,
+    actual: Option<bool>,
+}
+
+/// Whether a stroke over glyph `text` drawn at `at` in `font` at `opacity` may be drawn over a
+/// glyph `fill` filled (its font, placement, whether it is a glyph of an ActualText span, and its
+/// text) on a line that is `opaque` or not ([`TextLine::fills_at`]).
+fn may_stroke(fill: (u128, Placement, bool, Option<&str>), opaque: bool, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> bool {
+    let (g_font, g_at, g_actual, g_text) = fill;
+    if actual {
+        let same = |a: f64, b: f64| a.to_bits() == b.to_bits();
+        return g_actual && g_font == font && same(g_at.origin.x, at.origin.x) && same(g_at.origin.y, at.origin.y);
+    }
+    !g_actual && opacity >= 0.999 && opaque && g_font == font && g_at.same_as(&at) && g_text == Some(text)
+}
+
+/// The glyphs a stroke could still go over on lines of type finished before their stroke pass
+/// could end: lines beyond the most a fill pass keeps for its stroke pass. The device isn't told
+/// where an operator starts, so a stroke pass over such a line can't be told from one over the
+/// glyphs kept: its first stroke, over a glyph finished so, may match one of them instead. The
+/// first [`MAX_LOST_FILLS`](Self::MAX_LOST_FILLS) are kept, those finished first: a stroke pass
+/// starts over its operator's first glyph, which is among them unless more glyphs than that were
+/// finished so before the operator, since the last stroke or anything else drawn (#8549). A
+/// stroke over a glyph not kept matches none, so type filled and stroked after a page of type
+/// filled only stays filled and stroked; an operator whose first glyph isn't kept and that draws
+/// it again where it drew it may have its first stroke matched to the copy, as well as it can be,
+/// not exactly.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LostFills {
+    /// Each glyph's font, placement, whether it is a glyph of an ActualText span, its text and
+    /// whether its line is opaque.
+    fills: Vec<(u128, Placement, bool, Option<String>, bool)>,
+}
+
+impl LostFills {
+    /// The most glyphs kept, for bounded work and memory on hostile input: those after them
+    /// are not kept.
+    pub const MAX_LOST_FILLS: usize = 4096;
+
+    /// Add the glyphs `line` filled that a stroke may still go over, while there is room.
+    pub fn add(&mut self, line: &TextLine) {
+        let opaque = line.opacity >= 0.999;
+        for g in line.filled.get(line.stroked..).unwrap_or_default() {
+            if self.fills.len() >= Self::MAX_LOST_FILLS {
+                return;
+            }
+            self.fills.push((g.font, g.at, g.actual.is_some(), line.glyph_text(g).map(str::to_string), opaque));
+        }
+    }
+
+    /// Whether a stroke over glyph `text` drawn at `at` in `font` at `opacity` may be drawn over
+    /// one of the glyphs kept ([`TextLine::fills_at`]).
+    pub fn may_stroke(&self, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> bool {
+        self.fills.iter().any(|(f, a, act, t, opaque)| may_stroke((*f, *a, *act, t.as_deref()), *opaque, font, at, opacity, text, actual))
+    }
 }
 
 /// Glyphs next to each other in one run that a stroke is drawn over, not yet restyled
@@ -310,6 +376,9 @@ pub(crate) struct LineFacts {
     /// Horizontal point type: how long the file set it, from its first glyph's origin to the end
     /// of its last glyph that isn't a space (points, along the baseline).
     pub length: f64,
+    /// Set in a font the file carries for a family that isn't available: what its spacing is
+    /// measured from, to measure it again once that font is kept ([`keep_file_fonts`]).
+    pub respace: Option<Box<Spacing>>,
 }
 
 /// The most a glyph on a curve turns from the one before it (about 20°).
@@ -331,11 +400,11 @@ impl TextLine {
             text_bytes: 0,
             slots: vec![],
             authored: vec![],
-            actual_fills: HashMap::new(),
             filled: vec![],
             stroked: 0,
             pending: None,
             last_at: at,
+            last_closed: false,
             upright: None,
             column: false,
             ink: vec![],
@@ -343,7 +412,9 @@ impl TextLine {
             drawn_spaces: vec![],
             drawn_space: None,
             held: vec![],
+            file_font: false,
             has_type3: false,
+            file_conflict: false,
         }
     }
 
@@ -382,10 +453,10 @@ impl TextLine {
         let Some((last, _, run)) = self.runs.last_mut() else {
             self.runs.push((look.clone(), 0.0, text.to_string()));
             self.last_start = 0;
-            self.record_actual_fill(look, at, content);
             self.record_filled(look, at, content);
             self.authored.extend(text.chars().map(|_| content.authored()));
             (self.upright, self.next, self.last, self.last_at) = (Some(upright), at.origin + down * at.size, at.origin, at);
+            self.last_closed = false;
             return true;
         };
         let across = (at.origin - self.at.origin).dot(self.at.dir);
@@ -420,12 +491,12 @@ impl TextLine {
             self.runs.push((look.clone(), 0.0, text.to_string()));
             self.last_start = 0;
         }
-        self.record_actual_fill(look, at, content);
         self.record_filled(look, at, content);
         self.authored.extend(text.chars().map(|_| content.authored()));
         self.next = at.origin + down * at.size;
         self.last = at.origin;
         self.last_at = at;
+        self.last_closed = false;
         true
     }
 
@@ -522,7 +593,6 @@ impl TextLine {
             self.runs.push((look.clone(), 0.0, text.to_string()));
             self.last_start = 0;
         }
-        self.record_actual_fill(look, at, content);
         self.record_filled(look, at, content);
         self.text_bytes = self.text_bytes.saturating_add(text.len());
         if !pen {
@@ -539,41 +609,38 @@ impl TextLine {
         }
         self.last = at.origin;
         self.last_at = at;
+        self.last_closed = false;
         self.last_dir = at.dir;
         self.last_size = at.size;
         self.baseline.push(at.origin);
         true
     }
 
-    fn record_actual_fill(&mut self, look: &Look, at: Placement, content: TextContent<'_>) {
-        if content.authored() && look.fill.is_some() {
-            let run = matches!(content, TextContent::Actual(_)).then(|| self.runs.len().saturating_sub(1));
-            self.actual_fills.insert((look.font, at.origin.x.to_bits(), at.origin.y.to_bits()), run);
-        }
-    }
-
     /// Note glyph `content` just added to the last run, filled without a stroke, for a stroke
-    /// drawn over it later.
+    /// drawn over it later: a glyph of an ActualText span too, whose text is the replacement's
+    /// (the first glyph's) or none.
     fn record_filled(&mut self, look: &Look, at: Placement, content: TextContent<'_>) {
-        let len = content.text().len();
-        if content.authored() || len == 0 || look.fill.is_none() || look.stroke.is_some() {
+        if look.fill.is_none() || look.stroke.is_some() {
             return;
         }
-        let run = self.runs.len().saturating_sub(1);
-        self.filled.push(Filled { font: look.font, at, run, start: self.last_start, len });
+        let (run, start) = (self.runs.len().saturating_sub(1), self.last_start);
+        let (start, len, actual) = match content {
+            TextContent::Mapped(text) if !text.is_empty() => (start, text.len(), None),
+            TextContent::Mapped(_) => return,
+            TextContent::Actual(_) => (0, 0, Some(true)),
+            TextContent::Pen => (0, 0, Some(false)),
+        };
+        self.filled.push(Filled { font: look.font, at, run, start, len, actual });
     }
 
     /// The reader fills a whole Tj/TJ before replaying its glyphs as strokes. A replay
     /// must neither consume the replacement nor rewind the pen. Only the first glyph's
-    /// style belongs to the replacement; suppressed glyphs have no text to restyle.
+    /// style belongs to the replacement; suppressed glyphs have no text to restyle. The stroke
+    /// goes over the next glyph of the span filled in `font` at `at`, not stroked yet
+    /// ([`stroke_filled_at`](Self::stroke_filled_at)).
     pub fn stroke_actual(&mut self, font: u128, at: Placement, stroke: TypeStroke, overprint: bool) -> bool {
-        self.flush_stroke();
-        let key = (font, at.origin.x.to_bits(), at.origin.y.to_bits());
-        let Some(run) = self.actual_fills.remove(&key) else { return false };
-        if let Some((look, ..)) = run.and_then(|i| self.runs.get_mut(i)) {
-            (look.stroke, look.overprint_stroke) = (Some(stroke), overprint);
-        }
-        true
+        let Some(index) = self.next_filled(0, font, at, 1.0, "", true) else { return false };
+        self.stroke_filled_at(index, stroke, overprint)
     }
 
     /// Has the baseline turned (more than about 3° from the first glyph to the last)?
@@ -625,21 +692,35 @@ impl TextLine {
         // A stroke at another opacity than the fill's (`CA` and `ca` differ), or over a
         // translucent fill, is type of its own.
         let opaque = opacity >= 0.999 && self.opacity >= 0.999;
-        let rest = if opaque { self.filled.get(self.stroked..) } else { None };
-        let found = rest.and_then(|rest| {
-            rest.iter().position(|g| {
-                g.font == font
-                    && g.at.same_as(&at)
-                    && self.runs.get(g.run).and_then(|(.., t)| t.get(g.start..g.start.saturating_add(g.len))) == Some(text)
-            })
-        });
-        let Some(index) = found.map(|i| self.stroked.saturating_add(i)) else {
+        let Some(index) = self.next_filled(0, font, at, opacity, text, false) else {
             // Stroked text of its own (stroke rendering): no later stroke goes back over the
             // glyphs filled before it, so no stroke looks through them again.
             self.stroked = self.filled.len();
             // Nor does a translucent stroke join the glyph just filled.
             return opaque && self.stroke_last(font, at, text, stroke, overprint);
         };
+        self.stroke_filled_at(index, stroke, overprint)
+    }
+
+    /// A stroke over the glyph filled at `index` in [`filled`](Self::filled), not stroked yet
+    /// ([`next_filled`](Self::next_filled), [`last_filled`](Self::last_filled)): that glyph is
+    /// stroked as [`stroke_filled`](Self::stroke_filled) strokes the glyph it finds, and no later
+    /// stroke goes over the glyphs filled before it. `false`: there is no such glyph.
+    /// A glyph of an ActualText span restyles its replacement's run at once, if it holds it.
+    pub fn stroke_filled_at(&mut self, index: usize, stroke: TypeStroke, overprint: bool) -> bool {
+        if index < self.stroked || index >= self.filled.len() {
+            return false;
+        }
+        if let Some(g) = self.filled.get(index).copied()
+            && let Some(owner) = g.actual
+        {
+            self.flush_stroke();
+            if let Some((look, ..)) = self.runs.get_mut(g.run).filter(|_| owner) {
+                (look.stroke, look.overprint_stroke) = (Some(stroke), overprint);
+            }
+            self.stroked = index.saturating_add(1);
+            return true;
+        }
         let continues = self
             .pending
             .as_ref()
@@ -659,6 +740,68 @@ impl TextLine {
         }
         self.stroked = index.saturating_add(1);
         true
+    }
+
+    /// The first glyph from index `from` of [`filled`](Self::filled) on, not stroked yet, that a
+    /// stroke over glyph `text` drawn at `at` in `font` at `opacity` may be drawn over
+    /// ([`fills_at`](Self::fills_at)). `None` for a translucent fill or stroke.
+    pub fn next_filled(&self, from: usize, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> Option<usize> {
+        let from = from.max(self.stroked);
+        let i = self.filled.get(from..)?.iter().position(|g| self.fills(g, font, at, opacity, text, actual))?;
+        Some(from.saturating_add(i))
+    }
+
+    /// The last glyph before index `before` of [`filled`](Self::filled), not stroked yet, that a
+    /// stroke over glyph `text` drawn at `at` in `font` at `opacity` may be drawn over
+    /// ([`fills_at`](Self::fills_at)).
+    pub fn last_filled(&self, before: usize, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> Option<usize> {
+        let rest = self.filled.get(self.stroked..before.min(self.filled.len()))?;
+        let i = rest.iter().rposition(|g| self.fills(g, font, at, opacity, text, actual))?;
+        Some(self.stroked.saturating_add(i))
+    }
+
+    /// Whether the glyph filled at `index` in [`filled`](Self::filled), not stroked yet, is one a
+    /// stroke over glyph `text` drawn at `at` in `font` at `opacity` may be drawn over: opaque,
+    /// in the same font, with the same placement and text. With `actual`, a stroke over a glyph
+    /// of an ActualText span instead: a glyph of the span filled in the same font at the same
+    /// origin, at any opacity ([`stroke_actual`](Self::stroke_actual)): the span's replacement
+    /// text goes with the glyph filled first, so a translucent stroke kept apart from its fill
+    /// would be type with no text, and come in as nothing.
+    pub fn fills_at(&self, index: usize, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> bool {
+        index >= self.stroked && self.filled.get(index).is_some_and(|g| self.fills(g, font, at, opacity, text, actual))
+    }
+
+    /// How many glyphs the line filled for a stroke drawn over them later, stroked or not
+    /// ([`filled`](Self::filled)).
+    pub fn filled_len(&self) -> usize {
+        self.filled.len()
+    }
+
+    /// [`fills_at`](Self::fills_at) for glyph `g`.
+    fn fills(&self, g: &Filled, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> bool {
+        let (fill, opaque) = ((g.font, g.at, g.actual.is_some(), self.glyph_text(g)), self.opacity >= 0.999);
+        may_stroke(fill, opaque, font, at, opacity, text, actual)
+    }
+
+    /// The text of filled glyph `g` in the line's runs.
+    fn glyph_text(&self, g: &Filled) -> Option<&str> {
+        self.runs.get(g.run).and_then(|(.., t)| t.get(g.start..g.start.saturating_add(g.len)))
+    }
+
+    /// Whether a stroke drawn later may still be drawn over a glyph of the line (fill and stroke
+    /// rendering): an opaque glyph filled and not stroked yet, or a filled glyph of an
+    /// ActualText span ([`stroke_actual`](Self::stroke_actual)).
+    pub fn awaits_stroke(&self) -> bool {
+        self.filled.get(self.stroked..).is_some_and(|rest| rest.iter().any(|g| g.actual.is_some() || self.opacity >= 0.999))
+    }
+
+    /// No stroke drawn from now on goes over a glyph the line filled so far: a stroke pass does
+    /// not go back past a stroke of its own (one over no glyph filled) or the start or end of an
+    /// ActualText span ([`stroke_filled`](Self::stroke_filled)). Nor does one restyle the glyph
+    /// drawn last ([`stroke_last`](Self::stroke_last)).
+    pub fn end_fills(&mut self) {
+        self.stroked = self.filled.len();
+        self.last_closed = true;
     }
 
     /// Restyle the glyphs gathered for a stroke ([`stroke_filled`](Self::stroke_filled)): their
@@ -729,9 +872,6 @@ impl TextLine {
         for g in self.filled.iter_mut().skip(from) {
             (g.run, g.start) = moved(g.run, g.start);
         }
-        for i in self.actual_fills.values_mut().flatten() {
-            *i = moved(*i, 0).0;
-        }
         if last {
             self.last_start = moved(run, self.last_start).1;
         }
@@ -744,7 +884,14 @@ impl TextLine {
     /// ([`Look::takes`]): then the glyph's text becomes a run of its own with this stroke, and
     /// the glyphs before it stay unstroked (#7741). The line's text is the same either way, so
     /// the characters' slots, gaps and authored flags, kept along the whole line, still line up.
+    ///
+    /// Not a glyph drawn before a boundary of stroke passes ([`end_fills`](Self::end_fills)):
+    /// a stroke after the end of an ActualText span would otherwise stroke the span's replacement
+    /// text, and one after its start a glyph filled before the span (#8543).
     fn stroke_last(&mut self, font: u128, at: Placement, glyph: &str, stroke: TypeStroke, overprint: bool) -> bool {
+        if self.last_closed {
+            return false;
+        }
         self.flush_stroke();
         let start = self.last_start;
         let last_at = self.last_at;
@@ -880,76 +1027,160 @@ impl TextLine {
         let angle = self.at.dir.atan2();
         // The glyphs' tops lean along the baseline (+x), up being -y in the type's own space.
         t.xf = Affine::translate(self.at.origin.to_vec2()) * Affine::rotate(angle) * Affine::skew(-self.at.slant, 0.0);
-        let db = vectorcraft_text::FontDb::global();
-        // Each glyph where the file put it (#722): the kerning (the font's, or none) and tracking
-        // (one value for the line, or each character its own) that place them there.
-        let placed = (self.upright.is_none() && t.para.direction.is_none())
-            .then(|| place_each(&t, &self.slots, &self.baseline, path.as_ref(), self.at, self.at.size))
-            .flatten()
-            .map(|(runs, laid)| {
-                t.runs = runs;
-                laid.bounds
-            });
-        if let Some(path) = path {
-            // Evenly spaced type keeps its length along the path: the path runs through the
-            // glyphs' origins, one curve each, to the end of the last glyph, and tracking makes up
-            // the difference from the advances.
-            if placed.is_none() {
-                let length: f64 = path.segments().take(self.baseline.len()).map(|seg| kurbo::ParamCurveArclen::arclen(&seg, 1e-3)).sum();
-                let laid = vectorcraft_text::layout(db, &t);
-                let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
-                let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
-                let size = self.at.size;
-                if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
-                    let (tracking, spaces) = spacing(&laid, &[], length - natural, chars, size, spacing_em(&t, size));
-                    t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
-                }
-            }
-            t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&path), start: 0.0, end: None };
-            t.xf = Affine::IDENTITY;
-            t.cached_bounds = Some(vectorcraft_text::layout(db, &t).bounds);
-            return Some((t, self.opacity, facts));
-        }
-        let (start, along) = match self.upright {
+        // How far along the line the file put each glyph: along the path through them (one curve
+        // each), or along the baseline from the line's origin.
+        let along: Vec<f64> = match &path {
+            Some(bp) => std::iter::once(0.0)
+                .chain(bp.segments().scan(0.0, |d, seg| {
+                    *d += kurbo::ParamCurveArclen::arclen(&seg, 1e-3);
+                    Some(*d)
+                }))
+                .take(self.baseline.len())
+                .collect(),
+            None => self.baseline.iter().map(|p| (*p - self.at.origin).dot(self.at.dir)).collect(),
+        };
+        // Evenly spaced type on a path keeps its length along the path: the path runs through the
+        // glyphs' origins, one curve each, to the end of the last glyph.
+        let path_length =
+            path.as_ref().map(|path| path.segments().take(self.baseline.len()).map(|seg| kurbo::ParamCurveArclen::arclen(&seg, 1e-3)).sum());
+        let start = match self.upright {
             // Vertical point type (a column, or a single upright glyph) is anchored at the top
             // centre of its first em box.
-            Some(u) => {
+            Some(u) if path.is_none() => {
                 t.vertical = true;
                 t.xf = Affine::translate(u.top.to_vec2()) * Affine::rotate(angle);
-                (self.at.origin, -self.at.up())
+                -self.at.up()
             }
-            _ => (self.at.origin, self.at.dir),
+            _ => self.at.dir,
         };
-        // Tracking that makes the line as long as in the file: the PDF placed each glyph, the
-        // layout sets them by their advances. Spread over the gaps between characters (tracking
-        // follows each character, the last one's past the end of the line). A horizontal line is
-        // measured to its last glyph that isn't a space: the spaces after it were dropped.
-        let length = (if t.vertical { self.next } else { self.visible } - start).dot(along);
-        if !t.vertical {
+        // A horizontal line is measured to its last glyph that isn't a space (the spaces after it
+        // were dropped), a column to the end of its last glyph.
+        let length = (if t.vertical { self.next } else { self.visible } - self.at.origin).dot(start);
+        if path.is_none() && !t.vertical {
             facts.length = length;
         }
-        // Placed glyph by glyph: laid out so already.
-        if let Some(bounds) = placed {
-            t.cached_bounds = Some(bounds);
-            return Some((t, self.opacity, facts));
+        if let Some(path) = &path {
+            t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(path), start: 0.0, end: None };
+            t.xf = Affine::IDENTITY;
         }
-        let laid = vectorcraft_text::layout(db, &t);
-        let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
-        let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
-        let size = self.at.size;
-        let mut bounds = laid.bounds;
-        if chars > 1 && length.is_finite() && (length - natural).abs() > size * 0.01 {
-            // The spaces read from gaps or drawn between glyphs keep their own place only in text
-            // left in the file's order.
-            let total: usize = t.runs.iter().map(|r| r.text.len()).sum();
-            let gaps: Vec<(usize, f64)> = if t.para.direction.is_none() { gaps.into_iter().filter(|(b, _)| *b < total).collect() } else { vec![] };
-            let (tracking, spaces) = spacing(&laid, &gaps, length - natural, chars, size, spacing_em(&t, size));
-            t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
-            // Tracked: laid out again for its bounds.
-            bounds = vectorcraft_text::layout(db, &t).bounds;
+        // The spaces read from gaps or drawn between glyphs keep their own place only in a line
+        // left in the file's order (not along a path).
+        let total: usize = t.runs.iter().map(|r| r.text.len()).sum();
+        let gaps: Vec<(usize, f64)> =
+            if path.is_none() && t.para.direction.is_none() { gaps.into_iter().filter(|(b, _)| *b < total).collect() } else { vec![] };
+        let s = Spacing {
+            runs: t.runs.clone(),
+            slots: std::mem::take(&mut self.slots),
+            // Glyph by glyph only in horizontal type in the file's order.
+            along: (self.upright.is_none() && t.para.direction.is_none()).then_some(along),
+            slant: if path.is_some() { 0.0 } else { self.at.slant },
+            size: self.at.size,
+            length: path_length.unwrap_or(length),
+            gaps,
+        };
+        space_line(&mut t, &s);
+        // Set in a font the file carries for a family that isn't available: spaced again once that
+        // font is kept with the document ([`keep_file_fonts`]).
+        if self.file_font {
+            facts.respace = Some(Box::new(s));
         }
-        t.cached_bounds = Some(bounds);
         Some((t, self.opacity, facts))
+    }
+}
+
+/// What a line's spacing is measured from: where the file put its glyphs. Kept with a line set in
+/// a font the file carries for a family that isn't available ([`LineFacts::respace`]), to be
+/// measured again against that font once it is kept with the document ([`keep_file_fonts`]).
+#[derive(Clone, Debug)]
+pub(crate) struct Spacing {
+    /// The line's runs, unspaced.
+    runs: Vec<TextRun>,
+    /// Where the file put each character ([`TextLine::slots`]).
+    slots: Vec<Option<Slot>>,
+    /// How far along the line (or its path) the file put each glyph (points); `None` when the
+    /// glyphs aren't placed one by one (vertical type, type in visual order).
+    along: Option<Vec<f64>>,
+    /// The type's slant ([`Placement::slant`]; 0 on a path).
+    slant: f64,
+    size: f64,
+    /// How long the file set the line (points): along its path, to the end of a column, or to
+    /// the last glyph of a horizontal line that isn't a space.
+    length: f64,
+    /// The spaces read from gaps or drawn between glyphs: byte offset, width (points).
+    gaps: Vec<(usize, f64)>,
+}
+
+/// Space `t` (whose runs are `s`'s, unspaced) as the file did ([`Spacing`]): each glyph where the
+/// file put it (#722) with the kerning (the font's, or none) and tracking (one value for the line,
+/// or each character its own) that place them there ([`place_each`]); else tracking that makes
+/// the line as long as in the file (the PDF placed each glyph, the layout sets them by their
+/// advances), spread over the gaps between characters (tracking follows each character, the last
+/// one's past the end of the line). Its bounds are laid out too.
+fn space_line(t: &mut TextObject, s: &Spacing) {
+    let db = vectorcraft_text::FontDb::global();
+    t.runs = s.runs.clone();
+    let on_path = !matches!(t.kind, TextKind::Point);
+    // Measured as point type: type on a path stops at the path's end, which tracking moves.
+    let point = |t: &TextObject| TextObject { kind: TextKind::Point, ..t.clone() };
+    let placed = s.along.as_ref().and_then(|along| place_each(&point(t), &s.slots, along, s.slant, s.size));
+    if let Some((runs, laid)) = placed {
+        t.runs = runs;
+        t.cached_bounds = Some(if on_path { vectorcraft_text::layout(db, t).bounds } else { laid.bounds });
+        return;
+    }
+    let laid = vectorcraft_text::layout(db, &point(t));
+    let natural: f64 = laid.glyphs.iter().map(|g| g.advance).sum();
+    let chars: usize = t.runs.iter().map(|r| r.text.chars().count()).sum();
+    let mut bounds = (!on_path).then_some(laid.bounds);
+    if chars > 1 && s.length.is_finite() && (s.length - natural).abs() > s.size * 0.01 {
+        let (tracking, spaces) = spacing(&laid, &s.gaps, s.length - natural, chars, s.size, spacing_em(t, s.size));
+        t.runs = tracked(std::mem::take(&mut t.runs), tracking, &spaces);
+        // Tracked: laid out again for its bounds.
+        bounds = None;
+    }
+    t.cached_bounds = Some(bounds.unwrap_or_else(|| vectorcraft_text::layout(db, t).bounds));
+}
+
+/// The type among `nodes` (and in their groups) set in fonts the file carries for families that
+/// aren't available, now kept with the document as `kept` (family and style → the font's blob):
+/// drawn in them while its text is the file's ([`vectorcraft_doc::FileFonts`]), and spaced again
+/// from where the file put each glyph, measured against the file's own widths (not the stand-in's,
+/// which differ, #3756).
+pub(crate) fn keep_file_fonts(
+    nodes: &mut [Arc<Node>],
+    lines: &HashMap<NodeId, LineFacts>,
+    kept: &HashMap<(String, String), String>,
+    images: &HashMap<String, vectorcraft_doc::ImageBlob>,
+) {
+    if kept.is_empty() {
+        return;
+    }
+    for n in nodes.iter_mut() {
+        if n.children().is_some_and(|c| !c.is_empty())
+            && let Some(children) = Arc::make_mut(n).children_mut()
+        {
+            keep_file_fonts(children, lines, kept, images);
+        }
+        let Some(s) = lines.get(&n.id).and_then(|f| f.respace.as_deref()) else { continue };
+        let mut fonts: Vec<FileFont> = vec![];
+        for r in &s.runs {
+            let (family, style) = (&r.style.font_family, &r.style.font_style);
+            if let Some(key) = kept.get(&(family.clone(), style.clone()))
+                && !fonts.iter().any(|f| f.family == *family && f.style == *style)
+            {
+                fonts.push(FileFont { family: family.clone(), style: style.clone(), key: key.clone() });
+            }
+        }
+        if fonts.is_empty() {
+            continue;
+        }
+        if let NodeKind::Text(t) = &mut Arc::make_mut(n).kind {
+            let text: String = s.runs.iter().map(|r| r.text.as_str()).collect();
+            t.file_fonts = Some(Box::new(FileFonts::new(fonts, &text)));
+            // A blob reference is not ownership until its actual document resource is bound.
+            vectorcraft_text::FontDb::global().bind_file_fonts(t, |key| images.get(key));
+            space_line(t, s);
+        }
     }
 }
 
@@ -1008,21 +1239,14 @@ fn restyled(t: &TextObject, kern: Option<f64>, own: &[f64]) -> Vec<TextRun> {
 /// file's widths (not the font's advances, which may be a hair off them) and kept on course where
 /// the differences add up ([`on_course`]).
 ///
-/// The file put the glyph of each character with a [`Slot`] at `baseline` (one origin per glyph),
-/// measured along `path` (type on a path: one curve per glyph) or along `line`'s baseline from its
-/// origin, where a character shifted off it by its baseline shift draws that shift times `line`'s
-/// slant further along (the type's skew leans it so, as the file's text rise did). `None` when the
-/// font laid out isn't the file's (its advances differ from the file's): spacing measured against
-/// a stand-in's widths would keep the stand-in's differences once the font is installed; or when
-/// the glyphs can't be placed so (the layout joins characters the file drew apart).
-fn place_each(
-    t: &TextObject,
-    slots: &[Option<Slot>],
-    baseline: &[Point],
-    path: Option<&BezPath>,
-    line: Placement,
-    size: f64,
-) -> Option<(Vec<TextRun>, TextLayout)> {
+/// The file put the glyph of each character with a [`Slot`] `along` the line (points from its
+/// origin, or along its path), where a character shifted off the baseline by its baseline shift
+/// draws that shift times `slant` further along (the type's skew leans it so, as the file's text
+/// rise did). `None` when the font laid out isn't the file's (its advances differ from the file's):
+/// spacing measured against a stand-in's widths would keep the stand-in's differences once the
+/// font is installed; or when the glyphs can't be placed so (the layout joins characters the file
+/// drew apart).
+fn place_each(t: &TextObject, slots: &[Option<Slot>], along: &[f64], slant: f64, size: f64) -> Option<(Vec<TextRun>, TextLayout)> {
     let chars: Vec<usize> = t
         .runs
         .iter()
@@ -1036,20 +1260,8 @@ fn place_each(
     if chars.len() < 2 || chars.len() != slots.len() || t.runs.iter().any(|r| r.inline.is_some()) {
         return None;
     }
-    // How far along the line the file put each glyph.
-    let along: Vec<f64> = match path {
-        Some(bp) => std::iter::once(0.0)
-            .chain(bp.segments().scan(0.0, |d, seg| {
-                *d += kurbo::ParamCurveArclen::arclen(&seg, 1e-3);
-                Some(*d)
-            }))
-            .take(baseline.len())
-            .collect(),
-        None => baseline.iter().map(|p| (*p - line.origin).dot(line.dir)).collect(),
-    };
     // Each character's baseline shift, which the type's slant draws `slant` times as far along.
     let shifts: Vec<f64> = t.runs.iter().flat_map(|r| r.text.chars().map(move |_| r.style.baseline_shift)).collect();
-    let slant = if path.is_some() { 0.0 } else { line.slant };
     // Each character's target: where the file put it, if it put it anywhere.
     let target: Vec<Option<(f64, Option<f64>)>> =
         slots.iter().zip(&shifts).map(|(s, shift)| s.and_then(|s| Some((*along.get(s.glyph)? - slant * shift, s.advance)))).collect();

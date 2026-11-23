@@ -1029,8 +1029,9 @@ fn tiff_dropdown_exports_scaled_artboards_with_options_and_reopens() {
     // Existing vector and raster choices remain selectable.
     h.choose(&mut app, "TIFF", "SVG");
     assert_eq!(field(&app, "formats")[0]["format"], "svg");
-    h.choose(&mut app, "SVG", "PNG");
-    assert_eq!(field(&app, "formats")[0]["format"], "png");
+    // The list opens with SVG in its middle, so a raster format near it is in view.
+    h.choose(&mut app, "SVG", "GIF");
+    assert_eq!(field(&app, "formats")[0]["format"], "gif");
 }
 
 /// The Example line names the first file the export writes for the same settings: the item's file

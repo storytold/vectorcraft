@@ -48,7 +48,7 @@ pub struct AutomationRoots {
     write: Vec<Root>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Root {
     /// The folder made absolute, links followed: what paths are compared with.
     resolved: PathBuf,
@@ -126,6 +126,25 @@ impl AutomationRoots {
             (_, Access::Read) => Err(format!("automation path rejected: outside the read roots {roots}: {path}", roots = shown.join(", "))),
             (_, Access::Write) => Err(format!("automation path rejected: outside the write roots {roots}: {path}", roots = shown.join(", "))),
         }
+    }
+
+    /// The roots that grant only what both `self` and `other` grant: for each kind, every root of
+    /// one that lies inside a root of the other. A kind left with none grants no access of its kind.
+    pub fn intersect(&self, other: &Self) -> Arc<Self> {
+        let both = |a: &[Root], b: &[Root]| {
+            let mut out: Vec<Root> = Vec::new();
+            for r in a
+                .iter()
+                .filter(|r| b.iter().any(|o| inside(&r.resolved, &o.resolved)))
+                .chain(b.iter().filter(|o| a.iter().any(|r| inside(&o.resolved, &r.resolved))))
+            {
+                if !out.iter().any(|o| o.resolved == r.resolved) {
+                    out.push(r.clone());
+                }
+            }
+            out
+        };
+        Arc::new(Self { read: both(&self.read, &other.read), write: both(&self.write, &other.write) })
     }
 
     /// The roots for people: `read A, B; write C` (`none` for a kind without any).
@@ -223,6 +242,36 @@ impl ScopeHandle {
         let Self(scope, gate, exempt) = self;
         with_gate(gate, || with_gate_reads_exempt(exempt, || with_scope(scope, f)))
     }
+
+    /// The roots in force in this scope, if any (as [`current`] gives them on its thread).
+    fn roots(&self) -> Option<Arc<AutomationRoots>> {
+        match &self.0 {
+            Some(Scope::Confined(r)) => Some(r.clone()),
+            Some(Scope::Unconfined) => None,
+            None => PROCESS.get().cloned(),
+        }
+    }
+
+    /// The captured scope narrowed to what the calling thread may reach as well: the roots of both
+    /// are in force ([`AutomationRoots::intersect`]), and without roots in either, none are. The
+    /// script gates of both are in force too, and reads are exempt from them only where both are.
+    pub fn within_current(self) -> Self {
+        let here = Self::capture();
+        let gate = match (self.1.clone(), here.1.clone()) {
+            (None, None) => None,
+            (Some(g), None) | (None, Some(g)) => Some(g),
+            (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => Some(a),
+            (Some(a), Some(b)) => Some(Arc::new(a.followed_by(b))),
+        };
+        let exempt = self.2 && here.2;
+        let scope = match (self.roots(), here.roots()) {
+            (None, None) => self.0,
+            (Some(r), None) | (None, Some(r)) => Some(Scope::Confined(r)),
+            (Some(a), Some(b)) if Arc::ptr_eq(&a, &b) => Some(Scope::Confined(a)),
+            (Some(a), Some(b)) => Some(Scope::Confined(a.intersect(&b))),
+        };
+        Self(scope, gate, exempt)
+    }
 }
 
 /// What a command a running script runs (`vc.run`) may read and write: the places the script's
@@ -235,10 +284,26 @@ pub(crate) struct ScriptGate {
     pub(crate) write: ScriptScope,
     /// The paths of the open documents' files, as the documents hold them.
     pub(crate) documents: Vec<String>,
+    /// Another gate a path must pass as well ([`ScopeHandle::within_current`]).
+    pub(crate) also: Option<Arc<ScriptGate>>,
 }
 
 impl ScriptGate {
+    /// This gate with `next` at the end of its chain of `also` gates, so a path must pass every
+    /// gate already in the chain as well as `next`.
+    fn followed_by(&self, next: Arc<ScriptGate>) -> ScriptGate {
+        let also = match &self.also {
+            None => next,
+            Some(also) if Arc::ptr_eq(also, &next) => next,
+            Some(also) => Arc::new(also.followed_by(next)),
+        };
+        ScriptGate { also: Some(also), ..self.clone() }
+    }
+
     fn check(&self, path: &str, access: Access) -> Result<(), String> {
+        if let Some(also) = &self.also {
+            also.check(path, access)?;
+        }
         let real = if ScriptScope::refused_by_name(Path::new(path)) { None } else { resolve(path).ok() };
         let allowed = real.is_some_and(|real| {
             let scoped = match access {
@@ -717,15 +782,17 @@ impl ScriptScope {
         self.allows(&real.join(rest))
     }
 
-    /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it.
+    /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it. Whether
+    /// it is hidden is a link's own, and the rest is what the link leads to.
     pub(crate) fn stat(&self, path: &Path) -> Result<ScriptEntry, ScriptRead> {
         let real = self.locate(path)?;
         let meta = std::fs::metadata(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
-        let link = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+        let own = std::fs::symlink_metadata(path).ok().filter(|m| m.file_type().is_symlink());
+        let link = own.is_some();
         #[cfg(windows)]
-        let hidden = std::os::windows::fs::MetadataExt::file_attributes(&meta) & 2 != 0;
+        let hidden = std::os::windows::fs::MetadataExt::file_attributes(own.as_ref().unwrap_or(&meta)) & 2 != 0;
         #[cfg(not(windows))]
-        let hidden = real.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.'));
+        let hidden = if link { path.file_name() } else { real.file_name() }.is_some_and(|n| n.to_string_lossy().starts_with('.'));
         Ok(ScriptEntry {
             dir: meta.is_dir(),
             file: meta.is_file(),
@@ -822,6 +889,74 @@ mod tests {
 
     fn s(p: PathBuf) -> String {
         p.to_string_lossy().into_owned()
+    }
+
+    /// The roots both grant: the deeper of two nested roots, nothing for roots apart, and a kind
+    /// only one grants is not granted.
+    #[test]
+    fn intersected_roots_grant_what_both_grant() {
+        let (base, roots) = folders("intersect");
+        let narrow = AutomationRoots::new(&[&base.join("in/sub"), &base.join("in2")], &[]).unwrap().unwrap();
+        let both = roots.intersect(&narrow);
+        assert_eq!(both.check(&s(base.join("in/sub/x.svg")), Access::Read), Ok(()));
+        assert!(both.check(&s(base.join("in/a.svg")), Access::Read).is_err(), "only the narrow root grants it");
+        assert!(both.check(&s(base.join("in2")), Access::Read).is_err(), "only the narrow roots grant it");
+        assert!(both.check(&s(base.join("out/x.svg")), Access::Write).is_err(), "only the first grants writes");
+        assert_eq!(both.describe(), narrow.intersect(&roots).describe(), "either order");
+        let unconfined = ScopeHandle(Some(Scope::Unconfined), None, false);
+        let within = |saved: ScopeHandle, here: Option<&Arc<AutomationRoots>>| {
+            confine(here, || saved.within_current()).run(|| current().map(|r| r.describe()))
+        };
+        assert_eq!(within(unconfined.clone(), Some(&narrow)), Some(narrow.describe()), "a confined caller keeps its roots");
+        assert_eq!(within(ScopeHandle(Some(Scope::Confined(roots.clone())), None, false), None), Some(roots.describe()), "the saved roots stay");
+        assert_eq!(within(ScopeHandle(Some(Scope::Confined(roots.clone())), None, false), Some(&narrow)), Some(both.describe()));
+        assert!(unconfined.run(|| current().is_none()));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A scope narrowed to the calling thread keeps the script gate of both: a script command that
+    /// carries on work saved without a gate reads only what its gate allows, and with a gate saved
+    /// too, only what both allow; reads are exempt only where both scopes exempt them.
+    #[test]
+    fn a_narrowed_scope_keeps_the_script_gates_of_both() {
+        let (base, _) = folders("narrowed-gate");
+        let gate =
+            |dir: &str| ScriptGate { read: ScriptScope::of_folder(&base.join(dir)), write: ScriptScope::default(), documents: vec![], also: None };
+        let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
+        let reads = |saved: ScopeHandle, gate_here: Option<ScriptGate>| {
+            let narrowed = match gate_here {
+                Some(g) => with_script_gate(g, || saved.within_current()),
+                None => saved.within_current(),
+            };
+            narrowed.run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()))
+        };
+        let plain = ScopeHandle(None, None, false);
+        assert_eq!(reads(plain.clone(), Some(gate("in"))), (true, false), "the confirming command's gate");
+        assert_eq!(reads(ScopeHandle(None, Some(Arc::new(gate("in"))), false), None), (true, false), "the saved gate");
+        assert_eq!(reads(ScopeHandle(None, Some(Arc::new(gate("in"))), false), Some(gate("outside"))), (false, false), "both gates");
+        assert_eq!(reads(ScopeHandle(None, None, true), Some(gate("in"))), (true, false), "exempt only where both are");
+        assert_eq!(reads(plain, None), (true, true));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// A scope narrowed again and again keeps every gate it was narrowed by: a gate an earlier
+    /// narrowing joined to the chain still refuses what it refused before.
+    #[test]
+    fn a_scope_narrowed_several_times_keeps_every_gate() {
+        let (base, _) = folders("narrowed-thrice");
+        let gate = |dir: &Path| ScriptGate { read: ScriptScope::of_folder(dir), write: ScriptScope::default(), documents: vec![], also: None };
+        let (inside, other) = (s(base.join("in/a.svg")), s(base.join("outside/secret.svg")));
+        let narrow = |saved: ScopeHandle, g: ScriptGate| with_script_gate(g, || saved.within_current());
+        let reads = |h: &ScopeHandle| h.clone().run(|| (check_read(&inside).is_ok(), check_read(&other).is_ok()));
+        let first = narrow(ScopeHandle(None, None, false), gate(&base));
+        assert_eq!(reads(&first), (true, true));
+        let second = narrow(first, gate(&base.join("in")));
+        assert_eq!(reads(&second), (true, false), "the second gate refuses the outside file");
+        let third = narrow(second, gate(&base));
+        assert_eq!(reads(&third), (true, false), "the second gate is kept after a third narrowing");
+        let fourth = narrow(third, gate(&base));
+        assert_eq!(reads(&fourth), (true, false), "and after a fourth");
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]

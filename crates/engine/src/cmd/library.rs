@@ -20,7 +20,6 @@ use serde_json::{Map, Value, json};
 use vectorcraft_color::{Color, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, Node, NodeId, TextStyleDef};
 
-use super::clipboard::SwatchChoices;
 use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, color_value, has_doc, ids_param, index_opt, ok, point_param, str_param};
 use crate::Clipboard;
 
@@ -713,7 +712,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Use Library Item",
             [],
             None,
-            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; a spot color links to the document's spot swatch of its ink's name, added when the document has none of that colour (a name taken by another colour gets a number), one undo step; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number; a character style's color linked to a swatch that isn't a global or spot swatch of the document keeps the color it shows, unlinked) and apply it to the selected text, one undo step → {kind, ids?, style?}",
+            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; a spot color links to the document's spot swatch of its ink's name, added when the document has none of that colour (a name taken by another colour gets a number), one undo step; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused, also when its art links to the document's own color of a name; a global or spot color its art links to whose name the document gives another color comes in numbered, or as the document's numbered copy of the same color, and the pattern links to it) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number; a character style's color linked to a swatch that isn't a global or spot swatch of the document keeps the color it shows, unlinked) and apply it to the selected text, one undo step → {kind, ids?, style?}",
             has_doc,
             use_item
         ),
@@ -1353,12 +1352,13 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     if clip.nodes.is_empty() {
         return Err(damaged());
     }
-    let choices = SwatchChoices::default();
-    // The pattern's name in the document, worked out on a copy: nothing to add is no edit.
-    let mut probe = (*s.doc()?.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false)?;
-    let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name.as_str()).and_then(|r| r["to"].as_str());
-    let target = renamed.unwrap_or(&name).to_string();
+    // The pattern's name in the document, worked out on a copy: nothing to add is no edit. A global
+    // or spot color the pattern's art links to keeps the library's color, as Add to Swatches brings
+    // a library pattern's colors.
+    let current = s.doc()?.doc.clone();
+    let (choices, probe, imported) = super::patternlib::probe_import(&current, &doc, &name, &clip)?;
+    drop(current);
+    let target = super::patternlib::imported_name(&imported, &name);
     let paint = vectorcraft_doc::pattern::pattern_paint(&target);
     // A pattern the document holds without a swatch (an imported SVG's) gets one.
     let has_swatch =

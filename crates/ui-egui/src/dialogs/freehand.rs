@@ -280,6 +280,7 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             variation: (0.0, 100.0),
         };
         varied(ui, d, &roundness, &Variation::ALL);
+        tip_preview(ui, d, roundness.range.0);
         size_rows(ui, d, &Variation::ALL);
     } else {
         if d.fields.contains_key("angle") {
@@ -291,7 +292,7 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     }
     if d.str("tool") == "blobBrush" {
-        blob_tip_preview(ui, d);
+        tip_preview(ui, d, 0.0);
     }
     // The Eraser's Size rows are above.
     if !eraser && d.fields.contains_key("sizeMode") {
@@ -331,26 +332,26 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// Side of the Blob Brush tip preview's square, in points.
+/// Side of the Blob Brush's and the Eraser's tip preview square, in points.
 const TIP_PREVIEW: f32 = 64.0;
 
-/// Half the length of the Blob Brush tip in its preview, in points.
+/// Half the length of the tip in its preview, in points.
 const TIP_LONG: f32 = 18.0;
 
 /// How far from a Roundness dot of the tip preview a press still takes the dot, in points.
 const TIP_DOT_REACH: f32 = 8.0;
 
-/// The Blob Brush's tip preview: a square with the tip at its Angle and Roundness, a line with an
-/// arrowhead along its long axis and a black dot at each end of its short axis, and beside it three
-/// dabs of the tip, the middle one darker. A click or a drag that starts on a dot sets the
-/// Roundness from the pointer's distance from the center along the short axis
-/// ([`blob_tip_roundness_at`]) until the release, inside the square or out of it, and gives the
+/// The Blob Brush's and the Eraser's tip preview: a square with the tip at its Angle and
+/// Roundness, a line with an arrowhead along its long axis and a black dot at each end of its short
+/// axis, and beside it three dabs of the tip, the middle one darker. A click or a drag that starts
+/// on a dot sets the Roundness from the pointer's distance from the center along the short axis
+/// ([`tip_roundness_at`]) until the release, inside the square or out of it, and gives the
 /// Roundness slider the keyboard focus. A click or a drag that starts anywhere else in the square
 /// points the Angle at the pointer and gives the Angle slider the focus. Screen readers get the
 /// square as the Angle slider and then the Roundness slider, and their keys step the Angle within
-/// -180° to 180° and the Roundness within 0% to 100% as a dialog slider's do
+/// -180° to 180° and the Roundness within `min_roundness` to 100% as a dialog slider's do
 /// ([`widgets::stepped_area`]).
-fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
+fn tip_preview(ui: &mut egui::Ui, d: &mut Dialog, min_roundness: f64) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(egui::vec2(CONTENT_W, TIP_PREVIEW), egui::Sense::hover());
     let square = egui::Rect::from_min_size(rect.min, egui::vec2(TIP_PREVIEW, TIP_PREVIEW));
@@ -359,7 +360,7 @@ fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
     // Whether the press that started this click or drag was on a dot: it is kept until the release.
     let on_dot = response.id.with("on-dot");
     let near_dot = |p: egui::Pos2, d: &Dialog| {
-        blob_tip_dots(center, d.f64("angle", 0.0), d.f64("roundness", 100.0)).iter().any(|dot| dot.distance(p) <= TIP_DOT_REACH)
+        tip_dots(center, d.f64("angle", 0.0), d.f64("roundness", 100.0)).iter().any(|dot| dot.distance(p) <= TIP_DOT_REACH)
     };
     let mut started = ui.data(|m| m.get_temp::<bool>(on_dot));
     if started.is_none() && response.is_pointer_button_down_on() {
@@ -383,7 +384,7 @@ fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
     if let Some((p, _)) = widgets::pointer_phase(&response) {
         let delta = p - center;
         if dot_drag {
-            d.fields.insert("roundness".into(), json!(blob_tip_roundness_at(delta, d.f64("angle", 0.0))));
+            d.fields.insert("roundness".into(), json!(tip_roundness_at(delta, d.f64("angle", 0.0), min_roundness)));
         } else if delta.length_sq() > 1.0 {
             d.fields.insert("angle".into(), json!(f64::from((-delta.y).atan2(delta.x)).to_degrees().round()));
         }
@@ -406,13 +407,13 @@ fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
     if dot_drag && (response.drag_started() || response.clicked()) {
         widgets::focus_by_pointer(ui, roundness.id);
     }
-    let shown = widgets::SliderValue::field(d.f64("roundness", 100.0), 0.0..=100.0, "%", 0);
+    let shown = widgets::SliderValue::field(d.f64("roundness", 100.0), min_roundness..=100.0, "%", 0);
     if let Some(r) = widgets::stepped_area(ui, &roundness, tl!("Roundness"), Some(shown)) {
         d.fields.insert("roundness".into(), json!(r));
     }
-    let (u, v) = blob_tip_axes(d.f64("angle", 0.0));
+    let (u, v) = tip_axes(d.f64("angle", 0.0));
     let long = TIP_LONG;
-    let short = long * blob_tip_short_ratio(d.f64("roundness", 100.0));
+    let short = long * tip_short_ratio(d.f64("roundness", 100.0));
     let dab = |center: egui::Pos2, color: egui::Color32| {
         let points = (0..32)
             .map(|i| {
@@ -427,7 +428,7 @@ fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
     let arrowhead = vec![center + u * 28.0, center + u * 22.0 + v * 3.0, center + u * 22.0 - v * 3.0];
     painter.add(egui::Shape::convex_polygon(arrowhead, t.accent, egui::Stroke::NONE));
     // Black with a white rim, so a dot shows on the tip and on the square in either theme.
-    for dot in blob_tip_dots(center, d.f64("angle", 0.0), d.f64("roundness", 100.0)) {
+    for dot in tip_dots(center, d.f64("angle", 0.0), d.f64("roundness", 100.0)) {
         painter.circle(dot, 3.0, egui::Color32::BLACK, egui::Stroke::new(1.0, egui::Color32::WHITE));
     }
     let strip = square.right() + 2.5 * long;
@@ -438,7 +439,7 @@ fn blob_tip_preview(ui: &mut egui::Ui, d: &mut Dialog) {
 
 /// The tip preview's long axis on screen at Angle `angle` (degrees, y down: a positive angle tilts
 /// it up to the right), and its short axis.
-fn blob_tip_axes(angle: f64) -> (egui::Vec2, egui::Vec2) {
+fn tip_axes(angle: f64) -> (egui::Vec2, egui::Vec2) {
     let a = angle.clamp(-180.0, 180.0).to_radians();
     let u = egui::vec2(a.cos() as f32, -a.sin() as f32);
     (u, egui::vec2(-u.y, u.x))
@@ -446,23 +447,23 @@ fn blob_tip_axes(angle: f64) -> (egui::Vec2, egui::Vec2) {
 
 /// The two Roundness dots of the tip preview centered on `center`: the ends of the tip's short
 /// axis at Angle `angle` and Roundness `roundness`.
-fn blob_tip_dots(center: egui::Pos2, angle: f64, roundness: f64) -> [egui::Pos2; 2] {
-    let (_, v) = blob_tip_axes(angle);
-    let short = v * (TIP_LONG * blob_tip_short_ratio(roundness));
+fn tip_dots(center: egui::Pos2, angle: f64, roundness: f64) -> [egui::Pos2; 2] {
+    let (_, v) = tip_axes(angle);
+    let short = v * (TIP_LONG * tip_short_ratio(roundness));
     [center + short, center - short]
 }
 
-/// The Roundness, in whole percent from 0 to 100, that a dot of the tip preview dragged to `offset`
-/// from the preview's center gives at Angle `angle`: the distance along the tip's short axis, on
-/// either side of the center, as a percentage of half the tip's length.
-fn blob_tip_roundness_at(offset: egui::Vec2, angle: f64) -> f64 {
-    let (_, v) = blob_tip_axes(angle);
-    (f64::from(offset.dot(v).abs() / TIP_LONG) * 100.0).round().clamp(0.0, 100.0)
+/// The Roundness, in whole percent from `min` to 100, that a dot of the tip preview dragged to
+/// `offset` from the preview's center gives at Angle `angle`: the distance along the tip's short
+/// axis, on either side of the center, as a percentage of half the tip's length.
+fn tip_roundness_at(offset: egui::Vec2, angle: f64, min: f64) -> f64 {
+    let (_, v) = tip_axes(angle);
+    (f64::from(offset.dot(v).abs() / TIP_LONG) * 100.0).round().clamp(min, 100.0)
 }
 
 /// The preview tip's short axis as a fraction of its long axis: Roundness in percent, with 0
-/// percent drawn as 0.1 percent, the minimum the brush draws with.
-fn blob_tip_short_ratio(roundness: f64) -> f32 {
+/// percent drawn as 0.1 percent, the minimum the Blob Brush draws with.
+fn tip_short_ratio(roundness: f64) -> f32 {
     (roundness.clamp(0.0, 100.0) as f32 / 100.0).max(0.001)
 }
 

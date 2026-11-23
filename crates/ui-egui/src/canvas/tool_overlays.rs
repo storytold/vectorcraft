@@ -446,13 +446,37 @@ pub(super) type Underlines = std::sync::Arc<Vec<(Point, Point)>>;
 /// [`vectorcraft_tools::text::PORTS_MAX`] such frames selected the tools draw no ports, and only
 /// the lines are drawn here. `zoom`: screen pixels to the document unit.
 pub(super) fn thread_overlays(app: &VectorcraftApp, zoom: f64) -> Vec<Overlay> {
+    use std::collections::HashSet;
+    use vectorcraft_doc::NodeId;
     use vectorcraft_tools::text::{Port, PortState, port_centre, ported, ports_shown, push_port};
     let Some(st) = app.session.active() else { return vec![] };
     let px = 1.0 / zoom.max(1e-9);
     let boxes = ports_shown(&st.doc, &st.selection.objects);
+    let selection = &st.selection.objects;
+    let mut selected: Option<HashSet<NodeId>> = None;
+    // The first two full searches need no index.
+    let mut full_searches = 0;
+    let mut is_selected = |id: &NodeId| {
+        if selection.len() <= 1 {
+            return selection.contains(id);
+        }
+        if full_searches == 0 {
+            full_searches = 1;
+            return selection.contains(id);
+        }
+        // Two early selection hits need no index.
+        if selected.is_none() && selection[..2].contains(id) {
+            return true;
+        }
+        if selected.is_none() && full_searches < 2 {
+            full_searches += 1;
+            return selection.contains(id);
+        }
+        selected.get_or_insert_with(|| selection.iter().copied().collect::<HashSet<_>>()).contains(id)
+    };
     let mut o = vec![];
     for thread in &st.doc.text_threads {
-        if !thread.iter().any(|id| st.selection.objects.contains(id)) {
+        if !thread.iter().any(&mut is_selected) {
             continue;
         }
         let color = st.doc.layer_color(thread[0]);
@@ -635,6 +659,35 @@ pub(super) fn mirror_axis_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &
     let handle = egui::Rect::from_center_size(center, vec2(12.0, 12.0));
     p.rect_filled(handle, 2.0, t.selection);
     p.rect_stroke(handle, 2.0, Stroke::new(2.0, t.measure_bg), StrokeKind::Outside);
+}
+
+/// The Split view's divider of the selected Image Trace object, where the Selection tool's hit
+/// testing finds it: a line across the source image with a grip in its middle, at its place in the
+/// zoomed, scrolled or turned view. Hidden with the bounding box and in Outline mode, as the hit
+/// testing is.
+pub(super) fn trace_split_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    if app.session.tool_id() != "selection" || !app.ui.view.bounding_box || app.outline_view() {
+        return;
+    }
+    let Some(st) = app.session.active() else { return };
+    let Some(d) = vectorcraft_tools::trace_split::TraceDivider::of(&st.doc, &st.selection, xf.zoom) else { return };
+    let ends = d.ends.map(|q| xf.to_screen(q));
+    if !ends.iter().all(|q| q.is_finite()) {
+        return;
+    }
+    let t = Tokens::get(p.ctx());
+    if let Some((a, b)) = clip_segment(ends[0], ends[1], xf.rect) {
+        p.line_segment([a, b], Stroke::new(4.0, t.measure_bg));
+        p.line_segment([a, b], Stroke::new(1.5, t.selection));
+    }
+    let along = ends[1] - ends[0];
+    let length = along.length();
+    if length > 1.0 {
+        let mid = ends[0] + along * 0.5;
+        let half = along / length * vectorcraft_tools::trace_split::GRIP_HALF.min(length * 0.5);
+        p.line_segment([mid - half, mid + half], Stroke::new(7.0, t.measure_bg));
+        p.line_segment([mid - half, mid + half], Stroke::new(4.0, t.selection));
+    }
 }
 
 /// A selected grid repeat's row, column and corner handles and its spacing sliders (#2691), at

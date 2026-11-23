@@ -139,6 +139,21 @@ fn dropdown_is_dimmed_while_the_brush_keeps_its_size() {
     assert_eq!(listed(&ctx, &mut app).len(), WidthProfile::PRESETS.len());
 }
 
+/// While the Live Paint Bucket is active, the dropdown follows the stroke the bucket paints with,
+/// not a selected line that draws with a brush.
+#[test]
+fn the_live_paint_bucket_stroke_decides_whether_the_dropdown_is_dimmed() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_line();
+    let id = app.session.active().unwrap().selection.objects[0].0;
+    run(&mut app, "brush.apply", json!({"ids": [id], "name": "3 pt. Round"}));
+    assert!(dimmed(&ctx, &app));
+    app.session.select_tool("livePaintBucket", Default::default()).unwrap();
+    assert!(current_stroke(&app).is_some_and(|s| s.brush.is_none()), "the bucket's stroke has no brush");
+    assert!(!dimmed(&ctx, &app));
+    assert_eq!(listed(&ctx, &mut app).len(), WidthProfile::PRESETS.len());
+}
+
 /// With an Appearance panel stroke row active, the dropdown follows that row: a brushed row below
 /// a plain top stroke dims it, and the plain row does not.
 #[test]

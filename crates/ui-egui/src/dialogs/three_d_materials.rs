@@ -1,13 +1,14 @@
 //! The 3D and Materials panel's Materials tab: the document's Graphics (its symbols) as thumbnails,
 //! Add as Single Graphic, and the graphics mapped onto the selected 3D object (its planar faces,
-//! Extrude & Bevel's side, or Revolve's side) with their face, position, size and turn. Picking a thumbnail maps that graphic
+//! Extrude & Bevel's side, Revolve's side, or Inflate's puffed faces) with their face, position, size and turn. Picking a
+//! thumbnail maps that graphic
 //! onto the selected objects (`threeD.mapGraphic`); art dropped on the thumbnails becomes a graphic
 //! (`threeD.addGraphic`). Editing a mapped graphic changes the effect's `graphics` parameter, which
 //! the panel sends as it sends every other setting.
 
 use egui::{Sense, Stroke, StrokeKind, vec2};
 use serde_json::{Value, json};
-use vectorcraft_effects::{GRAPHICS, MappedGraphic, PlanarFace, REVOLVE, ROTATE};
+use vectorcraft_effects::{GRAPHICS, INFLATE, MappedGraphic, PlanarFace, REVOLVE, ROTATE};
 
 use super::revolve::{heading, label, number};
 use crate::VectorcraftApp;
@@ -105,7 +106,7 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     }
     ui.add_space(10.0);
     if !takes {
-        dim_label(ui, tl!("Graphics map onto the Plane, Extrude and Revolve object types."));
+        dim_label(ui, tl!("Graphics map onto the Plane, Extrude, Revolve and Inflate object types."));
         return;
     }
     let raw = d.fields.get(GRAPHICS).cloned().unwrap_or(Value::Null);
@@ -131,15 +132,18 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     let Some(g) = list.get(index).cloned() else { return };
     let mut edited = g.clone();
     // A plane has one face, and Revolve's graphics go on its side. Extrude & Bevel's graphics go on
-    // its front or back cap, or on its side (its walls and bevels).
+    // its front or back cap, or on its side (its walls and bevels). Inflate's go on its puffed front
+    // or back.
     if effect != ROTATE && effect != REVOLVE {
+        let faces: &[PlanarFace] = if effect == INFLATE { &[PlanarFace::Front, PlanarFace::Back] } else { &PlanarFace::ALL };
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             label(ui, tl!("Face"));
-            let labels = PlanarFace::ALL.map(face_label);
-            let at = PlanarFace::ALL.iter().position(|f| *f == g.face).unwrap_or(0);
-            if let Some(k) = widgets::dropdown(ui, "three-d-graphic-face", labels[at], &labels, 120.0)
-                && let Some(face) = PlanarFace::ALL.get(k)
+            let labels: Vec<&str> = faces.iter().map(|f| face_label(*f)).collect();
+            let at = faces.iter().position(|f| *f == g.face).unwrap_or(0);
+            let current = labels.get(at).copied().unwrap_or_default();
+            if let Some(k) = widgets::dropdown(ui, "three-d-graphic-face", current, &labels, 120.0)
+                && let Some(face) = faces.get(k)
             {
                 edited.face = *face;
             }

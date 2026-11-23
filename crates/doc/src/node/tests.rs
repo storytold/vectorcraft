@@ -184,6 +184,20 @@ fn a_polygon_reports_and_takes_its_radius_angle_and_equal_sides() {
     assert_eq!((e.polygon_radius(), e.polygon_angle()), (None, None));
 }
 
+/// A very large angle turns a rectangle to that angle modulo 360, whatever angle it had before.
+#[test]
+fn a_shape_takes_a_very_large_angle() {
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let want = 1e20f64.rem_euclid(360.0);
+    for turned in [0.0, 90.0] {
+        let xf = Affine::translate((50.0, 50.0)) * Affine::rotate(-f64::to_radians(turned));
+        let mut r = LiveShape::Rectangle { w: 100.0, h: 50.0, radii: [0.0; 4], kinds: Default::default(), radii_relative: false, xf };
+        assert!(close(r.shape_angle().unwrap(), turned), "{:?}", r.shape_angle());
+        r.set_shape_angle(1e20);
+        assert!(close(r.shape_angle().unwrap(), want), "from {turned}°: {:?}, not {want}", r.shape_angle());
+    }
+}
+
 /// A node holding a live rectangle (`w` × `h`, all radii `r`, placed by `xf`) and its path.
 fn live_rect(w: f64, h: f64, r: f64, xf: Affine) -> Node {
     let live = LiveShape::Rectangle { w, h, radii: [r; 4], kinds: Default::default(), radii_relative: false, xf };

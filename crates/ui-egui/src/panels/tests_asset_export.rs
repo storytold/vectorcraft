@@ -1075,3 +1075,154 @@ fn a_failed_3d_export_stops_the_picture_export() {
     assert!(log.borrow().is_empty(), "{:?}", log.borrow().iter().map(|f| &f.0).collect::<Vec<_>>());
     assert!(app.ui.status.contains("Box"), "{}", app.ui.status);
 }
+
+fn secondary_click(at: Pos2) -> Vec<egui::Event> {
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+    vec![egui::Event::PointerMoved(at), button(true), button(false)]
+}
+
+/// Open a real tile popup and let its first layout settle before looking up its menu rows.
+fn tile_menu(ctx: &egui::Context, app: &mut VectorcraftApp, name: &str) -> Vec<(String, Rect)> {
+    frame(ctx, app, vec![], false);
+    let texts = frame(ctx, app, vec![], false);
+    frame(ctx, app, secondary_click(at(&texts, name)), false);
+    frame(ctx, app, vec![], false);
+    frame(ctx, app, vec![], false)
+}
+
+fn asset_selection(ctx: &egui::Context) -> Vec<u64> {
+    super::pstate(ctx, "asset-export-selected")
+}
+
+#[test]
+fn right_click_selects_an_unselected_tile_and_preserves_a_multi_selection() {
+    for selected_tile in [false, true] {
+        let (mut app, _, [a, b]) = app(true);
+        let ids: Vec<u64> =
+            app.run("assets.add", json!({"ids": [a, b]})).unwrap()["assets"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let initial = if selected_tile { ids.clone() } else { vec![ids[1]] };
+        super::set_pstate(&ctx, "asset-export-selected", initial);
+        let canvas = app.session.active().unwrap().selection.objects.clone();
+        let items = tile_menu(&ctx, &mut app, "Asset 1");
+        assert_eq!(asset_selection(&ctx), if selected_tile { ids } else { vec![ids[0]] });
+        assert!(has(&items, if selected_tile { "   Export 2 Assets…" } else { "   Export Asset…" }));
+        assert!(has(&items, if selected_tile { "   Remove 2 Assets" } else { "   Remove Asset" }));
+        assert!(has(&items, "   Rename") && has(&items, "   Select Artwork on Canvas"));
+        assert!(has(&items, "   Add Selected Artwork as One Asset") && has(&items, "   Add Selected Artwork as Multiple Assets"));
+        assert_eq!(app.session.active().unwrap().selection.objects, canvas, "opening a menu leaves canvas art alone");
+    }
+}
+
+#[test]
+fn tile_menu_remove_uses_one_undo_step_for_one_or_multiple_assets() {
+    for multiple in [false, true] {
+        let (mut app, _, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a, b]})).unwrap();
+        let before = assets(&mut app);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        if multiple {
+            super::set_pstate(&ctx, "asset-export-selected", before.iter().map(|v| v["id"].as_u64().unwrap()).collect::<Vec<_>>());
+        }
+        let items = tile_menu(&ctx, &mut app, "Asset 1");
+        frame(&ctx, &mut app, click(at(&items, if multiple { "   Remove 2 Assets" } else { "   Remove Asset" })), false);
+        let remaining = assets(&mut app);
+        assert_eq!(remaining.len(), if multiple { 0 } else { 1 });
+        if !multiple {
+            assert_eq!(remaining[0]["name"], "Asset 2");
+        }
+        let texts = frame(&ctx, &mut app, vec![], false);
+        assert!(!has(&texts, "Asset 1") && !has(&texts, "   Remove Asset"));
+        assert!(asset_selection(&ctx).is_empty());
+        assert!(app.session.active().unwrap().doc.node(NodeId(a)).is_some(), "removing an asset keeps the artwork");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(assets(&mut app), before, "one Undo restores all removed assets");
+        app.run("edit.redo", json!({})).unwrap();
+        assert_eq!(assets(&mut app), remaining);
+    }
+}
+
+#[test]
+fn tile_menu_select_artwork_selects_only_the_clicked_assets_nodes() {
+    let (mut app, _, [a, b]) = app(true);
+    let c = app.run("shape.rectangle", json!({"x": 50, "y": 60, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("assets.add", json!({"ids": [a, b], "multiple": false, "name": "Pair"})).unwrap();
+    app.run("assets.add", json!({"ids": [c], "name": "Other"})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let ids: Vec<u64> = assets(&mut app).iter().map(|v| v["id"].as_u64().unwrap()).collect();
+    super::set_pstate(&ctx, "asset-export-selected", ids.clone());
+    let items = tile_menu(&ctx, &mut app, "Pair");
+    frame(&ctx, &mut app, click(at(&items, "   Select Artwork on Canvas")), false);
+    let mut selection: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+    selection.sort_unstable();
+    assert_eq!(selection, vec![a, b]);
+    assert_eq!(asset_selection(&ctx), ids, "canvas selection leaves the asset multi-selection intact");
+}
+
+#[test]
+fn tile_menu_exports_only_its_targets() {
+    for multiple in [false, true] {
+        let (mut app, log, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap();
+        app.run("assets.add", json!({"ids": [b], "name": "Other"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        if multiple {
+            super::set_pstate(&ctx, "asset-export-selected", assets(&mut app).iter().map(|v| v["id"].as_u64().unwrap()).collect::<Vec<_>>());
+        }
+        let items = tile_menu(&ctx, &mut app, "Badge");
+        frame(&ctx, &mut app, click(at(&items, if multiple { "   Export 2 Assets…" } else { "   Export Asset…" })), false);
+        let log = log.borrow();
+        let [(name, bytes)] = log.as_slice() else { panic!("expected one download: {}", app.ui.status) };
+        if multiple {
+            assert!(name.ends_with(".zip"));
+            assert!(bytes.windows(9).any(|w| w == b"Badge.png"));
+            assert!(bytes.windows(9).any(|w| w == b"Other.png"));
+        } else {
+            assert_eq!(name, "Badge.png");
+        }
+    }
+}
+
+#[test]
+fn tile_menu_rename_opens_the_clicked_assets_inline_field() {
+    let (mut app, _, [a, _]) = app(true);
+    let id = app.run("assets.add", json!({"ids": [a], "name": "Badge"})).unwrap()["assets"][0].as_u64().unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let items = tile_menu(&ctx, &mut app, "Badge");
+    frame(&ctx, &mut app, click(at(&items, "   Rename")), false);
+    let rename_id = egui::Id::unique("asset-export-rename");
+    assert_eq!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id)), Some((id, "Badge".into())));
+    frame(&ctx, &mut app, vec![], false);
+    let select_all = egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND };
+    frame(&ctx, &mut app, vec![select_all, egui::Event::Text("Renamed".into())], false);
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(&ctx, &mut app, vec![enter], false);
+    assert_eq!(assets(&mut app)[0]["name"], "Renamed");
+}
+
+#[test]
+fn tile_menu_collects_canvas_art_as_one_or_multiple_assets_and_disables_empty_selection() {
+    for (selected, single) in [(true, true), (true, false), (false, true), (false, false)] {
+        let (mut app, _, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a], "name": "Existing"})).unwrap();
+        app.run("select.set", json!({"ids": if selected { vec![a, b] } else { vec![] }})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let items = tile_menu(&ctx, &mut app, "Existing");
+        let label = if single { "   Add Selected Artwork as One Asset" } else { "   Add Selected Artwork as Multiple Assets" };
+        frame(&ctx, &mut app, click(at(&items, label)), false);
+        let list = assets(&mut app);
+        assert_eq!(list.len(), if selected { 2 } else { 1 });
+        if selected {
+            // Multiple-assets collection reuses the existing asset for a, adding only b.
+            assert_eq!(list[1]["nodes"], if single { json!([a, b]) } else { json!([b]) });
+            assert_eq!(asset_selection(&ctx).len(), if single { 1 } else { 2 });
+        }
+    }
+}

@@ -68,6 +68,7 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
         o.insert("commands".into(), Value::Array(cmds));
     }
     if !s.previewing {
+        s.note_shape_drawn("command.batch", &entry);
         s.journal.push(("command.batch".into(), entry));
     }
     Ok(json!({ "results": results }))

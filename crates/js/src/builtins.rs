@@ -327,7 +327,7 @@ fn install_errors(interp: &mut Interp, object_proto: ObjId) -> JsResult<()> {
     for (i, (name, f)) in kinds.into_iter().enumerate() {
         // Error.prototype and each NativeError prototype are Error objects (sections 15.11.4 and
         // 15.11.7.7).
-        let proto = alloc(interp, Class::Error, Some(if i == 0 { object_proto } else { error_proto }));
+        let proto = alloc(interp, Class::Error(None), Some(if i == 0 { object_proto } else { error_proto }));
         if i == 0 {
             error_proto = proto;
             method(interp, proto, "toString", error_to_string, 0)?;

@@ -163,6 +163,8 @@ pub struct Tokens {
     pub error: Color32,
     /// Warning marks (a modified linked file).
     pub warning: Color32,
+    /// Success marks (a message of level `success`).
+    pub success: Color32,
     /// Rotation gizmo axes, also labelled X, Y and Z.
     pub axis_x: Color32,
     pub axis_y: Color32,
@@ -215,6 +217,7 @@ impl Tokens {
             artboard_mark: hex(0x808080),
             error: hex(0xe34850),
             warning: hex(0xf0a330),
+            success: hex(0x45af63),
             axis_x: hex(0xef6058),
             axis_y: hex(0x45af63),
             axis_z: hex(0x378ef0),
@@ -645,6 +648,9 @@ pub fn apply_with(ctx: &egui::Context, b: Brightness, accent: Accent, scheme: Sc
         s.spacing.interact_size = egui::vec2(24.0, 24.0);
         s.spacing.menu_margin = egui::Margin::same(6);
         s.spacing.slider_width = 120.0;
+        // Every scroll area shows its bar while it has more to show, in a column of its own,
+        // not only while the pointer is over it (#5941).
+        s.spacing.scroll = crate::widgets::list_scroll_style();
         s.text_styles = [
             (TextStyle::Small, FontId::proportional(11.0)),
             (TextStyle::Body, FontId::proportional(13.0)),

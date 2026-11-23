@@ -888,3 +888,135 @@ fn rows_of_two_brushes_with_one_name_show_the_first() {
     assert_eq!(shown.ty, "art");
     assert_eq!(shown.def, got, "the first of two rows of one name is the one shown");
 }
+
+/// Right-clicking a brush in the Brushes panel selects it (if unselected), displays
+/// the context menu ("Brush Options…", "Duplicate Brush", "Delete Brush"), and clicking
+/// an item dispatches the corresponding command. Multi-selection right-click preserves
+/// selection and offers "Duplicate Brushes" / "Delete Brushes". "Delete Brush" is disabled
+/// when it is the last brush in the library.
+#[test]
+fn right_click_context_menu_in_brushes_panel() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    app.run("brush.apply", json!({"name": "Tapered Stroke"})).unwrap();
+
+    let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    let right_click = |h: &mut egui_kittest::Harness<'static, VectorcraftApp>, label: &str| {
+        let node = h.get_by_label(label);
+        let pos = node.rect().center();
+        h.event(egui::Event::PointerMoved(pos));
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+    };
+
+    // 1. Initial state: artwork uses Tapered Stroke; Charcoal is not current
+    assert_eq!(selected_brush(h.state()).as_deref(), Some("Tapered Stroke"));
+    assert_ne!(brushes(h.state_mut()).1.as_deref(), Some("Charcoal"));
+
+    // Right-click unselected "Charcoal"
+    right_click(&mut h, "Charcoal");
+
+    // Right-clicking selects Charcoal in panel without applying it to the selected artwork
+    assert_eq!(brushes(h.state_mut()).1.as_deref(), Some("Charcoal"));
+    assert_eq!(selected_brush(h.state()).as_deref(), Some("Tapered Stroke"), "right-click must not apply brush to artwork");
+    let (multi_sel, _): (Option<Vec<String>>, Option<ClickKey>) = pstate(&h.ctx, "br-selected");
+    assert_eq!(multi_sel, Some(vec!["Charcoal".to_string()]), "right-clicked brush is recorded as panel selection");
+    let (b_list, b_cur) = brushes(h.state_mut());
+    assert_eq!(targets(h.state(), &h.ctx, &b_list, b_cur.as_deref()), vec!["Charcoal".to_string()]);
+
+    // Context menu displays Brush Options…, Duplicate Brush, Delete Brush
+    let opt = h.get_by_label("   Brush Options…");
+    let dup = h.get_by_label("   Duplicate Brush");
+    let del = h.get_by_label("   Delete Brush");
+    assert!(!opt.accesskit_node().is_disabled());
+    assert!(!dup.accesskit_node().is_disabled());
+    assert!(!del.accesskit_node().is_disabled());
+
+    // 2. Click "Duplicate Brush" dispatches brush.duplicate and adds a copy
+    dup.click();
+    h.run_steps(2);
+
+    let all_names = names(h.state_mut());
+    assert!(all_names.contains(&"Charcoal copy".to_string()));
+
+    // 3. Right-click "Charcoal copy" and click "Delete Brush"
+    right_click(&mut h, "Charcoal copy");
+
+    let undo_before = undo_count(h.state());
+    h.get_by_label("   Delete Brush").click();
+    h.run_steps(2);
+
+    assert!(!names(h.state_mut()).contains(&"Charcoal copy".to_string()));
+    assert_eq!(undo_count(h.state()), undo_before + 1);
+
+    // Undo restores the deleted copy
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    assert!(names(h.state_mut()).contains(&"Charcoal copy".to_string()));
+
+    // 4. Click "Brush Options…" opens the Brush Options dialog
+    right_click(&mut h, "Charcoal");
+    h.get_by_label("   Brush Options…").click();
+    h.run_steps(2);
+
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::brush_options::KIND));
+    assert_eq!(h.state().ui.dialog.as_ref().unwrap().str("name"), "Charcoal");
+    crate::dialogs::cancel(h.state_mut());
+    assert!(h.state().ui.dialog.is_none());
+
+    // 5. Multi-selection: right-clicking within multi-selection preserves it and offers
+    // "Duplicate Brushes" and "Delete Brushes"
+    let cur = brushes(h.state_mut()).1;
+    let key = click_key(h.state(), cur.as_deref());
+    set_pstate(&h.ctx, "br-selected", (Some(vec!["Charcoal".to_string(), "Tapered Stroke".to_string()]), key));
+    h.run_steps(1);
+
+    right_click(&mut h, "Tapered Stroke");
+
+    let (multi_sel, _): (Option<Vec<String>>, Option<ClickKey>) = pstate(&h.ctx, "br-selected");
+    assert_eq!(multi_sel, Some(vec!["Charcoal".to_string(), "Tapered Stroke".to_string()]));
+
+    let dup_multi = h.get_by_label("   Duplicate Brushes");
+    let del_multi = h.get_by_label("   Delete Brushes");
+    assert!(!dup_multi.accesskit_node().is_disabled());
+    assert!(!del_multi.accesskit_node().is_disabled());
+
+    // Click Duplicate Brushes
+    dup_multi.click();
+    h.run_steps(2);
+
+    let all_names = names(h.state_mut());
+    assert!(all_names.contains(&"Charcoal copy 2".to_string()));
+    assert!(all_names.contains(&"Tapered Stroke copy".to_string()));
+
+    // 6. Delete a brush in use by artwork prompts with the brushDelete confirmation dialog
+    h.state_mut().run("brush.apply", json!({ "name": "Tapered Stroke" })).unwrap();
+    assert_eq!(selected_brush(h.state()).as_deref(), Some("Tapered Stroke"));
+    right_click(&mut h, "Tapered Stroke");
+    h.get_by_label("   Delete Brush").click();
+    h.run_steps(2);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::brush_delete::KIND));
+    crate::dialogs::cancel(h.state_mut());
+    assert!(names(h.state_mut()).contains(&"Tapered Stroke".to_string()));
+
+    // 7. Delete Brush is disabled when it is the last brush in the library
+    let current_brushes = names(h.state_mut());
+    let to_delete: Vec<String> = current_brushes.into_iter().filter(|n| n != "Charcoal").collect();
+    h.state_mut().run("brush.delete", json!({ "names": to_delete })).unwrap();
+    assert_eq!(names(h.state_mut()), vec!["Charcoal".to_string()]);
+
+    h.run_steps(2);
+    right_click(&mut h, "Charcoal");
+    let del_last = h.get_by_label("   Delete Brush");
+    assert!(del_last.accesskit_node().is_disabled(), "last remaining brush cannot be deleted");
+}
