@@ -424,8 +424,6 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         .show(ui);
     app.ui.swatches_panel = model;
     let shown = shown_keys(&data);
-    // PLAN: the panel reports a click only as `used`, for colour swatches: a gradient, pattern or None swatch applies on
-    // no click (production applied every swatch).
     if let Some((at, _, alt)) = out.used
         && let Some(entry) = data.get(at.group).and_then(|g| g.entries.get(at.index))
     {
@@ -451,11 +449,10 @@ fn shown_keys(groups: &[SwatchGroup]) -> Vec<SwatchKey> {
         .collect()
 }
 
-/// Runs a browser event over the `shown` rows: a click applies the swatch, a double click opens its editor, a row
-/// menu item runs on its row, and drops and reorders change the document.
+/// Runs a browser event over the `shown` rows (a click on a swatch comes as the panel's `used`): a double click opens
+/// its editor, a row menu item runs on its row, and drops and reorders change the document.
 fn on_event(app: &mut VectorcraftApp, shown: &[SwatchKey], event: PresetEvent<SwatchKey>) {
     match event {
-        PresetEvent::Select { key: SwatchKey::Swatch(name), mods, .. } => apply(app, &name, mods.alt),
         PresetEvent::Activate { key, .. } => activate(app, &key),
         PresetEvent::Menu { target, command, .. } => menu_command(app, &target, &command),
         PresetEvent::Dropped { at, payload, mods, .. } => {
