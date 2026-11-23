@@ -917,24 +917,41 @@ pub(super) fn finish_bar(ctx: &Context, open: bool, command_chosen: bool) {
 }
 
 /// A layout job changes only presentation; literal '&'/'_' and all native/shared labels survive.
-pub(super) fn text(ui: &egui::Ui, label: &str, prefix: &str, cue: Option<&Cue>, size: Option<f32>) -> egui::WidgetText {
-    let Some(cue) = cue else {
-        let text = format!("{prefix}{label}");
-        return match size {
-            Some(size) => egui::RichText::new(text).size(size).color(super::Tokens::get(ui.ctx()).text).into(),
-            None => text.into(),
-        };
+/// With `mark` (a check mark, the room for one, or nothing), the label starts at the end of the
+/// menu's check column ([`crate::widgets::check_column_job`]).
+pub(super) fn text(ui: &egui::Ui, label: &str, mark: Option<&str>, cue: Option<&Cue>, size: Option<f32>) -> egui::WidgetText {
+    let split = cue.and_then(|cue| {
+        let (before, rest) = label.split_at_checked(cue.range.start)?;
+        let (letter, after) = rest.split_at_checked(cue.range.len())?;
+        Some((before, letter, after))
+    });
+    let color = match (split, size) {
+        (Some(_), _) => ui.visuals().text_color(),
+        (None, Some(_)) => super::Tokens::get(ui.ctx()).text,
+        (None, None) => egui::Color32::PLACEHOLDER,
     };
-    let Some((before, rest)) = label.split_at_checked(cue.range.start) else { return format!("{prefix}{label}").into() };
-    let Some((letter, after)) = rest.split_at_checked(cue.range.len()) else { return format!("{prefix}{label}").into() };
+    if split.is_none() && mark.is_none() {
+        return match size {
+            Some(size) => egui::RichText::new(label).size(size).color(color).into(),
+            None => label.into(),
+        };
+    }
     let mut font = egui::TextStyle::Button.resolve(ui.style());
     if let Some(size) = size {
         font.size = size;
     }
-    let format = egui::TextFormat { font_id: font, color: ui.visuals().text_color(), ..Default::default() };
-    let mut job = egui::text::LayoutJob::default();
-    job.append(&format!("{prefix}{before}"), 0.0, format.clone());
-    job.append(letter, 0.0, egui::TextFormat { underline: egui::Stroke::new(1.0, format.color), ..format.clone() });
-    job.append(after, 0.0, format);
+    let format = egui::TextFormat { font_id: font, color, ..Default::default() };
+    let (mut job, lead) = match mark {
+        Some(mark) => crate::widgets::check_column_job(ui, mark, label, &format),
+        None => (egui::text::LayoutJob::default(), 0.0),
+    };
+    match split {
+        Some((before, letter, after)) => {
+            job.append(before, lead, format.clone());
+            job.append(letter, 0.0, egui::TextFormat { underline: egui::Stroke::new(1.0, format.color), ..format.clone() });
+            job.append(after, 0.0, format);
+        }
+        None => job.append(label, lead, format),
+    }
     job.into()
 }

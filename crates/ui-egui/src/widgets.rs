@@ -31,7 +31,8 @@ pub use buttons::{
     primary_button, primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
 pub(crate) use buttons::{
-    button_width, flat_button_fit_width, icon_button_info, menu_item_response, paint_icon_button_named, primary_button_width, secondary_button_width,
+    button_width, check_column_job, check_row_text, flat_button_fit_width, icon_button_info, menu_item_response, paint_icon_button_named,
+    primary_button_width, secondary_button_width,
 };
 #[cfg(test)]
 use chips::gradient_chip_colors;
@@ -1055,6 +1056,44 @@ mod button_tests {
 
             let resp_long = flat_button_fit(ui, "Çalışma Yüzeylerini Düzenle", 100.0);
             assert!(resp_long.rect.width() > 160.0);
+        });
+        out.textures_delta.clear();
+    }
+
+    /// A menu row whose label runs right to left is laid out as the label alone: no check-column
+    /// space goes into it, and its words keep the order they have on their own (in "אבג PDF" the
+    /// Latin word is drawn left of the Hebrew one), on the first line and on a later line of a
+    /// label that starts in English.
+    #[test]
+    fn a_right_to_left_menu_label_is_laid_out_as_it_reads() {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            for label in ["אבג PDF", "Title\nאבג PDF", "Title\u{2029}אבג PDF"] {
+                let layout = |text: egui::WidgetText| text.into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Button);
+                let galley = layout(check_row_text(ui, "", label, None));
+                let alone = layout(egui::RichText::new(label).font(egui::TextStyle::Button.resolve(ui.style())).into());
+                assert!(
+                    (galley.size().x - alone.size().x).abs() < 0.5,
+                    "{label:?}: the row is {} wide, the label alone {}",
+                    galley.size().x,
+                    alone.size().x
+                );
+                if label.contains('\u{2029}') {
+                    // egui breaks rows only at a line feed; the width check above covers this label.
+                    continue;
+                }
+                let x = |c: char| {
+                    galley
+                        .rows
+                        .iter()
+                        .flat_map(|r| r.row.glyphs.iter().map(move |g| (g.chr, r.pos.x + g.pos.x)))
+                        .find(|(g, _)| *g == c)
+                        .map(|(_, x)| x)
+                };
+                let (latin, hebrew) = (x('P').unwrap(), x('א').unwrap());
+                assert!(latin < hebrew, "{label:?}: PDF at {latin} is not left of the Hebrew word at {hebrew}");
+            }
         });
         out.textures_delta.clear();
     }

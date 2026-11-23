@@ -236,7 +236,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     let before = opts.clone();
-    ui.menu_button(format!("   {}", crate::i18n::fmt(tl!("Units: {units}"), &[("units", opts.units.name())])), |ui| {
+    let units = crate::i18n::fmt(tl!("Units: {units}"), &[("units", opts.units.name())]);
+    ui.menu_button(widgets::check_row_text(ui, "   ", &units, None), |ui| {
         for u in CssUnits::ALL {
             if menu_item(ui, u.name(), true, opts.units == u) {
                 opts.units = u;

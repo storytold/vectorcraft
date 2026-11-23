@@ -1831,7 +1831,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                             pick = Some((i, true));
                             ui.close();
                         }
-                        ui.menu_button(tl!("Limit to Library"), |ui| {
+                        ui.menu_button(widgets::check_row_text(ui, "", tl!("Limit to Library"), None), |ui| {
                             let cur = d.str("limitTo");
                             if widgets::menu_item(ui, tl!("None"), true, cur.is_empty()) {
                                 limit_to = Some("".to_string());
@@ -2615,7 +2615,7 @@ fn color_menu(ui: &mut Ui, rows: &[Value], i: usize, base: Option<usize>) -> Opt
     }
     if let Some(c) = rows.get(i).and_then(to_color) {
         // Indented like the items beside it (their check column).
-        ui.menu_button(format!("   {}", tl!("Select Shade")), |ui| {
+        ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Select Shade"), None), |ui| {
             if let Some(sv) = shade_grid(ui, &c) {
                 choice = Some(MenuChoice::Shade(i, sv));
             }

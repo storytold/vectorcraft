@@ -1548,6 +1548,12 @@ pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
     }
 }
 
+/// Where a tab's context menu records whether the panel's own items, drawn first, use the check
+/// column.
+fn check_column_key(ui: &egui::Ui) -> egui::Id {
+    ui.scope_id().with("panel-menu-check-column")
+}
+
 /// The panels' content, labels and icons.
 struct PanelContent<'a> {
     app: &'a mut VectorcraftApp,
@@ -1637,7 +1643,23 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
     }
 
     fn panel_menu(&mut self, ui: &mut egui::Ui, id: &String) {
-        crate::panels::panel_menu_items(self.app, ui, id);
+        let before = ui.cursor().min;
+        // A panel can draw no rows, as Layers does with no document open.
+        let drew = crate::panels::panel_menu_items(self.app, ui, id) && ui.cursor().min != before;
+        let pass = ui.ctx().cumulative_pass_nr();
+        ui.data_mut(|d| d.insert_temp(check_column_key(ui), (pass, drew)));
+    }
+
+    /// The stock tab-menu items (Float Panel, Move Panel To, the group items) after a panel's own
+    /// menu items start their labels at the same check column. Other docking menus keep plain text,
+    /// and so does a menu whose panel items were not drawn in this pass.
+    fn action_label(&mut self, ui: &egui::Ui, logical: &str, _font: &egui::FontId, _color: egui::Color32) -> egui::WidgetText {
+        let pass = ui.ctx().cumulative_pass_nr();
+        if ui.data(|d| d.get_temp::<(u64, bool)>(check_column_key(ui))) == Some((pass, true)) {
+            crate::widgets::check_row_text(ui, "", logical, None)
+        } else {
+            logical.into()
+        }
     }
 
     fn group_header_width(&self, panels: &[String], active: &String, floating: bool, _strip_width: f32) -> f32 {

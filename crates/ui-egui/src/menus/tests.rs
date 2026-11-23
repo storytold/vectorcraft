@@ -491,6 +491,65 @@ fn opening_the_file_menu_reads_the_scripts_folder_again() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The Window menu keeps one check column: the labels of checked and unchecked panels, of plain
+/// commands and of submenus all start at the same x.
+#[test]
+fn window_menu_labels_start_in_one_column() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let titles = bar_frame(&mut app, &ctx, vec![]);
+    let titles = if titles.is_empty() { bar_frame(&mut app, &ctx, vec![]) } else { titles };
+    let window = menu_tree().iter().filter(|(t, _)| *t != "VectorCraft").position(|(t, _)| *t == "Window").unwrap();
+    egui::Popup::open_id(&ctx, titles[window].1);
+    // Each text drawn, with the x where its label starts (after any check mark or blank room).
+    let mut shown: Vec<(String, f32)> = vec![];
+    for _ in 0..3 {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            menu_bar(&mut app, ui);
+        });
+        out.textures_delta.clear();
+        fn texts(s: &egui::Shape, out: &mut Vec<(String, f32)>) {
+            match s {
+                egui::Shape::Text(t) => {
+                    let start = t.galley.rows.first().and_then(|r| Some(r.pos.x + r.row.glyphs.iter().find(|g| g.chr != ' ' && g.chr != '✓')?.pos.x));
+                    if let Some(x) = start {
+                        out.push((t.galley.text().to_string(), t.pos.x + x));
+                    }
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        shown.clear();
+        out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    }
+    // A row that is on and one that is off, by their state in the menu.
+    let tree = menu_tree();
+    let (_, items) = tree.iter().find(|(t, _)| *t == "Window").unwrap();
+    let state = |on: bool| {
+        items.iter().find_map(|it| match entry(&app, it) {
+            Some(Entry::Item(row)) if row.checked == Some(on) => Some(row.label.to_string()),
+            _ => None,
+        })
+    };
+    let (on, off) = (state(true).expect("a checked Window item"), state(false).expect("an unchecked Window item"));
+    let x = |label: &str| {
+        shown
+            .iter()
+            .find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label)
+            .map(|(_, x)| *x)
+            .unwrap_or_else(|| panic!("{label} missing from {shown:?}"))
+    };
+    let column = x(&on);
+    for label in [off.as_str(), "New Window", "Arrange", "Workspace"] {
+        let at = x(label);
+        assert!((at - column).abs() < 0.5, "{label:?} starts at {at}, the checked {on:?} at {column}");
+    }
+}
+
 #[test]
 fn a_popup_covering_a_title_does_not_switch_menus() {
     let ctx = egui::Context::default();

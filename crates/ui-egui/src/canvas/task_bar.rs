@@ -526,7 +526,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             // The actions and chips the bar offers for this selection or tool, each
                             // checked while it shows, which turns it on or off; then Reset Bar
                             // Actions, which shows every action again.
-                            ui.menu_button(format!("   {}", tl!("Bar Actions")), |ui| {
+                            ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Bar Actions"), None), |ui| {
                                 ui.set_min_width(170.0);
                                 for (label, action, shown) in task_bar_offered(ui.ctx()) {
                                     let Some(action) = action else { continue };

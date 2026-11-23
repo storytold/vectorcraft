@@ -307,7 +307,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     ui.add_enabled_ui(set.view == View::Box, |ui| {
-        ui.menu_button(format!("   {}", tl!("Box Channel")), |ui| {
+        ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Box Channel"), None), |ui| {
             for ch in Channel::ALL {
                 if menu_item(ui, ch.name(), true, ch == set.channel) {
                     command(app, &json!({ "channel": ch.id() })).ok();
@@ -339,7 +339,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         command(app, &json!({ "harmony": !set.harmony })).ok();
     }
     ui.add_enabled_ui(set.view == View::Wheel, |ui| {
-        ui.menu_button(format!("   {}", tl!("Harmony Rule")), |ui| {
+        ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Harmony Rule"), None), |ui| {
             for rule in harmony_rules() {
                 if menu_item(ui, rule.label(), true, rule == set.harmony_rule) {
                     command(app, &json!({ "harmonyRule": rule.id() })).ok();

@@ -837,7 +837,7 @@ pub(crate) fn library_items(ui: &mut Ui, libs: &[LibraryRef], checked: &dyn Fn(&
         }
     }
     for s in subs {
-        ui.menu_button(tl!(s), |ui| {
+        ui.menu_button(widgets::check_row_text(ui, "", tl!(s), None), |ui| {
             crate::widgets::menu_scroll(ui, |ui| {
                 for l in libs.iter().filter(|l| l.submenu == Some(s)) {
                     item(ui, l);

@@ -638,7 +638,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         set_pstate(ui.ctx(), "br-list", true);
     }
     ui.separator();
-    ui.menu_button(tl!("Open Brush Library"), |ui| library_panel::library_menu::<BrushLibraries>(app, ui));
+    ui.menu_button(widgets::check_row_text(ui, "", tl!("Open Brush Library"), None), |ui| library_panel::library_menu::<BrushLibraries>(app, ui));
     if menu_item(ui, tl!("Save Brush Library…"), has_brushes, false) {
         save_library(app, targets);
     }

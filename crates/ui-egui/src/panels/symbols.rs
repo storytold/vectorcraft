@@ -625,7 +625,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     ui.separator();
-    ui.menu_button(tl!("Open Symbol Library"), |ui| library_panel::library_menu::<SymbolLibraries>(app, ui));
+    ui.menu_button(widgets::check_row_text(ui, "", tl!("Open Symbol Library"), None), |ui| library_panel::library_menu::<SymbolLibraries>(app, ui));
     let has_symbols = app.session.active().is_some_and(|d| !d.doc.symbols.is_empty());
     if menu_item(ui, tl!("Save Symbol Library…"), has_symbols, false) {
         save_library(app, sel.into_iter().collect());

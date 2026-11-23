@@ -852,7 +852,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         let hang = style.as_ref().map(|(_, p)| p.burasagari);
         ui.add_enabled_ui(has, |ui| {
             // Indented like the items beside it (their check column).
-            ui.menu_button(format!("   {}", tl!("Burasagari")), |ui| {
+            ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Burasagari"), None), |ui| {
                 use vectorcraft_doc::Burasagari;
                 for (label, b, key) in [
                     (tl!("None"), Burasagari::None, "none"),
@@ -874,7 +874,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         // checked, and none is when they differ.
         let kinsoku_type = shared_para(app, |p| p.kinsoku_type);
         ui.add_enabled_ui(has, |ui| {
-            ui.menu_button(format!("   {}", tl!("Kinsoku Shori Type")), |ui| {
+            ui.menu_button(widgets::check_row_text(ui, "   ", tl!("Kinsoku Shori Type"), None), |ui| {
                 for (label, t, key) in [
                     (tl!("Push In First"), KinsokuShoriType::PushInFirst, "pushInFirst"),
                     (tl!("Push Out First"), KinsokuShoriType::PushOutFirst, "pushOutFirst"),
