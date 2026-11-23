@@ -961,7 +961,10 @@ fn lighting(params: Value) -> (Rc<RefCell<VectorcraftApp>>, Fixture) {
     let mut app = app();
     app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": params})).unwrap();
     app.three_d.page = "lighting".into();
-    shown(app)
+    let (app, mut fixture) = shown(app);
+    // As tall as a docked panel: the button below the sphere sits past a 300-point room's bottom.
+    fixture.room(egui::vec2(400.0, crate::tests::panel_harness::ROOM.y)).settle();
+    (app, fixture)
 }
 
 /// The lighting widget's part for light `n` (from 1): its screen-reader name and the control to press.
