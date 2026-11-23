@@ -9,7 +9,7 @@ use vectorcraft_color::Paint;
 
 use vectorcraft_doc::{CharStyle, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, Point, Vec2};
-use vectorcraft_text::TextLayout;
+use vectorcraft_text::{FileFontInfo, FileGlyph, TextLayout};
 
 use super::cid::Base;
 use super::graphics::MAX_APART;
@@ -675,6 +675,17 @@ impl Interp<'_> {
         {
             return self.show_type42_outlines(data, glyphs, s, spacing, at, f1);
         }
+        // Type in a font the file carries whose family isn't available is drawn in a font made of
+        // the file's glyphs (see `file_fonts`), spaced by their own advances. A character whose
+        // glyph differs from the one that font has for it keeps the string as outlines.
+        let kept = match &plain {
+            Some((data, glyphs)) => match self.keep_file_glyphs(data, glyphs)? {
+                Some(true) => true,
+                Some(false) => return self.show_type42_outlines(data, glyphs, s, spacing, at, f1),
+                None => false,
+            },
+            None => false,
+        };
         // Each code's character, if it has one that shows (control codes don't).
         let chars = match &plain {
             Some((_, glyphs)) => glyphs.iter().map(|g| g.ch).collect::<Vec<_>>(),
@@ -685,7 +696,49 @@ impl Interp<'_> {
             codes.push(u32::from(code), c.filter(|c| !c.is_control()));
         }
         let widths: Option<Vec<f64>> = plain.map(|(_, glyphs)| glyphs.iter().map(|g| g.width).collect());
-        self.show_codes(&codes, widths.as_deref(), spacing, false, s, Draw::Fill)
+        self.show_codes(&codes, widths.as_deref().map(|of| Widths { of, kept }), spacing, false, s, Draw::Fill)
+    }
+
+    /// The glyphs of codes `glyphs` in font program `data` (the current font's) gathered for the
+    /// font kept from the file for their family and style, when that family isn't available and
+    /// the type shows: `Some(true)` gathered, `Some(false)` a character's glyph differs from the
+    /// one that font has for it, `None` not kept (the family is available, the type draws nothing
+    /// or is drawn apart, or a glyph can't be read).
+    fn keep_file_glyphs(&mut self, data: &Embedded, glyphs: &[Plain]) -> Res<Option<bool>> {
+        if self.g.paint.is_none() || self.g.null || self.out.apart > 0 {
+            return Ok(None);
+        }
+        let (name, _) = self.font()?;
+        let (family, style) = family_style(&name);
+        if family.is_empty() || vectorcraft_text::FontDb::global().find_family(&family).is_some() {
+            return Ok(None);
+        }
+        let mut file = Vec::with_capacity(glyphs.len());
+        for g in glyphs {
+            let Some(ch) = g.ch.filter(|c| !c.is_control()) else { continue };
+            let Some((outline, advance)) = data.glyph(g.gid) else { return Ok(None) };
+            self.spend(data.take_work())?;
+            // Ems, y up, onto thousandths of an em.
+            file.push(FileGlyph { ch, outline: Affine::scale(1000.0) * outline, advance: advance * 1000.0 });
+        }
+        if file.is_empty() {
+            return Ok(None);
+        }
+        let postscript = match name.split_once('+') {
+            Some((tag, rest)) if tag.len() == 6 && tag.bytes().all(|b| b.is_ascii_uppercase()) => rest.to_string(),
+            _ => name.clone(),
+        };
+        let (fs_type, metrics) = data.facts();
+        let (ascent, descent) = metrics.unwrap_or_default();
+        let info = || FileFontInfo { family: family.clone(), style: style.clone(), postscript, ascent, descent, fs_type };
+        let font = self.out.file_glyphs.font(&family, &style, info);
+        if !self.out.file_glyphs.fits(font, &file) {
+            return Ok(Some(false));
+        }
+        for g in file {
+            self.out.file_glyphs.add(font, g);
+        }
+        Ok(Some(true))
     }
 
     /// The codes `codes` (each standing for some of its characters, or none) shown in the current
@@ -698,12 +751,14 @@ impl Interp<'_> {
     fn show_codes<C: Copy + Into<i64>>(
         &mut self,
         codes: &Decoded,
-        widths: Option<&[f64]>,
+        widths: Option<Widths>,
         spacing: &Spacing,
         vertical: bool,
         kern: &[C],
         draw: Draw,
     ) -> Res {
+        let kept = widths.is_some_and(|w| w.kept);
+        let widths = widths.map(|w| w.of);
         let at = self.user_point()?;
         let (_, f1) = self.font()?;
         let text = &codes.text;
@@ -715,6 +770,17 @@ impl Interp<'_> {
         for g in &layout.glyphs {
             if let Some(n) = starts.binary_search(&g.byte).ok().and_then(|k| natural.get_mut(k)) {
                 *n += g.advance;
+            }
+        }
+        if kept && let Some(widths) = widths {
+            let mut k = 0;
+            for (i, &(_, n)) in codes.codes.iter().enumerate() {
+                if n == 1
+                    && let Some(slot) = natural.get_mut(k)
+                {
+                    *slot = widths.get(i).copied().unwrap_or(0.0) * size;
+                }
+                k += n;
             }
         }
         // Each code's move (user space) and that move in text space, along the baseline (down the
@@ -1328,7 +1394,7 @@ impl Interp<'_> {
         };
         let saved = self.g.font.replace(named.font.clone());
         let before = std::mem::replace(&mut self.kshow_font, saved.clone());
-        let r = self.show_codes(&named.codes, widths.as_deref(), spacing, named.vertical, &kern, draw);
+        let r = self.show_codes(&named.codes, widths.as_deref().map(|of| Widths { of, kept: false }), spacing, named.vertical, &kern, draw);
         self.kshow_font = before;
         self.g.font = saved;
         r
@@ -1673,6 +1739,15 @@ impl Interp<'_> {
         self.type42.push((sfnts, data.clone()));
         Ok(data)
     }
+}
+
+/// The widths of the codes [`Interp::show_codes`] shows (glyph space, one unit an em). With
+/// `kept`, the type is drawn in a font kept from the file whose glyphs are that wide (see
+/// `file_fonts`), so they are its characters' advances, not the layout's.
+#[derive(Clone, Copy)]
+struct Widths<'a> {
+    of: &'a [f64],
+    kept: bool,
 }
 
 /// A character code of a font carrying its program: the character it stands for (`None` when
