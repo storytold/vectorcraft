@@ -183,6 +183,13 @@ pub(crate) fn open_result_window_for_test(app: &mut VectorcraftApp, ctx: &egui::
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn close_dialogs_for_test(app: &mut VectorcraftApp) {
     app.updates_rt.updater = tests::isolated_updater(env!("CARGO_PKG_VERSION"), "closed");
+    // The dialogs are the host's: a new updater does not take them down.
+    if let (Some(ctx), Some(dialogs)) = (app.ui_ctx.clone(), app.dialogs()) {
+        dialogs.with(|h| {
+            h.cancel::<UpdatePromptDialog>(&ctx);
+            h.cancel::<UpdateCheckDialog>(&ctx);
+        });
+    }
 }
 
 #[cfg(test)]
