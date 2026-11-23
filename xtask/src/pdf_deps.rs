@@ -6,12 +6,14 @@ use std::process::Command;
 use serde_json::Value;
 
 const REV: &str = "33be35625e252cc4f06aa375b3b428521faea37d";
+const STREAM_REV: &str = "33be35625e252cc4f06aa375b3b428521faea37d";
 const PACKAGES: &[(&str, &str, &str)] = &[
     ("craft-pdf", "0.1.0", REV),
     ("krilla", "0.8.2", REV),
     ("hayro-syntax", "0.7.2", REV),
     ("hayro-interpret", "0.7.0", REV),
-    ("hayro-jbig2", "0.3.0", REV),
+    // Share the vendored JBIG2 package pulled in by craft-stream-codecs.
+    ("hayro-jbig2", "0.3.0", STREAM_REV),
     ("hayro-cmap", "0.1.0", REV),
     ("hayro-postscript", "0.1.0", REV),
 ];
@@ -32,7 +34,7 @@ pub fn run(root: &Path) -> Result<(), String> {
     }
     let metadata: Value = serde_json::from_slice(&output.stdout).map_err(|e| format!("cargo metadata: {e}"))?;
     validate(&metadata)?;
-    println!("PDF: shared crate and patched backends resolve once to {REV}");
+    println!("PDF: shared crate and patched backends match their pinned sources");
     Ok(())
 }
 
