@@ -1,7 +1,9 @@
 //! Background Save and Background Export (Preferences → File Handling): a save or an export encodes
 //! and writes a snapshot of the document on a worker thread while editing goes on. The status bar
 //! shows what is in progress; the result is applied on the UI thread when it arrives (a save marks
-//! the document saved as of its snapshot, so edits made meanwhile keep it modified).
+//! the document saved as of its snapshot, so edits made meanwhile keep it modified). Exports and
+//! saves show in the progress window ([`crate::export_progress`]) with Cancel and Continue in
+//! Background.
 //!
 //! It needs a thread-safe writer from the host ([`crate::Services::write_shared`], desktop);
 //! without one (the web, which downloads) the work runs at once, as with the preference off.
@@ -44,18 +46,34 @@ struct Task {
     scope: ScopeHandle,
 }
 
+/// What a job that shows in the progress window does: its Cancel and Continue in Background act on
+/// the jobs of its kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// An export (Background Export): `file.cancelExport`, `file.exportInBackground`.
+    Export,
+    /// A save (Background Save): `file.cancelSave`, `file.saveInBackground`.
+    Save,
+}
+
 /// A job in progress.
 pub struct Job {
     id: u64,
+    /// What the job does, for the progress window and its commands.
+    pub kind: Kind,
     /// What the status bar and `ui.inspect` show ("Saving Poster.vectorcraft"); empty for work they
     /// don't show.
     pub label: String,
     /// The document the job reads (`DocState::uid`), if any.
     pub doc: Option<u64>,
-    /// How far an export has got, and its Cancel ([`crate::export_progress`] shows it).
+    /// How far an export or a save has got, and its Cancel ([`crate::export_progress`] shows it).
     pub progress: Option<Arc<Progress>>,
     /// Continue in Background: the progress dialog no longer shows this job.
     pub hidden: bool,
+    /// [`crate::state::UiState::status_sets`] before the job set its status line.
+    sets: u64,
+    /// The status line the job set ("<label>…"); empty when it set none.
+    line: String,
     then: Then,
 }
 
@@ -79,6 +97,9 @@ pub struct Background {
     next_id: u64,
     /// Work started while this is set runs at once, whatever the preferences ([`in_foreground`]).
     foreground: bool,
+    /// [`crate::state::UiState::status_sets`] right after Cancel Save set its line, or after a save
+    /// it reached set the line that followed it; `None` before any Cancel Save.
+    pub(crate) save_cancel_line: Option<u64>,
 }
 
 impl Background {
@@ -115,18 +136,41 @@ impl Background {
 
     /// Cancel every export in progress → how many there were.
     pub fn cancel_exports(&mut self) -> usize {
+        self.cancel(Kind::Export)
+    }
+
+    /// Hide the exports in progress from the progress dialog (they go on) → how many there were.
+    pub fn hide_exports(&mut self) -> usize {
+        self.hide(Kind::Export)
+    }
+
+    /// Cancel every save in progress that the progress window can show → how many there were.
+    pub fn cancel_saves(&mut self) -> usize {
+        self.cancel(Kind::Save)
+    }
+
+    /// Hide the saves in progress from the progress window (they go on) → how many there were.
+    pub fn hide_saves(&mut self) -> usize {
+        self.hide(Kind::Save)
+    }
+
+    /// Is a job of `kind` in progress that can still be canceled?
+    pub fn running(&self, kind: Kind) -> bool {
+        self.jobs.iter().any(|j| j.kind == kind && j.progress.is_some() && !j.cancelled())
+    }
+
+    fn cancel(&mut self, kind: Kind) -> usize {
         let mut n = 0;
-        for p in self.jobs.iter().filter(|j| !j.cancelled()).filter_map(|j| j.progress.as_ref()) {
+        for p in self.jobs.iter().filter(|j| j.kind == kind && !j.cancelled()).filter_map(|j| j.progress.as_ref()) {
             p.cancel();
             n += 1;
         }
         n
     }
 
-    /// Hide the exports in progress from the progress dialog (they go on) → how many there were.
-    pub fn hide_exports(&mut self) -> usize {
+    fn hide(&mut self, kind: Kind) -> usize {
         let mut n = 0;
-        for j in self.jobs.iter_mut().filter(|j| j.progress.is_some() && !j.hidden && !j.cancelled()) {
+        for j in self.jobs.iter_mut().filter(|j| j.kind == kind && j.progress.is_some() && !j.hidden && !j.cancelled()) {
             j.hidden = true;
             n += 1;
         }
@@ -160,6 +204,34 @@ pub fn run_with_progress(
     work: impl FnOnce(Writer) -> Result<Value, String> + Send + 'static,
     then: impl FnOnce(&mut VectorcraftApp, Result<Value, String>) -> Result<Value, String> + 'static,
 ) -> Result<Value, String> {
+    start(app, enabled, label, doc, progress, Kind::Export, work, then)
+}
+
+/// [`run_with_progress`] for a save of document `doc`: the progress window shows it as a save, and
+/// its Cancel is `file.cancelSave`.
+pub fn run_saving(
+    app: &mut VectorcraftApp,
+    enabled: bool,
+    label: String,
+    doc: u64,
+    progress: Arc<Progress>,
+    work: impl FnOnce(Writer) -> Result<Value, String> + Send + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, Result<Value, String>) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    start(app, enabled, label, Some(doc), Some(progress), Kind::Save, work, then)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn start(
+    app: &mut VectorcraftApp,
+    enabled: bool,
+    label: String,
+    doc: Option<u64>,
+    progress: Option<Arc<Progress>>,
+    kind: Kind,
+    work: impl FnOnce(Writer) -> Result<Value, String> + Send + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, Result<Value, String>) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
     let mut work: Work = Box::new(work);
     let shared = app.services.write_shared.clone().filter(|_| enabled && !app.background.foreground && app.services.download.is_none());
     if let Some(write) = shared {
@@ -167,13 +239,14 @@ pub fn run_with_progress(
         if let Some(tx) = app.background.worker() {
             match tx.send(Task { id, work, write, scope: ScopeHandle::capture() }) {
                 Ok(()) => {
+                    let (sets, status) = (app.ui.status_sets, if label.is_empty() { String::new() } else { format!("{label}…") });
                     let bg = &mut app.background;
                     bg.next_id += 1;
-                    bg.jobs.push(Job { id, label: label.clone(), doc, progress, hidden: false, then: Box::new(then) });
+                    let line = status.clone();
+                    bg.jobs.push(Job { id, kind, label: label.clone(), doc, progress, hidden: false, sets, line, then: Box::new(then) });
                     if label.is_empty() {
                         return Ok(json!({ "background": true }));
                     }
-                    let status = format!("{label}…");
                     app.status(status.clone());
                     return Ok(json!({ "background": true, "status": status }));
                 }
@@ -250,9 +323,27 @@ fn finish(app: &mut VectorcraftApp, (id, r): Done) {
     apply(app, job, r);
 }
 
-/// Hand a job its result; a failure goes to the status bar (the call that started it returned).
+/// Does the status bar still show what a job left there? No line has been set since `sets`
+/// ([`crate::state::UiState::status_sets`] when the job started), or the one line set since is
+/// the job's own `line` ("<label>…"; empty for a job that set none) and it is still shown. A job's
+/// result goes to the status bar only then: a line set since (by another command or another job)
+/// stays, also when it has the same text as an earlier one.
+pub(crate) fn status_unchanged(app: &VectorcraftApp, sets: u64, line: &str) -> bool {
+    let now = app.ui.status_sets;
+    now == sets || (!line.is_empty() && now == sets.wrapping_add(1) && app.ui.status == line)
+}
+
+/// Hand a job its result; a failure goes to the status bar (the call that started it returned)
+/// while the status bar still shows the job's own line ([`status_unchanged`]) and the job's
+/// callback set no line of its own.
 fn apply(app: &mut VectorcraftApp, job: Job, r: Result<Value, String>) {
-    if let Err(e) = (job.then)(app, r) {
-        app.status(format!("{} failed: {e}", job.label));
+    let Job { label, sets, line, then, .. } = job;
+    let shown = status_unchanged(app, sets, &line);
+    let before = app.ui.status_sets;
+    if let Err(e) = then(app, r)
+        && shown
+        && app.ui.status_sets == before
+    {
+        app.status(format!("{label} failed: {e}"));
     }
 }

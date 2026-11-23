@@ -301,6 +301,71 @@ fn an_installed_script_is_read_as_script_run_reads_a_file() {
 }
 
 #[test]
+fn an_installed_run_runs_the_text_its_own_read_checked() {
+    let dir = folder("installed-run");
+    let root = dir.join("Scripts");
+    let script = touch(&root, "draw.jsx");
+    std::fs::write(&script, "#include \"lib.jsxinc\"\nvc.log(x);").unwrap();
+    std::fs::write(root.join("lib.jsxinc"), "var x = 1;").unwrap();
+    // A folder in the Scripts folder that is a link: script.run by path alone follows it.
+    let elsewhere = dir.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    std::fs::write(elsewhere.join("other.jsx"), "vc.log(2);").unwrap();
+    link_folder(&elsewhere, &root.join("linked"));
+    let linked = root.join("linked").join("other.jsx").to_string_lossy().into_owned();
+    let mut s = Session::new();
+    s.attach_scripts_dir(root.clone());
+    let path = script.to_string_lossy().into_owned();
+    let r = s.execute("script.run", &json!({"path": path, "installed": true})).unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(s.execute("script.run", &json!({"path": linked})).unwrap()["log"], json!([2]));
+    // With `installed`, the run's own read is the check: a script behind a link is not run.
+    let e = s.execute("script.run", &json!({"path": linked, "installed": true})).unwrap_err();
+    assert_eq!(e.to_string(), cmd::scripts::NOT_LISTED);
+    let outside = touch(&dir, "outside.js");
+    let e = s.execute("script.run", &json!({"path": outside.to_string_lossy(), "installed": true})).unwrap_err();
+    assert_eq!(e.to_string(), cmd::scripts::NOT_LISTED);
+    // `installed` is true or false, and takes a path.
+    assert!(
+        s.execute("script.run", &json!({"path": path, "installed": "yes"})).unwrap_err().to_string().contains("`installed` must be true or false")
+    );
+    assert!(s.execute("script.run", &json!({"source": "1", "installed": true})).unwrap_err().to_string().contains("`installed` takes a `path`"));
+    assert_eq!(s.execute("script.run", &json!({"source": "vc.log(3);", "installed": false})).unwrap()["log"], json!([3]));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn an_installed_run_reads_its_includes_in_the_folder_its_read_found() {
+    let dir = folder("installed-scope");
+    let checked = dir.join("Scripts").join("tools");
+    let swapped = dir.join("swapped");
+    for (folder, x) in [(&checked, 1), (&swapped, 2)] {
+        std::fs::create_dir_all(folder).unwrap();
+        std::fs::write(folder.join("draw.jsx"), "").unwrap();
+        std::fs::write(folder.join("lib.jsxinc"), format!("var x = {x};")).unwrap();
+    }
+    // The path now leads through a link to another folder, as after a link was put in place of the
+    // folder once the script's text was read.
+    let link = dir.join("link");
+    link_folder(&swapped, &link);
+    let mut s = Session::new();
+    let request = script::Request {
+        name: "draw.jsx".into(),
+        name_given: false,
+        file: Some(link.join("draw.jsx").to_string_lossy().into_owned()),
+        checked_real: Some(std::fs::canonicalize(checked.join("draw.jsx")).unwrap()),
+        source: "#include \"lib.jsxinc\"\nvc.log(x);".into(),
+        args: Default::default(),
+        fuel: script::DEFAULT_FUEL,
+        locale: "en_US".into(),
+        answers: Vec::new(),
+    };
+    s.script_start(request).unwrap();
+    assert_eq!(s.script_run_to_end().unwrap()["log"], json!([1]));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn the_automation_read_root_keeps_an_agent_out_of_the_scripts_folder() {
     let dir = folder("roots");
     let root = dir.join("Scripts");

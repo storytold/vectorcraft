@@ -1,14 +1,18 @@
 //! Images: embedded ones as a raster with its samples, linked ones as a placed file with a preview
 //! (see [`crate::ai_editing`] for the form).
 
+#[cfg(test)]
+use std::cell::Cell;
+use std::collections::HashMap;
 use std::fmt::Write;
+use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{FillLayer, ImageBlob, ImageObject, LinkInfo};
 use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Shape};
 
 use super::{Writer, Xy};
-use crate::ps;
+use crate::{ai_ops, ps};
 
 pub(in crate::ai_editing) const IMAGES: &str = "images that can't be decoded or have more than 33,554,432 pixels are written as their outlines filled mid gray in the editing data for other apps";
 pub(in crate::ai_editing) const IMAGE_DEPTH: &str = "images of 16 bits a channel are written at 8 bits a channel in the editing data for other apps";
@@ -26,8 +30,104 @@ pub(in crate::ai_editing) const PAYLOAD: char = '\u{1}';
 /// What starts the line of an image's samples: `XI` and its payload, then `%%EndData`.
 pub(super) const SAMPLES_LINE: &str = "XI\u{1}";
 
+/// An image's pixels as the data holds them, and whether it had 16 bits a channel ([`Samples::of`]).
+pub(super) type Read = Arc<(Samples, bool)>;
+
+/// The most bytes of samples a save keeps read ([`SampleCache`]): color and alpha together.
+const KEPT_SAMPLE_BYTES: usize = 256 << 20;
+/// The most images whose samples a save keeps read ([`SampleCache`]), those that can't be read
+/// included.
+const KEPT_IMAGES: usize = 256;
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Samples::of`] has read an image on this thread.
+    pub(in crate::ai_editing) static SAMPLE_READS: Cell<usize> = const { Cell::new(0) };
+    /// Whether [`Writer::samples`] keeps only the image read last on this thread, to compare its
+    /// file with the one [`SampleCache`] gives.
+    pub(in crate::ai_editing) static LAST_SAMPLES_ONLY: Cell<bool> = const { Cell::new(false) };
+    /// The bytes of samples and the images [`SampleCache`] keeps at most on this thread.
+    pub(in crate::ai_editing) static SAMPLE_LIMITS: Cell<(usize, usize)> = const { Cell::new((KEPT_SAMPLE_BYTES, KEPT_IMAGES)) };
+    /// The most bytes of samples and images a [`SampleCache`] kept on this thread, and whether one
+    /// held an image beside them.
+    pub(in crate::ai_editing) static SAMPLES_KEPT: Cell<(usize, usize, bool)> = const { Cell::new((0, 0, false)) };
+}
+
+/// The bytes of samples and the images [`SampleCache`] keeps at most.
+#[cfg(not(test))]
+const fn sample_limits() -> (usize, usize) {
+    (KEPT_SAMPLE_BYTES, KEPT_IMAGES)
+}
+
+#[cfg(test)]
+fn sample_limits() -> (usize, usize) {
+    SAMPLE_LIMITS.with(Cell::get)
+}
+
+/// The images read during a save and their pixels ([`Samples::of`], `None` when they can't be
+/// read), so that an image placed again is read once: up to [`KEPT_IMAGES`] images and
+/// [`KEPT_SAMPLE_BYTES`] of samples, and beside them the image read last that they have no room
+/// for. An image is known by the address of its data and its MIME type; each entry keeps the
+/// image, so no other data takes that address while the entry is kept.
+#[derive(Default)]
+pub(super) struct SampleCache {
+    /// By the address of the image's data, each image with that data and its pixels.
+    kept: HashMap<usize, Vec<(ImageBlob, Option<Read>)>>,
+    /// How many images `kept` holds.
+    images: usize,
+    /// The bytes of samples `kept` holds.
+    bytes: usize,
+    /// The image read last that `kept` had no room for, and its pixels.
+    last: Option<(ImageBlob, Option<Read>)>,
+}
+
+/// Whether `a` is the image `b`: the same data and MIME type.
+fn same_image(a: &ImageBlob, b: &ImageBlob) -> bool {
+    Arc::ptr_eq(&a.bytes, &b.bytes) && a.mime == b.mime
+}
+
+impl SampleCache {
+    /// The pixels kept for `blob`, when it was read.
+    fn get(&self, blob: &ImageBlob) -> Option<Option<Read>> {
+        let kept = self.kept.get(&(Arc::as_ptr(&blob.bytes) as usize)).and_then(|v| v.iter().find(|(b, _)| same_image(b, blob)));
+        kept.or(self.last.as_ref().filter(|(b, _)| same_image(b, blob))).map(|(_, read)| read.clone())
+    }
+
+    /// Keep `read`, the pixels of `blob`: with the others while both limits allow, else beside them
+    /// in place of the image read last.
+    fn keep(&mut self, blob: &ImageBlob, read: Option<Read>) {
+        let size = read.as_deref().map_or(0, |(s, _)| s.color.len().saturating_add(s.alpha.as_ref().map_or(0, Vec::len)));
+        let (most_bytes, most_images) = sample_limits();
+        match self.bytes.checked_add(size).filter(|b| *b <= most_bytes) {
+            Some(bytes) if self.images < most_images => {
+                self.bytes = bytes;
+                self.images += 1;
+                self.kept.entry(Arc::as_ptr(&blob.bytes) as usize).or_default().push((blob.clone(), read));
+            }
+            _ => self.last = Some((blob.clone(), read)),
+        }
+        #[cfg(test)]
+        SAMPLES_KEPT.with(|k| {
+            let (b, n, last) = k.get();
+            k.set((b.max(self.bytes), n.max(self.images), last || self.last.is_some()));
+        });
+    }
+}
+
+/// A copy of an image written as the part of it that its regions show ([`Writer::image`]).
+pub(super) struct Windowed {
+    /// Where its raster is in the body.
+    at: std::ops::Range<usize>,
+    /// The index of its samples in [`Writer::payloads`].
+    payload: usize,
+    /// The image's pixels.
+    samples: Read,
+    /// What places the image's whole pixel grid in the document.
+    xf: Affine,
+}
+
 /// An image's pixels as the data holds them.
-struct Samples {
+pub(super) struct Samples {
     /// `/DeviceGray`, `/DeviceRGB` or `/DeviceCMYK`.
     space: &'static str,
     /// The image type of `XI` (§8.1): 1 gray, 3 RGB, 4 CMYK.
@@ -45,6 +145,8 @@ impl Samples {
     /// or RGB samples, with an alpha channel when they need one. `None` when they can't be decoded or are more than
     /// [`MAX_PIXELS`]; the flag is set when the image had 16 bits a channel.
     fn of(blob: &ImageBlob) -> Option<(Samples, bool)> {
+        #[cfg(test)]
+        SAMPLE_READS.with(|n| n.set(n.get() + 1));
         // The header's size is checked before the inks are decoded.
         if blob.is_cmyk()
             && blob.header_size().is_some_and(|(w, h)| u64::from(w) * u64::from(h) <= MAX_PIXELS)
@@ -79,6 +181,19 @@ impl Samples {
         Some((Samples { space, kind, width, height, color, alpha }, deep))
     }
 
+    /// The pixels of `window` (`[x0, y0, x1, y1]`, within the image) alone.
+    fn window(&self, window: [u32; 4]) -> Samples {
+        let [x0, y0, x1, y1] = window;
+        Samples {
+            space: self.space,
+            kind: self.kind,
+            width: x1 - x0,
+            height: y1 - y0,
+            color: ai_ops::window_samples(&self.color, self.width, usize::from(self.kind), window),
+            alpha: self.alpha.as_ref().map(|a| ai_ops::window_samples(a, self.width, 1, window)),
+        }
+    }
+
     /// `XI`'s fourth flag as the files users sent have it: 0 gray, 1 RGB, 2 CMYK, 16 more with an
     /// alpha channel.
     fn reserved(&self) -> u8 {
@@ -92,28 +207,39 @@ impl Samples {
 }
 
 impl Writer<'_> {
+    /// Whether [`Self::image`] can read `im`'s pixels, rather than write its gray outline.
+    pub(super) fn image_readable(&mut self, im: &ImageObject) -> bool {
+        let doc = self.doc;
+        doc.image_blob(im).and_then(|b| self.samples(b)).is_some()
+    }
+
     /// Image object `im` of transparency `xy`: embedded, a raster ([`Self::raster`]); linked, a
     /// placed file with a preview ([`Self::placed_file`]), except in a part of the data written on
     /// `%_` lines (other than a styled object's copy on the layers, [`Self::styled_object`]) and in
     /// a symbol's art. One whose pixels can't be read is its outline filled mid gray. Where the art is
-    /// cut to a clipping path, the image is in a clipping group of that path.
-    pub(super) fn image(&mut self, im: &ImageObject, xy: Xy) {
+    /// cut to a clipping path, the image is in a clipping group of that path; a raster of pixels
+    /// written whole already is then the part of them that the path shows ([`ai_ops::image_window`]).
+    /// True when the image is written as an image.
+    pub(super) fn image(&mut self, im: &ImageObject, xy: Xy) -> bool {
         let doc = self.doc;
-        let Some((samples, deep)) = doc.image_blob(im).and_then(Samples::of) else {
+        let blob = doc.image_blob(im);
+        let read = blob.and_then(|b| self.samples(b));
+        let Some((samples, deep)) = read.as_deref() else {
             let bounds = PathData::from_bezpath(&(im.xf * Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1)));
             self.warn(IMAGES);
-            return self.fill_object(&bounds, FillRule::NonZero, &FillLayer::new(Paint::solid(Color::gray(0.5))), xy);
+            self.fill_object(&bounds, FillRule::NonZero, &FillLayer::new(Paint::solid(Color::gray(0.5))), xy);
+            return false;
         };
         // A region that has nothing left hides the image.
         if self.clip.as_ref().is_some_and(|c| c.subpaths.iter().all(|sp| sp.anchors.is_empty())) {
-            return;
+            return false;
         }
         // The image, and where it is cut, the clipping group and its clipping path.
         let clipping = self.clip.as_ref().map_or(0, |c| 1 + super::object_count(c.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()));
         if !self.take_objects(1 + clipping) {
-            return;
+            return false;
         }
-        if deep {
+        if *deep {
             self.warn(IMAGE_DEPTH);
         }
         let cut = self.clip.take();
@@ -129,13 +255,41 @@ impl Writer<'_> {
             Some(link) if (self.hidden == 0 || self.styled_copy) && !self.in_symbol => {
                 // Cut to a region, the placed file is in a clipping group.
                 self.placed = cut.is_none();
-                self.placed_file(link, &samples, (im.width.max(1), im.height.max(1)), im.xf);
+                self.placed_file(link, samples, (im.width.max(1), im.height.max(1)), im.xf);
             }
             other => {
                 if other.is_some() {
                     self.warn(LINKS_EMBEDDED);
                 }
-                self.raster(&samples, im.xf * fit);
+                // An image written whole already: the part its region shows, placed where it is in
+                // the image (the pieces of a warped image each show a small part of the same one).
+                // An object's editable original (on `%_` lines) and an image in an opacity mask's art
+                // are written whole.
+                let data = blob.map(|b| &b.bytes);
+                let written = self.hidden == 0 && data.is_some_and(|d| self.whole_images.contains_key(&(Arc::as_ptr(d) as usize)));
+                let window = written
+                    .then(|| {
+                        let clips: Vec<_> = self.shown.iter().cloned().chain(cut.iter().map(PathData::to_bezpath)).collect();
+                        ai_ops::image_window(&clips, im.xf * fit, (samples.width, samples.height))
+                    })
+                    .flatten();
+                match (window, &read) {
+                    (Some(window), Some(read)) => {
+                        let at = self.body.len();
+                        self.raster(&samples.window(window), im.xf * fit * Affine::translate((f64::from(window[0]), f64::from(window[1]))));
+                        self.windowed =
+                            Some(Windowed { at: at..self.body.len(), payload: self.payloads.len() - 1, samples: read.clone(), xf: im.xf * fit });
+                    }
+                    _ => {
+                        if let Some(d) = data {
+                            // `raster` adds the samples as the next payload. A copy written whole on
+                            // `%_` lines after an earlier whole copy keeps the earlier one's entry.
+                            let next = self.payloads.len();
+                            self.whole_images.entry(Arc::as_ptr(d) as usize).or_insert_with(|| (d.clone(), next));
+                        }
+                        self.raster(samples, im.xf * fit);
+                    }
+                }
             }
         }
         if let Some(region) = &cut {
@@ -157,6 +311,7 @@ impl Writer<'_> {
             self.end_group("Q", Xy::PLAIN);
         }
         self.clip = cut;
+        true
     }
 
     /// An embedded image whose pixels `xf` places in the document: `%AI5_File:`,
@@ -230,6 +385,41 @@ impl Writer<'_> {
             "%AI17_Begin_Content_if_version_gt:24 5\n%AI26_BeginPlacedObjectPreview\n{pw} {ph} {} 32 17 {mark}\n%AI26_EndPlacedObjectPreview\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace",
             pw * 4
         );
+    }
+
+    /// The pixels of `blob` ([`Samples::of`]), read once in a save for each image the
+    /// [`SampleCache`] has room for.
+    fn samples(&mut self, blob: &ImageBlob) -> Option<Read> {
+        #[cfg(test)]
+        if LAST_SAMPLES_ONLY.with(Cell::get) {
+            if let Some((last, read)) = &self.read_samples.last
+                && Arc::ptr_eq(&last.bytes, &blob.bytes)
+                && last.mime == blob.mime
+            {
+                return read.clone();
+            }
+            let read = Samples::of(blob).map(Arc::new);
+            self.read_samples.last = Some((blob.clone(), read.clone()));
+            return read;
+        }
+        if let Some(read) = self.read_samples.get(blob) {
+            return read;
+        }
+        let read = Samples::of(blob).map(Arc::new);
+        self.read_samples.keep(blob, read.clone());
+        read
+    }
+
+    /// The copy `w`, written as a window, written whole in its place, with fresh samples; its
+    /// window's samples are emptied.
+    pub(super) fn write_whole(&mut self, w: Windowed) {
+        let tail = self.body.split_off(w.at.end);
+        self.body.truncate(w.at.start);
+        if let Some(p) = self.payloads.get_mut(w.payload) {
+            *p = Vec::new();
+        }
+        self.raster(&w.samples.0, w.xf);
+        self.body.push_str(&tail);
     }
 
     /// Keep `bytes` to go in the program where the mark this returns is.

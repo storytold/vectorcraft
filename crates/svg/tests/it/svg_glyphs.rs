@@ -241,13 +241,10 @@ fn an_images_plain_href_decides_whether_it_is_an_svg_image() {
     let svg = vectorcraft_svg::base64_encode(
         br##"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#f00"/></svg>"##,
     );
-    let image = |href: &str, xlink: &str| {
-        format!(
-            r##"<image width="500" height="500" href="data:image/{href};base64,{}" xlink:href="data:image/{xlink};base64,{}"/>"##,
-            if href == "png" { &png } else { &svg },
-            if xlink == "png" { &png } else { &svg }
-        )
-    };
+    let data = |kind: &str| format!("data:image/{kind};base64,{}", if kind == "png" { &png } else { &svg });
+    let image = |href: &str, xlink: &str| format!(r##"<image width="500" height="500" href="{}" xlink:href="{}"/>"##, data(href), data(xlink));
+    // The same, `xlink:href` written first.
+    let xlink_first = |href: &str, xlink: &str| format!(r##"<image width="500" height="500" xlink:href="{}" href="{}"/>"##, data(xlink), data(href));
     let images = |inner: String| {
         let doc = format!(
             r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g id="glyph1"><path d="M0 0h1v-1z"/>{inner}</g></svg>"##
@@ -258,6 +255,38 @@ fn an_images_plain_href_decides_whether_it_is_an_svg_image() {
     };
     assert_eq!(images(image("png", "svg+xml")), 1, "the PNG stays");
     assert_eq!(images(image("svg+xml", "png")), 0, "the document goes");
+    assert_eq!(images(xlink_first("png", "svg+xml")), 1, "the PNG stays, its link written last");
+    assert_eq!(images(xlink_first("svg+xml", "png")), 0, "the document goes, its link written last");
+}
+
+/// A glyph draws what it refers to wherever its document defines it: here a sheet's `url()` to a
+/// gradient inside another glyph's element, which takes its stops from one in `defs`. The other
+/// glyph's own art is not drawn.
+#[test]
+fn a_glyph_draws_what_it_refers_to_from_anywhere_in_its_document() {
+    let doc = r##"<svg xmlns="http://www.w3.org/2000/svg"><style>.p { fill: url(#g) }</style>
+      <defs><linearGradient id="stops"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f"/></linearGradient></defs>
+      <g id="glyph2"><linearGradient id="g" href="#stops"/><path fill="#0f0" d="M0 0h10v-10z"/></g>
+      <g id="glyph5"><path class="p" d="M0 0h500v-500z"/></g>
+    </svg>"##;
+    let fills = fills(&art(doc, 5).unwrap());
+    let stops = fills.iter().find_map(|p| match p {
+        Paint::Gradient(g) => Some(g.gradient.stops.iter().map(|s| s.color).collect::<Vec<_>>()),
+        _ => None,
+    });
+    assert_eq!(stops, Some(vec![Color::rgb8(255, 0, 0), Color::rgb8(0, 0, 255)]), "{fills:?}");
+    assert!(!fills.contains(&Paint::solid(Color::rgb8(0, 255, 0))), "not the other glyph's art: {fills:?}");
+}
+
+/// A glyph in colors of its own doesn't use the text's because another glyph of its document does.
+#[test]
+fn another_glyphs_current_color_does_not_color_a_glyph() {
+    let doc = r##"<svg xmlns="http://www.w3.org/2000/svg">
+      <g id="glyph1"><path fill="#f00" d="M0 0h500v-500z"/></g>
+      <g id="glyph2"><path fill="currentColor" d="M0 0h500v-500z"/></g>
+    </svg>"##;
+    assert!(!glyph_art(doc.as_bytes(), 1, 1000.0, BLUE, None).unwrap().1);
+    assert!(glyph_art(doc.as_bytes(), 2, 1000.0, BLUE, None).unwrap().1);
 }
 
 /// A glyph's `<a>` draws its art but keeps no link: outlined text must not export a

@@ -158,8 +158,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         }
     });
     ui.add_space(4.0);
+    // Hidden for Export Selection, which writes the selected art alone.
     let selection = app.session.active().is_some_and(|st| !st.selection.is_empty());
-    if widgets::check(ui, tl!("Export Selected Art Only"), d.bool("selectedOnly") && selection, selection) {
+    if !d.bool(super::export_as::SELECTION_FIELD)
+        && widgets::check(ui, tl!("Export Selected Art Only"), d.bool("selectedOnly") && selection, selection)
+    {
         d.fields.insert("selectedOnly".into(), json!(!d.bool("selectedOnly")));
     }
     check(ui, d, "alterPaths", tl!("Alter Paths for Appearance"));
@@ -227,5 +230,5 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     app.ui.dxf_options = Value::Object(remembered.into_iter().flatten().collect());
     app.ui.dialog = None;
     let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
-    io::export(app, Some("dxf"), path, &params)
+    io::export(app, Some("dxf"), path, &super::export_as::exported(d, params))
 }

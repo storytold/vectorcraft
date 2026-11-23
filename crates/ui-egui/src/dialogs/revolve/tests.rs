@@ -52,6 +52,22 @@ impl Harness {
         }
     }
 
+    /// Scrolls the dialog's body to its end with the wheel over `text`, and lets the scroll finish.
+    fn scroll_to_end(&mut self, text: &str) {
+        let p = self.rect(text).center();
+        let wheel = Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -4000.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Default::default(),
+            source: egui::MouseWheelSource::Unknown,
+        };
+        self.frame(vec![Event::PointerMoved(p), wheel]);
+        for _ in 0..60 {
+            self.frame(vec![]);
+        }
+    }
+
     fn rect(&self, text: &str) -> Rect {
         self.texts.iter().find(|(s, _)| s == text).map(|(_, r)| *r).unwrap_or_else(|| panic!("missing text {text:?}"))
     }
@@ -59,6 +75,11 @@ impl Harness {
     /// Return the rectangle of the widget drawn under `Id::unique(id)` in the revolve test harness.
     fn response(&self, id: impl std::hash::Hash + std::fmt::Debug) -> Rect {
         self.ctx.read_response(Id::unique(id)).unwrap().rect
+    }
+
+    /// The open dialog's track cube.
+    fn cube_id(&self) -> Id {
+        super::super::three_d_classic::cube_id(&self.app.ui.dialog.as_ref().unwrap().kind)
     }
 
     fn click(&mut self, p: Pos2) {
@@ -83,6 +104,83 @@ impl Harness {
 
 fn button(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+#[test]
+fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    let mark = app.run("path.create", json!({"d":"M250 250L260 250L260 270L250 270Z"})).unwrap()["id"].clone();
+    app.run("threeD.addGraphic", json!({"name":"Mark","ids":[mark]})).unwrap();
+    app.run("path.create", json!({"d":"M50 50L150 50L150 150L50 150Z"})).unwrap();
+    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let mut h = Harness { app, ctx, screen: vec2(1280.0, 900.0), texts: vec![] };
+    h.settle();
+    h.click(h.rect("Map Art…").center());
+    assert!(h.app.ui.dialog.as_ref().unwrap().bool("__mapArt"), "Map Art… opens Map Art");
+    let count: usize = h.texts.iter().find_map(|(s, _)| s.strip_prefix("/ ")).and_then(|n| n.parse().ok()).expect("the surface count");
+    assert!(count >= 6, "a square's solid has at least six surfaces: {count}");
+    // The Symbol menu maps the symbol onto the surface shown, the first.
+    h.click(h.rect("None").center());
+    h.click(h.rect("Mark").center());
+    let maps = |h: &Harness| vectorcraft_effects::surface_maps(&json!({"mapArt": h.app.ui.dialog.as_ref().unwrap().fields.get("mapArt").cloned()}));
+    assert_eq!(maps(&h).iter().map(|m| (m.surface, m.symbol.as_str(), m.scale_x)).collect::<Vec<_>>(), [(1, "Mark", 100.0)]);
+    // The next surface has no map until it is given one; Scale to Fit fills the first.
+    h.click(h.rect(">").center());
+    assert_eq!(h.value("__mapSurface"), 2.0);
+    assert_eq!(maps(&h).len(), 1);
+    h.click(h.rect("<").center());
+    h.click(h.rect("Scale to Fit").center());
+    assert!(maps(&h)[0].scale_x > 100.0, "the 10-point art is scaled up to the 100-point cap: {:?}", maps(&h));
+    h.click(h.rect("Done").center());
+    assert!(!h.app.ui.dialog.as_ref().unwrap().bool("__mapArt"), "Done goes back to the effect's options");
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let id = state.selection.objects[0];
+    let params = &state.doc.node(id).unwrap().appearance.effects[0].params;
+    assert_eq!(vectorcraft_effects::surface_maps(params).len(), 1, "{params}");
+    assert!(params.get("__mapArt").is_none() && params.get("__mapSurface").is_none(), "the dialog's own state stays out of the effect");
+}
+
+#[test]
+fn map_art_maps_no_more_surfaces_than_an_object_takes() {
+    let max = vectorcraft_effects::MAX_MAPS;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":300,"height":300})).unwrap();
+    let mark = app.run("path.create", json!({"d":"M250 250L260 250L260 270L250 270Z"})).unwrap()["id"].clone();
+    app.run("threeD.addGraphic", json!({"name":"Mark","ids":[mark]})).unwrap();
+    // A star with 36 points has 72 corners, so its solid has two caps and 72 walls.
+    let corners: Vec<String> = (0..72)
+        .map(|i| {
+            let (r, a) = (if i % 2 == 0 { 100.0 } else { 60.0 }, f64::from(i) * std::f64::consts::TAU / 72.0);
+            format!("{:.3} {:.3}", 150.0 + r * a.cos(), 150.0 + r * a.sin())
+        })
+        .collect();
+    app.run("path.create", json!({"d": format!("M{}Z", corners.join(" L"))})).unwrap();
+    app.run("effect.dialog", json!({"effect":CLASSIC_EXTRUDE,"item":null})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let mut h = Harness { app, ctx, screen: vec2(1280.0, 900.0), texts: vec![] };
+    h.settle();
+    h.click(h.rect("Map Art…").center());
+    let count: usize = h.texts.iter().find_map(|(s, _)| s.strip_prefix("/ ")).and_then(|n| n.parse().ok()).expect("the surface count");
+    assert!(count > max, "{count} surfaces");
+    // Every map the object takes is used, and the surface shown has none.
+    let full: Vec<Value> = (1..=max).map(|surface| json!({"surface": surface, "symbol": "Mark"})).collect();
+    let d = h.app.ui.dialog.as_mut().unwrap();
+    d.fields.insert("mapArt".into(), json!(full));
+    d.fields.insert("__mapSurface".into(), json!(max + 1));
+    h.settle();
+    h.click(h.rect("None").center());
+    if h.texts.iter().any(|(s, _)| s == "Mark") {
+        h.click(h.rect("Mark").center());
+    }
+    let raw = h.app.ui.dialog.as_ref().unwrap().fields.get("mapArt").cloned().unwrap_or_default();
+    assert_eq!(raw.as_array().map(Vec::len), Some(max), "no map past the limit is written");
 }
 
 #[test]
@@ -338,17 +436,12 @@ fn classic_extrude_bevel_shows_its_options_and_applies_as_one_step() {
     }
     h.click(h.rect("Lighting").center());
     h.settle();
-    for text in [
-        "Surface",
-        "Plastic",
-        "Light Intensity",
-        "Ambient Light",
-        "Highlight Intensity",
-        "Highlight Size",
-        "Blend Steps",
-        "Shading Color",
-        "Draw Hidden Faces",
-    ] {
+    for text in ["Surface", "Plastic", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    // The lighting sphere makes the tab taller than the dialog's body, which scrolls.
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Highlight Intensity", "Highlight Size", "Blend Steps", "Shading Color", "Draw Hidden Faces"] {
         h.rect(text);
     }
     assert!(h.ctx.read_response(Id::unique(("revolve-reset", "highlightSize"))).unwrap().enabled());
@@ -399,7 +492,11 @@ fn classic_revolve_shows_its_options_and_applies_as_one_step() {
     }
     h.click(h.rect("Lighting").center());
     h.settle();
-    for text in ["Surface", "Plastic", "Light Intensity", "Ambient Light", "Highlight Size", "Blend Steps", "Shading Color"] {
+    for text in ["Surface", "Plastic", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Highlight Size", "Blend Steps", "Shading Color"] {
         h.rect(text);
     }
     assert!(!h.texts.iter().any(|(t, _)| t == "Draw Hidden Faces"), "every face is drawn");
@@ -437,7 +534,11 @@ fn classic_rotate_shows_its_options_and_applies_as_one_step() {
     assert!(!h.texts.iter().any(|(t, _)| t == "Object" || t == "Depth" || t == "Angle"), "no Object tab");
     h.click(h.rect("Lighting").center());
     h.settle();
-    for text in ["Surface", "Diffuse", "Light Intensity", "Ambient Light", "Blend Steps", "Shading Color"] {
+    for text in ["Surface", "Diffuse", "Move Light to Back", "Light Intensity"] {
+        h.rect(text);
+    }
+    h.scroll_to_end("Light Intensity");
+    for text in ["Ambient Light", "Blend Steps", "Shading Color"] {
         h.rect(text);
     }
     assert!(
@@ -460,6 +561,88 @@ fn classic_rotate_shows_its_options_and_applies_as_one_step() {
     assert_eq!(h.app.session.doc().unwrap().doc, before);
 }
 
+/// The classic effects' track cube: a drag on its face turns the object live and the presets show
+/// Custom, Escape during a drag puts the angles back, the ring turns Z alone, the arrow keys turn
+/// it with the keyboard focus, and OK keeps it all as one undo step. The newer effects have no cube.
+#[test]
+fn the_track_cube_turns_the_classic_effects_live_in_one_undo_step() {
+    use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, CLASSIC_ROTATE, EXTRUDE, ROTATE};
+    let square = "M100 100 L200 100 L200 200 L100 200 Z";
+    for effect in [EXTRUDE, ROTATE] {
+        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+        h.settle();
+        assert!(!h.texts.iter().any(|(t, _)| t == "Track cube"), "{effect} has no track cube");
+    }
+    for effect in [CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
+        let mut h = Harness::with(square, effect, vec2(1400.0, 1000.0));
+        h.app.ui.dialog.as_mut().unwrap().fields.insert("__tab".into(), json!("rotation"));
+        h.settle();
+        h.rect("Track cube");
+    }
+    let mut h = Harness::with(square, CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    h.rect("Off-Axis Front");
+    let start = ["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k));
+    let cube = h.ctx.read_response(h.cube_id()).unwrap().rect;
+    // A face, dragged right: the object turns, the document previews it, and the preset is Custom.
+    h.drag(cube.center(), vec2(30.0, 0.0));
+    let turned = ["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k));
+    assert_ne!(turned, start, "the drag turned the object");
+    h.rect("Custom");
+    let fx = |h: &Harness| {
+        let state = h.app.session.doc().unwrap();
+        state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params.clone()
+    };
+    assert_eq!(fx(&h)["rotationY"].as_f64(), Some(turned[1]), "the preview follows the cube");
+    // Escape during a drag puts the angles back and keeps the dialog open.
+    let p = cube.center();
+    h.frame(vec![Event::PointerMoved(p), button(p, true)]);
+    h.frame(vec![Event::PointerMoved(p + vec2(0.0, 30.0))]);
+    h.frame(vec![Event::PointerMoved(p + vec2(0.0, 40.0))]);
+    assert_ne!(h.value("rotationX"), turned[0]);
+    h.frame(vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.frame(vec![button(p + vec2(0.0, 40.0), false)]);
+    h.settle();
+    assert!(h.app.ui.dialog.is_some(), "Escape ends the drag, not the dialog");
+    assert_eq!(["rotationX", "rotationY", "rotationZ"].map(|k| h.value(k)), turned);
+    // The ring turns in the screen plane: Z alone.
+    let top = pos2(cube.center().x, cube.center().y - 53.5);
+    h.drag(top, vec2(12.0, 2.0));
+    assert_eq!((h.value("rotationX"), h.value("rotationY")), (turned[0], turned[1]));
+    assert!(h.value("rotationZ") > turned[2], "clockwise: {} -> {}", turned[2], h.value("rotationZ"));
+    // With the keyboard focus (the drags gave it), Right turns about the screen's vertical axis.
+    let z = h.value("rotationZ");
+    assert!(h.ctx.memory(|m| m.has_focus(h.cube_id())), "the drag gave the cube the keyboard focus");
+    h.frame(vec![Event::Key { key: egui::Key::PageUp, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.settle();
+    assert!((h.value("rotationZ") - (z - 1.0)).abs() < 0.011, "Page Up turns 1° counterclockwise");
+    let y = h.value("rotationY");
+    h.frame(vec![Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    h.settle();
+    assert_ne!(h.value("rotationY"), y, "Right turns the cube");
+    let last = h.value("rotationZ");
+    dialogs::confirm(&mut h.app).unwrap();
+    assert_eq!(fx(&h)["rotationZ"].as_f64(), Some(last));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
+}
+
+/// A mixed rotation (the 3D and Materials panel's selected effects differ) leaves the cube off.
+#[test]
+fn the_track_cube_is_off_while_a_rotation_is_mixed() {
+    use vectorcraft_effects::CLASSIC_ROTATE;
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", CLASSIC_ROTATE, vec2(1400.0, 1000.0));
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("rotationX".into(), Value::Null);
+    h.settle();
+    let cube = h.ctx.read_response(h.cube_id()).unwrap().rect;
+    h.drag(cube.center(), vec2(30.0, 0.0));
+    let d = h.app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("rotationX"), Some(&Value::Null));
+    assert!(!h.ctx.read_response(h.cube_id()).unwrap().sense.senses_drag());
+}
+
 #[test]
 fn extrude_bevel_options_enable_with_a_bevel_shape() {
     let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
@@ -470,6 +653,42 @@ fn extrude_bevel_options_enable_with_a_bevel_shape() {
     h.settle();
     assert!(h.ctx.read_response(Id::unique(("revolve-reset", "bevelWidth"))).unwrap().enabled());
     assert_eq!(h.response(("revolve-reset", "bevelWidth")), width);
+}
+
+#[test]
+fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
+    let mut h = Harness::with("M100 100 L200 100 L200 200 L100 200 Z", vectorcraft_effects::EXTRUDE, vec2(1400.0, 1000.0));
+    let before = h.app.session.doc().unwrap().doc.clone();
+    h.settle();
+    let enabled = |h: &Harness| h.ctx.read_response(Id::unique("revolve-reset-bevel")).unwrap().enabled();
+    assert!(!enabled(&h), "every bevel setting at its default: Reset is off");
+    let changed = json!({"bevel": "step", "bevelWidth": 12.0, "bevelHeight": 3.0, "bevelRepeat": 4, "bevelSpace": 30.0, "bevelInside": true, "bevelBothSides": true, "depth": 90.0, "twist": 45.0, "rotationX": 10.0});
+    h.app.ui.dialog.as_mut().unwrap().fields.extend(changed.as_object().unwrap().clone());
+    h.settle();
+    assert!(enabled(&h));
+    h.click(h.response("revolve-reset-bevel").center());
+    let defaults = vectorcraft_effects::default_params(vectorcraft_effects::EXTRUDE).unwrap();
+    let dialog = h.app.ui.dialog.as_ref().unwrap();
+    for key in ["bevel", "bevelWidth", "bevelHeight", "bevelRepeat", "bevelSpace", "bevelInside", "bevelBothSides"] {
+        assert_eq!(dialog.fields.get(key), defaults.get(key), "reset: {key}");
+    }
+    for key in ["depth", "twist", "rotationX"] {
+        assert_eq!(dialog.fields.get(key), changed.get(key), "kept: {key}");
+    }
+    assert!(!enabled(&h), "Reset turns itself off");
+    // One bevel setting off its default is enough to turn Reset on again.
+    h.app.ui.dialog.as_mut().unwrap().fields.insert("bevelBothSides".into(), json!(true));
+    h.settle();
+    assert!(enabled(&h));
+    dialogs::confirm(&mut h.app).unwrap();
+    let state = h.app.session.doc().unwrap();
+    let params = vectorcraft_effects::merged_params(
+        vectorcraft_effects::EXTRUDE,
+        &state.doc.node(state.selection.objects[0]).unwrap().appearance.effects[0].params,
+    );
+    assert_eq!((params["depth"].clone(), params["bevelBothSides"].clone(), params["bevel"].clone()), (json!(90.0), json!(true), json!("none")));
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(h.app.session.doc().unwrap().doc, before);
 }
 
 #[test]
@@ -549,6 +768,27 @@ fn every_3d_dialog_has_color_and_reset_all_restores_white() {
         h.click(h.response("revolve-reset-all").center());
         assert_eq!(h.app.ui.dialog.as_ref().unwrap().str("lightColor"), "#ffffff");
         dialogs::confirm(&mut h.app).unwrap();
+    }
+}
+
+#[test]
+fn reset_all_keeps_map_art_and_its_options() {
+    for effect in [CLASSIC_EXTRUDE, CLASSIC_REVOLVE] {
+        let mut h = Harness::with("M100 100L200 100L200 200L100 200Z", effect, vec2(1280.0, 900.0));
+        h.settle();
+        let maps = json!([{"surface": 1, "symbol": "Mark"}]);
+        let d = h.app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("mapArt".into(), maps.clone());
+        d.fields.insert("mapShade".into(), json!(true));
+        d.fields.insert("mapInvisible".into(), json!(true));
+        d.fields.insert("rotationX".into(), json!(40.0));
+        h.settle();
+        h.click(h.response("revolve-reset-all").center());
+        let d = h.app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.f64("rotationX", 0.0), -21.88, "{effect}: the view is reset");
+        assert_eq!(d.fields.get("mapArt"), Some(&maps), "{effect}: the maps stay");
+        assert!(d.bool("mapShade") && d.bool("mapInvisible"), "{effect}: Shade Artwork and Invisible Geometry stay");
+        dialogs::cancel(&mut h.app);
     }
 }
 

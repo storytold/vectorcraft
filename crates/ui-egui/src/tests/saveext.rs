@@ -89,7 +89,13 @@ fn save_panels_show_the_file_type_they_write() {
     app.run("shortcuts.export", json!({})).unwrap();
     assert_eq!(last_shown(&shown), FilePick::filters([("Shortcut sets", &["json"][..])]), "Keyboard Shortcuts › Export…");
     app.run("shortcuts.exportText", json!({})).unwrap();
-    assert_eq!(last_shown(&shown), FilePick::filters([("Text", &["txt"][..])]), "Keyboard Shortcuts › Export Text…");
+    assert_eq!(
+        last_shown(&shown),
+        FilePick::filters([("Text", &["txt"][..]), ("Shortcut sheet", &["pdf"][..]), ("CSV", &["csv"][..])]),
+        "Keyboard Shortcuts › Export Text…"
+    );
+    app.run("shortcuts.exportText", json!({"format": "sheet"})).unwrap();
+    assert_eq!(last_shown(&shown), FilePick::filters([("Shortcut sheet", &["pdf"][..])]), "shortcuts.exportText with a format");
     let presets = [
         ("pdf.preset.save", json!({"name": "Mine"}), "pdf.preset.export", "PDF presets", pdfcmds::PRESET_EXTS),
         ("print.presets.save", json!({"name": "Mine"}), "print.presets.export", "Print presets", printpresets::PRESET_EXTS),
@@ -378,6 +384,12 @@ fn every_write_through_a_save_panel_asks_before_replacing() {
         let d = app.ui.dialog.clone().expect(cmd);
         assert_eq!((d.kind.as_str(), d.str("path")), (dialogs::confirm::REPLACE, path.to_string()), "{cmd}");
         dialogs::confirm(&mut app).unwrap();
+        // Export Selection without params continues in the format's options, whose OK writes it.
+        if cmd == "document.exportSelection" {
+            assert_eq!(app.ui.dialog.as_ref().map(|d| (d.kind.as_str(), d.str("path"))), Some(("pngOptions", path.to_string())), "{cmd}");
+            assert!(w.borrow().is_empty(), "{cmd}: nothing is written before the options' OK");
+            dialogs::confirm(&mut app).unwrap();
+        }
         assert_eq!(last(&w), path, "{cmd}");
     }
     // Export As: the question's OK picks the file again, and PNG Options follows.
@@ -480,5 +492,8 @@ fn an_export_keeps_a_typed_extension_of_the_format_it_writes() {
     let (mut app, w) = saving_app("/tmp/sel.pdf");
     app.run("select.all", json!({})).unwrap();
     app.run("document.exportSelection", json!({})).unwrap();
+    // Save PDF follows the save panel, and its OK writes the file.
+    assert_eq!(app.ui.dialog.as_ref().map(|d| (d.kind.as_str(), d.str("path"))), Some(("savePdf", "/tmp/sel.pdf".to_string())));
+    dialogs::confirm(&mut app).unwrap();
     assert_eq!(last(&w), "/tmp/sel.pdf", "Export Selection takes its format from the typed name");
 }

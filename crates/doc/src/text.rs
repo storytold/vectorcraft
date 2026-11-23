@@ -9,6 +9,8 @@ use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, Li
 mod area;
 mod char_style;
 mod composite;
+mod file_fonts;
+mod kinsoku_set;
 mod object;
 mod para_style;
 mod runs;
@@ -18,23 +20,27 @@ mod wrap;
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
 pub use char_style::{
-    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, MAX_AKI, MAX_WARICHU_GAP, ScriptMetrics, WARICHU_LINES,
-    WARICHU_SCALE, WarichuAlign,
+    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, GlyphForm, MAX_AKI, MAX_DIACRITIC_POSITION, MAX_TSUME,
+    MAX_WARICHU_GAP, ScriptMetrics, WARICHU_LINES, WARICHU_SCALE, WarichuAlign,
 };
 pub use composite::{
-    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
-    CompositeParts,
+    COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX, CharClass,
+    CompositeClass, CompositeClasses, CompositeFont, CompositePart, CompositeParts, CustomCharSet,
 };
+pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFontFace, FileFonts, MAX_FILE_FONTS, text_hash};
+pub(crate) use kinsoku_set::read_sets as read_kinsoku_sets;
+pub use kinsoku_set::{KINSOKU_BUILT_IN, KINSOKU_CATEGORY_MAX, KINSOKU_NAME_MAX, KINSOKU_SEQUENCE, KINSOKU_SETS_MAX, KinsokuSet};
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
     Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,
 };
+pub use runs::PATH_LEAD_MAX;
 pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef, TypeAntiAlias};
 pub use tabs_lists::{
-    Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
-    TabStop,
+    Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, MAX_LIST_START, NumberStyle, ParaList,
+    TabAlign, TabStop,
 };
-pub use wrap::{resolve_wrap, wrap_work};
+pub use wrap::{resolve_wrap, wrap_copy_units, wrap_outline, wrap_sources, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///
@@ -66,6 +72,12 @@ pub struct TextObject {
     /// it on a frame that leaves its thread and on a copy. Not saved.
     #[serde(skip)]
     pub first_para_continues: bool,
+    /// Threaded text whose first paragraph continues ([`TextObject::first_para_continues`]): the
+    /// last character of that paragraph in the frames before that a repeat mark could stand for
+    /// (Kurikaeshi Moji Shori), or None. The engine sets it with `first_para_continues`; layout
+    /// reads it only while `first_para_continues` is on. Not saved.
+    #[serde(skip)]
+    pub first_para_lead: Option<char>,
     /// Area Type Options (area type only).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub area: AreaOptions,
@@ -121,6 +133,10 @@ pub struct TextObject {
     /// file saves the count only when it is not 0.
     #[serde(default, rename = "listCount", skip_serializing_if = "crate::skip::is_default")]
     pub list_count: u32,
+    /// The fonts the file this type came from carried for fonts that aren't available here,
+    /// which draw it until its text is edited ([`FileFonts`]); `None` for other type.
+    #[serde(default, rename = "fileFonts", skip_serializing_if = "Option::is_none")]
+    pub file_fonts: Option<Box<FileFonts>>,
     /// Threaded text: as [`Self::list_count`], the counts the earlier frames carry into this frame
     /// at list levels 2 on, level 2 first ([`ListCounts::from_parts`]). Empty when they are all 0,
     /// and the file saves them only when not empty. A file's longer list opens with the first 8.

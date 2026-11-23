@@ -33,12 +33,12 @@ const STRIP_BUTTON: egui::Vec2 = vec2(32.0, PITCH);
 
 /// The Basic toolbar: (category, slots); each slot is a flyout group (first = default).
 pub const BASIC: &[(&str, &[&[&str]])] = &[
-    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "magicWand"]]),
+    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "enclosingLasso", "magicWand"]]),
     (
         "Shapes",
         &[
-            &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "spiral", "rectangularGrid", "polarGrid", "flare"],
-            &["ellipse"],
+            &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "threePointArc", "spiral", "rectangularGrid", "polarGrid", "flare"],
+            &["ellipse", "circle", "curvatureCircle"],
             &["polygon"],
             &["shaper"],
         ],
@@ -47,9 +47,9 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         "Draw",
         &[
             &["pencil", "smooth", "pathEraser", "join"],
-            &["eraser", "scissors", "knife", "mirrorCut", "lineCut", "rectCut"],
+            &["eraser", "scissors", "knife", "trimAtCrossings", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
-            &["pen", "addAnchor", "deleteAnchor", "anchorPoint"],
+            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen"],
             &["curvature"],
         ],
     ),
@@ -58,7 +58,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         &[
             &["width", "warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"],
             &["rotate", "reflect", "scale", "shear", "reshape", "freeTransform", "puppetWarp"],
-            &["shapeBuilder", "livePaintBucket", "livePaintSelection", "blend"],
+            &["shapeBuilder", "livePaintBucket", "fillArea", "livePaintSelection", "blend"],
             &["dimension"],
         ],
     ),
@@ -112,8 +112,22 @@ pub(crate) fn docked_rect_id() -> egui::Id {
     egui::Id::unique("toolbar-docked-rect")
 }
 
-fn panel_width(ui: &crate::state::UiState) -> f32 {
-    if ui.toolbar_double { 80.0 } else { WIDTH }
+/// Geometry of the main Tools panel only; flyouts and custom toolbars keep their own metrics.
+struct ToolsMetrics {
+    cell: egui::Vec2,
+    well: egui::Vec2,
+    panel_width: f32,
+}
+
+fn main_metrics(ui: &crate::state::UiState) -> ToolsMetrics {
+    let (cell, well) = if ui.toolbar_compact { (vec2(30.0, 25.0), vec2(26.0, 23.0)) } else { (vec2(36.0, PITCH - 1.0), vec2(30.0, 27.5)) };
+    let panel_width = match (ui.toolbar_compact, ui.toolbar_double) {
+        (false, false) => WIDTH,
+        (false, true) => 80.0,
+        (true, false) => 44.0,
+        (true, true) => 76.0,
+    };
+    ToolsMetrics { cell, well, panel_width }
 }
 
 /// Space reserved inside the protected canvas panel for a visible Tools panel docked beside the
@@ -121,27 +135,26 @@ fn panel_width(ui: &crate::state::UiState) -> f32 {
 /// none while Tools docks at the window's left edge.
 pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
     if (ui.tools_beside_canvas || ui.toolbar_right) && ui.toolbar && ui.screen_mode < 3 && ui.toolbar_pos.is_none() {
-        panel_width(ui) + 6.0
+        main_metrics(ui).panel_width + 6.0
     } else {
         0.0
     }
 }
 
-/// With `UiState::tools_beside_canvas` on, the canvas-edge redocking target, registered even
-/// while Tools floats, and the docked panel, which follows the canvas's left edge as dock columns
-/// resize, collapse or hide. With it off, `app.rs` draws Tools before the docking layout.
+/// The canvas-edge redocking targets, registered even while Tools floats, whichever way
+/// `UiState::tools_beside_canvas` is (a drop on the left one turns it on), and, with it on, the
+/// docked panel, which follows the canvas's left edge as dock columns resize, collapse or hide.
+/// With it off, `app.rs` draws Tools before the docking layout.
 ///
-/// The canvas's right edge, left of the panels, is a redocking target too, and Tools docked there
-/// (`UiState::toolbar_right`) is drawn at it whichever way the setting is.
+/// Tools docked on the canvas's right edge, left of the panels (`UiState::toolbar_right`), is
+/// drawn there whichever way the setting is.
 pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !app.ui.toolbar || app.ui.screen_mode >= 3 {
         return;
     }
     let canvas = ui.available_rect_before_wrap();
     crate::tools_float::set_right_dock_zone(ui.ctx(), canvas, WIDTH);
-    if app.ui.tools_beside_canvas {
-        crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
-    }
+    crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
     if app.ui.toolbar_pos.is_none() && (app.ui.tools_beside_canvas || app.ui.toolbar_right) {
         show(app, ui);
     }
@@ -158,9 +171,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The user's choice alone: a window too short for the tools scrolls them.
     let cols = if app.ui.toolbar_double { 2 } else { 1 };
-    // Two 36 pt buttons with 2 pt either side inside the border and separator line (at 76 they
-    // overran the right border).
-    let w = panel_width(&app.ui);
+    // Regular: two 36 pt cells need 80 pt to fit the frame. Compact: 30 pt cells fit in 76 pt,
+    // leaving room for the unchanged 66 pt drawing-mode footer and the frame.
+    let w = main_metrics(&app.ui).panel_width;
     match app.ui.toolbar_pos {
         None => {
             // The card's outer gap faces the edge it docks at.
@@ -220,6 +233,7 @@ pub fn show_custom(app: &mut VectorcraftApp, ctx: &egui::Context) {
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egui::Pos2>) {
     let t = Tokens::get(ui.ctx());
     let all = slots(app);
+    let metrics = main_metrics(&app.ui);
     let bounds = ui.max_rect();
     let editing = app.ui.tools_drawer && app.ui.drawer_toolbar.is_none();
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -293,13 +307,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                 // Centred on the panel's inside (`bounds`: within its border and, docked, the
                 // separator line egui reserves on its right), not on `WIDTH`, which sat them 2½ pt
                 // right of centre docked; nor on this row, which the scroll area starts ½ pt in.
-                ui.add_space((bounds.center().x - cols as f32 * 18.0 - ui.cursor().min.x).max(0.0));
+                ui.add_space((bounds.center().x - cols as f32 * (metrics.cell.x / 2.0) - ui.cursor().min.x).max(0.0));
                 for &k in &row {
                     let slot = &all[k].1;
                     let Some(shown) = tool_info(shown_tool(app, slot)).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
-                    let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
-                    let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
+                    let (rect, resp) = ui.allocate_exact_size(metrics.cell, Sense::click_and_drag());
+                    crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(None, slot.iter().map(|s| s.to_string()).collect()));
+                    let well = egui::Rect::from_center_size(rect.center(), metrics.well);
                     if is_active {
                         ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
                     } else if resp.hovered() {
@@ -352,7 +367,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                         app.select_tool(shown.id);
                     }
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(shown)));
-                    resp.on_hover_text(tip(shown));
+                    card::hover(resp, shown, card::Side::Beside, Some(tip(shown)));
                 }
             });
             i += row.len();
@@ -423,7 +438,7 @@ pub(crate) fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> 
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
 /// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser, Shape Builder and Objects
 /// on Path tools' are their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
-/// ([`crate::dialogs::shapes::open_options`]). The Type on a Path and Vertical Type on a Path
+/// ([`crate::dialogs::shapes::open_options`]) and the Circle tool's ([`crate::dialogs::circle_options::open`]). The Type on a Path and Vertical Type on a Path
 /// tools' are Type on a Path Options for the selected type on a path.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
@@ -454,13 +469,20 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::dialogs::perspective_options::open(app);
             Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
         }
-        "shapeBuilder" => Ok(crate::dialogs::shape_builder_options::open(app)),
+        // Fill Area uses the Shape Builder's Gap Detection and open-filled-path options.
+        "shapeBuilder" | "fillArea" => Ok(crate::dialogs::shape_builder_options::open(app)),
         // The Objects on Path tool: the Pivot and Rotate of the objects it attaches next.
         "objectsOnPath" => Ok(crate::dialogs::objects_on_path_options::open(app)),
         // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
         // drag and click.
         _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
-        // The Flare tool: its options, which draw the next flare (OK draws none).
+        // The Circle tool: what it shows while a circle is drawn, where its anchors go and how
+        // the third point is placed.
+        vectorcraft_tools::circle::ID => Ok(crate::dialogs::circle_options::open(app)),
+        // The Three-Point Arc tool: whether the third point gives a direction.
+        vectorcraft_tools::three_point_arc::ID => Ok(crate::dialogs::three_point_arc_options::open(app)),
+        // The Flare tool: its options, which draw the next flare (OK draws none); with flares
+        // selected, the first one's settings, and OK draws the selected flares again.
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),
@@ -496,13 +518,15 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 
 /// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps, Puppet
 /// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
-/// [`crate::panels::artboards::control_bar`].
-pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if crate::addons::shapes::control_bar(app, ui) {
+/// [`crate::panels::artboards::control_bar`]. Each label with its field or menu, and each button,
+/// shows only while the row has room for it and `reserve` after it, and the controls after one left
+/// out are left out too ([`crate::chrome::Fit`]).
+pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
+    if crate::addons::shapes::control_bar(app, ui, reserve) {
         return;
     }
     if app.session.tool_id() == "dimension" {
-        return crate::dialogs::dimension::controls(app, ui);
+        return crate::dialogs::dimension::controls(app, ui, Some(reserve));
     }
     /// (value, label) of each choice.
     type Choices = &'static [(&'static str, &'static str)];
@@ -511,62 +535,121 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         ("keep", "Keep:", &[("left", "Left"), ("right", "Right"), ("top", "Top"), ("bottom", "Bottom")]),
     ];
     if app.session.tool_id() == "puppetWarp" {
-        return puppet_warp_options(app, ui);
+        return puppet_warp_options(app, ui, reserve);
     }
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
-        return crop_options(app, ui);
+        return crop_options(app, ui, reserve);
     }
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
     let t = Tokens::get(ui.ctx());
     let opts = app.session.tool_options();
+    let mut fit = crate::chrome::Fit::new(reserve);
     for (key, label, choices) in MIRROR {
-        ui.label(egui::RichText::new(tl!(label)).size(12.0).color(t.text));
+        let text = egui::RichText::new(tl!(label)).size(12.0).color(t.text);
+        if !fit.room(ui, &[widgets::text_width(ui, text.clone()), MIRROR_DROPDOWN_WIDTH]) {
+            break;
+        }
+        ui.label(text);
         let cur = opts[key].as_str().unwrap_or_default();
         let shown = choices.iter().find(|(v, _)| *v == cur).map_or(cur, |(_, l)| *l);
         let labels: Vec<&str> = choices.iter().map(|(_, l)| *l).collect();
-        if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, 96.0).and_then(|i| choices.get(i)) {
+        if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, MIRROR_DROPDOWN_WIDTH).and_then(|i| choices.get(i)) {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
-/// Crop Image's box: its centre (X, Y) and size (W, H) in the general unit, set through the tool's
-/// `rect` option, then Apply (Enter) and Cancel (Escape).
-fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let set = app.session.tool_options()["rect"].as_array().and_then(|v| match v.iter().filter_map(Value::as_f64).collect::<Vec<_>>()[..] {
+/// The width of Mirror & Cut's Axis and Keep menus in the Control bar.
+const MIRROR_DROPDOWN_WIDTH: f32 = 96.0;
+
+/// Crop Image's cropping options: the cropped image's resolution (PPI: a list, with the
+/// resolutions above what the image allows disabled, or a typed value), the reference point, the
+/// box's X and Y (that point) and size (W, H) in the general unit with the link that keeps their
+/// proportions, all set through the tool's options; then Apply (Enter) and Cancel (Escape), each
+/// while the row has room for it and `reserve` after it.
+fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
+    use vectorcraft_tools::cropimage::{self as crop, PPI_CHOICES};
+    let opts = app.session.tool_options();
+    let set = opts["rect"].as_array().and_then(|v| match v.iter().filter_map(Value::as_f64).collect::<Vec<_>>()[..] {
         [x, y, w, h] => Some(vectorcraft_geom::Rect::new(x, y, x + w, y + h)),
         _ => None,
     });
-    let Some((_, _, r)) = app.session.active().and_then(|st| vectorcraft_tools::cropimage::crop_box(&st.doc, &st.selection, set)) else { return };
+    let Some((r, image, own, max)) = app.session.active().and_then(|st| {
+        let (id, image, r) = crop::crop_box(&st.doc, &st.selection, set)?;
+        let vectorcraft_doc::NodeKind::Image(im) = &st.doc.node(id)?.kind else { return None };
+        let (own, max) = crop::image_ppi(im);
+        Some((r, image, own, max.min(2400.0)))
+    }) else {
+        return;
+    };
+    let reference = opts["reference"].as_u64().filter(|v| *v <= 8).map_or(crop::CENTER, |v| v as usize);
+    let linked = opts["linked"].as_bool().unwrap_or(false);
     let t = Tokens::get(ui.ctx());
-    let units = app.session.general_unit();
-    let c = r.center();
-    for (k, lbl, v) in [("x", "X:", c.x), ("y", "Y:", c.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
-        widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
-        if let Some(nv) = widgets::num_field(ui, ("cb-crop", k), Some(v), units, 80.0) {
-            let (mut c, mut w, mut h) = (c, r.width(), r.height());
-            match k {
-                "x" => c.x = nv,
-                "y" => c.y = nv,
-                "width" => w = nv.max(0.0),
-                _ => h = nv.max(0.0),
-            }
-            let rect = [c.x - w / 2.0, c.y - h / 2.0, w, h];
-            app.run("tool.setOption", json!({ "key": "rect", "value": rect })).ok();
+    let set_option = |app: &mut VectorcraftApp, key: &str, value: Value| {
+        app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
+    };
+    // Resolution: the list's choices above the image's limit are disabled; a typed value is held to it.
+    let ppi = opts["ppi"].as_f64().unwrap_or(own);
+    let label = |v: f64| crate::i18n::fill_once(tl!("{n} ppi"), &[("n", &format!("{}", (v * 100.0).round() / 100.0))]);
+    let labels: Vec<String> = PPI_CHOICES.iter().map(|v| label(*v)).collect();
+    let names: Vec<&str> = labels.iter().map(String::as_str).collect();
+    let mut fit = crate::chrome::Fit::new(reserve);
+    let text = egui::RichText::new(tl!("PPI")).size(12.0).color(t.text_dim);
+    if fit.room(ui, &[widgets::text_width(ui, text.clone()), 80.0, 56.0]) {
+        widgets::field_label(ui, text);
+        let current = label(ppi);
+        if let Some(v) =
+            widgets::dropdown_with(ui, ("cb-crop", "ppi-list"), &current, &names, 80.0, |i| PPI_CHOICES.get(i).is_some_and(|v| *v <= max + 1e-6))
+                .and_then(|i| PPI_CHOICES.get(i))
+        {
+            set_option(app, "ppi", json!(v));
+        }
+        // An image's own resolution above the limit (a linked image's, or one past 2400 ppi) still
+        // shows as it is; an edit there sets at most the limit.
+        if let Some(v) = widgets::range_field(ui, ("cb-crop", "ppi"), ppi, 1.0..=max.max(ppi).max(1.0), "", 2, 56.0) {
+            set_option(app, "ppi", json!(v.min(max.max(1.0))));
         }
     }
-    ui.separator();
+    fit.separator(ui);
+    // The reference point locator is 23 pt square.
+    if fit.room(ui, &[23.0])
+        && let Some(i) = widgets::reference_point(ui, reference)
+    {
+        set_option(app, "reference", json!(i));
+    }
+    let units = app.session.general_unit();
+    let p = vectorcraft_geom::reference_point(r, reference);
+    for (k, lbl, v) in [("x", "X:", p.x), ("y", "Y:", p.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
+        let text = egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim);
+        let widths =
+            if k == "height" { vec![22.0, widgets::text_width(ui, text.clone()), 80.0] } else { vec![widgets::text_width(ui, text.clone()), 80.0] };
+        if !fit.room(ui, &widths) {
+            break;
+        }
+        if k == "height"
+            && widgets::icon_button(ui, if linked { "link" } else { "unlink" }, tl!("Constrain Width and Height Proportions"), linked, 22.0).clicked()
+        {
+            set_option(app, "linked", json!(!linked));
+        }
+        widgets::field_label(ui, text);
+        if let Some(nv) = widgets::num_field(ui, ("cb-crop", k), Some(v), units, 80.0)
+            && let Some(b) = crop::edited_box(r, image, reference, linked, k, nv)
+        {
+            set_option(app, "rect", json!([b.x0, b.y0, b.width(), b.height()]));
+        }
+    }
+    fit.separator(ui);
     for (label, key) in [(tl!("Apply"), ToolKey::Enter), (tl!("Cancel"), ToolKey::Escape)] {
-        if widgets::flat_button(ui, label, 64.0).clicked() {
+        if fit.room(ui, &[widgets::flat_button_fit_width(ui, label, 64.0)]) && widgets::flat_button_fit(ui, label, 64.0).clicked() {
             let view = app.view_info();
             let r = app.session.tool_key(key, Mods::default(), view);
             crate::canvas::apply_requests(app, r);
         }
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes, screen mode and Edit Toolbar, as
@@ -775,7 +858,7 @@ fn flyout_body(
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     ui.horizontal(|ui| {
         let rows = if floating {
-            ui.horizontal(|ui| tool_strip(ui, t, active, tools, locate))
+            ui.horizontal(|ui| tool_strip(ui, t, active, tools, toolbar, locate))
         } else {
             // A group taller than the window scrolls its rows (inside the frame's 1 pt border). The
             // rows' height is given, since the row this sits in starts one widget tall.
@@ -861,6 +944,9 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Op
             ui.painter().galley(pos2(r.right() - ROW_END - sc.size().x, r.center().y - sc.size().y / 2.0), sc, color);
         }
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(tool)));
+        // A row already shows the name and shortcut: its card adds the rest, and without one it has
+        // no tool tip.
+        let resp = card::hover(resp, tool, card::Side::Row, None);
         if resp.clicked() {
             chosen = Some(tool.id);
         }
@@ -915,11 +1001,19 @@ fn grab_id(toolbar: Option<&str>, key: &str) -> egui::Id {
 
 /// One icon button per tool, the active one lit, with its name and shortcut on hover. Returns the
 /// tool clicked and the button of `locate`.
-fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Option<&str>) -> (Option<&'static str>, Option<egui::Rect>) {
+fn tool_strip(
+    ui: &mut Ui,
+    t: &Tokens,
+    active: &str,
+    tools: &[String],
+    toolbar: Option<&str>,
+    locate: Option<&str>,
+) -> (Option<&'static str>, Option<egui::Rect>) {
     let mut chosen = None;
     let mut located = None;
     for tool in tools.iter().filter_map(|id| tool_info(id)) {
         let (r, resp) = ui.allocate_exact_size(STRIP_BUTTON, Sense::click());
+        crate::palette::note_spot(ui, r, || crate::palette::SpotAt::Strip(toolbar.map(str::to_string), tool.id.to_string()));
         let well = r.shrink(1.0);
         if active == tool.id {
             ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
@@ -929,7 +1023,7 @@ fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: O
         let ir = egui::Rect::from_center_size(r.center(), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), active == tool.id, tip(tool)));
-        if resp.on_hover_text(tip(tool)).clicked() {
+        if card::hover(resp, tool, card::Side::Below, Some(tip(tool))).clicked() {
             chosen = Some(tool.id);
         }
         if locate == Some(tool.id) {
@@ -1141,24 +1235,31 @@ fn floating_strips(app: &mut VectorcraftApp, ctx: &egui::Context, toolbar: Optio
 }
 
 /// The Puppet Warp tool's Control bar: Expand (how far the mesh reaches past the art), Show Mesh
-/// and Select All Pins.
-fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// and Select All Pins, each while the row has room for it and `reserve` after it.
+fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     let t = Tokens::get(ui.ctx());
     let opts = app.session.tool_options();
-    ui.label(egui::RichText::new(tl!("Expand:")).size(12.0).color(t.text));
-    let unit = app.session.general_unit();
-    if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
-        app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();
+    let mut fit = crate::chrome::Fit::new(reserve);
+    let text = egui::RichText::new(tl!("Expand:")).size(12.0).color(t.text);
+    if fit.room(ui, &[widgets::text_width(ui, text.clone()), 64.0]) {
+        ui.label(text);
+        let unit = app.session.general_unit();
+        if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
+            app.run("tool.setOption", json!({ "key": "expand", "value": v.clamp(0.0, 1000.0) })).ok();
+        }
     }
     let show = opts["showMesh"].as_bool().unwrap_or(true);
-    if widgets::check(ui, "Show Mesh", show, true) {
+    if fit.room(ui, &[widgets::choice_width(ui, "Show Mesh")]) && widgets::check(ui, "Show Mesh", show, true) {
         app.run("tool.setOption", json!({ "key": "showMesh", "value": !show })).ok();
     }
-    if widgets::flat_button(ui, "Select All Pins", 104.0).clicked() {
+    if fit.room(ui, &[widgets::flat_button_fit_width(ui, "Select All Pins", 104.0)])
+        && widgets::flat_button_fit(ui, "Select All Pins", 104.0).clicked()
+    {
         app.run("tool.setOption", json!({ "key": "selectAllPins", "value": true })).ok();
     }
-    crate::chrome::group_separator(ui);
+    fit.separator(ui);
 }
 
+pub(crate) mod card;
 #[cfg(test)]
 pub(crate) mod tests;

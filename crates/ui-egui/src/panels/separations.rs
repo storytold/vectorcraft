@@ -1,11 +1,13 @@
 //! Separations Preview panel: process plates C/M/Y/K plus spot plates with eye toggles (one visible
-//! plate renders as greyscale ink coverage; Alt-click an eye to show only that plate), and the
+//! plate renders as grayscale ink coverage; Alt-click an eye to show only that plate, and Alt-click
+//! the eye of the plate shown alone to show every plate), and the
 //! colour-management controls behind Edit → Color Settings… / Assign Profile… and View → Proof
-//! Setup (working spaces, intent, black-point compensation, proof target, gamut check).
+//! Setup (working spaces, color management policies, intent, black-point compensation, proof
+//! target, gamut check).
 
 use egui::{Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, Intent, ProfileKind};
+use vectorcraft_color::cms::{self, Intent, Policy, ProfileKind};
 use vectorcraft_render::proof;
 
 use crate::VectorcraftApp;
@@ -58,11 +60,11 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let vis = visible(&p.name);
                 let mut clicked = false;
                 ui.add_enabled_ui(on, |ui| {
-                    clicked = widgets::toggle_icon(ui, "eye", vis, 18.0, tl!("Show/hide plate (Alt-click: only this plate)"));
+                    clicked =
+                        widgets::toggle_icon(ui, "eye", vis, 18.0, tl!("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)"));
                 });
                 if clicked && on {
-                    let key = if alt { "only" } else { "toggle" };
-                    run(app, "view.separationsPreview", json!({ key: p.name }));
+                    run(app, "view.separationsPreview", eye_click(&p.name, alt));
                 }
                 let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
                 let q = |x: f32| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -72,6 +74,12 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         }
     });
+}
+
+/// The `view.separationsPreview` params for a click on plate `name`'s eye: with Alt, that plate
+/// alone, or every plate when it already shows alone; without, the plate shown or hidden.
+fn eye_click(name: &str, alt: bool) -> Value {
+    if alt { json!({"soloToggle": name}) } else { json!({"toggle": name}) }
 }
 
 /// A dropdown of the `kind` profiles after `extra` (a built-in entry, shown in the UI language);
@@ -100,8 +108,9 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, Load
-/// Profile… and Gamut Check, and the profile the active document is assigned.
+/// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, the RGB
+/// and CMYK color management policies, the Ask boxes of Profile Mismatches and Missing Profiles,
+/// Load Profile… and Gamut Check, and the profile the active document is assigned.
 fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::working_settings();
     widgets::section_header(ui, tl!("Color Settings"));
@@ -127,6 +136,37 @@ fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::check(ui, tl!("Use Black Point Compensation"), st.bpc, true) {
         run(app, "edit.colorSettings", json!({"bpc": !st.bpc}));
     }
+    // Color management policies: what opening a document does with a profile it is tagged with
+    // that is not the working space.
+    let policies: [(&str, &str, Policy, &[Policy]); 2] =
+        [("rgbPolicy", tl!("RGB Policy:"), st.rgb_policy, &Policy::RGB), ("cmykPolicy", tl!("CMYK Policy:"), st.cmyk_policy, &Policy::CMYK)];
+    for (key, label, current, choices) in policies {
+        ui.horizontal(|ui| {
+            ui.label(label);
+            let labels: Vec<&str> = choices.iter().map(|p| policy_label(*p)).collect();
+            if let Some(i) = widgets::dropdown_names(ui, key, policy_label(current), &labels, 210.0)
+                && let Some(p) = choices.get(i)
+            {
+                run(app, "edit.colorSettings", json!({ key: p.id() }));
+            }
+        });
+    }
+    // Profile Mismatches and Missing Profiles: what opening and pasting ask about.
+    let asks: [(&str, &str, &str, bool); 3] = [
+        ("askMismatchOpen", tl!("Profile Mismatches:"), tl!("Ask When Opening"), st.ask_mismatch_open),
+        ("askMismatchPaste", "", tl!("Ask When Pasting"), st.ask_mismatch_paste),
+        ("askMissingOpen", tl!("Missing Profiles:"), tl!("Ask When Opening"), st.ask_missing_open),
+    ];
+    for (key, heading, label, on) in asks {
+        if !heading.is_empty() {
+            ui.label(heading);
+        }
+        ui.push_id(key, |ui| {
+            if widgets::check(ui, label, on, true) {
+                run(app, "edit.colorSettings", json!({ key: !on }));
+            }
+        });
+    }
     ui.horizontal(|ui| {
         if widgets::flat_button(ui, tl!("Load Profile…"), 110.0).clicked() {
             // Its file dialog, shown off the UI thread, loads the profile when it answers.
@@ -147,16 +187,109 @@ fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
-    if let Some(d) = app.session.active() {
-        let (_, cmyk) = vectorcraft_engine::cmd::colormgmt::doc_profiles(&d.doc);
-        const WORKING: &str = "Working CMYK (don't tag)";
-        ui.horizontal(|ui| {
-            ui.label(tl!("Assign:"));
-            if let Some(n) = profile_dropdown(ui, "cms-assign", cmyk.as_deref().unwrap_or(WORKING), ProfileKind::Cmyk, Some(WORKING)) {
-                let v = if n == WORKING { Value::Null } else { Value::String(n) };
-                run(app, "edit.assignProfile", json!({ "cmyk": v }));
+    if let Some(row) = app.session.active().map(|d| AssignRow::of(&d.doc)) {
+        assign_rows(app, ui, &row);
+    }
+}
+
+/// Edit › Assign Profile…'s three choices for the active document's color mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AssignChoice {
+    /// Don't Color Manage This Document: no profile, so the colors show through the working space.
+    None,
+    /// The working space of the mode, assigned to the document as its profile.
+    Working,
+    /// Another profile of the mode's kind.
+    Profile,
+}
+
+/// What the Assign rows show for a document: the profile of its color mode (`key` is the
+/// `edit.assignProfile` param), the working space of that mode, and the other profiles of that kind.
+#[derive(Debug)]
+struct AssignRow {
+    key: &'static str,
+    mode: vectorcraft_doc::ColorMode,
+    assigned: Option<String>,
+    working: String,
+    others: Vec<String>,
+}
+
+impl AssignRow {
+    fn of(doc: &vectorcraft_doc::Document) -> Self {
+        let (rgb, cmyk) = vectorcraft_engine::cmd::colormgmt::doc_profiles(doc);
+        let st = cms::working_settings();
+        let (key, kind, assigned, working) = match doc.color_mode {
+            vectorcraft_doc::ColorMode::Rgb => ("rgb", ProfileKind::Rgb, rgb, st.rgb),
+            vectorcraft_doc::ColorMode::Cmyk => ("cmyk", ProfileKind::Cmyk, cmyk, st.cmyk),
+        };
+        let working = cms::canonical_name(&working).to_string();
+        let others = cms::profiles().into_iter().filter(|p| p.kind == kind && p.name != working).map(|p| p.name).collect();
+        AssignRow { key, mode: doc.color_mode, assigned, working, others }
+    }
+
+    fn choice(&self) -> AssignChoice {
+        match &self.assigned {
+            None => AssignChoice::None,
+            Some(n) if *n == self.working => AssignChoice::Working,
+            Some(_) => AssignChoice::Profile,
+        }
+    }
+
+    /// The `edit.assignProfile` params for `choice` (with `profile`, the profile picked for
+    /// [`AssignChoice::Profile`], else the first of the list), or `None` when the document already
+    /// has it.
+    fn params(&self, choice: AssignChoice, profile: Option<&str>) -> Option<Value> {
+        let v = match choice {
+            AssignChoice::None => Value::Null,
+            AssignChoice::Working => json!(self.working),
+            AssignChoice::Profile => json!(profile.or(self.others.first().map(String::as_str))?),
+        };
+        (v != json!(self.assigned)).then(|| json!({ self.key: v }))
+    }
+}
+
+/// The Assign rows: Don't Color Manage This Document, the working space of the document's color
+/// mode, and Profile with a list of the other profiles of that kind. A pick runs `edit.assignProfile`.
+fn assign_rows(app: &mut VectorcraftApp, ui: &mut Ui, row: &AssignRow) {
+    let choice = row.choice();
+    let mut pick = None;
+    ui.label(tl!("Assign:"));
+    if widgets::radio(ui, tl!("Don't Color Manage This Document"), choice == AssignChoice::None, true) {
+        pick = row.params(AssignChoice::None, None);
+    }
+    let working = match row.mode {
+        vectorcraft_doc::ColorMode::Rgb => tl!("Working RGB: {name}"),
+        vectorcraft_doc::ColorMode::Cmyk => tl!("Working CMYK: {name}"),
+    };
+    let working = crate::i18n::fmt(working, &[("name", &row.working)]);
+    if widgets::radio(ui, &working, choice == AssignChoice::Working, true) {
+        pick = row.params(AssignChoice::Working, None);
+    }
+    ui.horizontal(|ui| {
+        let on = choice == AssignChoice::Profile;
+        let shown = if on { row.assigned.as_deref() } else { row.others.first().map(String::as_str) };
+        if widgets::radio(ui, tl!("Profile:"), on, !row.others.is_empty()) {
+            pick = row.params(AssignChoice::Profile, shown);
+        }
+        let refs: Vec<&str> = row.others.iter().map(String::as_str).collect();
+        ui.add_enabled_ui(!refs.is_empty(), |ui| {
+            if let Some(i) = widgets::dropdown_names(ui, "cms-assign", shown.unwrap_or_default(), &refs, 210.0) {
+                pick = row.params(AssignChoice::Profile, refs.get(i).copied());
             }
         });
+    });
+    if let Some(p) = pick {
+        run(app, "edit.assignProfile", p);
+    }
+}
+
+/// The name of color management policy `p` in the UI language.
+fn policy_label(p: Policy) -> &'static str {
+    match p {
+        Policy::Off => tl!("Off"),
+        Policy::PreserveEmbedded => tl!("Preserve Embedded Profiles"),
+        Policy::Convert => tl!("Convert to Working Space"),
+        Policy::PreserveNumbers => tl!("Preserve Numbers"),
     }
 }
 
@@ -233,6 +366,77 @@ mod tests {
         assert_eq!(menu, panel);
         assert!(panel.iter().any(|(id, _)| id == "tritanopia"));
         assert!(panel.iter().all(|(id, _)| cms::ProofTarget::parse(id).is_some_and(|t| t.id() == *id)));
+    }
+
+    /// An Alt-click on a plate's eye sends `soloToggle`, which `view.separationsPreview` takes, and
+    /// a plain click sends `toggle`.
+    #[test]
+    fn an_alt_click_on_a_plates_eye_sends_solo_toggle() {
+        assert_eq!(eye_click("Cyan", true), json!({"soloToggle": "Cyan"}));
+        assert_eq!(eye_click("Brand Orange", false), json!({"toggle": "Brand Orange"}));
+        let spec = vectorcraft_engine::cmd::command_specs().iter().find(|c| c.id == "view.separationsPreview");
+        assert!(spec.is_some_and(|c| c.params.contains("soloToggle?:")));
+    }
+
+    /// Assign Profile's three choices: no profile, the working space assigned as the profile, or
+    /// another profile; a choice the document already has runs nothing.
+    #[test]
+    fn assign_choices_give_the_profile_params_of_the_color_mode() {
+        let row = |assigned: Option<&str>| AssignRow {
+            key: "rgb",
+            mode: vectorcraft_doc::ColorMode::Rgb,
+            assigned: assigned.map(str::to_string),
+            working: "W".into(),
+            others: vec!["A".into(), "B".into()],
+        };
+        assert_eq!(row(None).choice(), AssignChoice::None);
+        assert_eq!(row(Some("W")).choice(), AssignChoice::Working);
+        assert_eq!(row(Some("B")).choice(), AssignChoice::Profile);
+        assert_eq!(row(None).params(AssignChoice::None, None), None);
+        assert_eq!(row(Some("B")).params(AssignChoice::None, None), Some(json!({"rgb": null})));
+        assert_eq!(row(None).params(AssignChoice::Working, None), Some(json!({"rgb": "W"})));
+        assert_eq!(row(Some("W")).params(AssignChoice::Working, None), None);
+        assert_eq!(row(None).params(AssignChoice::Profile, None), Some(json!({"rgb": "A"})));
+        assert_eq!(row(Some("W")).params(AssignChoice::Profile, Some("B")), Some(json!({"rgb": "B"})));
+        assert_eq!(row(Some("B")).params(AssignChoice::Profile, Some("B")), None);
+        let none = AssignRow { others: vec![], ..row(None) };
+        assert_eq!(none.params(AssignChoice::Profile, None), None, "no other profile to pick");
+    }
+
+    /// The Assign rows follow the document's color mode: an RGB document lists the RGB working space
+    /// and the RGB profiles and assigns its RGB profile, a CMYK document the CMYK ones, and the other
+    /// model's profile stays as it was.
+    #[test]
+    fn assign_rows_follow_the_document_color_mode() {
+        fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+            match s {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        for (mode, key, kind, other) in [("rgb", "rgb", ProfileKind::Rgb, "cmyk"), ("cmyk", "cmyk", ProfileKind::Cmyk, "rgb")] {
+            app.run("edit.assignProfile", json!({"rgb": null, "cmyk": null})).unwrap();
+            app.run("file.documentColorMode", json!({"mode": mode, "convert": false})).unwrap();
+            let row = AssignRow::of(&app.session.active().unwrap().doc);
+            assert_eq!((row.key, row.choice()), (key, AssignChoice::None));
+            assert!(!row.others.is_empty() && !row.others.contains(&row.working));
+            assert!(row.others.iter().chain([&row.working]).all(|n| cms::profile(n).is_some_and(|p| p.kind == kind)), "{row:?}");
+            let ctx = egui::Context::default();
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| settings_rows(&mut app, ui));
+            out.textures_delta.clear();
+            let mut shown = vec![];
+            out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+            let working = format!("Working {}: {}", mode.to_uppercase(), row.working);
+            assert!(shown.contains(&working) && shown.iter().any(|t| t == "Don't Color Manage This Document"), "{shown:?}");
+            app.run("edit.assignProfile", row.params(AssignChoice::Profile, None).unwrap()).unwrap();
+            let doc = &app.session.active().unwrap().doc;
+            let (rgb, cmyk) = vectorcraft_engine::cmd::colormgmt::doc_profiles(doc);
+            let (mine, theirs) = if key == "rgb" { (rgb, cmyk) } else { (cmyk, rgb) };
+            assert_eq!((mine.as_deref(), theirs), (row.others.first().map(String::as_str), None), "{other} stays untagged");
+        }
     }
 
     /// #6419: Edit › Assign Profile… and Color Settings… show the panel scrolled to its Color

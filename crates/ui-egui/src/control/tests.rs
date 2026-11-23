@@ -306,7 +306,7 @@ fn a_spaced_absolute_path_outside_the_read_root_is_left_out() {
         assert!(super::unreadable_path_like(" /outside/root/x"));
         assert!(super::unreadable_path_like("\tfile:///outside/root/x "));
         assert!(!super::unreadable_path_like(&inside), "{inside}");
-        super::leave_out_unreadable_params(params.as_object_mut().unwrap());
+        super::leave_out_unreadable_params(params.as_object_mut().unwrap(), vectorcraft_engine::cmd::ParamsPlace::top(None));
     });
     assert_eq!(params, json!({"keep": inside, "list": []}));
 }
@@ -337,8 +337,72 @@ fn a_url_naming_another_host_stays_without_a_read_root() {
     assert!(super::readable_value("file://host/share/a.svg"));
     let mut params = json!({"path": "file://host/share/a.svg", "list": ["file://host/share/b.svg"]});
     let fields = params.as_object_mut().unwrap();
-    super::leave_out_unreadable_params(fields);
+    super::leave_out_unreadable_params(fields, vectorcraft_engine::cmd::ParamsPlace::top(None));
     assert_eq!(params, json!({"path": "file://host/share/a.svg", "list": ["file://host/share/b.svg"]}));
+}
+
+/// Under a read root, a recorded step loses a relative path outside it under a key that names a file
+/// or a folder as its command reads it (also inside a `command.batch` step), and a `file:` URL outside
+/// it under any key. A web link, a choice or a switch whose name ends like a path key's, and a key
+/// that names part of the document in its command, keep their values; the same key in a command that
+/// doesn't take it as a param names a file.
+#[test]
+fn recorded_steps_filter_only_unreadable_locations() {
+    use vectorcraft_engine::cmd::ParamsPlace;
+    let root = std::env::temp_dir().join(format!("vc-recorded-locations-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let steps = [
+        ("document.compare", json!({"diffPath": "elsewhere/a.svg", "directory": "elsewhere", "keep": 1})),
+        ("attributes.set", json!({"url": "https://example.com/elsewhere/a.html", "note": "kept"})),
+        ("object.slice.options", json!({"url": "file:///elsewhere/a.html"})),
+        ("object.path.simplify", json!({"wholePaths": "elsewhere/a", "alignToPath": "elsewhere/b", "linksFolder": "elsewhere/c"})),
+        ("document.exportPresets.save", json!({"settings": {"folders": "item/format", "formats": [{"folder": "elsewhere/png"}]}})),
+        ("text.createInPath", json!({"path": "elsewhere/shape"})),
+        ("object.setLiveShape", json!({"path": "elsewhere/shape"})),
+        ("command.batch", json!({"commands": [{"command": "document.save", "params": {"path": "elsewhere/b.svg"}}]})),
+    ];
+    let filtered: Vec<Value> = vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        steps
+            .iter()
+            .map(|(id, params)| {
+                let mut params = params.clone();
+                super::leave_out_unreadable_params(params.as_object_mut().unwrap(), ParamsPlace::of(id));
+                params
+            })
+            .collect()
+    });
+    let _ = std::fs::remove_dir_all(root);
+    let want = [
+        json!({"keep": 1}),
+        json!({"url": "https://example.com/elsewhere/a.html", "note": "kept"}),
+        json!({}),
+        json!({"wholePaths": "elsewhere/a", "alignToPath": "elsewhere/b", "linksFolder": "elsewhere/c"}),
+        json!({"settings": {"folders": "item/format", "formats": [{}]}}),
+        json!({"path": "elsewhere/shape"}),
+        json!({}),
+        json!({"commands": [{"command": "document.save", "params": {}}]}),
+    ];
+    assert_eq!(filtered, want);
+}
+
+/// A request's relative path outside the read root is hidden in a reply where the command it calls
+/// reads it as a file, and a web link or a key that names part of the document there is not.
+#[test]
+fn a_request_sends_paths_as_its_command_reads_them() {
+    let root = std::env::temp_dir().join(format!("vc-sent-command-paths-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let mut sent = Vec::new();
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        super::sent_paths(&json!({"command": "attributes.set", "params": {"url": "https://example.com/a/page.html"}}), &mut sent);
+        super::sent_paths(&json!({"command": "object.path.simplify", "params": {"wholePaths": "out/w.svg"}}), &mut sent);
+        super::sent_paths(&json!({"command": "document.compare", "params": {"diffPath": "out/d.svg"}}), &mut sent);
+        super::sent_paths(&json!({"command": "file.place", "params": {"directory": "out/folder"}}), &mut sent);
+    });
+    let _ = std::fs::remove_dir_all(root);
+    let pair = |path: &str, name: &str| (format!("loaded/{path}"), format!("loaded/{name}"));
+    assert_eq!(sent, [pair("out/d.svg", "d.svg"), pair("out/folder", "folder")]);
 }
 
 /// A hidden path quoted with `{:?}` is hidden with its quotes and control characters escaped.
@@ -472,6 +536,36 @@ fn a_recovery_folder_outside_the_read_root_is_hidden_in_the_status() {
     app.recovery.named = vec!["/outside/earlier".into()];
     assert_eq!(inspect(&mut app, "Copies go to /outside/earlier".into()), "Copies go to earlier");
     assert_eq!(inspect(&mut app, format!("Copies go to {inside}")), json!(format!("Copies go to {inside}")));
+}
+
+/// `ui.inspect` shows a file on the way to a recovery folder outside the read root, which a failed
+/// recovery copy names, by its name, and a missing folder on the way too. A path that only begins or
+/// only ends with a folder on the way stays.
+#[test]
+fn a_file_on_the_way_to_a_recovery_folder_outside_the_read_root_is_hidden_in_the_status() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let outside = crate::tests_folder::Folder::new("recovery-in-the-way");
+    let file = outside.file("private", b"a file");
+    let folder = std::path::Path::new(&file).join("recovery").to_string_lossy().into_owned();
+    app.session.recovery.set_default_folder(Some(folder));
+    let root = crate::tests_folder::Folder::new("recovery-in-the-way-root");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
+    let inspect = |app: &mut VectorcraftApp, status: String| {
+        app.ui.status = status;
+        let reply = vectorcraft_engine::file_access::confine(roots.as_ref(), || input_request(app, "ui.inspect", json!({})));
+        reply["result"]["ui"]["status"].clone()
+    };
+    let status = format!("Couldn't save recovery data: {file} is not a folder");
+    assert_eq!(inspect(&mut app, status), "Couldn't save recovery data: private is not a folder");
+    let missing = outside.join("gone");
+    let folder = missing.join("recovery").to_string_lossy().into_owned();
+    app.session.recovery.set_default_folder(Some(folder));
+    let status = format!("Couldn't save recovery data: couldn't make {}", missing.display());
+    assert_eq!(inspect(&mut app, status), "Couldn't save recovery data: couldn't make gone");
+    let under = format!("Copies go near {}", outside.join("other.svg").display());
+    assert_eq!(inspect(&mut app, under.clone()), json!(under));
+    let longer = format!("Copies go near /work{}", missing.display());
+    assert_eq!(inspect(&mut app, longer.clone()), json!(longer));
 }
 
 /// A path outside the read root that a request sent is shown by its file name in a reply that succeeded
@@ -1331,4 +1425,20 @@ fn dialog_set_refuses_a_field_the_dialog_does_not_have() {
     );
     app.ui.dialog = None;
     assert_eq!(input_request(&mut app, "ui.dialog.set", json!({"field": "name", "value": "A"}))["error"], "no dialog open");
+}
+
+/// `engine.commands` lists each UI command's default shortcut on this platform: Select Last
+/// Selection Tool shows Ctrl+` (`Cmd+~`) on Windows and Linux and none on macOS.
+#[test]
+fn the_command_list_shows_this_platforms_default_shortcut() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let r = input_request(&mut app, "engine.commands", json!({}));
+    let row = r["result"].as_array().unwrap().iter().find(|c| c["id"] == "tool.selectLastSelection").cloned();
+    let row = row.unwrap_or_else(|| panic!("listed: {r}"));
+    assert_eq!(row["shortcut"], if crate::keymap::platform().is_mac() { "" } else { "Cmd+~" }, "{row}");
+    for p in [craft_keymap::Platform::Windows, craft_keymap::Platform::Linux] {
+        assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", p), "Cmd+~", "{p:?}");
+    }
+    assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", craft_keymap::Platform::Mac), "");
+    assert_eq!(crate::shortcut_editor::ui_command_default("view.zoomIn", "Cmd+=", craft_keymap::Platform::Mac), "Cmd+=");
 }

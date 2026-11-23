@@ -22,29 +22,7 @@ pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
     if bare_points && unit == Unit::Picas { Unit::Points } else { unit }
 }
 
-/// `text` typed in a numeric field, with a decimal comma read as a point: `0,1 mm` is `0.1 mm`
-/// (#3837), and each number of a sum reads its own separator, so `100.5 mm-0,5` (a comma typed
-/// after the value the field shows) is 100 mm (#5684). A number written with both separators has
-/// two points once read, so `1,000.5` and `1.234,5` are refused rather than guessed at; so is a
-/// number that reads as thousands ([`thousands`]).
-pub(super) fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
-}
-
-/// Is `text` a number written with a thousands comma, as `1,000` or `12,500 mm`: one to three
-/// digits (not a lone 0), a comma, exactly three digits, then at most a unit? Read as a decimal it
-/// would be a thousand times too small, so the field refuses it instead (`0,125` and `1,25` are
-/// decimals).
-fn thousands(text: &str) -> bool {
-    let number = text.trim().trim_start_matches('-');
-    let Some((whole, rest)) = number.split_once(',') else { return false };
-    let (part, unit) = rest.split_at(rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len()));
-    (1..=3).contains(&whole.len())
-        && whole.bytes().all(|b| b.is_ascii_digit())
-        && !whole.starts_with('0')
-        && part.len() == 3
-        && unit.trim().chars().all(char::is_alphabetic)
-}
+pub(super) use vectorcraft_doc::decimal_point;
 
 /// A recessed numeric field showing `value` (points) in `unit`. Returns the new value (points)
 /// when the user commits (Enter / focus loss / Shift+Enter, which keeps the focus outside dialogs).
@@ -142,7 +120,8 @@ fn unit_field(
 
 /// [`unit_field`] whose blank field (`value` is `None`) steps from `blank_from` (points) with
 /// ↑/↓ and the wheel instead of doing nothing. With `refuse_outside`, a value typed outside
-/// `bounds` is refused as text that doesn't read is, rather than kept at the nearer end.
+/// `bounds` is refused as text that doesn't read is, rather than kept at the nearer end. Armed
+/// with id salt `id` ([`arm_field_focus`]), it takes the keyboard focus with its value selected.
 #[allow(clippy::too_many_arguments)]
 fn unit_field_from(
     ui: &mut Ui,
@@ -160,10 +139,18 @@ fn unit_field_from(
     empty: &str,
     refuse_outside: bool,
 ) -> Option<f64> {
+    let armed = take_armed_focus(ui, &id);
     let id = id_with(ui.scope_id(), id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_else(|| empty.to_string());
     take_dialog_focus(ui, id, &shown);
+    if armed {
+        focus_field(ui, id, &shown);
+    }
     let (mut buf, commit, resp, rect) = recessed_text(ui, id, &shown, width, 1, label, name);
+    if armed {
+        // A field armed while it has focus keeps the text typed into it: select all of that text.
+        select_all(ui, id, &buf);
+    }
     select_all_on_focus(ui, &resp, &buf);
     // ↑/↓ and the wheel step in the field's unit; a drag on its label scrubs it.
     let typed = typed_unit(ui.ctx(), unit);
@@ -293,8 +280,8 @@ pub(super) fn shown_alike(show: impl Fn(f64) -> String) -> impl Fn(f64, f64) -> 
 /// goes to the next whole number in its direction (5.1 up to 6, down to 5), a Ctrl/Cmd step goes to
 /// the next tenth, and a Shift step adds or takes ten. Steps stop at the field's `bounds` (#3370:
 /// a weight stops at 0, a miter limit at 1), and a plain step also stops at each of `stops`
-/// ([`step_through`]). The new value is applied at once, as in
-/// Illustrator's panels and dialogs, and the new text replaces `buf`, all selected so typing
+/// ([`step_through`]). The new value is applied at once, and
+/// the new text replaces `buf`, all selected so typing
 /// replaces it when focused. Returns the new number when a step was taken. An enabled field takes
 /// the wheel without taking keyboard focus, and the panel under it doesn't scroll, when the wheel
 /// stream began over the field and the pointer was moved onto it, or pressed on it, after the
@@ -745,7 +732,7 @@ impl egui::Plugin for WheelTailPlugin {
 
 /// A [`num_field`] for a width or height (Transform panel, Properties panel, Control bar): Ctrl/Cmd+Enter
 /// also commits it and ends its editing, as Enter does, and [`enter_modifiers`] reports Command. A
-/// percentage typed alone (`50%`) is that share of the size shown, as in Illustrator (#2401).
+/// percentage typed alone (`50%`) is that share of the size shown (#2401).
 pub fn size_field(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     size_field_named(ui, id, None, value, unit, width)
 }
@@ -930,7 +917,19 @@ fn bounded_field_reading(
     let stepped = step_value(ui, &resp, &mut buf, bounds, (read, show), step, &[]).map(|v| round_to(v, decimals));
     let scrubbed = scrub::field(ui, id, rect, &buf, value, decimals, bounds);
     if commit && buf != shown {
-        read(&buf)
+        let typed = read(&buf);
+        if typed.is_none() {
+            // Text that reads as no number is refused as [`unit_field_from`] refuses it: the field
+            // flashes, shows its value again, and an open dialog is not confirmed by this Enter.
+            let end = ui.input(|i| i.time + 0.25);
+            ui.data_mut(|d| {
+                d.remove::<String>(id);
+                d.insert_temp(id.with("invalid-flash"), end);
+            });
+            crate::widgets::reject_dialog_commit(ui.ctx());
+            ui.ctx().request_repaint();
+        }
+        typed
     } else if let Some(v) = stepped.or(scrubbed).filter(|&v| Some(v) != value) {
         Some(v)
     } else if live && resp.changed() {

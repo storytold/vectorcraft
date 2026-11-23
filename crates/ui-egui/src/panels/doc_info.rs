@@ -11,10 +11,11 @@ use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 
-/// `document.info` and what it was fetched for: (document uid, revision, selection only).
+/// `document.info` and what it was fetched for: (document uid, revision, selection only, the
+/// Artboard tool's options while it is the current tool, else null).
 #[derive(Clone, Default)]
 struct Cache {
-    key: Option<(u64, u64, bool)>,
+    key: Option<(u64, u64, bool, Value)>,
     info: Value,
 }
 
@@ -31,10 +32,12 @@ pub(crate) fn row(ui: &mut Ui, label: &str, value: String) {
     });
 }
 
-/// `document.info` with its categories, fetched again only when the document or the scope changes.
+/// `document.info` with its categories, fetched again only when the document, the scope or the
+/// artboards the Artboard tool has selected change.
 fn info(app: &mut VectorcraftApp, ctx: &egui::Context, sel_only: bool) -> Option<Value> {
+    let artboard_tool = if app.session.tool_id() == "artboard" { app.session.tool_options_of("artboard") } else { Value::Null };
     let st = app.session.active()?;
-    let key = Some((st.uid, st.revision, sel_only));
+    let key = Some((st.uid, st.revision, sel_only, artboard_tool));
     let mut c: Cache = pstate(ctx, "docinfo-cache");
     if c.key != key {
         c.info = app.session.execute("document.info", &json!({ "selectionOnly": sel_only })).ok()?;
@@ -104,7 +107,7 @@ fn brush_value(value: &str) -> &str {
 /// Row `k` of Document Info section `id` (`label` and `value` as `document.info` gives them, the
 /// label a name when `named`) with its value in the interface language, built from what
 /// `document.info` (`info`) gives as values: the
-/// units, the raster effects resolution, each brush's type, each font's file, match and
+/// units, the raster effects resolution, each brush's type, each font's type and uses, each font's file, match and
 /// embedding permission, each image's size and file, each Repeat object's kind and counts, and the
 /// kinds of the gradients no swatch names. Names (fonts, files, faces, swatches) stay as they are.
 /// None when the row's value is shown as `document.info` gives it, or the values do not match the
@@ -121,9 +124,13 @@ fn shown_value(info: &Value, id: &str, k: usize, (label, value): (&str, &str), n
                 let ppi = info["document"]["rasterEffectsPpi"].as_f64()?;
                 Some(fill(tl!("{n} ppi"), &[("n", &ppi.to_string())]))
             }
+            "Grid Size" | "Grid Colors" | "Simulate Colored Paper" | "Flattener Preset" => {
+                transparency_value(&info["document"]["transparency"], label)
+            }
             _ => None,
         },
         "brushes" => Some(brush_value(value).to_string()),
+        "fonts" => font_use_value(entry("fontUses")?),
         "fontDetails" => font_detail_value(entry("fontDetails")?),
         "linkedImages" | "embeddedImages" => {
             let linked = id == "linkedImages";
@@ -136,9 +143,56 @@ fn shown_value(info: &Value, id: &str, k: usize, (label, value): (&str, &str), n
     }
 }
 
+/// A transparency row of Document (`label`) in the interface language, from `document.info`'s
+/// `document.transparency` (`t`): the grid's size, its colors' preset name (two custom colors stay
+/// as `document.info` gives them), Simulate Colored Paper on or off, and a built-in flattener
+/// preset's name (a saved preset's name stays as it is).
+fn transparency_value(t: &Value, label: &str) -> Option<String> {
+    let shown = match label {
+        "Grid Size" => match t["gridSize"].as_str()? {
+            "small" => tl!("Small"),
+            "medium" => tl!("Medium"),
+            "large" => tl!("Large"),
+            _ => return None,
+        },
+        "Grid Colors" => match t["gridColorsName"].as_str()? {
+            "Custom" => return None,
+            name if vectorcraft_doc::setup::GRID_COLOR_PRESETS.iter().any(|(n, _)| *n == name) => tl!(name),
+            _ => return None,
+        },
+        "Simulate Colored Paper" => {
+            if t["simulatePaper"].as_bool()? {
+                tl!("On")
+            } else {
+                tl!("Off")
+            }
+        }
+        _ => match t["flattenerPreset"].as_str()? {
+            "High Resolution" => tl!("High Resolution"),
+            "Medium Resolution" => tl!("Medium Resolution"),
+            "Low Resolution" => tl!("Low Resolution"),
+            _ => return None,
+        },
+    };
+    Some(shown.to_string())
+}
+
 /// [`crate::i18n::fill_once`]: a name that holds `{…}` text stays as it is.
 fn fill(template: &str, args: &[(&str, &str)]) -> String {
     crate::i18n::fill_once(template, args)
+}
+
+/// A `fontUses` entry as Fonts shows it: the font's type (the format names TrueType and OpenType
+/// stay as they are) and its number of uses in the language's plural forms.
+fn font_use_value(e: &Value) -> Option<String> {
+    let kind = match e["type"].as_str()? {
+        "truetype" => "TrueType",
+        "opentype" => "OpenType",
+        "unknown" => tl!("unknown type"),
+        _ => return None,
+    };
+    let uses = crate::i18n::tn(e["uses"].as_u64()?, "{n} use", "{n} uses");
+    Some(fill(tl!("{type}; {uses}"), &[("type", kind), ("uses", &uses)]))
 }
 
 /// A `fontDetails` entry as Font Details shows it: the font's file (or that it is built in) and
@@ -416,7 +470,7 @@ mod tests {
         assert!(objects.contains("\nOBJECTS\n") && objects.contains("Paths: 1") && objects.contains("Text Objects: 1"), "{objects}");
         assert!(!objects.contains("\nDOCUMENT\n") && !objects.contains("\nFONTS\n"), "only Objects: {objects}");
         let fonts = saved_from_menu(&mut app, "fonts", false);
-        assert!(fonts.contains("\nFONTS\n") && fonts.contains("Source Sans 3"), "{fonts}");
+        assert!(fonts.contains("\nFONTS\nSource Sans 3 Regular: TrueType; 1 use\n"), "{fonts}");
         assert!(!fonts.contains("\nOBJECTS\n") && !fonts.contains("\nFONT DETAILS\n"), "only Fonts: {fonts}");
         let all = saved_from_menu(&mut app, "", false);
         assert!(
@@ -551,6 +605,101 @@ mod tests {
         assert!(saved.contains("(the selection only)") && saved.contains("\nGRADIENT OBJECTS\nGlow: Linear gradient, Radial gradient\n"), "{saved}");
         let report = app.session.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(report.contains("Units: Millimeters\n") && report.contains("Radial Repeat, 6 instances"), "{report}");
+    }
+
+    /// Fonts shows each font's type and number of uses in the interface language, in the
+    /// language's plural forms; the format names TrueType and OpenType and the font names stay as
+    /// they are, and `document.info` and the saved report keep the English values.
+    #[test]
+    fn font_types_and_uses_show_in_the_interface_language() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hi"})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Gone", "font": "Qx Absent Family"})).unwrap();
+        let info = app.session.execute("document.info", &json!({})).unwrap();
+        let rows = |info: &Value| shown_rows(info, "fonts");
+        let english = vec![
+            ("Qx Absent Family Regular".to_string(), "unknown type; 1 use".to_string()),
+            ("Source Sans 3 Regular".into(), "TrueType; 2 uses".into()),
+        ];
+        assert_eq!(rows(&info), english);
+        let fonts = |app: &mut VectorcraftApp| {
+            crate::tests_labels::painted_text(app, |app, ui| {
+                set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
+                show(app, ui);
+            })
+        };
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let (german, painted) = (rows(&info), fonts(&mut app));
+        let one_opentype = font_use_value(&json!({"type": "opentype", "uses": 1}));
+        let Some(ru) = crate::i18n::Lang::from_code("ru") else { panic!("no Russian catalog") };
+        crate::i18n::set_current(ru);
+        let russian = [1, 3, 5].map(|n| font_use_value(&json!({"type": "truetype", "uses": n})));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(german[0], ("Qx Absent Family Regular".to_string(), "unbekannter Typ; 1 Verwendung".to_string()));
+        assert_eq!(german[1], ("Source Sans 3 Regular".to_string(), "TrueType; 2 Verwendungen".to_string()));
+        assert!(painted.contains("Source Sans 3 Regular") && painted.contains("TrueType; 2 Verwendungen"), "{painted}");
+        assert_eq!(one_opentype.as_deref(), Some("OpenType; 1 Verwendung"));
+        assert_eq!(russian.map(Option::unwrap_or_default), ["TrueType; 1 использование", "TrueType; 3 использования", "TrueType; 5 использований"]);
+        // An unknown type id is shown as `document.info` gives the row.
+        assert_eq!(font_use_value(&json!({"type": "bitmap", "uses": 1})), None);
+        let report =
+            app.session.execute("document.info", &json!({"category": "fonts", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(report.contains("Source Sans 3 Regular: TrueType; 2 uses\n"), "{report}");
+    }
+
+    /// Document shows the transparency settings with their values in the interface language (two
+    /// custom grid colors as they are), and while the Artboard tool is the current tool the
+    /// artboards it has selected, following its selection without an edit to the document.
+    #[test]
+    fn document_shows_transparency_and_the_artboard_tools_selection() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        app.session.execute("artboard.setProps", &json!({"index": 1, "name": "Back"})).unwrap();
+        let ctx = egui::Context::default();
+        let document = |app: &mut VectorcraftApp| {
+            let info = info(app, &ctx, false).unwrap();
+            shown_rows(&info, "document")
+        };
+        let value = |rows: &[(String, String)], label: &str| rows.iter().find(|(l, _)| l == label).map(|(_, v)| v.clone());
+        let english = document(&mut app);
+        assert_eq!(value(&english, "Grid Colors").as_deref(), Some("Light"));
+        assert_eq!(value(&english, "X"), None, "no artboard rows with another tool: {english:?}");
+        app.select_tool("artboard");
+        app.session.set_tool_option("selected", &json!([1]));
+        let rows = document(&mut app);
+        let at = rows.iter().position(|(l, v)| l == "Artboard" && v == "Back").unwrap_or_else(|| panic!("{rows:?}"));
+        assert_eq!(rows[at + 1..at + 5].iter().map(|(_, v)| v.as_str()).collect::<Vec<_>>(), ["60 pt", "80 pt", "0 pt", "0 pt"]);
+        // Selecting another artboard changes the rows, though the document did not change.
+        app.session.set_tool_option("selected", &json!([0, 1]));
+        let rows = document(&mut app);
+        assert_eq!(rows.iter().filter(|(l, _)| l == "Artboard").count(), 2, "{rows:?}");
+        assert!(rows.contains(&("X".into(), "150 pt".into())) && rows.contains(&("Y".into(), "40 pt".into())), "from artboard 1's corner: {rows:?}");
+        app.session
+            .execute(
+                "document.setup",
+                &json!({"gridSize": "large", "simulatePaper": true, "flattenerPreset": "Low Resolution", "gridColors": "Purple"}),
+            )
+            .unwrap();
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let german = document(&mut app);
+        let painted = crate::tests_labels::painted_text(&mut app, show);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let shown = |label: &str| value(&german, label).unwrap_or_else(|| panic!("no {label} in {german:?}"));
+        assert_eq!(
+            [shown("Grid Size"), shown("Grid Colors"), shown("Simulate Colored Paper"), shown("Flattener Preset")],
+            ["Groß", "Lila", "Ein", "Niedrige Auflösung"]
+        );
+        assert!(painted.contains("Rastergröße") && painted.contains("Groß") && painted.contains("Back"), "{painted}");
+        app.session.execute("document.setup", &json!({"gridColors": ["#ff0000", "#00ff00"]})).unwrap();
+        crate::i18n::set_current(de);
+        let custom = value(&document(&mut app), "Grid Colors");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(custom.as_deref(), Some("#ff0000, #00ff00"));
     }
 
     /// A Repeat object's counts take each language's plural forms, and a grid that draws fewer

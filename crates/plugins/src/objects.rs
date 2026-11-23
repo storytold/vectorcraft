@@ -325,7 +325,11 @@ fn encode_read_only_within(doc: &Document, n: &Node, symbols: &SymbolBoxes, left
             o["truncated"] = json!(false);
         }
         NodeKind::Image(im) => {
-            o["transform"] = affine_json(im.xf);
+            // A distorted image: its corners, and the affine placement nearest them at its middle.
+            o["transform"] = affine_json(vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf));
+            if let Some(q) = n.image_quad() {
+                o["corners"] = json!(q.map(|p| [p.x, p.y]));
+            }
             o["pixelSize"] = json!([im.width, im.height]);
             o["colorMode"] = json!(doc.image_blob(im).map_or("unknown", color_mode));
             o["linked"] = json!(im.link.is_some());
@@ -459,9 +463,8 @@ fn color_mode(b: &ImageBlob) -> &'static str {
     if b.gray_source().is_some() {
         return "gray";
     }
-    let readable =
-        image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok().and_then(|r| r.into_dimensions().ok());
-    if readable.is_some() { "rgb" } else { "unknown" }
+    let readable = vectorcraft_doc::header_size(&b.bytes).is_some() || b.header_size().is_some();
+    if readable { "rgb" } else { "unknown" }
 }
 
 #[cfg(test)]
@@ -481,8 +484,7 @@ fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize, charged: &mut usize) -
         return None;
     }
     let cmyk = b.is_cmyk();
-    let reader = || image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok();
-    let size = if cmyk { b.header_size()? } else { reader()?.into_dimensions().ok()? };
+    let size = if cmyk { b.header_size()? } else { vectorcraft_doc::header_size(&b.bytes).or_else(|| b.header_size())? };
     if size != (w, h) {
         return None;
     }
@@ -492,13 +494,11 @@ fn rgba_pixels(b: &ImageBlob, w: u32, h: u32, max: usize, charged: &mut usize) -
     if cmyk {
         return cmyk_rgba(b, w, h);
     }
-    let mut r = reader()?;
-    let mut limits = image::Limits::default();
+    let mut opts = craft_image_codecs::DecodeOptions::default();
     // The decoder's own buffers besides the RGBA it gives.
-    limits.max_alloc = Some(64 << 20);
-    r.limits(limits);
-    let img = r.decode().ok()?.into_rgba8();
-    (img.dimensions() == (w, h)).then(|| img.into_raw())
+    opts.limits.max_alloc = 64 << 20;
+    let img = craft_image_codecs::decode_with(&b.bytes, &opts).ok()?;
+    (img.dimensions() == (w, h)).then(|| img.to_rgba8())
 }
 
 /// The inks → XYZ table of [`cmyk_rgba`] and the color settings it was built with.
@@ -951,7 +951,8 @@ fn paints(ap: &Appearance, fill: bool) -> Vec<&Paint> {
 }
 
 /// `p` without swatch links: a plug-in's colours are its own, so only paints it returned
-/// unchanged keep theirs.
+/// unchanged keep theirs. A gradient stop also loses its process plates, which print only with
+/// a spot swatch.
 fn unlinked(mut p: Paint) -> Paint {
     match &mut p {
         Paint::Solid { swatch, tint, .. } => {
@@ -961,8 +962,7 @@ fn unlinked(mut p: Paint) -> Paint {
         Paint::Gradient(g) => {
             g.swatch = None;
             for s in &mut g.gradient.stops {
-                s.swatch = None;
-                s.tint = 1.0;
+                s.set_color(s.color, None);
             }
         }
         Paint::None | Paint::Pattern { .. } => {}

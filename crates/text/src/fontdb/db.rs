@@ -16,7 +16,7 @@ use super::scan::{file_face_names, is_font_file};
 #[cfg(test)]
 use super::traits::faces_published;
 #[cfg(not(target_arch = "wasm32"))]
-use super::traits::{Alias, FaceStyle};
+use super::traits::{Alias, FaceStyle, regular_rank};
 use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
@@ -56,6 +56,7 @@ impl FontDb {
             images: Mutex::new(GlyphCache::default()),
             colours: Mutex::new(GlyphCache::default()),
             catalog: RwLock::new(Catalog::new()),
+            file_faces: RwLock::new(super::FileFaces::default()),
             postscript: RwLock::new(PostScriptNames::new()),
             font_paths,
             aliases: RwLock::new(HashMap::new()),
@@ -74,6 +75,7 @@ impl FontDb {
             stamp: Mutex::new(None),
             instances: Mutex::new(Instances::default()),
             composites: RwLock::new(HashMap::new()),
+            custom_classes: Mutex::new(HashMap::new()),
         }
     }
 
@@ -304,6 +306,8 @@ impl FontDb {
                 }
             }
         }
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = (!made.is_empty()).then(crate::test_fonts::font_change);
         let mut faces = self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner);
         let before = faces.len();
         for f in made {
@@ -324,7 +328,7 @@ impl FontDb {
 
     /// Catalog the installed fonts unless that has been done: the first caller scans the font
     /// folders, any other waits for that scan to finish. A no-op on wasm.
-    pub(super) fn ensure_catalog(&self) {
+    pub(crate) fn ensure_catalog(&self) {
         #[cfg(not(target_arch = "wasm32"))]
         self.cataloged.get_or_init(|| {
             self.scan_font_dirs();
@@ -371,8 +375,6 @@ impl FontDb {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn scan_font_dirs(&self) -> usize {
-        // Files may have been installed since: other versions are looked for again.
-        self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
         let mut catalog = Catalog::new();
         let mut aliases: HashMap<String, Vec<Alias>> = HashMap::new();
         let mut postscript = PostScriptNames::new();
@@ -418,6 +420,8 @@ impl FontDb {
             if !named && !is_font_file(&p) && !crate::suitcase::is_suitcase(&p) {
                 continue;
             }
+            // The file's creation time, once for all its faces (a collection holds several).
+            let created = std::fs::metadata(&p).and_then(|m| m.created()).ok();
             for FaceStyle { family, native_family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
                 for (k, a) in Alias::of(&family, &style, &keys) {
                     aliases.entry(k).or_default().push(a);
@@ -429,6 +433,9 @@ impl FontDb {
                 let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
                 let kind = entry.traits.get_or_insert(traits);
                 kind.variable |= traits.variable;
+                if regular_rank(&traits.likeness) < regular_rank(&kind.likeness) {
+                    kind.likeness = traits.likeness;
+                }
                 if entry.name.is_empty() {
                     entry.name = family;
                 }
@@ -436,14 +443,20 @@ impl FontDb {
                     entry.native = native_family;
                 }
                 let (weight, italic) = (weight.unwrap_or_else(|| style_weight(&style)), italic || style_italic(&style));
-                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic });
+                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic, created });
                 n += 1;
             }
         }
         log::debug!("cataloged {n} system font faces");
         let installed: std::collections::HashSet<PathBuf> = catalog.values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
+        // The first scan waits for nothing: a guard is made only for a database already cataloged.
+        #[cfg(any(test, feature = "test-fonts"))]
+        let _change = self.cataloged.get().is_some().then(crate::test_fonts::font_change);
         *self.stamp.lock().unwrap_or_else(|e| e.into_inner()) = Some(ScanStamp { paths, modified: modified_at });
         *self.catalog.write().unwrap_or_else(|e| e.into_inner()) = catalog;
+        // Files may have been installed since: other versions are looked for again, in this
+        // catalog. A version lookup made during the scan read the previous one.
+        self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
         *self.aliases.write().unwrap_or_else(|e| e.into_inner()) = aliases;
         *self.postscript.write().unwrap_or_else(|e| e.into_inner()) = postscript;
         // Faces loaded from a file this scan did not catalog (the font was removed, or its folder

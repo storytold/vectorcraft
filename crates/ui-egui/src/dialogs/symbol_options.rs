@@ -7,7 +7,9 @@
 //! (percent of the symbol's size, -1600..1600: below 0 or above 100 for a guide outside the art),
 //! `exportType` (`movieClip` | `graphic`), `type` (`dynamic` |
 //! `static`; a new symbol is dynamic), `registration` (0..8, the 9-point grid;
-//! 4 = centre), `__edit` (true when editing an existing symbol). Help:
+//! 4 = centre), `alignToPixelGrid` (bool, off for a new symbol), `__edit` (true when editing an
+//! existing symbol), `__keepArt` (true when a new symbol leaves the selection as ordinary art).
+//! Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
 
 use serde_json::{Map, Value, json};
@@ -68,14 +70,23 @@ const EXPORT_TYPES: [(&str, &str); 2] = [("movieClip", "Movie Clip"), ("graphic"
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Symbol Options").into(), body, confirm, min_width: 320.0, ..DialogSpec::FORM };
 
-/// Open Symbol Options to name a new symbol made from the selection.
-pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+/// Open Symbol Options to name a new symbol made from the selection. With `keep_art`, OK leaves
+/// the selection as ordinary art instead of replacing it with an instance.
+pub fn open(app: &mut VectorcraftApp, keep_art: bool) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
     if st.selection.is_empty() {
         return Err("nothing selected".into());
     }
     let name = st.doc.unique_symbol_name("New Symbol");
-    let mut fields = json!({ "name": name, "exportType": "movieClip", "type": "dynamic", "registration": 4, "__edit": false });
+    let mut fields = json!({
+        "name": name,
+        "exportType": "movieClip",
+        "type": "dynamic",
+        "registration": 4,
+        "alignToPixelGrid": false,
+        "__edit": false,
+        "__keepArt": keep_art,
+    });
     if let Some(o) = fields.as_object_mut() {
         o.extend(slice_fields(None));
     }
@@ -107,6 +118,7 @@ pub fn open_edit(app: &mut VectorcraftApp, name: Option<&str>) -> Result<Value, 
         "exportType": export,
         "type": kind,
         "registration": registration,
+        "alignToPixelGrid": st.doc.symbol_pixel_aligned(&name),
         "__edit": true,
         "__from": name,
     });
@@ -160,6 +172,9 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 ui.end_row();
             }
         }
+        label(ui, "");
+        form::check(ui, d, "alignToPixelGrid", tl!("Align to Pixel Grid"));
+        ui.end_row();
     });
     false
 }
@@ -175,17 +190,21 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let kind = d.str("type");
     let registration = d.fields.get("registration").and_then(Value::as_u64).unwrap_or(4);
     let edit = d.fields.get("__edit").and_then(Value::as_bool).unwrap_or(false);
+    let pixel = d.bool("alignToPixelGrid");
     let r = if edit {
         let from = d.fields.get("__from").and_then(Value::as_str).unwrap_or(name);
-        let mut params = json!({ "name": from, "exportType": export, "type": kind, "registration": registration });
+        let mut params = json!({ "name": from, "exportType": export, "type": kind, "registration": registration, "alignToPixelGrid": pixel });
         merge(&mut params, slice_params(d));
         if from != name {
             params["newName"] = json!(name);
         }
         app.run("symbol.options", params)
     } else {
-        let mut params = json!({ "name": name, "exportType": export, "type": kind, "registration": registration });
+        let mut params = json!({ "name": name, "exportType": export, "type": kind, "registration": registration, "alignToPixelGrid": pixel });
         merge(&mut params, slice_params(d));
+        if d.bool("__keepArt") {
+            params["keepArt"] = json!(true);
+        }
         app.run("symbol.new", params)
     };
     if r.is_ok() {

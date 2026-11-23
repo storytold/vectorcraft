@@ -1,5 +1,3 @@
-use std::io::Cursor;
-
 use image::DynamicImage;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
@@ -15,7 +13,41 @@ const RED: [u8; 4] = [200, 0, 0, 255];
 
 fn png(img: DynamicImage) -> Vec<u8> {
     let mut out = Vec::new();
-    img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img;
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -138,7 +170,24 @@ fn applying_the_mask_makes_it_part_of_the_pixels() {
     assert_eq!(s.execute(APPLY_COLOR_MASK, &json!({})).unwrap(), json!({"changed": 1, "ids": [id.0]}));
     let d = doc(&s);
     assert_eq!((image_of(d, id).key, mask_of(d, id)), (m.key.clone(), None));
-    let px = image::load_from_memory(&d.images[&m.key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&d.images[&m.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(4, 4).0), (0, RED));
     assert_eq!(drawn(d, id, 0, 0)[3], 0);
     assert_eq!(undo_len(&s), steps + 1);
@@ -149,7 +198,23 @@ fn applying_the_mask_makes_it_part_of_the_pixels() {
 fn svg_image(svg: &str) -> DynamicImage {
     let at = svg.find("data:image/png;base64,").expect("an embedded PNG") + "data:image/png;base64,".len();
     let end = at + svg[at..].find('"').unwrap();
-    image::load_from_memory(&vectorcraft_format::base64_decode(&svg[at..end]).unwrap()).unwrap()
+    craft_image_codecs::decode(&vectorcraft_format::base64_decode(&svg[at..end]).unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
 }
 
 #[test]
@@ -159,7 +224,28 @@ fn outputs_write_the_masked_pixels() {
         |s: &Session, format: &str| crate::cmd::fileio::encode_all(doc(s), format, &json!({"useArtboards": true})).unwrap().files.remove(0).1;
     let (png0, svg0, pdf0, eps0) = (export(&s, "png"), export(&s, "svg"), export(&s, "pdf"), export(&s, "eps"));
     s.execute(COLOR_MASK, &hide_white()).unwrap();
-    let alpha = |bytes: &[u8]| image::load_from_memory(bytes).unwrap().to_rgba8().get_pixel(0, 0).0[3];
+    let alpha = |bytes: &[u8]| {
+        craft_image_codecs::decode(bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(0, 0)
+            .0[3]
+    };
     assert_eq!((alpha(&png0), alpha(&export(&s, "png"))), (255, 0), "PNG");
     let svg_alpha = |bytes: &[u8]| svg_image(std::str::from_utf8(bytes).unwrap()).to_rgba8().get_pixel(0, 0).0[3];
     assert_eq!((svg_alpha(&svg0), svg_alpha(&export(&s, "svg"))), (255, 0), "SVG");
@@ -323,7 +409,8 @@ fn a_mask_that_hides_nothing_keeps_the_link() {
 #[test]
 fn color_mask_refuses_previews_and_images_too_large() {
     let preview = std::sync::Arc::new(framed());
-    let (mut s, id) = linked("missing", ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
+    let (mut s, id) =
+        linked("missing", ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() });
     let e = s.execute(COLOR_MASK, &hide_white()).unwrap_err().to_string();
     assert!(e.contains(COLOR_MASK) && e.contains("the linked image shows its preview: embed or relink it first"), "{e}");
     assert_eq!(mask_of(doc(&s), id), None);
@@ -344,7 +431,24 @@ fn cropping_off_the_pixel_grid_keeps_the_hidden_colors_in_the_pixels() {
     let d = doc(&s);
     let (im, m) = (image_of(d, id), mask_of(d, id).unwrap());
     assert_eq!(m.from, im.key, "the mask is made for the cut pixels");
-    let own = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+    let own = craft_image_codecs::decode(&d.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert!(own.pixels().all(|p| p.0[3] == 255), "the cut pixels are the image's own, white included");
     assert_eq!(drawn(d, id, 0, 0)[3], 0, "white is hidden");
     s.execute(REMOVE_COLOR_MASK, &json!({"ids": [id.0]})).unwrap();
@@ -377,7 +481,24 @@ fn applying_a_mask_made_for_older_pixels_makes_it_again_and_keeps_the_size() {
     assert_eq!((im.width, im.height, mask_of(d, id)), (24, 20, None));
     let after = d.node(id).unwrap().geometric_bounds().unwrap();
     assert!((after.width() - before.width()).abs() < 1e-9 && (after.height() - before.height()).abs() < 1e-9, "{before:?} {after:?}");
-    let px = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&d.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(10, 10).0), (0, RED));
 }
 
@@ -435,7 +556,24 @@ fn another_image_colorized_with_transparency_does_not_change_the_refusal() {
     s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
     assert_eq!(s.execute(COLOR_MASK, &hide_white()).unwrap()["changed"], 1, "an image colorized with black takes the mask beside the other");
     let m = mask_of(doc(&s), id).unwrap();
-    let masked = image::load_from_memory(&doc(&s).images[&m.key].bytes).unwrap().to_luma_alpha8();
+    let masked = craft_image_codecs::decode(&doc(&s).images[&m.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_luma_alpha8();
     assert_eq!((masked.get_pixel(0, 0).0[1], masked.get_pixel(4, 4).0[1]), (0, 255), "white is hidden and black shows");
 }
 
@@ -580,7 +718,24 @@ fn masks_outside_the_layers_are_made_again() {
     let art = &d.node(holder_id).unwrap().extras().mask.as_ref().unwrap().art;
     assert_eq!(from(art), key, "in the opacity mask's art");
     let m = Document::color_mask_of(art).unwrap();
-    let px = image::load_from_memory(&d.images[&m.key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&d.images[&m.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(1, 0).0), (0, RED));
 }
 
@@ -696,7 +851,24 @@ fn a_linked_file_read_again_on_open_takes_the_mask_again() {
     let d = doc(&s);
     let (im, m) = (image_of(d, id), mask_of(d, id).unwrap());
     assert_eq!(m.from, im.key, "made for the file's new pixels");
-    let px = image::load_from_memory(&d.images[&m.key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&d.images[&m.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(4, 4).0), (0, [0, 0, 200, 255]));
 }
 
@@ -812,7 +984,24 @@ fn a_live_color_adjustment_recolors_the_image_when_its_masked_pixels_are_missing
     let NodeKind::Image(im) = &out.kind else { panic!("an image") };
     assert_ne!(im.key, image_of(&d, id).key, "the expanded image is recolored");
     assert_eq!(Document::color_mask_of(&out), None, "the expanded image has no mask to make again from the recolored pixels");
-    let px = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&d.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(px.get_pixel(1, 1).0, WHITE, "the expanded image shows the white");
 }
 
@@ -1002,6 +1191,23 @@ fn placing_a_document_brings_the_masked_pixels() {
     }
     let [(im, placed)] = found.as_slice() else { panic!("one masked image: {found:?}") };
     assert!(placed.made_for(im) && placed.from != m.from, "the image was renamed and the mask follows: {placed:?}");
-    let px = image::load_from_memory(&d.images[&placed.key].bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&d.images[&placed.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!((px.get_pixel(0, 0).0[3], px.get_pixel(4, 4).0), (0, RED));
 }

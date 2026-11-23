@@ -627,6 +627,110 @@ fn object_align_follows_align_to() {
     assert_eq!((bounds(&app, &a).x1, bounds(&app, &b).x1), (boards[1].x1, boards[1].x1), "the active artboard's right edge");
 }
 
+/// The Align To choices of Object → Align ([`ALIGN_TO_COMMANDS`]), in their order: (command id,
+/// label).
+const ALIGN_TO_ENTRIES: [(&str, &str); 3] =
+    [("align.toSelection", "Align to Selection"), ("align.toKeyObject", "Align to Key Object"), ("align.toArtboard", "Align to Artboard")];
+
+/// Which of Object → Align's Align To items are checked, in their order.
+fn align_to_checks(app: &VectorcraftApp) -> Vec<Option<bool>> {
+    ALIGN_TO_ENTRIES.iter().map(|(id, _)| crate::menus::checked(app, id, &json!({}))).collect()
+}
+
+/// Object → Align lists the Align To choices after its align items, the one the Align panel shows
+/// checked, and a click on one chooses it as the panel's button does. Edit › Keyboard Shortcuts
+/// lists each under Align with no default shortcut, and a shortcut chooses it too.
+#[test]
+fn object_align_lists_the_align_to_choices() {
+    let (mut app, back, front) = back_and_front();
+    let items: Vec<(String, Option<String>)> =
+        crate::menus::menu_entries(&app).into_iter().filter(|e| e.path == ["Object", "Align"]).map(|e| (e.label, e.command)).skip(7).collect();
+    let expected: Vec<(String, Option<String>)> = ALIGN_TO_ENTRIES.iter().map(|(id, l)| (l.to_string(), Some(id.to_string()))).collect();
+    assert_eq!(items, expected, "after the seven align items");
+    assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
+    object_align(&mut app, "Align to Artboard");
+    assert_eq!(app.ui.align_to, AlignTo::Artboard);
+    assert_eq!(align_to_checks(&app), [Some(false), Some(false), Some(true)]);
+    let list = app.run("shortcuts.list", json!({})).unwrap();
+    for (id, label) in ALIGN_TO_ENTRIES {
+        let e = list.as_array().unwrap().iter().find(|e| e["id"] == id).unwrap_or_else(|| panic!("{id} is not listed"));
+        assert_eq!((e["label"].as_str(), e["group"].as_str(), &e["default"]), (Some(label), Some("Align"), &Value::Null), "{id}");
+    }
+    // Align to Key Object by a shortcut: the topmost selected object becomes the key, and the
+    // stored choice stays.
+    app.run("shortcuts.set", json!({"id": "align.toKeyObject", "shortcut": CHORD})).unwrap();
+    press_chord(&mut app);
+    assert_eq!(app.session.active().unwrap().selection.key.map(|k| k.0), front.as_u64(), "{}", app.ui.status);
+    assert_eq!(align_to_checks(&app), [Some(false), Some(true), Some(false)]);
+    assert_eq!(app.ui.align_to, AlignTo::Artboard);
+    // Align to Selection lets the key go and stores Selection.
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "selection"}));
+    assert!(!has_key(&app));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+    // One object: Align to Key Object is off and fails, and Align To shows Artboard checked.
+    app.run("select.set", json!({"ids": [back]})).unwrap();
+    let key_item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("align.toKeyObject")).unwrap();
+    assert!(!key_item.enabled, "one object");
+    assert_eq!(app.run("align.toKeyObject", json!({})).unwrap_err(), "no key object");
+    assert!(!has_key(&app));
+    assert_eq!(align_to_checks(&app), [Some(false), Some(false), Some(true)]);
+    // Align to Selection with one object stores Selection and returns what the panel shows.
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "artboard"}));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+}
+
+/// With the Artboard tool chosen, Align to Key Object is off and fails, and Align to Artboard and
+/// Align to Selection store the choice while the selected objects keep their key.
+#[test]
+fn align_to_commands_with_the_artboard_tool() {
+    let (mut app, _, front) = back_and_front();
+    app.run("align.toKeyObject", json!({})).unwrap();
+    app.select_tool("artboard");
+    assert!(has_key(&app), "choosing the Artboard tool keeps the key");
+    let key_item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("align.toKeyObject")).unwrap();
+    assert!(!key_item.enabled, "the Artboard tool");
+    assert_eq!(app.run("align.toKeyObject", json!({})).unwrap_err(), "Align to Key Object isn't available with the Artboard tool");
+    assert_eq!(app.run("align.toArtboard", json!({})).unwrap(), json!({"alignTo": "artboard"}));
+    assert_eq!(app.ui.align_to, AlignTo::Artboard);
+    assert_eq!(align_to_checks(&app), [Some(false), Some(false), Some(true)]);
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "selection"}));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+    assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
+    assert_eq!(app.session.active().unwrap().selection.key.map(|k| k.0), front.as_u64(), "the key stays");
+}
+
+/// Align to Key Object is off and fails when the topmost selected object can't be the key: a group
+/// selected with an object inside it.
+#[test]
+fn align_to_key_object_fails_when_the_topmost_object_cannot_be_the_key() {
+    let (mut app, _, front) = back_and_front();
+    let group = app.run("object.group", json!({})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [group, front]})).unwrap();
+    assert_eq!(app.session.active().unwrap().selection.objects.len(), 2, "the group and its member");
+    let key_item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("align.toKeyObject")).unwrap();
+    assert!(!key_item.enabled, "the topmost object is inside the group");
+    assert!(!can_choose(&app, AlignTo::Key), "the panel's button is off too");
+    assert_eq!(app.run("align.toKeyObject", json!({})).unwrap_err(), "no key object");
+    assert!(!has_key(&app));
+}
+
+/// With a key anchor, Object → Align shows Align to Key Object checked under its menu name, and
+/// the command keeps the key anchor → `{alignTo: "key"}`.
+#[test]
+fn align_to_key_object_with_a_key_anchor() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("path.create", json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+    app.run("select.key", json!({"id": id, "anchor": [0, 2]})).unwrap();
+    assert_eq!(align_to_checks(&app), [Some(false), Some(true), Some(false)]);
+    let key_item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("align.toKeyObject")).unwrap();
+    assert_eq!((key_item.label.as_str(), key_item.enabled), ("Align to Key Object", true));
+    assert_eq!(app.run("align.toKeyObject", json!({})).unwrap(), json!({"alignTo": "key"}));
+    let key_anchor = app.session.active().unwrap().selection.key_anchor.map(|(k, a)| (k.0, a));
+    assert_eq!(key_anchor, Some((id, (0, 2))), "the key anchor stays");
+}
+
 /// With anchor points selected, Object → Align sends its params unchanged: two anchor points of
 /// one path align to their own bounds with Align to Selection and with Align to Artboard chosen.
 #[test]
@@ -670,6 +774,32 @@ fn anchor_points_of_one_path_align_to_each_other() {
     click(&ctx, &mut app, artboard.center(), show);
     click(&ctx, &mut app, left.center(), show);
     assert_eq!(xs(&app), [0.0, 0.0, 150.0], "to the artboard's left edge: {}", app.ui.status);
+}
+
+/// #1636: with a key anchor, the Align panel shows the key choice chosen and named Align to Key
+/// Anchor, its align button moves the other points to the key anchor, which stays, and Align to
+/// Selection lets go of it.
+#[test]
+fn a_key_anchor_is_chosen_named_and_aligned_to() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("path.create", json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap();
+    let xs = |app: &VectorcraftApp| -> Vec<f64> {
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        node.path_data().unwrap().anchors().map(|(_, _, a)| a.p.x).collect()
+    };
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+    app.run("select.key", json!({"id": id, "anchor": [0, 2]})).unwrap();
+    let ctx = egui::Context::default();
+    let ([selection, key, _], left) = panel_buttons(&mut app, &ctx);
+    assert_eq!((align_to(&app), chosen_align_to(&mut app, &ctx)), (AlignTo::Key, vec![key]), "chosen automatically");
+    let named = tree(|ui| show(&mut app, ui));
+    assert_eq!(role_and_state(&named, "Align to Key Anchor"), (Role::Button, Some(Toggled::True)));
+    click(&ctx, &mut app, left.center(), show);
+    assert_eq!(xs(&app), [150.0, 200.0, 150.0], "to the key anchor's x: {}", app.ui.status);
+    click(&ctx, &mut app, selection.center(), show);
+    assert!(!has_key(&app), "Align to Selection lets go of the key anchor");
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
 }
 
 /// #1636: the Distribute buttons work on the anchor points of one path (one object selected).

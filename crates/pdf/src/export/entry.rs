@@ -45,14 +45,24 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let set = &opts.settings;
     set.check()?;
     vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
-    // Live geometry effects export as their result; raster effects are reported below.
-    let baked = vectorcraft_effects::bake_document(doc);
-    // Baking stops early when cancelled, leaving a half-baked copy that must not be written.
-    vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
-    let doc = baked.as_ref().unwrap_or(doc);
+    // The pages come from the artboards, which baking leaves as they are. The version a long page
+    // raises the file to decides whether the layers are written, so it is settled before baking.
     let pages = pages(doc, opts)?;
     let raised = for_long_pages(set, &pages)?;
     let set = raised.as_ref().unwrap_or(set);
+    // Live geometry effects export as their result, in symbols' art too; raster effects are
+    // reported below.
+    // Only the layers this export writes place their instances' art (see `ex.non_printing` and
+    // `ex.layers` below).
+    let layers = vectorcraft_effects::WrittenLayers {
+        hidden: set.writes_layers() && !doc.page_knockout,
+        non_printing: set.include_non_printing || set.create_layers,
+        hidden_objects: false,
+    };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, true, layers);
+    // Baking stops early when cancelled, leaving a half-baked copy that must not be written.
+    vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
+    let doc = baked.as_ref().unwrap_or(doc);
 
     // The file's Title is File Info's; the page information names the document, as its tab does.
     let title = crate::pdfx::title(set.standard, opts.title.clone().unwrap_or_else(|| doc.info_title().to_owned()));

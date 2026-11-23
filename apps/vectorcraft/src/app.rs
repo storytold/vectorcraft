@@ -43,6 +43,16 @@ impl eframe::App for App {
     /// Restore the borderless caption, apply platform menu and pen input, and hand the frame to the
     /// app's raw-input hook while the keyboard user is unconfined.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        // Without vsync, a main-window frame starts no sooner than the minimum interval after the
+        // last one. eframe runs this hook once per frame, shown or not, before egui reads the input.
+        // The frame's time moves on by the wait, and the hang report's frame time starts after it.
+        if raw.viewport_id == egui::ViewportId::ROOT {
+            if let Some(wait) = super::presentation::frame_wait(self.min_frame, self.last_frame_began.map(|t| t.elapsed())) {
+                std::thread::sleep(wait);
+                raw.time = raw.time.map(|time| time + wait.as_secs_f64());
+            }
+            self.last_frame_began = Some(std::time::Instant::now());
+        }
         let _timed = BEACON.enter_timed(Stage::Input);
         self.frame_start = Some(std::time::Instant::now());
         // winit gives the window its caption back when it changes the window's flags (maximize,
@@ -108,34 +118,11 @@ impl eframe::App for App {
         self.app.start_pending_update();
         #[cfg(target_os = "macos")]
         super::mac_cursor::release();
+        // Dropping the app can wait for the clipboard handles to let go: the windows leave the
+        // screen first (`quit_windows`).
         #[cfg(not(any(target_os = "macos", windows)))]
-        hide_before_teardown(self.winit_window.as_deref());
+        super::quit_windows::before_teardown(self.winit_window.as_deref());
         end_before_teardown(self.frames);
-    }
-}
-
-/// The main window as [`hide_before_teardown`] sees it.
-#[cfg(not(any(target_os = "macos", windows)))]
-pub(crate) trait QuittingWindow {
-    fn hide(&self);
-}
-
-#[cfg(not(any(target_os = "macos", windows)))]
-impl QuittingWindow for winit::window::Window {
-    fn hide(&self) {
-        self.set_visible(false);
-    }
-}
-
-/// On Linux and the BSDs, hide the main window before eframe drops the app. Dropping the app waits
-/// up to [`vectorcraft_ui_egui::CLIPBOARD_PROBE_STOP_WAIT`] for the clipboard handles to let go, and
-/// the window would stay on screen for that time. The window is hidden, not closed: the Wayland
-/// clipboard reads text on the window's connection. winit hides X11 windows (XWayland included) and
-/// cannot hide a Wayland window.
-#[cfg(not(any(target_os = "macos", windows)))]
-pub(crate) fn hide_before_teardown<W: QuittingWindow + ?Sized>(window: Option<&W>) {
-    if let Some(window) = window {
-        window.hide();
     }
 }
 

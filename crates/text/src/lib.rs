@@ -18,6 +18,7 @@ pub mod craft_fonts;
 pub mod edit;
 pub mod embed;
 mod features;
+mod file_font;
 mod fontconfig;
 mod fontdb;
 mod harakat;
@@ -26,6 +27,7 @@ mod justify;
 mod kashida;
 mod kept;
 mod layout;
+pub mod retype;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
 mod suitcase;
@@ -40,11 +42,13 @@ pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
 pub use features::{
     EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
 };
+pub use file_font::{FILE_FONT_UPEM, FileFontInfo, FileGlyph, MAX_FILE_GLYPHS, build_file_font};
 pub use fontdb::{
-    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontMatch, FontTraits, GlyphAlternate, GlyphOrigin, IcfMargins, JoiningPosition,
-    LentCompositeFonts, PlatformFontFiles, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file,
-    is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs,
-    user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, GlyphAlternate,
+    GlyphCategory, GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, MAX_FILE_FACES, OutlineFormat, PlatformFontFiles,
+    RECENTLY_ADDED_WITHIN, RecentlyAdded, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file,
+    is_generic_family, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight,
+    system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 pub use layout::{envelope_ink, layout_inputs, register_envelope_ink};
@@ -54,7 +58,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
 pub use layout::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
-pub use shape::{aki_space, inseparable, line_start_space, spacing_scale};
+pub use shape::{aki_space, inseparable, kinsoku_set_from, line_start_space, repeat_base, spacing_scale};
 pub use vectorcraft_doc::TextObject;
 
 pub use vectorcraft_doc::{AreaFit, FirstBaseline, TextFlow, VerticalAlign};
@@ -188,6 +192,12 @@ pub struct PositionedGlyph {
     /// line's baseline before Character Alignment moves the glyph (y down). It names the block
     /// line whatever the alignment of each character on it. 0 for any other glyph.
     pub warichu_line: f64,
+    /// Type on an open path that starts before the path: the glyph's middle falls before the
+    /// path's start, so it draws nothing (its `outline` is empty and it has no image or color
+    /// art), hit testing and Touch Type skip it while a glyph is drawn, and exports leave it out.
+    /// It stays in the layout for the caret, at the path's start with no advance or width, and its
+    /// ligature carets stand there too.
+    pub off_path: bool,
 }
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
@@ -395,6 +405,10 @@ pub struct TextLayout {
     pub inlines: Vec<InlineGlyph>,
     /// List markers, in text order.
     pub markers: Vec<ListMarker>,
+    /// Kurikaeshi Moji Shori: the repeat marks drawn as the character they stand for, as (the
+    /// mark's byte offset in the plain text, the character drawn), in text order. Writers that put
+    /// characters in place of glyphs (live SVG text) write that character.
+    pub repeat_marks: Vec<(usize, char)>,
 }
 
 impl Default for TextLayout {
@@ -413,6 +427,7 @@ impl Default for TextLayout {
             path_fill: None,
             inlines: Vec::new(),
             markers: Vec::new(),
+            repeat_marks: Vec::new(),
         }
     }
 }
@@ -556,25 +571,32 @@ fn cluster_extent(layout: &TextLayout, glyphs: &[PositionedGlyph], i: usize) -> 
 
 /// Caret for byte offset `byte`, as a (top, bottom) segment in text space. In horizontal type, a
 /// cluster drawn with several glyphs is measured whole ([`cluster_extent`]). Inside a ligature the
-/// caret stands at its caret stops ([`PositionedGlyph::carets`]).
+/// caret stands at its caret stops ([`PositionedGlyph::carets`]). Next to a character of a warichu
+/// block the caret spans the band of its block line, as its highlight does.
 pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
     let Some(line) = layout.lines.get(layout.line_of(byte)) else {
         return (Point::ZERO, Point::ZERO);
     };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
-    let (pos, angle) = if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
+    let (pos, angle, glyph) = if let Some(i) = glyphs.iter().position(|g| g.byte <= byte && g.byte + g.len > byte) {
         let g = &glyphs[i];
         let (origin, advance) = match cluster_extent(layout, glyphs, i) {
             Some((left, right)) => (Point::new(left, g.origin.y), right - left),
             None => (g.origin, g.advance),
         };
         let off = g.caret_offset(byte, advance);
-        (origin + dir(g.angle) * if g.rtl { advance - off } else { off }, g.angle)
+        (origin + dir(g.angle) * if g.rtl { advance - off } else { off }, g.angle, Some(g))
     } else if let Some(g) = glyphs.iter().max_by_key(|g| g.byte + g.len) {
-        (g.origin + dir(g.angle) * if g.rtl { 0.0 } else { g.advance }, g.angle)
+        (g.origin + dir(g.angle) * if g.rtl { 0.0 } else { g.advance }, g.angle, Some(g))
     } else {
-        (layout.physical_point(Point::new(line.x0, line.baseline)), if layout.vertical { std::f64::consts::FRAC_PI_2 } else { 0.0 })
+        (layout.physical_point(Point::new(line.x0, line.baseline)), if layout.vertical { std::f64::consts::FRAC_PI_2 } else { 0.0 }, None)
     };
+    if let Some((_, top, bottom)) =
+        glyph.filter(|g| g.warichu.is_some() && !layout.on_path).and_then(|g| block_band(&warichu_rows(layout, line), line, g))
+    {
+        let x = layout.logical_point(pos).x;
+        return (layout.physical_point(Point::new(x, top)), layout.physical_point(Point::new(x, bottom)));
+    }
     // Up vector in y-down space, rotated with the baseline.
     let d = dir(angle);
     let up = Vec2::new(d.y, -d.x);
@@ -593,11 +615,15 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
                 .map(|(_, d)| (p - (g.origin + along * if g.rtl { g.advance - d } else { d })).hypot2())
                 .fold(mid, f64::min)
         };
-        let best = layout.glyphs.iter().enumerate().min_by(|(_, a), (_, b)| near(a).total_cmp(&near(b)));
+        // Glyphs before the start of an open path draw nothing: a click goes to a drawn one when
+        // there is one.
+        let drawn = layout.glyphs.iter().any(|g| !g.off_path);
+        let best = layout.glyphs.iter().enumerate().filter(|(_, g)| !(drawn && g.off_path)).min_by(|(_, a), (_, b)| near(a).total_cmp(&near(b)));
         let Some((i, g)) = best else { return layout.lines.first().map_or(0, |l| l.start) };
         // `first` and `last` are the first and last glyphs of the cluster. A click before the middle of
-        // the cluster, measured along the first glyph's direction, goes to the cluster's start.
-        let same = |o: &&PositionedGlyph| o.byte == g.byte && o.len == g.len;
+        // the cluster, measured along the first glyph's direction, goes to the cluster's start. A
+        // cluster's glyphs before an open path's start are left out when one of its glyphs is drawn.
+        let same = |o: &&PositionedGlyph| o.byte == g.byte && o.len == g.len && !(drawn && o.off_path);
         let first = layout.glyphs[..=i].iter().rev().take_while(same).last().unwrap_or(g);
         let last = layout.glyphs[i..].iter().take_while(same).last().unwrap_or(g);
         let along = dir(first.angle);
@@ -786,6 +812,20 @@ fn warichu_rows(layout: &TextLayout, l: &LineInfo) -> Vec<(usize, f64, f64)> {
     rows
 }
 
+/// The band across line `l` (text space, from the top) of the block line that warichu glyph `g` is
+/// on, with that block line's index in its block: out to halfway to the block lines next to it,
+/// and to the line's top or bottom past the block's outer lines. `rows` are the line's
+/// [`warichu_rows`]. None for a glyph of no block.
+fn block_band(rows: &[(usize, f64, f64)], l: &LineInfo, g: &PositionedGlyph) -> Option<(usize, f64, f64)> {
+    let block = g.warichu?;
+    let lines = rows.get(rows.partition_point(|r| r.0 < block)..rows.partition_point(|r| r.0 <= block)).unwrap_or_default();
+    let row = lines.partition_point(|r| r.1 < g.warichu_line - 1e-9);
+    let own = lines.get(row).filter(|r| (r.1 - g.warichu_line).abs() < 1e-9)?;
+    let top = row.checked_sub(1).and_then(|k| lines.get(k)).map_or(l.baseline - l.ascent, |above| (above.2 + own.2) * 0.5);
+    let bottom = lines.get(row + 1).map_or(l.baseline + l.descent, |below| (below.2 + own.2) * 0.5);
+    Some((row, top, bottom))
+}
+
 /// A glyph of a warichu block line, for [`selection_quads`]: its block and block line, its extent
 /// along the line and its band across it (text space), and whether the selection covers it.
 struct BlockPiece {
@@ -829,11 +869,7 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         let mut pieces: Vec<BlockPiece> = Vec::new();
         for (i, g) in layout.glyphs.iter().enumerate().take(l.glyph_end).skip(l.glyph_start) {
             let Some(block) = g.warichu else { continue };
-            let lines = rows.get(rows.partition_point(|r| r.0 < block)..rows.partition_point(|r| r.0 <= block)).unwrap_or_default();
-            let row = lines.partition_point(|r| r.1 < g.warichu_line - 1e-9);
-            let Some(own) = lines.get(row).filter(|r| (r.1 - g.warichu_line).abs() < 1e-9) else { continue };
-            let top = row.checked_sub(1).and_then(|k| lines.get(k)).map_or(l.baseline - l.ascent, |above| (above.2 + own.2) * 0.5);
-            let bottom = lines.get(row + 1).map_or(l.baseline + l.descent, |below| (below.2 + own.2) * 0.5);
+            let Some((row, top, bottom)) = block_band(&rows, l, g) else { continue };
             let x = layout.logical_point(g.origin).x;
             let selected = selected(i, g);
             let (f0, f1) = if selected { covered(g) } else { (0.0, g.advance) };

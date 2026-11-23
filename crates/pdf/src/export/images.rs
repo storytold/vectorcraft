@@ -1,7 +1,9 @@
-use super::exporter::{UNDECODED, UNWRITABLE_IMAGE, q, writable, xf};
+use super::exporter::{UNCONVERTED, UNDECODED, UNWRITABLE_IMAGE, q, writable, xf};
 use super::{Arc, BlendMode, Color, Exporter, Image, Node, NodeKind, Paint, Rect, Size, Surface, cmyk, krilla};
 use krilla::color::device_n::{Colorant, DeviceNSpace, Process};
 use krilla::image::{BitsPerComponent, CustomImage, ImageColorspace};
+
+use crate::images::SourceProfiles;
 
 /// The byte count of a repeated color channel, within [`vectorcraft_doc::MAX_RASTER_ALLOC`].
 fn tinted_color_len(samples: usize, pixels: usize) -> Option<usize> {
@@ -124,7 +126,9 @@ impl Exporter<'_> {
     /// settings say ([`crate::images::recode`], [`crate::images::recode_cmyk`] for CMYK images);
     /// cached by key (and size when images are resampled). With `interpolate` (and the export's
     /// own setting), viewers may smooth it. `None`, with [`UNDECODED`] among the warnings, for an
-    /// image that is missing, can't be decoded or is in [`Self::left_out`].
+    /// image that is missing, can't be decoded or is in [`Self::left_out`]; `None`, with
+    /// [`UNCONVERTED`], for one whose colors the Output settings convert but that can only be
+    /// written in its own ([`crate::images::Recoded::unconverted`]).
     fn load_image(&mut self, im: &vectorcraft_doc::ImageObject, size: (f64, f64), interpolate: bool) -> Option<Image> {
         let key = im.key.as_str();
         let c = self.compression;
@@ -138,22 +142,38 @@ impl Exporter<'_> {
         }
         let doc = self.doc;
         let out = self.out.clone();
+        let profiles = out.source_profiles();
+        let then = out.converts_tagged_pixels().then_some(&*out);
+        let grey = out.converts_grey_images();
+        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit, then, grey });
+        let mut unconverted = false;
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
             if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
                 self.rgb_in_cmyk.images.insert(key.to_string());
             }
             let r = if cmyk_image {
-                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None)
+                let icc = out.cmyk_image_icc(blob);
+                crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, out.cmyk_tag(icc.as_deref()))
             } else {
-                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels())
+                crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles, to_srgb)
             };
-            if let Some(w) = r.warning {
+            if r.unconverted {
+                // The source image would be written in its own colors: it is left out, with a
+                // warning that names the conversion when it could have been written.
+                unconverted = embed(blob, interpolate, self.sixteen_bit, profiles).is_some();
+                return None;
+            }
+            let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
+            // An image left out gets the warning below instead.
+            for w in [r.warning, r.note].into_iter().flatten().filter(|_| img.is_some()) {
                 self.warn(w);
             }
-            r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit))
+            img
         });
-        if img.is_none() {
+        if unconverted {
+            self.warn(UNCONVERTED);
+        } else if img.is_none() {
             self.warn(UNDECODED);
         }
         self.images.insert(cache, img.clone());
@@ -163,22 +183,33 @@ impl Exporter<'_> {
     /// CMYK image `im` with the alpha of its opacity mask `m`, when the mask is a greyscale image
     /// on the image's own pixel grid (an image's soft mask as it opens): the alpha is written as the
     /// image's soft mask, as an RGBA image's is, rather than as a luminosity soft mask over it,
-    /// through which CoreGraphics draws CMYK images on black boxes (#2159). `None` for other
-    /// images and masks; cached like [`Self::load_image`], `interpolate` as there.
-    pub(super) fn masked_image(&mut self, im: &vectorcraft_doc::ImageObject, m: &vectorcraft_doc::OpacityMask, interpolate: bool) -> Option<Image> {
+    /// through which CoreGraphics draws CMYK images on black boxes (#2159). `shown` is `im` as it is
+    /// shown ([`vectorcraft_doc::Document::shown_image`]). When a color mask shows other pixels
+    /// that are not CMYK (`im`'s own pixels with the hidden colors clear), `im`'s inks are written
+    /// with the mask's alpha multiplied by the shown pixels' alpha, so the hidden colors stay
+    /// hidden; shown pixels that are CMYK are written themselves. `None` for other images and
+    /// masks, and for shown pixels of another size; cached like [`Self::load_image`],
+    /// `interpolate` as there.
+    pub(super) fn masked_image(
+        &mut self,
+        im: &vectorcraft_doc::ImageObject,
+        shown: &vectorcraft_doc::ImageObject,
+        m: &vectorcraft_doc::OpacityMask,
+        interpolate: bool,
+    ) -> Option<Image> {
         let art = &m.art;
         let NodeKind::Image(mi) = &art.kind else { return None };
         // A color-masked image in the mask's art masks with the pixels it shows.
-        let shown = self.doc.shown_image(art, mi);
-        let mi = &*shown;
+        let shown_mask = self.doc.shown_image(art, mi);
+        let mi = &*shown_mask;
         let plain =
             art.opacity >= 1.0 && art.blend == BlendMode::Normal && art.extras().mask.is_none() && !art.appearance.effects.iter().any(|e| e.visible);
         if m.invert || !plain || (mi.xf, mi.width, mi.height) != (im.xf, im.width, im.height) {
             return None;
         }
-        let size = self.image_size(im);
+        let size = self.image_size(shown);
         let interpolate = interpolate && self.interpolate;
-        let mut cache = format!("{}\u{0}{}\u{0}{}", im.key, mi.key, m.clip);
+        let mut cache = format!("{}\u{0}{}\u{0}{}\u{0}{}", im.key, shown.key, mi.key, m.clip);
         if self.downsampled() {
             cache.push_str(&format!("\u{0}{:.3}x{:.3}", size.0, size.1));
         }
@@ -189,9 +220,23 @@ impl Exporter<'_> {
             return i.clone();
         }
         let doc = self.doc;
-        let img = doc.image_blob(im).filter(|b| b.is_cmyk()).and_then(|blob| {
-            let alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
-            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha));
+        // Pixels a color mask shows that are not CMYK carry the hidden colors as their alpha.
+        let shown_blob = doc.image_blob(shown);
+        let (source, hidden) = match shown_blob {
+            Some(b) if shown.key != im.key && !b.is_cmyk() => (doc.image_blob(im), Some(b)),
+            b => (b, None),
+        };
+        let img = source.filter(|b| b.is_cmyk()).and_then(|blob| {
+            let mut alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
+            if let Some(hidden) = hidden {
+                let shown_alpha = crate::images::image_alpha(hidden, im.width, im.height)?;
+                for (a, s) in alpha.iter_mut().zip(shown_alpha) {
+                    *a = ((u32::from(*a) * u32::from(s) + 127) / 255) as u8;
+                }
+            }
+            let icc = self.out.cmyk_image_icc(blob);
+            let tag = self.out.cmyk_tag(icc.as_deref());
+            let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha), tag);
             if let (Some(w), Some(_)) = (r.warning, &r.image) {
                 self.warn(w);
             }
@@ -313,22 +358,43 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(png)
 }
 
-/// Most pixels an image may have to be embedded: twice what the app reads (64 million), so every image
-/// it holds is still written.
-const MAX_EMBED_PIXELS: u64 = 1 << 27;
-
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
-/// other formats decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG of 16 bits a
-/// sample is written at 8 bits ([`png_8_bit`]).
-pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool) -> Option<Image> {
+/// other formats (a TIFF) decoded with their 16-bit samples and, when `profiles` keeps it (not in
+/// PDF/X-1a), the ICC profile they carry ([`crate::images::decoded_image`]). When `profiles`
+/// doesn't keep it, an image that carries a gray or RGB profile is written without it, and so is
+/// one whose gray or RGB profile is malformed ([`crate::images::valid_icc`]): a JPEG with its data
+/// unchanged, an image of another format decoded. With [`SourceProfiles::Remove`], an image that
+/// carries any profile is written without it, a JPEG without its `ICC_PROFILE` segments (decoded
+/// when those can't be taken out). Without `sixteen_bit` (a file before PDF 1.5), a PNG or another
+/// image of 16 bits a sample is written at 8 bits ([`png_8_bit`]).
+pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool, profiles: SourceProfiles) -> Option<Image> {
     // The header's size first: the writer's decoders allocate what it declares, and the encoded
     // bytes of an image that is far larger than any the app reads may be a few kilobytes.
     let size = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions();
-    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > MAX_EMBED_PIXELS) {
+    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > crate::images::MAX_EMBED_PIXELS) {
         return None;
     }
     let bytes = blob.bytes.as_ref().clone();
+    // The PDF writer keeps a gray or RGB image's ICC profile: unless `profiles` keeps it, or when
+    // the profile is malformed, such a JPEG is written without its profile, and an image of another
+    // format is decoded and written without it. The color space is read from the header's bytes
+    // 16..20 even in a profile cut short, as the PDF writer reads it. With `Remove`, a JPEG's
+    // `ICC_PROFILE` segments are taken out also when they don't make up a profile the decoder reads.
+    let remove = profiles == SourceProfiles::Remove;
+    let jpeg = matches!(blob.mime.as_str(), "image/jpeg" | "image/jpg");
+    let unkept = crate::images::source_icc(&bytes).is_some_and(|icc| match icc.get(16..20) {
+        _ if remove => true,
+        Some(space @ (b"GRAY" | b"RGB ")) => {
+            profiles != SourceProfiles::Keep || <[u8; 4]>::try_from(space).is_ok_and(|s| !crate::images::valid_icc(&icc, s))
+        }
+        _ => false,
+    });
+    let strip = (remove && jpeg) || unkept;
     let direct = match blob.mime.as_str() {
+        "image/jpeg" | "image/jpg" if strip => {
+            crate::images::jpeg_data(&bytes, remove).and_then(|data| Image::from_jpeg_with_icc(data.into(), None, interpolate).ok())
+        }
+        _ if strip => None,
         "image/png" if !sixteen_bit && png_16_bit(&bytes) => png_8_bit(&bytes).and_then(|png| Image::from_png(png.into(), interpolate).ok()),
         "image/png" => Image::from_png(bytes.clone().into(), interpolate).ok(),
         "image/jpeg" | "image/jpg" => Image::from_jpeg(bytes.clone().into(), interpolate).ok(),
@@ -336,11 +402,7 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
         "image/webp" => Image::from_webp(bytes.clone().into(), interpolate).ok(),
         _ => None,
     };
-    direct.or_else(|| {
-        let rgba = image::load_from_memory(&bytes).ok()?.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        Some(Image::from_rgba8(rgba.into_raw(), w, h))
-    })
+    direct.or_else(|| crate::images::decoded_image(&bytes, interpolate, sixteen_bit, profiles))
 }
 
 #[cfg(test)]
@@ -359,7 +421,7 @@ mod tests {
         let crc =
             !png[12..29].iter().fold(!0u32, |c, b| (0..8).fold(c ^ u32::from(*b), |c, _| if c & 1 == 1 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 }));
         png[29..33].copy_from_slice(&crc.to_be_bytes());
-        assert!(super::embed(&ImageBlob::png(png), false, true).is_none());
+        assert!(super::embed(&ImageBlob::png(png), false, true, super::SourceProfiles::Keep).is_none());
     }
 
     #[test]
@@ -413,7 +475,8 @@ mod tests {
             assert!(exporter.colorized_image(&image("pic", scale), &paint, true).is_some(), "colorized at {scale}");
             let art = vectorcraft_doc::Node::new(doc.layers[0].id, vectorcraft_doc::NodeKind::Image(Box::new(image("alpha", scale))));
             let mask = vectorcraft_doc::OpacityMask::new(art, true);
-            assert!(exporter.masked_image(&image("inks", scale), &mask, true).is_some(), "masked at {scale}");
+            let inks = image("inks", scale);
+            assert!(exporter.masked_image(&inks, &inks, &mask, true).is_some(), "masked at {scale}");
         }
         assert_eq!(exporter.images.len(), 2, "{:?}", exporter.images.keys().collect::<Vec<_>>());
     }

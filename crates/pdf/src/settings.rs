@@ -387,7 +387,12 @@ pub struct OutputSettings {
     /// Destination profile name (empty: the document's profile; [`DOCUMENT_CMYK`]: the CMYK
     /// profile in effect, whatever the document's colour mode).
     pub destination: String,
-    pub profiles: ProfileInclusion,
+    /// The Profile Inclusion setting; `None` (left out, `null` or `"default"`) when it isn't set:
+    /// colors are then written as with [`ProfileInclusion::None`], while gray and RGB images keep
+    /// the ICC profiles they carry. A set [`ProfileInclusion::None`] also leaves those out (see
+    /// [`crate::output`]).
+    #[serde(deserialize_with = "unset_or_choice")]
+    pub profiles: Option<ProfileInclusion>,
     /// PDF/X output intent profile name.
     pub output_intent: String,
     pub output_condition: String,
@@ -395,6 +400,19 @@ pub struct OutputSettings {
     pub registry: String,
     /// Mark the file as trapped.
     pub trapped: bool,
+}
+
+/// The JSON id of a setting that isn't set ([`OutputSettings::profiles`]), as `null` is.
+pub const UNSET_CHOICE: &str = "default";
+
+/// A choice that may be left unset: `null` and [`UNSET_CHOICE`] are `None`, a choice's id is that
+/// choice.
+fn unset_or_choice<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
+    match Option::<String>::deserialize(d)? {
+        None => Ok(None),
+        Some(id) if id == UNSET_CHOICE => Ok(None),
+        Some(id) => T::deserialize(serde::de::value::StringDeserializer::<D::Error>::new(id)).map(Some),
+    }
 }
 
 /// The Advanced section.
@@ -447,9 +465,14 @@ impl Default for SecuritySettings {
     }
 }
 
-/// `v` lies in `lo..=hi` (and is a number).
+/// `v` lies in `lo..=hi` (and is a number). The error names the range with its unit as one value
+/// (`72–2400 ppi`), so a catalog can match the message and translate it.
 pub(crate) fn within(name: &str, v: f64, lo: f64, hi: f64, unit: &str) -> Result<(), PdfError> {
-    if (lo..=hi).contains(&v) { Ok(()) } else { Err(PdfError::BadSetting(format!("{name} must be {lo}–{hi}{unit} (got {v})"))) }
+    if (lo..=hi).contains(&v) {
+        return Ok(());
+    }
+    let range = format!("{lo}–{hi}{unit}");
+    Err(PdfError::BadSetting(format!("{name} must be {range} (got {v})")))
 }
 
 impl PdfSettings {

@@ -1,8 +1,9 @@
 //! Perspective Grid Options (double-click the Perspective Grid tool): whether the Plane Switching
-//! Widget shows and which corner of the window it sits in. OK runs `perspective.widget.options`
-//! (the options live in the preferences).
+//! Widget shows and which corner of the window it sits in, and what Automatic Plane Positioning
+//! takes a point from. OK runs `perspective.widget.options` (the options live in the preferences).
 //!
-//! Fields: `show` (bool) and `position` (`topLeft`, `topRight`, `bottomLeft`, `bottomRight`).
+//! Fields: `show` (bool), `position` (`topLeft`, `topRight`, `bottomLeft`, `bottomRight`),
+//! `anchorPoint` (bool) and `gridlineIntersection` (bool).
 
 use serde_json::{Value, json};
 use vectorcraft_tools::distort::perspective::widget::WidgetCorner;
@@ -38,5 +39,13 @@ fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(8.0);
     let corners: Vec<(&str, &str)> = WidgetCorner::ALL.iter().map(|c| (c.id(), c.label())).collect();
     ui.add_enabled_ui(on, |ui| form::choice(ui, d, "position", tl!("Widget Position:"), (110.0, 160.0), &corners));
+    ui.add_space(8.0);
+    widgets::section_header(ui, tl!("Automatic Plane Positioning"));
+    for (key, label) in [("anchorPoint", tl!("Anchor Point of Perspective Artwork")), ("gridlineIntersection", tl!("Intersection of Gridlines"))] {
+        let on = d.bool(key);
+        if widgets::check(ui, label, on, true) {
+            d.fields.insert(key.into(), json!(!on));
+        }
+    }
     false
 }

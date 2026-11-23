@@ -529,13 +529,14 @@ pub(super) fn align_vertically(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &Tex
             std::mem::take(&mut cx.out.lines),
             std::mem::take(&mut cx.out.inlines),
             std::mem::take(&mut cx.out.markers),
+            std::mem::take(&mut cx.out.repeat_marks),
             std::mem::replace(&mut cx.out.overflow, false),
         );
         flow(cx, paras, t, Some(regions));
         if laid_out(&cx.out) < before {
             // Text no longer fits (lines got narrower, or flow around a wrap object): undo the
             // pass and try a smaller step.
-            (cx.out.glyphs, cx.out.lines, cx.out.inlines, cx.out.markers, cx.out.overflow) = prev;
+            (cx.out.glyphs, cx.out.lines, cx.out.inlines, cx.out.markers, cx.out.repeat_marks, cx.out.overflow) = prev;
             for (r, (shift, gap)) in regions.iter_mut().zip(saved) {
                 r.shift = shift;
                 r.gap = gap;

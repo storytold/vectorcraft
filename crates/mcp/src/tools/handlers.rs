@@ -1,5 +1,6 @@
 use super::dispatch::trace_views;
 use super::{Backend, Map, ToolResult, Value, json};
+use vectorcraft_doc::resample::{Resample, fitted};
 
 // ---------- implementation ----------
 
@@ -246,6 +247,16 @@ pub(super) fn select_ids(b: &mut dyn Backend, a: &Args) -> Result<(), String> {
 
 pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
     let text = a.get("text").and_then(Value::as_str).ok_or("missing string argument `text`")?;
+    // Creating type on a path replaces the path. Refuse an invalid effect before editing.
+    let path_effect = match a.get("pathEffect") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(effect)) if vectorcraft_doc::PathEffect::parse(effect).is_some() => Some(effect),
+        Some(Value::String(effect)) => return Err(format!("unknown path effect `{effect}`")),
+        Some(_) => return Err("`pathEffect` must be a string".into()),
+    };
+    if path_effect.is_some() && (!a.contains_key("path") || a.get("mode").is_some_and(|m| !matches!(m.as_str(), Some("onPath" | "path")))) {
+        return Err("`pathEffect` requires type on a path".into());
+    }
     let mut style = json!({});
     for k in ["size", "font", "color", "justify", "vertical"] {
         if let Some(v) = a.get(k) {
@@ -275,12 +286,12 @@ pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
         }
         exec(b, "text.create", p)?
     };
-    if let Some(e) = a.get("pathEffect").and_then(Value::as_str) {
+    if let Some(e) = path_effect {
         exec(b, "type.pathOptions", json!({"effect": e}))?;
     }
     let mut made = json!({"id": r.get("id")});
     // A path effect is applied after the text is made: ask again how it fits then.
-    let overflow = match r.get("id").filter(|_| a.get("pathEffect").is_some()) {
+    let overflow = match r.get("id").filter(|_| path_effect.is_some()) {
         Some(id) => exec(b, "document.node", json!({"id": id, "summary": true}))?.get("overflow").and_then(Value::as_bool) == Some(true),
         None => r.get("overflow").is_some(),
     };
@@ -291,9 +302,42 @@ pub(super) fn add_text(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
 }
 
 pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> {
+    // Each operation is its own command: check the params the later ones refuse before the first
+    // runs, so a refused request changes nothing. The `transform` arm of `dispatch` has already
+    // refused a `dx`, `dy`, `rotate`, `scale`, `scaleX`, `scaleY` or `shear` that is not a number.
+    fn bad(cmd: &'static str) -> impl Fn(String) -> String {
+        move |e| format!("invalid parameters for `{cmd}`: {e}")
+    }
+    let s = a.get("scale").and_then(Value::as_f64);
+    let (sx, sy) = (a.get("scaleX").and_then(Value::as_f64).or(s), a.get("scaleY").and_then(Value::as_f64).or(s));
+    if sx.is_some() || sy.is_some() {
+        vectorcraft_engine::cmd::scale_factors(sx.unwrap_or(100.0), sy.unwrap_or(100.0)).map_err(bad("object.scale"))?;
+    }
+    // A null `reflect`, `copy` or `origin` is left out.
+    let reflect = match a.get("reflect") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(axis)) => Some(axis.as_str()),
+        Some(v) => return Err(format!("invalid parameters for `object.reflect`: axis must be \"vertical\" or \"horizontal\", not `{v}`")),
+    };
+    if let Some(axis) = reflect {
+        vectorcraft_engine::cmd::reflect_axis(Some(&json!(axis))).map_err(bad("object.reflect"))?;
+    }
+    let shear = a.get("shear").and_then(Value::as_f64);
+    if let Some(sh) = shear {
+        vectorcraft_engine::cmd::shear_tangent(sh).map_err(bad("object.shear"))?;
+    }
+    let copy = match a.get("copy") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or_else(|| format!("`copy` must be true or false, not {v}"))?,
+    };
+    if let Some(o) = a.get("origin").filter(|o| !o.is_null())
+        && !o.as_array().is_some_and(|xy| xy.len() == 2 && xy.iter().all(Value::is_number))
+    {
+        return Err(format!("`origin` must be [x, y], not {o}"));
+    }
     select_ids(b, a)?;
     // With `copy`, the first operation duplicates and the rest transform the copy (the new selection).
-    let copy = std::cell::Cell::new(a.get("copy").and_then(Value::as_bool).unwrap_or(false));
+    let copy = std::cell::Cell::new(copy);
     let with = |mut p: Value| {
         if let Some(o) = a.get("origin") {
             p["origin"] = o.clone();
@@ -311,17 +355,15 @@ pub(super) fn transform(b: &mut dyn Backend, a: &Args) -> Result<Value, String> 
         exec(b, "object.rotate", with(json!({"angle": r})))?;
         done.push("rotate");
     }
-    let s = a.get("scale").and_then(Value::as_f64);
-    let (sx, sy) = (a.get("scaleX").and_then(Value::as_f64).or(s), a.get("scaleY").and_then(Value::as_f64).or(s));
     if sx.is_some() || sy.is_some() {
         exec(b, "object.scale", with(json!({"sx": sx.unwrap_or(100.0), "sy": sy.unwrap_or(100.0)})))?;
         done.push("scale");
     }
-    if let Some(axis) = a.get("reflect").and_then(Value::as_str) {
+    if let Some(axis) = reflect {
         exec(b, "object.reflect", with(json!({"axis": axis})))?;
         done.push("reflect");
     }
-    if let Some(sh) = a.get("shear").and_then(Value::as_f64) {
+    if let Some(sh) = shear {
         exec(b, "object.shear", with(json!({"angle": sh})))?;
         done.push("shear");
     }
@@ -498,14 +540,16 @@ const MAX_CAPTURE_SIDE: u32 = 16_384;
 
 /// `png` decoded, refused when a side is longer than `side` or the decode needs more than 256 MiB:
 /// the picture is the app's reply, and its header names the size it is decoded at.
-pub(super) fn decode_png(png: &[u8], side: u32) -> Result<image::DynamicImage, image::ImageError> {
-    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(png), image::ImageFormat::Png);
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(side);
-    limits.max_image_height = Some(side);
-    limits.max_alloc = Some(256 << 20);
-    reader.limits(limits);
-    reader.decode()
+pub(super) fn decode_png(png: &[u8], side: u32) -> Result<image::DynamicImage, String> {
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_width = side;
+    opts.limits.max_height = side;
+    opts.limits.max_alloc = 256 << 20;
+    let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, png, &opts).map_err(|e| e.to_string())?;
+    let (w, h) = img.dimensions();
+    image::RgbaImage::from_raw(w, h, img.to_rgba8())
+        .map(image::DynamicImage::ImageRgba8)
+        .ok_or_else(|| "decoded PNG buffer size mismatch".to_string())
 }
 
 /// A window capture with `max_side`: scaled down when its longer side is larger, with its own size
@@ -521,12 +565,20 @@ fn fit_capture(png: Vec<u8>, max: Option<u32>, info: &mut Value) -> Result<Vec<u
         info["height"] = json!(img.height());
         return Ok(png);
     }
-    let img = img.thumbnail(max, max);
+    let img = fitted(img, max, max, Resample::Average);
     info["width"] = json!(img.width());
     info["height"] = json!(img.height());
-    let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode capture: {e}"))?;
-    Ok(out.into_inner())
+    let rgba = img.to_rgba8();
+    let raw = craft_image_codecs::Image::from_raw(
+        rgba.width(),
+        rgba.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.into_raw(),
+    )
+    .map_err(|e| format!("encode capture: {e}"))?;
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| format!("encode capture: {e}"))
 }
 
 pub(super) fn image_result(png: &[u8], info: Value) -> ToolResult {
@@ -545,9 +597,15 @@ mod decode_tests {
 
     #[test]
     fn a_picture_with_a_side_past_the_limit_is_not_decoded() {
-        let mut png = std::io::Cursor::new(Vec::new());
-        image::RgbaImage::new(200, 10).write_to(&mut png, image::ImageFormat::Png).unwrap();
-        let png = png.into_inner();
+        let img = craft_image_codecs::Image::from_raw(
+            200,
+            10,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            vec![0; 200 * 10 * 4],
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         assert!(decode_png(&png, 100).is_err());
         assert_eq!(decode_png(&png, 200).unwrap().width(), 200);
     }

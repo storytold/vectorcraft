@@ -78,10 +78,11 @@ fn joining(c: char) -> Joining {
 }
 
 /// Is the cluster of glyph `a` joined to the cluster of glyph `b` that follows it in `text`: both
-/// right to left in one face, `a`'s last character other than a mark joining the letter after it,
-/// and `b` starting with a letter that joins the one before it?
+/// right to left in one face and set as joining letters (not by a Standard composer), `a`'s last
+/// character other than a mark joining the letter after it, and `b` starting with a letter that
+/// joins the one before it?
 fn joined(text: &str, a: &SGlyph, b: &SGlyph) -> bool {
-    if a.face.id() != b.face.id() || a.level != b.level || !a.level.is_rtl() || a.byte + a.len != b.byte {
+    if a.face.id() != b.face.id() || a.level != b.level || !a.level.is_rtl() || a.byte + a.len != b.byte || !(a.cursive && b.cursive) {
         return false;
     }
     let last = text.get(a.byte..a.byte + a.len).and_then(|s| s.chars().rev().find(|&c| joining(c) != Joining::Transparent));

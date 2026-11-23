@@ -144,7 +144,19 @@ fn the_window_menu_and_the_symbols_panel_open_symbol_libraries() {
     let under = |e: &crate::menus::MenuEntry| e.path == ["Window", "Symbol Libraries"];
     let opened: Vec<_> =
         entries.iter().filter(|e| under(e) && e.command.as_deref() == Some("window.symbolLibrary")).map(|e| e.params["library"].clone()).collect();
-    assert_eq!(opened, [json!("basic-shapes"), json!("ui-frames"), json!("map-markers"), json!("inventory-icons"), json!("skill-icons")]);
+    assert_eq!(
+        opened,
+        [
+            json!("basic-shapes"),
+            json!("ui-frames"),
+            json!("map-markers"),
+            json!("inventory-icons"),
+            json!("skill-icons"),
+            json!("weather-icons"),
+            json!("nature-icons"),
+            json!("media-controls"),
+        ]
+    );
     let has = |cmd: &str| entries.iter().find(|e| under(e) && e.command.as_deref() == Some(cmd)).map(|e| e.enabled);
     assert_eq!(has("window.symbolLibrary.other"), Some(true));
     assert_eq!(has("ui.saveSymbolLibrary"), Some(false), "no symbols to save yet");
@@ -224,4 +236,30 @@ fn other_library_opens_a_documents_symbols_and_reports_unreadable_files() {
     assert!(app.run("window.symbolLibrary.other", json!({"path": bad.to_string_lossy()})).is_err());
     assert!(last_open(&app.ui).is_none());
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A built-in library lists its symbols in the UI language, and Find matches the name shown and the
+/// symbol's own name. A click adds the symbol under its own name. Another library's symbols are
+/// matched by their own names only.
+#[test]
+fn built_in_library_symbols_are_listed_in_the_ui_language() {
+    let mut app = app();
+    let ctx = context();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    app.run("window.symbolLibrary", json!({"library": "basic-shapes"})).unwrap();
+    let panel = last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default();
+    app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
+    frame(&ctx, vec![], 0.0, |ui| library_panel::show_window(&mut app, ui.ctx()));
+    let texts = frame(&ctx, vec![], 0.25, |ui| library_panel::show_window(&mut app, ui.ctx()));
+    assert!(texts.iter().any(|t| t == "Éclat") && texts.iter().any(|t| t == "Étoile"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Burst"), "{texts:?}");
+    let lib = SymbolLibraries::get(&app, "basic-shapes").unwrap().1;
+    for query in ["éclat", "burst"] {
+        let rows = SymbolLibraries::rows(&lib, "basic-shapes", query);
+        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Burst"], "{query}");
+    }
+    assert!(SymbolLibraries::rows(&lib, "loaded/1", "éclat").is_empty(), "another library's symbol is matched by its own name only");
+    click(&mut app, &ctx, "Star", Modifiers::NONE, 1.0);
+    assert_eq!(symbols(&app), ["Star"]);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
 }

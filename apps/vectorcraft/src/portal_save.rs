@@ -242,7 +242,7 @@ fn parent(window: &winit::window::Window) -> (String, Option<()>) {
 /// (<https://wayland.app/protocols/xdg-foreign-unstable-v2>), made as rfd's `window_identifier`
 /// makes it.
 #[cfg(target_os = "linux")]
-mod wayland {
+pub(crate) mod wayland {
     use wayland_client::globals::{GlobalListContents, registry_queue_init};
     use wayland_client::protocol::wl_registry::{self, WlRegistry};
     use wayland_client::protocol::wl_surface::WlSurface;
@@ -308,9 +308,10 @@ mod wayland {
         }
     }
 
-    /// `window`'s Wayland connection and surface, from its raw handles.
+    /// `window`'s Wayland connection and surface, from its raw handles. The caller holds `window`
+    /// while it uses them (`quit_windows` unmaps the main window's surface through them).
     #[allow(unsafe_code)]
-    fn surface(window: &winit::window::Window) -> Option<(Connection, WlSurface)> {
+    pub(crate) fn surface(window: &winit::window::Window) -> Option<(Connection, WlSurface)> {
         use wayland_backend::sys::client::{Backend, ObjectId};
         use winit::raw_window_handle::{HasDisplayHandle as _, HasWindowHandle as _, RawDisplayHandle, RawWindowHandle};
         let (RawWindowHandle::Wayland(w), RawDisplayHandle::Wayland(d)) =
@@ -319,8 +320,8 @@ mod wayland {
             return None;
         };
         // SAFETY: the display is winit's open `wl_display`, which outlives `window` (the caller
-        // holds it until the export is dropped); a backend made from a foreign display does not
-        // close it when dropped.
+        // holds it while it uses the connection, and the export holds it until it is dropped); a
+        // backend made from a foreign display does not close it when dropped.
         let backend = unsafe { Backend::from_foreign_display(d.display.as_ptr().cast()) };
         let conn = Connection::from_backend(backend);
         // SAFETY: the pointer is the window's live `wl_surface` proxy on that display.

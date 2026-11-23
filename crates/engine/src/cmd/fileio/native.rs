@@ -231,20 +231,20 @@ pub(super) fn encode_to(cmd: &str, f: &Format, doc: &Document, p: &Value, w: imp
         }
         other => other,
     };
+    // Without an Export for Screens folder outside the read roots.
+    let native = super::access::with_readable_settings_folder(&native);
     so.pretty = so.pretty_fits(&native);
     vectorcraft_format::save_to(&native, &so, w).map_err(|e| bad(cmd, e.to_string()))
 }
 
 /// `doc` with its path geometry rounded to `decimals` places, as [`vectorcraft_format::save_to`]
-/// writes it for `version`: placed documents become groups of their art for older versions.
+/// writes it for `version`: placed documents, those in the stored brushes' art included, become
+/// groups of their art for older versions.
 fn rounded(doc: &Document, version: u32, decimals: u8) -> Document {
-    let mut d = if version < vectorcraft_format::VERSION && doc.has_placed() {
-        let mut d = doc.with_placed_art().into_owned();
-        d.placed_as_groups();
-        d
-    } else {
-        doc.clone()
-    };
+    let mut d = doc.clone();
+    if version < vectorcraft_format::VERSION {
+        vectorcraft_format::placed_as_groups(&mut d);
+    }
     d.round_geometry(decimals.min(vectorcraft_format::MAX_PRECISION));
     d
 }
@@ -310,6 +310,8 @@ pub(super) fn ai_native(cmd: &str, doc: &Document, so: &SaveOptions) -> Result<V
     } else {
         Cow::Borrowed(doc)
     };
+    // Without an Export for Screens folder outside the read roots.
+    let native = super::access::with_readable_settings_folder(&native);
     vectorcraft_format::save_with(&native, so).map_err(|e| bad(cmd, e.to_string()))
 }
 

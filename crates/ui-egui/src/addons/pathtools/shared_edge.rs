@@ -17,7 +17,7 @@ const LABEL_W: f32 = 80.0;
 
 /// Object › Plug-ins › Path Precision Tools › Shared Edge Merge Tool.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    app.select_tool(ID);
+    app.try_select_tool(ID)?;
     crate::panel_docking::reveal_panel(app, super::ID)
 }
 

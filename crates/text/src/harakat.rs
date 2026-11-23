@@ -13,6 +13,12 @@
 //! a mark on a ligature (for example Geeza Pro's Allah ligature) painted as its letter. Renderers
 //! and exporters read the glyph's run as they always did, so they need no change. The text itself
 //! is never changed.
+//!
+//! The Adjust Horizontal and Vertical Diacritic Positions ([`CharStyle::diacritic_horizontal`])
+//! move the face's mark glyphs (GDEF class 3) by the values of the glyph's run. Runs that differ
+//! only in paint and those positions stay one shaping cluster at an Arabic harakat or a Hebrew
+//! point ([`diacritic_mark_boundary`]), so a mark set apart from its letter takes its own values
+//! the same way it takes its own paint.
 
 use skrifa::raw::TableProvider;
 use skrifa::raw::tables::layout::ClassDef;
@@ -36,17 +42,31 @@ pub(crate) fn is_harakat(c: char) -> bool {
     )
 }
 
+/// Is `c` a Hebrew point or cantillation mark (U+0591–U+05BD, U+05BF, U+05C1–U+05C2,
+/// U+05C4–U+05C5, U+05C7)?
+fn is_hebrew_mark(c: char) -> bool {
+    matches!(c as u32, 0x0591..=0x05BD | 0x05BF | 0x05C1..=0x05C2 | 0x05C4..=0x05C5 | 0x05C7)
+}
+
+/// Is `c` a diacritical mark the Adjust Diacritic Position fields set apart from its letter: an
+/// Arabic harakat ([`is_harakat`]) or a Hebrew point?
+pub(crate) fn is_diacritic(c: char) -> bool {
+    is_harakat(c) || is_hebrew_mark(c)
+}
+
 /// Do character styles `a` and `b` differ, if at all, only in paint: fill, stroke and how the
 /// stroke is drawn, overprint, and the character style name? OpenType feature differences are
 /// ignored here: they already apply to their own character ranges during shaping. Nor is the
 /// space before a line's first character read inside a cluster, which takes it from its first
-/// character (#5111). Stricter than [`crate::shape`]'s `shapes_alike` (which also ignores baseline
+/// character (#5111), nor the Adjust Diacritic Positions, which move a mark glyph by its own run's
+/// values. Stricter than [`crate::shape`]'s `shapes_alike` (which also ignores baseline
 /// shift, tracking, underline, …).
 pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
     // Exhaustive: a new attribute must explicitly keep or relax this boundary rule.
     let CharStyle {
         font_family,
         font_style,
+        file_font_id,
         font_version,
         font_axes,
         size,
@@ -56,6 +76,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         kerning_before: _,
         aki_left: _,
         aki_right: _,
+        tsume: _,
         optical_kerning,
         baseline_shift,
         h_scale,
@@ -81,10 +102,13 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         warichu_scale,
         warichu_align,
         digits,
+        diacritic_horizontal: _,
+        diacritic_vertical: _,
         font_height_reference,
         no_break,
         language,
         glyph_alternate,
+        glyph_form: _,
         fill,
         stroke,
         stroke_width,
@@ -104,6 +128,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
     original_paint == normalized_paint
         && font_family == &b.font_family
         && font_style == &b.font_style
+        && file_font_id == &b.file_font_id
         && font_version == &b.font_version
         && font_axes == &b.font_axes
         && size == &b.size
@@ -146,6 +171,16 @@ pub(crate) fn paint_only_mark_boundary(text: &str, at: usize, before: &CharStyle
     let next = text.get(at..).and_then(|s| s.chars().next());
     let previous = text.get(..at).and_then(|s| s.chars().next_back());
     (next.is_some_and(is_harakat) || previous.is_some_and(is_harakat)) && paint_only(before, after)
+}
+
+/// Is the run boundary at byte `at` of `text`, between styles `before` and `after`, one where the
+/// Adjust Diacritic Positions differ, nothing but paint differs besides, and an Arabic harakat or a
+/// Hebrew point is on either side? It stays inside a shaping cluster as a paint-only one does.
+pub(crate) fn diacritic_mark_boundary(text: &str, at: usize, before: &CharStyle, after: &CharStyle) -> bool {
+    let next = text.get(at..).and_then(|s| s.chars().next());
+    let previous = text.get(..at).and_then(|s| s.chars().next_back());
+    let moved = before.diacritic_horizontal != after.diacritic_horizontal || before.diacritic_vertical != after.diacritic_vertical;
+    moved && (next.is_some_and(is_diacritic) || previous.is_some_and(is_diacritic)) && paint_only(before, after)
 }
 
 /// The byte ranges of the harakat in `text[range]`, each run of consecutive harakat as one range.
@@ -192,7 +227,8 @@ pub(crate) fn mark_classes(face: &FontFace) -> Option<ClassDef<'_>> {
 /// by glyph): repeated glyph ids alone could hide a changed correspondence. A glyph whose character
 /// lies outside its own shaping cluster of `raw` (from its cluster value up to the next larger one,
 /// else `end`) gets its cluster's first character instead. A later in-cluster character is kept
-/// only when the glyph is a GDEF mark and that character is a harakat; otherwise the cluster start
+/// only when the glyph is a GDEF mark and that character is a harakat or a Hebrew point
+/// ([`is_diacritic`]); otherwise the cluster start
 /// is kept (conservative: a mark may miss its colour; a base must never take a mark's). `raw`'s
 /// clusters are never changed. These are HarfBuzz shaping clusters, which can span more than one
 /// grapheme (a ligature).
@@ -222,8 +258,9 @@ pub(crate) fn own_chars(
             if c.1 == r.1 {
                 return c.1;
             }
-            // Later in-cluster character: only a positively identified mark glyph on a harakat.
-            let mark_char = text.get(c.1 as usize..).and_then(|s| s.chars().next()).is_some_and(is_harakat);
+            // Later in-cluster character: only a positively identified mark glyph on a harakat or
+            // a Hebrew point.
+            let mark_char = text.get(c.1 as usize..).and_then(|s| s.chars().next()).is_some_and(is_diacritic);
             if is_gdef_mark(r.0) && mark_char { c.1 } else { r.1 }
         })
         .collect()

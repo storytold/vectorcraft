@@ -12,14 +12,20 @@
 //! preset picked), `bullet` (`dot`, `dash`, `circle` or `square`), `number` (`arabic`,
 //! `upperLetters`, `lowerLetters`, `upperRoman`, `lowerRoman`, `twoDigits` or `threeDigits`),
 //! `listAlign` (`left` or `right`), `listLevel` (1 to 9; 1 for paragraphs in no list),
-//! `leftIndent` and `firstLineIndent` (pt), as `text.setFormat` takes them, with `__initial` (the
-//! values it opened with) and `__targets` (the type and range it acts on).
+//! `leftIndent` and `firstLineIndent` (pt), as `text.setFormat` takes them, `startAt` (the Numbers
+//! tab's Start At box) and `startNumber` (its number, 1 to 999999999), with `__initial` (the values
+//! it opened with) and `__targets` (the type and range it acts on).
+//!
+//! Start At is VectorCraft's own: on, OK gives the first numbered paragraph the number in the
+//! field (`text.setFormat` `startNumber`), and the numbered paragraphs after it count on from it;
+//! off, the paragraphs count on from the paragraph before (`restartNumbering` false). The box is on
+//! when the paragraphs have a number of their own, off when none has, and blank when they differ.
 //!
 //! Behavior reference (public documentation):
 //! <https://web.archive.org/web/20260417034638/https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/create-bulleted-or-numbered-lists.html>.
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::text::{LIST_HANGING_INDENT, LIST_LEVELS, NumberStyle, ParaList};
+use vectorcraft_doc::text::{LIST_HANGING_INDENT, LIST_LEVELS, MAX_LIST_START, NumberStyle, ParaList};
 
 use super::swatch_options::label;
 use super::{DialogSpec, form};
@@ -52,7 +58,7 @@ const ARROWS: egui::EventFilter = egui::EventFilter { tab: false, horizontal_arr
 /// The fields `ui.dialog.set` can set while the dialog does not hold them: the dialog leaves a
 /// field out where the paragraphs differ, and holds no `bullet` or `number` for paragraphs in no
 /// list or in another kind of list.
-const INPUTS: [&str; 7] = ["list", "bullet", "number", "listAlign", "listLevel", "leftIndent", "firstLineIndent"];
+const INPUTS: [&str; 9] = ["list", "bullet", "number", "listAlign", "listLevel", "leftIndent", "firstLineIndent", "startAt", "startNumber"];
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Bullets and Numbering").into(),
@@ -85,8 +91,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
     // While typing, the dialog acts on the paragraphs of the text being edited.
     let mut targets = json!({});
-    if let Some((id, a, b)) = crate::panels::character::text_editing(app) {
-        crate::panels::character::end_typing(app);
+    if let Some((id, a, b)) = crate::panels::character::text_editing_kept(app)? {
         targets = json!({"ids": [id.0], "start": a, "end": b});
     }
     let mut values = Map::new();
@@ -113,6 +118,13 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     if let Some(v) = shared_para_field(app, |p| p.first_line_indent) {
         values.insert("firstLineIndent".into(), json!(v));
+    }
+    // …and Start At: on with the number when the paragraphs share one, off when none has one.
+    if let Some(start) = shared_para(app, |p| p.list.and_then(|l| l.start)) {
+        values.insert("startAt".into(), json!(start.is_some()));
+        if let Some(n) = start {
+            values.insert("startNumber".into(), json!(n));
+        }
     }
     let tab = tab.unwrap_or(if list == Some("number") { "numbers" } else { "bullets" });
     let mut fields = Value::Object(values.clone());
@@ -210,6 +222,29 @@ fn number_tab(ui: &mut egui::Ui, d: &mut Dialog) {
         }
         None => {}
     }
+    ui.add_space(8.0);
+    start_at(ui, d);
+}
+
+/// The Start At box and its number, 1 to [`MAX_LIST_START`]: the box shows a dash while the
+/// paragraphs' numbers differ, and a click then turns it on; the number field is dimmed unless the
+/// box is on, and shows 1 until a number is typed.
+fn start_at(ui: &mut egui::Ui, d: &mut Dialog) {
+    ui.horizontal(|ui| {
+        let on = d.fields.get("startAt").and_then(Value::as_bool);
+        if widgets::check3(ui, tl!("Start at:"), on, true) {
+            d.fields.insert("startAt".into(), json!(on != Some(true)));
+        }
+        let value = d.fields.get("startNumber").and_then(Value::as_f64).unwrap_or(1.0);
+        ui.add_enabled_ui(on == Some(true), |ui| {
+            let name = Some(tl!("Start at:"));
+            if let Some(v) =
+                widgets::range_field_named(ui, ("bullets-numbering", "startNumber"), name, value, 1.0..=f64::from(MAX_LIST_START), "", 0, 90.0)
+            {
+                d.fields.insert("startNumber".into(), json!(v));
+            }
+        });
+    });
 }
 
 /// A row of preset buttons named `names`, `current` selected, each drawn by `paint` (painter,
@@ -366,6 +401,20 @@ fn params(d: &Dialog) -> Map<String, Value> {
         && (listing || was("list") != Some("none"))
     {
         p.insert("listLevel".into(), json!(l));
+    }
+    // …and Start At, unless the paragraphs are made bulleted or taken out of their list: on, the
+    // number shown; off, the paragraphs count on from the one before.
+    if let Some(on) = d.fields.get("startAt").and_then(Value::as_bool)
+        && !matches!(field("list"), Some("none" | "bullet"))
+    {
+        let n = d.fields.get("startNumber").and_then(Value::as_f64).unwrap_or(1.0);
+        let was_on = initial.and_then(|m| m.get("startAt")).and_then(Value::as_bool);
+        let was_n = initial.and_then(|m| m.get("startNumber")).and_then(Value::as_f64);
+        if on && (was_on != Some(true) || was_n != Some(n)) {
+            p.insert("startNumber".into(), json!(n));
+        } else if !on && was_on != Some(false) {
+            p.insert("restartNumbering".into(), json!(false));
+        }
     }
     // For paragraphs in a list and paragraphs in none, an indent left as it was is not sent:
     // `text.setFormat` then gives each paragraph that joins the list its hanging indent.
@@ -690,7 +739,8 @@ mod tests {
         app.run("text.setFormat", json!({"ids": [id], "listAlign": "right", "listLevel": 2, "start": 0, "end": 0})).unwrap();
         app.run("ui.bulletsAndNumbering", json!({})).unwrap();
         let held = app.ui.dialog.as_ref().unwrap().fields.clone();
-        for key in INPUTS {
+        // Neither paragraph has a number of its own, so Start at is off, not blank.
+        for key in INPUTS.into_iter().filter(|k| !["startAt", "startNumber"].contains(k)) {
             assert!(!held.contains_key(key), "{key} is blank");
         }
         let fields = json!([
@@ -735,6 +785,67 @@ mod tests {
         assert_eq!(params(app.ui.dialog.as_ref().unwrap()).get("listLevel"), Some(&json!(2.0)));
         super::super::confirm(&mut app).unwrap();
         assert_eq!((first(&app, id).0.map(|l| l.level), paras(&app, id).1.list.map(|l| l.level)), (Some(2), Some(2)));
+    }
+
+    /// Start at: the box opens off for paragraphs without a number of their own and on with the
+    /// number for one that has it; a change shows on the type at once, OK keeps it as one undo
+    /// step, Cancel puts the type back, and turning the box off sends `restartNumbering` false.
+    #[test]
+    fn start_at_gives_the_first_numbered_paragraph_its_number() {
+        let (mut app, id) = app();
+        app.run("text.setFormat", json!({"number": "arabic"})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!((d.fields.get("startAt"), d.fields.get("startNumber")), (Some(&json!(false)), None));
+        set(&mut app, "startAt", json!(true));
+        set(&mut app, "startNumber", json!(4));
+        frame(&mut app);
+        let starts = |app: &VectorcraftApp| {
+            let (one, two) = paras(app, id);
+            (one.list.and_then(|l| l.start), two.list.and_then(|l| l.start))
+        };
+        assert_eq!(starts(&app), (Some(4), None), "previewed on the type");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "the preview adds no undo step");
+        super::super::cancel(&mut app);
+        assert_eq!(starts(&app), (None, None), "Cancel puts it back");
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        set(&mut app, "startAt", json!(true));
+        set(&mut app, "startNumber", json!(4));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!((starts(&app), app.session.active().unwrap().history.undo.len()), ((Some(4), None), undo + 1));
+        // One paragraph with a number and one without: the box is blank, and OK sends nothing for it.
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert!(!d.fields.contains_key("startAt") && !changes(&params(&d)));
+        // The blank box shows a dash, not an empty box.
+        use egui::accesskit::{Role, Toggled};
+        let mut shown = d.clone();
+        let tree = crate::widgets::accessibility_tests::tree(|ui| start_at(ui, &mut shown));
+        let check = tree.iter().find(|n| n.label() == Some("Start at:") && n.role() == Role::CheckBox).map(|n| n.toggled());
+        assert_eq!(check, Some(Some(Toggled::Mixed)));
+        // A preset that makes the paragraphs bulleted sends no number.
+        set(&mut app, "startAt", json!(true));
+        pick_preset(&mut app, "bullet", Some("dot"));
+        let p = params(app.ui.dialog.as_ref().unwrap());
+        assert!(!p.contains_key("startNumber") && !p.contains_key("restartNumbering"));
+        super::super::cancel(&mut app);
+        // A paragraph with a number opens the box on with it, and off sends it back to counting on.
+        let solo = app.run("text.create", json!({"x": 10, "y": 200, "text": "Solo"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [solo]})).unwrap();
+        app.run("text.setFormat", json!({"number": "arabic", "startNumber": 9})).unwrap();
+        app.run("ui.bulletsAndNumbering", json!({})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!((d.fields.get("startAt"), d.f64("startNumber", 0.0)), (Some(&json!(true)), 9.0));
+        assert!(!changes(&params(&d)), "nothing changed yet");
+        set(&mut app, "startAt", json!(false));
+        assert_eq!(params(app.ui.dialog.as_ref().unwrap()).get("restartNumbering"), Some(&json!(false)));
+        super::super::confirm(&mut app).unwrap();
+        let start = match &app.session.active().unwrap().doc.node(NodeId(solo)).unwrap().kind {
+            NodeKind::Text(t) => t.para_at(0).list.map(|l| l.start),
+            _ => panic!("not text"),
+        };
+        assert_eq!(start, Some(None), "still numbered, with no number of its own");
     }
 
     /// `text.setFormat` sets `listLevel` only on paragraphs in a list, so a Level change alone on

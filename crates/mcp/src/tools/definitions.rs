@@ -8,6 +8,11 @@ fn num(desc: &str) -> Value {
     json!({"type": "number", "description": desc})
 }
 
+/// A number or null.
+fn num_or_null(desc: &str) -> Value {
+    json!({"description": desc, "anyOf": [{"type": "number"}, {"type": "null"}]})
+}
+
 fn string(desc: &str) -> Value {
     json!({"type": "string", "description": desc})
 }
@@ -205,20 +210,21 @@ pub fn tool_definitions() -> Vec<Value> {
                         "type": "array",
                         "minItems": 1,
                         "items": obj(json!({
-                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick"]},
+                            "kind": {"type": "string", "enum": ["down", "drag", "up", "move", "doubleclick", "tripleclick"]},
                             "x": num("Document x (pt)"),
                             "y": num("Document y (pt)"),
                             "mods": mods_schema(),
-                            "backquote": {"type": "boolean", "description": "Backquote held for this event: Selection and transform tool drags transform only pattern paint"},
+                            "backquote": {"type": "boolean", "description": "Backquote held for this event: Selection and transform tool drags transform only pattern paint; Rectangle, Rounded Rectangle, Ellipse, Polygon, Star and Line Segment drags leave copies of the shape being drawn"},
                             "pressure": num("Pen pressure 0..1 (default 1): the Liquify tools' intensity with Use Pressure Pen on, and the pressure the Paintbrush records"),
                             "tiltX": num("Pen tilt in degrees −90..90, positive leaning right (document axes); with tiltY, the tilt the Paintbrush records for Tilt and Bearing brushes. One without the other is 0"),
                             "tiltY": num("Pen tilt in degrees −90..90, positive leaning down the page"),
                             "rotation": num("Pen barrel rotation in degrees clockwise: the rotation the Paintbrush records for Rotation brushes"),
+                            "wheel": num("Airbrush pen finger wheel 0..1 (clamped): the wheel the Paintbrush records for Stylus Wheel brushes"),
                             "holdMs": num("Milliseconds the pointer then holds still, button down (0..60000): Twirl, Pucker and Bloat keep applying"),
                         }), &["kind", "x", "y"]),
                     },
                     "mods": mods_schema(),
-                    "backquote": {"type": "boolean", "description": "Default backquote held state for events: Selection and transform tool drags transform only pattern paint"},
+                    "backquote": {"type": "boolean", "description": "Default backquote held state for events: Selection and transform tool drags transform only pattern paint; Rectangle, Rounded Rectangle, Ellipse, Polygon, Star and Line Segment drags leave copies of the shape being drawn"},
                 }),
                 &["events"],
             ),
@@ -244,7 +250,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "draw_shape",
             "Draw shape",
-            "Create a live shape and apply optional paint. rectangle/ellipse: x, y, width, height (rectangle: radius = corner radius). polygon: cx, cy, radius, sides. star: cx, cy, radius1, radius2, points. line: x1, y1, x2, y2. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke); lines start with no fill and a visible stroke. For a filled shape without an outline, pass an explicit fill and stroke:\"none\". Stroke dash/cap/join, opacity, name and live effects apply to the new shape as in draw_path. Returns the new object id.",
+            "Create a live shape and apply optional paint. rectangle/ellipse: x, y, width, height (rectangle: radius = corner radius; ellipse: anchors, default 4, where any other count from 2 to 1000 draws a plain path rather than a live shape). polygon: cx, cy, radius, sides. star: cx, cy, radius1, radius2, points. line: x1, y1, x2, y2. Omitted paint fields inherit the current new-art appearance (initially white fill and 1 pt black stroke); lines start with no fill and a visible stroke. For a filled shape without an outline, pass an explicit fill and stroke:\"none\". Stroke dash/cap/join, opacity, name and live effects apply to the new shape as in draw_path. Returns the new object id.",
             obj(
                 with_draw_options(json!({
                     "shape": {"type": "string", "enum": ["rectangle", "ellipse", "polygon", "star", "line"]},
@@ -253,6 +259,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "width": num("Width (rectangle/ellipse)"),
                     "height": num("Height (rectangle/ellipse)"),
                     "radius": num("Corner radius (rectangle) or radius (polygon)"),
+                    "anchors": {"type": "integer", "minimum": 2, "maximum": 1000, "description": "Ellipse anchors, spaced evenly by angle (default 4, a live ellipse; any other count draws a plain path)"},
                     "cx": num("Centre x (polygon/star)"),
                     "cy": num("Centre y (polygon/star)"),
                     "sides": {"type": "integer", "minimum": 3, "description": "Polygon sides (default 6)"},
@@ -465,20 +472,20 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "transform",
             "Transform",
-            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. `origin` [x,y] defaults to the selection centre; `copy` transforms a copy.",
+            "Move, rotate, scale, reflect or shear the selection (or `ids`); several may be combined and run in that order. Angles in degrees (counter-clockwise), scale in %. Scale and reflect act along the selection's bounding box, turned with rotated objects until Reset Bounding Box. `origin` [x,y] defaults to the selection center; `copy` transforms a copy. A scale, reflect or shear its command refuses, or an argument of the wrong type, returns that error before any step runs, and nothing changes.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
-                    "dx": num("Move right"),
-                    "dy": num("Move down"),
-                    "rotate": num("Rotation in degrees counter-clockwise"),
-                    "scale": num("Uniform scale in %"),
-                    "scaleX": num("Horizontal scale in %"),
-                    "scaleY": num("Vertical scale in %"),
-                    "reflect": {"type": "string", "enum": ["vertical", "horizontal"]},
-                    "shear": num("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
-                    "origin": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
-                    "copy": {"type": "boolean"},
+                    "dx": num_or_null("Move right (null: 0)"),
+                    "dy": num_or_null("Move down (null: 0)"),
+                    "rotate": num_or_null("Rotation in degrees counter-clockwise"),
+                    "scale": num_or_null("Uniform scale in %"),
+                    "scaleX": num_or_null("Horizontal scale in %"),
+                    "scaleY": num_or_null("Vertical scale in %"),
+                    "reflect": {"anyOf": [{"type": "string", "enum": ["vertical", "horizontal"]}, {"type": "null"}]},
+                    "shear": num_or_null("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
+                    "origin": {"anyOf": [{"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, {"type": "null"}]},
+                    "copy": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
                 }),
                 &[],
             ),
@@ -507,7 +514,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "text_wrap",
             "Text wrap",
-            "Make the selected (or `ids`) objects wrap objects: area type below them in the same layer flows around them (offset in pt, invert = flow inside). `release: true` removes the wrap.",
+            "Make the selected (or `ids`) objects wrap objects: area type below them in the same layer flows around them (offset in pt, invert = flow inside). `release: true` removes the wrap. An offset outside -1000 to 1000 or not a number, or an invert or release that is not true or false, is an error and changes nothing.",
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},

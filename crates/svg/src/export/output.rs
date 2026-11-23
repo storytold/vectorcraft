@@ -1,8 +1,9 @@
 use super::*;
 
-/// XML 1.0 literal attribute whitespace is normalized to spaces; references retain the value.
+/// Escape a double-quoted attribute, retaining VectorCraft's apostrophe entity spelling.
 pub(super) fn xml_attr_escape(s: &str) -> String {
-    xml_escape(s).replace('\t', "&#9;").replace('\n', "&#10;").replace('\r', "&#13;")
+    let escaped = craft_xml::esc_attr(s);
+    if escaped.contains('\'') { escaped.replace('\'', "&apos;") } else { escaped }
 }
 
 /// Escape type for XML content. Characters XML 1.0 does not allow are dropped, except the line
@@ -12,21 +13,15 @@ pub(super) fn xml_text(s: &str) -> String {
         .chars()
         .filter_map(|c| match c {
             '\u{b}' | '\u{c}' => Some(' '),
-            c if valid_xml_value(c.encode_utf8(&mut [0; 4])) => Some(c),
+            c if craft_xml::is_xml_char(c) => Some(c),
             _ => None,
         })
         .collect();
     xml_escape(&s)
 }
 
-/// `s` without the characters XML 1.0 does not allow, ready for a double-quoted attribute.
-pub(super) fn xml_attr_valid(s: &str) -> String {
-    let s: String = s.chars().filter(|c| valid_xml_value(c.encode_utf8(&mut [0; 4]))).collect();
-    xml_attr_escape(&s)
-}
-
 pub(super) fn valid_xml_value(s: &str) -> bool {
-    s.chars().all(|c| matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}'))
+    s.chars().all(craft_xml::is_xml_char)
 }
 
 /// An XML name without a colon (an NCName): a letter or `_`, then [`xml_name_char`]s.
@@ -164,14 +159,22 @@ impl Writer<'_> {
     }
 
     /// Reserve ids for every named object up front so generated def ids never collide with them.
+    /// Symbols' art takes no ids, also where the drawing holds it placed by an instance (every
+    /// instance of the symbol writes it).
     pub(super) fn assign_name_ids(&mut self) {
         if self.opts.object_ids == ObjectIds::Minimal {
             return;
         }
+        let mut art = HashSet::new();
+        for s in &self.doc.symbols {
+            s.art.walk(&mut |n| {
+                art.insert(n.id);
+            });
+        }
         let mut named: Vec<(NodeId, String)> = Vec::new();
         self.doc.walk(|n| {
             // Ruler guides are not written, so their names reserve no id.
-            if n.is_ruler_guide() {
+            if n.is_ruler_guide() || art.contains(&n.id) {
                 return;
             }
             if let Some(name) = &n.name {
@@ -500,8 +503,8 @@ impl Writer<'_> {
     /// `<circle>` when its radii are written the same, else `<ellipse>`.
     fn ellipse_shape(&self, sp: &SubPath, m: Affine) -> Option<(&'static str, String)> {
         let tol = 10f64.powi(-i32::from(self.opts.decimals));
-        let (anchors, closed) = (sp.anchors.as_slice(), sp.closed);
-        let [a0, a1, a2, a3] = anchors else { return None };
+        let (anchors, closed) = (sp.anchors.contiguous(), sp.closed);
+        let [a0, a1, a2, a3] = &*anchors else { return None };
         let [p0, p1, p2, p3] = [a0.p, a1.p, a2.p, a3.p].map(|p| m * p);
         let c = p0.midpoint(p2);
         let near = |a: f64, b: f64| (a - b).abs() <= tol;

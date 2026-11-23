@@ -14,10 +14,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use kurbo::{PathSeg, Point};
-use vectorcraft_doc::{Appearance, GraphKind, GraphSpec, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, SeriesPaint, TickLength};
+use vectorcraft_doc::{
+    Appearance, DEFAULT_FILLED_LINE_WIDTH, GraphKind, GraphSpec, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, MIN_FILLED_LINE_WIDTH, SeriesPaint,
+    TickLength,
+};
 
 use super::types::{GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, Kind};
 use super::{Affine, AppearanceItem, BlendMode, Node, NodeId, NodeKind, Paint, Reader, Rect, V, obj};
+use crate::ai_graph::{band_outline, square};
 
 /// Most cells of a graph's table, its label row and column included.
 const MAX_CELLS: usize = 2_600_000;
@@ -293,11 +297,20 @@ impl Records {
         self.spec.legend = true;
         self.spec.mark_points = flag(marks)?;
         self.spec.connect_points = flag(lines)?;
-        // Lines drawn as shapes have a width the model doesn't keep.
-        (!flag(shapes)?).then_some(())?;
-        self.spec.filled_lines = false;
+        // Lines drawn as shapes (Draw Filled Lines); without connected points the flag is ignored.
+        self.spec.filled_lines = flag(shapes)? && self.spec.connect_points;
         self.spec.legend_across_top = flag(across)?;
-        finite(width).filter(|w| (0.0..=100.0).contains(w))?;
+        // `lineShapeWidth`, in points from 0 to 100. The model holds widths from 0.01 points, 3 points
+        // being its default; a smaller width is left out while the lines aren't filled, and keeps
+        // filled lines plain.
+        let width = finite(width).filter(|w| (0.0..=100.0).contains(w))?;
+        self.spec.line_width = if width == DEFAULT_FILLED_LINE_WIDTH {
+            None
+        } else if width >= MIN_FILLED_LINE_WIDTH {
+            Some(width)
+        } else {
+            (!self.spec.filled_lines).then_some(None)?
+        };
         // 44: the series are measured against the left axis; 45 (right) isn't kept per series.
         (int(axis)? == 44).then_some(())?;
         if let Some([percentage, digits]) = pie {
@@ -471,20 +484,36 @@ fn as_drawn(n: &Node) -> bool {
 
 /// Each series' fill and stroke, read from its group (`tags`), which holds paths only, one at
 /// least: the paths with a fill share it, and every path has the same stroke or none. Only a line
-/// graph (`line`) has paths without a fill: its lines. `None` when they differ, or the group, its
-/// own appearance or a path is drawn otherwise than [`as_drawn`].
-fn series_paints(art: &Node, tags: &HashMap<NodeId, u32>, line: bool) -> Option<Vec<SeriesPaint>> {
+/// graph (`line`) has paths without a fill: its lines. With filled lines (`bands`), a filled path
+/// outlined as [`band_outline`] says is a band or a mark drawn like one and gives no stroke; any
+/// other filled path but a [`square`] marker or legend swatch is a band outlined otherwise. The
+/// other paths give the series' stroke, and without them the series has none. A series with a band
+/// and no stroke on its other paths keeps no stroke at all, so with filled lines turned off its thin
+/// line is drawn in the series color at 1 pt, as for a graph drawn here. `None` when they
+/// differ, a band has another outline, or the group, its own appearance or a path is drawn
+/// otherwise than [`as_drawn`].
+fn series_paints(art: &Node, tags: &HashMap<NodeId, u32>, line: bool, bands: bool) -> Option<Vec<SeriesPaint>> {
     let mut paints = vec![SeriesPaint::default(); tags.len()];
     for group in art.children().into_iter().flatten() {
         let Some(slot) = tags.get(&group.id).and_then(|i| paints.get_mut(usize::try_from(*i).ok()?)) else { continue };
         (as_drawn(group) && *group.appearance == Appearance::default()).then_some(())?;
         let paths: Vec<&Arc<Node>> = group.children().into_iter().flatten().collect();
         (!paths.is_empty() && paths.iter().all(|p| matches!(p.kind, NodeKind::Path { .. }))).then_some(())?;
-        let (mut fills, mut strokes) = (vec![], vec![]);
+        let (mut fills, mut strokes, mut banded) = (vec![], vec![], false);
         for p in &paths {
             as_drawn(p).then_some(())?;
-            fills.extend(shown(p, true).ok()?);
-            strokes.push(shown(p, false).ok()?);
+            let filled = shown(p, true).ok()?;
+            let outline = shown(p, false).ok()?;
+            if bands && filled.is_some() && band_outline(&outline) {
+                // A band, or a mark outlined as one: the graph keeps no stroke for a series that draws bands.
+                banded = true;
+            } else if bands && filled.is_some() && !square(p) {
+                // A band outlined otherwise: the graph draws it again with the thin black outline only.
+                return None;
+            } else {
+                strokes.push(outline);
+            }
+            fills.extend(filled);
         }
         let fill = fills.first().map(|(paint, _)| paint.clone());
         fills.iter().all(|(paint, _)| Some(paint) == fill.as_ref()).then_some(())?;
@@ -494,6 +523,7 @@ fn series_paints(art: &Node, tags: &HashMap<NodeId, u32>, line: bool) -> Option<
         slot.fill = fill;
         (slot.stroke, slot.stroke_width) = match stroke {
             Some((paint, width)) => (Some(paint), Some(width)),
+            None if banded => (None, None),
             None => (Some(Paint::None), None),
         };
     }
@@ -628,9 +658,11 @@ impl<'a> Reader<'a> {
             if r.x0 < placed.x0 - EDGE || r.y0 < placed.y0 - EDGE || r.x1 > placed.x1 + EDGE || r.y1 > placed.y1 + EDGE {
                 return false;
             }
-            let Some(paints) = series_paints(art, &tags, spec.kind == GraphKind::Line) else { return false };
+            let line = spec.kind == GraphKind::Line;
+            let Some(paints) = series_paints(art, &tags, line, line && spec.filled_lines) else { return false };
             spec.series_paints = paints;
             spec.placed = Some(placed);
+            spec.placed_art = art.children().and_then(|c| vectorcraft_doc::graph::graph_art_without_type(c));
             tag_series(art, &tags);
             art.extras_mut().graph = Some(Box::new(spec));
             true
@@ -645,6 +677,7 @@ impl<'a> Reader<'a> {
 mod tests {
     use super::*;
     use vectorcraft_color::Color;
+    use vectorcraft_doc::FILLED_LINE_OUTLINE_WIDTH;
     use vectorcraft_geom::shapes;
 
     /// A graph's art: one series group (id 2) holding one mark painted `ap`, the group changed by
@@ -664,9 +697,58 @@ mod tests {
         let mut two = one.clone();
         two.items.extend(one.items.iter().find(|i| i.is_fill()).cloned());
         let tags = HashMap::from([(NodeId(2), 0)]);
-        let kept = series_paints(&art(one, |_| {}), &tags, false).expect("one fill");
+        let kept = series_paints(&art(one, |_| {}), &tags, false, false).expect("one fill");
         assert_eq!((kept[0].fill.as_ref(), kept[0].stroke.as_ref()), (Some(&red), Some(&Paint::None)));
-        assert!(series_paints(&art(two, |_| {}), &tags, false).is_none());
+        assert!(series_paints(&art(two, |_| {}), &tags, false, false).is_none());
+    }
+
+    /// With filled lines, a band's thin black outline is not the series' stroke: its markers' stroke
+    /// is, and with unstroked markers or none the series keeps no stroke. A band outlined otherwise
+    /// than its markers has no one stroke.
+    #[test]
+    fn a_filled_line_bands_outline_is_not_its_series_stroke() {
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let series = |band: Appearance, marker: Appearance| {
+            let band = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 3.0)), band));
+            let marker = Arc::new(Node::path(NodeId(4), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), marker));
+            Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![band, marker]))])
+        };
+        let tags = HashMap::from([(NodeId(2), 0)]);
+        let outlined = Appearance::basic(red.clone(), Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), FILLED_LINE_OUTLINE_WIDTH);
+        let marker = Appearance::basic(red.clone(), Paint::None, 0.0);
+        let kept = series_paints(&series(outlined.clone(), marker.clone()), &tags, true, true).expect("a band and a marker");
+        assert_eq!((kept[0].fill.as_ref(), kept[0].stroke.as_ref(), kept[0].stroke_width), (Some(&red), None, None));
+        let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+        let stroked = Appearance::basic(red.clone(), blue.clone(), 2.0);
+        let kept = series_paints(&series(outlined.clone(), stroked), &tags, true, true).expect("a band and a stroked marker");
+        assert_eq!((kept[0].stroke.as_ref(), kept[0].stroke_width), (Some(&blue), Some(2.0)));
+        let bands_only = Node::group(
+            NodeId(1),
+            vec![Arc::new(Node::group(
+                NodeId(2),
+                vec![Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 3.0)), outlined.clone()))],
+            ))],
+        );
+        let kept = series_paints(&bands_only, &tags, true, true).expect("a band alone");
+        assert_eq!((kept[0].stroke.as_ref(), kept[0].stroke_width), (None, None), "a band alone");
+        // A band as long as it is wide is a square, and still a band: its outline is not the series' stroke.
+        let square_band = |marker: Appearance| {
+            let band = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 3.0, 3.0)), outlined.clone()));
+            let marker = Arc::new(Node::path(NodeId(4), shapes::rectangle(Rect::new(10.0, 0.0, 15.0, 5.0)), marker));
+            Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(2), vec![band, marker]))])
+        };
+        let kept = series_paints(&square_band(marker.clone()), &tags, true, true).expect("a square band and a marker");
+        assert_eq!((kept[0].stroke.as_ref(), kept[0].stroke_width), (None, None), "a square band");
+        assert!(series_paints(&series(outlined, marker.clone()), &tags, true, false).is_none(), "lines not filled");
+        let thick = Appearance::basic(red.clone(), Paint::solid(Color::BLACK), 1.0);
+        assert!(series_paints(&series(thick, marker), &tags, true, true).is_none(), "a 1 pt outline");
+        // A band outlined as its markers are stroked is drawn again with the thin black outline.
+        assert!(series_paints(&series(stroked_like(&blue), stroked_like(&blue)), &tags, true, true).is_none(), "a band outlined in blue");
+    }
+
+    /// A red mark stroked 2 pt in `paint`.
+    fn stroked_like(paint: &Paint) -> Appearance {
+        Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), paint.clone(), 2.0)
     }
 
     /// A series group that is hidden, see-through or in another blending mode is not drawn again so.
@@ -674,8 +756,8 @@ mod tests {
     fn a_series_group_drawn_otherwise_has_no_series_paint() {
         let ap = || Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
         let tags = HashMap::from([(NodeId(2), 0)]);
-        assert!(series_paints(&art(ap(), |g| g.visible = false), &tags, false).is_none(), "hidden");
-        assert!(series_paints(&art(ap(), |g| g.opacity = 0.5), &tags, false).is_none(), "50% opaque");
-        assert!(series_paints(&art(ap(), |g| g.blend = BlendMode::Multiply), &tags, false).is_none(), "Multiply");
+        assert!(series_paints(&art(ap(), |g| g.visible = false), &tags, false, false).is_none(), "hidden");
+        assert!(series_paints(&art(ap(), |g| g.opacity = 0.5), &tags, false, false).is_none(), "50% opaque");
+        assert!(series_paints(&art(ap(), |g| g.blend = BlendMode::Multiply), &tags, false, false).is_none(), "Multiply");
     }
 }

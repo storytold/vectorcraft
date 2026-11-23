@@ -48,6 +48,14 @@ fn internal<T>(message: &str) -> JsResult<T> {
     Err(Abrupt::Internal(message.into()))
 }
 
+/// The hash an error the interpreter throws keeps of its description ([`Interp::throw`]).
+fn description_hash(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::hash::DefaultHasher::new();
+    text.hash(&mut h);
+    h.finish()
+}
+
 /// The kinds of error object the engine throws.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ErrorType {
@@ -58,6 +66,21 @@ pub(crate) enum ErrorType {
     Syntax,
     Type,
     Uri,
+}
+
+impl ErrorType {
+    /// The `name` the prototype of this kind of error has before a script changes it.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            ErrorType::Error => "Error",
+            ErrorType::Eval => "EvalError",
+            ErrorType::Range => "RangeError",
+            ErrorType::Reference => "ReferenceError",
+            ErrorType::Syntax => "SyntaxError",
+            ErrorType::Type => "TypeError",
+            ErrorType::Uri => "URIError",
+        }
+    }
 }
 
 /// The objects the interpreter itself refers to.
@@ -162,6 +185,34 @@ pub(crate) struct Frame {
 /// Where the exception being thrown was raised: the code and the instruction.
 type ThrowSite = (Rc<Code>, usize);
 
+/// What [`crate::Realm::observe_code`] calls with each source evaluated at run time.
+pub(crate) type CodeObserver = Rc<dyn Fn(&[u16])>;
+
+/// A built-in function that may wait for the host ([`crate::heap::Func::Pausable`]): it is given
+/// `this` and the arguments, and gives the host call it makes.
+pub(crate) type PausableFn = fn(&mut Interp, Value, &[Value]) -> JsResult<Pause>;
+
+/// What a [`PausableFn`] does with the host's answer: it is given the values it kept and the
+/// answer, and gives the result of its call.
+pub(crate) type ResumeFn = fn(&mut Interp, &[Value], Value) -> JsResult<Value>;
+
+/// The host call a [`PausableFn`] makes: the host function `host` with `args`. Its answer goes to
+/// `resume` with `keep`, at once when the host answers at once. When the host waits
+/// ([`crate::HostError::Wait`]), the run pauses at the call, and `resume` runs when the run goes on
+/// after [`crate::Realm::answer`]; a run ended while it waits ([`crate::Realm::end`]) drops it.
+pub(crate) struct Pause {
+    pub(crate) host: Value,
+    pub(crate) args: Vec<Value>,
+    pub(crate) keep: Vec<Value>,
+    pub(crate) resume: ResumeFn,
+}
+
+/// A [`Pause`] whose host call waits for its answer.
+pub(crate) struct Resumption {
+    resume: ResumeFn,
+    keep: Vec<Value>,
+}
+
 pub(crate) struct Interp {
     pub(crate) heap: Heap,
     pub(crate) stack: Vec<Value>,
@@ -222,6 +273,9 @@ pub(crate) struct Interp {
     pub(crate) can_wait: Rc<std::cell::Cell<bool>>,
     /// A host function's call waits for its result: the value on top of the stack stands in for it.
     pub(crate) waiting: bool,
+    /// The built-in that waits with the host's call ([`Pause::Ask`]): it takes the answer before
+    /// the next instruction runs.
+    pub(crate) resuming: Option<Resumption>,
     /// The message of the uncatchable error a host function ended the run with.
     pub(crate) host_abort: Option<String>,
     /// How much a value passed to or from a host function may carry.
@@ -230,6 +284,9 @@ pub(crate) struct Interp {
     pub(crate) source_tag: u32,
     /// The sources [`crate::HostItem::Evaluator`] functions have given in this realm.
     pub(crate) evaluated: u32,
+    /// Called with the source text given to `eval`, `Function` and evaluator functions, before it
+    /// is compiled ([`crate::Realm::observe_code`]).
+    pub(crate) code_observer: Option<CodeObserver>,
     /// The tag of the source the last run's error was raised in.
     pub(crate) error_tag: u32,
     /// Where `$.line` and `$.stack` find the file and line of a compiled line.
@@ -309,6 +366,10 @@ pub(crate) const MAX_APPLY_ARGS: usize = 1 << 16;
 
 /// The estimated bytes of a name's entries in the list and the set `for-in` builds.
 const KEY_ENTRY_BYTES: usize = 32;
+
+/// The most units of a computed property name an error about a property of `null` or `undefined`
+/// names; a longer name is left out of the message.
+const NAMED_KEY_UNITS: usize = 256;
 
 #[cfg(test)]
 thread_local! {
@@ -466,10 +527,12 @@ impl Interp {
             in_slice: false,
             can_wait: Rc::default(),
             waiting: false,
+            resuming: None,
             host_abort: None,
             data_limits: crate::DataLimits::default(),
             source_tag: crate::realm::UNKNOWN_SOURCE,
             evaluated: 0,
+            code_observer: None,
             error_tag: crate::realm::UNKNOWN_SOURCE,
             locator: None,
             thrown_mark: None,
@@ -498,15 +561,34 @@ impl Interp {
 
     pub(crate) fn error_object(&mut self, t: ErrorType, message: &str) -> ObjId {
         let proto = self.intrinsics.error_proto(t);
-        let mut o = Object::new(Class::Error, Some(proto));
+        let mut o = Object::new(Class::Error(None), Some(proto));
         if !message.is_empty() {
             o.props.insert(key("message"), Prop::Data { value: Value::str(message), flags: HIDDEN });
         }
         self.heap.alloc_object(o)
     }
 
+    /// An error of the interpreter's or a host function's own, marked as such with a hash of the
+    /// description it has with its kind's own name ([`Self::thrown_by_script`]), so a name a script
+    /// gave the kind's prototype before the error was made counts as the script's text.
     pub(crate) fn throw(&mut self, t: ErrorType, message: &str) -> Abrupt {
-        Abrupt::Throw(Value::Object(self.error_object(t, message)))
+        let o = self.error_object(t, message);
+        let own = if message.is_empty() { t.name().to_string() } else { format!("{}: {message}", t.name()) };
+        if let Some(object) = self.heap.object_mut(o) {
+            object.class = Class::Error(Some(description_hash(&own)));
+        }
+        Abrupt::Throw(Value::Object(o))
+    }
+
+    /// Is the text [`Self::describe`] gives for the thrown value `v` the script's own? It is unless
+    /// `v` is an error the interpreter or a host function threw, with its name and message as they
+    /// were then: a value the script threw, an error it made, and an error whose name or message it
+    /// changed all hold its own text.
+    pub(crate) fn thrown_by_script(&mut self, v: &Value) -> bool {
+        let Value::Object(o) = v else { return true };
+        let Some(Class::Error(Some(hash))) = self.heap.object(*o).map(|o| &o.class) else { return true };
+        let hash = *hash;
+        description_hash(&self.describe(v)) != hash
     }
 
     pub(crate) fn type_error(&mut self, message: &str) -> Abrupt {
@@ -675,6 +757,7 @@ impl Interp {
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
+        roots.values.extend(self.resuming.iter().flat_map(|r| r.keep.iter()));
         roots.values.push(&self.last_thrown);
         roots.values.push(&self.last_error);
         roots.values.push(&self.passing);
@@ -739,6 +822,14 @@ impl Interp {
 
     fn step(&mut self) -> JsResult<Option<Value>> {
         self.tick()?;
+        // A built-in that waited for the host takes the answer on top of the stack before the
+        // instruction after its call runs; what it throws is thrown at that call.
+        if let Some(r) = self.resuming.take() {
+            let answer = self.pop()?;
+            let v = self.resume(r, answer)?;
+            self.push(v)?;
+            return Ok(None);
+        }
         let frame = self.frame_mut()?;
         let Some(&op) = frame.code.ops.get(frame.pc) else { return internal("ran past the end of the code") };
         frame.pc += 1;
@@ -770,7 +861,7 @@ impl Interp {
         let passed = matches!((&v, std::mem::replace(&mut self.passing, Value::Undefined)), (Value::Object(a), Value::Object(b)) if *a == b);
         if !passed
             && let Value::Object(o) = v
-            && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error))
+            && self.heap.object(o).is_some_and(|o| matches!(o.class, Class::Error(_)))
         {
             self.last_error = v.clone();
         }
@@ -1077,8 +1168,8 @@ impl Interp {
     }
 
     fn not_defined(&mut self, name: &[u16]) -> Abrupt {
-        let message = format!("{} is not defined", String::from_utf16_lossy(name));
-        self.throw(ErrorType::Reference, &message)
+        let ident = String::from_utf16_lossy(name);
+        self.throw(ErrorType::Reference, &format!("{ident} is not defined"))
     }
 
     fn get_var(&mut self, name: &Key) -> JsResult<(Value, Value)> {
@@ -1332,12 +1423,9 @@ impl Interp {
             Value::Number(_) => Ok(self.intrinsics.number_proto),
             Value::Bool(_) => Ok(self.intrinsics.boolean_proto),
             Value::Undefined | Value::Null => {
-                let message = format!(
-                    "cannot read property '{}' of {}",
-                    String::from_utf16_lossy(k),
-                    if matches!(v, Value::Null) { "null" } else { "undefined" }
-                );
-                Err(self.type_error(&message))
+                let key = String::from_utf16_lossy(k);
+                let base = if matches!(v, Value::Null) { "null" } else { "undefined" };
+                Err(self.type_error(&format!("cannot read property '{key}' of {base}")))
             }
         }
     }
@@ -1434,8 +1522,8 @@ impl Interp {
 
     fn reject_bool(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<bool> {
         if throw {
-            let message = format!("cannot define property '{}': {why}", String::from_utf16_lossy(k));
-            return Err(self.type_error(&message));
+            let key = String::from_utf16_lossy(k);
+            return Err(self.type_error(&format!("cannot define property '{key}': {why}")));
         }
         Ok(false)
     }
@@ -1588,8 +1676,8 @@ impl Interp {
 
     fn reject(&mut self, throw: bool, k: &[u16], why: &str) -> JsResult<()> {
         if throw {
-            let message = format!("cannot assign to property '{}': {why}", String::from_utf16_lossy(k));
-            return Err(self.type_error(&message));
+            let key = String::from_utf16_lossy(k);
+            return Err(self.type_error(&format!("cannot assign to property '{key}': {why}")));
         }
         Ok(())
     }
@@ -1684,8 +1772,8 @@ impl Interp {
                 Ok(true)
             }
             Some(_) if throw => {
-                let message = format!("cannot delete property '{}'", String::from_utf16_lossy(k));
-                Err(self.type_error(&message))
+                let key = String::from_utf16_lossy(k);
+                Err(self.type_error(&format!("cannot delete property '{key}'")))
             }
             Some(_) => Ok(false),
         }
@@ -1703,12 +1791,9 @@ impl Interp {
                 self.put(*o, k, v, throw)
             }
             Value::Undefined | Value::Null => {
-                let message = format!(
-                    "cannot set property '{}' of {}",
-                    String::from_utf16_lossy(&k),
-                    if matches!(base, Value::Null) { "null" } else { "undefined" }
-                );
-                Err(self.type_error(&message))
+                let key = String::from_utf16_lossy(&k);
+                let base = if matches!(base, Value::Null) { "null" } else { "undefined" };
+                Err(self.type_error(&format!("cannot set property '{key}' of {base}")))
             }
             _ => {
                 let proto = self.primitive_proto(base, &k)?;
@@ -1742,16 +1827,30 @@ impl Interp {
         self.replace(2, v)
     }
 
-    fn check_coercible(&mut self, base: &Value, k: &[u16]) -> JsResult<()> {
-        if base.is_nullish() {
-            self.primitive_proto(base, k)?;
+    /// Throws when `base` is `null` or `undefined`, naming the property `k` when it is a primitive
+    /// of at most [`NAMED_KEY_UNITS`] units, which converts without running script code, and the
+    /// access as a read, or as a write when `set`.
+    fn check_coercible(&mut self, base: &Value, k: Option<&Value>, set: bool) -> JsResult<()> {
+        if !base.is_nullish() {
+            return Ok(());
         }
-        Ok(())
+        let key = match k {
+            Some(Value::String(s)) if s.len() > NAMED_KEY_UNITS => None,
+            Some(Value::Object(_)) | None => None,
+            Some(k) => Some(self.to_str(k)?.to_rust_string()),
+        };
+        let base = if matches!(base, Value::Null) { "null" } else { "undefined" };
+        Err(match (key, set) {
+            (Some(key), false) => self.type_error(&format!("cannot read property '{key}' of {base}")),
+            (Some(key), true) => self.type_error(&format!("cannot set property '{key}' of {base}")),
+            (None, false) => self.type_error(&format!("cannot read a property of {base}")),
+            (None, true) => self.type_error(&format!("cannot set a property of {base}")),
+        })
     }
 
     fn op_check_object(&mut self) -> JsResult<()> {
         let base = self.peek(0)?;
-        self.check_coercible(&base, &[])
+        self.check_coercible(&base, None, true)
     }
 
     fn op_to_key(&mut self) -> JsResult<()> {
@@ -1760,7 +1859,7 @@ impl Interp {
         if self.is_xml_access(&base, &k) {
             return Ok(());
         }
-        self.check_coercible(&base, &[])?;
+        self.check_coercible(&base, Some(&k), true)?;
         let name = self.to_key(&k)?;
         self.replace(1, Value::String(Str::from_rc(name)))
     }
@@ -1778,9 +1877,8 @@ impl Interp {
             let v = self.xml_get(&base, &k)?;
             return self.replace(2, v);
         }
-        self.check_coercible(&base, &[])?;
-        let name = self.to_key(&k)?;
-        let v = self.get_value(&base, &name)?;
+        self.check_coercible(&base, Some(&k), false)?;
+        let v = self.with_key(&k, |i, name| i.get_value(&base, &name))?;
         self.replace(2, v)?;
         if with_this { self.push(base) } else { Ok(()) }
     }
@@ -1818,7 +1916,7 @@ impl Interp {
             let r = self.xml_delete(&base, &k)?;
             return self.replace(2, Value::Bool(r));
         }
-        self.check_coercible(&base, &[])?;
+        self.check_coercible(&base, Some(&k), false)?;
         let name = self.to_key(&k)?;
         let o = self.to_object(&base)?;
         let strict = self.strict();
@@ -1851,9 +1949,8 @@ impl Interp {
             self.xml_put(&base, &k, &Value::Number(new))?;
             return self.replace(2, Value::Number(if prefix { new } else { old }));
         }
-        self.check_coercible(&base, &[])?;
-        let name = self.to_key(&k)?;
-        let r = self.inc_property(&base, name, prefix, dec)?;
+        self.check_coercible(&base, Some(&k), false)?;
+        let r = self.with_key(&k, |i, name| i.inc_property(&base, name, prefix, dec))?;
         self.replace(2, r)
     }
 
@@ -2152,6 +2249,16 @@ impl Interp {
                     self.temp_roots.truncate(mark);
                     return Ok(Prepared::Done(r?));
                 }
+                Func::Pausable { f: native, .. } => {
+                    let mark = self.temp_roots.len();
+                    self.temp_roots.push(this.clone());
+                    self.temp_roots.extend(args.iter().cloned());
+                    let held = self.held_bytes;
+                    let r = native(self, this, &args).and_then(|p| self.ask(p));
+                    self.held_bytes = held;
+                    self.temp_roots.truncate(mark);
+                    return Ok(Prepared::Done(r?));
+                }
                 Func::Data { f, name, read } => {
                     // The arguments are read before the function runs, and a result being built
                     // keeps itself reachable.
@@ -2377,6 +2484,41 @@ impl Interp {
         Ok(a)
     }
 
+    /// Makes the host call a [`PausableFn`] gave, whose answer goes to its resume function. A host
+    /// function is called as the script's own code calls it, so it may wait; then the resume
+    /// function is kept for the answer [`crate::Realm::answer`] gives, and the value that stands
+    /// in for that answer is the call's result for now.
+    fn ask(&mut self, p: Pause) -> JsResult<Value> {
+        let Pause { host, args, keep, resume } = p;
+        let mark = self.temp_roots.len();
+        self.temp_roots.push(host.clone());
+        self.temp_roots.extend(args.iter().cloned());
+        self.temp_roots.extend(keep.iter().cloned());
+        let was_waiting = self.waiting;
+        let answer = match self.func_of(&host) {
+            Some(Func::Data { f, name, read }) => self.call_data(&f, &name, &args, &read),
+            _ => self.call(&host, &Value::Undefined, &args),
+        };
+        self.temp_roots.truncate(mark);
+        let answer = answer?;
+        let r = Resumption { resume, keep };
+        if self.waiting && !was_waiting {
+            self.resuming = Some(r);
+            return Ok(answer);
+        }
+        self.resume(r, answer)
+    }
+
+    /// Gives a [`PausableFn`]'s kept values and the host's `answer` to its resume function.
+    fn resume(&mut self, r: Resumption, answer: Value) -> JsResult<Value> {
+        let mark = self.temp_roots.len();
+        self.temp_roots.push(answer.clone());
+        self.temp_roots.extend(r.keep.iter().cloned());
+        let v = (r.resume)(self, &r.keep, answer);
+        self.temp_roots.truncate(mark);
+        v
+    }
+
     /// Calls `f` from Rust and returns its result, running the loop again for a function written
     /// in JavaScript.
     pub(crate) fn call(&mut self, f: &Value, this: &Value, args: &[Value]) -> JsResult<Value> {
@@ -2425,6 +2567,13 @@ impl Interp {
         crate::to_utf16(text, &self.remaining_source_options()).map_err(CompileError::Syntax)
     }
 
+    /// Gives `units`, source a script evaluates at run time, to the realm's code observer.
+    pub(crate) fn observe_code(&self, units: &[u16]) {
+        if let Some(f) = &self.code_observer {
+            f(units);
+        }
+    }
+
     /// Parses and compiles source for eval code or a script, counting it against the source
     /// limit.
     pub(crate) fn compile_source(&mut self, units: &[u16], strict: bool, kind: CodeKind) -> Result<Rc<Code>, CompileError> {
@@ -2463,6 +2612,7 @@ impl Interp {
         self.check_source_units(s.len()).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.prepare_source(s.len())?;
         let units = self.flat_reserved(s)?;
+        self.observe_code(&units);
         let code = self.compile_source(&units, strict, CodeKind::Eval).map_err(|e| self.compile_error_to_abrupt(e))?;
         self.charge_code(&code, declaration_bytes(&code).saturating_add(ENV_BYTES))?;
         let frame = self.frame()?;
@@ -2575,8 +2725,8 @@ impl Interp {
                                 self.put(object, name.clone(), v, true)
                             }
                             Some(_) => {
-                                let message = format!("cannot declare function {}", String::from_utf16_lossy(name));
-                                Err(self.type_error(&message))
+                                let ident = String::from_utf16_lossy(name);
+                                Err(self.type_error(&format!("cannot declare function {ident}")))
                             }
                         }
                     }
@@ -2668,6 +2818,18 @@ impl Interp {
                 self.flat_reserved(&s)
             }
         }
+    }
+
+    /// Runs `f` with the property name [`Self::to_key`] makes from `v`. A name converted from a
+    /// value that is not a string is kept reachable while `f` runs, so a collection that a getter
+    /// or setter starts still counts its units.
+    pub(crate) fn with_key<T>(&mut self, v: &Value, f: impl FnOnce(&mut Self, Key) -> JsResult<T>) -> JsResult<T> {
+        let name = self.to_key(v)?;
+        if matches!(v, Value::String(_)) {
+            return f(self, name);
+        }
+        let root = Value::String(Str::from_rc(name.clone()));
+        self.rooted(&[root], |i| f(i, name))
     }
 
     /// The code units of `s`. Flattening a rope makes a copy of its units, so for a rope that

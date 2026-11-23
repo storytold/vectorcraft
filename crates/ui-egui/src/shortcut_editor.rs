@@ -152,12 +152,23 @@ pub fn sync(ui: &UiState) {
     crate::custom_toolbars::sync(ui);
 }
 
-/// Registry default shortcut of a command (engine or UI command).
+/// Registry default shortcut of a command (engine or UI command) on [`crate::keymap::platform`].
 pub fn default_command_shortcut(id: &str) -> Option<&'static str> {
+    default_command_shortcut_on(id, crate::keymap::platform())
+}
+
+/// Registry default shortcut of a command on platform `p`.
+fn default_command_shortcut_on(id: &str, p: craft_keymap::Platform) -> Option<&'static str> {
     if let Some(c) = vectorcraft_engine::find_command(id) {
         return c.shortcut;
     }
-    menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| c.2).filter(|s| !s.is_empty())
+    menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| ui_command_default(c.0, c.2, p)).filter(|s| !s.is_empty())
+}
+
+/// The default shortcut `sc` of UI command `id` on platform `p` (empty for none). Select Last
+/// Selection Tool has none on macOS, which takes Cmd+` to switch between an app's windows.
+pub(crate) fn ui_command_default(id: &str, sc: &'static str, p: craft_keymap::Platform) -> &'static str {
+    if id == "tool.selectLastSelection" && p.is_mac() { "" } else { sc }
 }
 
 /// Window menu items that show a panel (`window.panel {panel}`) with a default shortcut: (panel
@@ -184,15 +195,21 @@ pub const PANEL_SHORTCUTS: &[(&str, &str)] = &[
     ("openType", "Cmd+Alt+Shift+T"),
 ];
 
-/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id).
+/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id) on
+/// [`crate::keymap::platform`].
 pub fn default_of(key: &str) -> Option<&'static str> {
+    default_on(key, crate::keymap::platform())
+}
+
+/// Default shortcut of an entry key on platform `p`.
+pub(crate) fn default_on(key: &str, p: craft_keymap::Platform) -> Option<&'static str> {
     if let Some(t) = key.strip_prefix("tool:") {
         return vectorcraft_tools::tool_info(t).and_then(|t| t.shortcut);
     }
-    if let Some(p) = key.strip_prefix("panel:") {
-        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == p).map(|(_, sc)| *sc);
+    if let Some(panel) = key.strip_prefix("panel:") {
+        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == panel).map(|(_, sc)| *sc);
     }
-    default_command_shortcut(key)
+    default_command_shortcut_on(key, p)
 }
 
 /// Effective shortcut of an entry key, honouring the user's overrides.
@@ -753,7 +770,7 @@ fn menu_bar_paths() -> &'static HashMap<&'static str, Vec<(String, Value)>> {
 /// The menu path of the item of the menu bar that runs command `id` as a key press runs it
 /// ([`a_menu_bar_item_runs`]): the first item that runs it with no params, or else the first item,
 /// whose params all its items give.
-fn menu_bar_path(id: &str) -> Option<&'static str> {
+pub(crate) fn menu_bar_path(id: &str) -> Option<&'static str> {
     let (_, params) = command_doc(id)?;
     let items = menu_bar_paths().get(id).filter(|_| a_menu_bar_item_runs(id, params))?;
     chosen_path(items)
@@ -765,12 +782,10 @@ fn chosen_path(items: &[(String, Value)]) -> Option<&str> {
     items.iter().find(|(_, p)| is_bare(p)).or(items.first()).map(|(path, _)| path.as_str())
 }
 
-/// Does a command's params doc (`{a?, b?} …`) say it runs with no params, as a shortcut runs it?
+/// Does a command's params doc (`{a?, b?: bool} …`) say it runs with no params, as a shortcut runs
+/// it? It does when it starts with `{` and [`names_a_required_field`] finds no field a call must give.
 fn runs_without_params(params: &str) -> bool {
-    params
-        .strip_prefix('{')
-        .and_then(|r| r.split_once('}'))
-        .is_some_and(|(fields, _)| fields.split(',').all(|f| f.trim().is_empty() || f.trim_end().ends_with('?')))
+    params.starts_with('{') && !names_a_required_field(params)
 }
 
 /// Does the editor list `e` under `overrides`? An entry that [`needs_a_value`] is listed only while
@@ -783,8 +798,13 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
 /// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
 /// and the library, data set, text style and SVG filter loaders a file, which their menu items ask
-/// for.
-const NEEDS_A_PARAM: [&str; 20] = [
+/// for. The commands after them have no menu path: the setters of panels and dialogs (Fill, Stroke
+/// Options, Character, Set Bounds), the exports and saves that give the file back without a `path`
+/// (Save Document gives the file back when the document has no file yet; File › Save takes a key
+/// instead), the undo group's begin and end, and the commands that need a point, a value or a name
+/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush, Paintbrush, Map Art, Quick Pen). New
+/// Symbol is left out because the Symbols panel runs it through the Symbol Options dialog.
+const NEEDS_A_PARAM: [&str; 77] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -805,6 +825,63 @@ const NEEDS_A_PARAM: [&str; 20] = [
     "paraStyle.load",
     "textStyle.loadAll",
     "svgFilter.import",
+    "addon.pathtools.setAnchor",
+    "addon.shapes.configure",
+    "appearance.addEffect",
+    "artboard.align",
+    "artboard.distribute",
+    "assets.export",
+    "assets.export3D",
+    "assets.settings.set",
+    "attributes.set",
+    "brush.freehand",
+    "brush.move",
+    "css.export",
+    "dimension.create",
+    "document.export",
+    "document.exportDxf",
+    "document.exportEps",
+    "document.exportForWeb",
+    "document.exportPdf",
+    "document.save",
+    "document.setup",
+    "edit.undoGroup.begin",
+    "edit.undoGroup.end",
+    "eyedropper.setOptions",
+    "file.package",
+    "library.createGroup",
+    "links.placementOptions",
+    "links.unembed",
+    "livePaint.gapOptions",
+    "object.blend.createSpine",
+    "object.blend.setEasing",
+    "object.intertwine.arrange",
+    "object.objectsOnPath.options",
+    "object.puppetWarp.pins",
+    "object.setBounds",
+    "object.setLiveShape",
+    "object.setOverprint",
+    "object.setProps",
+    "object.slice.select",
+    "paint.freeform.setPoint",
+    "paint.setFill",
+    "paint.setGradientGeom",
+    "paint.setStroke",
+    "path.quickPen",
+    "perspective.grid.define",
+    "perspective.grid.set",
+    "perspective.plane.move",
+    "print.setup",
+    "select.color",
+    "select.globalEditOptions",
+    "stroke.setAdvanced",
+    "symbol.new",
+    "symbol.options",
+    "text.setFormat",
+    "text.setRangeStyle",
+    "text.setStyle",
+    "threeD.mapArt",
+    "type.ruby",
 ];
 
 /// The (label, params) of each menu bar item, by command id.
@@ -860,17 +937,27 @@ pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
 /// status line ([`dimmed`]), as for Remove Background… with no image selected.
 pub(crate) fn menu_target_now(app: &VectorcraftApp, id: &str) -> Option<Result<(String, Value), String>> {
     let target = menu_target(id)?;
-    Some(if menus::enabled(app, id) { Ok(target) } else { dimmed(app, id) })
+    Some(match dimmed(app, id, id) {
+        None => Ok(target),
+        Some(why) => Err(why),
+    })
 }
 
-/// What [`menu_target_now`] gives for command `id` while its menu bar item is dimmed: the status
-/// line, with the engine's reason when it gives one. The app's own rules ([`menus::enabled`]) dim
-/// UI commands, and some commands the engine would run, without giving a reason.
-fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
-    let Some(why) = vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()) else {
-        return Err(format!("command `{id}` is not available right now"));
+/// What [`menu_target_now`] gives for command `id` while its menu bar item is dimmed, or `None`
+/// while the item is not dimmed: the status line, which calls the command `name` (its id on the
+/// status line), with the engine's reason when it gives one. The app's own rules
+/// ([`menus::enabled`]) dim UI commands, and some commands the engine would run, without giving a
+/// reason. The engine's check runs at most once.
+pub(crate) fn dimmed(app: &VectorcraftApp, id: &str, name: &str) -> Option<String> {
+    let why = match menus::why_off(app, id)? {
+        Some(why) => Some(why),
+        // Dimmed before the engine was asked (no Appearance subject, an input method composing).
+        None => vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()),
     };
-    Err(vectorcraft_engine::EngineError::Disabled(id.to_string(), why).to_string())
+    Some(match why {
+        Some(why) => vectorcraft_engine::EngineError::Disabled(name.to_string(), why).to_string(),
+        None => format!("command `{name}` is not available right now"),
+    })
 }
 
 /// Is `key` a command with no default shortcut that a key press can't run: no item of the menu
@@ -878,7 +965,7 @@ fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
 /// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
 /// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a menu command whose params
 /// doc names a field a call must give (File › Document Setup › Units, `{units}`)?
-fn needs_a_value(key: &str) -> bool {
+pub(crate) fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
         vectorcraft_engine::command_specs()
@@ -907,7 +994,7 @@ fn a_menu_bar_item_runs(id: &str, params: &str) -> bool {
 /// Is engine command `c` listed in Edit › Keyboard Shortcuts whether or not an item of the menu bar
 /// runs it? A command with a menu path of its own is. One without (a panel menu item) is when a key
 /// alone can run it: it has a default key, or it is an undoable command, not an alias, whose params
-/// doc ends each field with `?`.
+/// doc names no field a call must give ([`runs_without_params`]).
 fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
     !c.menu.is_empty() || c.shortcut.is_some() || (c.journal && !vectorcraft_engine::cmd::is_alias(c.id) && runs_without_params(c.params))
 }
@@ -915,9 +1002,10 @@ fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
 /// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
 /// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
 /// of `{}` or `{path…}`. Rename has no default key, and a key press names the selection: it needs
-/// no `id`.
+/// no `id`. Color Picker… has no default key either, and a key press opens it for the proxy in
+/// front.
 fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
-    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename"
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || id == "ui.rename" || id == "ui.colorPicker"
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens
@@ -942,14 +1030,10 @@ fn names_a_required_field(params: &str) -> bool {
         !(f.is_empty() || f.starts_with('…') || f[end..].starts_with('=') || f[..end].split('|').all(|n| n.trim().ends_with('?')))
     };
     let Some(rest) = params.strip_prefix('{') else { return false };
-    let (mut depth, mut quoted, mut start) = (0usize, false, 0);
-    for (i, ch) in rest.char_indices() {
+    let mut start = 0;
+    for (i, ch, depth) in outside_quotes(rest) {
         match ch {
-            '"' => quoted = !quoted,
-            _ if quoted => {}
-            '{' | '[' | '(' => depth += 1,
             '}' if depth == 0 => return required(&rest[start..i]),
-            '}' | ']' | ')' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
                 if required(&rest[start..i]) {
                     return true;
@@ -960,6 +1044,44 @@ fn names_a_required_field(params: &str) -> bool {
         }
     }
     false
+}
+
+/// Each character of `text` that is not a double quote or inside a pair of them, with its byte
+/// offset and the number of `{`, `[` and `(` groups open before it. A closing `}`, `]` or `)` comes
+/// with a count that includes the group it closes, and one with no group open counts none.
+pub(crate) fn outside_quotes(text: &str) -> impl Iterator<Item = (usize, char, usize)> + '_ {
+    outside_marks(text, &['"'])
+}
+
+/// [`outside_quotes`], with a span between backticks skipped as well, as the engine's params object
+/// reads it: inside a span opened by a double quote or a backtick, only the same mark closes it.
+pub(crate) fn outside_quotes_and_backticks(text: &str) -> impl Iterator<Item = (usize, char, usize)> + '_ {
+    outside_marks(text, &['"', '`'])
+}
+
+/// Each character of `text` that is not one of `marks` or inside a span a mark opens and the same
+/// mark closes, as [`outside_quotes`] counts them.
+fn outside_marks<'a>(text: &'a str, marks: &'static [char]) -> impl Iterator<Item = (usize, char, usize)> + 'a {
+    let (mut depth, mut quote) = (0usize, None::<char>);
+    text.char_indices().filter_map(move |(i, ch)| {
+        if let Some(q) = quote {
+            if ch == q {
+                quote = None;
+            }
+            return None;
+        }
+        if marks.contains(&ch) {
+            quote = Some(ch);
+            return None;
+        }
+        let before = depth;
+        match ch {
+            '{' | '[' | '(' => depth += 1,
+            '}' | ']' | ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        Some((i, ch, before))
+    })
 }
 
 pub fn entry(key: &str) -> Option<Entry> {
@@ -1083,6 +1205,100 @@ pub fn reset_one(overrides: &mut Overrides, key: &str) {
     crate::keymap::remove_override(overrides, key);
 }
 
+/// Hold shortcuts: entry key → chord text ([`UiState::shortcut_holds`]).
+pub type Holds = BTreeMap<String, String>;
+
+/// The chord of hold shortcut text `text`, or why it can't be one. A hold shortcut is a key that
+/// types a character, alone or with Shift. Space and the backtick key are refused: the canvas reads
+/// them while they are held.
+pub fn hold_chord(text: &str) -> Result<craft_keymap::Chord, String> {
+    let chord = vc_chord(text).ok_or_else(|| format!("can't parse shortcut `{text}`"))?;
+    let shown = menus::pretty_shortcut(&vc_format(&chord));
+    if chord.mods.cmd || chord.mods.ctrl || chord.mods.alt {
+        return Err(format!("a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)"));
+    }
+    if chord.key == craft_keymap::Key::Backtick || !crate::shortcuts::types_text(chord.key) {
+        return Err(format!("{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key"));
+    }
+    Ok(chord)
+}
+
+/// The hold shortcut of `key` in `holds`, in VectorCraft's chord spelling, when it is usable.
+pub fn hold_of(holds: &Holds, key: &str) -> Option<String> {
+    holds.get(key).and_then(|t| hold_chord(t).ok()).map(|c| vc_format(&c))
+}
+
+/// The entry whose usable hold shortcut is `chord`: the first in `holds`' order when several are.
+/// An entry no longer listed (a removed plug-in's, or one that [`needs_a_value`] whose shortcut
+/// was taken away) keeps its text but does not hold.
+pub(crate) fn hold_for<'a>(holds: &'a Holds, chord: &craft_keymap::Chord) -> Option<&'a str> {
+    let mirror = current();
+    holds
+        .iter()
+        .find(|(k, t)| hold_chord(t).is_ok_and(|c| c == *chord) && entry(k).is_some_and(|e| listed(mirror.keymap.overrides(), &e)))
+        .map(|(k, _)| k.as_str())
+}
+
+/// Removes the hold shortcuts of the entries the editor does not list under `overrides`: one that
+/// [`needs_a_value`] loses its hold with its shortcut. A removed plug-in's entry keeps its hold.
+fn drop_unlisted_holds(holds: &mut Holds, overrides: &Overrides) {
+    holds.retain(|k, _| entry(k).is_none_or(|e| listed(overrides, &e)));
+}
+
+/// Sets (`Some`) or removes (`None` or `""`) the hold shortcut of `key`. Another entry that holds
+/// the same key loses it when `force`; otherwise that is an error. Returns the entries that lost
+/// it. Nothing changes on an error.
+pub fn assign_hold(holds: &mut Holds, key: &str, text: Option<&str>, force: bool) -> Result<Vec<String>, String> {
+    if entry(key).is_none() {
+        return Err(format!("unknown tool or command `{key}`"));
+    }
+    let Some(text) = text.filter(|t| !t.is_empty()) else {
+        holds.remove(key);
+        return Ok(vec![]);
+    };
+    let chord = hold_chord(text)?;
+    let taken: Vec<String> = holds.iter().filter(|(k, t)| *k != key && vc_chord(t) == Some(chord)).map(|(k, _)| k.clone()).collect();
+    if !taken.is_empty() && !force {
+        let names: Vec<String> = taken.iter().map(|k| entry(k).map_or(k.clone(), |e| english_name(&e))).collect();
+        return Err(format!("Hold {} is already used by {}", menus::pretty_shortcut(&vc_format(&chord)), names.join(", ")));
+    }
+    for k in &taken {
+        holds.remove(k);
+    }
+    holds.insert(key.to_string(), vc_format(&chord));
+    Ok(taken)
+}
+
+/// Hold shortcuts used by more than one entry: (chord text, entry keys).
+pub fn hold_conflicts(holds: &Holds) -> Vec<(String, Vec<String>)> {
+    let mut by: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (k, t) in holds {
+        if let Ok(c) = hold_chord(t) {
+            by.entry(vc_format(&c)).or_default().push(k.clone());
+        }
+    }
+    by.into_iter().filter(|(_, keys)| keys.len() > 1).collect()
+}
+
+/// The hold shortcuts of an exported set's `holds` member: none when it is missing. Every value
+/// must be a usable hold shortcut; otherwise the error names the first entry that is not.
+pub fn import_holds(v: &Value) -> Result<Holds, String> {
+    let Some(h) = v.get("holds") else { return Ok(Holds::new()) };
+    let h = h.as_object().ok_or("`holds` must be an object")?;
+    let mut out = Holds::new();
+    for (k, v) in h {
+        let s = v.as_str().ok_or_else(|| format!("hold shortcut for `{k}` must be a string"))?;
+        let c = hold_chord(s).map_err(|e| format!("hold shortcut for `{k}`: {e}"))?;
+        out.insert(k.clone(), vc_format(&c));
+    }
+    Ok(out)
+}
+
+/// The hold shortcuts of the Keyboard Shortcuts dialog's working set.
+fn dialog_holds(d: &Dialog) -> Holds {
+    d.fields.get("holds").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default()
+}
+
 /// Text shown for all active chords in a dialog row, with the backtick key shown as `typed`
 /// ([`backtick_text`]).
 fn dialog_shortcuts_with(km: &Keymap, key: &str, typed: Option<&str>) -> Option<String> {
@@ -1103,7 +1319,17 @@ pub fn preset(name: &str) -> Option<Overrides> {
 
 /// Export format: `{"format": "vectorcraft-shortcuts", "set": name, "overrides": {...}}`.
 pub fn export_json(set: &str, overrides: &Overrides) -> Value {
-    json!({"format": "vectorcraft-shortcuts", "version": 1, "set": set, "overrides": stored::to_value(overrides)})
+    export_json_with(set, overrides, &Holds::new())
+}
+
+/// [`export_json`] with the set's hold shortcuts, written as `holds` when there are any. The
+/// version stays 1: earlier versions read `overrides` only, so they import the file without them.
+pub fn export_json_with(set: &str, overrides: &Overrides, holds: &Holds) -> Value {
+    let mut v = json!({"format": "vectorcraft-shortcuts", "version": 1, "set": set, "overrides": stored::to_value(overrides)});
+    if !holds.is_empty() {
+        v["holds"] = json!(holds);
+    }
+    v
 }
 
 pub fn import_json(v: &Value) -> Result<(String, Overrides), String> {
@@ -1123,20 +1349,173 @@ pub fn import_json(v: &Value) -> Result<(String, Overrides), String> {
 /// row per line with the name and the shortcuts as the dialog shows them, separated by a tab. A
 /// row with no shortcut ends after the tab.
 pub fn export_text(set: &str, overrides: &Overrides) -> String {
+    export_text_with(set, overrides, &Holds::new())
+}
+
+/// [`export_text`] with the set's hold shortcuts: a row with one gets a third column, `Hold X`.
+pub fn export_text_with(set: &str, overrides: &Overrides, holds: &Holds) -> String {
     let snapshot = snapshot();
     let km = crate::keymap::keymap_in(&snapshot, overrides);
     let backtick = backtick_text();
-    let shown_set = if PRESETS.contains(&set) || set == CUSTOM { tl!(set) } else { set };
+    let shown_set = shown_set_name(set);
     let mut out = format!("{}\n{} {shown_set}\n", tl!("Keyboard Shortcuts"), tl!("Set:"));
     for (tools, heading) in [(true, "Tools"), (false, "Menu Commands")] {
         out += &format!("\n{}\n", tl!(heading));
         for e in snapshot.entries.iter().filter(|e| e.is_tool == tools && listed(km.overrides(), e)) {
             let name = shown_name(e);
             let sc = dialog_shortcuts_with(&km, &e.key, backtick.as_deref()).unwrap_or_default();
-            out += &format!("{name}\t{sc}\n");
+            match hold_of(holds, &e.key) {
+                Some(h) => out += &format!("{name}\t{sc}\t{} {}\n", tl!("Hold"), menus::pretty_shortcut(&h)),
+                None => out += &format!("{name}\t{sc}\n"),
+            }
         }
     }
     out
+}
+
+/// A set's name as the dialog shows it: the presets and Custom in the UI language.
+fn shown_set_name(set: &str) -> &str {
+    if PRESETS.contains(&set) || set == CUSTOM { tl!(set) } else { set }
+}
+
+/// Export Text's file formats.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextFormat {
+    /// [`export_text`]'s text file.
+    Text,
+    /// The printable shortcut sheet as a PDF ([`crate::shortcut_sheet::sheet_pdf`]).
+    Sheet,
+    /// A CSV file of [`export_sections`] ([`crate::shortcut_sheet::csv`]).
+    Csv,
+}
+
+impl TextFormat {
+    pub const ALL: [Self; 3] = [Self::Text, Self::Sheet, Self::Csv];
+
+    /// The `format` param's value.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Sheet => "sheet",
+            Self::Csv => "csv",
+        }
+    }
+
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Text => "txt",
+            Self::Sheet => "pdf",
+            Self::Csv => "csv",
+        }
+    }
+
+    /// The save dialog's file type.
+    fn filter(self) -> crate::FileFilter {
+        let label = match self {
+            Self::Text => "Text",
+            Self::Sheet => "Shortcut sheet",
+            Self::Csv => "CSV",
+        };
+        crate::FilePick::filter(label, &[self.extension()])
+    }
+
+    fn file_name(self) -> String {
+        format!("VectorCraft Shortcuts.{}", self.extension())
+    }
+
+    /// `path` with `format`'s extension: kept when it has it in any letter case, the extension of
+    /// another of these formats replaced, and the extension added to any other path.
+    fn with_extension(path: &str, format: Self) -> String {
+        let ext = vectorcraft_engine::cmd::fileio::extension(path);
+        if ext.eq_ignore_ascii_case(format.extension()) {
+            path.to_string()
+        } else if Self::ALL.iter().any(|f| f.extension().eq_ignore_ascii_case(&ext)) {
+            std::path::Path::new(path).with_extension(format.extension()).to_string_lossy().into_owned()
+        } else {
+            format!("{path}.{}", format.extension())
+        }
+    }
+
+    /// The format a save dialog's answer picked: the file type it reports, else the extension of
+    /// `path`; text for any other.
+    fn picked(path: &str, file_type: Option<&str>) -> Self {
+        let ext = file_type.map_or_else(|| vectorcraft_engine::cmd::fileio::extension(path), str::to_string);
+        Self::ALL.into_iter().find(|f| f.extension().eq_ignore_ascii_case(ext.trim_start_matches('.'))).unwrap_or(Self::Text)
+    }
+}
+
+/// The section name for menu commands no menu holds, as Export Text's heading has it.
+const MENU_COMMANDS: &str = "Menu Commands";
+
+/// Export Text's rows in sections, for the shortcut sheet and the CSV file: Tools, then one section
+/// per top-level menu in the order the dialog first lists a command of it, with the names and
+/// shortcuts as the dialog shows them, each name without its top-level menu. Every row the dialog
+/// lists is there, with an empty shortcut when it has none. A row with a hold shortcut in `holds`
+/// ends its shortcuts with `Hold X`, joined as the dialog joins them.
+pub fn export_sections(overrides: &Overrides, holds: &Holds) -> Vec<crate::shortcut_sheet::Section> {
+    use crate::shortcut_sheet::{Row, Section};
+    let snapshot = snapshot();
+    let km = crate::keymap::keymap_in(&snapshot, overrides);
+    let backtick = backtick_text();
+    let mut tools = Section { title: tl!("Tools").to_string(), rows: vec![] };
+    let mut menus: Vec<Section> = vec![];
+    for e in snapshot.entries.iter().filter(|e| listed(km.overrides(), e)) {
+        let shortcut = dialog_shortcuts_with(&km, &e.key, backtick.as_deref()).unwrap_or_default();
+        let shortcut = match hold_of(holds, &e.key) {
+            Some(h) if shortcut.is_empty() => format!("{} {}", tl!("Hold"), menus::pretty_shortcut(&h)),
+            Some(h) => format!("{shortcut} · {} {}", tl!("Hold"), menus::pretty_shortcut(&h)),
+            None => shortcut,
+        };
+        if e.is_tool {
+            tools.rows.push(Row { name: shown_name(e), shortcut });
+            continue;
+        }
+        let group = shown_group(&e.group);
+        let (top, rest) = group.split_once(" › ").unwrap_or((group.as_str(), ""));
+        let top = if top.is_empty() { tl!(MENU_COMMANDS) } else { top };
+        let label = shown_label(e);
+        let inner = if rest.is_empty() { label.to_string() } else { format!("{rest} › {label}") };
+        let name = if e.shows_key { format!("{inner} ({})", e.key) } else { inner };
+        match menus.iter_mut().find(|s| s.title == top) {
+            Some(s) => s.rows.push(Row { name, shortcut }),
+            None => menus.push(Section { title: top.to_string(), rows: vec![Row { name, shortcut }] }),
+        }
+    }
+    std::iter::once(tools).chain(menus).collect()
+}
+
+/// The file `format` writes for `set` with `overrides`: the sheet on `page`.
+fn export_text_file(
+    format: TextFormat,
+    set: &str,
+    overrides: &Overrides,
+    holds: &Holds,
+    page: crate::shortcut_sheet::PageSize,
+) -> Result<Vec<u8>, String> {
+    match format {
+        TextFormat::Text => Ok(export_text_with(set, overrides, holds).into_bytes()),
+        TextFormat::Sheet => {
+            let title = format!("{} · {}", tl!("Keyboard Shortcuts"), shown_set_name(set));
+            crate::shortcut_sheet::sheet_pdf(&title, &export_sections(overrides, holds), page)
+        }
+        TextFormat::Csv => Ok(crate::shortcut_sheet::csv(&export_sections(overrides, holds), ["Group", "Command", "Shortcut"]).into_bytes()),
+    }
+}
+
+/// The sheet's paper when `pageSize` is left out: A4 when the current document prints on A4 (its
+/// print settings, or, with none saved, a first artboard of A4 size either way up), else Letter.
+fn default_sheet_page(app: &VectorcraftApp) -> crate::shortcut_sheet::PageSize {
+    use crate::shortcut_sheet::PageSize;
+    let Some(st) = app.session.active() else { return PageSize::Letter };
+    let a4 = match st.doc.print_setup.clone().and_then(|v| serde_json::from_value::<vectorcraft_pdf::PrintSettings>(v).ok()) {
+        Some(settings) => settings.media == vectorcraft_pdf::Media::A4,
+        None => st.doc.artboards.first().is_some_and(|a| {
+            let (w, h) = PageSize::A4.landscape();
+            let (long, short) = (a.rect.width().max(a.rect.height()), a.rect.width().min(a.rect.height()));
+            (long - w).abs() < 1.0 && (short - h).abs() < 1.0
+        }),
+    };
+    if a4 { PageSize::A4 } else { PageSize::Letter }
 }
 
 // ---------- UI commands ----------
@@ -1145,8 +1524,33 @@ pub fn open(app: &mut VectorcraftApp) {
     let ov = stored::to_value(&app.ui.shortcut_overrides);
     app.ui.dialog = Some(Dialog::new(
         "shortcuts",
-        json!({"tab": "tools", "query": "", "set": app.ui.shortcut_set, "overrides": ov, "__recording": "", "__selected": "", "__message": "", "__conflict": ""}),
+        json!({
+            "tab": "tools",
+            "query": "",
+            "set": app.ui.shortcut_set,
+            "overrides": ov,
+            "holds": app.ui.shortcut_holds,
+            "holdShortcuts": app.session.prefs.hold_shortcuts,
+            "keyHoldDelay": app.session.prefs.key_hold_delay(),
+            "__holdInfo": false,
+            "__recording": "",
+            "__recordingHold": false,
+            "__selected": "",
+            "__message": "",
+            "__conflict": ""
+        }),
     ));
+}
+
+/// Hold Shortcuts in the Keyboard Shortcuts dialog's working copy.
+fn dialog_holds_on(d: &Dialog) -> bool {
+    d.bool("holdShortcuts")
+}
+
+/// The Hold Shortcut Delay in the Keyboard Shortcuts dialog's working copy, in its range.
+fn dialog_hold_delay(d: &Dialog) -> f64 {
+    let (min, max) = vectorcraft_engine::KEY_HOLD_DELAY_RANGE;
+    d.fields.get("keyHoldDelay").and_then(Value::as_f64).filter(|x| x.is_finite()).map_or(vectorcraft_engine::KEY_HOLD_DELAY, |x| x.clamp(min, max))
 }
 
 fn dialog_overrides(d: &Dialog) -> Overrides {
@@ -1156,7 +1560,16 @@ fn dialog_overrides(d: &Dialog) -> Overrides {
 /// OK: commit the working set.
 pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
+    let (on, delay) = (dialog_holds_on(&d), dialog_hold_delay(&d));
+    let prefs = &app.session.prefs;
+    if d.kind == "shortcuts" && (on != prefs.hold_shortcuts || delay != prefs.key_hold_delay()) {
+        app.run("prefs.set", json!({"values": {"holdShortcuts": on, "keyHoldDelay": delay}})).map_err(|e| e.to_string())?;
+        // Saved as OK in Preferences saves them.
+        crate::prefs_dialog::snapshot(app);
+        app.prefs_changed = true;
+    }
     app.ui.shortcut_overrides = dialog_overrides(&d);
+    app.ui.shortcut_holds = dialog_holds(&d);
     app.ui.shortcut_set = d.str("set");
     app.ui.dialog = None;
     sync(&app.ui);
@@ -1186,18 +1599,50 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 (Ok(key), Ok(shortcut), Ok(force)) => (key.unwrap_or_default(), shortcut, force.unwrap_or(false)),
                 (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => return Some(Err(e)),
             };
+            let hold = match s("hold") {
+                Ok(hold) => hold,
+                Err(e) => return Some(Err(e)),
+            };
+            // Without `hold`, a missing `shortcut` removes the shortcut, as it always has; with
+            // `hold` alone, the shortcut is left as it is. Both are checked before either is kept.
+            let has_hold = p.get("hold").is_some();
+            let has_shortcut = p.get("shortcut").is_some() || !has_hold;
             let mut ov = app.ui.shortcut_overrides.clone();
-            let r = if p.get("shortcut").is_some_and(Value::is_null) {
+            let mut holds = app.ui.shortcut_holds.clone();
+            let r = if !has_shortcut {
+                Ok(vec![])
+            } else if p.get("shortcut").is_some_and(Value::is_null) {
                 reset_one(&mut ov, &key);
                 Ok(vec![])
             } else {
                 assign(&mut ov, &key, shortcut.as_deref(), force)
             };
+            let r = r.and_then(|mut removed| {
+                // An entry the editor lists only with a shortcut takes a hold shortcut only with one.
+                if hold.as_deref().is_some_and(|h| !h.is_empty()) && entry(&key).is_some_and(|e| !listed(&ov, &e)) {
+                    return Err(format!("`{key}` needs a shortcut before it can have a hold shortcut"));
+                }
+                if has_hold {
+                    for k in assign_hold(&mut holds, &key, hold.as_deref(), force)? {
+                        if !removed.contains(&k) {
+                            removed.push(k);
+                        }
+                    }
+                }
+                drop_unlisted_holds(&mut holds, &ov);
+                Ok(removed)
+            });
             r.map(|removed| {
                 app.ui.shortcut_overrides = ov;
+                app.ui.shortcut_holds = holds;
                 app.ui.shortcut_set = CUSTOM.into();
                 sync(&app.ui);
-                json!({"id": key, "shortcut": effective_in(&app.ui.shortcut_overrides, &key), "removedFrom": removed})
+                json!({
+                    "id": key,
+                    "shortcut": effective_in(&app.ui.shortcut_overrides, &key),
+                    "hold": hold_of(&app.ui.shortcut_holds, &key),
+                    "removedFrom": removed
+                })
             })
         }
         "shortcuts.list" => {
@@ -1214,15 +1659,19 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                     .iter()
                     .filter(|e| listed(ov, e))
                     .filter(|e| q.is_empty() || e.label.to_lowercase().contains(&q) || e.key.to_lowercase().contains(&q))
-                    .map(|e| json!({"id": e.key, "label": e.label, "group": e.group, "shortcut": effective_with(&km, &e.key), "default": default_of(&e.key), "overridden": crate::keymap::has_override(ov, &e.key)}))
+                    .map(|e| json!({"id": e.key, "label": e.label, "group": e.group, "shortcut": effective_with(&km, &e.key), "hold": hold_of(&app.ui.shortcut_holds, &e.key), "default": default_of(&e.key), "overridden": crate::keymap::has_override(ov, &e.key)}))
                     .collect(),
             ))
         }
         "shortcuts.conflicts" => {
-            Ok(json!(all_conflicts(&app.ui.shortcut_overrides).into_iter().map(|(c, k)| json!({"shortcut": c, "ids": k})).collect::<Vec<_>>()))
+            let holds = hold_conflicts(&app.ui.shortcut_holds).into_iter().map(|(c, k)| (format!("Hold {c}"), k));
+            Ok(json!(
+                all_conflicts(&app.ui.shortcut_overrides).into_iter().chain(holds).map(|(c, k)| json!({"shortcut": c, "ids": k})).collect::<Vec<_>>()
+            ))
         }
         "shortcuts.reset" => {
             app.ui.shortcut_overrides.clear();
+            app.ui.shortcut_holds.clear();
             app.ui.shortcut_set = PRESETS[0].into();
             sync(&app.ui);
             Ok(Value::Null)
@@ -1230,6 +1679,8 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
         "shortcuts.preset" => match s("name").map(|n| n.as_deref().map(set_name).and_then(|n| preset(n).map(|p| (n.to_string(), p)))) {
             Ok(Some((n, p))) => {
                 app.ui.shortcut_overrides = p;
+                // The presets have no hold shortcuts.
+                app.ui.shortcut_holds.clear();
                 app.ui.shortcut_set = n;
                 sync(&app.ui);
                 Ok(Value::Null)
@@ -1242,7 +1693,7 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                 Ok(path) => path,
                 Err(e) => return Some(Err(e)),
             };
-            let v = export_json(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
+            let v = export_json_with(&app.ui.shortcut_set, &app.ui.shortcut_overrides, &app.ui.shortcut_holds);
             let bytes = serde_json::to_vec_pretty(&v).unwrap_or_default();
             let pick = crate::FilePick {
                 filters: vec![crate::FilePick::filter("Shortcut sets", &["json"])],
@@ -1271,19 +1722,77 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                     return Some(Err(format!("`{key}` must be a string")));
                 }
             };
-            let text = export_text(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
-            let pick =
-                crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt"])], ..crate::FilePick::named("VectorCraft Shortcuts.txt") };
-            match path.or_else(|| crate::picks::save(app, &pick)) {
+            let format = match s("format") {
+                Ok(None) => None,
+                Ok(Some(f)) => match TextFormat::ALL.into_iter().find(|t| t.name() == f) {
+                    Some(t) => Some(t),
+                    None => {
+                        let key = "format";
+                        return Some(Err(format!("`{key}` must be one of {}", TextFormat::ALL.map(TextFormat::name).join(", "))));
+                    }
+                },
+                Err(e) => return Some(Err(e)),
+            };
+            let page = match s("pageSize") {
+                Ok(None) => default_sheet_page(app),
+                Ok(Some(n)) => match crate::shortcut_sheet::PageSize::parse(&n) {
+                    Some(page) => page,
+                    None => {
+                        let key = "pageSize";
+                        return Some(Err(format!(
+                            "`{key}` must be one of {}",
+                            crate::shortcut_sheet::PageSize::ALL.map(crate::shortcut_sheet::PageSize::name).join(", ")
+                        )));
+                    }
+                },
+                Err(e) => return Some(Err(e)),
+            };
+            // A given path is written as text unless `format` says otherwise; a save dialog offers
+            // every format (text first) unless `format` names one, and its answer picks the format.
+            let (path, format) = match path {
+                Some(path) => (Some(path), format.unwrap_or(TextFormat::Text)),
+                None => {
+                    let shown = format.unwrap_or(TextFormat::Text);
+                    let filters = format.map_or_else(|| TextFormat::ALL.map(TextFormat::filter).to_vec(), |f| vec![f.filter()]);
+                    let pick = crate::FilePick { filters, ..crate::FilePick::named(&shown.file_name()) };
+                    match crate::picks::save_with_type(app, &pick) {
+                        Some((answer, file_type)) => {
+                            let picked = format.unwrap_or_else(|| TextFormat::picked(&answer, file_type.as_deref()));
+                            // The format that `format` names, or that a dialog reports as the type
+                            // picked, gives the name its extension. A file already at a path
+                            // changed that way, which the dialog did not check, is replaced only
+                            // after asking.
+                            let typed = format.is_some() || file_type.is_some();
+                            let path = if typed { TextFormat::with_extension(&answer, picked) } else { answer.clone() };
+                            let request = crate::picks::PickRequest::Save(pick.clone());
+                            if path != answer && crate::picks::ask_to_replace(app, request, &answer, file_type.as_deref(), &path) {
+                                return Some(Err("cancelled".into()));
+                            }
+                            (Some(path), picked)
+                        }
+                        None => (None, shown),
+                    }
+                }
+            };
+            // Its save dialog is open: the file is made and written when it answers.
+            if path.is_none() && app.file_dialog_open() {
+                return Some(Err("cancelled".into()));
+            }
+            // The hold shortcuts are listed while they act.
+            let holds = if app.session.prefs.hold_shortcuts { app.ui.shortcut_holds.clone() } else { Holds::new() };
+            let bytes = match export_text_file(format, &app.ui.shortcut_set, &app.ui.shortcut_overrides, &holds, page) {
+                Ok(bytes) => bytes,
+                Err(e) => return Some(Err(e)),
+            };
+            match path {
                 Some(path) => match app.services.write.as_mut() {
-                    Some(w) => w(&path, text.as_bytes()).map(|_| json!({"path": path})),
+                    Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
                     None => Err("no file writer".into()),
                 },
-                // Its save dialog is open: the file is written when it answers.
-                None if app.file_dialog_open() => Err("cancelled".into()),
                 None => match app.services.download.as_mut() {
-                    Some(dl) => dl("VectorCraft Shortcuts.txt", text.as_bytes()).map(|()| Value::Null),
-                    None => Ok(json!({"text": text})),
+                    Some(dl) => dl(&format.file_name(), &bytes).map(|()| Value::Null),
+                    None if format == TextFormat::Sheet => Ok(json!({"pdf": vectorcraft_svg::base64_encode(&bytes)})),
+                    None => Ok(json!({"text": String::from_utf8_lossy(&bytes)})),
                 },
             }
         }
@@ -1316,13 +1825,16 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                     (_, None) => Err("no file reader".into()),
                 }
             };
-            data.and_then(|v| import_json(&v)).map(|(set, ov)| {
+            data.and_then(|v| Ok((import_json(&v)?, import_holds(&v)?))).map(|((set, ov), mut holds)| {
                 let n = ov.len();
+                drop_unlisted_holds(&mut holds, &ov);
                 app.ui.shortcut_overrides = ov;
+                app.ui.shortcut_holds = holds;
                 app.ui.shortcut_set = set;
                 sync(&app.ui);
                 if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "shortcuts") {
                     d.fields.insert("overrides".into(), stored::to_value(&app.ui.shortcut_overrides));
+                    d.fields.insert("holds".into(), json!(app.ui.shortcut_holds));
                     d.fields.insert("set".into(), json!(app.ui.shortcut_set));
                 }
                 json!({"overrides": n})
@@ -1408,7 +1920,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut cancel = false;
     drop_hidden(&mut d, km.overrides());
     let saved = dialog_overrides(&d);
+    let mut holds = dialog_holds(&d);
     let recording = d.str("__recording");
+    // Which column records: the Hold column, or the Shortcut column.
+    let recording_hold = !recording.is_empty() && d.bool("__recordingHold");
     // Record a chord (before widgets see the keys). Modifiers held down are part of the next key's
     // chord, not a chord of their own.
     if !recording.is_empty() {
@@ -1423,7 +1938,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if key == Key::Escape {
                 d.fields.insert("__recording".into(), json!(""));
             } else if let Some(chord) = chord_from_event(key, m) {
-                record(&mut d, km.to_mut(), &recording, &chord);
+                if recording_hold {
+                    record_hold(&mut d, &mut holds, &recording, &chord);
+                } else {
+                    record(&mut d, km.to_mut(), &recording, &chord);
+                }
             }
         }
     }
@@ -1445,6 +1964,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 && let Some(p) = preset(name)
             {
                 km.to_mut().set_overrides(p);
+                // The presets have no hold shortcuts.
+                holds.clear();
                 d.fields.insert("set".into(), json!(name));
                 d.fields.insert("__message".into(), json!(""));
             }
@@ -1460,10 +1981,13 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             }
             if ui.button(tl!("Reset to Defaults")).clicked() {
                 km.to_mut().reset_all();
+                holds.clear();
                 d.fields.insert("set".into(), json!(PRESETS[0]));
                 d.fields.insert("__message".into(), json!(tl!("All shortcuts reset to defaults.")));
             }
         });
+        ui.add_space(6.0);
+        hold_row(ui, &t, &mut d);
         ui.add_space(8.0);
         // Tabs + search.
         ui.horizontal(|ui| {
@@ -1486,14 +2010,25 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let q = d.str("query").to_lowercase();
         let selected = d.str("__selected");
         let rec = d.str("__recording");
+        let rec_hold = d.bool("__recordingHold");
+        let holds_on = dialog_holds_on(&d);
         let scroll_to = d.fields.remove("__scrollTo").and_then(|v| v.as_str().map(str::to_string));
         egui::Frame::NONE.fill(t.input).stroke(egui::Stroke::new(1.0, t.input_border)).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.allocate_ui_with_layout(egui::vec2(360.0, 16.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.set_min_width(360.0);
+                let name_width = if holds_on { 340.0 } else { 360.0 };
+                ui.allocate_ui_with_layout(egui::vec2(name_width, 16.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.set_min_width(name_width);
                     ui.label(egui::RichText::new(if tools { tl!("Tool") } else { tl!("Command") }).color(t.text_dim).size(11.0));
                 });
-                ui.label(egui::RichText::new(tl!("Shortcut")).color(t.text_dim).size(11.0));
+                if holds_on {
+                    ui.allocate_ui_with_layout(egui::vec2(150.0, 16.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.set_min_width(150.0);
+                        ui.label(egui::RichText::new(tl!("Shortcut")).color(t.text_dim).size(11.0));
+                    });
+                    ui.label(egui::RichText::new(tl!("Hold")).color(t.text_dim).size(11.0));
+                } else {
+                    ui.label(egui::RichText::new(tl!("Shortcut")).color(t.text_dim).size(11.0));
+                }
             });
             egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, false]).show(ui, |ui| {
                 for (i, e) in view.entries.iter().enumerate().filter(|(_, e)| e.is_tool == tools && listed(km.overrides(), e)) {
@@ -1501,28 +2036,50 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         Cow::Borrowed(_) => view.texts.get(i).cloned().flatten(),
                         Cow::Owned(km) => dialog_shortcuts_with(km, &e.key, view.backtick.as_deref()),
                     };
-                    if !q.is_empty() && !row_matches(e, &q, sc.as_deref()) {
+                    let hold_text = if holds_on { hold_of(&holds, &e.key).map(|h| menus::pretty_shortcut(&h)) } else { None };
+                    if !q.is_empty() && !row_matches(e, &q, sc.as_deref()) && !hold_text.is_some_and(|h| h.to_lowercase().contains(&q)) {
                         continue;
                     }
                     let row = ui.horizontal(|ui| {
                         let name = shown_name(e);
+                        let name_width = if holds_on { 340.0 } else { 360.0 };
                         let r = ui
-                            .allocate_ui_with_layout(egui::vec2(360.0, 20.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                                ui.set_min_width(360.0);
+                            .allocate_ui_with_layout(egui::vec2(name_width, 20.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                                ui.set_min_width(name_width);
                                 ui.add(egui::Button::selectable(selected == e.key, egui::RichText::new(name).color(t.text)).truncate())
                             })
                             .inner;
                         if r.clicked() {
                             d.fields.insert("__selected".into(), json!(e.key));
                         }
-                        let label = if rec == e.key { tl!("Press keys…").to_string() } else { sc.unwrap_or_else(|| "—".into()) };
+                        let recording_here = rec == e.key && !rec_hold;
+                        let label = if recording_here { tl!("Press keys…").to_string() } else { sc.unwrap_or_else(|| "—".into()) };
                         let changed = crate::keymap::has_override(&saved, &e.key);
                         let txt = egui::RichText::new(label).color(if changed { t.accent } else { t.text });
                         let b = ui
-                            .add_sized([150.0, 20.0], egui::Button::new(txt).selected(rec == e.key))
+                            .add_sized([150.0, 20.0], egui::Button::new(txt).selected(recording_here))
                             .on_hover_text(tl!("Click, then press the new shortcut (Esc cancels)"));
                         if b.clicked() {
                             d.fields.insert("__recording".into(), json!(e.key));
+                            d.fields.insert("__recordingHold".into(), json!(false));
+                            d.fields.insert("__selected".into(), json!(e.key));
+                        }
+                        if !holds_on {
+                            return;
+                        }
+                        let holding_here = rec == e.key && rec_hold;
+                        let hold = hold_of(&holds, &e.key);
+                        let label = if holding_here {
+                            tl!("Press keys…").to_string()
+                        } else {
+                            hold.as_deref().map_or_else(|| "—".into(), menus::pretty_shortcut)
+                        };
+                        let h = ui.add_sized([90.0, 20.0], egui::Button::new(egui::RichText::new(label).color(t.text)).selected(holding_here)).on_hover_text(
+                            tl!("Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut."),
+                        );
+                        if h.clicked() {
+                            d.fields.insert("__recording".into(), json!(e.key));
+                            d.fields.insert("__recordingHold".into(), json!(true));
                             d.fields.insert("__selected".into(), json!(e.key));
                         }
                     });
@@ -1546,6 +2103,10 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 if ui.button(tl!("Use Default")).clicked() {
                     km.to_mut().reset(&command_of(&sel));
                 }
+                if dialog_holds_on(&d) && ui.add_enabled(holds.contains_key(&sel), egui::Button::new(tl!("Clear Hold"))).clicked() {
+                    holds.remove(&sel);
+                    d.fields.insert("set".into(), json!(CUSTOM));
+                }
             });
             let conflict = d.str("__conflict");
             if !conflict.is_empty() && ui.button(tl!("Go to Conflict")).clicked() {
@@ -1564,7 +2125,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let n = match &km {
             Cow::Borrowed(_) => view.conflicts,
             Cow::Owned(km) => conflicts_in(km).len(),
-        };
+        } + if dialog_holds_on(&d) { hold_conflicts(&holds).len() } else { 0 };
         if n > 0 {
             ui.label(
                 egui::RichText::new(crate::i18n::tn(
@@ -1589,6 +2150,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     });
     if let Cow::Owned(km) = &km {
         d.fields.insert("overrides".into(), stored::to_value(&saved_overrides(km.overrides(), &saved)));
+    }
+    drop_unlisted_holds(&mut holds, km.overrides());
+    d.fields.insert("holds".into(), json!(holds));
+    if d.str("__recording").is_empty() {
+        d.fields.insert("__recordingHold".into(), json!(false));
     }
     let import = d.fields.remove("__import").is_some();
     let export = d.fields.remove("__export").is_some();
@@ -1624,14 +2190,15 @@ fn import_into_dialog(app: &mut VectorcraftApp) {
         app.status(crate::picks::dialog_gone());
         return;
     }
-    let saved = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_set.clone());
+    let saved = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_holds.clone(), app.ui.shortcut_set.clone());
     match run_command(app, "shortcuts.import", &json!({})) {
         Some(Ok(_)) => {
-            let (o, s) = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_set.clone());
-            (app.ui.shortcut_overrides, app.ui.shortcut_set) = saved;
+            let (o, h, s) = (app.ui.shortcut_overrides.clone(), app.ui.shortcut_holds.clone(), app.ui.shortcut_set.clone());
+            (app.ui.shortcut_overrides, app.ui.shortcut_holds, app.ui.shortcut_set) = saved;
             sync(&app.ui);
             if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "shortcuts") {
                 d.fields.insert("overrides".into(), stored::to_value(&o));
+                d.fields.insert("holds".into(), json!(h));
                 d.fields.insert("set".into(), json!(s));
                 d.fields.insert("__message".into(), json!(tl!("Imported. Press OK to keep the imported set.")));
             }
@@ -1657,13 +2224,19 @@ fn export_dialog_set(app: &mut VectorcraftApp, command: &str) {
         app.status(crate::picks::dialog_gone());
         return;
     }
-    let (ov, set) = app.ui.dialog.as_ref().map(|d| (dialog_overrides(d), d.str("set"))).unwrap_or_default();
+    let (ov, holds, set, on) =
+        app.ui.dialog.as_ref().map(|d| (dialog_overrides(d), dialog_holds(d), d.str("set"), dialog_holds_on(d))).unwrap_or_default();
     let saved = std::mem::replace(&mut app.ui.shortcut_overrides, ov);
+    let saved_holds = std::mem::replace(&mut app.ui.shortcut_holds, holds);
     let saved_set = std::mem::replace(&mut app.ui.shortcut_set, set);
+    // Export Text… lists the hold shortcuts while the dialog's Hold Shortcuts is on.
+    let saved_on = std::mem::replace(&mut app.session.prefs.hold_shortcuts, on);
     if let Some(Err(e)) = run_command(app, command, &json!({})) {
         app.status(e);
     }
+    app.session.prefs.hold_shortcuts = saved_on;
     app.ui.shortcut_overrides = saved;
+    app.ui.shortcut_holds = saved_holds;
     app.ui.shortcut_set = saved_set;
 }
 
@@ -1714,6 +2287,107 @@ fn record(d: &mut Dialog, km: &mut Keymap, key: &str, chord: &str) {
                 d.fields.insert("__message".into(), json!(""));
                 d.fields.insert("__conflict".into(), json!(""));
             }
+        }
+        Err(e) => {
+            d.fields.insert("__message".into(), json!(e));
+        }
+    }
+}
+
+/// The Hold Shortcuts row of the Keyboard Shortcuts dialog: the checkbox that turns hold shortcuts
+/// on (and shows the Hold column), a button that shows how they work, and, while on, the Hold
+/// Shortcut Delay.
+fn hold_row(ui: &mut egui::Ui, t: &Tokens, d: &mut Dialog) {
+    ui.horizontal(|ui| {
+        let mut on = dialog_holds_on(d);
+        if ui.checkbox(&mut on, egui::RichText::new(tl!("Hold Shortcuts")).color(t.text)).changed() {
+            d.fields.insert("holdShortcuts".into(), json!(on));
+            if !on && d.bool("__recordingHold") {
+                d.fields.insert("__recording".into(), json!(""));
+                d.fields.insert("__recordingHold".into(), json!(false));
+            }
+        }
+        let info = d.bool("__holdInfo");
+        if ui
+            .add(egui::Button::new(egui::RichText::new("?").color(t.text_dim)).selected(info).small())
+            .on_hover_text(tl!("How hold shortcuts work"))
+            .clicked()
+        {
+            d.fields.insert("__holdInfo".into(), json!(!info));
+        }
+        if on {
+            ui.add_space(12.0);
+            ui.label(egui::RichText::new(tl!("Hold Shortcut Delay")).color(t.text_dim));
+            let (min, max) = vectorcraft_engine::KEY_HOLD_DELAY_RANGE;
+            let mut delay = dialog_hold_delay(d);
+            if ui.add(egui::DragValue::new(&mut delay).range(min..=max).speed(0.01).fixed_decimals(2).suffix(" s")).changed() {
+                d.fields.insert("keyHoldDelay".into(), json!(delay));
+            }
+        }
+    });
+    if d.bool("__holdInfo") {
+        egui::Frame::NONE.stroke(egui::Stroke::new(1.0, t.input_border)).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                hold_illustration(ui, t);
+                ui.add_space(8.0);
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(tl!(
+                            "A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift."
+                        ))
+                        .color(t.text)
+                        .size(11.5),
+                    )
+                    .wrap(),
+                );
+            });
+        });
+    }
+}
+
+/// A key and two presses of it drawn in code: a short press (Tap) ends before the delay, and a long
+/// one (Hold) reaches it.
+fn hold_illustration(ui: &mut egui::Ui, t: &Tokens) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(200.0, 52.0), egui::Sense::hover());
+    let p = ui.painter_at(rect);
+    let key = egui::Rect::from_min_size(rect.min + egui::vec2(2.0, 12.0), egui::vec2(28.0, 28.0));
+    p.rect(key, 4.0, t.input, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    p.text(key.center(), egui::Align2::CENTER_CENTER, "X", egui::FontId::proportional(13.0), t.text);
+    let start = key.right() + 10.0;
+    let delay_x = start + 70.0;
+    let rows = [(tl!("Tap"), 40.0, key.top() + 6.0), (tl!("Hold"), 100.0, key.bottom() - 6.0)];
+    for (label, len, y) in rows {
+        let color = if start + len >= delay_x { t.accent } else { t.text_dim };
+        p.line_segment([egui::pos2(start, y), egui::pos2(start + len, y)], egui::Stroke::new(4.0, color));
+        p.text(egui::pos2(start + len + 4.0, y), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(10.5), t.text);
+    }
+    // The delay.
+    let mut y = rect.top() + 4.0;
+    while y < rect.bottom() - 4.0 {
+        p.line_segment([egui::pos2(delay_x, y), egui::pos2(delay_x, (y + 3.0).min(rect.bottom() - 4.0))], egui::Stroke::new(1.0, t.text_dim));
+        y += 6.0;
+    }
+}
+
+/// Apply a recorded key as `key`'s hold shortcut in the working set. Another entry that held the
+/// key loses it, with the same warning as a shortcut; a key that can't hold says why.
+fn record_hold(d: &mut Dialog, holds: &mut Holds, key: &str, chord: &str) {
+    d.fields.insert("__recording".into(), json!(""));
+    d.fields.insert("__recordingHold".into(), json!(false));
+    match assign_hold(holds, key, Some(chord), true) {
+        Ok(removed) => {
+            d.fields.insert("set".into(), json!(CUSTOM));
+            let names: Vec<String> = removed.iter().map(|k| entry(k).map(|e| shown_name(&e)).unwrap_or(k.clone())).collect();
+            let message = if names.is_empty() {
+                String::new()
+            } else {
+                crate::i18n::fmt(
+                    tl!("⚠ {chord} was already used by {names} — it has been removed there."),
+                    &[("chord", &menus::pretty_shortcut(chord)), ("names", &names.join(", "))],
+                )
+            };
+            d.fields.insert("__message".into(), json!(message));
+            d.fields.insert("__conflict".into(), json!(""));
         }
         Err(e) => {
             d.fields.insert("__message".into(), json!(e));
@@ -2113,6 +2787,169 @@ mod tests {
         assert_eq!(*text, expected);
     }
 
+    /// The sheet's sections: Tools first, then each top-level menu once, in the
+    /// order the dialog first lists a command of it, holding every row the dialog lists with its
+    /// shortcut, the command named without its top-level menu.
+    #[test]
+    fn export_sections_hold_every_listed_row_once_by_top_level_menu() {
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.preferences", "Ctrl+Alt+Shift+9");
+        let (sections, listed_rows, tops) = with_steady_plugins(|| {
+            let km = keymap_with(&ov);
+            let listed: Vec<Entry> = entries().iter().filter(|e| listed(km.overrides(), e)).cloned().collect();
+            let mut tops: Vec<String> = vec![];
+            for e in listed.iter().filter(|e| !e.is_tool) {
+                let top = e.group.split(" › ").next().filter(|t| !t.is_empty()).unwrap_or(MENU_COMMANDS).to_string();
+                if !tops.contains(&top) {
+                    tops.push(top);
+                }
+            }
+            (export_sections(&ov, &Holds::new()), listed.len(), tops)
+        });
+        let titles: Vec<&str> = sections.iter().map(|s| s.title.as_str()).collect();
+        assert_eq!(titles[0], "Tools");
+        assert_eq!(titles[1..], tops.iter().map(String::as_str).collect::<Vec<_>>()[..], "one section per top-level menu");
+        for menu in ["File", "Edit", "Object", "Type", "Select", "Effect", "View", "Window", "Help"] {
+            assert!(titles.contains(&menu), "no {menu} section: {titles:?}");
+        }
+        assert_eq!(sections.iter().map(|s| s.rows.len()).sum::<usize>(), listed_rows, "every listed row once");
+        let prefs = entry("edit.preferences").expect("the Preferences row");
+        let top = prefs.group.split(" › ").next().unwrap_or_default().to_string();
+        let name = shown_name(&prefs).strip_prefix(&format!("{top} › ")).map(str::to_string).expect("Preferences is in a menu");
+        let section = sections.iter().find(|s| s.title == top).expect("its menu's section");
+        assert!(section.rows.iter().any(|r| r.name == name && r.shortcut.ends_with('9')), "{name} in {:?}", section.rows);
+        let pen = sections[0].rows.iter().find(|r| r.shortcut == menus::pretty_shortcut(default_of("tool:pen").unwrap_or_default()));
+        assert!(pen.is_some(), "the Pen tool's row");
+    }
+
+    /// `format` picks the file: text (the default, the same bytes as before) or the PDF sheet. A
+    /// given path is written as text whatever its extension, and a bad `format` or `pageSize` is an
+    /// error that writes nothing.
+    #[test]
+    fn export_text_command_writes_text_or_a_sheet() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, Vec<u8>)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+            w.borrow_mut().push((path.to_string(), b.to_vec()));
+            Ok(())
+        }));
+        let (files, text) = with_steady_plugins(|| {
+            written.borrow_mut().clear();
+            app.run("shortcuts.exportText", json!({"path": "/a/plain.txt"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/named.txt", "format": "text"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/as-text.pdf"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/sheet.pdf", "format": "sheet", "pageSize": "a4"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/sheet.txt", "format": "sheet"})).unwrap();
+            (written.borrow().clone(), export_text(&app.ui.shortcut_set, &app.ui.shortcut_overrides))
+        });
+        let [plain, named, as_text, sheet, sheet_as_named] = files.as_slice() else { panic!("{} files", files.len()) };
+        for f in [plain, named, as_text] {
+            assert_eq!(f.1, text.as_bytes(), "{}", f.0);
+        }
+        assert!(sheet.1.starts_with(b"%PDF-"), "{}", sheet.0);
+        assert_eq!(sheet_as_named.0, "/a/sheet.txt", "a path is written as given");
+        assert!(sheet_as_named.1.starts_with(b"%PDF-"));
+        written.borrow_mut().clear();
+        let mut err = |p: Value| app.run("shortcuts.exportText", p);
+        assert_eq!(err(json!({"path": "/a/x", "format": "xlsx"})), Err("`format` must be one of text, sheet, csv".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "format": "Sheet"})), Err("`format` must be one of text, sheet, csv".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "format": 3})), Err("`format` must be a string".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "pageSize": "legal"})), Err("`pageSize` must be one of letter, a4".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "pageSize": "A4"})), Err("`pageSize` must be one of letter, a4".to_string()));
+        assert!(written.borrow().is_empty());
+    }
+
+    /// `format: "csv"` writes the CSV file: the `Group,Command,Shortcut` header, then a record per
+    /// row the dialog lists, every group and row of [`export_sections`] once. Without a file it
+    /// comes back under `text`.
+    #[test]
+    fn export_text_command_writes_a_csv_file() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, Vec<u8>)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let (returned, files, sections) = with_steady_plugins(|| {
+            app.services.write = None;
+            written.borrow_mut().clear();
+            let returned = app.run("shortcuts.exportText", json!({"format": "csv"}));
+            let w = written.clone();
+            app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+                w.borrow_mut().push((path.to_string(), b.to_vec()));
+                Ok(())
+            }));
+            app.run("shortcuts.exportText", json!({"path": "/a/list.csv", "format": "csv"})).unwrap();
+            (returned, written.borrow().clone(), export_sections(&app.ui.shortcut_overrides, &Holds::new()))
+        });
+        let [(path, bytes)] = files.as_slice() else { panic!("{} files", files.len()) };
+        assert_eq!(path, "/a/list.csv");
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        assert_eq!(returned.unwrap()["text"].as_str(), Some(text.as_str()), "the same file without a writer");
+        assert_eq!(text, crate::shortcut_sheet::csv(&sections, ["Group", "Command", "Shortcut"]));
+        assert!(text.starts_with("\u{feff}Group,Command,Shortcut\r\nTools,"), "{text}");
+        let records = text.matches("\r\n").count();
+        assert_eq!(records, 1 + sections.iter().map(|s| s.rows.len()).sum::<usize>(), "a header and a record per row");
+        for s in &sections {
+            assert!(text.contains(&format!("\r\n{},", s.title)), "no {} group", s.title);
+        }
+    }
+
+    /// With no `pageSize` the sheet is on A4 when the current document prints on A4: its print
+    /// settings say so, or, with none saved, its first artboard is A4 either way up; else Letter.
+    #[test]
+    fn the_sheet_is_on_a4_when_the_document_prints_on_a4() {
+        use crate::shortcut_sheet::PageSize;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "no document");
+        app.session.add_document(vectorcraft_doc::Document::new(612.0, 792.0), None);
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "a Letter artboard");
+        app.session.add_document(vectorcraft_doc::Document::new(595.28, 841.89), None);
+        assert_eq!(default_sheet_page(&app), PageSize::A4, "an A4 artboard");
+        let printing = |w, h, media| {
+            let mut doc = vectorcraft_doc::Document::new(w, h);
+            doc.print_setup = serde_json::to_value(vectorcraft_pdf::PrintSettings { media, ..Default::default() }).ok();
+            doc
+        };
+        app.session.add_document(printing(595.28, 841.89, vectorcraft_pdf::Media::Letter), None);
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "an A4 artboard printing on Letter");
+        app.session.add_document(printing(612.0, 792.0, vectorcraft_pdf::Media::A4), None);
+        assert_eq!(default_sheet_page(&app), PageSize::A4, "printing on A4");
+    }
+
+    /// Without a path, a file writer or a download, `shortcuts.exportText` returns the file: the
+    /// text file under `text` and the sheet as base64 under `pdf`.
+    #[test]
+    fn export_text_without_a_file_returns_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let (text, sheet) =
+            with_steady_plugins(|| (app.run("shortcuts.exportText", json!({})), app.run("shortcuts.exportText", json!({"format": "sheet"}))));
+        let text = text.unwrap();
+        assert!(text["text"].as_str().unwrap_or_default().starts_with("Keyboard Shortcuts\n"), "{text}");
+        let sheet = sheet.unwrap();
+        // "%PDF-" in base64.
+        assert!(sheet["pdf"].as_str().unwrap_or_default().starts_with("JVBERi0"), "{}", sheet.to_string().len());
+    }
+
+    /// The save dialog's answer picks the format: the file type it reports, else the extension
+    /// typed; text for any other.
+    #[test]
+    fn the_save_dialogs_answer_picks_the_export_text_format() {
+        assert_eq!(TextFormat::picked("/a/sheet.PDF", None), TextFormat::Sheet);
+        assert_eq!(TextFormat::picked("/a/list", Some("pdf")), TextFormat::Sheet);
+        assert_eq!(TextFormat::picked("/a/list.pdf", Some("txt")), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list.txt", None), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list", None), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list.json", None), TextFormat::Text);
+        assert_eq!(TextFormat::with_extension("/a/list", TextFormat::Sheet), "/a/list.pdf");
+        assert_eq!(TextFormat::with_extension("/a/list.txt", TextFormat::Sheet), "/a/list.pdf");
+        assert_eq!(TextFormat::with_extension("/a/list", TextFormat::Text), "/a/list.txt");
+        assert_eq!(TextFormat::picked("/a/list.CSV", None), TextFormat::Csv);
+        assert_eq!(TextFormat::picked("/a/list", Some("csv")), TextFormat::Csv);
+        assert_eq!(TextFormat::with_extension("/a/list.pdf", TextFormat::Csv), "/a/list.csv");
+        assert_eq!(TextFormat::with_extension("/a/list.PDF", TextFormat::Sheet), "/a/list.PDF");
+        assert_eq!(TextFormat::with_extension("/a/v1.2", TextFormat::Sheet), "/a/v1.2.pdf");
+    }
+
     /// The dialog's Import… leaves an action its function key when the imported set gives the key
     /// to a command, through both Cancel and OK.
     #[test]
@@ -2309,10 +3146,38 @@ mod tests {
         for id in ["brush.duplicate", "path.convertAnchors", "document.json", "prefs.list"] {
             assert!(entry(id).is_none(), "{id}");
         }
-        for (doc, bare) in
-            [("{}", true), ("{dx?, dy?} x", true), ("{id?|ids?, clip?}", true), ("{name, newName?}", false), ("{a?: {b}}", false), ("same as", false)]
-        {
+        // The Symbols panel runs New Symbol through Symbol Options, so it waits for a key the user gives it.
+        assert!(entry("symbol.new").is_some_and(|e| !listed(&Overrides::new(), &e)));
+        for (doc, bare) in [
+            ("{}", true),
+            ("{dx?, dy?} x", true),
+            ("{id?|ids?, clip?}", true),
+            ("{name, newName?}", false),
+            ("{a?: {b}}", true),
+            ("{ids?|id?, on?: bool} turn it on or off", true),
+            ("{ids?: [id…] (the selection), anchors?: [index…]}", true),
+            ("{format?: a|b, size?: 1|3|5}", true),
+            ("{artboard?: index=0}", true),
+            ("{mode: a|b, on?: bool}", false),
+            ("same as", false),
+        ] {
             assert_eq!(runs_without_params(doc), bare, "{doc}");
+        }
+        // Panel menu commands whose params doc gives each optional field a type are listed too.
+        let none = Overrides::new();
+        for id in [
+            "type.fractionalWidths",
+            "type.systemLayout",
+            "object.setPixelAligned",
+            "links.embed",
+            "links.update",
+            "object.slice.delete",
+            "artboard.switchOrientation",
+            "appearance.targetContents",
+            "paint.invert",
+            "artboard.distributeSpacing",
+        ] {
+            assert!(entry(id).is_some_and(|e| listed(&none, &e)), "{id}");
         }
         let mut ov = Overrides::new();
         assert!(assign(&mut ov, "symbol.breakLink", Some("Cmd+Alt+Shift+F9"), true).is_ok());
@@ -2511,13 +3376,19 @@ mod tests {
         use vectorcraft_testkit::fixtures::Fixture;
         let none = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
         assert!(!menus::enabled(&none, "edit.findReplace"));
-        assert_eq!(dimmed(&none, "edit.findReplace"), Err("command `edit.findReplace` is not available right now: no document open".into()));
+        let why = "command `edit.findReplace` is not available right now: no document open";
+        assert_eq!(dimmed(&none, "edit.findReplace", "edit.findReplace").as_deref(), Some(why));
+        // A name to show takes the id's place.
+        let shown = "command `Edit › Find and Replace…` is not available right now: no document open";
+        assert_eq!(dimmed(&none, "edit.findReplace", "Edit › Find and Replace…").as_deref(), Some(shown));
         let empty = VectorcraftApp::new(Fixture::Empty.session(), crate::Services::default());
         for id in ["appearance.addFill", "ui.cropImage"] {
             assert!(!menus::enabled(&empty, id), "{id}");
             assert!(vectorcraft_engine::find_command(id).is_none_or(|c| (c.enabled)(&empty.session).is_ok()), "{id}: the engine gives no reason");
-            assert_eq!(dimmed(&empty, id), Err(format!("command `{id}` is not available right now")));
+            assert_eq!(dimmed(&empty, id, id), Some(format!("command `{id}` is not available right now")));
         }
+        assert!(menus::enabled(&empty, "edit.findReplace"));
+        assert_eq!(dimmed(&empty, "edit.findReplace", "edit.findReplace"), None, "not dimmed");
     }
 
     /// Every command the editor lists, run as a key press runs it on a document with one or with
@@ -2656,10 +3527,13 @@ mod tests {
         assert_eq!(shown("file.new"), Some(("File".into(), "New…".into(), true)));
         assert_eq!(shown("text.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), false)));
         assert_eq!(shown("type.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), true)));
-        for id in ["file.exportInBackground", "file.openInBackground"] {
+        assert_eq!(shown("text.convertListToText"), Some(("Type".into(), "Convert to Text".into(), false)));
+        assert_eq!(shown("type.convertListToText"), Some(("Type › Bullets and Numbering".into(), "Convert to Text".into(), false)));
+        for id in ["file.exportInBackground", "file.openInBackground", "file.saveInBackground"] {
             assert_eq!(shown(id), Some(("File".into(), "Continue in Background".into(), true)), "{id}");
         }
         assert_eq!(shown("file.cancelExport"), Some(("File".into(), "Cancel Export".into(), false)));
+        assert_eq!(shown("file.cancelSave"), Some(("File".into(), "Cancel Save".into(), false)));
         let e = entry("type.fitHeadline").unwrap();
         assert!(shown_name(&e).ends_with("Fit Headline (type.fitHeadline)"), "{}", shown_name(&e));
         assert!(row_matches(&e, "type.fitheadline", None));
@@ -2678,6 +3552,26 @@ mod tests {
         record(&mut d, &mut km, "type.fitHeadline", "Cmd+Alt+Shift+F10");
         record(&mut d, &mut km, "text.fitHeadline", "Cmd+Alt+Shift+F10");
         assert!(d.str("__message").contains("was already used by Type › Fit Headline (type.fitHeadline) "), "{}", d.str("__message"));
+    }
+
+    /// No two entries of Keyboard Shortcuts have the same name in any UI language: each catalog
+    /// translates two different English names two different ways.
+    #[test]
+    fn no_two_entries_have_the_same_name_in_any_language() {
+        let all = entries();
+        let mut shared = vec![];
+        let previous = crate::i18n::current();
+        for lang in crate::i18n::Lang::all() {
+            crate::i18n::set_current(lang);
+            let mut by_name: HashMap<String, Vec<&str>> = HashMap::new();
+            for e in all.iter() {
+                by_name.entry(shown_name(e)).or_default().push(e.key.as_str());
+            }
+            shared.extend(by_name.into_iter().filter(|(_, keys)| keys.len() > 1).map(|(name, keys)| (lang.code(), name, keys)));
+        }
+        crate::i18n::set_current(previous);
+        shared.sort();
+        assert!(shared.is_empty(), "{} names: {shared:#?}", shared.len());
     }
 
     /// Two filter plug-ins with the same name in the same menu show their ids, and a third whose
@@ -2752,5 +3646,280 @@ mod tests {
         let r = app.run("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": null})).unwrap();
         assert_eq!(r["shortcut"], "Cmd+Alt+Shift+F11");
         assert!(app.run("shortcuts.preset", json!({"name": null})).unwrap_err().starts_with("unknown preset"));
+    }
+
+    /// `shortcuts.set {hold}` gives an entry a hold shortcut and leaves its shortcut, its default
+    /// and its overridden state alone; `shortcuts.list` shows it; Clear (`shortcut: null`) keeps it.
+    #[test]
+    fn a_hold_shortcut_is_kept_apart_from_the_shortcut() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let before = effective_in(&app.ui.shortcut_overrides, "paint.swap");
+        let r = app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "x"})).unwrap();
+        assert_eq!((r["hold"].as_str(), r["shortcut"].as_str().map(str::to_string)), (Some("X"), before.clone()));
+        assert!(app.ui.shortcut_overrides.is_empty(), "no shortcut changed");
+        assert_eq!(app.ui.shortcut_set, CUSTOM);
+        let rows = with_steady_plugins(|| app.run("shortcuts.list", json!({"query": "paint.swap"})).unwrap());
+        let row = rows.as_array().unwrap().iter().find(|r| r["id"] == "paint.swap").unwrap().clone();
+        assert_eq!((row["hold"].as_str(), row["overridden"].as_bool()), (Some("X"), Some(false)));
+        app.run("shortcuts.set", json!({"id": "paint.swap", "shortcut": null})).unwrap();
+        assert_eq!(hold_of(&app.ui.shortcut_holds, "paint.swap").as_deref(), Some("X"), "Use Default keeps the hold");
+        app.run("shortcuts.set", json!({"id": "paint.swap", "shortcut": "Cmd+Alt+Shift+F9"})).unwrap();
+        assert_eq!(hold_of(&app.ui.shortcut_holds, "paint.swap").as_deref(), Some("X"), "a new shortcut keeps the hold");
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": ""})).unwrap();
+        assert!(app.ui.shortcut_holds.is_empty(), "an empty hold removes it");
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "Shift+1"})).unwrap();
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": null})).unwrap();
+        assert!(app.ui.shortcut_holds.is_empty(), "a null hold removes it");
+    }
+
+    /// A hold shortcut is a key that types a character, alone or with Shift; other keys, a clash
+    /// without `force` and a hold that is not a string are refused and change nothing.
+    #[test]
+    fn hold_shortcuts_refuse_keys_that_cannot_wait() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        for bad in ["Space", "Shift+Space", "~", "Shift+~", "Cmd+X", "Alt+X", "Ctrl+X", "Left", "F5", "Enter", "Delete"] {
+            let r = app.run("shortcuts.set", json!({"id": "paint.swap", "hold": bad}));
+            assert!(r.is_err(), "{bad}: {r:?}");
+        }
+        assert_eq!(app.run("shortcuts.set", json!({"id": "paint.swap", "hold": 5})), Err("`hold` must be a string".to_string()));
+        assert!(app.ui.shortcut_holds.is_empty());
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "Shift+X"})).unwrap();
+        let clash = app.run("shortcuts.set", json!({"id": "select.none", "hold": "Shift+X"})).unwrap_err();
+        assert!(clash.starts_with("Hold "), "{clash}");
+        // A refused hold leaves the shortcut given with it unchanged too.
+        let r = app.run("shortcuts.set", json!({"id": "select.none", "shortcut": "Cmd+Alt+Shift+F9", "hold": "Shift+X"}));
+        assert!(r.is_err());
+        assert!(app.ui.shortcut_overrides.is_empty());
+        let r = app.run("shortcuts.set", json!({"id": "select.none", "hold": "Shift+X", "force": true})).unwrap();
+        assert_eq!(r["removedFrom"], json!(["paint.swap"]));
+        assert_eq!(app.ui.shortcut_holds.keys().collect::<Vec<_>>(), ["select.none"]);
+    }
+
+    /// A command the editor lists only with a shortcut (Transparency needs a value) takes a hold
+    /// shortcut only with one, and loses its hold, as it stops being listed, when the shortcut is
+    /// taken away: by clearing it or by giving it to another command.
+    #[test]
+    fn a_hold_shortcut_needs_a_listed_entry() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert!(needs_a_value("transparency.set"));
+        let r = app.run("shortcuts.set", json!({"id": "transparency.set", "hold": "Q"}));
+        assert!(r.is_err(), "{r:?}");
+        assert!(app.ui.shortcut_holds.is_empty() && app.ui.shortcut_overrides.is_empty());
+        let q = vc_chord("Q").unwrap();
+        app.run("shortcuts.set", json!({"id": "transparency.set", "shortcut": "Cmd+Alt+Shift+F9", "hold": "Q"})).unwrap();
+        assert_eq!(hold_for(&app.ui.shortcut_holds, &q), Some("transparency.set"));
+        let rows = with_steady_plugins(|| app.run("shortcuts.list", json!({"query": "transparency.set"})).unwrap());
+        assert!(rows.as_array().unwrap().iter().any(|r| r["id"] == "transparency.set" && r["hold"] == "Q"), "{rows}");
+        app.run("shortcuts.set", json!({"id": "transparency.set", "shortcut": ""})).unwrap();
+        assert_eq!(hold_for(&app.ui.shortcut_holds, &q), None);
+        assert!(app.ui.shortcut_holds.is_empty(), "{:?}", app.ui.shortcut_holds);
+        // The key is free for another command, with no conflict left behind.
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "Q"})).unwrap();
+        assert_eq!(app.run("shortcuts.conflicts", json!({})).unwrap(), json!([]));
+        app.run("shortcuts.set", json!({"id": "transparency.set", "shortcut": "Cmd+Alt+Shift+F9", "hold": "Shift+Q"})).unwrap();
+        app.run("shortcuts.set", json!({"id": "edit.duplicate", "shortcut": "Cmd+Alt+Shift+F9", "force": true})).unwrap();
+        assert_eq!(app.ui.shortcut_holds.keys().collect::<Vec<_>>(), ["paint.swap"]);
+    }
+
+    /// Reset All and a preset clear the hold shortcuts; two entries holding one key are a conflict.
+    #[test]
+    fn hold_shortcut_conflicts_reset_and_presets() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.ui.shortcut_holds.insert("paint.swap".into(), "X".into());
+        app.ui.shortcut_holds.insert("select.none".into(), "X".into());
+        let c = app.run("shortcuts.conflicts", json!({})).unwrap();
+        assert!(c.as_array().unwrap().iter().any(|c| c["shortcut"] == "Hold X"), "{c}");
+        app.run("shortcuts.reset", json!({})).unwrap();
+        assert!(app.ui.shortcut_holds.is_empty());
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "X"})).unwrap();
+        app.run("shortcuts.preset", json!({"name": PRESETS[0]})).unwrap();
+        assert!(app.ui.shortcut_holds.is_empty());
+    }
+
+    /// Export… writes the hold shortcuts as `holds` (version 1) only when there are any; Import…
+    /// reads them, a file without them has none, and a bad one fails and applies nothing.
+    #[test]
+    fn hold_shortcuts_export_and_import() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let none = export_json("Studio", &Overrides::new());
+        assert!(none.get("holds").is_none());
+        let holds: Holds = [("paint.swap".to_string(), "X".to_string())].into();
+        let v = export_json_with("Studio", &Overrides::new(), &holds);
+        assert_eq!((v["version"].as_u64(), v["holds"].clone()), (Some(1), json!({"paint.swap": "X"})));
+        app.run("shortcuts.import", json!({"data": v})).unwrap();
+        assert_eq!(app.ui.shortcut_holds, holds);
+        for bad in [json!("X"), json!({"paint.swap": 5}), json!({"paint.swap": "Space"})] {
+            let mut v = export_json("Other", &Overrides::new());
+            v["holds"] = bad.clone();
+            assert!(app.run("shortcuts.import", json!({"data": v})).is_err(), "{bad}");
+            assert_eq!((app.ui.shortcut_holds.clone(), app.ui.shortcut_set.as_str()), (holds.clone(), "Studio"), "{bad}");
+        }
+        app.run("shortcuts.import", json!({"data": none})).unwrap();
+        assert!(app.ui.shortcut_holds.is_empty(), "an import replaces the whole set");
+    }
+
+    /// Export Text… gives a row with a hold shortcut a third column while Hold Shortcuts is on.
+    #[test]
+    fn export_text_lists_hold_shortcuts_while_they_act() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |_: &str, b: &[u8]| {
+            w.borrow_mut().push(String::from_utf8(b.to_vec()).map_err(|e| e.to_string())?);
+            Ok(())
+        }));
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "X"})).unwrap();
+        let row = |text: &str| text.lines().find(|l| l.starts_with(&english_name(&entry("paint.swap").unwrap()))).map(str::to_string);
+        with_steady_plugins(|| {
+            written.borrow_mut().clear();
+            app.run("shortcuts.exportText", json!({"path": "/a.txt"})).unwrap();
+            app.run("prefs.set", json!({"key": "holdShortcuts", "value": true})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/b.txt"})).unwrap();
+            app.run("prefs.set", json!({"key": "holdShortcuts", "value": false})).unwrap();
+        });
+        let files = written.borrow();
+        let (off, on) = (row(&files[0]).unwrap(), row(&files[1]).unwrap());
+        assert_eq!(off.split('\t').count(), 2, "{off}");
+        assert_eq!(on.split('\t').nth(2), Some(format!("Hold {}", menus::pretty_shortcut("X")).as_str()), "{on}");
+    }
+
+    /// Export Text…'s shortcut sheet and CSV file also list a hold shortcut while Hold Shortcuts is
+    /// on, after the row's shortcuts.
+    #[test]
+    fn the_sheet_and_csv_list_hold_shortcuts_while_they_act() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<Vec<u8>>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |_: &str, b: &[u8]| {
+            w.borrow_mut().push(b.to_vec());
+            Ok(())
+        }));
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "X"})).unwrap();
+        let hold = format!("Hold {}", menus::pretty_shortcut("X"));
+        let sections = with_steady_plugins(|| {
+            written.borrow_mut().clear();
+            for on in [false, false, true] {
+                app.run("prefs.set", json!({"key": "holdShortcuts", "value": on})).unwrap();
+                app.run("shortcuts.exportText", json!({"path": "/a.csv", "format": "csv"})).unwrap();
+                app.run("shortcuts.exportText", json!({"path": "/a.pdf", "format": "sheet"})).unwrap();
+            }
+            app.run("prefs.set", json!({"key": "holdShortcuts", "value": false})).unwrap();
+            export_sections(&app.ui.shortcut_overrides, &app.ui.shortcut_holds)
+        });
+        let files = written.borrow();
+        let [csv_off, sheet_off, _, sheet_off_again, csv_on, sheet_on] = files.as_slice() else { panic!("{} files", files.len()) };
+        let swap = sections.iter().flat_map(|s| &s.rows).filter(|r| r.shortcut.ends_with(&hold)).collect::<Vec<_>>();
+        assert_eq!(swap.len(), 1, "one row has the hold: {swap:?}");
+        let (csv_off, csv_on) = (String::from_utf8_lossy(csv_off), String::from_utf8_lossy(csv_on));
+        assert!(!csv_off.contains(&hold), "off, the CSV file lists no hold");
+        assert!(csv_on.contains(&swap[0].shortcut), "on, the CSV file lists it: {}", swap[0].shortcut);
+        // The writer stamps each file with the clock: its dates and its ID (fixed width), which differ
+        // between two exports a second apart. The rest of the file is the same each time.
+        let unstamped = |pdf: &[u8]| {
+            let mut b: Vec<u8> = pdf.iter().map(|&c| if c.is_ascii_digit() { b'0' } else { c }).collect();
+            for key in [&b"InstanceID>"[..], b"DocumentID>", b"/ID["] {
+                let mut at = 0;
+                while let Some(i) = b[at..].windows(key.len()).position(|w| w == key) {
+                    let start = at + i + key.len();
+                    let end = b[start..].iter().position(|&c| c == b'<' || c == b']').map_or(b.len(), |e| start + e);
+                    b[start..end].fill(b'?');
+                    at = end;
+                }
+            }
+            b
+        };
+        assert_eq!(unstamped(sheet_off), unstamped(sheet_off_again), "the sheet is the same each time");
+        assert_ne!(sheet_off, sheet_on, "on, the sheet lists the hold");
+    }
+
+    /// The text the Keyboard Shortcuts dialog draws in its second frame.
+    fn dialog_texts(app: &mut VectorcraftApp) -> Vec<String> {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        // The modal draws nothing in its first frame, which only sizes it.
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => Some(t.galley.text().to_string()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Hold Shortcuts is off by default: the dialog shows its checkbox and no Hold column. Turned
+    /// on, the dialog shows the column and the delay, and OK turns hold shortcuts on and asks the
+    /// host to write the preferences file; Cancel keeps them off.
+    #[test]
+    fn the_hold_shortcuts_checkbox_shows_the_hold_column() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert!(!app.session.prefs.hold_shortcuts);
+        open(&mut app);
+        let off = dialog_texts(&mut app);
+        assert!(off.iter().any(|t| t == "Hold Shortcuts"), "{off:?}");
+        assert!(!off.iter().any(|t| t == "Hold" || t == "Hold Shortcut Delay"), "{off:?}");
+        app.ui.dialog.as_mut().unwrap().fields.insert("holdShortcuts".into(), json!(true));
+        let on = dialog_texts(&mut app);
+        assert!(on.iter().any(|t| t == "Hold") && on.iter().any(|t| t == "Hold Shortcut Delay"), "{on:?}");
+        app.ui.dialog = None;
+        assert!(!app.session.prefs.hold_shortcuts, "Cancel keeps them off");
+        assert!(!app.take_prefs_changed(), "nothing to write after Cancel");
+        open(&mut app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("holdShortcuts".into(), json!(true));
+        d.fields.insert("keyHoldDelay".into(), json!(0.5));
+        confirm(&mut app).unwrap();
+        assert!(app.session.prefs.hold_shortcuts);
+        assert_eq!(app.session.prefs.key_hold_delay, 0.5);
+        assert!(app.take_prefs_changed(), "OK asks the host to write the preferences file");
+        assert_eq!(app.ui.engine_prefs["holdShortcuts"], json!(true));
+        assert_eq!(app.ui.engine_prefs["keyHoldDelay"], json!(0.5));
+    }
+
+    /// The info button shows how hold shortcuts work.
+    #[test]
+    fn the_info_button_explains_hold_shortcuts() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        open(&mut app);
+        assert!(!dialog_texts(&mut app).iter().any(|t| t.starts_with("A quick press")));
+        app.ui.dialog.as_mut().unwrap().fields.insert("__holdInfo".into(), json!(true));
+        let texts = dialog_texts(&mut app);
+        assert!(texts.iter().any(|t| t.starts_with("A quick press")) && texts.iter().any(|t| t == "Tap"), "{texts:?}");
+    }
+
+    /// While Hold Shortcuts is on, the search finds a row by its hold shortcut as the Hold column
+    /// shows it; while it is off, the hold shortcut finds nothing.
+    #[test]
+    fn the_search_finds_a_row_by_its_hold_shortcut() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "Shift+;"})).unwrap();
+        let hold = menus::pretty_shortcut("Shift+;").to_lowercase();
+        let name = shown_name(&entry("paint.swap").unwrap());
+        assert!(!name.to_lowercase().contains(&hold), "{name}");
+        open(&mut app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("tab".into(), json!("menu"));
+        d.fields.insert("query".into(), json!(hold));
+        assert!(!dialog_texts(&mut app).contains(&name), "off, the hold shortcut finds nothing");
+        app.ui.dialog.as_mut().unwrap().fields.insert("holdShortcuts".into(), json!(true));
+        let texts = dialog_texts(&mut app);
+        assert!(texts.contains(&name), "{name} in {texts:?}");
+    }
+
+    /// A command that needs a value is listed in the editor once the user gives it a key, but the
+    /// command search still leaves it out: a pick gives it no value.
+    #[test]
+    fn a_command_given_a_key_that_needs_a_value_is_no_pick() {
+        let mut overrides = Overrides::default();
+        crate::keymap::set_override(&mut overrides, "document.setUnits", "Cmd+Alt+Shift+F12");
+        let entry = entries().iter().find(|e| e.key == "document.setUnits").cloned().expect("the editor has a row for it");
+        assert!(!listed(&Overrides::default(), &entry) && listed(&overrides, &entry));
+        assert!(needs_a_value("document.setUnits"));
+        assert!(crate::palette::items().iter().all(|(_, id, _)| id != "document.setUnits"));
     }
 }

@@ -522,7 +522,9 @@ fn the_wheel_steps_the_families_in_properties_and_the_control_bar() {
     type Draw = fn(&mut VectorcraftApp, &mut egui::Ui);
     let places: [(&str, Draw); 2] = [
         ("Properties", |app, ui| crate::panels::properties::type_sections(app, ui)),
-        ("Control bar", |app, ui| crate::panels::character::control_bar(app, ui)),
+        ("Control bar", |app, ui| {
+            crate::panels::character::control_bar(app, ui, 0.0);
+        }),
     ];
     let at = |f: &str| FontDb::global().menu_family_list().iter().position(|x| x == f);
     for (place, draw) in places {
@@ -981,18 +983,19 @@ impl Drawn {
     fn filter_rows(&self) -> Vec<(f32, f32)> {
         use crate::i18n::{current, t, tr_ctx};
         let variable = tr_ctx(current(), "font-technology", "Variable");
-        [(t("All Scripts"), t("Thai")), ("★", t("Rounded")), (t("Script / Brush"), t("Decorative")), (t("Font Technology"), variable)]
+        let added = t("Recently Added");
+        [(t("All Scripts"), t("Thai")), ("★", t("Rounded")), (t("Script / Brush"), t("Decorative")), (t("Font Technology"), variable), (added, added)]
             .map(|(first, last)| (self.text(first).center().y, self.text(last).center().y))
             .to_vec()
     }
 
-    /// The filters lie on their four rows, none wrapped.
+    /// The filters lie on their five rows, none wrapped.
     fn assert_filter_rows(&self) {
         let rows = self.filter_rows();
         for (i, (first, last)) in rows.iter().enumerate() {
             assert!((first - last).abs() < 1.0, "filter row {i} wraps: its first chip at {first}, its last at {last}");
         }
-        assert!(rows.windows(2).all(|w| w[1].0 > w[0].0 + 4.0), "four rows of filters, in order: {rows:?}");
+        assert!(rows.windows(2).all(|w| w[1].0 > w[0].0 + 4.0), "five rows of filters, in order: {rows:?}");
     }
 }
 
@@ -1042,17 +1045,20 @@ fn open_menu_with(id: &str, left: f32, width: f32, screen: egui::Vec2, look: Men
     }
     // egui places the menu by the size it had the frame before. When a name measured late (a face
     // added for its script, a font found in the background) widens it on that frame, the menu sits
-    // where the narrower one fit until the next: draw until it stays put.
-    let filter_at = |shapes: &[egui::epaint::ClippedShape]| {
-        shapes.iter().find_map(|s| match &s.shape {
+    // where the narrower one fit until the next: draw until it stays put. The filter alone can stay
+    // put on the frame that widens the menu, so the menu's own rect must stay put too.
+    let placed = |shapes: &[egui::epaint::ClippedShape]| {
+        let filter = shapes.iter().find_map(|s| match &s.shape {
             egui::Shape::Text(t) if t.galley.text() == crate::i18n::t("Any Kind") => Some(t.pos),
             _ => None,
-        })
+        });
+        let menu = filter.and_then(|p| ctx.layer_id_at(p)).and_then(|l| ctx.memory(|m| m.area_rect(l.id)));
+        (filter, menu)
     };
     for _ in 0..100 {
-        let before = filter_at(&shapes);
+        let before = placed(&shapes);
         shapes = frame(vec![]);
-        if filter_at(&shapes) == before && !crate::font_menu::wait_for_samples(&ctx) {
+        if placed(&shapes) == before && !crate::font_menu::wait_for_samples(&ctx) {
             break;
         }
     }
@@ -1147,7 +1153,7 @@ fn a_narrow_field_opens_a_menu_wide_enough_for_the_filters_and_names() {
     }
 }
 
-/// In every UI language the filters keep their four rows unwrapped when the window has room for
+/// In every UI language the filters keep their five rows unwrapped when the window has room for
 /// them: the longest translated labels set the menu's width.
 #[test]
 fn the_filter_rows_stay_whole_in_every_language() {

@@ -5,7 +5,7 @@
 //! `object.blend.options`, and each other button runs its Object › Blend command.
 
 use egui::{Event, Pos2, Rect, pos2, vec2};
-use serde_json::json;
+use serde_json::{Value, json};
 use vectorcraft_doc::live::{BlendOrientation, BlendSpacing};
 use vectorcraft_doc::{BlendSpec, NodeId, NodeKind};
 use vectorcraft_engine::Session;
@@ -78,11 +78,44 @@ impl Frames {
         self.run(app, vec![]);
     }
 
+    /// Press at `from` and move to `to` in four steps, a frame each, keeping the button down.
+    fn press_and_move(&mut self, app: &mut VectorcraftApp, from: Pos2, to: Pos2) {
+        self.run(app, vec![Event::PointerMoved(from)]);
+        self.run(app, vec![primary(from, true)]);
+        for i in 1..=4 {
+            self.run(app, vec![Event::PointerMoved(from + (to - from) * (i as f32 / 4.0))]);
+        }
+    }
+
+    /// Release the button at `at`.
+    fn release(&mut self, app: &mut VectorcraftApp, at: Pos2) {
+        self.run(app, vec![primary(at, false)]);
+        self.run(app, vec![]);
+    }
+
+    /// The Ramp (`index` 0) or Shift (1) slider's rail: its left and right ends at mid-height.
+    fn slider(&mut self, app: &mut VectorcraftApp, index: usize) -> (Pos2, Pos2) {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let mut sliders: Vec<_> = nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Slider).collect();
+        // The tree is not in layout order: Ramp sits above Shift.
+        sliders.sort_by(|a, b| a.1.bounds().unwrap().y0.total_cmp(&b.1.bounds().unwrap().y0));
+        let b = sliders[index].1.bounds().expect("bounds");
+        let y = ((b.y0 + b.y1) * 0.5) as f32;
+        (pos2(b.x0 as f32, y), pos2(b.x1 as f32, y))
+    }
+
     /// Click the text `label` the panel draws.
     fn click_text(&mut self, app: &mut VectorcraftApp, label: &str) {
         let at = self.text(app, label);
         self.click(app, at);
     }
+}
+
+/// A press (`pressed`) or release of the primary button at `pos`.
+fn primary(pos: Pos2, pressed: bool) -> Event {
+    Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE }
 }
 
 /// A document with two 20 pt squares 200 pt apart, both selected.
@@ -308,4 +341,127 @@ fn panel_easing_type_ramp_and_shift_edit_the_blend_and_undo() {
     app.run("ui.blendOptions", json!({})).unwrap();
     let text = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
     assert!(!text.contains("Ease In:") && !text.contains("Ramp:") && !text.contains("Color Ease"), "{text}");
+}
+
+#[test]
+fn a_ramp_or_shift_drag_is_one_undo_step() {
+    let mut app = app();
+    let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    let mut f = Frames::new();
+    for index in [0, 1] {
+        let (left, right) = f.slider(&mut app, index);
+        let (before, depth) = (spec(&app, id), undo_depth(&app));
+        let (from, to) = (left + (right - left) * 0.6, left + (right - left) * 0.9);
+        f.press_and_move(&mut app, from, to);
+        // While the button is down the blend shows the new value, and no undo step is recorded yet.
+        assert!(app.session.in_interaction(), "the drag is in progress");
+        assert_ne!(spec(&app, id), before, "the drag previews on the blend");
+        assert_eq!(undo_depth(&app), depth);
+        f.release(&mut app, to);
+        let after = spec(&app, id);
+        assert!(!app.session.in_interaction(), "the release ends the drag");
+        if index == 0 {
+            assert!(after.ease.ramp > before.ease.ramp, "{after:?}");
+        } else {
+            assert!(after.color_shift > before.color_shift, "{after:?}");
+        }
+        assert_eq!(undo_depth(&app), depth + 1, "the whole drag is one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(spec(&app, id), before);
+    }
+}
+
+#[test]
+fn ramp_and_shift_edit_every_selected_blend_and_keep_their_other_options() {
+    let mut app = app();
+    let a = NodeId(app.run("object.blend.make", json!({"spacing": "steps", "steps": 3, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    let ids: Vec<Value> =
+        [0, 200].map(|x| app.run("shape.rectangle", json!({"x": x, "y": 100, "width": 20, "height": 20})).unwrap()["id"].clone()).into();
+    app.run("select.set", json!({"ids": ids})).unwrap();
+    let b =
+        NodeId(app.run("object.blend.make", json!({"spacing": "distance", "distance": 12, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    app.run("object.blend.setEasing", json!({"id": b.0, "easingType": "easeInOut", "colorShift": -40})).unwrap();
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    let mut f = Frames::new();
+    for index in [0, 1] {
+        let (left, right) = f.slider(&mut app, index);
+        let (before_a, before_b, depth) = (spec(&app, a), spec(&app, b), undo_depth(&app));
+        f.click(&mut app, left + (right - left) * 0.75);
+        let (after_a, after_b) = (spec(&app, a), spec(&app, b));
+        assert_eq!(undo_depth(&app), depth + 1, "one undo step for both blends");
+        // The value the slider set goes to both; each keeps its own spacing, type and the other value.
+        if index == 0 {
+            assert!(after_a.ease.ramp > 0.0 && after_a.ease.ramp == after_b.ease.ramp, "{after_a:?} {after_b:?}");
+            assert_eq!((after_a.color_shift, after_b.color_shift), (before_a.color_shift, before_b.color_shift));
+        } else {
+            assert!(after_a.color_shift > 0.0 && after_a.color_shift == after_b.color_shift, "{after_a:?} {after_b:?}");
+            assert_eq!((after_a.ease.ramp, after_b.ease.ramp), (before_a.ease.ramp, before_b.ease.ramp));
+        }
+        assert_eq!((after_a.spacing, after_b.spacing), (BlendSpacing::Steps(3), BlendSpacing::Distance(12.0)));
+        assert_eq!((after_a.ease.kind, after_b.ease.kind), (before_a.ease.kind, before_b.ease.kind));
+    }
+}
+
+#[test]
+fn ramp_is_dimmed_while_a_selected_blend_has_no_spine() {
+    // The first selected blend has a spine and the second has none: the engine refuses easing for
+    // the pair, so the Ramp slider does not take a drag; Shift still edits both.
+    let mut app = app();
+    let a = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    let ids: Vec<Value> =
+        [0, 200].map(|x| app.run("shape.rectangle", json!({"x": x, "y": 100, "width": 20, "height": 20})).unwrap()["id"].clone()).into();
+    app.run("select.set", json!({"ids": ids})).unwrap();
+    let b = NodeId(app.run("object.blend.make", json!({"smooth": true, "createSpine": "never"})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    let mut f = Frames::new();
+    let (left, right) = f.slider(&mut app, 0);
+    let (before_a, before_b, depth) = (spec(&app, a), spec(&app, b), undo_depth(&app));
+    let (from, to) = (left + (right - left) * 0.6, left + (right - left) * 0.9);
+    f.press_and_move(&mut app, from, to);
+    f.release(&mut app, to);
+    assert_eq!((spec(&app, a), spec(&app, b), undo_depth(&app), app.ui.status.as_str()), (before_a, before_b, depth, ""), "Ramp did nothing");
+    let (left, right) = f.slider(&mut app, 1);
+    f.click(&mut app, left + (right - left) * 0.75);
+    assert!(spec(&app, a).color_shift > 0.0 && spec(&app, b).color_shift == spec(&app, a).color_shift);
+}
+
+#[test]
+fn ramp_and_reverse_spine_are_dimmed_while_a_selected_key_belongs_to_a_blend_with_no_spine() {
+    // A key of each blend is selected, as Direct Selection does: the commands act on the keys'
+    // blends, and the second has no spine, so Ramp and Reverse Spine do nothing.
+    let mut app = app();
+    let a = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    let ids: Vec<Value> =
+        [0, 200].map(|x| app.run("shape.rectangle", json!({"x": x, "y": 100, "width": 20, "height": 20})).unwrap()["id"].clone()).into();
+    app.run("select.set", json!({"ids": ids})).unwrap();
+    let b = NodeId(app.run("object.blend.make", json!({"smooth": true, "createSpine": "never"})).unwrap()["id"].as_u64().unwrap());
+    let key = |app: &VectorcraftApp, blend: NodeId| match &app.session.active().unwrap().doc.node(blend).unwrap().kind {
+        NodeKind::Blend { children, .. } => children[0].id,
+        k => panic!("not a blend: {k:?}"),
+    };
+    let keys = [key(&app, a).0, key(&app, b).0];
+    app.run("select.set", json!({"ids": keys})).unwrap();
+    assert_eq!(app.session.execute("object.blend.info", &json!({})).unwrap()["target"], "blend");
+    let mut f = Frames::new();
+    let (left, right) = f.slider(&mut app, 0);
+    let (before_a, before_b, depth) = (spec(&app, a), spec(&app, b), undo_depth(&app));
+    let (from, to) = (left + (right - left) * 0.6, left + (right - left) * 0.9);
+    f.press_and_move(&mut app, from, to);
+    f.release(&mut app, to);
+    f.click_text(&mut app, "Reverse Spine");
+    assert_eq!((spec(&app, a), spec(&app, b), undo_depth(&app), app.ui.status.as_str()), (before_a, before_b, depth, ""), "nothing ran");
+}
+
+#[test]
+fn fractional_ramp_and_shift_stay_as_they_are_while_the_panel_draws() {
+    let mut app = app();
+    let id = NodeId(app.run("object.blend.make", json!({"smooth": true, "orientation": "path"})).unwrap()["id"].as_u64().unwrap());
+    app.run("object.blend.options", json!({"id": id.0, "ramp": 42.5, "colorShift": 12.5})).unwrap();
+    let depth = undo_depth(&app);
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    f.run(&mut app, vec![]);
+    let info = app.session.execute("object.blend.info", &json!({})).unwrap();
+    assert_eq!((&info["ramp"], &info["colorShift"]), (&json!(42.5), &json!(12.5)));
+    assert_eq!(undo_depth(&app), depth);
 }

@@ -23,8 +23,10 @@ mod tests_read_only_save;
 
 pub use export::{EXPORT_CANCELLED, cancel_exports, export, export_for_screens, export_pdf, hide_exports, reveal, save_command_output};
 pub(crate) use export::{
-    export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
+    EXPORT_SELECTION, export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
+    selection_path, take_selection,
 };
+pub(crate) use open::asks_first;
 pub(crate) use open::report_installed;
 pub(crate) use open::{EXPORT_PRESETS, import_presets, open_notes, open_with_on, opened, opened_after_notice, show_opened};
 pub use open::{
@@ -34,8 +36,12 @@ pub use open::{
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
 pub(crate) use save::save_current;
-pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
-pub(crate) use save::{export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to};
+pub use save::{
+    SAVE_CANCELED, ask_format_options, ask_pdf_options, cancel_saves, hide_saves, remember_active_artboard, remember_view, save, save_pdf,
+};
+pub(crate) use save::{
+    clear_notes_left, export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to,
+};
 #[cfg(test)]
 pub(crate) use save::{report_write_error, saved_status};
 
@@ -171,32 +177,41 @@ mod tests {
         app.run("file.save", json!({"path": "/out/b.vectorcraft"})).unwrap();
         assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/b.vectorcraft", &None));
 
-        // A PDF export of a knockout group and of type in a font that isn't installed.
+        // A PDF export of a knockout group whose soft masks would draw a brushed stroke, and of type
+        // in a font that isn't installed.
         app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
-        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let lower = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
+        let upper = app.run("shape.rectangle", json!({"x": 25, "y": 15, "width": 30, "height": 20})).unwrap()["id"].clone();
+        app.run("brush.apply", json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+        app.run("object.setProps", json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+        app.run("select.set", json!({"ids": [lower, upper]})).unwrap();
         app.run("object.group", json!({})).unwrap();
         app.run("transparency.set", json!({"knockout": "on"})).unwrap();
         let r = export(&mut app, Some("pdf"), Some("/out/c.pdf".into()), &json!({})).unwrap();
         let notes = notes_of(&r);
         assert_eq!(notes.len(), 2, "{r}");
+        assert!(notes.iter().any(|n| n.contains("brushed strokes")), "{r}");
         assert_eq!(app.ui.status, exported_with_notes("/out/c.pdf", notes.len(), &notes[0]));
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 
-    /// An export whose encoder notes an option it didn't apply (lossy WebP) before what the file
-    /// loses (type in a font that isn't installed): the status bar names what the file loses, and
-    /// the hover lists it first.
+    /// An export whose encoder notes what an option left out (the fill hatches that
+    /// `includeHatches: false` leaves out of a DXF drawing) and what the file loses (a see-through
+    /// rectangle that DXF 2000 writes opaque): the status bar names what the file loses, and the
+    /// hover lists the option's note last.
     #[test]
     fn an_export_names_what_the_file_loses_before_a_note_on_the_options() {
         let (mut app, _) = app();
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
-        let r = export(&mut app, Some("webp"), Some("/out/d.webp".into()), &json!({"lossless": false})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        app.run("object.setProps", json!({"opacity": 50})).unwrap();
+        let r = export(&mut app, Some("dxf"), Some("/out/d.dxf".into()), &json!({"version": "2000", "includeHatches": false})).unwrap();
         let notes = notes_of(&r);
-        assert_eq!(notes.len(), 2, "{r}");
-        assert!(notes[0].contains("Nonexistent Sans Probe"), "{r}");
-        assert!(notes[1].starts_with("lossy WebP"), "{r}");
-        assert_eq!(app.ui.status, exported_with_notes("/out/d.webp", 2, &notes[0]));
+        let Some((option, losses)) = notes.split_last() else { panic!("no notes: {r}") };
+        assert!(option.starts_with("fill hatches are left out"), "{r}");
+        assert!(losses.iter().any(|n| n.starts_with("transparency needs DXF 2004")), "{r}");
+        assert!(!losses.iter().any(|n| n.starts_with("fill hatches")), "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/d.dxf", notes.len(), &notes[0]));
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 
@@ -430,11 +445,38 @@ mod tests {
         app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
         app.services.pick_save = Some(Box::new(|_: &FilePick| Some("/tmp/sel.svg".into())));
-        assert_eq!(app.run("document.exportSelection", json!({})).unwrap()["path"], "/tmp/sel.svg");
+        app.run("document.exportSelection", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("svgOptions"), "the picked format's options follow");
+        assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["path"], "/tmp/sel.svg");
         app.run("document.exportSelection", json!({"path": "/tmp/sel.png"})).unwrap();
         let w = written.borrow();
         assert!(String::from_utf8_lossy(&w[0].1).contains("<svg"), "SVG from the picked name");
         assert_eq!(&w[1].1[1..4], b"PNG", "PNG from the given path");
+    }
+
+    /// An option skips the options dialog, but without `path` the save panel still picks the file.
+    #[test]
+    fn export_selection_with_an_option_and_no_path_asks_for_the_file_only() {
+        let (mut app, written) = app();
+        app.session.execute("file.new", &json!({"width": 60, "height": 40})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 20, "height": 10})).unwrap();
+        let asked = Rc::new(RefCell::new(0));
+        let count = asked.clone();
+        app.services.pick_save = Some(Box::new(move |_: &FilePick| {
+            *count.borrow_mut() += 1;
+            Some("/tmp/sel.png".into())
+        }));
+        let r = app.run("document.exportSelection", json!({"scale": 2})).unwrap();
+        assert_eq!(*asked.borrow(), 1, "the save panel picks the file");
+        assert!(app.ui.dialog.is_none(), "no options dialog follows");
+        assert_eq!(r["path"], "/tmp/sel.png");
+        assert_eq!(&written.borrow()[0].1[1..4], b"PNG");
+        app.run("document.exportSelection", json!({"path": "/tmp/sel2.png", "scale": 2})).unwrap();
+        assert_eq!(*asked.borrow(), 1, "a path writes without the save panel");
+        let w = written.borrow();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0].0, "/tmp/sel.png", "the picked file");
+        assert_eq!(w[1].0, "/tmp/sel2.png", "the given path");
     }
 
     #[test]

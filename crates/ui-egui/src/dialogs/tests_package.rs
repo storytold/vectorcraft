@@ -43,9 +43,41 @@ fn saved(dir: &Folder) -> VectorcraftApp {
     app.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(300, 300, image::Rgba([1, 2, 3, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(300, 300, image::Rgba([1, 2, 3, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     std::fs::write(dir.path("pic.png"), &png).unwrap();
     app.run("file.place", json!({"path": dir.path("pic.png")})).unwrap();
     app.run("document.save", json!({"path": dir.path("card.vectorcraft")})).unwrap();
@@ -246,6 +278,27 @@ fn a_failed_save_before_packaging_writes_no_package() {
             Err(e) => assert!(!background_export && e.contains("Access is denied"), "{e}"),
         }
     }
+}
+
+/// A save before packaging that Cancel Save stops writes no package either: the document keeps
+/// its unsaved changes, so the package would not hold it as saved.
+#[test]
+fn a_canceled_save_before_packaging_writes_no_package() {
+    let dir = Folder::new("canceled-save");
+    let gate = Gate::default();
+    let (mut app, files) = saved_with_worker(&dir, &gate);
+    let out = dir.path("out");
+    // An export holds the worker, so the save waits behind it and Cancel comes before it starts.
+    crate::io::export(&mut app, Some("svg"), Some(dir.path("first.svg")), &json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    package_dialog(&mut app, &out);
+    assert_eq!(confirm(&mut app).unwrap()["background"], true);
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 1);
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), [dir.path("first.svg")], "only the export");
+    assert!(!std::path::Path::new(&out).join("card Folder").exists(), "no package folder");
+    assert!(app.session.active().unwrap().is_dirty(), "the save was canceled");
 }
 
 /// A package that an automation request confined to its roots asks for, started once the

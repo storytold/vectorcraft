@@ -24,6 +24,9 @@ pub struct Interaction {
     /// The perspective transform the previews make (`perspective.transform` params): Transform
     /// Again repeats it once the drag is committed.
     pub perspective_again: Option<Value>,
+    /// A preview drew an object on, or attached one to, a plane held by Automatic Plane
+    /// Positioning: the plane goes back to its place once the drag is committed.
+    pub(crate) plane_placed: bool,
     /// A transform or a perspective edit with `copy` keeps the copies it made of the snapshot here
     /// ([`PreviewCopies`]).
     pub(crate) copies: Option<Arc<PreviewCopies>>,
@@ -52,6 +55,8 @@ pub(crate) struct PreviewCopies {
     pub(crate) from: Arc<Document>,
     /// The transform or perspective edit copied these objects.
     pub(crate) roots: Vec<NodeId>,
+    /// Each copy is directly below its original, not above it.
+    pub(crate) below: bool,
     /// This is `from` with the copies added, untransformed.
     pub(crate) doc: Arc<Document>,
     /// This is the selection after copying, with the copies selected.

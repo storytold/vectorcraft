@@ -126,7 +126,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             let size_at = r.right_center() - vec2(6.0, 0.0);
             p.text(size_at, egui::Align2::RIGHT_CENTER, &size, font.clone(), t.text_dim);
             p.with_clip_rect(r.with_max_x(size_at.x - 80.0)).text(mid + vec2(NUMBER_W, 0.0), egui::Align2::LEFT_CENTER, name, font, t.text);
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, true, on, format!("{} {name} {size}", i + 1)));
+            widgets::list_item_info(&resp, on, || format!("{} {name} {size}", i + 1));
             if resp.double_clicked() {
                 double = Some(i);
             } else if resp.clicked() {

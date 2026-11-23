@@ -1,4 +1,4 @@
-//! The Properties panel: context-sensitive sections like Illustrator's.
+//! The Properties panel: sections that change with the selection.
 
 use egui::Ui;
 use serde_json::json;
@@ -26,7 +26,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let editing_artboards = app.session.tool_id() == "artboard";
     // Ruler guides selected on their own (a click on one): their position.
     let guides = super::transform::selected_guides(app);
-    let label = heading(first.as_ref(), n_sel, editing_artboards, guides.is_some());
+    let label = heading(first.as_deref(), n_sel, editing_artboards, guides.is_some());
     ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
     ui.add_space(4.0);
     if editing_artboards {
@@ -69,6 +69,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         objects_on_path_section(app, ui, &oop);
         divider(ui);
     }
+    graph::section(app, ui);
     if matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Text(_))) {
         type_sections(app, ui);
         divider(ui);
@@ -112,15 +113,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::chrome::anchor_buttons(app, ui, anchors);
     }
     divider(ui);
+    quick_actions_section(app, ui, first.as_deref(), n_sel);
+    global_edit_row(app, ui);
+}
+
+fn quick_actions_section(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&vectorcraft_doc::Node>, n_sel: usize) {
     section_header(ui, tl!("Quick Actions"));
-    let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
-    let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
+    let is_group = matches!(first.map(|n| &n.kind), Some(NodeKind::Group { .. }));
+    let is_live = matches!(first.map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(&**l, LiveShape::Path { .. }));
     // Blend Options for one selected blend, Merge Live Paint for a Live Paint group selected with
     // more to merge into it, as the Properties panel overview lists them
     // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
     // The overview names the Blend tool; the blending page has the button for a blend selected with
     // any tool (<https://helpx.adobe.com/illustrator/using/blending-objects.html>, #4817).
-    let blend_options = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Blend { .. }));
+    let blend_options = n_sel == 1 && matches!(first.map(|n| &n.kind), Some(NodeKind::Blend { .. }));
     let merge_live_paint = n_sel > 1 && can_merge_live_paint(app);
     // Repeat Options for one selected repeat (radial, grid or mirror), or one object of its source
     // art in isolation mode: Object › Repeat › Options, the dialog of the repeat options pages
@@ -155,6 +161,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if multi_color(app, ui.ctx()) {
         actions.push((tl!("Recolor"), "ui.recolorDialog"));
     }
+    let is_image = n_sel == 1 && matches!(first.map(|n| &n.kind), Some(NodeKind::Image(_)));
     if is_image {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
         actions.push((tl!("Crop Image"), "ui.cropImage"));
@@ -165,10 +172,26 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
     // live through the Appearance panel's Effect › Path › Offset Path (#2238).
-    let type_only = app.session.active().is_some_and(|st| {
-        let mut nodes = st.selection.objects.iter().filter_map(|id| st.doc.node(*id));
-        nodes.all(|n| matches!(n.kind, NodeKind::Text(_)))
+    let (has_type, type_only) = app.session.active().map_or((false, false), |st| {
+        let mut any_type = false;
+        let mut all_type = !st.selection.objects.is_empty();
+        for id in &st.selection.objects {
+            let is_text = st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)));
+            any_type |= is_text;
+            all_type &= is_text;
+        }
+        (any_type, all_type)
     });
+    // Contextual Quick Actions for type selection (G12, Properties panel per context): Create
+    // Outlines, Retype and Find and Replace…
+    // (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
+    if has_type {
+        actions.push((tl!("Create Outlines"), "type.createOutlines"));
+        if crate::menus::enabled(app, "ui.retype") || crate::menus::enabled(app, "type.retype") {
+            actions.push((tl!("Retype"), "ui.retype"));
+        }
+        actions.push((tl!("Find and Replace…"), "ui.findAndReplace"));
+    }
     if !type_only {
         actions.push((tl!("Offset Path"), "object.path.offsetPath"));
         actions.push((tl!("Simplify"), "object.path.simplify"));
@@ -188,7 +211,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     }
-    global_edit_row(app, ui);
 }
 
 /// Whether Merge Live Paint can take the selection: a Live Paint group among the selected objects
@@ -356,7 +378,7 @@ fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let w = (ui.available_width() - 6.0) / 2.0;
     let links = crate::panels::links::ID;
-    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, Some(w)));
+    ui.horizontal(|ui| crate::place::link_buttons(app, ui, id, linked, &name, crate::place::LinkButtons::Width(w)));
     ui.horizontal(|ui| {
         if app.services.pick_open.is_some() && widgets::flat_button(ui, tl!("Replace…"), w).clicked() {
             crate::panels::links::replace(app, vec![id]);
@@ -376,6 +398,7 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
         crate::panels::image_trace::preset_dropdown(app, ui, preset, ui.available_width());
     });
     ui.horizontal(|ui| crate::panels::image_trace::view_row(app, ui, view, ui.available_width()));
+    crate::panels::image_trace::split_row(app, ui);
     if widgets::flat_button(ui, tl!("Image Trace"), ui.available_width()).clicked() {
         crate::panels::image_trace::open_settings(app);
     }
@@ -631,7 +654,7 @@ fn artboard_size_controls_inner(
     let mut fit = None;
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Preset:"));
-        preset = widgets::combo(ui, "ab-preset", &current, 140.0, |ui| {
+        preset = widgets::combo(ui, "ab-preset", &current, PRESET_MENU_WIDTH, |ui| {
             let mut chosen = None;
             if let Some(enabled) = fits {
                 for (selection, label) in [(false, tl!("Fit to Artwork Bounds")), (true, tl!("Fit to Selected Art"))] {
@@ -662,6 +685,19 @@ fn artboard_size_controls_inner(
         }
     });
     (preset.map(|(w, h)| ArtboardSizeChoice::Preset(w, h)).or_else(|| orientation.map(ArtboardSizeChoice::Orientation)), fit)
+}
+
+/// The width of the artboard size row's Preset menu.
+const PRESET_MENU_WIDTH: f32 = 140.0;
+
+/// The width of the artboard size row's Portrait and Landscape buttons, 26 points each, with the
+/// 2 points between them.
+const ORIENTATION_BUTTONS_WIDTH: f32 = 2.0 * 26.0 + 2.0;
+
+/// The widths of the parts of [`artboard_size_row`] in a row, as [`crate::chrome::Fit::room`] takes
+/// them: the Preset label, its menu, and the Portrait and Landscape buttons.
+pub(crate) fn artboard_size_row_widths(ui: &Ui) -> [f32; 3] {
+    [widgets::dim_label_width(ui, tl!("Preset:")), PRESET_MENU_WIDTH, ORIENTATION_BUTTONS_WIDTH]
 }
 
 /// Artboard `i`'s Fill, its background `color`: the chip shows it (the None paint when the artboard
@@ -752,7 +788,9 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button(ui, "ruler", tl!("Show Rulers (⌘R)"), v.rulers, 26.0).clicked() {
             app.run("view.rulers", json!({})).ok();
         }
-        if widgets::icon_button(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, 26.0).clicked() {
+        // Trim View holds the grid and the guides off while it is on (#8363).
+        let shows = crate::menus::enabled(app, "view.grid");
+        if widgets::icon_button_enabled(ui, "grid-3x3", tl!("Show Grid (⌘')"), v.grid, shows, 26.0).clicked() {
             app.run("view.grid", json!({})).ok();
         }
         let transparency_grid = app.session.active().is_some_and(|d| d.transparency_grid);
@@ -764,7 +802,8 @@ fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Guides"));
     ui.horizontal(|ui| {
         let v = app.ui.view.clone();
-        if widgets::icon_button(ui, "layout-grid", tl!("Show Guides"), v.guides, 26.0).clicked() {
+        let shows = crate::menus::enabled(app, "view.guides");
+        if widgets::icon_button_enabled(ui, "layout-grid", tl!("Show Guides"), v.guides, shows, 26.0).clicked() {
             app.run("view.guides", json!({})).ok();
         }
         if widgets::icon_button(ui, "sparkles", tl!("Smart Guides (⌘U)"), v.smart_guides, 26.0).clicked() {
@@ -971,7 +1010,7 @@ fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Profile:"));
-        if let Some(id) = super::stroke::profile_dropdown(app, ui, profile) {
+        if let Some(id) = super::stroke::profile_dropdown(app, ui, stroke.as_ref()) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
     });
@@ -1001,11 +1040,13 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         dim_label(ui, tl!("Select a text object"));
         return;
     };
-    let NodeKind::Text(tx) = &n.kind else {
+    let NodeKind::Text(_) = &n.kind else {
         dim_label(ui, tl!("Select a text object"));
         return;
     };
-    let s = tx.first_style();
+    // The style of the Type tool's selection (or caret) when it edits text, else of the selected
+    // text's first run, as the Character panel shows it (#8189).
+    let Some((s, para)) = super::character::text_style(app) else { return };
     section_header(ui, tl!("Character"));
     // The font, Font Size, Leading, Kerning and Tracking as in the Character panel.
     let w = ui.available_width();
@@ -1015,28 +1056,27 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Paragraph"));
     // As in the Paragraph panel: the seven alignments and Hyphenate (#775), and area type's
     // vertical alignment (#3759); the rest is there.
-    if let Some((_, para)) = super::character::text_style(app) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        super::paragraph::alignment_buttons(app, ui, &para, 24.0);
+        if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
+            app.ui.open_panel = Some("paragraph".into());
+        }
+    });
+    // Area type: its vertical alignment in the frame (#3759).
+    if vertical_align::shown(app).is_some() {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
-            super::paragraph::alignment_buttons(app, ui, &para, 24.0);
-            if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
-                app.ui.open_panel = Some("paragraph".into());
-            }
+            vertical_align::buttons(app, ui, 24.0);
         });
-        // Area type: its vertical alignment in the frame (#3759).
-        if vertical_align::shown(app).is_some() {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 3.0;
-                vertical_align::buttons(app, ui, 24.0);
-            });
-        }
-        super::paragraph::hyphenate_check(app, ui, &para);
-        // Area type: Dynamic Text's Block and its gaps.
-        dynamic_text::rows(app, ui);
     }
+    super::paragraph::hyphenate_check(app, ui, &para);
+    // Area type: Dynamic Text's Block and its gaps.
+    dynamic_text::rows(app, ui);
 }
 
 pub(crate) mod dynamic_text;
+pub(crate) mod graph;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

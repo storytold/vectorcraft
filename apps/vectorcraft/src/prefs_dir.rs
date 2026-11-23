@@ -65,11 +65,36 @@ pub fn attach_scripts_dir(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Keep File Info's metadata templates in the `Metadata Templates` folder, which a saved template
+/// makes.
+pub fn attach_metadata_templates_dir(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Metadata Templates") {
+        session.attach_metadata_templates_dir(dir);
+    }
+}
+
 /// Have File › New start each category's documents from its profile in the `New Document
 /// Profiles` folder, which `file.newProfiles.edit` makes.
 pub fn attach_new_doc_profiles(session: &mut vectorcraft_engine::Session) {
     if let Some(dir) = store_dir("New Document Profiles") {
         session.attach_new_doc_profiles(dir);
+    }
+}
+
+/// Have View › Proof Setup list the proof setups saved in the `Proof Setups` folder, which
+/// `view.proofSetup.save` makes when it saves a setup by name.
+pub fn attach_proof_setups(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Proof Setups") {
+        session.attach_proof_setups(dir);
+    }
+}
+
+/// Keep each script's `Folder.userData` in the `Script Data` folder, and the file access people
+/// allow scripts with Always in `Script Grants.json` beside it. Both are made when a script first
+/// needs them.
+pub fn attach_script_data(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Script Data") {
+        session.attach_script_data(dir);
     }
 }
 
@@ -94,6 +119,14 @@ pub fn attach_custom_dictionary(session: &mut vectorcraft_engine::Session) {
 pub fn attach_arrowheads(session: &mut vectorcraft_engine::Session) {
     if let Some(path) = store_dir(vectorcraft_engine::cmd::arrowheads::FILE_NAME) {
         session.attach_arrowheads_file(path.to_string_lossy().to_string());
+    }
+}
+
+/// Keep the custom bevels (`threeD.bevels.edit`) in the `Bevels.vectorcraft` file next to the
+/// settings, and list the bevels it holds.
+pub fn attach_bevels(session: &mut vectorcraft_engine::Session) {
+    if let Some(path) = store_dir(vectorcraft_engine::cmd::bevels::FILE_NAME) {
+        session.attach_bevels_file(path.to_string_lossy().to_string());
     }
 }
 

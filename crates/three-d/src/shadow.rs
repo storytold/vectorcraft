@@ -1,6 +1,7 @@
 //! The shadow a 3D effect's solid casts: its faces projected along the first light onto a plane
 //! behind the object (square to the view) or below it (under the object's own vertical axis, turned
-//! with it), as one hard-edged vector shape.
+//! with it), as one vector shape. The light's Softness gives the shape a blur radius
+//! ([`ShadowPlane::blur`]); at 0 the shape stays hard-edged.
 //!
 //! Every face is projected whole, so the shape is the union of the projected faces: each contour is
 //! turned so that its face winds the same way, and the shape is filled with the nonzero rule. The
@@ -11,8 +12,8 @@ use std::ops::Range;
 
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect};
 
-use crate::solid::{Face3, extrude_faces, inflate_faces, plane_faces};
-use crate::{Extrude, Inflate, MAX_SOLID_FACES, Revolve, V3, View, finite, perspective_scale};
+use crate::solid::{Face3, Keep, extrude_faces, inflate_faces, plane_faces};
+use crate::{Extrude, Face, Facet, Inflate, MAX_SOLID_FACES, Revolve, V3, View, finite, perspective_scale};
 
 /// Where the shadow falls.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -48,19 +49,35 @@ pub struct Shadow {
     /// How far the plane reaches, as a share (0.1..4): at 1 the plane is a square four times the
     /// object's largest size across.
     pub bounds: f64,
+    /// The casting light's Softness (0..1): at 0 the shadow is hard-edged, above it blurred
+    /// ([`ShadowPlane::blur`]).
+    pub softness: f64,
 }
 
 impl Default for Shadow {
     fn default() -> Self {
-        Self { position: ShadowPosition::Behind, distance: 0.0, bounds: 1.0 }
+        Self { position: ShadowPosition::Behind, distance: 0.0, bounds: 1.0, softness: 0.0 }
     }
 }
 
 impl Shadow {
     fn sanitized(self) -> Self {
-        Self { distance: finite(self.distance, 0.0, 0.0, 1.0), bounds: finite(self.bounds, 1.0, 0.1, 4.0), ..self }
+        Self {
+            distance: finite(self.distance, 0.0, 0.0, 1.0),
+            bounds: finite(self.bounds, 1.0, 0.1, 4.0),
+            softness: finite(self.softness, 0.0, 0.0, 1.0),
+            ..self
+        }
     }
 }
+
+/// The blur radius at full Softness on a plane that touches the object, as a share of the object's
+/// largest size, and what each share of Distance from Object adds to it. VectorCraft's own values.
+const BLUR_NEAR: f64 = 0.05;
+const BLUR_PER_DISTANCE: f64 = 0.2;
+
+/// Most blur radius a shadow takes, in points (the Gaussian Blur effect's own limit).
+pub const MAX_SHADOW_BLUR: f64 = 1000.0;
 
 /// The rotation and projection a solid is drawn with.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -119,6 +136,17 @@ pub struct ShadowPlane {
     foot: V3,
     /// Half the side of the square the plane ends at.
     half: f64,
+    /// The blur radius of the shadow on the plane, in points ([`ShadowPlane::blur`]).
+    blur: f64,
+}
+
+impl ShadowPlane {
+    /// The radius, in points, of the blur that softens the edges of the shadow on this plane: 0 at
+    /// Softness 0, and with Softness a share of the object's largest size that grows with the
+    /// plane's distance from the object (VectorCraft's own mapping), at most [`MAX_SHADOW_BLUR`].
+    pub fn blur(&self) -> f64 {
+        self.blur
+    }
 }
 
 /// The faces of one object's solids, gathered to cast one shadow. The solids of one object share
@@ -160,20 +188,20 @@ impl ShadowCaster {
 
     /// Add Extrude & Bevel's solid ([`crate::extrude`]).
     pub fn extrude(&mut self, path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<Range<usize>, String> {
-        let (_, faces, projection) = extrude_faces(path, rule, bounds, options, view, true)?;
-        self.add(faces, projection)
+        let (_, faces, projection) = extrude_faces(path, rule, bounds, options, view, Keep::Faces)?;
+        self.add(faces?, projection)
     }
 
     /// Add Rotate's plane ([`crate::plane`]).
     pub fn plane(&mut self, path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Range<usize>, String> {
-        let (_, faces, projection) = plane_faces(path, rule, bounds, view, true)?;
-        self.add(faces, projection)
+        let (_, faces, projection) = plane_faces(path, rule, bounds, view, Keep::Faces)?;
+        self.add(faces?, projection)
     }
 
     /// Add Inflate's solids for several shapes of one object ([`crate::inflate_together`]), each
     /// shape whose entry in `casts` is true: the eye is placed for every shape, as for the solids
-    /// drawn, but the faces of the others are not kept (their range is empty). A shape that does
-    /// not inflate is left out, as its solid is; the result says which, in order.
+    /// drawn, but the solids of the others are not built (their range is empty). A casting shape
+    /// that does not inflate is left out, as its solid is; the result says which, in order.
     pub fn inflate(
         &mut self,
         shapes: &[(&PathData, FillRule)],
@@ -182,11 +210,15 @@ impl ShadowCaster {
         options: Inflate,
         view: View,
     ) -> Vec<Result<Range<usize>, String>> {
-        inflate_faces(shapes, bounds, options, view, true)
-            .enumerate()
-            .map(|(i, r)| {
-                let (_, faces, projection) = r?;
-                if casts.get(i).copied().unwrap_or(true) { self.add(faces, projection) } else { Ok(self.faces.len()..self.faces.len()) }
+        let mut solids = inflate_faces(shapes, bounds, options, view, Keep::Faces);
+        (0..shapes.len())
+            .map(|i| {
+                if !casts.get(i).copied().unwrap_or(true) {
+                    solids.pass();
+                    return Ok(self.faces.len()..self.faces.len());
+                }
+                let (_, faces, projection) = solids.next().unwrap_or_else(|| Ok((vec![], Ok(vec![]), None)))?;
+                self.add(faces?, projection)
             })
             .collect()
     }
@@ -197,6 +229,14 @@ impl ShadowCaster {
         crate::revolve_faces(path, rule, bounds, options, Some(&mut faces))?;
         let o = options.sanitized();
         self.add(faces, Some(crate::revolve_projection(bounds, o)))
+    }
+
+    /// Add the faces of a solid kept by the build that drew it ([`extrude_shadowed`],
+    /// [`plane_shadowed`], [`inflate_shadowed`], [`revolve_shadowed`]): the faces
+    /// [`ShadowCaster::extrude`], [`ShadowCaster::plane`], [`ShadowCaster::inflate`] or
+    /// [`ShadowCaster::revolve`] adds for that solid, or the error it gives.
+    pub fn add_solid(&mut self, solid: SolidFaces) -> Result<Range<usize>, String> {
+        self.add(solid.faces?, solid.projection)
     }
 
     /// The shadow of the faces gathered, on the page, filled with the nonzero rule: `None` when
@@ -242,13 +282,15 @@ impl ShadowCaster {
         let level = corners().map(|v| n.dot(*v)).fold(f64::INFINITY, f64::min) - s.distance * size;
         let centre = V3((lo.0 + hi.0) / 2.0, (lo.1 + hi.1) / 2.0, (lo.2 + hi.2) / 2.0);
         let foot = add(centre, scale(n, level - n.dot(centre)));
-        Some(ShadowPlane { projection: p, light, reach, n, u, w, level, foot, half: 2.0 * s.bounds * size })
+        let blur = (s.softness * size * (BLUR_NEAR + BLUR_PER_DISTANCE * s.distance)).min(MAX_SHADOW_BLUR);
+        let blur = if blur.is_finite() { blur } else { 0.0 };
+        Some(ShadowPlane { projection: p, light, reach, n, u, w, level, foot, half: 2.0 * s.bounds * size, blur })
     }
 
     /// The shadow the faces in the ranges `faces` cast on `plane`, on the page, filled with the
     /// nonzero rule; `None` when nothing of it falls within the plane.
     pub fn path_on(&self, plane: &ShadowPlane, faces: &[Range<usize>]) -> Option<PathData> {
-        let &ShadowPlane { projection: p, light, reach, n, u, w, level, foot, half } = plane;
+        let &ShadowPlane { projection: p, light, reach, n, u, w, level, foot, half, .. } = plane;
         // A corner's shadow, in the plane's axes about the foot.
         let cast = |v: V3| {
             let q = add(v, scale(light, -(n.dot(v) - level) / reach));
@@ -285,6 +327,56 @@ impl ShadowCaster {
         let path = PathData::from_bezpath(&bp);
         (!path.subpaths.is_empty()).then_some(path)
     }
+}
+
+/// A solid's faces before projection, kept by the build that drew it, for its shadow
+/// ([`ShadowCaster::add_solid`]): the faces, or the error keeping them gave, and the projection the
+/// solid was drawn with.
+#[derive(Clone, Debug)]
+pub struct SolidFaces {
+    faces: Result<Vec<Face3>, String>,
+    projection: Option<Projection>,
+}
+
+/// Extrude & Bevel's solid ([`crate::extrude`]) and, from the same build, the faces
+/// [`ShadowCaster::extrude`] adds for it. An error where [`crate::extrude`] gives one.
+pub fn extrude_shadowed(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<(Vec<Facet>, SolidFaces), String> {
+    let (facets, faces, projection) = extrude_faces(path, rule, bounds, options, view, Keep::Both)?;
+    Ok((facets, SolidFaces { faces, projection }))
+}
+
+/// Rotate's plane ([`crate::plane`]) and, from the same build, the face [`ShadowCaster::plane`]
+/// adds for it. An error where [`crate::plane`] gives one.
+pub fn plane_shadowed(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<(Vec<Facet>, SolidFaces), String> {
+    let (facets, faces, projection) = plane_faces(path, rule, bounds, view, Keep::Both)?;
+    Ok((facets, SolidFaces { faces, projection }))
+}
+
+/// Inflate's solids for several shapes of one object ([`crate::inflate_each`]) and, from the same
+/// builds, the faces [`ShadowCaster::inflate`] adds for each, each solid built as the iterator
+/// reaches it. An error where [`crate::inflate_each`] gives one.
+pub fn inflate_shadowed(
+    shapes: &[(&PathData, FillRule)],
+    bounds: Rect,
+    options: Inflate,
+    view: View,
+) -> impl Iterator<Item = Result<(Vec<Facet>, SolidFaces), String>> + use<> {
+    inflate_faces(shapes, bounds, options, view, Keep::Both).map(|r| r.map(|(facets, faces, projection)| (facets, SolidFaces { faces, projection })))
+}
+
+/// Revolve's surface ([`crate::revolve`]) and, from the same sweep, the faces
+/// [`ShadowCaster::revolve`] adds for it with the fill rule of `options`. An error where
+/// [`crate::revolve`] gives one.
+pub fn revolve_shadowed(path: &PathData, bounds: Rect, options: Revolve) -> Result<(Vec<Face>, SolidFaces), String> {
+    let mut kept = vec![];
+    let (faces, lost) = crate::revolve_sweep(path, options.fill_rule, bounds, options, true, Some(&mut kept), None)?;
+    let projection = Some(crate::revolve_projection(bounds, options.sanitized()));
+    Ok((faces, SolidFaces { faces: lost.map_or(Ok(kept), Err), projection }))
+}
+
+/// [`revolve_shadowed`] with the faces as facets, as [`crate::revolve_facets`] gives them.
+pub fn revolve_facets_shadowed(path: &PathData, bounds: Rect, options: Revolve) -> Result<(Vec<Facet>, SolidFaces), String> {
+    revolve_shadowed(path, bounds, options).map(|(faces, kept)| (faces.into_iter().map(Facet::of_face).collect(), kept))
 }
 
 /// Whether `area`, the signed area of a polygon with corners `points`, is within rounding of

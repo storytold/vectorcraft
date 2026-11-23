@@ -51,17 +51,25 @@ pub(super) fn hover_wait(moved: &mut Option<(ViewKey, f64)>, key: ViewKey, now: 
 
 /// Note that the canvas asks for `key` at time `now` (seconds, egui's input time) → how many more
 /// seconds it draws the frame `shown` reprojected instead of rendering `key`: while the last
-/// render was `slow`, only the view differs between the two, and the canvas has asked for `key`
-/// for less than [`STILL_SECS`]. `still` holds the key last asked for and when the canvas first
-/// asked for it. None: the canvas renders `key` now, unless it is the frame shown.
+/// render was `slow`, only the view differs between the two, and the canvas has asked for the view
+/// of `key` for less than [`STILL_SECS`]. `still` holds the key last asked for and when the canvas first
+/// asked for its view. An edit leaves that time as it is: with the view still and edits drawn into
+/// the frame shown at each step of a drag, the canvas still renders whole once the view has been
+/// still for [`STILL_SECS`]. None: the canvas renders `key` now, unless it is the frame shown.
 pub(super) fn still_wait(still: &mut Option<(CacheKey, f64)>, shown: Option<&CacheKey>, key: &CacheKey, slow: bool, now: f64) -> Option<f64> {
-    if still.as_ref().is_none_or(|(k, _)| k != key) {
+    if still.as_ref().is_none_or(|(k, _)| !same_view(k, key)) {
         *still = Some((key.clone(), now));
     }
     let waited = still.as_ref().map_or(0.0, |(_, at)| now - at);
     // The clock went back (a new egui context): don't wait for it to catch up.
     let waiting = (0.0..STILL_SECS).contains(&waited);
     (slow && waiting && shown.is_some_and(|s| s != key && only_view_differs(s, key))).then_some(STILL_SECS - waited)
+}
+
+/// Whether two cache keys are of the same document at the same view (zoom, center, rotation,
+/// canvas size, pixel density and Pixel Preview's document pixels), whatever else differs.
+fn same_view(a: &CacheKey, b: &CacheKey) -> bool {
+    (a.doc, a.zoom, a.cx, a.cy, a.w, a.h, a.ppp, a.rot, a.pixel) == (b.doc, b.zoom, b.cx, b.cy, b.w, b.h, b.ppp, b.rot, b.pixel)
 }
 
 /// Whether two cache keys differ only in the view (zoom, center, rotation, canvas size, pixel
@@ -84,6 +92,7 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::PathBracket
         | Cursor::TypeWidget
         | Cursor::LoadedText
+        | Cursor::LoadedTextLink
         | Cursor::LivePaintSelectFace
         | Cursor::LivePaintSelectEdge
         | Cursor::LivePaintSelectOutside => C::Default,
@@ -127,6 +136,8 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         // The system has no tip outline to go round: its crosshair aims as well.
         Cursor::BlobBrush | Cursor::Eraser => C::Crosshair,
         Cursor::LivePaintBucket | Cursor::LivePaintBucketFace | Cursor::LivePaintBucketEdge => C::Crosshair,
+        // The system has no knife: its crosshair aims at the blade's point.
+        Cursor::Knife => C::Crosshair,
         // Not drawn yet: the cursor each borrows.
         Cursor::Lasso
         | Cursor::MagicWand
@@ -135,7 +146,6 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::Smooth
         | Cursor::PathEraser
         | Cursor::Join
-        | Cursor::Knife
         | Cursor::Shaper
         | Cursor::Measure
         | Cursor::PrintTiling

@@ -49,7 +49,8 @@ pub(crate) fn doc_sane(d: &Document, sel: &Selection) -> bool {
         && objects_in_range(d, &sel.objects)
 }
 
-fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
+/// Is every edge of `r` finite and within [`MAX_COORD`] of the origin?
+pub(crate) fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
     [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_COORD)
 }
 
@@ -59,8 +60,23 @@ fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
 /// margin passes without being measured: its curves stay inside their control points. Any other
 /// object, and a path with a point outside that margin, is measured.
 pub(crate) fn objects_in_range(d: &Document, ids: &[NodeId]) -> bool {
-    let paths = d.index_paths(ids.iter().copied());
-    ids.iter().all(|id| paths.get(id).and_then(|p| d.node_at(p)).is_none_or(|n| points_in_range(n) || n.geometric_bounds().is_none_or(rect_in_range)))
+    if ids.is_empty() {
+        return true;
+    }
+    let node_ok = |n: &vectorcraft_doc::Node| points_in_range(n) || n.geometric_bounds().is_none_or(rect_in_range);
+    // A cached document or a few ids: look each one up. Otherwise one walk of the tree, with no
+    // path vectors allocated.
+    if d.has_lookup_cache() || ids.len() <= 16 {
+        return ids.iter().all(|id| d.node(*id).is_none_or(node_ok));
+    }
+    let want: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+    let mut ok = true;
+    d.walk(|n| {
+        if ok && want.contains(&n.id) && !node_ok(n) {
+            ok = false;
+        }
+    });
+    ok
 }
 
 /// Coordinates at most this far from 0 keep a curve's measured bounds within [`MAX_COORD`]

@@ -141,7 +141,11 @@ impl Builder {
                     if fills.is_empty() { Body::Complex } else { Body::Fills { shape: self.shape(path, rule, Kind::Vector)?, fills } }
                 }
                 NodeKind::Image(im) => {
-                    let frame = shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf);
+                    // A distorted image's frame joins its corners.
+                    let frame = match n.image_frame().filter(|_| n.is_distorted_image()) {
+                        Some(bp) => PathData::from_bezpath(&bp),
+                        None => shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf),
+                    };
                     self.shape(frame, FillRule::NonZero, Kind::Other)?;
                     Body::Complex
                 }

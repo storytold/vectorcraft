@@ -24,6 +24,15 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Direct Selection picks and outlines the parts of a dynamic symbol's instance where the
+        // effects of the instance's fill and stroke draw them.
+        vectorcraft_doc::hit::set_instance_row_art(vectorcraft_render::effects::add_instance_row_effects_to_parts);
+        vectorcraft_doc::hit::set_instance_reshapes(vectorcraft_render::effects::has_item_geometry);
+        // Clicks inside a clip group fall in the region its clipping path's effects give it.
+        vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
+        // Clicks and marquees find paths, compound paths, groups and layers where their geometry
+        // effects draw them.
+        vectorcraft_doc::hit::set_drawn_art(vectorcraft_render::effects::preview::drawn_art);
         // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
         // evaluated again when the fonts, the hyphenation exceptions or the plug-ins change.
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
@@ -50,6 +59,7 @@ impl Session {
             histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
+            back_to_bucket: false,
             held_input: Default::default(),
             input_count: 0,
             edit_started_by: None,
@@ -63,6 +73,7 @@ impl Session {
             preview_memo: Default::default(),
             depth: 0,
             replaying: false,
+            shape_drawn: false,
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -78,11 +89,13 @@ impl Session {
             recent_colors: vec![],
             pending_paint: None,
             swatch_libraries: Default::default(),
+            graph_design_libraries: Default::default(),
             freeform_point: None,
             style_libraries: Default::default(),
             symbol_libraries: Default::default(),
             brush_libraries: Default::default(),
             arrowheads: Default::default(),
+            bevels: Default::default(),
             shown_library_ids: Default::default(),
             libraries: Default::default(),
             pdf_preset_dir: None,
@@ -91,7 +104,11 @@ impl Session {
             color_settings_file: None,
             plugin_dir: None,
             scripts_dir: None,
+            metadata_templates_dir: None,
             new_doc_profile_dir: None,
+            proof_setup_dir: None,
+            proof_setup_saves: 0,
+            script_data_dir: None,
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
@@ -111,6 +128,7 @@ impl Session {
             place_hand_off: None,
             queue_hand_off: None,
             place_queue_roots: None,
+            place_queue_loads: 0,
             image_hand_off: None,
             trace_hand_off: None,
             place_cursor_requests: false,
@@ -126,6 +144,7 @@ impl Session {
             plane_widget_press: false,
             pointer_held: false,
             press_options: None,
+            press_options_stored: false,
             press_type_selection: None,
             press_point: None,
             ruler_guide: None,
@@ -139,7 +158,9 @@ impl Session {
             link_stamps: Default::default(),
             link_scan: None,
             global_edit_options: Default::default(),
+            select_similar: crate::cmd::SIMILAR[0].0,
             keyboard_text: false,
+            toasts: Default::default(),
             script_key: None,
             script_engines: crate::script::EnginesKey::new(),
             script_stop: vectorcraft_js::Interrupt::new(),
@@ -195,8 +216,7 @@ impl Session {
         let _ = self.finish_tool_edit_later();
         // The switch goes on whatever the lent tool's last actions did, as for the deactivation.
         let _ = self.give_back_tool(view);
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        let _ = self.apply_actions(acts);
+        let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
         // the rest of the batch; anything else in progress (a drag) is cancelled.
         if self.batch_stash.is_none() {
@@ -273,7 +293,9 @@ impl Session {
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
     /// not only in the layers (#1738).
-    pub(crate) fn refresh_text_bounds(doc: &mut Document) {
+    pub(crate) fn refresh_text_bounds(doc: &mut Document) -> Vec<String> {
+        // The fonts files carried for their type draw it ([`vectorcraft_doc::FileFonts`]).
+        let warnings = vectorcraft_text::FontDb::global().bind_document_file_fonts(doc);
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
         let mut uncached = |t: &TextObject| t.cached_bounds.is_none();
@@ -283,6 +305,7 @@ impl Session {
         // The symbols' type is measured now: the inline graphics showing those symbols take their
         // art's measured size, a symbol's type before the type that shows that symbol inline.
         doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
+        warnings
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -324,11 +347,15 @@ impl Session {
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
         cmd::compositefonts::filter_loaded(&mut doc);
+        // Importers report binding failures; programmatic additions still need owned resources.
+        let _ = vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc);
         // Inline graphics in text take their size from their symbols' art (not saved).
         doc.resolve_inline_art();
         // Ruler guides a reader left in the saved list become nodes on their layers.
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        // A plane held by Automatic Plane Positioning when the file was saved is back in its place.
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         self.reset_tool_for_doc_switch();
         let mut st = DocState::new(doc, path);
         st.history.limit = self.prefs.history_states as usize;
@@ -357,6 +384,7 @@ impl Session {
         doc.resolve_inline_art();
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
+        vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         // In the back, type set in a font named like a composite font is measured again below, in
         // the document's own composite fonts, not in the front document's.
         let back = self.active != Some(index);
@@ -415,14 +443,16 @@ impl Session {
 
     /// Measure the type not measured yet in open document `index`, which is in the back, in its own
     /// composite fonts, lent for the measuring, so its type has the bounds it will have when the
-    /// document comes to the front. The front document stays the one whose composite fonts are
-    /// registered. The names of the document's composite fonts its type was measured in are kept,
-    /// so its coming to the front does not measure that type again.
+    /// document comes to the front: type naming a composite font the document does not define is
+    /// measured as in a missing font, also when the front document defines one of that name, and
+    /// also when the document defines none. The front document stays the one whose composite fonts
+    /// are registered. The names of the document's composite fonts its type was measured in are
+    /// kept, so its coming to the front does not measure that type again.
     fn measure_back_document(&mut self, index: usize) {
         let Some(st) = self.docs.get(index) else { return };
         let fonts = st.doc.composite_fonts.clone();
         let db = vectorcraft_text::FontDb::global();
-        let lent = db.lend_composite_fonts(&fonts);
+        let lent = db.lend_document_composite_fonts(&fonts);
         // A name another loan holds with a different definition is not lent: type set in it is
         // measured again when the document comes to the front.
         let own: HashSet<String> =

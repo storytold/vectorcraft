@@ -71,7 +71,9 @@ pub struct TileGrid {
 
 /// Calls `f` with the bounds of each object of `n` that prints: visible, not on a template
 /// layer and not a guide (layers are already picked by the Print Layers option). Symbol
-/// instances are measured by their art from `symbols`.
+/// instances are measured by their art from `symbols`. A box grows by the room brush art can
+/// paint past the brushed strokes of the object and of the objects in it
+/// ([`vectorcraft_brush::reach_within`]).
 fn printed(n: &Node, symbols: &SymbolBoxes, f: &mut impl FnMut(Rect)) {
     if !n.visible {
         return;
@@ -85,7 +87,8 @@ fn printed(n: &Node, symbols: &SymbolBoxes, f: &mut impl FnMut(Rect)) {
         }
         _ => {
             if let Some(b) = n.visual_bounds_with(symbols) {
-                f(b);
+                let reach = vectorcraft_brush::reach_within(n);
+                f(if reach > 0.0 { b.inflate(reach, reach) } else { b });
             }
         }
     }
@@ -102,9 +105,10 @@ fn has_art(doc: &Document, r: Rect) -> bool {
     any
 }
 
-/// The bounds of all the art that prints.
+/// The bounds of all the art that prints, with the brush art it paints. The box of a symbol
+/// instance whose art holds brushed strokes grows as in [`has_art`].
 fn art_bounds(doc: &Document) -> Option<Rect> {
-    let symbols = doc.symbol_boxes();
+    let symbols = doc.symbol_boxes().with_brush_art();
     let mut all: Option<Rect> = None;
     for l in &doc.layers {
         printed(l, &symbols, &mut |b| all = Some(all.map_or(b, |a| a.union(b))));

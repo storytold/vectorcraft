@@ -61,13 +61,17 @@ fn a_uniform_or_unreadable_width_profile_stays_a_live_stroke() {
 }
 
 #[test]
-fn dashes_aligned_to_corners_keep_the_drawn_look() {
-    // GUARDS: the look holds the fitted pattern and the solid ends the style's dash array doesn't.
+fn dashes_aligned_to_corners_read_as_aligned_dashes() {
+    // The look holds the fitted pattern, which the style's dash array doesn't: the reader takes the
+    // stroke only where VectorCraft's own fitting draws as that look.
     let data = b"/KnownStyle :\n(Stitches) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
             /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
             /Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n\
             /StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n1 J 0 j 2 w 10 M [5 10 ]0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
-    assert!(!art_styles(data)["Stitches"].plain);
+    let style = &art_styles(data)["Stitches"];
+    assert!(style.plain, "{style:?}");
+    let [StyleItem::Stroke { dash: Some(dash), .. }] = style.items.as_slice() else { panic!("{:?}", style.items) };
+    assert_eq!((dash.pattern.as_slice(), dash.align_corners), ([5.0, 10.0].as_slice(), true));
 }
 
 /// The style `Shade`: a Drop Shadow whose dictionary holds `keys`.
@@ -469,6 +473,28 @@ fn lettering() -> String {
         ],
     );
     format!("/KnownStyle :\n(Lettering) /Name ,\n/ActiveStyle :\n{root}\n/Execution ;\n /Def ;\n")
+}
+
+/// A fill filter's last paint is its fill: a color, a gradient or a pattern replaces whichever of the
+/// others came before it.
+#[test]
+fn a_fill_filter_paints_with_its_last_paint() {
+    let gradient = "0 Bb\n2 (Sky) 0 0 30 1 1 0 0 1 0 0 1 Bg\n0 BB";
+    let pattern = "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p";
+    let color = "0 0 0 0 1 0 0 Xa";
+    let items = |paint: String| {
+        let root = compound("Chain Style Filter", &[fill(&paint)]);
+        let data = format!("/KnownStyle :\n(S) /Name ,\n/ActiveStyle :\n{root}\n/Execution ;\n /Def ;\n");
+        art_styles(data.as_bytes()).remove("S").map(|s| s.items).unwrap_or_default()
+    };
+    for before in [gradient, pattern] {
+        assert!(matches!(items(format!("{before}\n{color}")).as_slice(), [StyleItem::Fill(Paint::Solid { .. })]), "{before}");
+    }
+    for before in [color, pattern] {
+        assert_eq!(items(format!("{before}\n{gradient}")), [StyleItem::Gradient { name: Some("Sky".into()), angle: 30.0 }], "{before}");
+    }
+    assert!(matches!(items(format!("{color}\n{pattern}")).as_slice(), [StyleItem::Pattern { .. }]));
+    assert!(matches!(items(format!("{gradient}\n{pattern}")).as_slice(), [StyleItem::Pattern { .. }]));
 }
 
 #[test]
@@ -1001,7 +1027,8 @@ fn any_object_takes_the_distort_effects_that_draw_as_its_drawn_look() {
     assert!(simple("Adobe Free Distort", &corners(src, [[0.2, 0.0], [1.2, 0.0], [0.0, -1.0], [1.0, -1.0]])));
     assert!(!simple("Adobe Free Distort", &corners(src, [[0.2, 0.0], [1.2, 0.1], [0.0, -1.0], [1.0, -1.0]])));
     assert!(!simple("Adobe Punk and Bloat", "-35 /Real (d_factor) ,\n"));
-    assert!(!simple("Adobe Zigzag", ""));
+    // Zig Zag: objects other than type check it against their drawn look (`read::ops`).
+    assert!(simple("Adobe Zigzag", ""));
     assert!(!simple("Adobe Transform", &format!("1 /Int (numCopies) ,\n{SWITCHES}")));
     // With another effect, only type takes it.
     let chain = [basic("Adobe Twirl", "45 /Real (angle) ,\n"), basic("Adobe Offset Path", "4 /Real (ofst) ,\n0 /Int (jntp) ,\n4 /Real (mlim) ,\n")];
@@ -1423,7 +1450,8 @@ fn warp_numbers_are_the_dialogs_order() {
 /// and nothing for styles it doesn't read.
 #[test]
 fn a_style_is_read_as_a_writer_checks_it() {
-    let read = |data: &str, own: Option<&Paint>| crate::import::read_art_style(data.as_bytes(), "Odd", own);
+    let parse = |data: &str, name: &str| crate::import::parse_art_style(data.as_bytes(), name);
+    let read = |data: &str, own: Option<&Paint>| parse(data, "Odd").and_then(|st| crate::import::read_parsed_style(&st, own));
     let style = |kids: &[String]| format!("/KnownStyle :\n(Odd) /Name ,\n/ActiveStyle :\n{}", compound("Chain Style Filter", kids));
     let gradient = fill("Bb\n1 (G) 0 0 0 1 1 0 0 1 0 0 1 Bg\n0 BB");
     let stack = compound("Stack Style Filter", std::slice::from_ref(&gradient));
@@ -1434,11 +1462,18 @@ fn a_style_is_read_as_a_writer_checks_it() {
     assert_eq!(got.appearance.items[0].paint(), &own);
     assert_eq!(got.transparency.map(|t| (t.0, t.1)), Some((0.5, BlendMode::Multiply)));
     assert!(got.simple && !got.pathfinder);
+    // One parse read on two objects: each takes its own gradient, and the parse is left as it was.
+    let parsed = parse(&data, "Odd").unwrap();
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let first = crate::import::read_parsed_style(&parsed, Some(&own)).unwrap();
+    let second = crate::import::read_parsed_style(&parsed, Some(&black)).unwrap();
+    assert_eq!((first.appearance.items[0].paint(), second.appearance.items[0].paint()), (&own, &black));
+    assert_eq!(parsed.style, parse(&data, "Odd").unwrap().style);
     // A gradient that isn't the object's own, a pattern, another name, two gradients: nothing.
     assert!(read(&data, None).is_none());
     let pattern = style(&[compound("Stack Style Filter", &[fill("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p")])]);
     assert!(read(&pattern, None).is_none());
-    assert!(crate::import::read_art_style(data.as_bytes(), "Even", Some(&own)).is_none());
+    assert!(parse(&data, "Even").is_none());
     assert!(read(&style(&[compound("Stack Style Filter", &[gradient.clone(), gradient])]), Some(&own)).is_none());
     // Damaged text: every cut of the style, and stray bytes, without a panic.
     for cut in 0..data.len() {
@@ -1523,8 +1558,10 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
     };
     let stroke = "0 R\n0 1 1 0 K\n1 J 2 j 3 w 4 M [2 1]0 d\n";
     let Some(Ok(items)) = one(&format!("0 O\n0 0 1 0 k\n{stroke}1 1 Xd\n")) else { panic!("{:?}", one(stroke)) };
-    let [StyleItem::Fill(fill), StyleItem::Stroke { paint, width, cap, join, miter, dash, profile: None, align: StrokeAlign::Center, brush: None }] =
-        items.as_slice()
+    let [
+        StyleItem::Fill(fill),
+        StyleItem::Stroke { paint, width, cap, join, miter, dash, profile: None, align: StrokeAlign::Center, brush: None, arrows: _ },
+    ] = items.as_slice()
     else {
         panic!("{items:?}")
     };
@@ -1544,16 +1581,51 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
     // A gradient instance's flag says which one it paints: a stroke gradient leaves a solid fill read.
     let fill_and_stroke_gradient = one("0 0 1 0 k\n1 Bb\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 1 Xd\n");
     assert!(matches!(fill_and_stroke_gradient, Some(Ok(i)) if matches!(i.as_slice(), [StyleItem::Fill(_)])));
-    // Not read: no `Xd`, a gradient or pattern fill, a pattern stroke, a gradient stroke after a solid one, a paint
-    // turned on with no color.
+    // A gradient instance's fill is its swatch at its angle; its stroke, after a solid one too, is a
+    // gradient naming its swatch at its angle, at the stroke's weight.
+    let gradient_fill = one("0 Bb\n2 (Sky) 0 0 30 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n");
+    assert_eq!(gradient_fill, Some(Ok(vec![StyleItem::Gradient { name: Some("Sky".into()), angle: 30.0 }])));
+    let gradient_stroke = one("0 R\n0 1 1 0 K\n1 Bb\n0 0 0 0 Bh\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n2 w\n1 0 Xd\n");
+    let Some(Ok(items)) = &gradient_stroke else { panic!("{gradient_stroke:?}") };
+    let [StyleItem::Stroke { paint: Paint::Gradient(g), width, .. }] = items.as_slice() else { panic!("{items:?}") };
+    assert_eq!((g.swatch.as_deref(), g.angle, g.geom, *width), (Some("Ramp"), 90.0, None, 2.0));
+    // Not read: no `Xd`, a pattern fill, a pattern stroke, a gradient outside a gradient instance, a
+    // paint turned on with no color.
     for paint in [
         format!("0 0 1 0 k\n{stroke}"),
-        "0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n0 1 Xd\n".to_string(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 1 Xd\n".to_string(),
         "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n1 0 Xd\n".to_string(),
-        "0 R\n0 1 1 0 K\n1 Bb\n0 0 0 0 Bh\n2 (Ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n2 w\n1 0 Xd\n".to_string(),
+        "2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 1 Xd\n".to_string(),
+        "0 Bb\n2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg\n0 BB\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n0 1 Xd\n".to_string(),
         "0 0 1 0 k\n1 1 Xd\n".to_string(),
     ] {
         assert_eq!(one(&paint), Some(Err(())), "{paint}");
     }
+}
+
+/// A `/SymbolArt` entry cut short (no `; (key)` after it) leaves what follows to be read: here the
+/// next style.
+#[test]
+fn a_symbol_entry_cut_short_leaves_the_next_style_read() {
+    let stroke = "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                  /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n";
+    let text = format!(
+        "/KnownStyle :\n(Cut) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{stroke}/GObjRef : (W) /SymbolArt\n\
+         /KnownStyle :\n(Next) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{stroke}; /Dict ;\n /Part ,\n;\n"
+    );
+    let styles = art_styles(text.as_bytes());
+    assert!(styles.contains_key("Cut") && styles.contains_key("Next"), "{:?}", styles.keys().collect::<Vec<_>>());
+    assert!(matches!(styles["Next"].items.as_slice(), [StyleItem::Stroke { arrows: None, .. }]), "{:?}", styles["Next"].items);
+}
+
+/// A comment line inside a `/SymbolArt` entry is skipped: the entry is still read.
+#[test]
+fn a_comment_inside_a_symbol_entry_is_skipped() {
+    let text = "/KnownStyle :\n(Arrowed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+                /GObjRef : (W) /SymbolArt\n%a comment\n; (BSArrowEndSymbol) ,\n\
+                /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j 1 w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let styles = art_styles(text.as_bytes());
+    let [StyleItem::Stroke { arrows: Some(arrows), .. }] = styles["Arrowed"].items.as_slice() else { panic!("{:?}", styles["Arrowed"].items) };
+    assert_eq!(arrows.end, Some(("W".to_string(), 100.0)));
 }

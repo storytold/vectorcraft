@@ -157,9 +157,14 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 }
 
 /// `ui.newLayer {sublayer?}`: Layer Options for a new layer (or sublayer), with the name and
-/// colour it would get.
+/// colour it would get. In isolation mode a layer that would be outside the isolated art, where the
+/// Layers panel does not list it, is an error.
 pub fn open_new(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
+    let sublayer = crate::menus::opt_bool(p, "sublayer")?.unwrap_or(false);
+    if crate::panels::layers::new_layer_unlisted(st, sublayer, false) {
+        return Err("exit isolation mode first".into());
+    }
     let mut layers = vec![];
     st.doc.walk(|n| {
         if n.is_layer() {
@@ -170,7 +175,6 @@ pub fn open_new(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     while layers.contains(&format!("Layer {i}")) {
         i += 1;
     }
-    let sublayer = p.get("sublayer").and_then(Value::as_bool).unwrap_or(false);
     let color = LayerColor::Preset((layers.len() % LAYER_COLORS.len()) as u8);
     let name = format!("Layer {i}");
     let name = if app.session.prefs.identify_objects_by == "xmlId" { vectorcraft_doc::xml_id::from_object_name(&name) } else { name };
@@ -325,6 +329,17 @@ pub(crate) fn params(d: &Dialog) -> (&'static str, Value) {
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (cmd, p) = params(d);
+    // Isolation mode can start while the dialog is open.
+    let sublayer = match cmd {
+        "layer.new" => Some(false),
+        "layer.newSublayer" => Some(true),
+        _ => None,
+    };
+    if let Some(sublayer) = sublayer
+        && app.session.active().is_some_and(|st| crate::panels::layers::new_layer_unlisted(st, sublayer, false))
+    {
+        return Err("exit isolation mode first".into());
+    }
     run_and_close(app, cmd, p)
 }
 
@@ -609,6 +624,23 @@ mod tests {
                 assert!(n.locked && matches!(n.kind, NodeKind::Layer { template: true, dim_images: None, .. }), "{id:?}, dim first: {dim_first}");
             }
         }
+    }
+
+    /// OK in New Layer Options makes no layer outside the isolated art when isolation mode started
+    /// while the dialog was open.
+    #[test]
+    fn new_layer_options_ok_checks_isolation_again() {
+        let mut app = app();
+        let id = |v: Value| v["id"].as_u64().unwrap();
+        let rect = id(app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
+        app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+        let group = id(app.session.execute("object.group", &json!({})).unwrap());
+        app.run("ui.newLayer", json!({})).unwrap();
+        app.session.execute("object.isolate", &json!({"id": group})).unwrap();
+        draw(&mut app);
+        let err = super::super::confirm(&mut app).unwrap_err();
+        assert!(err.contains("exit isolation mode first"), "{err}");
+        assert_eq!(app.session.doc().unwrap().doc.layers.len(), 1);
     }
 
     #[test]

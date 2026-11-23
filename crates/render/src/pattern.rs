@@ -191,6 +191,9 @@ fn rasterize(
     let symbols = doc.symbol_boxes().quick();
     r.stamp += 1;
     let px_rect = Rect::new(0.0, 0.0, w as f64, h as f64);
+    // A tile drawn for a proof that preserves the colors' numbers shows its images through that
+    // proof too.
+    let plates = crate::proof::ink_plate_lut(ink, doc);
     for o in def.offsets_covering(region) {
         let v = view * def.instance_xf(o);
         let frame = Frame {
@@ -203,7 +206,7 @@ fn rasterize(
             opts: &opts,
             ink,
             output: v,
-            plates: None,
+            plates: plates.as_deref(),
         };
         for a in &def.art {
             r.draw_arc(&mut ctx, &frame, a);

@@ -92,6 +92,27 @@ fn trim_box_artboards_take_the_bleed_box_round_them_as_the_document_bleed() {
 }
 
 #[test]
+fn trim_box_artboards_keep_the_bleed_between_them() {
+    // The second page's bleed box is its trim box: the document's bleed (10 mm, over half the
+    // 36 pt gap) still goes round its artboard.
+    let edge = Some([50.0, 50.0, 250.0, 150.0]);
+    let plain = PdfPage { bleed: edge, trim: edge, ..PdfPage::new(300.0, 200.0, "0 g 50 50 200 100 re f") };
+    let bytes = pdf(&[bled_page(), plain, bled_page()], None);
+    let d = open(&bytes, ImportOptions { crop: CropTo::Trim, ..Default::default() });
+    let starts: Vec<f64> = d.artboards.iter().map(|a| a.rect.x0).collect();
+    let step = 200.0 + 36.0 + 2.0 * BLEED;
+    assert!(near([starts[0], starts[1], starts[2], 0.0], [0.0, step, 2.0 * step, 0.0]), "{starts:?}");
+    // Each artboard's bleed ends 36 pt before the next one's begins.
+    for pair in d.artboards.windows(2) {
+        let (a, b) = (d.setup.bleed_rect(pair[0].rect), d.setup.bleed_rect(pair[1].rect));
+        assert!((b.x0 - a.x1 - 36.0).abs() < 1e-3, "{a:?} {b:?}");
+    }
+    // On the crop boxes there is no bleed, and the artboards are 36 pt apart.
+    let d = open(&bytes, ImportOptions::default());
+    assert_eq!(d.artboards.iter().map(|a| a.rect.x0).collect::<Vec<_>>(), [0.0, 336.0, 672.0]);
+}
+
+#[test]
 fn missing_boxes_fall_back_to_the_crop_box_and_boxes_are_clipped_to_the_media_box() {
     let page = PdfPage { crop: Some([10.0, 10.0, 290.0, 390.0]), art: Some([-50.0, 0.0, 100.0, 100.0]), ..PdfPage::new(300.0, 400.0, "") };
     let bytes = pdf(&[page], None);

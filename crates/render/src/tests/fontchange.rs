@@ -75,6 +75,55 @@ fn type_redraws_when_its_font_becomes_available() {
     assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
 }
 
+/// Same serialized text and node ids are not the same glyph geometry when each document owns
+/// different file-font bytes. Both fonts are bound before either render, so generation is steady.
+#[test]
+fn file_font_geometry_is_scoped_to_owned_resources_not_serialized_keys() {
+    use vectorcraft_doc::{FILE_FONT_MIME, FileFont, FileFonts, ImageBlob};
+    use vectorcraft_text::{FileFontInfo, FileGlyph, FontDb, build_file_font};
+
+    let _adding = adding_fonts();
+    let make = |width| {
+        const FAMILY: &str = "Rendered Owned File Font Regression";
+        let info = FileFontInfo { family: FAMILY.into(), style: "Regular".into(), ..Default::default() };
+        let g = FileGlyph { ch: 'x', outline: Rect::new(0.0, 0.0, width, 700.0).to_path(0.1), advance: width + 100.0 };
+        let mut doc = Document::new(100.0, 100.0);
+        doc.images.insert("chosen".into(), ImageBlob::new(FILE_FONT_MIME, build_file_font(&info, &[g]).unwrap()));
+        let style = CharStyle { size: 60.0, font_family: FAMILY.into(), ..Default::default() };
+        let mut t = TextObject::point(Point::new(10.0, 70.0), "x", style);
+        t.file_fonts = Some(Box::new(FileFonts::new(vec![FileFont { family: FAMILY.into(), style: "Regular".into(), key: "chosen".into() }], "x")));
+        let id = doc.alloc_id();
+        let layer = doc.layers[0].id;
+        doc.insert(Some(layer), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        assert!(FontDb::global().bind_document_file_fonts(&mut doc).is_empty());
+        doc
+    };
+    let (a, b) = (make(200.0), make(800.0));
+    let renderer = with_fonts_unchanged(|| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut reused = Renderer::new();
+        let first = reused.render(&a, 100, 100, Affine::IDENTITY, &opts).pixels;
+        let second = reused.render(&b, 100, 100, Affine::IDENTITY, &opts).pixels;
+        let fresh = Renderer::new().render(&b, 100, 100, Affine::IDENTITY, &opts).pixels;
+        assert_ne!(first, second, "B must draw its own wider glyph");
+        assert_eq!(second, fresh, "a renderer must not reuse A's glyph geometry for B");
+        reused
+    });
+    let mut faces = vec![];
+    for doc in [&a, &b] {
+        doc.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                faces.extend(FontDb::global().file_faces(t).into_iter().flatten().map(|face| Arc::downgrade(&face)));
+            }
+        });
+    }
+    assert_eq!(faces.len(), 2);
+    drop(a);
+    drop(b);
+    assert!(!renderer.texts.is_empty(), "the idle renderer still holds its old text nodes");
+    assert!(faces.iter().all(|face| face.upgrade().is_none()), "geometry-cache nodes must not pin document font allowance");
+}
+
 /// Type with raster effects redraws in a font that becomes available: its drop shadow and its
 /// blurred content are made again.
 #[test]
@@ -117,6 +166,24 @@ fn variable_font_settings_are_not_highlighted_as_substituted_glyphs() {
     assert!(g.alternate_glyphs(&t).elements().is_empty());
 }
 
+/// Type in a missing font that starts before its open path: only the characters drawn on the path
+/// are highlighted as substituted.
+#[test]
+fn characters_before_an_open_path_are_not_highlighted() {
+    let _steady = fonts_steady();
+    let style = CharStyle { size: 20.0, font_family: "No Such Family 5932".into(), ..Default::default() };
+    let mut t = TextObject::point(Point::ZERO, "MMMM", style);
+    let mut line = vectorcraft_geom::BezPath::new();
+    line.move_to((0.0, 50.0));
+    line.line_to((500.0, 50.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let whole = text_geom(&t).substituted_fonts;
+    assert!(!whole.elements().is_empty());
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -0.9, end: None };
+    let g = text_geom(&t);
+    assert!(g.all.elements().is_empty() && g.substituted_fonts.elements().is_empty(), "{:?}", g.substituted_fonts);
+}
+
 /// Type in a composite font draws each class of character in its part's face, which is not a
 /// substitute: Document Setup's highlight of substituted glyphs leaves it alone.
 #[test]
@@ -127,7 +194,7 @@ fn composite_font_parts_are_not_highlighted_as_substituted_glyphs() {
     let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
     parts.roman = CompositePart::new("JetBrains Mono", "Regular");
     parts.numerals = CompositePart::new("Inter", "Regular");
-    db.set_composite_font(&CompositeFont { name: "CF Highlight".into(), parts });
+    db.set_composite_font(&CompositeFont { name: "CF Highlight".into(), parts, custom: Vec::new() });
     let style = CharStyle { size: 40.0, font_family: "CF Highlight".into(), ..Default::default() };
     let t = TextObject::point(Point::new(10.0, 60.0), "Ab12", style);
     let g = text_geom(&t);
@@ -157,7 +224,7 @@ fn a_documents_own_composite_font_draws_without_being_registered() {
     let (mut composite, id) = typed(NAME);
     let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
     parts.roman = CompositePart::new("JetBrains Mono", "Regular");
-    composite.composite_fonts.push(CompositeFont { name: NAME.into(), parts });
+    composite.composite_fonts.push(CompositeFont { name: NAME.into(), parts, custom: Vec::new() });
     let (plain, plain_id) = typed("JetBrains Mono");
     assert!(db.composite_font(NAME).is_none());
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
@@ -209,7 +276,7 @@ fn a_documents_own_composite_font_draws_without_being_registered() {
 }
 
 /// A placed document draws its type in its own definition of a composite font that the document
-/// placing it defines differently.
+/// placing it defines differently, and as missing in one only the document placing it defines.
 #[test]
 fn a_placed_document_draws_its_own_definition_of_a_name_the_page_defines() {
     use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts, ImageBlob, LinkInfo, PlacedDocument};
@@ -218,7 +285,7 @@ fn a_placed_document_draws_its_own_definition_of_a_name_the_page_defines() {
     let definition = |roman: &str| {
         let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
         parts.roman = CompositePart::new(roman, "Regular");
-        CompositeFont { name: NAME.into(), parts }
+        CompositeFont { name: NAME.into(), parts, custom: Vec::new() }
     };
     let typed = |family: &str| {
         let mut d = Document::new(300.0, 150.0);
@@ -260,6 +327,55 @@ fn a_placed_document_draws_its_own_definition_of_a_name_the_page_defines() {
     assert!(own == page(&plain, plain_id, "fontchange-placed-twice-plain", vec![]), "drawn in the placed document's definition");
     assert!(own != page(&inter, inter_id, "fontchange-placed-twice-inter", vec![]), "not in the page's");
     assert!(vectorcraft_text::FontDb::global().composite_font(NAME).is_none());
+    // A placed document that defines no composite font draws type naming the page's as missing.
+    let (undefined, undefined_id) = typed(NAME);
+    let (missing, missing_id) = typed("CF Placed Nowhere");
+    let borrowed = page(&undefined, undefined_id, "fontchange-placed-undefined", vec![definition("Inter")]);
+    assert!(borrowed == page(&missing, missing_id, "fontchange-placed-missing", vec![]), "drawn as in a missing font");
+    assert!(borrowed != page(&inter, inter_id, "fontchange-placed-undefined-inter", vec![]), "not in the page's definition");
+}
+
+/// A document that defines no composite font, drawn while another document's composite font of
+/// the name its type is set in is registered (that document in front), draws that type as in a
+/// missing font: in a render, an ink render, a thumbnail and a node render.
+#[test]
+fn a_document_draws_type_in_another_documents_composite_font_as_missing() {
+    use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts};
+    let _adding = adding_fonts();
+    const NAME: &str = "CF Front Only";
+    let db = vectorcraft_text::FontDb::global();
+    let typed = |family: &str| {
+        let mut d = Document::new(300.0, 150.0);
+        let style = CharStyle { size: 60.0, font_family: family.into(), ..Default::default() };
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 100.0), "Hamburg", style))));
+        let l = d.layers[0].id;
+        let id = d.insert(Some(l), 0, n).unwrap();
+        (d, id)
+    };
+    let (back, id) = typed(NAME);
+    let (missing, missing_id) = typed("CF Front Nowhere");
+    let (plain, plain_id) = typed("JetBrains Mono");
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let region = Rect::new(0.0, 0.0, 300.0, 150.0);
+    let draw = |d: &Document, id: NodeId| {
+        let n = d.node(id).unwrap().clone();
+        (
+            Renderer::new().render(d, 300, 150, Affine::IDENTITY, &opts).pixels,
+            Renderer::new().render_region_inks(d, region, 1.0, &opts),
+            Renderer::new().render_thumbnail(d, id, 64).map(|r| r.pixels),
+            Renderer::new().render_node(d, &std::sync::Arc::new(n), 300, 150, Affine::IDENTITY).map(|r| r.pixels),
+        )
+    };
+    let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
+    parts.roman = CompositePart::new("JetBrains Mono", "Regular");
+    db.set_composite_font(&CompositeFont { name: NAME.into(), parts, custom: Vec::new() });
+    let (drawn, as_missing, in_front) = (draw(&back, id), draw(&missing, missing_id), draw(&plain, plain_id));
+    db.remove_composite_font(NAME);
+    assert!(drawn.0 != in_front.0, "not in the front document's definition");
+    assert!(drawn.0 == as_missing.0, "rendered");
+    assert!(drawn.1 == as_missing.1, "rendered as ink amounts");
+    assert!(drawn.2 == as_missing.2, "thumbnail");
+    assert!(drawn.3 == as_missing.3, "node");
 }
 
 /// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes

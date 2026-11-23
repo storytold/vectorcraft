@@ -1,10 +1,11 @@
 //! Character Styles and Paragraph Styles panels (one implementation, two kinds).
 //!
-//! Click a style to apply it to the selected text (or the Type tool's selected characters);
-//! Alt-click applies it and clears overrides. Double-clicking a character style's row opens its
-//! Character Style Options (`ui.charStyleOptions`), as the panel menu does; a paragraph style's row
-//! opens its Paragraph Style Options (`ui.paraStyleOptions`). The style of the
-//! selection is highlighted, with a "+" when the text overrides some of its attributes. New makes
+//! Click a style to apply it to the selected text (every frame of each selected threaded story) or
+//! the Type tool's selected characters; Alt-click applies it and clears overrides. Double-clicking a
+//! character style's row opens its Character Style Options (`ui.charStyleOptions`), as the panel
+//! menu does; a paragraph style's row opens its Paragraph Style Options (`ui.paraStyleOptions`).
+//! The style all of that text has is highlighted, with a "+" when some of the text overrides some
+//! of its attributes; text in several styles highlights none. New makes
 //! a style from the selected text; Alt-click on New first asks for its name (`ui.newCharStyle`,
 //! `ui.newParaStyle`).
 
@@ -15,8 +16,9 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::Document;
 use vectorcraft_engine::cmd::{fileio, textstyles};
 
-use super::character::{end_typing, text_editing, text_style};
+use super::character::{end_typing, shared, text_editing, text_style};
 use super::memo::Memo;
+use super::paragraph::shared_para;
 use super::{alt_held, pstate, selection_len, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
@@ -96,7 +98,7 @@ fn highlight_made(ctx: &egui::Context, kind: Kind, names: Vec<String>) {
 
 /// Duplicates the styles `names` (`charStyle.duplicate`, `paraStyle.duplicate`) in one undo step
 /// and highlights the copies.
-fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind, names: &[String]) {
+fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind, names: &[String]) -> Vec<String> {
     let p = kind.prefix();
     let made = if let [name] = names {
         app.run(&format!("{p}.duplicate"), json!({ "name": name })).map(|r| vec![r])
@@ -106,7 +108,11 @@ fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, kind: Kind, names: &
         app.run("command.batch", json!({ "label": label, "commands": commands })).map(|r| r["results"].as_array().cloned().unwrap_or_default())
     };
     if let Ok(made) = made {
-        highlight_made(ctx, kind, made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect());
+        let names: Vec<String> = made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect();
+        highlight_made(ctx, kind, names.clone());
+        names
+    } else {
+        vec![]
     }
 }
 
@@ -172,14 +178,25 @@ thread_local! {
     static LISTED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-/// The selection's style name (Normal when none) and every one of its attributes, written as a
-/// style holds them, if text is selected.
-fn current(app: &VectorcraftApp, kind: Kind) -> Option<(Option<String>, Map<String, Value>)> {
-    let (c, p) = text_style(app)?;
-    Some(match kind {
-        Kind::Char => (c.style_name.clone(), textstyles::char_attrs(&c)),
-        Kind::Para => (p.style_name.clone(), textstyles::para_attrs(&p)),
-    })
+/// The style name (`None`: the Normal style) that every character the panel acts on has (paragraph
+/// styles: every paragraph), with the Selection tool in every frame of the selected stories;
+/// `None` when they differ or no type is selected.
+fn current(app: &VectorcraftApp, kind: Kind) -> Option<Option<String>> {
+    match kind {
+        Kind::Char => shared(app, |s| s.style_name.clone()),
+        Kind::Para => shared_para(app, |p| p.style_name.clone()),
+    }
+}
+
+/// Whether any character (paragraph styles: paragraph) the panel acts on differs from the style
+/// attributes `attrs` in one of them.
+fn has_overrides(app: &VectorcraftApp, kind: Kind, attrs: &Map<String, Value>) -> bool {
+    let differs = |m: Map<String, Value>| attrs.iter().any(|(k, v)| m.get(k) != Some(v));
+    let same = match kind {
+        Kind::Char => shared(app, |s| differs(textstyles::char_attrs(s))),
+        Kind::Para => shared_para(app, |p| differs(textstyles::para_attrs(p))),
+    };
+    same != Some(false)
 }
 
 /// Parameters targeting the selection: the Type tool's selected characters (paragraph styles: the
@@ -196,14 +213,19 @@ fn target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
 }
 
 /// [`target`] for applying a style: after Select All in threaded text, all the text of every
-/// frame of the story.
+/// frame of the story; with the Selection tool, every frame of the selected stories
+/// ([`super::character::selected_stories`]).
 fn apply_target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
+    if text_editing(app).is_none() {
+        super::character::target_selected_stories(app, &mut p);
+        return p;
+    }
     match super::character::text_story(app) {
-        Some(story) if text_editing(app).is_some() => {
+        Some(story) => {
             p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>());
             p
         }
-        _ => target(app, kind, p),
+        None => target(app, kind, p),
     }
 }
 
@@ -236,15 +258,56 @@ fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
     app.run(command, json!({ "name": name })).ok();
 }
 
+/// An item's right-click context menu in the Character Styles / Paragraph Styles panel.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind, name: &str, normal: &str, sel: &mut Vec<String>, listed: &[&str]) {
+    let p = kind.prefix();
+    let is_normal = name == normal;
+    let targets = dragged(sel, listed, name);
+    let doomed: Vec<String> = targets.iter().filter(|s| *s != normal).cloned().collect();
+    let has_text_target = text_style(app).is_some();
+
+    let options_label = crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]);
+    if menu_item(ui, &options_label, !is_normal, false) {
+        open_style_options(app, kind, name);
+        ui.close();
+    }
+    let duplicate_label = crate::i18n::fmt(tl!("Duplicate {kind} Style"), &[("kind", kind.what_label())]);
+    if menu_item(ui, &duplicate_label, true, false) {
+        let made = duplicate(app, ui.ctx(), kind, &targets);
+        if !made.is_empty() {
+            *sel = made;
+        }
+        ui.close();
+    }
+    let delete_label = crate::i18n::fmt(tl!("Delete {kind} Style"), &[("kind", kind.what_label())]);
+    if menu_item(ui, &delete_label, !is_normal && !doomed.is_empty(), false) {
+        if app.run(&format!("{p}.delete"), json!({ "names": doomed })).is_ok() {
+            *sel = vec![];
+            set_highlighted(ui.ctx(), kind, vec![]);
+        }
+        ui.close();
+    }
+    ui.separator();
+    let redefine_label = crate::i18n::fmt(tl!("Redefine {kind} Style"), &[("kind", kind.what_label())]);
+    if menu_item(ui, &redefine_label, has_text_target, false) {
+        end_typing(app);
+        app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": name }))).ok();
+        ui.close();
+    }
+    if menu_item(ui, tl!("Clear Overrides"), has_text_target, false) {
+        app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": name, "clearOverrides": true }))).ok();
+        ui.close();
+    }
+}
+
 /// The style list and its New and Delete buttons. Shift-click highlights every style from the
 /// last one clicked without Shift through this one, and Cmd/Ctrl-click adds or removes one; both
 /// leave the text as it is. Delete deletes every highlighted style but the Normal style.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let t = Tokens::get(ui.ctx());
     let all = styles(app, kind);
-    let cur = current(app, kind);
     let normal = all.first().map(|s| s.0.clone()).unwrap_or_default();
-    let cur_name = cur.as_ref().map(|(n, _)| n.clone().unwrap_or_else(|| normal.clone()));
+    let cur_name = current(app, kind).map(|n| n.unwrap_or_else(|| normal.clone()));
     let mut clicked: Option<(String, egui::Modifiers)> = None;
     // A double-clicked style's row, whose options open after the list is laid out.
     let mut options: Option<String> = None;
@@ -270,14 +333,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     widgets::list_box(ui, |ui| {
         for (name, attrs, _) in &all {
             let is_cur = cur_name.as_deref() == Some(name.as_str());
-            // Overrides: an attribute the style sets that the selection doesn't match.
-            let overridden = is_cur && cur.as_ref().is_some_and(|(_, m)| attrs.iter().any(|(k, v)| m.get(k) != Some(v)));
+            // Overrides: an attribute the style sets that some of the text doesn't match.
+            let overridden = is_cur && has_overrides(app, kind, attrs);
             let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click_and_drag());
             if resp.drag_started_by(egui::PointerButton::Primary) {
                 egui::DragAndDrop::set_payload(ui.ctx(), RowDrag { kind, name: name.clone() });
             }
             if scroll_to.as_deref() == Some(name.as_str()) {
                 ui.scroll_to_rect(r, None);
+            }
+            if resp.secondary_clicked() && !sel.contains(name) {
+                sel = vec![name.clone()];
+                set_pstate(ui.ctx(), kind.anchor_key(), name.clone());
+                set_highlighted(ui.ctx(), kind, sel.clone());
             }
             let (fill, outline) = row_look(is_cur, sel.contains(name), resp.hovered(), &t);
             if let Some(fill) = fill {
@@ -291,6 +359,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
             let shown = super::label_or_name(name, *name == normal);
             let label = if overridden { format!("{shown}+") } else { shown.to_string() };
             ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::ListItem, ui.is_enabled(), sel.contains(name), shown.to_string()));
+            resp.context_menu(|ui| {
+                item_context_menu(app, ui, kind, name, &normal, &mut sel, &listed);
+            });
             if resp.clicked() {
                 clicked = Some((name.clone(), ui.input(|i| i.modifiers)));
             }
@@ -310,7 +382,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if scroll_to.is_some() {
         set_pstate::<Option<String>>(ui.ctx(), kind.scroll_key(), None);
     }
-    let has_text = cur.is_some();
+    let has_text = text_style(app).is_some();
     if let Some((name, m)) = clicked {
         sel = super::swatches::click_selection(ui, kind.anchor_key(), sel, &listed, &name, m);
         // Shift and Cmd/Ctrl clicks only highlight, as in the Graphic Styles panel. The second
@@ -381,7 +453,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let normal = if kind == Kind::Char { "[Normal Character Style]" } else { "[Normal Paragraph Style]" };
     let user = sel.as_ref().is_some_and(|s| s != normal);
     let doomed: Vec<&String> = many.iter().filter(|s| *s != normal).collect();
-    let has_text = current(app, kind).is_some() || selection_len(app) > 0;
+    let has_text = text_style(app).is_some() || selection_len(app) > 0;
     let p = kind.prefix();
     if menu_item(ui, &crate::i18n::fmt(tl!("New {kind} Style…"), &[("kind", kind.what_label())]), true, false) {
         // A later typing preview must not restore the document from before this capture.

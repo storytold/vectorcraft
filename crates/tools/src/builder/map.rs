@@ -364,7 +364,8 @@ impl BuilderMap {
 }
 
 /// What a merge needs of each input besides the map: its outline as drawn ([`node_outline`]) and
-/// whether its fill closes its open subpaths (Consider Open Filled Paths as Closed, and a fill).
+/// whether its fill closes its open subpaths (Consider Open Filled Paths as Closed, and a fill row
+/// that draws).
 #[derive(Clone, Debug, PartialEq)]
 pub struct MergeInput {
     pub outline: Option<PathData>,
@@ -375,7 +376,7 @@ pub struct MergeInput {
 pub fn merge_inputs(leaves: &[&Node], open_filled_as_closed: bool) -> Vec<MergeInput> {
     leaves
         .iter()
-        .map(|l| MergeInput { outline: node_outline(l).map(|o| o.0), fill_closes: open_filled_as_closed && !l.appearance.fill_paint().is_none() })
+        .map(|l| MergeInput { outline: node_outline(l).map(|o| o.0), fill_closes: open_filled_as_closed && l.appearance.has_drawn_fill() })
         .collect()
 }
 
@@ -518,6 +519,58 @@ pub fn sample_polyline(pts: &[Point], step: f64) -> Vec<Point> {
     out
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The edges [`hatch`] has tested against a scanline on this thread.
+    pub(super) static HATCH_EDGE_TESTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// A region's edges in [`hatch`]'s rotated space, met in order of rising scanline. Each line tests
+/// only the edges that span it, and the edges with a NaN or infinite end height.
+pub(super) struct EdgeSweep {
+    /// The edges with finite, unequal end heights, by lower end.
+    edges: Vec<(Point, Point)>,
+    /// How many of `edges` have reached the active list.
+    next: usize,
+    /// The edges whose lower end is at or below the last line and whose upper end is above it.
+    active: Vec<(Point, Point)>,
+    /// The edges with a NaN or infinite end height.
+    loose: Vec<(Point, Point)>,
+}
+
+impl EdgeSweep {
+    pub(super) fn new(mut edges: Vec<(Point, Point)>) -> Self {
+        let mut loose = vec![];
+        edges.retain(|&(a, c)| {
+            let finite = a.y.is_finite() && c.y.is_finite();
+            if !finite {
+                loose.push((a, c));
+            }
+            // An edge with equal end heights never crosses a scanline.
+            finite && a.y != c.y
+        });
+        edges.sort_unstable_by(|(a, c), (b, d)| a.y.min(c.y).total_cmp(&b.y.min(d.y)));
+        EdgeSweep { edges, next: 0, active: vec![], loose }
+    }
+
+    /// Pushes the x of each edge crossing the scanline at `y` onto `xs`, in no particular order.
+    /// `y` is not NaN and never decreases from one call to the next.
+    pub(super) fn crossings(&mut self, y: f64, xs: &mut Vec<f64>) {
+        while let Some(&(a, c)) = self.edges.get(self.next).filter(|(a, c)| a.y.min(c.y) <= y) {
+            self.active.push((a, c));
+            self.next += 1;
+        }
+        self.active.retain(|(a, c)| a.y.max(c.y) > y);
+        #[cfg(test)]
+        HATCH_EDGE_TESTS.with(|n| n.set(n.get() + self.active.len() + self.loose.len()));
+        for (a, c) in self.active.iter().chain(&self.loose) {
+            if (a.y <= y) != (c.y <= y) {
+                xs.push(a.x + (y - a.y) / (c.y - a.y) * (c.x - a.x));
+            }
+        }
+    }
+}
+
 /// Diagonal hatch lines filling `path` (the Shape Builder's grey mesh highlight), `gap` apart.
 pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
     let mut out = BezPath::new();
@@ -562,6 +615,7 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
     }
     let gap = gap.max((y1 - y0) / 400.0).max(1e-6);
     let start = (y0 / gap).floor() * gap + gap * 0.5;
+    let mut sweep = EdgeSweep::new(edges);
     let mut xs: Vec<f64> = vec![];
     // Counted, not summed: far from the origin `y + gap` can round back to `y`. The gap is at least
     // a 400th of the height, so 402 lines cover it.
@@ -571,11 +625,7 @@ pub fn hatch(path: &BezPath, gap: f64) -> BezPath {
             break;
         }
         xs.clear();
-        for (a, c) in &edges {
-            if (a.y <= y) != (c.y <= y) {
-                xs.push(a.x + (y - a.y) / (c.y - a.y) * (c.x - a.x));
-            }
-        }
+        sweep.crossings(y, &mut xs);
         xs.sort_by(f64::total_cmp);
         for pair in xs.as_chunks::<2>().0 {
             out.move_to(unrot(Point::new(pair[0], y)));

@@ -90,6 +90,7 @@ fn a_tab_dragged_along_the_strip_moves_its_document_and_the_current_one_stays() 
     assert_eq!(during.platform_output.cursor_icon, egui::CursorIcon::Grabbing, "the tab is held while it moves");
     assert_eq!(order(&app), ["Bravo", "Charlie", "Delta", "Alpha"]);
     assert_eq!(current(&app), "Delta", "a move is not a switch");
+    assert!(app.ui.floating.is_empty(), "a move along the strip floats no document");
     // The tabs are drawn in the new order.
     let xs: Vec<f32> = NAMES.iter().map(|n| tab(&mut app, &ctx, 1.0, n).x).collect();
     assert!(xs[1] < xs[2] && xs[2] < xs[3] && xs[3] < xs[0], "Bravo, Charlie, Delta, Alpha: {xs:?}");

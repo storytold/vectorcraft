@@ -25,7 +25,7 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
 /// The Home screen's column: welcome, New / Open, Recent Files, Learn, presets and community links.
 fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    // The welcome and the New / Open buttons sit centred, as PhotoCraft's Home screen does (#4684).
+    // The welcome and the New / Open buttons sit centred (#4684).
     ui.vertical_centered(|ui| {
         ui.label(egui::RichText::new(tl!("Welcome to VectorCraft")).font(theme::semibold(26.0)).color(t.text));
         ui.add_space(4.0);

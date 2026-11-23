@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 craft-eps = { workspace = true }
+craft-ps = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }
@@ -30,10 +31,11 @@ craft-pdf = { workspace = true }
 vectorcraft-render = { workspace = true }
 kurbo = { workspace = true }
 image = { workspace = true }
+craft-image-codecs = { workspace = true }
 flate2 = { workspace = true }
 ruzstd = { workspace = true }
 # Images read through `CCITTFaxDecode`.
-hayro-ccitt = { workspace = true }
+craft-stream-codecs = { workspace = true }
 # Live effects' params, as the art styles that name them give them.
 serde_json = { workspace = true }
 # Substring search for PostScript `search`.

@@ -3,7 +3,7 @@
 
 use vectorcraft_geom::{Affine, PathData};
 
-use crate::raster::{MAX_PIXELS, fit_size, gif_first_frame_pixels};
+use crate::raster::{MAX_PIXELS, fit_size, gif_first_frame_pixels, trace_header};
 use crate::{Mode, Raster, TraceError, TraceParams, trace_within};
 
 /// The most pixels [`opaque_outline`] traces: a larger image is reduced to this many first,
@@ -24,26 +24,49 @@ pub const ALPHA_MAX_DECODE_BYTES: u64 = 256 << 20;
 /// than [`MAX_PIXELS`] (64 megapixels), or whose samples take more than [`ALPHA_MAX_DECODE_BYTES`],
 /// gives [`TraceError::TooLarge`] before it is decoded.
 pub fn decode_alpha(bytes: &[u8]) -> Result<Option<(u32, u32, Vec<u8>)>, TraceError> {
-    use image::ImageDecoder;
-    let decode_err = |e: image::ImageError| TraceError::Decode(e.to_string());
-    let reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| TraceError::Decode(e.to_string()))?;
-    let decoder = reader.into_decoder().map_err(decode_err)?;
-    let (w, h) = decoder.dimensions();
+    use craft_image_codecs::{ChannelLayout, DecodeOptions, Limits, RasterColorType, SampleType, decode_with};
+    let decode_err = |e: craft_image_codecs::CodecError| TraceError::Decode(e.to_string());
+    if let Some(info) = trace_header(bytes, MAX_PIXELS, ALPHA_MAX_DECODE_BYTES)? {
+        if info.width == 0 || info.height == 0 {
+            return Err(TraceError::Empty);
+        }
+        let might_have_alpha = match info.color_type {
+            RasterColorType::GrayAlpha | RasterColorType::Rgba | RasterColorType::CmykAlpha => true,
+            RasterColorType::Rgb => info.channels > 3,
+            RasterColorType::Gray => info.channels > 1,
+            // The shared TIFF inspector reports the base photometric type even
+            // when an ExtraSamples channel carries alpha.
+            RasterColorType::Cmyk => info.channels > 4,
+            RasterColorType::Lab => info.channels > 3,
+            RasterColorType::Indexed => true,
+            _ => false,
+        };
+        if !might_have_alpha {
+            return Ok(None);
+        }
+        let pixels = u64::from(info.width) * u64::from(info.height);
+        let frame = gif_first_frame_pixels(bytes).unwrap_or(0);
+        let total_bytes = pixels.saturating_mul(u64::from(info.channels)).saturating_mul(u64::from(info.bits_per_sample.max(8).div_ceil(8)));
+        if pixels.max(frame) > MAX_PIXELS || total_bytes > ALPHA_MAX_DECODE_BYTES {
+            return Err(TraceError::TooLarge { width: info.width, height: info.height, max: MAX_PIXELS >> 20 });
+        }
+    } else if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
+        return Err(TraceError::TooLarge { width: 0, height: 0, max: MAX_PIXELS >> 20 });
+    }
+    let opts =
+        DecodeOptions { keep_orientation: true, limits: Limits { max_pixels: MAX_PIXELS, max_alloc: ALPHA_MAX_DECODE_BYTES, ..Limits::default() } };
+    let img = decode_with(bytes, &opts).map_err(decode_err)?;
+    let (w, h) = (img.width(), img.height());
     if w == 0 || h == 0 {
         return Err(TraceError::Empty);
     }
-    if !decoder.color_type().has_alpha() {
+    if !img.layout().has_alpha() {
         return Ok(None);
     }
-    let pixels = u64::from(w) * u64::from(h);
-    let frame = gif_first_frame_pixels(bytes).unwrap_or(0);
-    if pixels.max(frame) > MAX_PIXELS || decoder.total_bytes() > ALPHA_MAX_DECODE_BYTES {
-        return Err(TraceError::TooLarge { width: w, height: h, max: MAX_PIXELS >> 20 });
-    }
-    let alpha: Vec<u8> = match image::DynamicImage::from_decoder(decoder).map_err(decode_err)? {
-        image::DynamicImage::ImageRgba8(img) => img.as_raw().as_chunks::<4>().0.iter().map(|p| p[3]).collect(),
-        image::DynamicImage::ImageLumaA8(img) => img.as_raw().as_chunks::<2>().0.iter().map(|p| p[1]).collect(),
-        img => img.to_rgba8().as_raw().as_chunks::<4>().0.iter().map(|p| p[3]).collect(),
+    let alpha: Vec<u8> = match (img.layout(), img.sample_type()) {
+        (ChannelLayout::Rgba, SampleType::U8) => img.data().as_chunks::<4>().0.iter().map(|p| p[3]).collect(),
+        (ChannelLayout::GrayA, SampleType::U8) => img.data().as_chunks::<2>().0.iter().map(|p| p[1]).collect(),
+        _ => img.to_rgba8().as_chunks::<4>().0.iter().map(|p| p[3]).collect(),
     };
     Ok(Some((w, h, alpha)))
 }
@@ -265,28 +288,77 @@ mod tests {
     }
 
     /// `img` encoded as `format`.
-    fn encoded(img: image::DynamicImage, format: image::ImageFormat) -> Vec<u8> {
-        let mut out = vec![];
-        img.write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
-        out
+    fn encoded(img: &craft_image_codecs::Image, format: craft_image_codecs::Format) -> Vec<u8> {
+        craft_image_codecs::encode(img, format, &Default::default()).unwrap()
     }
 
     #[test]
     fn decode_alpha_reads_the_alpha_of_formats_that_have_one() {
-        let px = |x: u32, y: u32| image::Rgba([10, 20, 30, u8::try_from((x + 4 * y) * 16).unwrap()]);
-        let rgba = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(4, 4, px));
-        let want: Vec<u8> = (0..16).map(|i| u8::try_from(i * 16).unwrap()).collect();
-        for (name, img) in [
-            ("rgba", rgba.clone()),
-            ("gray and alpha", image::DynamicImage::ImageLumaA8(rgba.to_luma_alpha8())),
-            ("16 bits", image::DynamicImage::ImageRgba16(rgba.to_rgba16())),
-        ] {
-            let got = decode_alpha(&encoded(img, image::ImageFormat::Png)).unwrap();
+        use craft_image_codecs::{ChannelLayout, Format, Image, SampleType};
+        let mut rgba_bytes = Vec::with_capacity(4 * 4 * 4);
+        let mut luma_a_bytes = Vec::with_capacity(4 * 4 * 2);
+        let mut rgba16_bytes = Vec::with_capacity(4 * 4 * 8);
+        let mut rgb_bytes = Vec::with_capacity(4 * 4 * 3);
+        let mut want = Vec::with_capacity(16);
+        for y in 0..4u32 {
+            for x in 0..4u32 {
+                let a = u8::try_from((x + 4 * y) * 16).unwrap();
+                want.push(a);
+                rgba_bytes.extend_from_slice(&[10, 20, 30, a]);
+                luma_a_bytes.extend_from_slice(&[18, a]);
+                let a16 = u16::from(a) * 257;
+                for v in [10u16 * 257, 20 * 257, 30 * 257, a16] {
+                    rgba16_bytes.extend_from_slice(&v.to_ne_bytes());
+                }
+                rgb_bytes.extend_from_slice(&[10, 20, 30]);
+            }
+        }
+        let rgba = Image::from_u8(4, 4, ChannelLayout::Rgba, rgba_bytes).unwrap();
+        let luma_a = Image::from_u8(4, 4, ChannelLayout::GrayA, luma_a_bytes).unwrap();
+        let rgba16 = Image::from_raw(4, 4, ChannelLayout::Rgba, SampleType::U16, rgba16_bytes).unwrap();
+        for (name, img) in [("rgba", rgba), ("gray and alpha", luma_a), ("16 bits", rgba16)] {
+            let got = decode_alpha(&encoded(&img, Format::Png)).unwrap();
             assert_eq!(got, Some((4, 4, want.clone())), "{name}");
         }
-        let rgb = image::DynamicImage::ImageRgb8(rgba.to_rgb8());
-        assert_eq!(decode_alpha(&encoded(rgb.clone(), image::ImageFormat::Png)).unwrap(), None);
-        assert_eq!(decode_alpha(&encoded(rgb, image::ImageFormat::Jpeg)).unwrap(), None);
+        let rgb = Image::from_u8(4, 4, ChannelLayout::Rgb, rgb_bytes).unwrap();
+        assert_eq!(decode_alpha(&encoded(&rgb, Format::Png)).unwrap(), None);
+        assert_eq!(decode_alpha(&encoded(&rgb, Format::Jpeg)).unwrap(), None);
         assert!(decode_alpha(b"not an image").is_err());
+    }
+
+    #[test]
+    fn decode_alpha_expands_gray_and_rgb_png_transparency_keys() {
+        // Original synthetic 2x1 PNGs: first pixel matches tRNS; second is opaque.
+        // Generated from PNG chunks and zlib scanlines, without an external image asset.
+        let gray: &[u8] = &[
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 0, 0, 0, 0, 209, 73, 32, 86, 0, 0, 0, 2, 116,
+            82, 78, 83, 0, 0, 118, 147, 205, 56, 0, 0, 0, 11, 73, 68, 65, 84, 120, 156, 99, 96, 168, 7, 0, 0, 130, 0, 128, 32, 18, 25, 54, 0, 0, 0,
+            0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ];
+        let rgb: &[u8] = &[
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 1, 8, 2, 0, 0, 0, 123, 64, 232, 221, 0, 0, 0, 6, 116,
+            82, 78, 83, 0, 255, 0, 0, 0, 0, 164, 194, 192, 29, 0, 0, 0, 15, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 192, 240, 159, 1, 0, 7, 255,
+            1, 255, 1, 127, 137, 167, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ];
+        for bytes in [gray, rgb] {
+            assert_eq!(decode_alpha(bytes).unwrap(), Some((2, 1, vec![0, 255])));
+        }
+    }
+
+    #[test]
+    fn decode_alpha_preserves_cmyk_and_lab_tiff_extra_samples() {
+        use craft_image_codecs::{ChannelLayout, Format, Image};
+        for (layout, samples) in
+            [(ChannelLayout::CmykA, vec![10, 20, 30, 40, 0, 50, 60, 70, 80, 255]), (ChannelLayout::LabA, vec![128, 128, 128, 0, 192, 128, 128, 255])]
+        {
+            let img = Image::from_u8(2, 1, layout, samples).unwrap();
+            assert_eq!(decode_alpha(&encoded(&img, Format::Tiff)).unwrap(), Some((2, 1, vec![0, 255])), "{layout:?}");
+        }
+        for (layout, samples) in
+            [(ChannelLayout::Cmyk, vec![10, 20, 30, 40, 50, 60, 70, 80]), (ChannelLayout::Lab, vec![128, 128, 128, 192, 128, 128])]
+        {
+            let img = Image::from_u8(2, 1, layout, samples).unwrap();
+            assert_eq!(decode_alpha(&encoded(&img, Format::Tiff)).unwrap(), None, "{layout:?}");
+        }
     }
 }

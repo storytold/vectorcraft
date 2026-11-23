@@ -198,7 +198,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             && let Some(counts) = d.fields.get("__counts")
             && let (Some(before), Some(after)) = (counts["before"].as_u64(), counts["after"].as_u64())
         {
-            ui.label(format!("{}: {before} → {after}", tl!("Anchor Points")));
+            ui.label(format!("{} {before} → {after}", crate::i18n::colon(tl!("Anchor Points"))));
         }
     }
     false

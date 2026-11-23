@@ -10,6 +10,26 @@ pub enum DrawMode {
     Inside,
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: the instructions an object filter's run
+/// may use ([`vectorcraft_plugins::Plugin::large_limits`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginBudget {
+    /// The plug-in's own limits.
+    #[default]
+    Normal,
+    /// At least [`vectorcraft_plugins::LARGE_FUEL`] instructions besides those for each byte of
+    /// input; the time budget is unchanged.
+    Large,
+}
+
+/// A saved Plug-in Instruction Budget: any value but `large`, of any type, reads as Normal, and the
+/// other preferences are read as they are.
+fn plugin_budget<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<PluginBudget, D::Error> {
+    let saved = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(if saved.as_str() == Some("large") { PluginBudget::Large } else { PluginBudget::Normal })
+}
+
 /// A saved Default Language as its tag: older preferences hold the language's name, and one the list
 /// no longer has reads as the default.
 fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
@@ -29,8 +49,17 @@ pub struct Prefs {
     pub constrain_angle: f64,
     pub corner_radius: f64,
     pub disable_auto_add_delete: bool,
+    /// General › Interpolate Control Points When Moving Anchors: the default of the `interpolate`
+    /// param of the commands that move direct-selected anchors (a Direct Selection drag, the arrow
+    /// keys, Move, Transform Again). On, the handles of each segment with one moved end are
+    /// re-mapped by the turn, scale and move that take its old ends to its new ends. Off (the
+    /// default), the handles of a moved anchor move with it and the other handles stay.
+    pub interpolate_control_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// General › Show Tool Cards: with tool tips on, a tool button's tool tip is a card with what the
+    /// tool does and its keys, for tools that have a description.
+    pub show_tool_cards: bool,
     /// Other Script… warns before it runs a chosen script.
     pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
@@ -71,6 +100,13 @@ pub struct Prefs {
     /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
     /// tool active before comes back; a quick press chooses the tool for good.
     pub hold_tool_keys: bool,
+    /// Hold shortcuts act (Edit › Keyboard Shortcuts › Hold Shortcuts, off by default): a key with a
+    /// hold shortcut runs it when held for [`Self::key_hold_delay`], and its own shortcut when let go
+    /// sooner. Off, every key runs on its press and the dialog shows no Hold column.
+    pub hold_shortcuts: bool,
+    /// Seconds a key with a hold shortcut must stay down before the hold shortcut runs (Hold
+    /// Shortcut Delay, 0.2 to 1.0). VectorCraft's own default, 0.35.
+    pub key_hold_delay: f64,
     /// With View › Show Bounding Box on, the bounding box stays visible while a drag moves the
     /// selection, and the shape tools that show it draw it around the shape being drawn. Off (the
     /// default), it hides during a move and while a shape is drawn, except that a Selection tool
@@ -111,6 +147,9 @@ pub struct Prefs {
     pub recent_fonts_count: u32,
     pub missing_glyph_protection: bool,
     pub highlight_alternate_glyphs: bool,
+    /// Type › Show Character Alternates: with a Type tool and one character selected, the canvas
+    /// shows that character's alternate glyphs beside it (on by default).
+    pub show_character_alternates: bool,
     /// Type › Highlight Substituted Fonts: on screen, text drawn in a substitute for a missing
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
@@ -170,6 +209,11 @@ pub struct Prefs {
     pub fonts_folder: String,
     // Plug-ins & Scratch Disks
     pub plugins_folder: String,
+    /// Plug-in Instruction Budget: the instructions each object filter run gets, from
+    /// `plugin.run`, a plug-in command and the app alike. Live effects, exporters and importers
+    /// keep their own budgets.
+    #[serde(deserialize_with = "plugin_budget")]
+    pub plugin_instruction_budget: PluginBudget,
     pub scratch_primary: String,
     pub scratch_secondary: String,
     // User Interface
@@ -211,6 +255,10 @@ pub struct Prefs {
     /// runs on: a Wayland compositor may not show frames from another GPU (#502). Single-GPU
     /// machines are unaffected.
     pub gpu_preference: String,
+    /// The desktop app's window presents without vsync, with frames capped at 240 a second (#6013).
+    /// Read at startup (it takes effect after a restart); `--present-mode` and
+    /// `VECTORCRAFT_PRESENT_MODE` take precedence over it.
+    pub low_latency_drawing: bool,
     pub history_states: u32,
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
@@ -233,8 +281,17 @@ pub struct Prefs {
     pub recovery_off_for_complex: bool,
     pub recent_files_count: u32,
     pub low_res_proxy_eps: bool,
+    /// File Handling › Use fonts embedded in imported PDFs: type in a font a PDF embeds and this
+    /// machine lacks is drawn in the file's own glyphs (on by default); off, it is set in the
+    /// fallback font with the missing-font warning (#4568).
+    pub pdf_import_embedded_fonts: bool,
     pub anti_aliased_bitmaps: bool,
     pub update_links: String,
+    /// PDF Text: what the text of a PDF, `.ai` or `.ait` file opened or placed from the app
+    /// becomes when the open or place does not say (`text`: editable type in the file's fonts;
+    /// `outlines`: the glyph outlines the file draws). The Import PDF dialog starts from it and
+    /// keeps the choice it confirms.
+    pub pdf_text_as: String,
     // Clipboard Handling
     pub copy_as_svg: bool,
     pub copy_as_pdf: bool,
@@ -355,6 +412,11 @@ pub struct Prefs {
     /// selected, the panel and the Properties panel's Transform section measure and transform it
     /// from its symbol's registration point instead of the reference point.
     pub use_registration_point_for_symbol: bool,
+    /// The Transform panel menu's Show on Shape Creation: drawing a shape with the Rectangle,
+    /// Rounded Rectangle, Ellipse, Polygon, Star or Line Segment tool (a drag or OK in the tool's
+    /// dialog, also on the active perspective plane), a shape the Shaper tool recognizes, or running
+    /// one of [`crate::DRAWS_SHAPE`], shows the Transform panel.
+    pub show_on_shape_creation: bool,
     /// The tools' persistent options by store (a tool id, or a store a family shares: `liquify`
     /// holds the Liquify tools' Global Brush Dimensions), see [`vectorcraft_tools::settings`]:
     /// kept across tool switches and saved with the preferences. Not a Preferences dialog field:
@@ -382,6 +444,32 @@ pub struct Prefs {
     pub import_matches: Vec<cmd::importmatches::ImportMatch>,
 }
 
+/// The default Hold Shortcut Delay, in seconds (VectorCraft's own value).
+pub const KEY_HOLD_DELAY: f64 = 0.35;
+/// The range of the Hold Shortcut Delay, in seconds.
+pub const KEY_HOLD_DELAY_RANGE: (f64, f64) = (0.2, 1.0);
+
+impl Prefs {
+    /// The `document.open` / place params `p` with `embeddedFonts: false` added when Preferences
+    /// › File Handling › Use fonts embedded in imported PDFs is off and `p` gives no choice of its own.
+    pub fn with_pdf_font_choice(&self, p: &serde_json::Value) -> serde_json::Value {
+        if self.pdf_import_embedded_fonts || p.get("embeddedFonts").is_some_and(|v| !v.is_null()) {
+            return p.clone();
+        }
+        let mut out = if p.is_object() { p.clone() } else { serde_json::json!({}) };
+        out["embeddedFonts"] = serde_json::json!(false);
+        out
+    }
+
+    /// The Hold Shortcut Delay in seconds, inside its range. A restored settings file is not
+    /// checked against the range, so a value outside it is brought inside, and one that is not a
+    /// number gives the default.
+    pub fn key_hold_delay(&self) -> f64 {
+        let (min, max) = KEY_HOLD_DELAY_RANGE;
+        if self.key_hold_delay.is_finite() { self.key_hold_delay.clamp(min, max) } else { KEY_HOLD_DELAY }
+    }
+}
+
 impl Default for Prefs {
     fn default() -> Self {
         let s = |v: &str| v.to_string();
@@ -390,8 +478,10 @@ impl Default for Prefs {
             constrain_angle: 0.0,
             corner_radius: 12.0,
             disable_auto_add_delete: false,
+            interpolate_control_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_tool_cards: false,
             show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
@@ -412,6 +502,8 @@ impl Default for Prefs {
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
+            hold_shortcuts: false,
+            key_hold_delay: KEY_HOLD_DELAY,
             bounding_box_while_moving_and_drawing: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
@@ -442,6 +534,7 @@ impl Default for Prefs {
             recent_fonts_count: 10,
             missing_glyph_protection: true,
             highlight_alternate_glyphs: false,
+            show_character_alternates: true,
             highlight_substituted_fonts: true,
             placeholder_text: true,
             typed_lists: true,
@@ -481,6 +574,7 @@ impl Default for Prefs {
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),
+            plugin_instruction_budget: PluginBudget::Normal,
             scratch_primary: s("Startup"),
             scratch_secondary: s("None"),
             ui_brightness: s("mediumDark"),
@@ -499,6 +593,7 @@ impl Default for Prefs {
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),
+            low_latency_drawing: false,
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,
@@ -512,8 +607,10 @@ impl Default for Prefs {
             recovery_off_for_complex: false,
             recent_files_count: 20,
             low_res_proxy_eps: false,
+            pdf_import_embedded_fonts: true,
             anti_aliased_bitmaps: false,
             update_links: s("askWhenModified"),
+            pdf_text_as: s("text"),
             copy_as_svg: true,
             copy_as_pdf: false,
             copy_aicb: false,
@@ -555,6 +652,7 @@ impl Default for Prefs {
             single_corner_radius: true,
             transform_panel_patterns: "default".to_string(),
             use_registration_point_for_symbol: false,
+            show_on_shape_creation: false,
             tool_settings: Default::default(),
             perspective_presets: vec![],
             blend_options: None,

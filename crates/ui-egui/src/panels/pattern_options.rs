@@ -1,6 +1,6 @@
 //! Pattern Options panel: active in pattern editing mode (Object → Pattern → Make / Edit
-//! Pattern). Name, Tile Type, Brick Offset, Width/Height, Size Tile to Art with H/V spacing,
-//! Overlap, Copies, Dim Copies, Show Tile Edge, Show Swatch Bounds; Save a Copy / Done / Cancel. Outside editing
+//! Pattern). Name, Tile Type, Brick Offset, Width/Height, Size Tile to Art with H/V spacing, Move
+//! Tile with Art, Overlap, Copies, Dim Copies, Show Tile Edge, Show Swatch Bounds; Save a Copy / Done / Cancel. Outside editing
 //! mode it lists the document's patterns with an Edit button.
 
 use egui::Ui;
@@ -93,6 +93,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if widgets::check(ui, tl!("Size Tile to Art"), sized, true) {
         set(app, &name, json!({"sizeTileToArt": !sized}));
+    }
+    if widgets::check(ui, tl!("Move Tile with Art"), def.move_tile_with_art, true) {
+        set(app, &name, json!({"moveTileWithArt": !def.move_tile_with_art}));
     }
     row(ui, tl!("H Spacing:"), |ui| {
         ui.add_enabled_ui(sized, |ui| {
@@ -276,5 +279,30 @@ mod tests {
         frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(true)]);
         frame(&mut app, &ctx, vec![click(false)]);
         assert!(app.session.active().unwrap().doc.pattern("Dots").unwrap().show_swatch_bounds);
+    }
+
+    /// The Move Tile with Art checkbox sits under Size Tile to Art and turns the option on and off.
+    #[test]
+    fn move_tile_with_art_toggles_the_pattern_option() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app.run("object.pattern.make", json!({"name": "Dots"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let on = |app: &VectorcraftApp| app.session.active().unwrap().doc.pattern("Dots").unwrap().move_tile_with_art;
+        let texts = frame(&mut app, &ctx, vec![]);
+        let find = |t: &str| texts.iter().find(|(s, _)| s == t).map(|(_, r)| *r);
+        let (sized, at) = (find("Size Tile to Art").expect("Size Tile to Art"), find("Move Tile with Art").expect("the checkbox"));
+        assert!(at.top() > sized.top(), "under Size Tile to Art");
+        let at = at.center();
+        let click = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        assert!(!on(&app));
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(true)]);
+        frame(&mut app, &ctx, vec![click(false)]);
+        assert!(on(&app));
+        frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), click(true)]);
+        frame(&mut app, &ctx, vec![click(false)]);
+        assert!(!on(&app));
     }
 }

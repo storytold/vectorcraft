@@ -29,8 +29,8 @@ fn panels_draw_and_apply_headless() {
         out.textures_delta.clear();
     }
     app.run("charStyle.apply", target(&app, Kind::Char, json!({"name": "Big"}))).unwrap();
-    let (name, attrs) = current(&app, Kind::Char).unwrap();
-    assert_eq!((name.as_deref(), attrs["size"].as_f64()), (Some("Big"), Some(30.0)));
+    let (style, _) = text_style(&app).unwrap();
+    assert_eq!((current(&app, Kind::Char), style.size), (Some(Some("Big".to_string())), 30.0));
 }
 
 #[test]
@@ -818,6 +818,74 @@ fn the_styles_are_listed_once_per_document_version() {
     }
 }
 
+/// The style names of `id`'s runs (`Kind::Para`: of its paragraphs).
+fn frame_style_names(app: &VectorcraftApp, kind: Kind, id: u64) -> Vec<Option<String>> {
+    match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) if kind == Kind::Char => t.runs.iter().map(|r| r.style.style_name.clone()).collect(),
+        NodeKind::Text(t) => (0..t.paragraph_count()).map(|i| t.para_at(i).style_name.clone()).collect(),
+        _ => panic!("not text"),
+    }
+}
+
+/// With the Selection tool a selected frame of threaded text stands for its whole story, in both
+/// panels: no row shows as the current style while a locked or hidden frame has another style, a
+/// row click applies the style to every frame in one undo step and leaves other type alone, the
+/// row shows "+" while a hidden frame overrides the style, and an Alt-click clears that override.
+#[test]
+fn selection_tool_styles_reach_every_frame_of_the_story() {
+    use egui::Modifiers;
+    for kind in [Kind::Char, Kind::Para] {
+        let what = kind.what();
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+        let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        app.run("object.lock", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        app.run("object.hide", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Plain"})).unwrap();
+        app.run(&format!("{}.new", kind.prefix()), json!({"name": "Second", "attrs": {}})).unwrap();
+        app.run(&format!("{}.apply", kind.prefix()), json!({"name": "Second", "ids": [c]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        for id in [a, b, c] {
+            assert!(!frame_style_names(&app, kind, id).is_empty(), "frame {id} holds text");
+        }
+        assert_eq!(current(&app, kind), None, "{what} Styles: the hidden frame has another style");
+
+        let ctx = egui::Context::default();
+        let rows = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
+            ui.set_width(280.0);
+            show(app, ui, kind);
+        };
+        let undo = app.session.doc().unwrap().history.undo.len();
+        click_text_held(&ctx, &mut app, "Plain", Modifiers::NONE, rows);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "{what} Styles: one undo step");
+        for id in [a, b, c] {
+            assert!(frame_style_names(&app, kind, id).iter().all(|n| n.as_deref() == Some("Plain")), "{what} Styles: frame {id}");
+        }
+        assert!(frame_style_names(&app, kind, other).iter().all(Option::is_none), "{what} Styles: other type keeps its style");
+        assert_eq!(current(&app, kind), Some(Some("Plain".to_string())));
+
+        app.run("text.setFormat", json!({"ids": [c], "kerning": 40, "composer": "singleLine"})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain+"), "{what} Styles: the hidden frame's override shows: {shown}");
+        // A new context, so that this click does not count as the second click of a double-click.
+        click_text_held(&egui::Context::default(), &mut app, "Plain+", Modifiers::ALT, rows);
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain"), "{what} Styles: Alt-click clears the override: {shown}");
+        app.run("edit.undo", json!({})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
+        assert!(shown.lines().any(|line| line == "Plain+"), "{what} Styles: undo brings the override back: {shown}");
+    }
+}
+
 /// A row dragged from the highlighted styles carries all of them: dropped on Create New Style it
 /// duplicates each in one undo step and highlights the copies, and dropped on Delete it deletes each
 /// but the Normal style in one undo step and clears the highlight. A row from outside the highlight
@@ -1201,7 +1269,7 @@ fn alt_clicking_new_paragraph_style_asks_for_its_name() {
     assert!(app.session.doc().unwrap().doc.para_styles.is_empty(), "no style is added before OK");
     set_name(&mut app, "Body Copy");
     crate::dialogs::confirm(&mut app).unwrap();
-    let (_, attrs) = current(&app, Kind::Para).unwrap();
+    let attrs = textstyles::para_attrs(&text_style(&app).unwrap().1);
     let doc = &app.session.doc().unwrap().doc;
     assert_eq!(doc.para_styles.iter().map(|s| (s.name.as_str(), &s.attrs)).collect::<Vec<_>>(), [("Body Copy", &attrs)]);
 
@@ -1409,4 +1477,250 @@ fn character_style_unicode_boundary_capture_controls() {
     for (redefine, footer) in [(false, false), (true, false), (false, true)] {
         capture_from_ui(Some((2, 5)), redefine, footer, true);
     }
+}
+
+#[test]
+fn right_click_context_menu_in_character_styles_panel() {
+    use egui::vec2;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hello world", "size": 18})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 18.0}})).unwrap();
+
+    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui, Kind::Char);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    // Initial state: Body is unselected in panel
+    assert_eq!(pstate::<Option<String>>(&h.ctx, Kind::Char.key()), None, "Body is initially unselected");
+
+    // Right-click unselected row "Body"
+    let node = h.get_by_label("Body");
+    let pos = node.rect().center();
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    // Right-clicking highlights it and opens context menu
+    assert_eq!(pstate::<Option<String>>(&h.ctx, Kind::Char.key()).as_deref(), Some("Body"));
+
+    let opt = h.get_by_label("   Character Style Options…");
+    let dup = h.get_by_label("   Duplicate Character Style");
+    let del = h.get_by_label("   Delete Character Style");
+    let redefine = h.get_by_label("   Redefine Character Style");
+    let clear = h.get_by_label("   Clear Overrides");
+
+    assert!(!opt.accesskit_node().is_disabled());
+    assert!(!dup.accesskit_node().is_disabled());
+    assert!(!del.accesskit_node().is_disabled());
+    assert!(!redefine.accesskit_node().is_disabled());
+    assert!(!clear.accesskit_node().is_disabled());
+
+    // Clicking "Duplicate Character Style" creates a copy (e.g. "Body copy")
+    dup.click();
+    h.run_steps(2);
+
+    let all_styles = styles(h.state_mut(), Kind::Char);
+    assert!(all_styles.iter().any(|s| s.0 == "Body copy"), "Body copy was created: {all_styles:?}");
+    assert_eq!(pstate::<Option<String>>(&h.ctx, Kind::Char.key()).as_deref(), Some("Body copy"), "copy is highlighted");
+}
+
+#[test]
+fn right_click_context_menu_in_paragraph_styles_panel() {
+    use egui::vec2;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Paragraph text", "size": 14})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("paraStyle.new", json!({"name": "Headline"})).unwrap();
+
+    let undo_len = app.session.doc().unwrap().history.undo.len();
+
+    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui, Kind::Para);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    // Initial state: Headline is unselected
+    assert_eq!(pstate::<Option<String>>(&h.ctx, Kind::Para.key()), None, "Headline is initially unselected");
+
+    // Right-click unselected row "Headline"
+    let node = h.get_by_label("Headline");
+    let pos = node.rect().center();
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    // Highlights it and opens context menu
+    assert_eq!(pstate::<Option<String>>(&h.ctx, Kind::Para.key()).as_deref(), Some("Headline"));
+
+    let opt = h.get_by_label("   Paragraph Style Options…");
+    let dup = h.get_by_label("   Duplicate Paragraph Style");
+    let del = h.get_by_label("   Delete Paragraph Style");
+    let redefine = h.get_by_label("   Redefine Paragraph Style");
+    let clear = h.get_by_label("   Clear Overrides");
+
+    assert!(!opt.accesskit_node().is_disabled());
+    assert!(!dup.accesskit_node().is_disabled());
+    assert!(!del.accesskit_node().is_disabled());
+    assert!(!redefine.accesskit_node().is_disabled());
+    assert!(!clear.accesskit_node().is_disabled());
+
+    // Clicking "Delete Paragraph Style" deletes the style with undo support
+    del.click();
+    h.run_steps(2);
+
+    let all_styles = styles(h.state_mut(), Kind::Para);
+    assert!(!all_styles.iter().any(|s| s.0 == "Headline"), "Headline deleted: {all_styles:?}");
+    assert_eq!(pstate::<Option<String>>(&h.ctx, Kind::Para.key()), None, "selection cleared after delete");
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo_len + 1, "delete recorded one undo step");
+
+    // Test undo
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    let restored = styles(h.state_mut(), Kind::Para);
+    assert!(restored.iter().any(|s| s.0 == "Headline"), "Headline restored by undo: {restored:?}");
+}
+
+#[test]
+fn right_click_context_menu_normal_style_disables_options_and_delete() {
+    use egui::vec2;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+
+    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui, Kind::Char);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    // Right-click Normal Character Style row
+    let node = h.get_by_label("[Normal Character Style]");
+    let pos = node.rect().center();
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    let opt = h.get_by_label("   Character Style Options…");
+    let dup = h.get_by_label("   Duplicate Character Style");
+    let del = h.get_by_label("   Delete Character Style");
+
+    assert!(opt.accesskit_node().is_disabled(), "Options disabled for Normal style");
+    assert!(!dup.accesskit_node().is_disabled(), "Duplicate enabled for Normal style");
+    assert!(del.accesskit_node().is_disabled(), "Delete disabled for Normal style");
+}
+
+#[test]
+fn right_click_context_menu_preserves_multiselection() {
+    use egui::vec2;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("charStyle.new", json!({"name": "Style A"})).unwrap();
+    app.run("charStyle.new", json!({"name": "Style B"})).unwrap();
+
+    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui, Kind::Char);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    // Highlight both styles in pstate
+    set_highlighted(&h.ctx, Kind::Char, vec!["Style A".into(), "Style B".into()]);
+    h.run_steps(2);
+
+    // Right-click Style B (which is part of the multi-selection)
+    let node = h.get_by_label("Style B");
+    let pos = node.rect().center();
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    // Multiselection is preserved
+    let sel = highlighted(h.state(), &h.ctx, Kind::Char, &["[Normal Character Style]", "Style A", "Style B"]);
+    assert_eq!(sel, vec!["Style A".to_string(), "Style B".to_string()], "multi-selection preserved on right-click");
+}
+
+#[test]
+fn right_click_context_menu_clear_overrides_requires_text_target() {
+    use egui::vec2;
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("charStyle.new", json!({"name": "Style 1"})).unwrap();
+
+    // Select a non-text shape: rectangle
+    let rect_id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [rect_id]})).unwrap();
+
+    let mut h = Harness::builder().with_size(vec2(280.0, 500.0)).with_accessibility_check(false).build_ui_state(
+        |ui, app: &mut VectorcraftApp| {
+            show(app, ui, Kind::Char);
+        },
+        app,
+    );
+    h.run_steps(2);
+
+    // Right-click Style 1
+    let node = h.get_by_label("Style 1");
+    let pos = node.rect().center();
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    let clear_overrides = h.get_by_label("   Clear Overrides");
+    let redefine = h.get_by_label("   Redefine Character Style");
+    assert!(clear_overrides.accesskit_node().is_disabled(), "Clear Overrides disabled when only a rectangle is selected");
+    assert!(redefine.accesskit_node().is_disabled(), "Redefine disabled when only a rectangle is selected");
+
+    // Close menu
+    h.event(egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    // Now select a text object
+    let text_id = h.state_mut().run("text.create", json!({"x": 10, "y": 10, "text": "Hello"})).unwrap()["id"].as_u64().unwrap();
+    h.state_mut().run("select.set", json!({"ids": [text_id]})).unwrap();
+    h.run_steps(2);
+
+    // Right-click Style 1 again
+    let node = h.get_by_label("Style 1");
+    let pos = node.rect().center();
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(2);
+
+    let clear_overrides = h.get_by_label("   Clear Overrides");
+    let redefine = h.get_by_label("   Redefine Character Style");
+    assert!(!clear_overrides.accesskit_node().is_disabled(), "Clear Overrides enabled when text is selected");
+    assert!(!redefine.accesskit_node().is_disabled(), "Redefine enabled when text is selected");
 }

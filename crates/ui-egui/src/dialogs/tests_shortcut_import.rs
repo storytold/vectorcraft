@@ -234,6 +234,24 @@ fn cancel_and_apply_go_back_to_keyboard_shortcuts() {
     assert_eq!((app.ui.shortcut_set.as_str(), app.ui.shortcut_overrides.len()), ("Acme Keys", 3));
 }
 
+/// Started from VectorCraft's defaults, an import leaves no hold shortcut in the working set; added
+/// to the current shortcuts, it keeps them. OK keeps what the working set shows.
+#[test]
+fn an_import_from_the_defaults_clears_the_hold_shortcuts() {
+    let mut app = app();
+    earlier_answers(&mut app);
+    for (start, kept) in [("defaults", json!({})), ("current", json!({"paint.swap": "X"}))] {
+        app.ui.shortcut_holds = [("paint.swap".to_string(), "X".to_string())].into();
+        shortcut_editor::open(&mut app);
+        super::shortcut_import::open(&mut app, "/sets/Acme Keys.kys", SET.as_bytes()).unwrap();
+        set(&mut app, "start", json!(start));
+        confirm(&mut app).unwrap();
+        assert_eq!(dialog(&app).fields["holds"], kept, "{start}");
+        confirm(&mut app).unwrap();
+        assert_eq!(json!(app.ui.shortcut_holds), kept, "{start}: OK keeps it");
+    }
+}
+
 /// A document's Missing Fonts dialog that Keyboard Shortcuts replaced waits while Cancel goes back
 /// from Import Shortcut Set to Keyboard Shortcuts, and opens again once Keyboard Shortcuts closes.
 #[test]

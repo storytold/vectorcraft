@@ -2,9 +2,12 @@ use super::containers::close;
 use super::document::slot_of;
 use super::types::{BLENDS, FLIP, Frame, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, MAX_TAG_TEXT, MAX_TAGS, Place, URL_TAG, line_width};
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, HashMap, HashSet,
-    Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, CustomArrowhead, Dash, FillLayer, FillRule, Global, Gradient, GradientDef,
+    HashMap, HashSet, Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V,
+    obj, paint,
 };
+use vectorcraft_doc::{ArrowAlign, Arrowhead};
+use vectorcraft_geom::PathData;
 
 impl<'a> Reader<'a> {
     // ---- operators -------------------------------------------------------------------------
@@ -41,8 +44,19 @@ impl<'a> Reader<'a> {
     }
 
     /// `X=` in a `/Mask` dictionary: the opacity mask's art starts, read until its `X+`
-    /// ([`Self::end_mask`]).
+    /// ([`Self::end_mask`]). In an envelope's dictionary, its `AIDeformArtKey` block starts
+    /// ([`Reader::envelope_blocks`]).
     fn open_mask_object(&mut self, hidden: bool) -> Result<(), String> {
+        if let Some(Frame { kind: Kind::Obj(o), .. }) = self.frames.last()
+            && o.ty == "ArtDictionary"
+            && o.get("AIDeformOptionsKey").is_some()
+        {
+            // One entry for each open dictionary, however many `X=` it has.
+            if self.envelope_blocks.last() != Some(&self.frames.len()) {
+                self.envelope_blocks.push(self.frames.len());
+            }
+            return Ok(());
+        }
         if !matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(o), .. }) if o.ty == "Mask") {
             // `X=` also introduces legacy text frame art, read by `text_frames`.
             return Ok(());
@@ -61,6 +75,22 @@ impl<'a> Reader<'a> {
             (self.pending_unread_fill, self.pending_unread_stroke) = (f.pending_unread_fill, f.pending_unread_stroke);
         }
         self.open(Kind::Mask, hidden)
+    }
+
+    /// `X+`: a dictionary's art block ends. The block of a dictionary whose `X=` opened no frame (an
+    /// envelope's, in an opacity mask's art too) ends with the dictionary still innermost; an opacity
+    /// mask's ends its art ([`Self::end_mask`]).
+    fn end_block(&mut self) -> Result<(), String> {
+        if matches!(self.frames.last(), Some(Frame { kind: Kind::Obj(_), .. })) {
+            if self.envelope_blocks.last() == Some(&self.frames.len()) {
+                self.envelope_blocks.pop();
+            }
+            return Ok(());
+        }
+        if self.frames.iter().any(|f| matches!(f.kind, Kind::Mask)) {
+            return self.end_mask();
+        }
+        Ok(())
     }
 
     /// `LB`: a graph started in this layer that hasn't ended doesn't go on past it; the layer ends.
@@ -86,6 +116,18 @@ impl<'a> Reader<'a> {
                 Some((m, b, path)) => (p.matrix, p.bounds, p.path) = (Some(m), Some(b), path),
                 None => p.broken = true,
             }
+        }
+    }
+
+    /// `(…) Xt n XD`: samples of the pen along the object before it. They aren't read, so the object
+    /// keeps its drawn look when its style has a Calligraphic brush with a setting that varies with
+    /// the pen ([`Self::style_marker`]).
+    fn pen_samples_op(&mut self) {
+        if !self.after_object || self.pen_samples.len() >= MAX_NODES {
+            return;
+        }
+        if let Some(n) = self.frames.last().and_then(|f| f.children.last()) {
+            self.pen_samples.insert(n.id);
         }
     }
 
@@ -147,8 +189,7 @@ impl<'a> Reader<'a> {
             }
             ";" => return self.end_obj(),
             "X=" => return self.open_mask_object(hidden),
-            "X+" if self.frames.iter().any(|f| matches!(f.kind, Kind::Mask)) => return self.end_mask(),
-            "X+" => return Ok(()),
+            "X+" => return self.end_block(),
             _ => {}
         }
         self.state_block_continues(w);
@@ -188,10 +229,7 @@ impl<'a> Reader<'a> {
                 }
                 ("X!", Some("End")) if self.mesh.is_some() => return self.end_mesh(),
                 ("X#", _) => {
-                    let to_doc = self.space();
-                    if let Some((m, _)) = self.mesh.as_mut() {
-                        m.entry(&vals, to_doc);
-                    }
+                    self.mesh_entry(&vals);
                     return Ok(());
                 }
                 _ if self.mesh.is_some() => return Ok(()),
@@ -418,6 +456,7 @@ impl<'a> Reader<'a> {
                     self.end_envelope();
                 }
             }
+            "XD" => self.pen_samples_op(),
             _ if IGNORED.contains(&w) => {}
             // Before the art, the setup runs procedures of the printing format.
             _ if self.frames.is_empty() => {}
@@ -559,9 +598,9 @@ impl<'a> Reader<'a> {
             return;
         }
         self.image_tail = false;
-        // An object's tags (`XT`, and a graph's `Go`) follow it one after another, and an image's
-        // follow the `XH` that ends its data.
-        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH" | "Go") {
+        // An object's tags (`XT`, and a graph's `Go`) and samples of the pen (`Xt`, `XD`) follow it
+        // one after another, and an image's tags follow the `XH` that ends its data.
+        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH" | "Go" | "Xt" | "XD") {
             return;
         }
         self.after_object = false;
@@ -671,6 +710,30 @@ impl<'a> Reader<'a> {
         self.note_state();
     }
 
+    /// Read the heads of the arrowhead symbols the art styles' strokes name into
+    /// [`Reader::arrowheads`] ([`crate::import::ai::arrowhead::head`]), each symbol once. Called
+    /// when the styles are read and again when the symbols have all been read ([`Self::check_symbols`]),
+    /// for a file that defines its symbols after its styles: a name with no symbol read yet is
+    /// left for then.
+    pub(super) fn read_arrowheads(&mut self) {
+        use crate::import::ai::style::StyleItem;
+        for st in self.styles.values() {
+            for item in &st.items {
+                let StyleItem::Stroke { arrows: Some(arrows), .. } = item else { continue };
+                for name in arrows.symbols() {
+                    if self.arrowheads.contains_key(name) {
+                        continue;
+                    }
+                    let symbol = self.symbol_names.get(name).and_then(|named| self.doc.symbols.iter().find(|s| &s.name == named));
+                    if let Some(s) = symbol {
+                        let head = crate::import::ai::arrowhead::head(name, &s.art).map(Arc::new);
+                        self.arrowheads.insert(name.to_string(), head);
+                    }
+                }
+            }
+        }
+    }
+
     /// Brings [`Reader::brushes_kept`] up to date with the brushes and brush art read so far.
     fn note_brushes_kept(&mut self) {
         use super::super::brush;
@@ -688,6 +751,8 @@ impl<'a> Reader<'a> {
     /// drawn look before it (all on `%_` lines inside another such object). Other markers end what
     /// follows an object.
     fn style_marker(&mut self, vals: &[V], hidden: bool) {
+        use crate::import::ai::brush::PathBrush;
+        use crate::import::ai::style::{ArtStyle, StyleItem};
         let code = Self::nums(vals).last().copied().unwrap_or(0.0);
         let style = vals.iter().rev().find_map(|v| self.names.text(v)).unwrap_or_default();
         let after = std::mem::take(&mut self.after_object);
@@ -754,8 +819,20 @@ impl<'a> Reader<'a> {
         } else {
             look
         };
-        // A style read here: the object, painted as it says.
-        let appearance = self.styles.get(&style).and_then(|st| {
+        // A style read here: the object, painted as it says. An object with samples of the pen
+        // keeps its drawn look when its style has a Calligraphic brush with a setting that varies
+        // with the pen: the samples aren't read, and the brush draws such a stroke at the pen's
+        // middle values.
+        let sampled = self.pen_samples.contains(&object.id);
+        let follows_pen = |st: &ArtStyle| {
+            st.items.iter().any(|i| match i {
+                StyleItem::Stroke { brush: Some((_, PathBrush::Calligraphic(c))), .. } => {
+                    c.modes().iter().zip(c.variation).any(|(m, v)| m.follows_pen() && v != 0.0)
+                }
+                _ => false,
+            })
+        };
+        let appearance = self.styles.get(&style).filter(|st| !(sampled && follows_pen(st))).and_then(|st| {
             styled(
                 object,
                 look,
@@ -768,6 +845,7 @@ impl<'a> Reader<'a> {
                     brushes: &self.brush_drafts,
                     kept: &self.brushes_kept.kept,
                     bending: &self.brushes_kept.bending,
+                    arrowheads: &self.arrowheads,
                     space,
                 },
             )
@@ -782,15 +860,32 @@ impl<'a> Reader<'a> {
             })
         });
         // An image with a Warp is the object only where its live warp draws as its drawn look, and
-        // while the import has a check left for it; otherwise its drawn look stays.
+        // while the import has a check left for it; otherwise its drawn look stays. So is a stroke
+        // with dashes aligned to corners and path ends, whose fitting is VectorCraft's own, within
+        // checks of its own ([`crate::import::ai::MAX_DASH_CHECKS`]) and without weighing the page:
+        // the envelopes' checks and share of the page check stay theirs alone. Type with such
+        // dashes keeps its drawn look, as before.
         let appearance = match appearance {
+            Some(ap) if aligns_dashes(&ap) && slot_of(object.name.as_deref()).is_some() => None,
             Some(ap) if matches!(object.kind, NodeKind::Image(_)) && ap.effects.iter().any(|e| e.id.starts_with("warp.")) => {
                 let alike = self.envelope_checks > 0 && {
                     self.envelope_checks -= 1;
                     let layer = self.doc.alloc_id();
                     let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
                     let shown = !hidden && object.visible && look.visible;
-                    image_warp_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, page.filter(|_| shown), &mut self.envelope_spent)
+                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, page.filter(|_| shown), &mut self.envelope_spent)
+                };
+                alike.then_some(ap)
+            }
+            Some(ap) if aligns_dashes(&ap) => {
+                let alike = self.dash_checks > 0 && {
+                    self.dash_checks -= 1;
+                    #[cfg(test)]
+                    crate::import::ai::DASH_CHECKS_MADE.set(crate::import::ai::DASH_CHECKS_MADE.get() + 1);
+                    let layer = self.doc.alloc_id();
+                    let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
+                    let mut spent = crate::import::ai::envelope::Spent::default();
+                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, None, &mut spent)
                 };
                 alike.then_some(ap)
             }
@@ -992,8 +1087,10 @@ struct StylePaints<'a> {
     brushes: &'a [super::super::brush::BrushDraft],
     /// Which of [`Self::brushes`] are kept as brushes ([`super::super::brush::kept`]).
     kept: &'a [bool],
-    /// The art an Art brush draws as the file does ([`super::super::brush::bending_art`]).
-    bending: &'a HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length ([`super::super::brush::bending_art`]).
+    bending: &'a HashMap<String, f64>,
+    /// The heads of the arrowhead symbols strokes name ([`Reader::arrowheads`]).
+    arrowheads: &'a HashMap<String, Option<Arc<CustomArrowhead>>>,
     space: Affine,
 }
 
@@ -1012,23 +1109,35 @@ fn tick(vals: &[V]) -> Option<(Affine, Rect, String)> {
 }
 
 /// The gradients and patterns `look` paints with, placed as it draws them, by their swatch's name
-/// (the first of each; a pattern's name after `PATTERN_KEY`).
-fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, depth: usize) {
+/// (the first of each; a pattern's name after `PATTERN_KEY`). With `fill_patterns`, a pattern only
+/// where the look fills with it: a style's pattern is a fill, so a path's stack takes it from the
+/// look's fills alone (type keeps taking it from either). `moved` gets each pattern that the look
+/// also places elsewhere than its first placement.
+fn placed_paints(look: &Node, out: &mut HashMap<String, Paint>, moved: &mut HashSet<String>, fill_patterns: bool, depth: usize) {
     if depth > MAX_DEPTH {
         return;
     }
     for item in &look.appearance.items {
         let key = match item.paint() {
             Paint::Gradient(g) => g.swatch.clone(),
-            Paint::Pattern { pattern, .. } => Some(format!("{PATTERN_KEY}{pattern}")),
+            Paint::Pattern { pattern, .. } if item.is_fill() || !fill_patterns => Some(format!("{PATTERN_KEY}{pattern}")),
             _ => None,
         };
         if let Some(key) = key {
-            out.entry(key).or_insert_with(|| item.paint().clone());
+            match out.get(&key) {
+                Some(first) => {
+                    if matches!(first, Paint::Pattern { .. }) && first != item.paint() {
+                        moved.insert(key);
+                    }
+                }
+                None => {
+                    out.insert(key, item.paint().clone());
+                }
+            }
         }
     }
     for c in look.children().into_iter().flatten() {
-        placed_paints(c, out, depth + 1);
+        placed_paints(c, out, moved, fill_patterns, depth + 1);
     }
 }
 
@@ -1076,13 +1185,47 @@ fn no_guides(n: &Node, depth: usize) -> bool {
     depth <= MAX_DEPTH && !n.is_guide() && n.children().into_iter().flatten().all(|c| no_guides(c, depth + 1))
 }
 
-/// Is `n` a compound path with a guide member whose bounds reach past the bounds of its members that
-/// aren't guides, or with guide members only? Any other object counts as no.
+/// Is `n` a compound path or group with a guide in it whose bounds reach past the bounds of the rest
+/// of its art, or with guides only? Members are looked into to [`MAX_DEPTH`]; deeper counts as yes.
+/// Any other object counts as no.
 fn guides_reach_past(n: &Node) -> bool {
-    let NodeKind::Compound { children, .. } = &n.kind else { return false };
-    let bounds =
-        |guides: bool| children.iter().filter(|c| c.is_guide() == guides).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds()));
-    bounds(true).is_some_and(|g| bounds(false).is_none_or(|o| o.union(g) != o))
+    /// Adds the bounds of the guides in `n`'s members to `guides` and of the rest to `art`; false when
+    /// it is deeper than [`MAX_DEPTH`].
+    fn split(n: &Node, depth: usize, guides: &mut Option<Rect>, art: &mut Option<Rect>) -> bool {
+        depth <= MAX_DEPTH
+            && n.children().into_iter().flatten().all(|c| match c.children() {
+                _ if c.is_guide() => {
+                    *guides = vectorcraft_geom::union_opt(*guides, c.geometric_bounds());
+                    true
+                }
+                Some(_) => split(c, depth + 1, guides, art),
+                None => {
+                    *art = vectorcraft_geom::union_opt(*art, c.geometric_bounds());
+                    true
+                }
+            })
+    }
+    if !matches!(n.kind, NodeKind::Compound { .. } | NodeKind::Group { .. }) {
+        return false;
+    }
+    let (mut guides, mut art) = (None, None);
+    !split(n, 0, &mut guides, &mut art) || guides.is_some_and(|g| art.is_none_or(|o| o.union(g) != o))
+}
+
+/// Do Transform params `p` scale, turn or reflect, so that where the object's bounds lie changes
+/// what they draw? Moving alone doesn't.
+fn transform_measures(p: &serde_json::Value) -> bool {
+    p["scaleH"].as_f64() != Some(100.0)
+        || p["scaleV"].as_f64() != Some(100.0)
+        || p["rotate"].as_f64() != Some(0.0)
+        || p["reflectX"].as_bool() != Some(false)
+        || p["reflectY"].as_bool() != Some(false)
+}
+
+/// Do Free Distort params `p` move a corner of the box, so that where the object's bounds lie
+/// changes what they draw?
+fn free_distort_measures(p: &serde_json::Value) -> bool {
+    p["corners"] != serde_json::json!([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
 }
 
 /// The largest Twist angle, in degrees either way, read as a live effect on an object that isn't a
@@ -1101,7 +1244,11 @@ const MAX_STRAIGHT_TWIST: f64 = 180.0;
 /// compound path with straight segments (only at 0° when its guide members reach past its other
 /// members, see [`guides_reach_past`]), or up to [`MAX_TWIST`] degrees either way on another object
 /// with no guide in it. Transform that scales, turns or reflects is read only when nothing is stroked
-/// (its reference point lies on the bounds without strokes).
+/// (its reference point lies on the bounds without strokes) and, unless Transform Objects is off,
+/// no guide reaches past the rest of the object's art ([`guides_reach_past`]). Free Distort that
+/// moves a corner of a group is read only when no guide in the group reaches past the rest of its
+/// art. The live effect is measured from bounds that take in the guides, so such an object keeps
+/// its drawn look.
 fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     use crate::import::ai::style::StyleItem;
     let stroked = st.items.iter().any(|i| matches!(i, StyleItem::Stroke { paint, .. } if !paint.is_none()))
@@ -1121,12 +1268,14 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
             }
             "distort.transform" => {
                 let p = &e.params;
-                !stroked
-                    || (p["scaleH"].as_f64() == Some(100.0)
-                        && p["scaleV"].as_f64() == Some(100.0)
-                        && p["rotate"].as_f64() == Some(0.0)
-                        && p["reflectX"].as_bool() == Some(false)
-                        && p["reflectY"].as_bool() == Some(false))
+                // With Transform Objects off, nothing is placed from the bounds: a style read here and
+                // the object's members paint with no pattern for Transform Patterns to move (`simple`,
+                // `moves_alike`).
+                let placed = p["objects"].as_bool() != Some(false);
+                !transform_measures(p) || (!stroked && (!placed || !guides_reach_past(object)))
+            }
+            "distort.freeDistort" => {
+                !matches!(object.kind, NodeKind::Group { .. }) || !free_distort_measures(&e.params) || !guides_reach_past(object)
             }
             _ => true,
         })
@@ -1134,18 +1283,19 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
 
 /// Is `object` an image without an opacity mask, and `st` one Warp on it with nothing else that
 /// paints ([`crate::import::ai::style::ArtStyle::image_warp`])? Such an image is read with its Warp
-/// live where that draws as its drawn look ([`image_warp_alike`]).
+/// live where that draws as its drawn look ([`look_alike`]).
 fn image_warps(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
     matches!(object.kind, NodeKind::Image(_)) && object.extras().mask.is_none() && st.image_warp
 }
 
-/// Does image `object` with `appearance` (its style's Warp) draw as `look`, its drawn look, compared
-/// over all that the warp draws ([`crate::import::ai::envelope::warped_alike`]) on `layer`, a layer
-/// id no other node has? Both are drawn shown, opaque and in the Normal mode; a hidden look is drawn
-/// with every object in it shown, as the hidden object's look holds them. Unless the look is on
-/// `%_` lines itself (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
+/// Does `object` with `appearance` (an image's Warp, or a stroke with dashes aligned to corners)
+/// draw as `look`, its drawn look, compared over all that it draws, effects included
+/// ([`crate::import::ai::envelope::warped_alike`]), on `layer`, a layer id no other node has? Both
+/// are drawn shown, opaque and in the Normal mode; a hidden look is drawn with every object in it
+/// shown, as the hidden object's look holds them. Unless the look is on `%_` lines itself
+/// (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
 #[allow(clippy::too_many_arguments)]
-fn image_warp_alike(
+fn look_alike(
     object: &Node,
     appearance: &Appearance,
     look: &Node,
@@ -1171,6 +1321,11 @@ fn image_warp_alike(
     crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
 }
 
+/// Does `appearance` stroke with dashes aligned to corners and path ends?
+fn aligns_dashes(appearance: &Appearance) -> bool {
+    appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.dash.as_ref().is_some_and(|d| d.align_corners && d.is_dashed())))
+}
+
 /// Show every object in container `n`, at any depth.
 fn show_members(n: &mut Node) {
     for c in n.children_mut().into_iter().flatten() {
@@ -1192,7 +1347,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     let slot = slot_of(object.name.as_deref()).is_some();
     // Several fills and strokes, on a path or a compound path.
     let stacked = !slot && !st.simple && st.stacked && matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
-    // One Warp on an image, checked against its drawn look by the caller ([`image_warp_alike`]).
+    // One Warp on an image, checked against its drawn look by the caller ([`look_alike`]).
     let image_warp = !st.simple && image_warps(object, st);
     // A symbol instance draws its symbol's art: it keeps its drawn look.
     if !st.plain
@@ -1211,15 +1366,22 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     let own_gradient = object.appearance.fill().filter(|f| matches!(f.paint, Paint::Gradient(_)));
     // A style's gradients are written in a space of the object's bounds that isn't documented; its
     // drawn look has each where the app placed it.
-    let mut placed = HashMap::new();
-    placed_paints(look, &mut placed, 0);
+    let (mut placed, mut moved) = (HashMap::new(), HashSet::new());
+    placed_paints(look, &mut placed, &mut moved, stacked, 0);
     // A stack's gradients are each its own swatch, placed where the drawn look has it: one fitted
-    // to the object's bounds instead could lie elsewhere, so such a stack keeps its drawn look.
+    // to the object's bounds instead could lie elsewhere, so such a stack keeps its drawn look. So
+    // are its patterns, each once, and each placed one way in the look: `placed_paints` keeps the
+    // first placement of each name, and which of several is the style's isn't known. The same
+    // placement again (a compound path's look fills each subpath) is still one.
     if stacked {
-        let mut seen = HashSet::new();
+        let (mut seen, mut seen_patterns) = (HashSet::new(), HashSet::new());
         let placed_apart = st.items.iter().all(|i| match i {
             StyleItem::Gradient { name: Some(n), .. } => seen.insert(n) && placed.contains_key(paints.names.get(Global::Gradient, n)),
             StyleItem::Gradient { name: None, .. } => false,
+            StyleItem::Pattern { name, .. } => {
+                let key = format!("{PATTERN_KEY}{}", paints.names.get(Global::Pattern, name));
+                seen_patterns.insert(key.clone()) && placed.contains_key(&key) && !moved.contains(&key)
+            }
             _ => true,
         });
         if !placed_apart {
@@ -1270,7 +1432,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                     if !super::super::brush::draws_as(draft, settings, paints.bending) {
                         return None;
                     }
-                    let art = matches!(settings, super::super::brush::PathBrush::Art);
+                    let art = matches!(settings, super::super::brush::PathBrush::Art(_));
                     let on_a_path = matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
                     if !on_a_path && (art || !slot) {
                         return None;
@@ -1279,7 +1441,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                         return None;
                     }
                 }
-                stroke_layer(item)?
+                stroke_layer(item, paints.arrowheads)?
             }
         };
         if let Some(look) = st.looks.get(n) {
@@ -1292,13 +1454,228 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
     } else {
         object.appearance.contents_index
     };
-    Some(Appearance { items, effects: st.effects.clone(), contents_index })
+    let appearance = Appearance { items, effects: st.effects.clone(), contents_index };
+    // Zig Zag's ridges are placed by VectorCraft's own rule: on objects other than type it is kept
+    // only where they draw the outline the drawn look has.
+    if !slot && st.effects.iter().any(|e| e.id == "distort.zigZag") && !draws_look_outline(object, &appearance, look) {
+        return None;
+    }
+    heads_placed(object, look, appearance, paints.space)
+}
+
+/// What `appearance` paints on path or compound path `object`: its fills' outline and its strokes'
+/// areas, heads included, measured exactly (a node's visual bounds allow a head its whole reach on
+/// every side). `None` for another object or an appearance that paints nothing.
+fn painted_bounds(object: &Node, appearance: &Appearance) -> Option<Rect> {
+    let (path, rule) = match &object.kind {
+        NodeKind::Path { path, rule, .. } => (path.clone(), *rule),
+        NodeKind::Compound { children, rule } => {
+            (PathData::new(children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect()), *rule)
+        }
+        _ => return None,
+    };
+    let mut out = None;
+    for item in &appearance.items {
+        let painted = match item {
+            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => path.bounds(),
+            AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => vectorcraft_effects::stroke::outline_region(&path, rule, s).bounds(),
+            _ => None,
+        };
+        out = vectorcraft_geom::union_opt(out, painted);
+    }
+    out
+}
+
+/// `appearance` (on `object`, whose drawn look is `look`, in a space `space` takes to the
+/// document) with its strokes' arrowheads placed as the look draws them: the tips on the ends of
+/// the path, or past them by the line's length under each head (Extend), whichever gives the
+/// object the look's bounds within a quarter of the least distance a head moves between the two
+/// (at least 0.05 pt, at most 0.5 pt). `None`
+/// when neither does (the file draws the heads elsewhere: on other subpaths, say), or when both do
+/// and any head moves 0.2 pt or more between them (the bounds can't tell which the file draws).
+fn heads_placed(object: &Node, look: &Node, mut appearance: Appearance, space: Affine) -> Option<Appearance> {
+    let k = space.determinant().abs().sqrt();
+    let k = if k.is_finite() && k > 0.0 { k } else { 1.0 };
+    // How far each head moves between the placements (its line's length under it): the least and
+    // the most.
+    let (mut shift, mut most) = (f64::INFINITY, 0.0f64);
+    for item in &appearance.items {
+        let AppearanceItem::Stroke(s) = item else { continue };
+        for (head, end) in [(&s.start_arrow, false), (&s.end_arrow, true)] {
+            if let Some(Arrowhead::Custom(c)) = head {
+                let moves = c.stop() * s.arrow_weight(end) * k;
+                (shift, most) = (shift.min(moves), most.max(moves));
+            }
+        }
+    }
+    if shift.is_infinite() {
+        return Some(appearance);
+    }
+    let want = look.visual_bounds()?;
+    // Well under the distance between the placements, and under half a point: a look without
+    // those heads, or with them elsewhere, is off by more.
+    let tolerance = (shift / 4.0).clamp(0.05, 0.5);
+    let mut fits = vec![];
+    for align in [ArrowAlign::Tip, ArrowAlign::Extend] {
+        for item in &mut appearance.items {
+            if let AppearanceItem::Stroke(s) = item {
+                s.arrow_align = align;
+            }
+        }
+        let mut scaled = appearance.clone();
+        scaled.scale_strokes(k);
+        let got = painted_bounds(object, &scaled)?;
+        let off = [got.x0 - want.x0, got.y0 - want.y0, got.x1 - want.x1, got.y1 - want.y1].iter().fold(0.0f64, |m, d| m.max(d.abs()));
+        if off <= tolerance {
+            fits.push(align);
+        }
+    }
+    // Both fit when the bounds can't tell the placements apart (the end inside the bounds of the
+    // line's other segments), unless every head moves so little that either draws alike.
+    let align = match fits.as_slice() {
+        [one] => *one,
+        [first, _] if most < 0.2 => *first,
+        _ => return None,
+    };
+    for item in &mut appearance.items {
+        if let AppearanceItem::Stroke(s) = item {
+            s.arrow_align = align;
+        }
+    }
+    Some(appearance)
+}
+
+/// How far, in points, an outline drawn with a reshaping effect may lie from its drawn look's
+/// ([`draws_look_outline`]): the look's coordinates are written to a few decimals.
+const OUTLINE_TOLERANCE: f64 = 0.25;
+
+/// How far, in points, a flattened outline in [`draws_look_outline`] may lie from its curves.
+const OUTLINE_FLATNESS: f64 = OUTLINE_TOLERANCE / 10.0;
+
+/// How far apart, in points, [`draws_look_outline`] checks points along each flattened segment.
+const OUTLINE_SPACING: f64 = OUTLINE_TOLERANCE / 2.0;
+
+/// How close, in points, each checked point must lie to the other flattened outline: every point
+/// between two checked ones is within half the spacing of one, and both outlines are within the
+/// flatness of their curves, so the curves are then within [`OUTLINE_TOLERANCE`] of each other.
+const OUTLINE_POINT_LIMIT: f64 = OUTLINE_TOLERANCE - 2.0 * OUTLINE_FLATNESS - OUTLINE_SPACING / 2.0;
+
+/// Most point-to-segment distances worked out for one object, over all its look's outlines.
+const MAX_OUTLINE_PAIRS: usize = 4_000_000;
+
+/// Does path or compound path `object` with `appearance`'s effects draw every outline of its drawn look
+/// `look`, as `look` draws its own (each within [`OUTLINE_TOLERANCE`] of the other)? `false` for
+/// anything else: a look holding other than paths, outlines too detailed to compare.
+fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bool {
+    fn leaves(n: &Node, out: &mut Vec<vectorcraft_geom::PathData>, depth: usize) -> bool {
+        match &n.kind {
+            NodeKind::Path { path, .. } => {
+                out.push(path.clone());
+                true
+            }
+            NodeKind::Compound { children, .. } => {
+                out.push(vectorcraft_geom::PathData::new(
+                    children.iter().filter_map(|c| c.path_data()).flat_map(|p| p.subpaths.iter().cloned()).collect(),
+                ));
+                true
+            }
+            NodeKind::Group { clip: false, .. } if depth < MAX_DEPTH => n.children().into_iter().flatten().all(|c| leaves(c, out, depth + 1)),
+            _ => false,
+        }
+    }
+    /// The segments of `paths` flattened, at most `max` of them.
+    fn segments(paths: &[vectorcraft_geom::PathData], max: usize) -> Option<Vec<kurbo::Line>> {
+        let mut out = vec![];
+        let (mut start, mut last) = (None, None);
+        let mut over = false;
+        for p in paths {
+            vectorcraft_geom::flatten(p.to_bezpath(), OUTLINE_FLATNESS, |el| {
+                let mut add = |a: kurbo::Point, b: kurbo::Point| {
+                    if out.len() < max {
+                        out.push(kurbo::Line::new(a, b));
+                    } else {
+                        over = true;
+                    }
+                };
+                match el {
+                    kurbo::PathEl::MoveTo(q) => (start, last) = (Some(q), Some(q)),
+                    kurbo::PathEl::LineTo(q) => {
+                        if let Some(l) = last {
+                            add(l, q);
+                        }
+                        last = Some(q);
+                    }
+                    kurbo::PathEl::ClosePath => {
+                        if let (Some(l), Some(s)) = (last, start) {
+                            add(l, s);
+                        }
+                        last = start;
+                    }
+                    _ => {}
+                }
+            });
+        }
+        (!over && !out.is_empty()).then_some(out)
+    }
+    /// Does every point of segments `a` lie close enough to segments `b` ([`OUTLINE_POINT_LIMIT`])?
+    /// Each segment is checked at both ends (the last point of an open outline starts no segment)
+    /// and at points at most [`OUTLINE_SPACING`] apart between them (two outlines can share their
+    /// vertices and join them differently). Each point's distance to each segment of `b` (a
+    /// projection onto it) is taken from `budget`: `false` once that runs out.
+    fn near(a: &[kurbo::Line], b: &[kurbo::Line], budget: &mut usize) -> bool {
+        use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
+        let close = |p: kurbo::Point| b.iter().any(|t| t.nearest(p, 1e-6).distance_sq <= OUTLINE_POINT_LIMIT * OUTLINE_POINT_LIMIT);
+        for s in a {
+            let steps = (s.arclen(1e-6) / OUTLINE_SPACING).ceil();
+            let steps = if steps.is_finite() && steps >= 1.0 { steps as usize } else { 1 };
+            let Some(left) = budget.checked_sub(steps.saturating_add(1).saturating_mul(b.len())) else { return false };
+            *budget = left;
+            if !(0..=steps).all(|k| close(s.eval(k as f64 / steps as f64))) {
+                return false;
+            }
+        }
+        true
+    }
+    /// The box round segments `lines` (`None` without any).
+    fn bounds(lines: &[kurbo::Line]) -> Option<kurbo::Rect> {
+        let first = lines.first()?.p0;
+        Some(lines.iter().fold(kurbo::Rect::from_points(first, first), |r, l| r.union_pt(l.p0).union_pt(l.p1)))
+    }
+    let (mut ours, mut theirs) = (vec![], vec![]);
+    if !matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) || !leaves(object, &mut ours, 0) || !leaves(look, &mut theirs, 0) {
+        return false;
+    }
+    // The object's outline reshaped as it is drawn: its effects from its own bounds.
+    for path in &mut ours {
+        let bounds = kurbo::Shape::bounding_box(&path.to_bezpath());
+        *path = vectorcraft_effects::apply_geometry(&appearance.effects, path, bounds);
+    }
+    let max = MAX_OUTLINE_PAIRS.isqrt();
+    let Some(ours) = segments(&ours, max) else { return false };
+    let Some(ours_box) = bounds(&ours) else { return false };
+    // Two outlines each within the tolerance of the other have boxes as close: the boxes are
+    // compared first, then the points, from one budget for the object.
+    let boxed = |t: &[kurbo::Line]| {
+        let Some(r) = bounds(t) else { return false };
+        [r.x0 - ours_box.x0, r.y0 - ours_box.y0, r.x1 - ours_box.x1, r.y1 - ours_box.y1].iter().all(|d| d.abs() <= OUTLINE_TOLERANCE)
+    };
+    let mut budget = MAX_OUTLINE_PAIRS;
+    // Each of the look's outlines (a fill and a stroke draw the same one) is the object's.
+    theirs
+        .iter()
+        .all(|t| segments(std::slice::from_ref(t), max).is_some_and(|t| boxed(&t) && near(&t, &ours, &mut budget) && near(&ours, &t, &mut budget)))
 }
 
 /// A graphic style's appearance from art style `st`, on no object: `None` when the style isn't one
-/// this reads, or paints with a gradient or a pattern (placed on each object as its drawn look has them).
+/// this reads, paints with a pattern, or paints with a gradient that names no swatch of `gradients`.
 /// A style that is one paint is its fill and stroke ([`crate::import::ai::style::ArtStyle::one_paint`]).
-pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle) -> Option<Appearance> {
+/// A style keeps only its gradients' names and angles, so each one's gradient, by VectorCraft's own
+/// rule, is fitted to the bounds of whatever object the style is applied to, at its angle.
+pub(super) fn appearance_from_art_style(
+    st: &crate::import::ai::style::ArtStyle,
+    gradients: &HashMap<String, Gradient>,
+    arrowheads: &HashMap<String, Option<Arc<CustomArrowhead>>>,
+) -> Option<Appearance> {
     use crate::import::ai::style::StyleItem;
     if !st.plain {
         return None;
@@ -1313,15 +1690,30 @@ pub(super) fn appearance_from_art_style(st: &crate::import::ai::style::ArtStyle)
             StyleItem::Fill(paint) => AppearanceItem::Fill(FillLayer::new(paint.clone())),
             // A graphic style's brush isn't checked against the file's brushes: it is left out.
             StyleItem::Stroke { brush: Some(_), .. } => return None,
-            StyleItem::Stroke { .. } => stroke_layer(item)?,
-            StyleItem::Gradient { .. } | StyleItem::Pattern { .. } => return None,
+            StyleItem::Stroke { .. } => stroke_layer(item, arrowheads)?,
+            StyleItem::Gradient { name, angle } => AppearanceItem::Fill(FillLayer::new(named_gradient(name.as_deref()?, *angle, gradients)?)),
+            StyleItem::Pattern { .. } => return None,
         };
+        // A one-paint style's gradient stroke names its swatch (`style::OnePaint::items`).
+        if let AppearanceItem::Stroke(s) = &mut layer
+            && let Paint::Gradient(g) = &s.paint
+        {
+            s.paint = named_gradient(g.swatch.as_deref()?, g.angle, gradients)?;
+        }
         if let Some(look) = st.looks.get(n) {
             with_look(&mut layer, look);
         }
         items.push(layer);
     }
     Some(Appearance { items, effects: st.effects.clone(), contents_index: st.contents_index })
+}
+
+/// The gradient of `gradients` named `name` at `angle` degrees, fitted to the bounds of the object it
+/// paints (`None` when there is no such gradient).
+fn named_gradient(name: &str, angle: f64, gradients: &HashMap<String, Gradient>) -> Option<Paint> {
+    let mut g = vectorcraft_color::gradient::GradientPaint::new(gradients.get(name)?.clone());
+    g.angle = angle;
+    Some(Paint::Gradient(Box::new(g)))
 }
 
 /// What the reader makes of art style `name` in `section` (the text between `%AI9_BeginArtStyles`
@@ -1346,16 +1738,30 @@ pub(crate) fn read_style_list(section: &[u8]) -> Vec<String> {
     crate::import::ai::style::art_style_list(section).iter().map(|raw| obj::text(raw)).filter(|name| !name.is_empty()).collect()
 }
 
-/// Art style `name` of `section` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`],
-/// with a style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads
-/// it on objects other than type. A stroke that names a brush is read with that brush's name, as
-/// [`styled`] reads it on a path or compound path when the Brushes panel keeps that brush at those
-/// settings, which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the section
-/// doesn't define it, the reader doesn't read it, or it paints with a pattern or a gradient that
-/// isn't the object's own.
-pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&Paint>) -> Option<StyleRead> {
+/// An art style as the reader parses it ([`parse_art_style`]), which a writer reads on any number of
+/// objects ([`read_parsed_style`], [`parsed_moves_with`],
+/// [`crate::import::ai::brush::BrushesRead::style_reads`]).
+#[derive(Clone, Debug)]
+pub(crate) struct ParsedStyle {
+    pub(in crate::import::ai) style: crate::import::ai::style::ArtStyle,
+}
+
+/// Art style `name` of `section` (the text between `%AI9_BeginArtStyles` and its end) as the reader
+/// parses it. `None` when the section doesn't define it.
+pub(crate) fn parse_art_style(section: &[u8], name: &str) -> Option<ParsedStyle> {
+    crate::import::ai::style::art_styles(section).remove(name).map(|style| ParsedStyle { style })
+}
+
+/// Art style `parsed` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`], with a
+/// style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads it on
+/// objects other than type. A stroke that names a brush is read with that brush's name, as [`styled`]
+/// reads it on a path or compound path when the Brushes panel keeps that brush at those settings,
+/// which [`crate::import::ai::brush::BrushesRead::style_reads`] checks. `None` when the reader doesn't
+/// read it, or it paints with a pattern or a gradient that isn't the object's own. `parsed` is left as
+/// it is, for the next object.
+pub(crate) fn read_parsed_style(parsed: &ParsedStyle, own_gradient: Option<&Paint>) -> Option<StyleRead> {
     use crate::import::ai::style::StyleItem;
-    let mut st = crate::import::ai::style::art_styles(section).remove(name)?;
+    let mut st = parsed.style.clone();
     if st.items.iter().filter(|i| matches!(i, StyleItem::Gradient { .. })).count() == 1 {
         let own = own_gradient?;
         for item in &mut st.items {
@@ -1373,7 +1779,9 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
             _ => None,
         })
         .collect();
-    let mut appearance = appearance_from_art_style(&st)?;
+    // No gradient is taken by name: on an object, one that isn't its own is placed where its drawn
+    // look has it.
+    let mut appearance = appearance_from_art_style(&st, &HashMap::new(), &HashMap::new())?;
     for (item, brush) in appearance.items.iter_mut().zip(brushes) {
         if let (AppearanceItem::Stroke(s), Some(brush)) = (item, brush) {
             s.brush = Some(brush);
@@ -1382,19 +1790,33 @@ pub(crate) fn read_art_style(section: &[u8], name: &str, own_gradient: Option<&P
     Some(StyleRead { appearance, simple: st.simple, image_warp: st.image_warp, pathfinder: st.pathfinder, transparency: st.transparency })
 }
 
-/// Is art style `name` of `section` read on `object` as far as an effect that moves the outline
-/// goes: the style has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
-/// `false` when the section doesn't define it.
-pub(crate) fn style_moves_with(section: &[u8], name: &str, object: &Node) -> bool {
-    crate::import::ai::style::art_styles(section).remove(name).is_some_and(|st| !st.moves_outline() || moves_with(object, &st))
+/// Is art style `parsed` read on `object` as far as an effect that moves the outline goes: the style
+/// has none, or `object` is one [`moves_with`] reads it on, as [`styled`] checks?
+pub(crate) fn parsed_moves_with(parsed: &ParsedStyle, object: &Node) -> bool {
+    !parsed.style.moves_outline() || moves_with(object, &parsed.style)
 }
 
-/// A style's stroke as an appearance item (`None` for a fill).
-fn stroke_layer(item: &crate::import::ai::style::StyleItem) -> Option<AppearanceItem> {
-    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, align, brush } = item else { return None };
+/// A style's stroke as an appearance item, its arrowheads the heads of `arrowheads` by symbol
+/// name, each tip on its end of the path (where [`heads_placed`] finds the file draws them on an
+/// object; a graphic style keeps that). `None` for a fill, or for a stroke
+/// whose arrowhead symbol has no head there or whose head's weight would be under the least one
+/// draws at ([`StrokeLayer::arrow_weight`]), so the head would draw larger than in the file.
+fn stroke_layer(item: &crate::import::ai::style::StyleItem, arrowheads: &HashMap<String, Option<Arc<CustomArrowhead>>>) -> Option<AppearanceItem> {
+    let crate::import::ai::style::StyleItem::Stroke { paint, width, cap, join, miter, dash, profile, align, brush, arrows } = item else {
+        return None;
+    };
     let mut layer = StrokeLayer::new(paint.clone(), line_width(*width));
     (layer.cap, layer.join, layer.miter_limit, layer.dash, layer.profile, layer.align) = (*cap, *join, *miter, dash.clone(), profile.clone(), *align);
     layer.brush = brush.as_ref().map(|(name, _)| name.clone());
+    if let Some(arrows) = arrows {
+        let head = |end: &Option<(String, f64)>| -> Option<(Option<Arrowhead>, f64)> {
+            let Some((name, pct)) = end else { return Some((None, 100.0)) };
+            let head = arrowheads.get(name)?.clone()?;
+            (layer.width * pct / 100.0 >= StrokeLayer::LEAST_ARROW_WEIGHT).then_some((Some(Arrowhead::Custom(head)), *pct))
+        };
+        let ((start, start_pct), (end, end_pct)) = (head(&arrows.start)?, head(&arrows.end)?);
+        (layer.start_arrow, layer.end_arrow, layer.arrow_scale, layer.arrow_align) = (start, end, (start_pct, end_pct), ArrowAlign::Tip);
+    }
     Some(AppearanceItem::Stroke(layer))
 }
 
@@ -1551,6 +1973,50 @@ mod tests {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
     }
 
+    /// The outline check works from one budget for the object: a look of the outline drawn twice
+    /// (a fill and a stroke) matches, one drawn thousands of times gives up and keeps the drawn
+    /// look instead of comparing every copy.
+    #[test]
+    fn the_outline_check_has_one_budget_for_the_object() {
+        let zig = vectorcraft_doc::Effect {
+            id: "distort.zigZag".into(),
+            params: serde_json::json!({"size": 3.0, "relative": false, "ridges": 4, "points": "corner"}),
+            visible: true,
+        };
+        let path = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 60.0));
+        let appearance = Appearance { effects: vec![zig.clone()], ..Appearance::basic(Paint::None, Paint::None, 0.0) };
+        let object = Node::path(NodeId(1), path.clone(), appearance.clone());
+        let outline = vectorcraft_effects::apply_geometry(std::slice::from_ref(&zig), &path, Rect::new(0.0, 0.0, 100.0, 60.0));
+        let look = |copies: u64| {
+            let drawn = (0..copies).map(|i| Arc::new(Node::path(NodeId(10 + i), outline.clone(), Appearance::default()))).collect();
+            Node::group(NodeId(2), drawn)
+        };
+        assert!(draws_look_outline(&object, &appearance, &look(2)));
+        let started = std::time::Instant::now();
+        assert!(!draws_look_outline(&object, &appearance, &look(5_000)));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+    }
+
+    /// The outline check holds for every point of the outlines, not only the points it checks: a
+    /// 0.25 pt line whose look has only short pieces over its ends, 0.24 pt away, leaves the
+    /// line's middle about 0.27 pt from the look, so the drawn look stays. The line drawn 0.1 pt
+    /// away matches.
+    #[test]
+    fn the_outline_check_holds_between_the_points_it_checks() {
+        use kurbo::Point;
+        use vectorcraft_geom::{PathData, SubPath};
+        let appearance = Appearance::basic(Paint::None, Paint::None, 0.0);
+        let line = PathData::new(vec![SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(0.25, 0.0)], false)]);
+        let object = Node::path(NodeId(1), line, appearance.clone());
+        let look = |pieces: &[[Point; 2]]| {
+            let drawn = PathData::new(pieces.iter().map(|p| SubPath::polyline(p, false)).collect());
+            Node::group(NodeId(2), vec![Arc::new(Node::path(NodeId(3), drawn, Appearance::default()))])
+        };
+        let ends = [[Point::new(0.0, 0.24), Point::new(0.01, 0.24)], [Point::new(0.24, 0.24), Point::new(0.25, 0.24)]];
+        assert!(!draws_look_outline(&object, &appearance, &look(&ends)));
+        assert!(draws_look_outline(&object, &appearance, &look(&[[Point::new(0.0, 0.1), Point::new(0.25, 0.1)]])));
+    }
+
     /// An image draws no stroke, so an image with a brush in its art style keeps its drawn look.
     #[test]
     fn an_image_with_a_brush_keeps_its_drawn_look() {
@@ -1570,7 +2036,7 @@ mod tests {
         let st = &styles["Inked"];
         let brushes = [parse_tool_object(Tool::Calligraphic, "N", "1 4 8 30 50 -150 210 2 5 6 0").unwrap()];
         let (gradients, patterns, names, v7_patterns, bending) =
-            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashMap::new());
         let paints = StylePaints {
             gradients: &gradients,
             patterns: &patterns,
@@ -1579,6 +2045,7 @@ mod tests {
             brushes: &brushes,
             kept: &[true],
             bending: &bending,
+            arrowheads: &HashMap::new(),
             space: Affine::IDENTITY,
         };
         let look = Node::group(NodeId(1), vec![square(2, Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)))]);
@@ -1616,7 +2083,7 @@ mod tests {
         // GUARDS: an image with a Warp in its art style came in as its drawn look.
         let warp = ("Adobe Deform", "1 /Int (DeformStyle) ,\n0.4 /Real (DeformValue) ,\n"); // brand-ok: the filter's name in the files
         let (gradients, patterns, names, v7_patterns, bending) =
-            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashMap::new());
         let paints = StylePaints {
             gradients: &gradients,
             patterns: &patterns,
@@ -1625,6 +2092,7 @@ mod tests {
             brushes: &[],
             kept: &[],
             bending: &bending,
+            arrowheads: &HashMap::new(),
             space: Affine::IDENTITY,
         };
         let look = Node::group(NodeId(1), vec![square(2, Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)))]);

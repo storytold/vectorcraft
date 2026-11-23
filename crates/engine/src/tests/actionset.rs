@@ -3,7 +3,7 @@
 
 use serde_json::json;
 
-use crate::cmd::actionset::{AiaStep, read_aia};
+use crate::cmd::actionset::{AiaData, AiaStep, AiaValue, read_aia};
 use crate::*;
 
 /// `text` as a bracketed hexadecimal value.
@@ -37,7 +37,12 @@ fn a_set_reads_its_actions_and_steps() {
     let names: Vec<&str> = set.actions.iter().map(|a| a.name.as_str()).collect();
     assert_eq!(names, ["First", "二番目"]);
     let step = |a: usize, s: usize| set.actions[a].steps[s].clone();
-    let join = AiaStep { name: "sample_join".into(), label: Some("Join".into()), on: Some(1), params: 3, declared: Some(3), line: 9 };
+    let values = vec![
+        AiaValue { key: Some(1), kind: Some("unit real".into()), value: None },
+        AiaValue { key: None, kind: Some("ustring".into()), value: Some(AiaData::Text(b"a } brace".to_vec())) },
+        AiaValue { key: None, kind: Some("raw".into()), value: None },
+    ];
+    let join = AiaStep { name: "sample_join".into(), label: Some("Join".into()), on: Some(1), params: 3, values, declared: Some(3), line: 9 };
     assert_eq!(step(0, 0), join);
     assert_eq!((step(1, 0).name.as_str(), step(1, 0).label.clone(), step(1, 0).on), ("sample)one", None, Some(0)));
     assert_eq!((step(1, 1).label.as_deref(), step(1, 1).on, step(1, 1).line), (Some("Second Step"), None, 39));
@@ -58,6 +63,55 @@ fn recorded_values_are_counted_and_checked() {
     assert!(!read.truncated, "a long value or one that isn't UTF-8 is not damage");
     assert!(set(&["/value [ 3 4142 ]".to_string()]).truncated);
     assert!(set(&[value("one"), "/value [ 1 zz ]".to_string()]).truncated, "a second value that isn't hexadecimal");
+}
+
+/// `actionSet.read` answers with each recorded value's key, type and value: a number, text in
+/// parentheses or hexadecimal text that is UTF-8 with its length in bytes, and null for text that
+/// isn't UTF-8 and for other values. Fields may come in any order, and a value with the wrong byte
+/// count still marks the set truncated.
+#[test]
+fn recorded_values_come_back_with_their_keys_and_types() {
+    let mut s = Session::new();
+    let text = format!(
+        "/version 3 /action-1 {{ /event-1 {{ /internalName (sample_values) /parameterCount 6 \
+         /parameter-1 {{ /key 1952807028 /type (ustring) /value {note} }} \
+         /parameter-2 {{ /value 1 /type (boolean) /key 2003792484 }} \
+         /parameter-3 {{ /type (ustring) /value [ 2 c328 ] /key 7 }} \
+         /parameter-4 {{ /key 99999999999999999999 /type (real) /value 4.5 }} \
+         /parameter-5 {{ /key 3 /type (text) /value (plain) }} \
+         /parameter-6 {{ }} }} }}",
+        note = hex("Größe ✓")
+    );
+    let r = s.execute("actionSet.read", &json!({ "data": text })).unwrap();
+    assert_eq!(r["truncated"], false);
+    assert_eq!(
+        r["actions"][0]["steps"][0]["values"],
+        json!([
+            {"key": 1952807028, "type": "ustring", "value": "Größe ✓", "bytes": 11},
+            {"key": 2003792484, "type": "boolean", "value": 1},
+            {"key": 7, "type": "ustring", "value": null, "bytes": 2},
+            {"key": null, "type": "real", "value": null},
+            {"key": 3, "type": "text", "value": "plain", "bytes": 5},
+            {"key": null, "type": null, "value": null},
+        ])
+    );
+    let bad = "/version 3 /action-1 { /event-1 { /parameter-1 { /key 1 /type (ustring) /value [ 3 4142 ] } } }";
+    assert_eq!(s.execute("actionSet.read", &json!({ "data": bad })).unwrap()["truncated"], true);
+}
+
+/// At most 100,000 recorded values are kept in a set: the others are still counted, so a step's
+/// `values` can be shorter than its `params`.
+#[test]
+fn recorded_values_past_the_cap_are_counted_but_not_kept() {
+    let step = format!("/event-1 {{ {} }} ", "/parameter-1 { /key 1 /value 0 } ".repeat(1000));
+    let action = format!("/action-1 {{ {} }} ", step.repeat(50));
+    let set = read_aia(format!("/version 3 {}", action.repeat(3)).as_bytes()).unwrap();
+    assert!(!set.truncated);
+    let steps = || set.actions.iter().flat_map(|a| &a.steps);
+    assert_eq!(steps().map(|s| s.params).sum::<usize>(), 150_000);
+    assert_eq!(steps().map(|s| s.values.len()).sum::<usize>(), 100_000);
+    assert_eq!(set.actions[2].steps[0].values.len(), 0);
+    assert_eq!(set.actions[1].steps[49].values[999], AiaValue { key: Some(1), kind: None, value: Some(AiaData::Int(0)) });
 }
 
 /// `actionSet.read` takes exactly one of `path`, `data` and `dataBase64`, and text for the text
@@ -97,7 +151,7 @@ fn read_command_answers_with_the_set() {
     let text = sample().replacen(&format!("/name {}", hex("Prep Sätze")), "", 1);
     let r = s.execute("actionSet.read", &json!({ "data": text, "name": "/sets/Mine.aia" })).unwrap();
     assert_eq!(r["set"], "Mine");
-    assert_eq!(r["actions"][1]["steps"][0], json!({"name": "sample)one", "label": null, "on": false, "params": 0, "line": 34}));
+    assert_eq!(r["actions"][1]["steps"][0], json!({"name": "sample)one", "label": null, "on": false, "params": 0, "values": [], "line": 34}));
     assert_eq!(r["actions"][0]["steps"][0]["on"], true);
     assert_eq!(r["actions"][0]["steps"][0]["label"], "Join");
     let blank = format!("/version 3 /action-1 {{ /event-1 {{ /internalName (x) /localizedName {} }} }}", hex(" "));

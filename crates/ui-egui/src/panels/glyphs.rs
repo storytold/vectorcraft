@@ -2,6 +2,10 @@
 //! outlines; Show › Entire Font adds the glyphs no character maps, by glyph id. Double-click
 //! inserts the character at the Type tool's caret (or appends it to the selected text objects).
 //! The character selected with the Type tool is highlighted in the grid.
+//! A character whose glyph has alternates has a triangle in its cell's lower right corner, and a
+//! click on it opens a pop-up of those alternates ([`alternates_popup`]); picking one inserts the
+//! character drawn with it ([`insert_alternate`]). In Entire Font a glyph no character maps has the
+//! triangle too, and a pick goes on the selected character as a double-click on its cell does.
 //! Show › Alternates for Current Selection lists that character's alternate glyphs instead (as it
 //! stands in its word), and a double-click applies the OpenType feature that draws one to that
 //! character alone, so the text stays real text that joins its neighbors. A double-click on a
@@ -9,12 +13,17 @@
 //! that glyph as one of its alternates in its word. A glyph no feature reaches whose name does
 //! not belong to another letter is applied as a glyph choice, which may not join. Other glyphs
 //! are drawn dimmed, and their tooltips say why they cannot be applied to the selection.
+//! With Show East Asian Options, the panel menu sets the selected characters' East Asian glyph
+//! form ([`glyph_form_items`]).
+//! After its Unicode ranges and Alternates for Current Selection, the Show menu lists the OpenType
+//! categories the browsed font has ([`vectorcraft_text::FontFace::glyph_categories`]): each shows
+//! the glyphs its features give, as Entire Font shows them.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use egui::{Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
-use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
+use vectorcraft_doc::{CharStyle, GlyphForm, NodeId, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, PathEl};
 use vectorcraft_text::FontDb;
 
@@ -28,6 +37,8 @@ use crate::widgets::{self, menu_item};
 /// (Zoom Out reduces the preview, Zoom In increases it). The step sizes themselves are ours.
 const CELL_STEPS: [f32; 7] = [16.0, 22.0, 30.0, 42.0, 56.0, 72.0, 96.0];
 const CELL_DEFAULT: usize = 2;
+/// The least height of a grid's list that scrolls, when the panel leaves it less room.
+const MIN_LIST_H: f32 = 64.0;
 
 /// The grid step in [`crate::state::UiState::glyphs_preview`]. `0` means [`CELL_DEFAULT`]; a
 /// stored step is `index + 1`. A value past the steps (a hand-edited preferences file) is the
@@ -52,6 +63,26 @@ fn nudge_cell(index: usize, delta: i32) -> usize {
     (index as i32 + delta).clamp(0, last) as usize
 }
 
+/// The cells in a row of a grid `w` wide that holds `count` cells of side `cell` in a list at most
+/// `list_h` tall. When the rows run past the list, its scroll bar takes a column of its own and the
+/// cells go beside it; when they fit, the cells take the whole width.
+fn grid_cols(ui: &Ui, w: f32, cell: f32, count: usize, list_h: f32) -> usize {
+    let fit = |room: f32| ((room / cell).floor() as usize).max(1);
+    let gap = ui.spacing().item_spacing.y;
+    let cols = fit(w);
+    // The height `ScrollArea::show_rows` gives the rows: the gaps between them, none after the last.
+    let content_h = count.div_ceil(cols) as f32 * (row_height(ui, cell) + gap) - gap;
+    // The list is as tall as the room left, but at least as tall as `min_scrolled_height` makes it.
+    let view_h = list_h.min(ui.available_height().max(list_h.min(MIN_LIST_H)));
+    if view_h.ceil() < content_h { fit(w - ui.spacing().scroll.allocated_width()) } else { cols }
+}
+
+/// The height of a row of cells of side `cell`: a row laid out with `Ui::horizontal` is at least as
+/// tall as a button, so the two smallest cell sizes give rows taller than their cells.
+fn row_height(ui: &Ui, cell: f32) -> f32 {
+    cell.max(ui.spacing().interact_size.y)
+}
+
 /// Character subsets offered by the Show menu.
 const SUBSETS: [(&str, u32, u32); 7] = [
     ("Entire Font", 0, 0x10FFFF),
@@ -69,6 +100,75 @@ const SUBSETS: [(&str, u32, u32); 7] = [
 /// (select Alternates For Current Selection from the Show menu; highlight a character, then
 /// double-click the glyph to replace it).
 const ALTERNATES: &str = "Alternates for Current Selection";
+
+/// The Show menu's choice of an OpenType category of the browsed font, after [`ALTERNATES`]; the
+/// panel state `gl-category` holds the category's id ([`vectorcraft_text::GlyphCategoryKind::id`]).
+/// Public behavior: [Glyphs panel overview](https://helpx.adobe.com/illustrator/desktop/design-with-text/special-characters-glyphs/glyphs-panel-overview.html)
+/// (with an OpenType font, a category chosen from the Show menu restricts the kinds of glyphs the
+/// panel displays). Which categories are offered, their names and their order are ours.
+const CATEGORY: usize = SUBSETS.len() + 1;
+
+/// The Show menu label of `category`: a stylistic set by the font's name for it, else `Set N`, as
+/// the OpenType panel names it.
+fn category_label(category: &vectorcraft_text::GlyphCategory) -> String {
+    use vectorcraft_text::GlyphCategoryKind as K;
+    match category.kind {
+        K::Ligatures => tl!("Ligatures").to_string(),
+        K::Swashes => tl!("Swash").to_string(),
+        K::StylisticAlternates => tl!("Stylistic Alternates").to_string(),
+        K::StylisticSet(number) => super::opentype::set_label(&vectorcraft_text::StylisticSet { number, name: category.name.clone() }),
+        K::SmallCaps => tl!("Small Caps").to_string(),
+        K::Ornaments => tl!("Ornaments").to_string(),
+        K::Fractions => tl!("Fractions").to_string(),
+        K::Figures => tl!("Figures").to_string(),
+    }
+}
+
+/// The ids and Show menu labels of `face`'s OpenType categories, in the menu's order.
+fn categories(face: Option<&vectorcraft_text::FontFace>) -> Vec<(String, String)> {
+    face.map(|f| f.glyph_categories().iter().map(|c| (c.kind.id(), category_label(c))).collect()).unwrap_or_default()
+}
+
+/// The Show menu's choice: the entry index (a Unicode range, [`ALTERNATES`] or [`CATEGORY`]) and,
+/// for a category, its place in `cats`. A category the browsed font does not have is Entire Font,
+/// and so is an index past the entries.
+fn shown(ctx: &egui::Context, cats: &[(String, String)]) -> (usize, Option<usize>) {
+    let subset: usize = pstate(ctx, "gl-subset");
+    match subset {
+        CATEGORY => {
+            let id: String = pstate(ctx, "gl-category");
+            match cats.iter().position(|c| c.0 == id) {
+                Some(i) => (CATEGORY, Some(i)),
+                None => (0, None),
+            }
+        }
+        s if s > CATEGORY => (0, None),
+        s => (s, None),
+    }
+}
+
+/// Show category `id` of the browsed font.
+fn show_category(ctx: &egui::Context, id: &str) {
+    set_pstate(ctx, "gl-category", id.to_string());
+    set_pstate(ctx, "gl-subset", CATEGORY);
+}
+
+/// The face the panel browses: the font picked in the panel, else the current text's font, else
+/// the fallback family, with that family and style. The same family and style can have a different
+/// face id at the selection's version or axes; that instance is used when the Type tool's selected
+/// character is set in the font.
+fn browsed_face(app: &VectorcraftApp, ctx: &egui::Context) -> (String, String, Option<std::sync::Arc<vectorcraft_text::FontFace>>) {
+    let db = FontDb::global();
+    let current = super::character::text_style(app).map(|(s, _)| (s.font_family, s.font_style));
+    // The panel browses the current text's font unless another font was picked here.
+    let picked: Option<(String, String)> = pstate(ctx, "gl-font");
+    let (family, style) = picked.or(current).unwrap_or_else(|| (vectorcraft_text::FALLBACK_FAMILY.to_string(), "Regular".to_string()));
+    let face = selected_target(app)
+        .filter(|t| t.style.font_family.eq_ignore_ascii_case(&family) && t.style.font_style.eq_ignore_ascii_case(&style))
+        .and_then(|t| db.style_face(t.style))
+        .or_else(|| db.face(&family, &style));
+    (family, style, face)
+}
 
 thread_local! {
     static TEX: crate::graphics::TexCache<HashMap<(u32, u32, u32), egui::TextureHandle>> = crate::graphics::TexCache::default();
@@ -221,50 +321,83 @@ fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) -> bool {
     }
 }
 
+/// The grid's cells for `face`: the characters listed, with their glyphs, then the glyphs listed by
+/// glyph id. `category` gives the glyphs of one of the face's categories; without it, the cells are
+/// the characters of `lo..=hi`, and in Entire Font (`subset` 0) also the glyphs no character maps.
+fn grid_glyphs(
+    face: &vectorcraft_text::FontFace,
+    category: Option<&vectorcraft_text::GlyphCategory>,
+    subset: usize,
+    (lo, hi): (u32, u32),
+) -> (Vec<(char, u32)>, std::sync::Arc<[u32]>) {
+    let all = face.mapped_chars();
+    match category {
+        // A category lists its glyphs that a character maps by that character, and the others by
+        // glyph id after them.
+        Some(c) => {
+            let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
+            // A glyph several characters map is listed once, by the first of them; a glyph only a
+            // space or control character maps is listed by glyph id, as no character it can insert.
+            let mut mapped: HashSet<u32> = HashSet::new();
+            let chars: Vec<(char, u32)> =
+                all.iter().copied().filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g)).collect();
+            (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
+        }
+        None => {
+            // The list is sorted by code point, so the range's characters lie between two bounds.
+            let start = all.partition_point(|(c, _)| (*c as u32) < lo);
+            let end = all.partition_point(|(c, _)| (*c as u32) <= hi);
+            let chars = all.get(start..end).unwrap_or_default().iter().copied().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).collect();
+            // Entire Font also lists the glyphs no character maps (positional forms, alternates,
+            // ligatures) by glyph id, after the characters.
+            (chars, if subset == 0 { face.unencoded_glyphs() } else { std::sync::Arc::from([]) })
+        }
+    }
+}
+
 /// Browse and insert glyphs from the chosen font, with font controls below the glyph grid.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
-    let db = FontDb::global();
-    let current = super::character::text_style(app).map(|(s, _)| (s.font_family, s.font_style));
-    // The panel browses the current text's font unless another font was picked here.
-    let picked: Option<(String, String)> = pstate(ui.ctx(), "gl-font");
-    let (family, style) = picked.or(current).unwrap_or_else(|| (vectorcraft_text::FALLBACK_FAMILY.to_string(), "Regular".to_string()));
-    let subset: usize = pstate(ui.ctx(), "gl-subset");
+    // The same family and style can have a different face id at the selection's version or axes.
+    // That instance is used for both the previews and Fit's applicability check.
+    let (family, style, face) = browsed_face(app, ui.ctx());
+    let cats = categories(face.as_deref());
+    let (subset, category) = shown(ui.ctx(), &cats);
     let (_, lo, hi) = SUBSETS[subset.min(SUBSETS.len() - 1)];
     let w = ui.available_width();
-    let names: Vec<&str> = SUBSETS.iter().map(|s| s.0).chain([ALTERNATES]).collect();
+    // A stylistic set's name is the font's, shown as it is: the built-in labels are translated here.
+    let labels: Vec<String> =
+        SUBSETS.iter().map(|s| tl!(s.0).to_string()).chain([tl!(ALTERNATES).to_string()]).chain(cats.iter().map(|c| c.1.clone())).collect();
+    let names: Vec<&str> = labels.iter().map(String::as_str).collect();
+    let current = match category {
+        Some(i) => CATEGORY + i,
+        None => subset,
+    };
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(tl!("Show:")).color(t.text_dim));
-        if let Some(i) = widgets::dropdown(ui, "gl-subset", names[subset.min(names.len() - 1)], &names, (w - 50.0).max(80.0)) {
-            set_pstate(ui.ctx(), "gl-subset", i);
+        if let Some(i) = widgets::dropdown_names(ui, "gl-subset", names[current.min(names.len() - 1)], &names, (w - 50.0).max(80.0)) {
+            match i.checked_sub(CATEGORY).and_then(|k| cats.get(k)) {
+                Some((id, _)) => show_category(ui.ctx(), id),
+                None => set_pstate(ui.ctx(), "gl-subset", i),
+            }
         }
     });
-    if subset >= SUBSETS.len() {
+    if subset == SUBSETS.len() {
         alternates(app, ui, w);
         font_row(app, ui, &family, &style, w);
         return;
     }
-    // The same family and style can have a different face id at the selection's version or axes.
-    // Use that instance for both the previews and Fit's applicability check.
-    let face = selected_target(app)
-        .filter(|t| t.style.font_family.eq_ignore_ascii_case(&family) && t.style.font_style.eq_ignore_ascii_case(&style))
-        .and_then(|t| db.style_face(t.style))
-        .or_else(|| db.face(&family, &style));
     let Some(face) = face else {
         ui.label(egui::RichText::new(tl!("No fonts are available.")).color(t.text_dim));
         return;
     };
-    let chars: Vec<(char, u32)> =
-        face.chars().into_iter().filter(|(c, _)| (lo..=hi).contains(&(*c as u32)) && !c.is_control() && !c.is_whitespace()).collect();
-    // Entire Font also lists the glyphs no character maps (positional forms, alternates,
-    // ligatures) by glyph id, after the characters.
-    let unencoded = if subset == 0 { face.unencoded_glyphs() } else { Default::default() };
+    let (chars, unencoded) = grid_glyphs(&face, category.and_then(|i| face.glyph_categories().get(i)), subset, (lo, hi));
     let total = chars.len() + unencoded.len();
     let cell = CELL_STEPS[cell_index(app)];
-    let cols = ((w / cell).floor() as usize).max(1);
-    let rows = total.div_ceil(cols);
     let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
     let list_h = widgets::panel_list_height(ui, (ui.available_height() - 64.0).max(cell * 3.0), 33.0);
+    let cols = grid_cols(ui, w, cell, total, list_h);
+    let rows = total.div_ceil(cols);
     let hover_id = egui::Id::unique("gl-hover");
     let selected = selected_char(app);
     // What a double-click on an unencoded glyph can do to the selected character.
@@ -273,17 +406,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // only when the selection moves to another character, so it still scrolls freely meanwhile.
     let follow_id = egui::Id::unique("gl-follow");
     let (followed, shown): (Option<char>, std::ops::Range<usize>) = ui.ctx().data(|d| d.get_temp(follow_id)).unwrap_or_default();
-    let mut area = egui::ScrollArea::vertical().max_height(list_h).min_scrolled_height(list_h.min(64.0)).auto_shrink([false, false]);
+    let mut area = egui::ScrollArea::vertical().max_height(list_h).min_scrolled_height(list_h.min(MIN_LIST_H)).auto_shrink([false, false]);
     if selected != followed
         && let Some(c) = selected
         && let Ok(i) = chars.binary_search_by_key(&c, |x| x.0)
         && !shown.contains(&(i / cols))
     {
-        let row_h = cell + ui.spacing().item_spacing.y;
+        let row_h = row_height(ui, cell) + ui.spacing().item_spacing.y;
         area = area.vertical_scroll_offset((((i / cols) as f32 + 0.5) * row_h - list_h * 0.5).max(0.0));
     }
+    // A pick in a cell's pop-up of alternates: the character (none for a glyph no character maps),
+    // the glyph of its cell, the glyph picked.
+    let mut popup_pick: Option<(Option<char>, u32, u32)> = None;
     let shown =
-        area.show_rows(ui, cell, rows, |ui, range| {
+        area.show_rows(ui, row_height(ui, cell), rows, |ui, range| {
             for r in range.clone() {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -310,6 +446,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         let ink = if matches!(pick, Some(None)) { t.text_disabled } else { t.text_strong };
                         let tex = glyph_texture(ui.ctx(), &face, gid, px);
                         ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), ink);
+                        // Only the cells drawn ask whether their glyph has alternates.
+                        if face.has_alternates(gid)
+                            && let Some(picked) = corner_popup(ui, &face, c, gid, rect, cell)
+                        {
+                            popup_pick = Some((c, gid, picked));
+                        }
                         // The tooltip is made when it is shown: working out why a glyph cannot be
                         // applied reads the font, which hundreds of cells cannot do each frame.
                         let resp = resp.on_hover_ui(|ui| {
@@ -352,6 +494,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             range
         });
     ui.ctx().data_mut(|d| d.insert_temp(follow_id, (selected, shown.inner)));
+    match (popup_pick, &fit) {
+        (Some((Some(c), cell_gid, picked)), _) => insert_alternate(app, ui.ctx(), &face, c, cell_gid, picked),
+        // A glyph no character maps goes on the selected character as a double-click on its cell
+        // in Entire Font puts it.
+        (Some((None, _, picked)), Some(fit)) => match fit.pick(&face, picked) {
+            Some(pick) => fit.apply(app, pick),
+            None => app.status(fit.why(&face, picked)),
+        },
+        _ => {}
+    }
     ui.add_space(4.0);
     let info = ui.ctx().data(|d| d.get_temp::<(Option<char>, u32)>(hover_id));
     let count = crate::i18n::tn(total as u64, "{n} glyph", "{n} glyphs");
@@ -473,18 +625,18 @@ fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
         default: false,
     }));
     let cell = CELL_STEPS[cell_index(app)];
-    let cols = ((w / cell).floor() as usize).max(1);
-    let rows = list.len().div_ceil(cols);
     let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
     let list_h = widgets::panel_list_height(ui, (ui.available_height() - 64.0).max(cell * 3.0), 33.0);
+    let cols = grid_cols(ui, w, cell, list.len(), list_h);
+    let rows = list.len().div_ceil(cols);
     let mut pick = None;
     // A scroll position of its own for each character, so the grid starts at the top for another.
     let area = egui::ScrollArea::vertical()
         .id_salt(("gl-alternates", id.0, byte))
         .max_height(list_h)
-        .min_scrolled_height(list_h.min(64.0))
+        .min_scrolled_height(list_h.min(MIN_LIST_H))
         .auto_shrink([false, false]);
-    area.show_rows(ui, cell, rows, |ui, range| {
+    area.show_rows(ui, row_height(ui, cell), rows, |ui, range| {
         for r in range {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -539,15 +691,34 @@ fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
 /// goes through `text.setRangeStyle` on exactly the character (its other alternate features are
 /// turned off, a glyph choice is taken away); a glyph no feature draws through
 /// `text.setGlyphAlternate`. The default glyph, or a variant the character already has, changes
-/// nothing.
-fn apply_alternate(app: &mut VectorcraftApp, id: NodeId, bytes: (usize, usize), features: &[String], has_choice: bool, pick: Pick) {
-    let (cmd, params) = match pick {
+/// nothing. Whether the command ran or nothing needed to change; a failed command's error goes to
+/// the status.
+fn apply_alternate(app: &mut VectorcraftApp, id: NodeId, bytes: (usize, usize), features: &[String], has_choice: bool, pick: Pick) -> bool {
+    let Some((cmd, params)) = alternate_command(id, bytes, features, has_choice, pick) else { return true };
+    match app.run(cmd, params) {
+        Ok(_) => true,
+        Err(e) => {
+            app.status(e.to_string());
+            false
+        }
+    }
+}
+
+/// The command and parameters [`apply_alternate`] runs; `None` when nothing needs to change.
+fn alternate_command(
+    id: NodeId,
+    bytes: (usize, usize),
+    features: &[String],
+    has_choice: bool,
+    pick: Pick,
+) -> Option<(&'static str, serde_json::Value)> {
+    Some(match pick {
         Pick::Glyph(gid) => ("text.setGlyphAlternate", json!({"id": id.0, "start": bytes.0, "gid": gid})),
         Pick::Default | Pick::Feature(_) => {
             let tag = if let Pick::Feature(tag) = &pick { Some(tag.as_str()) } else { None };
             let changes = vectorcraft_text::alternate_changes(features, tag);
             if changes.is_empty() && !has_choice {
-                return;
+                return None;
             }
             let mut params = json!({"id": id.0, "start": bytes.0, "end": bytes.1});
             if !changes.is_empty() {
@@ -558,9 +729,129 @@ fn apply_alternate(app: &mut VectorcraftApp, id: NodeId, bytes: (usize, usize), 
             }
             ("text.setRangeStyle", params)
         }
-    };
-    if let Err(e) = app.run(cmd, params) {
-        app.status(e.to_string());
+    })
+}
+
+/// The most alternate glyphs the canvas shows beside a selected character. Public behavior: at
+/// most five alternates show on the canvas, and an icon to their right opens the Glyphs panel when
+/// the font has more ("Replace a character with on-canvas alternate glyphs",
+/// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=479>).
+pub(crate) const ON_CANVAS_ALTERNATES: usize = 5;
+
+/// The alternate glyphs the canvas offers beside the Type tool's one selected character
+/// ([`on_canvas`]).
+pub(crate) struct OnCanvas {
+    /// The text the character is in.
+    pub id: NodeId,
+    /// The character's bytes in the text, start and end.
+    pub bytes: (usize, usize),
+    /// The face that draws the character's glyph.
+    face: std::sync::Arc<vectorcraft_text::FontFace>,
+    /// Up to [`ON_CANVAS_ALTERNATES`] glyphs, none of them the glyph the character is drawn with.
+    cells: Vec<Variant>,
+    /// Whether the character has alternates that [`Self::cells`] leaves out.
+    pub more: bool,
+    features: Vec<String>,
+    has_choice: bool,
+}
+
+impl OnCanvas {
+    /// How many glyphs are offered: 1 to [`ON_CANVAS_ALTERNATES`].
+    pub fn count(&self) -> usize {
+        self.cells.len()
+    }
+
+    /// The id of glyph `i`.
+    #[cfg(test)]
+    pub fn gid(&self, i: usize) -> Option<u32> {
+        self.cells.get(i).map(|c| c.gid)
+    }
+
+    /// The preview of glyph `i` in a square of `px` pixels.
+    pub fn texture(&self, ctx: &egui::Context, i: usize, px: u32) -> Option<egui::TextureHandle> {
+        self.cells.get(i).map(|c| glyph_texture(ctx, &self.face, c.gid, px))
+    }
+
+    /// The tooltip of glyph `i`: its id, the feature that draws it, and what a click does.
+    pub fn tip(&self, i: usize) -> String {
+        let Some(c) = self.cells.get(i) else { return String::new() };
+        let glyph = crate::i18n::fmt(tl!("glyph {id}"), &[("id", &c.gid.to_string())]);
+        let glyph = match (&c.apply, c.default) {
+            (_, true) => glyph,
+            (Some(tag), _) => format!("{glyph}  ({tag})"),
+            (None, _) => format!("{glyph}  ({})", String::from_utf8_lossy(&c.feature)),
+        };
+        let mut tip = format!("{glyph}\n{}", tl!("Click to replace"));
+        if !c.default && c.apply.is_none() {
+            tip.push('\n');
+            tip.push_str(tl!("No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors."));
+        }
+        tip
+    }
+
+    /// Draw the character with glyph `i`, as a double-click on that glyph in Show › Alternates for
+    /// Current Selection does: one command, so one undo step.
+    pub fn pick(&self, app: &mut VectorcraftApp, i: usize) {
+        let Some(c) = self.cells.get(i) else { return };
+        let pick = match (&c.apply, c.default) {
+            (_, true) => Pick::Default,
+            (Some(tag), _) => Pick::Feature(tag.clone()),
+            (None, _) => Pick::Glyph(c.gid),
+        };
+        super::character::end_typing(app);
+        apply_alternate(app, self.id, self.bytes, &self.features, self.has_choice, pick);
+    }
+}
+
+/// What the canvas offers beside the Type tool's selection: the alternates of the selected
+/// character as it stands in its word ([`alternates_found`], found once for each document
+/// revision), in the font's order and without the glyph the character is drawn with. A character
+/// drawn with an alternate gets its default glyph first. `None` unless the Type tool's selection
+/// is exactly one character of one type object whose font is available and gives it another glyph.
+pub(crate) fn on_canvas(app: &VectorcraftApp, ui: &Ui) -> Option<OnCanvas> {
+    let (_, a, b) = super::character::text_editing(app)?;
+    if a == b || super::character::text_story(app).is_some() {
+        return None;
+    }
+    let target = selected_target(app)?;
+    let (start, end) = (a.min(b), a.max(b));
+    if target.byte != start || start + target.ch.len_utf8() != end {
+        return None;
+    }
+    let db = FontDb::global();
+    let face = db.style_face(target.style).filter(|_| db.has_family(&target.style.font_family))?;
+    let found = alternates_found(app, ui, target.id, start, face.id())?;
+    let face = db.face_by_id(found.font_id).unwrap_or(face);
+    let default = (found.default != found.current).then_some(Variant { gid: found.default, feature: [0; 4], apply: None, default: true });
+    let others = found.alternates.iter().filter(|a| a.gid != found.default && a.gid != found.current).map(|a| Variant {
+        gid: a.gid,
+        feature: a.feature,
+        apply: a.apply.clone(),
+        default: false,
+    });
+    let mut cells: Vec<Variant> = default.into_iter().chain(others).collect();
+    if cells.is_empty() {
+        return None;
+    }
+    let more = cells.len() > ON_CANVAS_ALTERNATES;
+    cells.truncate(ON_CANVAS_ALTERNATES);
+    Some(OnCanvas {
+        id: target.id,
+        bytes: (start, end),
+        face,
+        cells,
+        more,
+        features: target.style.features.clone(),
+        has_choice: target.style.glyph_alternate.is_some(),
+    })
+}
+
+/// Show the Glyphs panel on Show › Alternates for Current Selection, for the canvas's control that
+/// stands for the alternates it leaves out. A panel that is already shown stays where it is.
+pub(crate) fn show_alternates(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    set_pstate(ctx, "gl-subset", SUBSETS.len());
+    if let Err(e) = crate::panel_docking::reveal_panel(app, "glyphs") {
+        app.status(e);
     }
 }
 
@@ -730,6 +1021,315 @@ fn insert_character(app: &mut VectorcraftApp, ctx: &egui::Context, face: &vector
     }
 }
 
+/// The side of the triangle in the lower right corner of a grid cell `cell` points wide whose glyph
+/// has alternates: a quarter of the cell, from 5 to 10 points (VectorCraft's own size).
+fn corner_side(cell: f32) -> f32 {
+    (cell * 0.25).clamp(5.0, 10.0)
+}
+
+/// The most columns, and the most rows before it scrolls, of a cell's pop-up of alternates
+/// (VectorCraft's own numbers).
+const POPUP_COLUMNS: usize = 8;
+const POPUP_ROWS: usize = 6;
+
+/// The triangle in the lower right corner of the grid cell `rect` of character `c` (none for a
+/// glyph no character maps), whose glyph `gid` has alternates, and the pop-up a click on it opens
+/// ([`alternates_popup`]). Public
+/// behavior: a pop-up of alternate glyphs opens from the triangle in the lower right corner of a
+/// glyph's box where the glyph has alternates
+/// ([CS6 reference, Glyphs panel overview](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=373)).
+/// Returns the glyph picked in the pop-up, in the frame it is picked.
+fn corner_popup(ui: &mut Ui, face: &vectorcraft_text::FontFace, c: Option<char>, gid: u32, rect: egui::Rect, cell: f32) -> Option<u32> {
+    let t = Tokens::get(ui.ctx());
+    let side = corner_side(cell);
+    let corner = egui::Rect::from_min_max(rect.max - vec2(side + 1.0, side + 1.0), rect.max - vec2(1.0, 1.0));
+    let resp = ui.interact(corner, egui::Id::unique(("gl-alternates-corner", face.id(), c, gid)), Sense::click());
+    let fill = if resp.hovered() { t.accent } else { t.text_dim };
+    ui.painter().add(egui::Shape::convex_polygon(vec![corner.right_top(), corner.right_bottom(), corner.left_bottom()], fill, Stroke::NONE));
+    let resp = resp.on_hover_text(tl!("Show Character Alternates"));
+    let mut picked = None;
+    egui::Popup::menu(&resp).show(|ui| picked = alternates_popup(ui, face, c, gid, cell.max(CELL_STEPS[CELL_DEFAULT])));
+    picked
+}
+
+/// The pop-up of the alternates of glyph `gid`: that glyph first, then the alternates
+/// [`vectorcraft_text::FontFace::alternates`] lists for character `c`, or for a glyph no character
+/// maps the glyphs [`vectorcraft_text::FontFace::substitutions`] gives it, in the font's order, in
+/// cells `cell` points wide, [`POPUP_COLUMNS`] to a row and [`POPUP_ROWS`] rows before it scrolls.
+/// The glyph clicked.
+fn alternates_popup(ui: &mut Ui, face: &vectorcraft_text::FontFace, c: Option<char>, gid: u32, cell: f32) -> Option<u32> {
+    let t = Tokens::get(ui.ctx());
+    let mut list: Vec<(u32, Option<[u8; 4]>)> = vec![(gid, None)];
+    match c {
+        Some(c) => list.extend(face.alternates(c).into_iter().map(|a| (a.gid, Some(a.feature)))),
+        None => list.extend(face.substitutions(gid).into_iter().flat_map(|s| s.glyphs.into_iter().map(move |g| (g, Some(s.feature))))),
+    }
+    let mut seen = std::collections::HashSet::new();
+    list.retain(|(g, _)| seen.insert(*g));
+    let cols = list.len().clamp(1, POPUP_COLUMNS);
+    let rows = list.len().div_ceil(cols);
+    let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
+    let mut picked = None;
+    let area = egui::ScrollArea::vertical().id_salt(("gl-alternates-popup", face.id(), c, gid)).max_height(cell * POPUP_ROWS as f32);
+    area.show_rows(ui, cell, rows, |ui, range| {
+        for r in range {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                for &(g, feature) in list.iter().skip(r * cols).take(cols) {
+                    let (rect, resp) = ui.allocate_exact_size(vec2(cell, cell), Sense::click());
+                    if resp.hovered() {
+                        ui.painter().rect_filled(rect, 2, t.hover);
+                    }
+                    ui.painter().rect_stroke(rect.shrink(0.5), 0, Stroke::new(0.5, t.border), StrokeKind::Inside);
+                    let tex = glyph_texture(ui.ctx(), face, g, px);
+                    ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), t.text_strong);
+                    let glyph = crate::i18n::fmt(tl!("glyph {id}"), &[("id", &g.to_string())]);
+                    let tip = match feature {
+                        Some(f) => format!("{glyph}  ({})", String::from_utf8_lossy(&f)),
+                        None => glyph,
+                    };
+                    if resp.on_hover_text(tip).clicked() {
+                        picked = Some(g);
+                    }
+                }
+            });
+        }
+    });
+    picked
+}
+
+/// A pick in the pop-up of character `c`'s cell, whose glyph is `gid` ([`alternates_popup`]).
+/// The cell's own glyph inserts the character as a double-click on the cell does
+/// ([`insert_character`]). An alternate needs the Type tool's caret or selection in text set in
+/// `face`: when the selection is exactly one `c` in one type object, that character is drawn with
+/// the glyph, and the selection follows it to the frame the text flows it to; else `c` goes in at the caret, in place of the selection (with the rest of a
+/// threaded story that Select All selected), and is drawn with it, the two as one undo step. The
+/// glyph goes on as a double-click in Show › Alternates for Current Selection puts it
+/// ([`draw_selected_with`]). An Arabic presentation form goes in as its base letter, as a
+/// double-click on its cell puts it, drawn with the glyph where the font gives it that glyph in its
+/// word. Without a caret, with text in another font, or with a glyph the character cannot be drawn
+/// with there, the status says why and nothing changes.
+fn insert_alternate(app: &mut VectorcraftApp, ctx: &egui::Context, face: &vectorcraft_text::FontFace, c: char, gid: u32, picked: u32) {
+    if picked == gid {
+        return insert_character(app, ctx, face, c, gid);
+    }
+    let db = FontDb::global();
+    let Some((editing, a, b)) = super::character::text_editing(app) else {
+        app.ui.status = "Select text or click into text with the Type tool to insert glyphs".into();
+        return;
+    };
+    let style = super::character::text_style(app).map(|(s, _)| s);
+    let text_face = style.as_ref().filter(|s| db.has_family(&s.font_family)).and_then(|s| db.style_face(s));
+    if text_face.as_ref().map(|f| f.id()) != Some(face.id()) {
+        let text_font = match &text_face {
+            Some(f) => format!("{} {}", f.family, f.style),
+            None => style.map(|s| s.font_family).unwrap_or_default(),
+        };
+        app.status(crate::i18n::fmt(
+            tl!("{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font})."),
+            &[("glyph", &glyph_label(face, picked)), ("font", &format!("{} {}", face.family, face.style)), ("text_font", &text_font)],
+        ));
+        return;
+    }
+    let c = base_letter(face, c, gid).unwrap_or(c);
+    // Typing in progress stays a step of its own.
+    super::character::end_typing(app);
+    // After Select All in a threaded story, the other frames' text goes too, as typing removes it,
+    // even when the edited frame holds only `c`.
+    let story = super::character::text_story(app).unwrap_or_default();
+    let one = story.is_empty() && selected_target(app).is_some_and(|t| t.ch == c && (a.min(b), a.max(b)) == (t.byte, t.byte + c.len_utf8()));
+    if one {
+        let Some(at) = app.session.active().map(|st| story_start(&st.doc, editing, &[]) + a.min(b)) else { return };
+        if draw_selected_with(app, face, c, picked) {
+            // The glyph can change the character's width and flow it on to the next frame: the
+            // selection follows it there.
+            select_in_story(app, (editing, at), c, (0, c.len_utf8()));
+        }
+        return;
+    }
+    // Inside an undo group that is already open, the insertion and the glyph are part of that
+    // group's step; else they are one step of their own.
+    let open = app.session.active().is_some_and(|st| st.undo_group.is_some());
+    if !open {
+        app.session.begin_named_undo_group(None);
+    }
+    put_alternate(app, face, c, picked, editing, (a.min(b), a.max(b)), &story);
+    if !open && let Some(st) = app.session.active_mut() {
+        st.undo_group = None;
+    }
+}
+
+/// The insertion of [`insert_alternate`]: `c` takes the place of the Type tool's selection `lo..hi`
+/// of text `id` (with the text of the other frames of `story` when the Type tool has the whole
+/// threaded story selected), in the style of the selection's first character, and is drawn with
+/// glyph `picked`. The edits are tried on a copy of the document first, and a pick the copy refuses
+/// changes nothing, the undo history included.
+fn put_alternate(
+    app: &mut VectorcraftApp,
+    face: &vectorcraft_text::FontFace,
+    c: char,
+    picked: u32,
+    id: NodeId,
+    (lo, hi): (usize, usize),
+    story: &[NodeId],
+) {
+    let style = if lo < hi {
+        match app.run("text.getRange", json!({"id": id.0, "start": lo, "end": hi})) {
+            Ok(v) => v.pointer("/runs/0/style").cloned(),
+            Err(e) => {
+                app.status(e.to_string());
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    let clear: Vec<NodeId> = story.iter().copied().filter(|f| *f != id).collect();
+    let mut edit = json!({"id": id.0, "start": lo, "end": hi, "clear": clear.iter().map(|f| f.0).collect::<Vec<_>>()});
+    match style {
+        Some(style) => edit["runs"] = json!([{"text": c.to_string(), "style": style}]),
+        None => edit["insert"] = json!(c.to_string()),
+    }
+    // The character's place in the story: a full frame of threaded text flows it on to the next.
+    let Some(at) = app.session.active().map(|st| story_start(&st.doc, id, &clear) + lo) else { return };
+    if let Err(e) = try_on_a_copy(app, face, c, picked, (id, at), &edit) {
+        app.status(e);
+        return;
+    }
+    if let Err(e) = app.run("text.editRange", edit) {
+        app.status(e.to_string());
+        return;
+    }
+    let n = c.len_utf8();
+    if select_in_story(app, (id, at), c, (0, n)) && draw_selected_with(app, face, c, picked) {
+        // The glyph can change the character's width and flow it on again: find it again.
+        select_in_story(app, (id, at), c, (n, n));
+    }
+}
+
+/// The Type tool's selection becomes bytes `start..end` from character `c` at byte `at` of the
+/// story of text `id`, in the frame that holds the character; whether it is there. When that
+/// frame is not the one the Type tool edits, the tool edits it, and it is selected, as a click in
+/// it selects it (`move_editing_selection` in the engine's `panelcmds.rs`).
+fn select_in_story(app: &mut VectorcraftApp, (id, at): (NodeId, usize), c: char, (start, end): (usize, usize)) -> bool {
+    let Some((frame, byte)) = app.session.active().and_then(|st| story_place(&st.doc, id, at, c)) else { return false };
+    if super::character::text_editing(app).is_some_and(|(editing, ..)| editing == frame) {
+        app.session.set_tool_option("select", &json!({"start": byte + start, "end": byte + end}));
+        return true;
+    }
+    app.session.set_tool_option("textSelection", &json!({"editing": frame.0, "anchor": byte + start, "caret": byte + end}));
+    let selected =
+        app.session.active().is_some_and(|st| std::iter::successors(Some(frame), |f| st.doc.parent_of(*f)).any(|f| st.selection.contains(f)));
+    if !selected && let Err(e) = app.session.select(|_, sel| sel.set([frame])) {
+        app.status(e.to_string());
+        return false;
+    }
+    true
+}
+
+/// The bytes of the text of the frames before frame `id` in its story ([`Document::story_of`]),
+/// without the frames of `clear`, whose text an edit removes.
+///
+/// [`Document::story_of`]: vectorcraft_doc::Document::story_of
+fn story_start(doc: &vectorcraft_doc::Document, id: NodeId, clear: &[NodeId]) -> usize {
+    doc.story_of(id)
+        .into_iter()
+        .take_while(|f| *f != id)
+        .filter(|f| !clear.contains(f))
+        .filter_map(|f| match doc.node(f).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some(t.plain_text().len()),
+            _ => None,
+        })
+        .sum()
+}
+
+/// The frame of the story of text `id` that holds the character at byte `at` of the story's text,
+/// and that character's byte in the frame; `None` unless that character is `c`.
+fn story_place(doc: &vectorcraft_doc::Document, id: NodeId, at: usize, c: char) -> Option<(NodeId, usize)> {
+    let mut start = 0;
+    for f in doc.story_of(id) {
+        let Some(NodeKind::Text(t)) = doc.node(f).map(|n| &n.kind) else { continue };
+        let text = t.plain_text();
+        if at < start + text.len() {
+            return text.get(at - start..)?.starts_with(c).then_some((f, at - start));
+        }
+        start += text.len();
+    }
+    None
+}
+
+/// The edits of [`put_alternate`] on a copy of the active document in a session of its own: `edit`
+/// (`text.editRange`) puts `c` in at byte `at` of the story of text `id` (in whichever frame the
+/// text flows it to), and glyph `picked` of `face` goes on it. The error of the step that fails; an
+/// error too when the character is not where the edit put it.
+fn try_on_a_copy(
+    app: &VectorcraftApp,
+    face: &vectorcraft_text::FontFace,
+    c: char,
+    picked: u32,
+    (id, at): (NodeId, usize),
+    edit: &serde_json::Value,
+) -> Result<(), String> {
+    let Some(st) = app.session.active() else { return Ok(()) };
+    let mut copy = vectorcraft_engine::Session::new();
+    copy.add_document(vectorcraft_doc::Document::clone(&st.doc), None);
+    copy.execute("text.editRange", edit).map_err(|e| e.to_string())?;
+    let n = c.len_utf8();
+    let doc = copy.active().map(|s| &s.doc);
+    let step = match doc.and_then(|d| story_place(d, id, at, c).and_then(|(f, byte)| Some((f, byte, d.node(f)?)))) {
+        Some((f, byte, node)) => match &node.kind {
+            NodeKind::Text(text) => style_at(text, byte).and_then(|style| {
+                alternate_command(f, (byte, byte + n), &style.features, style.glyph_alternate.is_some(), pick_for(text, byte, face, picked))
+            }),
+            _ => return Err("Select text or click into text with the Type tool to insert glyphs".into()),
+        },
+        None => return Err("Select text or click into text with the Type tool to insert glyphs".into()),
+    };
+    if let Some((cmd, params)) = step {
+        copy.execute(cmd, &params).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Draw the Type tool's selected character, `c` (a range's first character, else the one before
+/// the caret), with glyph `picked` of `face`: through the OpenType feature that draws that glyph
+/// on it in its word when one does, else as a glyph choice ([`apply_alternate`]). Whether it
+/// worked; nothing changes when the character already has that glyph.
+fn draw_selected_with(app: &mut VectorcraftApp, face: &vectorcraft_text::FontFace, c: char, picked: u32) -> bool {
+    let Some(t) = selected_target(app).filter(|t| t.ch == c) else { return false };
+    let (id, byte, features, has_choice) = (t.id, t.byte, t.style.features.clone(), t.style.glyph_alternate.is_some());
+    let pick = match app.session.active().and_then(|s| s.doc.node(id)).map(|node| &node.kind) {
+        Some(NodeKind::Text(text)) => pick_for(text, byte, face, picked),
+        _ => Pick::Glyph(picked),
+    };
+    super::character::end_typing(app);
+    apply_alternate(app, id, (byte, byte + c.len_utf8()), &features, has_choice, pick)
+}
+
+/// How glyph `picked` of `face` goes on the character at `byte` of `text`: the OpenType feature
+/// that draws it there in its word, the default glyph, else a glyph choice.
+fn pick_for(text: &vectorcraft_text::TextObject, byte: usize, face: &vectorcraft_text::FontFace, picked: u32) -> Pick {
+    match vectorcraft_text::alternates_in_context(FontDb::global(), text, byte).filter(|f| f.font_id == face.id()) {
+        Some(f) if f.default == picked => Pick::Default,
+        Some(f) => f.alternates.iter().find(|x| x.gid == picked).and_then(|x| x.apply.clone()).map_or(Pick::Glyph(picked), Pick::Feature),
+        None => Pick::Glyph(picked),
+    }
+}
+
+/// The style of the character at `byte` of `text`.
+fn style_at(text: &vectorcraft_text::TextObject, byte: usize) -> Option<&CharStyle> {
+    let mut start = 0;
+    text.runs
+        .iter()
+        .find(|run| {
+            let end = start + run.text.len();
+            let found = (start..end).contains(&byte);
+            start = end;
+            found
+        })
+        .map(|run| &run.style)
+}
+
 /// The tooltip of a glyph no character maps (Show › Entire Font): its name from the font, `gid N`
 /// when it has none, its id, and the feature that gives it, if one does.
 fn unencoded_tip(face: &vectorcraft_text::FontFace, gid: u32) -> String {
@@ -781,20 +1381,164 @@ fn zoom_button(ui: &mut Ui, id: &str, label: &str, tip: &str, enabled: bool) -> 
     resp.on_hover_text(tl!(tip)).clicked() && enabled
 }
 
-pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
+/// The menu label of East Asian glyph form `form` ([`GlyphForm::ALL`]).
+fn glyph_form_label(form: GlyphForm) -> &'static str {
+    match form {
+        GlyphForm::Traditional => "Traditional Forms",
+        GlyphForm::Expert => "Expert Forms",
+        GlyphForm::Jis04 => "JIS 04 Forms",
+        GlyphForm::Jis90 => "JIS 90 Forms",
+        GlyphForm::Jis78 => "JIS 78 Forms",
+        GlyphForm::Jis83 => "JIS 83 Forms",
+        GlyphForm::FullWidth => "Monospaced Full-Width Forms",
+        GlyphForm::HalfWidth => "Monospaced Half-Width Forms",
+        GlyphForm::ThirdWidth => "Monospaced Third-Width Forms",
+        GlyphForm::QuarterWidth => "Monospaced Quarter-Width Forms",
+        GlyphForm::Default => "Revert To Default Forms",
+    }
+}
+
+/// The ids of the faces that draw the characters [`glyph_form_items`] acts on: the faces the
+/// fonts of their styles name, and the faces layout draws them with, fallback faces included:
+/// the Type tool's selected range (every frame of its story after Select All in threaded text,
+/// the whole text object at a caret), else every frame of the selected stories. Laid out once for
+/// each document revision, selection and set of fonts while the menu is open, overflow text
+/// included.
+fn selection_faces(app: &VectorcraftApp, ui: &Ui) -> Vec<u32> {
+    type Key = (u64, u64, u64, Option<(NodeId, usize, usize)>, Vec<NodeId>);
+    let editing = super::character::text_editing(app).map(|(id, a, b)| (id, a.min(b), a.max(b)));
+    let Some(state) = app.session.active() else { return vec![] };
+    let story = super::character::text_story(app);
+    let stories = match editing {
+        Some(_) => story.clone().unwrap_or_default(),
+        None => super::character::selected_stories(app),
+    };
+    let db = FontDb::global();
+    let key: Key = (state.uid, state.revision, db.generation(), editing, stories);
+    let slot = ui.scope_id().with("gl-form-faces");
+    if let Some((cached, ids)) = ui.ctx().data(|d| d.get_temp::<(Key, Vec<u32>)>(slot))
+        && cached == key
+    {
+        return ids;
+    }
+    let mut ids: Vec<u32> =
+        super::character::selected_fonts(app).iter().filter_map(|(family, style)| db.face(family, style)).map(|f| f.id()).collect();
+    let mut add = |t: &vectorcraft_doc::TextObject, range: Option<(usize, usize)>| {
+        // Laid out as point type, so that text overflowing its area or path counts too.
+        let mut all = t.clone();
+        all.kind = vectorcraft_doc::TextKind::Point;
+        for g in vectorcraft_text::layout(db, &all).glyphs {
+            // A glyph counts when its characters overlap the range (a ligature may start before it).
+            if range.is_none_or(|(a, b)| g.byte < b && g.byte + g.len.max(1) > a) && !ids.contains(&g.font_id) {
+                ids.push(g.font_id);
+            }
+        }
+    };
+    let text = |id: NodeId| match state.doc.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => Some(t),
+        _ => None,
+    };
+    match (editing, story) {
+        // After Select All in threaded text: every frame of the story.
+        (Some(_), Some(frames)) => frames.into_iter().filter_map(text).for_each(|t| add(t, None)),
+        (Some((id, a, b)), None) => {
+            if let Some(t) = text(id) {
+                // A caret applies the form to all the text of the object.
+                add(t, (a < b).then_some((a, b)));
+            }
+        }
+        (None, _) => super::character::selected_story_texts(app).into_iter().for_each(|t| add(t, None)),
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(slot, (key, ids.clone())));
+    ids
+}
+
+/// The value `f` gives every character [`glyph_form_items`] acts on: the Type tool's selected
+/// range, all the text of the object at a caret (the menu formats all of it there), else every
+/// frame of the selected stories. `None` where they differ, or with no type.
+fn selection_shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> T) -> Option<T> {
+    match super::character::text_editing(app) {
+        Some((id, a, b)) if b <= a && super::character::text_story(app).is_none() => {
+            let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
+            let mut acc = super::character::Shared::None;
+            for r in &t.runs {
+                acc.add(f(&r.style));
+            }
+            acc.value()
+        }
+        _ => super::character::shared(app, f),
+    }
+}
+
+/// The East Asian glyph form every character [`glyph_form_items`] acts on has ([`selection_shared`]).
+fn selection_glyph_form(app: &VectorcraftApp) -> Option<GlyphForm> {
+    selection_shared(app, |s| s.glyph_form)
+}
+
+/// Does choosing `form` change the characters [`glyph_form_items`] acts on? Not when they all have
+/// it already, unless one of them has a glyph choice, which a form other than the default takes
+/// away.
+fn glyph_form_changes(app: &VectorcraftApp, form: GlyphForm) -> bool {
+    selection_glyph_form(app) != Some(form) || (form != GlyphForm::Default && selection_shared(app, |s| s.glyph_alternate.is_none()) != Some(true))
+}
+
+/// The East Asian glyph forms of the panel menu, with Show East Asian Options: each draws the
+/// selected characters (all the text of the selected type objects without a Type tool range) in
+/// one form of their font, and is checked when they all have it; a form none of the faces that
+/// draw the selected text has a feature for ([`selection_faces`]) is disabled. Revert To Default
+/// Forms draws the font's default glyphs.
+/// Public behavior: [Format East Asian characters](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)
+/// (Replace Asian characters with a different glyph form).
+fn glyph_form_items(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let has = super::character::text_style(app).is_some();
+    let db = FontDb::global();
+    let faces: Vec<_> = selection_faces(app, ui).into_iter().filter_map(|id| db.face_by_id(id)).collect();
+    let current = selection_glyph_form(app);
+    for form in GlyphForm::ALL {
+        // A width form may be drawn with other widths for the same glyphs (`GPOS`) instead of
+        // other glyphs.
+        let enabled = match form.feature() {
+            Some(tag) => faces.iter().any(|f| f.has_substitution_feature(*tag) || (form.is_width() && f.has_positioning_feature(*tag))),
+            None => has,
+        };
+        let checked = form != GlyphForm::Default && current == Some(form);
+        if form == GlyphForm::Default {
+            ui.separator();
+        }
+        // Choosing the form every selected character already has changes nothing.
+        if menu_item(ui, tl!(glyph_form_label(form)), enabled, checked) && glyph_form_changes(app, form) {
+            super::character::format(app, json!({"glyphForm": form.id()}));
+        }
+    }
+}
+
+pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Use the Selected Text's Font"), true, false) {
         set_pstate::<Option<(String, String)>>(ui.ctx(), "gl-font", None);
     }
     ui.separator();
+    if app.session.prefs.show_east_asian_options {
+        glyph_form_items(app, ui);
+        ui.separator();
+    }
+    let (_, _, face) = browsed_face(app, ui.ctx());
+    let cats = categories(face.as_deref());
+    let (cur, category) = shown(ui.ctx(), &cats);
     for (i, (name, _, _)) in SUBSETS.iter().enumerate() {
-        let cur: usize = pstate(ui.ctx(), "gl-subset");
         if menu_item(ui, tl!(name), true, cur == i) {
             set_pstate(ui.ctx(), "gl-subset", i);
         }
     }
-    let cur: usize = pstate(ui.ctx(), "gl-subset");
-    if menu_item(ui, tl!("Alternates for Current Selection"), true, cur >= SUBSETS.len()) {
+    if menu_item(ui, tl!("Alternates for Current Selection"), true, cur == SUBSETS.len()) {
         set_pstate(ui.ctx(), "gl-subset", SUBSETS.len());
+    }
+    if !cats.is_empty() {
+        ui.separator();
+    }
+    for (i, (id, label)) in cats.iter().enumerate() {
+        if menu_item(ui, label, true, category == Some(i)) {
+            show_category(ui.ctx(), id);
+        }
     }
 }
 
@@ -977,6 +1721,104 @@ mod tests {
 
     fn texts(ctx: &egui::Context, app: &mut VectorcraftApp) -> Vec<String> {
         text_anchors(&shapes(ctx, app, vec![])).into_iter().map(|(t, _)| t).collect()
+    }
+
+    /// With Show East Asian Options, the panel menu lists the East Asian glyph forms; choosing one
+    /// draws the Type tool's selected characters in it, checks it, and Revert To Default Forms
+    /// takes it away. A form the font has no feature for is disabled. The second half needs
+    /// craft-fonts' BIZ UDMincho, which has JIS 78 forms and no JIS 04 forms (skipped without it).
+    #[test]
+    fn east_asian_glyph_forms_in_the_panel_menu_set_the_selected_characters_form() {
+        let (mut app, id) = editing("亜唖");
+        let ctx = egui::Context::default();
+        let labels = |app: &mut VectorcraftApp| menu_texts(&ctx, app, vec![]).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        let plain = |l: &String| l.trim_start_matches(['✓', ' ']).to_string();
+        app.session.prefs.show_east_asian_options = false;
+        assert!(!labels(&mut app).iter().map(plain).any(|l| l == "JIS 78 Forms"), "hidden without Show East Asian Options");
+        app.session.prefs.show_east_asian_options = true;
+        let shown: Vec<String> = labels(&mut app).iter().map(plain).collect();
+        for form in GlyphForm::ALL {
+            assert!(shown.iter().any(|l| l == glyph_form_label(form)), "{form:?} in {shown:?}");
+        }
+        const FAMILY: &str = "BIZ UDMincho";
+        if FontDb::global().face(FAMILY, "Regular").is_none_or(|f| f.family != FAMILY) {
+            eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+            return;
+        }
+        app.run("text.setRangeStyle", json!({"id": id, "font": FAMILY})).unwrap();
+        let forms = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap_or(0))).unwrap().kind {
+            NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.glyph_form)).collect::<Vec<_>>(),
+            _ => panic!("text"),
+        };
+        select(&mut app, 3, 6);
+        choose(&ctx, &mut app, "JIS 78 Forms");
+        assert_eq!(forms(&app), [("亜".to_string(), GlyphForm::Default), ("唖".to_string(), GlyphForm::Jis78)]);
+        assert!(labels(&mut app).iter().any(|l| l.starts_with('✓') && l.ends_with("JIS 78 Forms")), "checked");
+        // A selection whose first font has no JIS 83 forms, and whose second one does, takes them.
+        let fallback = vectorcraft_text::FALLBACK_FAMILY;
+        if FontDb::global().face(fallback, "Regular").is_some_and(|f| !f.has_substitution_feature(*b"jp83")) {
+            app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "font": fallback})).unwrap();
+            select(&mut app, 0, 6);
+            choose(&ctx, &mut app, "JIS 83 Forms");
+            assert!(forms(&app).iter().all(|(_, f)| *f == GlyphForm::Jis83), "{:?}", forms(&app));
+            app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "font": FAMILY})).unwrap();
+            app.run("text.setRangeStyle", json!({"id": id, "glyphForm": "default"})).unwrap();
+            select(&mut app, 3, 6);
+            choose(&ctx, &mut app, "JIS 78 Forms");
+        }
+        // Choosing it again changes nothing, and the font has no JIS 04 forms: that item is disabled.
+        let n = app.session.active().unwrap().history.undo.len();
+        choose(&ctx, &mut app, "JIS 78 Forms");
+        choose(&ctx, &mut app, "JIS 04 Forms");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), n);
+        assert_eq!(forms(&app)[1].1, GlyphForm::Jis78);
+        choose(&ctx, &mut app, "Revert To Default Forms");
+        assert!(forms(&app).iter().all(|(_, f)| *f == GlyphForm::Default), "{:?}", forms(&app));
+    }
+
+    /// At a caret the glyph form items act on all the text of the object, so they are checked, and
+    /// skipped as changing nothing, by every character's form, not the caret's: with the caret in
+    /// text of the default form and other text in JIS 78 forms, Revert To Default Forms reverts
+    /// that text.
+    #[test]
+    fn glyph_form_items_at_a_caret_follow_all_the_text() {
+        let (mut app, id) = editing("亜唖");
+        app.session.prefs.show_east_asian_options = true;
+        let ctx = egui::Context::default();
+        let node = NodeId(id.as_u64().unwrap_or(0));
+        let forms = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(node).unwrap().kind {
+            NodeKind::Text(t) => t.runs.iter().map(|r| r.style.glyph_form).collect::<Vec<_>>(),
+            _ => panic!("text"),
+        };
+        app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 3, "glyphForm": "jis78"})).unwrap();
+        select(&mut app, 6, 6);
+        assert_eq!(selection_glyph_form(&app), None, "the caret's form is not every character's");
+        choose(&ctx, &mut app, "Revert To Default Forms");
+        assert!(forms(&app).iter().all(|f| *f == GlyphForm::Default), "{:?}", forms(&app));
+        app.run("text.setRangeStyle", json!({"id": id, "glyphForm": "jis78"})).unwrap();
+        select(&mut app, 6, 6);
+        assert_eq!(selection_glyph_form(&app), Some(GlyphForm::Jis78));
+    }
+
+    /// Choosing the form every character already has is skipped as changing nothing, unless a
+    /// character has a glyph choice: a form other than the default takes it away, and Revert To
+    /// Default Forms keeps it.
+    #[test]
+    fn a_glyph_choice_lets_the_current_form_be_chosen_again() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+        FontDb::global().add_font(alternates_font(false).expect("the test font builds"));
+        let [u1, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        let (mut app, id) = editing("xay");
+        app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(false), "glyphForm": "jis78"})).unwrap();
+        select(&mut app, 3, 3);
+        assert!(!glyph_form_changes(&app, GlyphForm::Jis78), "every character has it");
+        assert!(glyph_form_changes(&app, GlyphForm::Default));
+        app.run("text.setGlyphAlternate", json!({"id": id, "start": 1, "gid": u1})).unwrap();
+        select(&mut app, 3, 3);
+        assert!(glyph_form_changes(&app, GlyphForm::Jis78), "it takes away the glyph choice");
+        app.run("text.setRangeStyle", json!({"id": id, "glyphForm": "default"})).unwrap();
+        select(&mut app, 3, 3);
+        assert!(!glyph_form_changes(&app, GlyphForm::Default), "Revert To Default Forms keeps the glyph choice");
     }
 
     /// Show › Alternates for Current Selection lists the selected character's alternates from the
@@ -1253,6 +2095,550 @@ mod tests {
         }
     }
 
+    /// The corner triangles of the grid cells whose glyph has alternates: right-angled, with the
+    /// right angle at the cell's lower right corner.
+    fn corner_triangles(shapes: &[Shape]) -> Vec<Rect> {
+        fn walk(s: &Shape, out: &mut Vec<Rect>) {
+            match s {
+                Shape::Path(p) if p.points.len() == 3 && p.points[0].x == p.points[1].x && p.points[1].y == p.points[2].y => {
+                    out.push(Rect::from_points(&p.points));
+                }
+                Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                _ => {}
+            }
+        }
+        let mut out = vec![];
+        shapes.iter().for_each(|s| walk(s, &mut out));
+        out
+    }
+
+    /// The Type tool editing `text` set in the alternates test font, the panel on Basic Latin, and
+    /// the egui context it is drawn in.
+    fn basic_latin_of_the_alternates_font(text: &str) -> (VectorcraftApp, serde_json::Value, egui::Context) {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let (mut app, id) = editing(text);
+        app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-subset", 1usize);
+        (app, id, ctx)
+    }
+
+    /// Click the one corner triangle of the grid, and return the glyph cells of the pop-up it
+    /// opens (drawn after the panel, on top of it).
+    fn open_corner_popup(ctx: &egui::Context, app: &mut VectorcraftApp) -> Vec<Rect> {
+        let before = squares(&shapes(ctx, app, vec![]));
+        let corners = corner_triangles(&shapes(ctx, app, vec![]));
+        assert_eq!(corners.len(), 1, "only a has alternates among Basic Latin: {corners:?}");
+        click(ctx, app, corners[0].center() + vec2(1.0, 1.0));
+        let after = squares(&shapes(ctx, app, vec![]));
+        assert!(after.len() > before.len(), "the pop-up drew its glyphs: {} then {}", before.len(), after.len());
+        after[after.len() - (after.len() - before.len())..].to_vec()
+    }
+
+    /// A cell whose glyph has alternates has a corner triangle; a click on it opens a pop-up of the
+    /// glyph and its alternates in the font's order, and picking an alternate inserts the
+    /// character at the caret drawn with it, as one undo step.
+    #[test]
+    fn a_cells_corner_triangle_opens_its_alternates_and_a_pick_inserts_one() {
+        use vectorcraft_text::test_fonts::{alternates_family, unencoded_glyphs};
+        let [u1, u2, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        let (mut app, id, ctx) = basic_latin_of_the_alternates_font("xy");
+        let face = FontDb::global().face(alternates_family(true), "Regular").expect("the test face");
+        let a = face.glyph_for('a');
+        assert!(face.has_alternates(a));
+        let drawn = shapes(&ctx, &mut app, vec![]);
+        let (cells, triangle) = (squares(&drawn), corner_triangles(&drawn));
+        assert_eq!(triangle.len(), 1);
+        assert!(
+            cells.iter().any(|c| c.contains(triangle[0].center()) && (c.max - triangle[0].max).length() < 2.0),
+            "in a cell's lower right corner: {triangle:?} among {cells:?}"
+        );
+        select(&mut app, 1, 1);
+        let popup = open_corner_popup(&ctx, &mut app);
+        assert_eq!(popup.len(), 7, "a and its six alternates");
+        let plain = glyph_ids(&app, &id);
+        let undo = app.session.active().unwrap().history.undo.len();
+        // a, u1, b, u2: the fourth cell is ss01's u2.
+        click(&ctx, &mut app, popup[3].center());
+        let NodeKind::Text(text) = &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };
+        assert_eq!(text.plain_text(), "xay", "status: {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &id), [plain[0], u2, plain[1]], "the inserted a is drawn with the pick");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(glyph_ids(&app, &id), plain, "undo takes the character back out");
+        // The cell's own glyph inserts the plain character, as a double-click does.
+        select(&mut app, 1, 1);
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[0].center());
+        assert_eq!(glyph_ids(&app, &id), [plain[0], a, plain[1]]);
+        // An alternate with no feature that draws it here (u1 is listed by aalt) still goes on.
+        select(&mut app, 2, 2);
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[1].center());
+        assert_eq!(glyph_ids(&app, &id), [plain[0], a, u1, plain[1]], "status: {}", app.ui.status);
+    }
+
+    /// With the Type tool's selection exactly the cell's character, a pick draws that character
+    /// with the glyph and keeps the text; picking the glyph it already has adds no undo step.
+    /// Without the Type tool, and with text in another font, the status says why and nothing
+    /// changes.
+    #[test]
+    fn a_pick_replaces_the_selected_character_and_says_why_when_it_cannot() {
+        use vectorcraft_text::test_fonts::{alternates_family, unencoded_glyphs};
+        let [_, u2, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        let (mut app, id, ctx) = basic_latin_of_the_alternates_font("xay");
+        let plain = glyph_ids(&app, &id);
+        select(&mut app, 1, 2);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        let NodeKind::Text(text) = &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind else { panic!("text") };
+        assert_eq!(text.plain_text(), "xay", "the selected a stays: status {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &id), [plain[0], u2, plain[2]]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        select(&mut app, 1, 2);
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "the glyph it already has changes nothing");
+        assert_eq!(glyph_ids(&app, &id), [plain[0], u2, plain[2]]);
+
+        // Text set in another font than the one the panel browses.
+        let family = alternates_family(true);
+        set_pstate(&ctx, "gl-font", Some((family.to_string(), "Regular".to_string())));
+        app.run("text.setRangeStyle", json!({"id": id, "font": vectorcraft_text::FALLBACK_FAMILY})).unwrap();
+        select(&mut app, 3, 3);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let before = glyph_ids(&app, &id);
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        assert_eq!(glyph_ids(&app, &id), before);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(app.ui.status.contains("not of the font the selected text is set in"), "{}", app.ui.status);
+
+        // No Type tool caret.
+        app.session.select_tool("select", Default::default()).unwrap();
+        app.ui.status.clear();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        assert_eq!(glyph_ids(&app, &id), before);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.status, "Select text or click into text with the Type tool to insert glyphs");
+    }
+
+    /// A pick the inserted character cannot be drawn with (All Caps keeps a glyph choice from
+    /// being drawn) takes the character back out and keeps the status that says why: on its own,
+    /// and inside an undo group that is already open, which stays open with its earlier edit and
+    /// takes a pick that can be drawn in place of the selection.
+    #[test]
+    fn a_pick_that_cannot_be_drawn_leaves_the_text_as_it_was() {
+        let [_, u2, ..] = vectorcraft_text::test_fonts::unencoded_glyphs().expect("unencoded glyphs");
+        let (mut app, id, ctx) = basic_latin_of_the_alternates_font("xy");
+        let text = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        app.run("text.setFormat", json!({"ids": [id], "allCaps": true})).unwrap();
+        // A step to redo, which the failed pick keeps.
+        app.run("text.setFormat", json!({"ids": [id], "underline": true})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        select(&mut app, 1, 1);
+        app.ui.status.clear();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[1].center());
+        assert_eq!(text(&app), "xy");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "no undo step is left");
+        assert_eq!(app.session.active().unwrap().history.redo.len(), 1, "the redo step stays");
+        assert!(!app.ui.status.is_empty(), "the status says why");
+
+        // In an open group with no edit yet, the failed pick leaves the group with nothing to undo.
+        app.run("edit.undoGroup.begin", json!({})).unwrap();
+        select(&mut app, 0, 1);
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[1].center());
+        assert_eq!(text(&app), "xy");
+        assert!(!app.ui.status.is_empty(), "the status says why");
+        app.run("edit.undoGroup.end", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "the empty group adds no step");
+
+        app.run("edit.undoGroup.begin", json!({})).unwrap();
+        app.run("text.setFormat", json!({"ids": [id], "underline": true})).unwrap();
+        select(&mut app, 0, 1);
+        app.ui.status.clear();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[1].center());
+        assert_eq!(text(&app), "xy", "the replaced x is back: status {}", app.ui.status);
+        assert!(!app.ui.status.is_empty(), "the status says why");
+        assert!(app.session.active().unwrap().undo_group.is_some(), "the group stays open");
+        // A pick that can be drawn replaces the selection inside the group.
+        app.run("text.setFormat", json!({"ids": [id], "allCaps": false})).unwrap();
+        select(&mut app, 0, 1);
+        let plain = glyph_ids(&app, &id);
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        assert_eq!(text(&app), "ay", "status {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &id), [u2, plain[1]]);
+        assert!(app.session.active().unwrap().undo_group.is_some(), "the group stays open");
+        app.run("edit.undoGroup.end", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "the group is one step");
+    }
+
+    /// After Select All in a threaded story, a pick replaces the whole story's text, as typing
+    /// does: the character drawn with the glyph stays, in one undo step.
+    #[test]
+    fn a_pick_replaces_a_threaded_story_that_select_all_selected() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+        let [_, u2, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let story = "a bad cab ".repeat(30);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+        for id in [a, b, c] {
+            app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        }
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        assert_eq!(super::super::character::text_story(&app).map(|s| s.len()), Some(3), "the whole story is selected");
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-subset", 1usize);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        let plain = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        let texts: String = [a, b, c].iter().map(|id| plain(&app, *id)).collect();
+        assert_eq!(texts, "a", "status: {}", app.ui.status);
+        let first = [a, b, c].into_iter().find(|id| !plain(&app, *id).is_empty()).expect("a frame with the character");
+        assert_eq!(glyph_ids(&app, &json!(first)), [u2]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// After Select All in a threaded story whose first frame holds only the picked character, a
+    /// pick still replaces the whole story's text: the other frames' text goes too.
+    #[test]
+    fn a_pick_replaces_a_threaded_story_whose_first_frame_holds_one_character() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+        let [_, u2, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        // The first frame is wide enough for the "a" only; the ideographs flow on to the second.
+        let area = json!({"x": 10, "y": 10, "text": "a中中中", "size": 12, "area": {"width": 16, "height": 16}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        for id in [a, b] {
+            app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        }
+        let plain = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        assert_eq!((plain(&app, a), plain(&app, b)), ("a".to_string(), "中中中".to_string()));
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 0, "caret": 0}));
+        app.run("select.all", json!({})).unwrap();
+        assert_eq!(super::super::character::text_editing(&app), Some((NodeId(a), 0, 1)), "the selection is the one character");
+        assert_eq!(super::super::character::text_story(&app).map(|s| s.len()), Some(2), "the whole story is selected");
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-subset", 1usize);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        let texts: String = [a, b].iter().map(|id| plain(&app, *id)).collect();
+        assert_eq!(texts, "a", "status: {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &json!(a)), [u2]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// A pick at the caret at the end of a full frame of threaded text puts the character in, and
+    /// the text flows it on to the next frame: it is drawn with the glyph there, and the Type tool
+    /// edits that frame with the caret after it.
+    #[test]
+    fn a_pick_at_the_end_of_a_full_frame_follows_the_character_to_the_next_frame() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font, unencoded_glyphs};
+        let [_, u2, ..] = unencoded_glyphs().expect("unencoded glyphs");
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let face = FontDb::global().face(alternates_family(true), "Regular").expect("the test face");
+        let gid = |c| face.chars().into_iter().find(|(x, _)| *x == c).map(|(_, g)| g).expect("a glyph");
+        let pt = |c| face.advance(gid(c)) * 12.0 / face.units_per_em();
+        // The first frame holds the line "a xx " and not the next word. Every character is in the
+        // test font, so no fallback face measures the line.
+        let width = pt('a') + 2.0 * pt(' ') + 2.0 * pt('x') + pt('x') / 2.0;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let area = json!({"x": 10, "y": 10, "text": "a xx xx", "size": 12, "area": {"width": width, "height": 16}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        for id in [a, b] {
+            app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        }
+        let plain = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        assert_eq!((plain(&app, a), plain(&app, b)), ("a xx ".to_string(), "xx".to_string()));
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let end = "a xx ".len();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": end, "caret": end}));
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-subset", 1usize);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[3].center());
+        assert_eq!((plain(&app, a), plain(&app, b)), ("a xx ".to_string(), "axx".to_string()), "status: {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &json!(b))[0], u2);
+        assert_eq!(super::super::character::text_editing(&app), Some((NodeId(b), 1, 1)), "the caret is after the character");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// A pick on the selected last character of a full frame of threaded text, with a glyph wider
+    /// than the one it had, flows the character on to the next frame: the Type tool edits that
+    /// frame with the character still selected.
+    #[test]
+    fn a_wider_pick_on_the_selected_character_moves_the_selection_with_it() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let face = FontDb::global().face(alternates_family(true), "Regular").expect("the test face");
+        let gid = |c| face.chars().into_iter().find(|(x, _)| *x == c).map(|(_, g)| g).expect("a glyph");
+        let plain_a = gid('a');
+        // The pop-up's glyphs in its order: the cell's own glyph, then the alternates.
+        let mut list = vec![plain_a];
+        for alt in face.alternates('a') {
+            if !list.contains(&alt.gid) {
+                list.push(alt.gid);
+            }
+        }
+        let (index, wide) =
+            list.iter().copied().enumerate().max_by(|x, y| face.advance(x.1).total_cmp(&face.advance(y.1))).expect("the pop-up lists glyphs");
+        assert!(face.advance(wide) > face.advance(plain_a), "an alternate wider than the a");
+        // The first frame holds "x a" with the plain a, and not with the wider glyph.
+        let pt = |g: u32| face.advance(g) * 12.0 / face.units_per_em();
+        let width = pt(gid('x')) + pt(gid(' ')) + (pt(plain_a) + pt(wide)) / 2.0;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let area = json!({"x": 10, "y": 10, "text": "x a", "size": 12, "area": {"width": width, "height": 16}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        for id in [a, b] {
+            app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        }
+        let plain = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("text"),
+        };
+        assert_eq!((plain(&app, a), plain(&app, b)), ("x a".to_string(), String::new()));
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        app.session.select_tool("type", Default::default()).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 2, "caret": 3}));
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-subset", 1usize);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let popup = open_corner_popup(&ctx, &mut app);
+        click(&ctx, &mut app, popup[index].center());
+        assert_eq!((plain(&app, a), plain(&app, b)), ("x ".to_string(), "a".to_string()), "status: {}", app.ui.status);
+        assert_eq!(glyph_ids(&app, &json!(b)), [wide]);
+        assert_eq!(super::super::character::text_editing(&app), Some((NodeId(b), 0, 1)), "the character stays selected");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// In Entire Font, a glyph no character maps whose substitutions give other glyphs has the
+    /// corner triangle too: its pop-up lists it and those glyphs, and a pick goes on the selected
+    /// character as a double-click on that glyph's cell would put it.
+    #[test]
+    fn an_unencoded_glyphs_corner_triangle_applies_its_alternates_to_the_selection() {
+        use vectorcraft_text::test_fonts::{JOINING_ALTERNATES_FAMILY, joining_alternates_font, source_sans_gid};
+        FontDb::global().add_font(joining_alternates_font().expect("the test font builds"));
+        let g = |c| u32::from(source_sans_gid(c).expect("a glyph"));
+        let (mut app, id) = editing("\u{628}\u{62A}\u{646}");
+        app.run("text.setRangeStyle", json!({"id": id, "font": JOINING_ALTERNATES_FAMILY})).unwrap();
+        select(&mut app, 2, 4);
+        let ctx = egui::Context::default();
+        choose(&ctx, &mut app, "Entire Font");
+        let face = FontDb::global().face(JOINING_ALTERNATES_FAMILY, "Regular").expect("the test face");
+        let medial = g('u');
+        assert!(face.unencoded_glyphs().contains(&medial) && face.has_alternates(medial), "the medial teh is unencoded and has alternates");
+        // A screen tall enough for every cell of the font.
+        let run = |ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 200_000.0))), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out.shapes.into_iter().map(|c| c.shape).collect::<Vec<Shape>>()
+        };
+        let click_at = |ctx: &egui::Context, app: &mut VectorcraftApp, at: Pos2| {
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            run(ctx, app, vec![egui::Event::PointerMoved(at), button(true)]);
+            run(ctx, app, vec![button(false)]);
+        };
+        let drawn = run(&ctx, &mut app, vec![]);
+        let (cells, corners) = (squares(&drawn), corner_triangles(&drawn));
+        let chars = face.chars().into_iter().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).count();
+        let unencoded = face.unencoded_glyphs();
+        assert_eq!(cells.len(), chars + unencoded.len(), "every glyph has a cell");
+        let cell = cells[chars + unencoded.iter().position(|g| *g == medial).expect("an unencoded glyph")];
+        let corner = corners.iter().find(|t| cell.contains(t.center())).expect("its corner triangle");
+        let undo = app.session.active().unwrap().history.undo.len();
+        click_at(&ctx, &mut app, corner.center() + vec2(1.0, 1.0));
+        let after = squares(&run(&ctx, &mut app, vec![]));
+        let popup = &after[cells.len()..];
+        assert_eq!(popup.len(), 4, "the medial teh and its three alternates");
+        click_at(&ctx, &mut app, popup[2].center());
+        assert_eq!(glyph_ids(&app, &id), [g('B'), g('x'), g('M')], "status: {}", app.ui.status);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// The panel drawn `width` by `height` after a few frames (the scroll bar fades in): the left
+    /// edge of its scroll bar, when one is drawn, the grid's cells and the rectangle they are
+    /// clipped to.
+    fn grid_with_bar(ctx: &egui::Context, app: &mut VectorcraftApp, width: f32, height: f32, time: &mut f64) -> (Option<f32>, Vec<Rect>, Rect) {
+        fn flat(s: Shape, out: &mut Vec<Shape>) {
+            match s {
+                Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
+                s => out.push(s),
+            }
+        }
+        let mut shapes = vec![];
+        let mut clip = Rect::NOTHING;
+        for _ in 0..4 {
+            *time += 0.5;
+            let raw =
+                egui::RawInput { time: Some(*time), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, height))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+            shapes.clear();
+            for c in out.shapes {
+                if !squares(std::slice::from_ref(&c.shape)).is_empty() {
+                    clip = c.clip_rect;
+                }
+                flat(c.shape, &mut shapes);
+            }
+        }
+        // The bar's track and handle: narrow filled rectangles taller than a cell.
+        let bar = shapes
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Rect(r) if r.fill != Color32::TRANSPARENT && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => Some(r.rect.left()),
+                _ => None,
+            })
+            .min_by(f32::total_cmp);
+        (bar, squares(&shapes), clip)
+    }
+
+    /// #5941: the grid's cells go beside its scroll bar. At every panel width the bar shows and the
+    /// last cell of a row ends before it.
+    #[test]
+    fn the_grids_cells_end_before_its_scroll_bar() {
+        use vectorcraft_text::test_fonts::{JOINING_ALTERNATES_FAMILY, joining_alternates_font};
+        FontDb::global().add_font(joining_alternates_font().expect("the test font builds"));
+        let (mut app, id) = editing("\u{628}");
+        app.run("text.setRangeStyle", json!({"id": id, "font": JOINING_ALTERNATES_FAMILY})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, Default::default());
+        let mut time = 0.0;
+        for width in 240..=300 {
+            let (bar, cells, _) = grid_with_bar(&ctx, &mut app, width as f32, 420.0, &mut time);
+            // Cells wider than the room beside the bar push the bar past the panel's edge.
+            let Some(bar) = bar else { panic!("width {width}: the grid scrolls and shows its bar") };
+            assert!(!cells.is_empty(), "width {width}: the grid is drawn");
+            let last = cells.iter().map(|r| r.right()).fold(f32::MIN, f32::max);
+            assert!(last <= bar - 1.0, "width {width}: the last cell ends at {last}, the bar starts at {bar}");
+        }
+    }
+
+    /// #5941: Alternates for Current Selection lays out its cells the same way. While its rows run
+    /// past the list, the cells end before the scroll bar; while they fit, no bar shows and the
+    /// cells fill the whole width.
+    #[test]
+    fn the_alternates_grid_leaves_room_for_its_scroll_bar_only_while_it_scrolls() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let (mut app, id) = editing("xay");
+        app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        select(&mut app, 2, 2);
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, Default::default());
+        set_pstate(&ctx, "gl-subset", SUBSETS.len());
+        let mut time = 0.0;
+        let (mut scrolled, mut fitted) = (0, 0);
+        // The largest cells, so seven glyphs fill two to four rows. In a panel 360 pt tall, three
+        // rows of them run past the list; in one 640 pt tall, they fit. The sweep covers panel
+        // widths at three heights, then the heights around the one where three rows just fit.
+        let cell = CELL_STEPS[CELL_STEPS.len() - 1];
+        set_cell_index(&mut app, CELL_STEPS.len() - 1);
+        let sizes = [360, 420, 640].into_iter().flat_map(|h| (240..=320).map(move |w| (w, h))).chain((360..=420).map(|h| (290, h)));
+        for (width, height) in sizes {
+            let (bar, cells, clip) = grid_with_bar(&ctx, &mut app, width as f32, height as f32, &mut time);
+            assert!(!cells.is_empty(), "{width}×{height}: the grid is drawn");
+            let last = cells.iter().map(|r| r.right()).fold(f32::MIN, f32::max);
+            let left = cells.iter().map(|r| r.left()).fold(f32::MAX, f32::min);
+            let row = cells.iter().filter(|r| (r.top() - cells[0].top()).abs() < 1.0).count();
+            // The cells a row holds across the whole width.
+            let room = (((width as f32 - 2.0 * left) / cell).floor() as usize).clamp(1, 7);
+            if let Some(bar) = bar {
+                scrolled += 1;
+                assert!(last <= bar - 1.0, "{width}×{height}: the last cell ends at {last}, the bar starts at {bar}");
+                // Rows narrowed for the bar only when full-width rows would not fit either.
+                if row < room {
+                    let step = cells.iter().map(|r| r.top() - cells[0].top()).filter(|d| *d > 1.0).fold(f32::MAX, f32::min);
+                    let full = 7usize.div_ceil(room) as f32 * step - (step - cell);
+                    assert!(full > clip.height() + 0.5, "{width}×{height}: {room} to a row would fit in {full} pt, the list is {}", clip.height());
+                }
+            } else {
+                fitted += 1;
+                // Without a bar every cell shows whole; a grid that runs past its list would need one.
+                assert_eq!(cells.len(), 7, "{width}×{height}: a and its six alternates all show");
+                let bottom = cells.iter().map(|r| r.bottom()).fold(f32::MIN, f32::max);
+                assert!(
+                    bottom <= clip.bottom() + 0.5 && last <= clip.right() + 0.5,
+                    "{width}×{height}: the cells end at ({last}, {bottom}), inside the list {clip:?}"
+                );
+                assert_eq!(row, room, "{width}×{height}: without a bar a row takes the whole width (cells from {left})");
+            }
+        }
+        assert!(scrolled > 0 && fitted > 0, "both layouts are drawn: {scrolled} scrolled, {fitted} fitted");
+    }
+
+    /// #5941: at the smallest cell sizes a row of the grid is as tall as a button, taller than its
+    /// cells. A list tall enough for four rows of cells but not for four rows as drawn scrolls, so
+    /// its cells go beside the bar, at a width that holds a whole number of cells too.
+    #[test]
+    fn small_cells_leave_room_for_the_bar_when_their_rows_as_drawn_run_past_the_list() {
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, Default::default());
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 800.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let gap = ui.spacing().item_spacing.y;
+            let bar = ui.spacing().scroll.allocated_width();
+            for cell in [CELL_STEPS[0], CELL_STEPS[1]] {
+                let drawn = ui.spacing().interact_size.y;
+                assert!(drawn > cell, "{cell} pt cells: rows are {drawn} pt as drawn");
+                let w = 6.0 * cell;
+                // Four rows of six: they fit at the cells' own height, not at the rows' drawn height.
+                let list_h = 4.0 * (cell + drawn) / 2.0 + 3.0 * gap;
+                let beside = ((w - bar) / cell).floor() as usize;
+                assert_eq!(grid_cols(ui, w, cell, 24, list_h), beside, "{cell} pt cells in a list {list_h} pt tall");
+            }
+            // With less room left than the list's least height, the list is that tall: two rows of
+            // twelve 22 pt cells fit in it, so they take the whole width.
+            let w = 12.0 * CELL_STEPS[1];
+            ui.allocate_ui(vec2(w, 48.0), |ui| {
+                assert_eq!(grid_cols(ui, w, CELL_STEPS[1], 24, 66.0), 12, "two rows in a 64 pt list with 48 pt of room");
+            });
+        });
+        out.textures_delta.clear();
+    }
+
     /// Show › Entire Font also lists the glyphs no character maps.
     #[test]
     fn entire_font_lists_the_unencoded_glyphs() {
@@ -1268,6 +2654,34 @@ mod tests {
         let all = texts(&ctx, &mut app);
         assert!(all.iter().any(|s| s == &format!("{} glyphs", encoded + unencoded.len())), "{all:?}");
         assert!(face.glyph_name(unencoded[0]).is_some(), "the font names its glyphs");
+    }
+
+    /// The panel menu lists the browsed font's OpenType categories after Alternates for Current
+    /// Selection, a stylistic set by the font's name for it; choosing one shows the glyphs its
+    /// features give and names it in Show. A font without that category shows Entire Font.
+    #[test]
+    fn the_show_menu_lists_the_fonts_opentype_categories() {
+        use vectorcraft_text::test_fonts::{CATEGORIES_FAMILY, HALF_FORM_FAMILY, categories_font, half_form_font};
+        FontDb::global().add_font(categories_font().expect("the test font builds"));
+        FontDb::global().add_font(half_form_font(false).expect("the test font builds"));
+        let (mut app, _) = editing("a");
+        let ctx = egui::Context::default();
+        set_pstate(&ctx, "gl-font", Some((CATEGORIES_FAMILY.to_string(), "Regular".to_string())));
+        let items: Vec<String> = menu_texts(&ctx, &mut app, vec![]).into_iter().map(|(t, _)| t.trim_start_matches(['✓', ' ']).to_string()).collect();
+        let at = items.iter().position(|t| t == "Alternates for Current Selection").expect("the alternates item");
+        assert_eq!(items[at + 1..], ["Ligatures", "Round Dots", "Small Caps", "Figures"]);
+        choose(&ctx, &mut app, "Figures");
+        assert_eq!(pstate::<String>(&ctx, "gl-category"), "figures");
+        let all = texts(&ctx, &mut app);
+        assert!(all.iter().any(|s| s == "2 glyphs") && all.iter().any(|s| s == "Figures"), "{all:?}");
+        choose(&ctx, &mut app, "Round Dots");
+        let all = texts(&ctx, &mut app);
+        assert!(all.iter().any(|s| s == "1 glyph") && all.iter().any(|s| s == "Round Dots"), "{all:?}");
+        set_pstate(&ctx, "gl-font", Some((HALF_FORM_FAMILY.to_string(), "Regular".to_string())));
+        let all = texts(&ctx, &mut app);
+        assert!(all.iter().any(|s| s == "Entire Font") && !all.iter().any(|s| s == "Round Dots"), "{all:?}");
+        let items: Vec<String> = menu_texts(&ctx, &mut app, vec![]).into_iter().map(|(t, _)| t.trim_start_matches(['✓', ' ']).to_string()).collect();
+        assert_eq!(items.last().map(String::as_str), Some("Alternates for Current Selection"), "{items:?}");
     }
 
     #[test]
@@ -1686,5 +3100,73 @@ mod tests {
         let mut texts = 0;
         state.doc.walk(|n| texts += usize::from(matches!(n.kind, NodeKind::Text(_))));
         assert_eq!(texts, 0, "neither glyph created or changed text");
+    }
+
+    /// The grid's cells built from the face's character list read once are the cells built from a
+    /// fresh read of the font on every frame, for every Show choice, every category, a change of
+    /// face back and forth, and a font with no `cmap`.
+    #[test]
+    fn the_grid_lists_the_same_cells_from_the_character_list_read_once() {
+        use vectorcraft_text::test_fonts::{CATEGORIES_FAMILY, CMAPLESS_FAMILY, categories_font, cmapless_font};
+
+        /// The cells as the grid listed them on each frame from its own copy of the face's characters
+        /// (`vectorcraft-text`'s tests check that list against a fresh read of the font).
+        fn read_cells(
+            face: &vectorcraft_text::FontFace,
+            category: Option<usize>,
+            subset: usize,
+            (lo, hi): (u32, u32),
+        ) -> (Vec<(char, u32)>, Vec<u32>) {
+            match category.and_then(|i| face.glyph_categories().get(i)) {
+                Some(c) => {
+                    let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
+                    let mut mapped: HashSet<u32> = HashSet::new();
+                    let chars: Vec<(char, u32)> = face
+                        .chars()
+                        .into_iter()
+                        .filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g))
+                        .collect();
+                    (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
+                }
+                None => {
+                    let chars =
+                        face.chars().into_iter().filter(|(c, _)| (lo..=hi).contains(&(*c as u32)) && !c.is_control() && !c.is_whitespace()).collect();
+                    (chars, if subset == 0 { face.unencoded_glyphs().to_vec() } else { vec![] })
+                }
+            }
+        }
+
+        let db = FontDb::with_font_dirs(vec![]);
+        assert_eq!(db.add_font(categories_font().expect("the categories test font builds")), 1);
+        assert_eq!(db.add_font(cmapless_font().expect("the cmapless test font builds")), 1);
+        let faces: Vec<_> = [
+            (vectorcraft_text::FALLBACK_FAMILY, "Regular"),
+            ("Inter", "Regular"),
+            (CATEGORIES_FAMILY, "Regular"),
+            (vectorcraft_text::FALLBACK_FAMILY, "Regular"),
+            (CMAPLESS_FAMILY, "Regular"),
+            ("JetBrains Mono", "Regular"),
+        ]
+        .into_iter()
+        .map(|(family, style)| db.face(family, style).unwrap_or_else(|| panic!("{family} {style} is loaded")))
+        .collect();
+        let categories = db.face(CATEGORIES_FAMILY, "Regular").expect("the categories face");
+        assert!(!categories.glyph_categories().is_empty(), "the test font has categories");
+        let none = db.face(CMAPLESS_FAMILY, "Regular").expect("the cmapless face");
+        assert!(none.mapped_chars().is_empty(), "no character is mapped");
+        for face in &faces {
+            for (subset, &(name, lo, hi)) in SUBSETS.iter().enumerate() {
+                let (chars, unencoded) = grid_glyphs(face, None, subset, (lo, hi));
+                assert_eq!((chars, unencoded.to_vec()), read_cells(face, None, subset, (lo, hi)), "{face:?} {name}");
+            }
+            for (i, c) in face.glyph_categories().iter().enumerate() {
+                let (chars, unencoded) = grid_glyphs(face, Some(c), CATEGORY, (0, 0x10FFFF));
+                assert_eq!((chars, unencoded.to_vec()), read_cells(face, Some(i), CATEGORY, (0, 0x10FFFF)), "{face:?} {:?}", c.kind);
+            }
+        }
+        // Entire Font lists every glyph of a font with no `cmap` by glyph id.
+        let (chars, unencoded) = grid_glyphs(&none, None, 0, (0, 0x10FFFF));
+        assert!(chars.is_empty());
+        assert!(!unencoded.is_empty(), "the glyphs are listed by glyph id");
     }
 }

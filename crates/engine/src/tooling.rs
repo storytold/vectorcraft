@@ -1,7 +1,7 @@
 //! Hosting the active tool: pointer/key events → actions → commands.
 
 use serde_json::{Map, Value};
-use vectorcraft_doc::Selection;
+use vectorcraft_doc::{NodeId, Selection};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::distort::perspective::widget::WidgetPlace;
 use vectorcraft_tools::draw2::FEEDBACK;
@@ -35,6 +35,9 @@ pub struct ViewInfo {
     pub snap_to_glyph: bool,
     /// View → Show Corner Widget.
     pub corner_widgets: bool,
+    /// The Control bar's Show Shape Widgets: selected live shapes show their corner, pie and side
+    /// widgets to the Selection tool and the shape tools.
+    pub shape_widgets: bool,
     /// The document window (none headless): screen-fixed widgets sit in it.
     pub screen: Option<vectorcraft_tools::ScreenFrame>,
     /// The view's active artboard (an index): artboard rulers measure from it.
@@ -55,6 +58,7 @@ impl Default for ViewInfo {
             snap_to_point: true,
             snap_to_glyph: false,
             corner_widgets: true,
+            shape_widgets: true,
             screen: None,
             artboard: 0,
         }
@@ -89,6 +93,8 @@ fn with_status(mut ui: Vec<UiRequest>, warnings: Vec<String>) -> Vec<UiRequest> 
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiRequest {
     Dialog(String, Value),
+    /// Show and select the panel with this id where it is (Window › Transform for `transform`).
+    Panel(String),
     SwitchTool(String),
     /// A message for the status bar: the `warning` of a command the tool ran (Liquify skipping
     /// type under the brush).
@@ -120,6 +126,12 @@ impl Session {
         self.tool.id()
     }
 
+    /// The selection tool chosen last (Selection, Direct Selection or Group Selection), which
+    /// `tool.selectLastSelection` chooses: the Selection tool until one is chosen.
+    pub fn last_selection_tool(&self) -> &'static str {
+        self.last_selection_tool.unwrap_or("selection")
+    }
+
     /// How many times switching or closing documents, or replacing the active one (File › Revert),
     /// has started the tool afresh, also inside a `command.batch` or `action.batch`. A frontend
     /// compares it before and after a command.
@@ -145,7 +157,8 @@ impl Session {
             crate::cmd::distortcmds::silent(self, |g| g.visible = true)?;
         }
         // When the tool already active, or the tool lent a selection tool for a drag, is chosen again,
-        // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend).
+        // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend, the Pen
+        // ends its path).
         let again = self.lender.as_ref().unwrap_or(&self.tool).id() == id;
         self.switch_tool(id, view)?;
         // `switch_tool` returns early for the tool already active.
@@ -173,17 +186,45 @@ impl Session {
         let text_selection = ((id == "eyedropper" && is_type(self.tool.id())) || (self.tool.id() == "eyedropper" && is_type(id)))
             .then(|| self.tool.options())
             .filter(|o| o.get("editing").is_some_and(|v| !v.is_null()) && o.get("start") != o.get("end"));
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        self.apply_actions(acts)?;
+        // The gradient mesh points the Mesh tool, Direct Selection, the Lasso or the Polygonal Lasso
+        // picked stay picked when another of these tools or the Eyedropper, which samples into
+        // them (#8090), is chosen: a fill color then recolors just them. None stay picked when
+        // none were.
+        let mesh_points = (Self::picks_mesh_points(id) && Self::picks_mesh_points(self.tool.id()))
+            .then(|| self.tool.options().get("meshPoints").cloned())
+            .flatten();
+        self.deactivate_tool(view)?;
         self.keep_tool_settings();
         self.tool = self.make_tool(id);
         if let Some(selection) = text_selection {
             self.tool.set_option("textSelection", &selection);
         }
+        if let Some(points) = mesh_points {
+            self.tool.set_option("meshPoints", &points);
+        }
         if vectorcraft_tools::catalog::is_selection_tool(id) {
             self.last_selection_tool = Some(self.tool.id());
             self.select_whole_instance(id);
         }
+        Ok(())
+    }
+
+    /// Does tool `id` pick gradient mesh points (its `meshPoints` option): the Mesh tool, Direct
+    /// Selection, the Lasso, the Polygonal Lasso and the Eyedropper? Group Selection, which
+    /// selects whole objects, does not.
+    fn picks_mesh_points(id: &str) -> bool {
+        matches!(id, "mesh" | "directSelection" | "lasso" | "polygonalLasso" | "eyedropper")
+    }
+
+    /// Deactivate the tool and apply the actions it returns. In a batch, a Cancel is left out: the
+    /// batch settled the tool's drag when it began, and the open interaction holds the batch's
+    /// steps, which the batch keeps or rolls back as a whole.
+    pub(crate) fn deactivate_tool(&mut self, view: ViewInfo) -> Result<()> {
+        let mut acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
+        if self.batch_stash.is_some() {
+            acts.retain(|a| !matches!(a, Action::Cancel));
+        }
+        self.apply_actions(acts)?;
         Ok(())
     }
 
@@ -255,7 +296,20 @@ impl Session {
         }
         // The Selection and Group Selection tools act on the instance whole.
         self.select_whole_instance(id);
-        let lent = self.make_tool(id);
+        // The lending tool does not see the press: it counts as a press elsewhere for the clicks a
+        // double-click or triple-click compares.
+        self.tool.press_elsewhere();
+        let mut lent = self.make_tool(id);
+        // The gradient mesh points the lending tool picked (the Mesh tool's, the Lasso's, the
+        // Eyedropper's) are the lent tool's picks, which a Shift click adds to (#8090).
+        if Self::picks_mesh_points(self.tool.id()) && Self::picks_mesh_points(id) {
+            let points = self.tool.options().get("meshPoints").cloned().unwrap_or_else(|| Value::Array(vec![]));
+            lent.set_option("meshPoints", &points);
+        }
+        // The Cmd/Ctrl held for the loan is not the Cmd/Ctrl that mirrors a dragged handle (#7842).
+        if id == "directSelection" {
+            lent.set_option("lentByCmd", &Value::Bool(true));
+        }
         self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         Ok((PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }, settled))
@@ -265,11 +319,27 @@ impl Session {
     /// Pen goes on drawing its path), less the work the gesture ended as a command would: a
     /// Cmd+click that takes the type being edited out of the selection ends its edit (#3779).
     pub(crate) fn give_back_tool(&mut self, view: ViewInfo) -> Result<()> {
+        let lent_by_bucket = self.lent_by_bucket();
         let Some(lender) = self.lender.take() else { return Ok(()) };
-        let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
-        let r = self.apply_actions(acts);
+        // The points the lent tool left picked go back to the tool it was lent to when that tool
+        // picks mesh points, none when it unpicked them all (#8090). Group Selection and the
+        // Selection tool pick no mesh points, so the tool keeps its own. Unchanged picks are not
+        // set again, so the Mesh tool keeps the point whose handles it shows.
+        let mesh_points = (Self::picks_mesh_points(lender.id()) && Self::picks_mesh_points(self.tool.id()))
+            .then(|| self.tool.options().get("meshPoints").cloned())
+            .flatten()
+            .filter(|p| lender.options().get("meshPoints") != Some(p));
+        // The lent tool's last actions (a drag it cancels or keeps) still count as the Live Paint
+        // Bucket's when the bucket lent it ([`Session::bucket_paints`]).
+        let outer_bucket = self.back_to_bucket;
+        self.back_to_bucket |= lent_by_bucket;
+        let r = self.deactivate_tool(view);
+        self.back_to_bucket = outer_bucket;
         self.keep_tool_settings();
         self.tool = lender;
+        if let Some(points) = mesh_points {
+            self.tool.set_option("meshPoints", &points);
+        }
         // A gesture that left the selection as it found it (a Shift marquee over nothing) picked
         // nothing: the selection keeps what it was, the Pen's last anchor or an earlier pick.
         let left = self.active().map(|d| (d.uid, d.selection.clone()));
@@ -277,7 +347,7 @@ impl Session {
             self.lent_selection = left;
         }
         self.after_command(None);
-        r.map(drop)
+        r
     }
 
     /// A fresh `id` tool with the options it keeps ([`settings`]): its last values, from this
@@ -376,6 +446,7 @@ impl Session {
             snap_to_glyph: view.snap_to_glyph && smart_guides && !view.snap_to_grid,
             glyph_snap: self.prefs.glyph_snap,
             corner_widgets: view.corner_widgets,
+            shape_widgets: view.shape_widgets,
             fill_active: self.fill_active,
             gradient_stop: self.selected_stop(),
             appearance_item: self.appearance_item(),
@@ -429,8 +500,10 @@ impl Session {
             },
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
+            plane_targets: self.prefs.perspective_widget.targets(),
             precise_cursors: self.precise_cursors(),
             global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
+            interaction_doc: st.interaction.as_ref().map(|it| &*it.doc),
         };
         let tool = &mut self.tool;
         match crate::guard::catch_panic(|| f(tool.as_mut(), &cx)) {
@@ -560,13 +633,18 @@ impl Session {
     /// Escape, as during a drag, for most tools), and a release returns the tool to rest. Of what
     /// the tool asks for along the way, only a cancel and a notify run, so a marquee selects
     /// nothing and a click opens no size dialog. The tool gets back the persistent options it had
-    /// when the press began, and none of the press's changes to them are stored. A dropped Type
-    /// press restores the prior selection. The freeform gradient point selected once the tool
-    /// took the press is selected again. A press held while the tool computes an edit on another
-    /// thread has not reached the tool: it is removed from the held input with the pointer events
-    /// and tool keys held after it, and the tool is left as it is. A perspective plane key held
-    /// after it stays held, since the plane it picks outlasts a dropped press. Pointer events held
-    /// after the last held release belong to the press the tool has, and are removed with it.
+    /// when the press began, and none of the press's changes to them are stored. An option set
+    /// during the press with [`Self::set_tool_option`] or [`Self::set_tool_options`], or a General ›
+    /// Corner Radius change during a Rounded Rectangle press, keeps its new value, also when the
+    /// tool lent a selection tool for the press (a Cmd-drag). Setting an option stores all of the
+    /// tool's options, the press's changes included, so the dropped press then stores the options
+    /// it puts back. A dropped Type press restores the prior selection. The freeform gradient
+    /// point selected once the tool took the press is selected again. A press held while the tool
+    /// computes an edit on another thread has not reached the tool: it is removed from the held
+    /// input with the pointer events and tool keys held after it, and the tool is left as it is.
+    /// A perspective plane key held after it stays held, since the plane it picks outlasts a
+    /// dropped press. Pointer events held after the last held release belong to the press the tool
+    /// has, and are removed with it.
     pub fn drop_tool_press(&mut self, view: ViewInfo) -> Result<()> {
         let (from, held) = self.held_press();
         let keep: Vec<bool> = (self.held_input.iter().enumerate())
@@ -584,6 +662,7 @@ impl Session {
         // Nothing to roll back without a document; the tool still drops the press and gets the release.
         let _ = self.cancel_interaction();
         let before = self.press_options.take();
+        let stored = std::mem::take(&mut self.press_options_stored);
         let type_selection = self.press_type_selection.take();
         let point = self.press_point.take();
         let mut acts = self.with_tool_cx(view, |t, cx| t.drop_press(cx));
@@ -618,6 +697,11 @@ impl Session {
                     self.tool.set_option(k, v);
                 }
             }
+            // An option set during the press stored every option the tool had then, the press's
+            // changes included: those stored values are put back too.
+            if stored {
+                self.keep_tool_settings();
+            }
         }
         r.map(drop)
     }
@@ -650,11 +734,12 @@ impl Session {
         match ev.kind {
             PointerKind::Down | PointerKind::Drag => self.pointer_held = true,
             PointerKind::Up | PointerKind::Move => self.pointer_held = false,
-            PointerKind::DoubleClick => {}
+            PointerKind::DoubleClick | PointerKind::TripleClick => {}
         }
         match ev.kind {
             PointerKind::Down => {
                 self.press_options = Some((self.tool.id().to_string(), Self::persistent_options(self.tool.as_ref())));
+                self.press_options_stored = false;
                 self.press_type_selection =
                     if matches!(self.tool.id(), "type" | "areaType" | "typeOnPath" | "verticalType" | "verticalAreaType" | "verticalTypeOnPath") {
                         self.active().map(|st| (st.selection.clone(), st.active_layer))
@@ -664,6 +749,7 @@ impl Session {
             }
             PointerKind::Up => {
                 self.press_options = None;
+                self.press_options_stored = false;
                 self.press_type_selection = None;
             }
             _ => {}
@@ -786,6 +872,12 @@ impl Session {
     /// The drag of the rulers' origin ended, released or cancelled: its guides go.
     pub fn end_ruler_origin_drag(&mut self) {
         self.ruler_origin = None;
+    }
+
+    /// A guide is being dragged out of a ruler ([`Session::ruler_guide`]): its first event came
+    /// and its release has not.
+    pub fn ruler_guide_dragging(&self) -> bool {
+        self.ruler_guide.is_some()
     }
 
     /// Time passed while the pointer button is held (`dt` seconds; see [`Tool::tick`]): the
@@ -1085,6 +1177,12 @@ impl Session {
         self.with_tool_cx(view, |t, cx| t.hover_ended(cx));
     }
 
+    /// A press on the canvas went to the view tools and not to the active tool
+    /// ([`vectorcraft_tools::Tool::press_elsewhere`]).
+    pub fn tool_press_elsewhere(&mut self) {
+        self.tool.press_elsewhere();
+    }
+
     /// Whether the active tool's hover depends on what lies under a still pointer
     /// ([`vectorcraft_tools::Tool::wants_rehover`]).
     pub fn tool_wants_rehover(&self) -> bool {
@@ -1100,6 +1198,12 @@ impl Session {
     /// Dimension tool after its first point).
     pub fn pointer_held(&self) -> bool {
         self.pointer_held
+    }
+
+    /// What the Info panel shows for the active tool as it is now
+    /// ([`vectorcraft_tools::Tool::readout`]), in the view of the last pointer event.
+    pub fn tool_readout(&mut self) -> Option<vectorcraft_tools::Readout> {
+        self.with_tool_cx(self.last_view, |t, cx| t.readout(cx))
     }
 
     /// Is the active tool moving, scaling or rotating the selection with a drag?
@@ -1176,6 +1280,12 @@ impl Session {
         self.with_tool_cx(view, |t, cx| t.ends_on_escape(cx))
     }
 
+    /// The point a path the active tool is drawing goes on from, and the direction the path
+    /// arrives there in (see `Tool::drawing_end`).
+    pub fn tool_drawing_end(&mut self, view: ViewInfo) -> Option<(Point, Option<vectorcraft_geom::Vec2>)> {
+        self.with_tool_cx(view, |t, cx| t.drawing_end(cx))
+    }
+
     pub fn overlays(&mut self, view: ViewInfo) -> Vec<Overlay> {
         // The Blend tool's first pick is not marked after an edit that dropped it.
         self.tell_tool_history_moved();
@@ -1246,15 +1356,26 @@ impl Session {
         if key == "queue" && self.tool.id() == "place" {
             self.note_place_queue_roots();
         }
+        let before_press = self.options_before_press_set();
+        let sets_pressed = self.press_taken_by(self.tool.id());
         self.tool.set_option(key, v);
         self.tool_set_since_reset = true;
         self.keep_tool_settings();
+        self.keep_press_set(before_press, |k| sets_pressed && k == key, sets_pressed);
     }
 
     /// Keep the automation roots in force now as those the place cursor's queue, being loaded,
     /// is placed under ([`Session::place_queue_roots`]).
     fn note_place_queue_roots(&mut self) {
         self.place_queue_roots = crate::file_access::current();
+        self.place_queue_loads = self.place_queue_loads.wrapping_add(1);
+    }
+
+    /// How many times the place cursor has been loaded (`file.place.queue`, or a `queue` set on
+    /// the Place tool): a frontend that keeps its own state about the loaded cursor compares it to
+    /// tell a newer load.
+    pub fn place_queue_loads(&self) -> u64 {
+        self.place_queue_loads
     }
 
     /// The automation roots the place cursor's files are placed under: those in force when it
@@ -1266,7 +1387,14 @@ impl Session {
 
     /// The options of tool `id`: the active tool's, or those it would have if chosen now.
     pub fn tool_options_of(&self, id: &str) -> Value {
-        if id == self.tool.id() { self.tool.options() } else { self.make_tool(id).options() }
+        if id == self.tool.id() {
+            self.tool.options()
+        } else if let Some(lender) = self.lender.as_deref().filter(|l| l.id() == id) {
+            // The tool that lent a selection tool for a Cmd-drag holds its options while it waits.
+            lender.options()
+        } else {
+            self.make_tool(id).options()
+        }
     }
 
     /// Set options of tool `id` (default: the active tool). Another tool's persistent options are
@@ -1278,14 +1406,24 @@ impl Session {
             self.note_place_queue_roots();
         }
         let active = id.is_none_or(|id| id == self.tool.id());
-        self.tool_set_since_reset |= active;
+        let before_press = self.options_before_press_set();
+        let sets_pressed = self.press_taken_by(id.unwrap_or(self.tool.id()));
+        // The tool that lent a selection tool for a Cmd-drag is the tool chosen, and active again
+        // when the drag ends.
+        let lender = id.is_some_and(|id| self.lender.as_deref().is_some_and(|l| l.id() == id));
+        self.tool_set_since_reset |= active || lender;
+        // The Place queue and a parametric shape's kind are set first: setting the queue starts
+        // again at its first file, and a `current` given with it is an index into it; setting the
+        // kind puts the shape's other numbers back to that kind's, and those given with it are its.
+        let first = |k: &str| k == "queue" || k == "kind";
+        let ordered = || values.iter().filter(|(k, _)| first(k)).chain(values.iter().filter(|(k, _)| !first(k)));
         let mut other = (!active).then(|| self.make_tool(id.unwrap_or_default()));
         let t = other.as_deref_mut().unwrap_or(self.tool.as_mut());
-        for (k, v) in values {
+        for (k, v) in ordered() {
             t.set_option(k, v);
         }
         Self::store_tool_settings(&mut self.prefs, t);
-        let out = t.options();
+        let mut out = t.options();
         if let Some(other) = other {
             // The tool that lent a selection tool for a Cmd-drag is kept aside, not made again when
             // it is back: when it is the tool set, it takes the writes too (the Rounded Rectangle's
@@ -1293,36 +1431,99 @@ impl Session {
             // active tool.
             if let Some(lender) = self.lender.as_deref_mut() {
                 if lender.id() == other.id() {
-                    for (k, v) in values {
+                    for (k, v) in ordered() {
                         lender.set_option(k, v);
                     }
                 }
                 Self::restore_tool_settings(&self.prefs, lender);
+                if lender.id() == other.id() {
+                    out = lender.options();
+                }
             }
             // Only the stores it shares with the tool set: the active tool's own options stay as they
             // are, also in the middle of a drag that Escape can cancel.
             let set = other.id();
             Self::restore_stores(&self.prefs, self.tool.as_mut(), |store| settings::stores(set).any(|(s, _)| s == store));
         }
+        self.keep_press_set(before_press, |k| sets_pressed && values.contains_key(k), sets_pressed);
         out
+    }
+
+    /// The tool that took the press under way: the active tool, or the tool that lent a selection
+    /// tool for it (a Cmd-drag), which the dropped press gives its options back to.
+    fn pressed_tool(&self) -> Option<&dyn Tool> {
+        let (pressed, _) = self.press_options.as_ref()?;
+        std::iter::once(&self.tool).chain(self.lender.as_ref()).map(|t| t.as_ref()).find(|t| t.id() == pressed)
+    }
+
+    /// Tool `id` took the press under way ([`Self::pressed_tool`]).
+    pub(crate) fn press_taken_by(&self, id: &str) -> bool {
+        self.pressed_tool().is_some_and(|t| t.id() == id)
+    }
+
+    /// The persistent options of the tool that took the press under way ([`Self::pressed_tool`])
+    /// before an option is set: a dropped press puts back the options it began with, except those
+    /// the set changes ([`Self::keep_press_set`]).
+    fn options_before_press_set(&self) -> Option<Map<String, Value>> {
+        self.pressed_tool().map(Self::persistent_options)
+    }
+
+    /// After an option is set during a held press, the press's saved options take the options of
+    /// the tool that took the press that the set changed from `before` or named (`named`), so a
+    /// dropped press keeps them. `stored`: the set stored that tool's options, the press's changes
+    /// included, so a dropped press stores the options it puts back.
+    fn keep_press_set(&mut self, before: Option<Map<String, Value>>, named: impl Fn(&str) -> bool, stored: bool) {
+        let Some(before) = before else { return };
+        let Some(now) = self.pressed_tool().map(Self::persistent_options) else { return };
+        self.press_options_stored |= stored;
+        if let Some((_, saved)) = self.press_options.as_mut() {
+            for (k, v) in now {
+                if before.get(&k) != Some(&v) || named(&k) {
+                    saved.insert(k, v);
+                }
+            }
+        }
     }
 
     /// `tool.setOption {tool?, key?, value?, values?}` (a command of the desktop app and of the
     /// headless host): set one option (`key`, `value`) or several (`values`) of `tool` (default:
-    /// the active tool) → its options.
+    /// the tool active when the call arrives, named before the edit in progress is finished) → its
+    /// options. With no option given, the options are read and nothing is set. Parameters that are
+    /// not an object are an error; none (null) read the options. Every option given is checked
+    /// first ([`vectorcraft_tools::Tool::check_option`]): an unknown option, a value of the wrong
+    /// type or a number out of range is an error that sets none of them.
     pub fn set_tool_option_cmd(&mut self, p: &Value) -> std::result::Result<Value, String> {
-        let tool = p.get("tool").and_then(Value::as_str);
+        let (tool, values) = vectorcraft_tools::option_check::set_option_params(p)?;
         if let Some(t) = tool
             && vectorcraft_tools::tool_info(t).is_none()
         {
             return Err(format!("unknown tool `{t}`"));
         }
-        let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
-        if let Some(k) = p.get("key").and_then(Value::as_str) {
-            values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
+        // The tool is named before the edit in progress is finished: finishing it can make a held
+        // Cmd press, which lends a selection tool and makes that the active tool.
+        let id = tool.unwrap_or(self.tool.id());
+        let active = id == self.tool.id();
+        if values.is_empty() {
+            return Ok(self.tool_options_of(id));
         }
         // Every value is checked before any is set, so an invalid one changes nothing.
-        vectorcraft_tools::builder::check_builder_options(tool.unwrap_or(self.tool.id()), &values)?;
+        vectorcraft_tools::builder::check_builder_options(id, &values)?;
+        if id == vectorcraft_tools::circle::ID {
+            vectorcraft_tools::circle::check_options(&values)?;
+        }
+        vectorcraft_tools::symbolism::check_options(id, &values)?;
+        if id == vectorcraft_tools::cropimage::ID {
+            use vectorcraft_tools::cropimage as crop;
+            // The most the selected image can be cropped to, when one is selected.
+            let max = self.doc().ok().and_then(|st| {
+                let (id, _) = crop::selected_image(&st.doc, &st.selection)?;
+                match &st.doc.node(id)?.kind {
+                    vectorcraft_doc::NodeKind::Image(im) => Some(crop::image_ppi(im).1),
+                    _ => None,
+                }
+            });
+            crop::check_options(&values, max)?;
+        }
         // The Place queue is read later, by a click outside any automation scope: its files must
         // be readable now, under the roots of whoever sets it.
         if let Some(entries) = values.get("queue").and_then(|q| q.get("entries")).and_then(Value::as_array) {
@@ -1330,7 +1531,7 @@ impl Session {
                 crate::file_access::check_read(path)?;
             }
         }
-        if tool.unwrap_or(self.tool_id()) == "dimension" {
+        if id == "dimension" {
             if let Some(style) = values.get("style") {
                 vectorcraft_doc::dimension::DimensionOptions::from_params(style.clone())?;
             }
@@ -1340,19 +1541,25 @@ impl Session {
                 return Err("Unknown dimension mode".into());
             }
         }
+        if active {
+            vectorcraft_tools::option_check::check_values(self.tool.as_ref(), &values)?;
+        } else {
+            vectorcraft_tools::option_check::check_values(self.make_tool(id).as_ref(), &values)?;
+        }
         // The active tool's merge being computed is applied with the options it was started with.
-        if tool.is_none_or(|t| t == self.tool.id()) {
+        if active {
             self.finish_tool_edit_later().map_err(|e| e.to_string())?;
         }
-        Ok(self.set_tool_options(tool, &values))
+        Ok(self.set_tool_options(Some(id), &values))
     }
 
     /// Let the active tool finish work a command from outside it ended ([`vectorcraft_tools::Tool::after_command`]):
-    /// the Type tool and the Eyedropper clear a character range whose text is no longer selected.
+    /// the Type tool and the Eyedropper clear a character range whose text is no longer selected,
+    /// and the Curvature Circle tool lets the pointer reach its circles once none is selected.
     /// After `edit.undo` or `edit.redo` (`cmd`), the tool is told first, so the Type tool puts the
     /// caret where the step changed the text.
     pub(crate) fn after_command(&mut self, cmd: Option<&str>) {
-        if self.in_tool_actions || (!self.tool.wants_text() && self.tool.id() != "eyedropper") {
+        if self.in_tool_actions || (!self.tool.wants_text() && !matches!(self.tool.id(), "eyedropper" | vectorcraft_tools::curvature_circle::ID)) {
             return;
         }
         if let Some(cmd @ ("edit.undo" | "edit.redo")) = cmd {
@@ -1405,6 +1612,10 @@ impl Session {
     /// Apply tool actions. Errors from previews are reported but keep the interaction alive.
     pub fn apply_actions(&mut self, acts: Vec<Action>) -> Result<Vec<UiRequest>> {
         let outer = std::mem::replace(&mut self.in_tool_actions, true);
+        let outer_bucket = self.back_to_bucket;
+        // The Eyedropper's sample into a stop of the Live Paint Bucket's gradient, which switches back to the bucket.
+        self.back_to_bucket |=
+            self.tool.id() == "eyedropper" && acts.iter().any(|a| matches!(a, Action::SwitchTool(t) if t == crate::cmd::LIVE_PAINT_BUCKET));
         // A preview that settling applied (typing kept as its own step before a drag begins) shows
         // its warning in the status bar, as the tool's own commit shows its preview's.
         let r = if !outer && self.depth == 0 {
@@ -1414,6 +1625,7 @@ impl Session {
             self.apply_tool_actions(acts)
         };
         self.in_tool_actions = outer;
+        self.back_to_bucket = outer_bucket;
         if !outer && self.depth == 0 {
             self.trim_histories();
         }
@@ -1493,7 +1705,9 @@ impl Session {
                     }
                 }
                 Action::Dialog(k, p) => ui.push(UiRequest::Dialog(k, p)),
+                Action::Panel(panel) => ui.push(UiRequest::Panel(panel)),
                 Action::SwitchTool(t) => ui.push(UiRequest::SwitchTool(t)),
+                Action::Status(msg) => ui.push(UiRequest::Status(msg)),
                 Action::Notify(what) => {
                     let view = self.last_view;
                     self.with_tool_cx(view, |t, cx| t.notify(cx, &what));
@@ -1543,11 +1757,11 @@ impl Session {
             if !std::sync::Arc::ptr_eq(&it.doc, &st.doc) {
                 return None;
             }
-            let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone());
+            let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone(), it.plane_placed);
             (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
         };
         let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
-            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection)).unwrap_or_default();
+            let overlays = self.active().map(|st| outlines_for_selection(&st.doc, &st.selection, cmd, p)).unwrap_or_default();
             let (objects, color) = self
                 .active()
                 .map(|st| (st.selection.objects.clone(), st.selection.objects.first().map(|id| st.doc.layer_color(*id))))
@@ -1565,6 +1779,7 @@ impl Session {
                 it.preview = interaction_fields.0;
                 it.copies = interaction_fields.1;
                 it.perspective_again = interaction_fields.2;
+                it.plane_placed = interaction_fields.3;
             }
         }
         self.pending_paint = paint;
@@ -1587,11 +1802,17 @@ const FEEDBACK_MAX_POINTS: usize = 100_000;
 
 /// The outlines of every selected object, a group's members each with their own, or the selection's
 /// bounds when the outlines' points and the objects evaluated to make them come to more than
-/// [`FEEDBACK_MAX_POINTS`].
-fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection) -> Vec<Overlay> {
-    let nodes = selection.objects.iter().filter_map(|&id| doc.node(id));
-    let outlines = vectorcraft_render::drawn_outlines(doc, nodes, FEEDBACK_MAX_POINTS).unwrap_or_else(|| {
-        doc.bounds_of(&selection.objects, true).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()).into_iter().collect()
-    });
+/// [`FEEDBACK_MAX_POINTS`]. A `dimension.update` preview (`cmd`, `p`) that names its dimensions,
+/// as the Dimension tool sends for a dimension it drags, outlines those dimensions instead.
+fn outlines_for_selection(doc: &vectorcraft_doc::Document, selection: &Selection, cmd: &str, p: &Value) -> Vec<Overlay> {
+    let named: Vec<NodeId> = if cmd == "dimension.update" {
+        p.get("ids").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect()
+    } else {
+        vec![]
+    };
+    let objects = if named.is_empty() { &selection.objects } else { &named };
+    let nodes = objects.iter().filter_map(|&id| doc.node(id));
+    let outlines = vectorcraft_render::drawn_outlines(doc, nodes, FEEDBACK_MAX_POINTS)
+        .unwrap_or_else(|| doc.bounds_of(objects, true).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()).into_iter().collect());
     outlines.into_iter().map(|path| Overlay::Path { path, color: FEEDBACK, width: 1.0, dashed: false }).collect()
 }

@@ -7,6 +7,10 @@
 //! active one, and each time the File menu of the window's menu bar opens ([`refresh`]). The menus show the last finished
 //! listing ([`items`]), so a script added to the folder is listed without a restart.
 //!
+//! Until the first read ends the menu shows [`LOADING`], and [`SLOW`] once that read has taken
+//! [`SLOW_SECS`]; a first read that cannot start or ends without a listing shows [`UNREADABLE`],
+//! and the next read tries again.
+//!
 //! `ui.runInstalledScript {path}` runs a listed script (`script.run`) without the warning Other
 //! Script… shows: the file was put in the folder to be run from the menu. The path is one a
 //! listing gave; a file that is no longer a plain script under the folder is not run.
@@ -16,6 +20,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::scripts::NOT_LISTED;
 use vectorcraft_engine::script::folder::{Entry, Listing};
 
 use crate::VectorcraftApp;
@@ -27,8 +32,14 @@ pub const COMMAND: &str = "ui.runInstalledScript";
 pub const TRUNCATED: &str = "Some scripts were not listed";
 /// The menu's note when the folder is there and cannot be read.
 pub const UNREADABLE: &str = "The Scripts folder cannot be read";
+/// The menu's note while the first read is under way.
+pub const LOADING: &str = "Loading scripts…";
+/// The menu's note once the first read has taken [`SLOW_SECS`].
+pub const SLOW: &str = "The Scripts folder is still being read";
 /// The notes, for the catalogs ([`crate::menus::menu_strings`]).
-pub const LABELS: &[&str] = &[TRUNCATED, UNREADABLE];
+pub const LABELS: &[&str] = &[TRUNCATED, UNREADABLE, LOADING, SLOW];
+/// How long the first read runs before the menu shows [`SLOW`].
+pub const SLOW_SECS: f64 = 2.0;
 
 #[derive(Default)]
 struct State {
@@ -44,6 +55,43 @@ struct State {
     started: bool,
     /// The window was the active one at the last [`poll`].
     focused: bool,
+    /// A listing has been taken in.
+    loaded: bool,
+    /// When the first read started ([`crate::clock::now_secs`]), while it is under way.
+    first_read: Option<f64>,
+    /// The first read has taken [`SLOW_SECS`].
+    slow: bool,
+    /// No listing yet, and the last read could not start or ended without one.
+    failed: bool,
+}
+
+impl State {
+    /// The note in place of a listing before the first one.
+    fn first_read_note(&self) -> Option<&'static str> {
+        if self.loaded {
+            return None;
+        }
+        if self.reading.is_some() {
+            return Some(if self.slow { SLOW } else { LOADING });
+        }
+        self.failed.then_some(UNREADABLE)
+    }
+
+    /// No listing yet, and the read under way ended without one or could not start.
+    fn first_read_failed(&mut self) {
+        if !self.loaded {
+            (self.first_read, self.slow, self.failed) = (None, false, true);
+            self.revision += 1;
+        }
+    }
+
+    /// Show [`SLOW`] once the first read has run [`SLOW_SECS`] by `now`.
+    fn mark_slow(&mut self, now: f64) {
+        if !self.loaded && !self.slow && self.reading.is_some() && self.first_read.is_some_and(|t| now - t >= SLOW_SECS) {
+            self.slow = true;
+            self.revision += 1;
+        }
+    }
 }
 
 /// The listing the menus show. One per process in the app; one per thread in unit tests, which run
@@ -91,7 +139,8 @@ pub(crate) fn intern(s: &str) -> Option<&'static str> {
     Some(v)
 }
 
-/// Changes whenever the menus' listing changes (the macOS menu bar follows it).
+/// Changes whenever the menus' listing or the note before the first listing changes (the macOS
+/// menu bar follows it).
 pub fn revision() -> u64 {
     state().revision
 }
@@ -107,18 +156,28 @@ pub fn refresh(app: &VectorcraftApp, ctx: Option<&egui::Context>) {
         return;
     }
     let (tx, rx) = std::sync::mpsc::channel();
-    let ctx = ctx.cloned();
+    let worker_ctx = ctx.cloned();
     let spawned = std::thread::Builder::new().name("vectorcraft-scripts".into()).spawn(move || {
         // The app's own folder, read for the person at the keyboard.
         let listing = vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&root));
         if tx.send(listing).is_ok()
-            && let Some(ctx) = ctx
+            && let Some(ctx) = worker_ctx
         {
             ctx.request_repaint();
         }
     });
-    if spawned.is_ok() {
-        state.reading = Some(rx);
+    if spawned.is_err() {
+        state.first_read_failed();
+        return;
+    }
+    state.reading = Some(rx);
+    if !state.loaded && state.first_read.is_none() {
+        // The menus show the loading note, and a frame comes when it is due to change to SLOW.
+        state.first_read = Some(crate::clock::now_secs());
+        state.revision += 1;
+        if let Some(ctx) = ctx {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(SLOW_SECS));
+        }
     }
 }
 
@@ -136,6 +195,7 @@ pub fn poll(app: &VectorcraftApp, ctx: &egui::Context) {
         refresh(app, Some(ctx));
     }
     take(false);
+    state().mark_slow(crate::clock::now_secs());
     let again = {
         let mut state = state();
         let again = state.pending && state.reading.is_none();
@@ -156,14 +216,22 @@ fn take(wait: bool) {
     let listing = if wait { reading.recv().map_err(|_| TryRecvError::Disconnected) } else { reading.try_recv() };
     match listing {
         Ok(listing) => {
-            if *state.listing != listing {
+            let changed = *state.listing != listing;
+            if changed {
                 state.listing = Arc::new(listing);
+            }
+            // The first listing also takes the place of the loading note.
+            if changed || !state.loaded {
                 state.revision += 1;
             }
+            (state.loaded, state.first_read, state.slow, state.failed) = (true, None, false, false);
             state.reading = None;
         }
         Err(TryRecvError::Empty) => {}
-        Err(TryRecvError::Disconnected) => state.reading = None,
+        Err(TryRecvError::Disconnected) => {
+            state.reading = None;
+            state.first_read_failed();
+        }
     }
 }
 
@@ -171,6 +239,27 @@ fn take(wait: bool) {
 #[cfg(test)]
 pub(crate) fn wait() {
     take(true);
+}
+
+/// The read under way ends without a listing, as when its thread stops early.
+#[cfg(test)]
+pub(crate) fn lose_read() {
+    let mut state = state();
+    if state.reading.is_some() {
+        state.reading = Some(std::sync::mpsc::channel::<Listing>().1);
+    }
+}
+
+/// When the first read started, while it is under way.
+#[cfg(test)]
+pub(crate) fn first_read_started() -> Option<f64> {
+    state().first_read
+}
+
+/// What [`poll`] does about a slow first read, at `now` ([`crate::clock::now_secs`]).
+#[cfg(test)]
+pub(crate) fn check_slow(now: f64) {
+    state().mark_slow(now);
 }
 
 /// Wait for the read under way to end and leave its listing to be taken in, so the read is under
@@ -187,7 +276,8 @@ pub(crate) fn end_untaken() {
 }
 
 /// File › Scripts' items: the listed scripts and subfolders, a note when some may be missing or
-/// the folder cannot be read, then Check Script… and Other Script….
+/// the folder cannot be read, or one before the first listing, then Check Script… and Other
+/// Script….
 pub fn items() -> Vec<Item> {
     // A row whose name is past [`MAX_NAMES`] is left out (`dropped`).
     fn level(entries: &[Entry], dropped: &mut bool) -> Vec<Item> {
@@ -207,7 +297,10 @@ pub fn items() -> Vec<Item> {
         }
         items
     }
-    let listing = state().listing.clone();
+    let (listing, note) = {
+        let state = state();
+        (state.listing.clone(), state.first_read_note())
+    };
     let mut dropped = false;
     let mut items = level(&listing.entries, &mut dropped);
     if listing.truncated || dropped {
@@ -216,6 +309,7 @@ pub fn items() -> Vec<Item> {
     if listing.unreadable {
         items.push(Item::Header(UNREADABLE));
     }
+    items.extend(note.map(Item::Header));
     if !items.is_empty() {
         items.push(Item::Sep);
     }
@@ -241,15 +335,16 @@ pub fn readable(p: &Value) -> bool {
     p.get("path").and_then(Value::as_str).is_some_and(|path| vectorcraft_engine::file_access::check_read(path).is_ok())
 }
 
-/// `ui.runInstalledScript {path}`: run the listed script at `path`. A script that is no longer in
-/// the folder is not run, and the folder is read again. The script runs from its file, so its
-/// `#include` lines and `$.evalFile` read beside it.
+/// `ui.runInstalledScript {path}`: run the listed script at `path`. `script.run` reads the file
+/// once, checks it as a listed script and runs that text, so its `#include` lines and `$.evalFile`
+/// read in the folder that read found. A script that is no longer in the folder is not run, and the
+/// folder is read again.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let path = p.get("path").and_then(Value::as_str).ok_or("missing `path`")?;
-    app.session.installed_script(path).map_err(|e| {
-        let ctx = app.ui_ctx.clone();
-        refresh(app, ctx.as_ref());
-        e.to_string()
-    })?;
-    app.run("script.run", json!({ "path": path }))
+    app.run("script.run", json!({ "path": path, "installed": true })).inspect_err(|e| {
+        if e == NOT_LISTED {
+            let ctx = app.ui_ctx.clone();
+            refresh(app, ctx.as_ref());
+        }
+    })
 }

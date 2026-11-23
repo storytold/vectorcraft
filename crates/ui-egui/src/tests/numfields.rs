@@ -778,6 +778,8 @@ fn bare_numbers_in_picas_fields_are_points_when_the_preference_says_so() {
     assert_eq!(typed(&mut f, pc, "2p6"), Some(30.0), "picas and points as typed");
     assert_eq!(typed(&mut f, pc, "1in"), Some(72.0), "a typed unit wins");
     assert_eq!(typed(&mut f, pc, "10+5"), Some(15.0), "arithmetic in points too");
+    assert_eq!(typed(&mut f, pc, "10x2"), Some(20.0), "x multiplies (#8435)");
+    assert_eq!(typed(&mut f, mm, "2 x 3"), Some(mm.to_pt(6.0)), "x multiplies in millimeters");
     assert_eq!(typed(&mut f, mm, "12"), Some(mm.to_pt(12.0)), "a millimetre field keeps millimetres");
     widgets::set_bare_numbers_are_points(&f.ctx, false);
     assert_eq!(typed(&mut f, pc, "12"), Some(pc.to_pt(12.0)), "off: picas");

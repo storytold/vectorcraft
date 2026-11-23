@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use kurbo::BezPath;
 use skrifa::instance::{Location, LocationRef, Size};
-use skrifa::outline::{DrawSettings, OutlinePen};
+use skrifa::outline::OutlinePen;
 use skrifa::raw::FileRef;
 use skrifa::string::StringId;
 use skrifa::{GlyphId, MetadataProvider, Tag};
@@ -17,6 +17,7 @@ use crate::GlyphImage;
 use crate::colr::ColourContent;
 use vectorcraft_doc::color::Color;
 
+mod added;
 mod alternates;
 mod build;
 mod cache;
@@ -33,6 +34,9 @@ mod stylistic_sets;
 mod traits;
 mod wanted;
 
+#[cfg(test)]
+pub(crate) use added::recently_added_of;
+pub use added::{RECENTLY_ADDED_WITHIN, RecentlyAdded};
 pub use alternates::GlyphAlternate;
 pub(crate) use alternates::listed;
 pub use build::style_weight;
@@ -52,9 +56,9 @@ use face::Instances;
 #[cfg(test)]
 pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
-pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
+pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins, OutlineFormat};
 pub(crate) use glyph_pen::FlipPen;
-pub use gsub::{GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
+pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]
@@ -70,10 +74,22 @@ pub use stylistic_sets::StylisticSet;
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
-pub use traits::{FontClass, FontMatch, FontTraits};
+pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, is_generic_family};
 #[cfg(test)]
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
+
+/// Weak indexes of live file-font resources, by content hash (collisions checked by bytes) and id.
+#[derive(Default)]
+pub(super) struct FileFaces {
+    pub(super) by_key: HashMap<String, Vec<std::sync::Weak<FontFace>>>,
+    pub(super) by_id: HashMap<u32, std::sync::Weak<FontFace>>,
+    /// Only each admitted face's own byte allocation, never an unbounded list of alias owners.
+    pub(super) by_blob: HashMap<usize, std::sync::Weak<FontFace>>,
+}
+
+/// How many live fonts files carried the database admits at most (each shares its document's bytes).
+pub const MAX_FILE_FACES: usize = 4096;
 
 /// Process-wide font database.
 pub struct FontDb {
@@ -83,6 +99,9 @@ pub struct FontDb {
     images: Mutex<GlyphImages>,
     colours: Mutex<GlyphColours>,
     catalog: RwLock<Catalog>,
+    /// Fonts files carried for their type ([`vectorcraft_doc::FileFonts`]): apart from the faces,
+    /// so no family name, font menu, fallback or PostScript name lookup finds them.
+    pub(super) file_faces: RwLock<FileFaces>,
     /// The installed faces by PostScript name (documents name fonts so: PDF, EPS, .ai).
     postscript: RwLock<PostScriptNames>,
     /// Where the system font scan looks.
@@ -119,6 +138,9 @@ pub struct FontDb {
     /// type naming one as its family is set in its parts' fonts. A thread's guards can lend others
     /// in their place ([`FontDb::lend_composite_fonts`]).
     composites: RwLock<HashMap<String, Arc<vectorcraft_doc::CompositeFont>>>,
+    /// The lookups of the custom character sets of the composite fonts held or lent, each built
+    /// when first used.
+    custom_classes: Mutex<composite::CustomClasses>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.

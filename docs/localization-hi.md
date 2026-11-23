@@ -32,6 +32,13 @@ every clause such as "all" or "what follows it". Type as a text object is टा
 in `crates/ui-egui/src/i18n/tests.rs` checks the save, swatch, crop, resolution and path terms
 and the point unit in every row.
 
+Translate a label by its sense in the interface, not by its first dictionary sense. A ruler is
+रूलर, never शासक (a sovereign); a text character is कैरेक्टर, never चरित्र (a personality); a
+vector point is पॉइंट and a printer's mark is मार्क, never अंक (a digit); fills are फ़िल्स, never
+भरता (the verb). In a minimum, desired and maximum range, Desired is वांछित, never देसी (local),
+and a range message keeps both comparisons: minimum ≤ desired ≤ maximum. The same test rejects
+these senses, and others found in the catalog, in every row whose English names the word.
+
 A variable is वेरिएबल (plural वेरिएबल्स) in every sense: a data-merge variable and the
 variable library, a variable font, a variable stroke width and an environment variable. It is
 never चर, परिवर्तनीय or वैरिएबल. Joining paths, anchor points, point type or the lines of a
@@ -61,7 +68,10 @@ checks every `@msg` row's lists.
 | Artwork | आर्टवर्क |
 | Path / Anchor point / Handle | पाथ / एंकर पॉइंट / हैंडल |
 | File path on disk | फ़ाइल पाथ |
-| Fill / Stroke | फ़िल / स्ट्रोक |
+| Fill / Fills / Stroke | फ़िल / फ़िल्स / स्ट्रोक |
+| Point (vector) / Printer's marks | पॉइंट / मार्क्स |
+| Ruler / Ruler origin | रूलर / रूलर ओरिजिन |
+| Minimum / Desired / Maximum | न्यूनतम / वांछित / अधिकतम |
 | Gradient / Mesh / Blend | ग्रेडिएंट / मेश / ब्लेंड |
 | Pattern / Swatch | पैटर्न / स्वॉच |
 | Type (text object) / Crop / Resolution | टाइप / क्रॉप / रिज़ॉल्यूशन |
@@ -89,7 +99,10 @@ percentage of the application's entire interface.
 On 2026-11-13 the catalog has 8,782 rows, including 3,014 `@msg`, 47 `@msgplural` and 41
 `@plural` rows. A wording pass on that date corrected 193 rows outside the plug-in
 messages for meaning, dropped clauses, English left in place and the save, swatch, crop,
-resolution, path and type terms. It is not a native proofread.
+resolution, path and type terms. A second pass on that date corrected 85 short labels and
+messages that used a word's unrelated sense, such as देसी (local) for Desired, शासक (a
+sovereign) for a ruler and उच्च न्यायालय (a high court) for High Contrast. It is not a native
+proofread.
 
 The comparison covers release `v0.21.1` (`f6aa4309`) and current `main` (`3c7d9e1f`). Their
 non-English catalogs have no missing Hindi keys except the names deliberately kept in English.
@@ -98,8 +111,12 @@ main added paragraph labels, spine-index validation and two error messages: six 
 Main's workspace version is still 0.21.0; this PR does not change release versioning.
 
 `cargo test -p vectorcraft-ui-egui --lib i18n::tests` passes all 55 tests in Ubuntu 24.04 (WSL).
-The untranslated report has no Hindi section, meaning it found no missing Hindi rows among the
-categories it checks. This does not check dynamically assembled strings that the scanners miss.
+On 2026-11-14 the untranslated report on main (`f793044f83`) has a Hindi section with 608
+missing rows: 28 menu strings, 30 `tl!` strings, 11 undo labels and 539 messages. Its
+`every language` section lists 68 more that every checked language lacks, Hindi included: 10 menu
+strings, 2 undo labels and 56 messages. These include labels for newer features and command
+parameter, script and file import or export errors, which show in English until a catalog row
+is added. The report does not check dynamically assembled strings that the scanners miss.
 Additional checks compare placeholders, backtick-delimited identifiers and numeric values.
 The native Hindi UI fallback test also passes with the installed Nirmala UI font. A running
 desktop preview was checked in Hindi, including the New Document dialog and File menu.
@@ -114,9 +131,12 @@ The pinned egui fork shapes Devanagari with HarfRust. The desktop's existing `Ui
 finds an installed covering face, such as Nirmala UI, Kohinoor Devanagari or Noto Sans Devanagari.
 If a `CRAFT_FONTS_DIR` build includes a face tagged `Deva`, it is also installed at the end of
 each UI font family. No font binaries are added to this repository. Without either an embedded
-or installed covering face, Hindi cannot display correctly. The web has no system fonts and
-needs a Devanagari face supplied through craft-fonts; this catalog alone does not supply one.
+or installed covering face, Hindi cannot display correctly. The web has no system fonts. A web
+build made with craft-fonts serves Noto Sans Devanagari Regular beside the wasm and fetches it
+when the interface language is Hindi or the interface paints Devanagari
+(`crates/text/web-fonts.txt`, `demand`); until it arrives, Devanagari draws as missing-glyph boxes.
+Other languages do not fetch it.
 
 Before release: native-speaker review of the draft (especially less common labels and error
-messages), visual checks for clipped labels and matras at different UI scales, and a web-font
-build. Reviewers should use this glossary to make terminology corrections consistently.
+messages), and visual checks for clipped labels and matras at different UI scales, on the
+desktop and on the web. Reviewers should use this glossary to make terminology corrections consistently.

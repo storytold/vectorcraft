@@ -1,4 +1,4 @@
-use super::{EngineResult, Key, Mods, SurroundingUnit, ToolKey, UiRequest, VectorcraftApp, ViewInfo, chord_runs_a_command};
+use super::{EngineResult, Key, Mods, SurroundingUnit, ToolKey, UiRequest, VectorcraftApp, ViewInfo, chord_runs_a_command, typing_presses};
 use crate::panels::character::TextInput;
 
 /// Drop each key press made with Ctrl and Alt held that is followed by the text it typed. Firefox
@@ -38,10 +38,110 @@ pub(super) fn is_shortcut_chord(m: egui::Modifiers) -> bool {
     (m.command || m.ctrl) && !m.alt
 }
 
+/// The character an Alt chord types while the Type tool edits text on Windows and Linux, with the
+/// characters its key types without Alt: Alt+8 •, Alt+G ©, Alt+; …, Alt+7 ¶, Alt+6 §, Alt+2 ™,
+/// Alt+R ®, Alt+- en dash, Alt+Shift+- em dash, Alt+[ “, Alt+Shift+[ ”, Alt+] ‘ and Alt+Shift+] ’.
+/// A chord with Ctrl or Cmd held, AltGr included, types none of them.
+fn alt_chord_character(key: Key, m: egui::Modifiers) -> Option<(char, &'static str)> {
+    if !m.alt || m.ctrl || m.command || m.mac_cmd {
+        return None;
+    }
+    Some(match (key, m.shift) {
+        (Key::Num8, false) => ('\u{2022}', "8"),
+        (Key::G, false) => ('\u{00A9}', "gG"),
+        (Key::Semicolon, false) => ('\u{2026}', ";"),
+        (Key::Num7, false) => ('\u{00B6}', "7"),
+        (Key::Num6, false) => ('\u{00A7}', "6"),
+        (Key::Num2, false) => ('\u{2122}', "2"),
+        (Key::R, false) => ('\u{00AE}', "rR"),
+        (Key::Minus, false) => ('\u{2013}', "-"),
+        (Key::Minus, true) => ('\u{2014}', "_"),
+        (Key::OpenBracket, false) => ('\u{201C}', "["),
+        (Key::OpenBracket | Key::OpenCurlyBracket, true) => ('\u{201D}', "{"),
+        (Key::CloseBracket, false) => ('\u{2018}', "]"),
+        (Key::CloseBracket | Key::CloseCurlyBracket, true) => ('\u{2019}', "}"),
+        _ => return None,
+    })
+}
+
+/// Turn each Alt chord of [`alt_chord_character`] into the text of its character. Windows and Linux
+/// send the key's own character with the press (Alt+G is a G press and the text "g"); that text is
+/// replaced. Any other text that the press typed is what the keyboard layout typed, and it is typed
+/// as it came. A press that typed no text gets its character added after it. A text's press is the
+/// one [`typing_presses`] pairs it with: the press before it, or in the web build the press after it.
+/// An input method's committed or marked text belongs to the last press before it, past modifier
+/// changes, key releases, empty pre-edits and deletions around the caret; that press is left as it came, since the input method's text is what the key typed.
+fn type_alt_chords(events: &mut Vec<egui::Event>) {
+    let chord = |e: &egui::Event| match e {
+        egui::Event::Key { key, pressed: true, modifiers, .. } => alt_chord_character(*key, *modifiers),
+        _ => None,
+    };
+    if !events.iter().any(|e| chord(e).is_some()) {
+        return;
+    }
+    let ime_text = |e: &egui::Event| match e {
+        egui::Event::Ime(egui::ImeEvent::Commit(t) | egui::ImeEvent::Preedit { text: t, .. }) => !t.is_empty(),
+        _ => false,
+    };
+    // Events between a press and the input method's text it typed. Windows sends an empty pre-edit
+    // before each commit, and an input method can delete the text around the caret first.
+    let between = |e: &egui::Event| match e {
+        egui::Event::ModifiersChanged(_) | egui::Event::Key { pressed: false, .. } => true,
+        egui::Event::Ime(egui::ImeEvent::Preedit { text, .. }) => text.is_empty(),
+        egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { .. } | egui::ImeEvent::DeleteSurroundingBytes { .. }) => true,
+        _ => false,
+    };
+    // The press an input method's text at `j` belongs to.
+    let ime_press = |j: usize| {
+        events
+            .iter()
+            .enumerate()
+            .take(j)
+            .rev()
+            .find(|(_, e)| !between(e))
+            .filter(|(_, e)| matches!(e, egui::Event::Key { pressed: true, .. }))
+            .map(|(k, _)| k)
+    };
+    let pressed_by = typing_presses(events);
+    let mut typed = vec![false; events.len()];
+    let ime_presses = events.iter().enumerate().filter(|(_, e)| ime_text(e)).map(|(j, _)| ime_press(j));
+    for k in pressed_by.iter().copied().chain(ime_presses).flatten() {
+        if let Some(t) = typed.get_mut(k) {
+            *t = true;
+        }
+    }
+    let chords: Vec<_> = events.iter().map(chord).collect();
+    let mut out = Vec::with_capacity(events.len() + 1);
+    for (j, e) in std::mem::take(events).into_iter().enumerate() {
+        match e {
+            egui::Event::Text(t) => {
+                let press = pressed_by.get(j).copied().flatten().and_then(|k| chords.get(k).copied().flatten());
+                match press {
+                    Some((c, own)) if t.is_empty() || (t.chars().count() == 1 && own.contains(t.as_str())) => {
+                        out.push(egui::Event::Text(c.to_string()));
+                    }
+                    _ => out.push(egui::Event::Text(t)),
+                }
+            }
+            e => {
+                out.push(e);
+                if let Some((c, _)) = chords.get(j).copied().flatten()
+                    && !typed.get(j).copied().unwrap_or(false)
+                {
+                    out.push(egui::Event::Text(c.to_string()));
+                }
+            }
+        }
+    }
+    *events = out;
+}
+
 enum Seq {
     Text(String),
     Preedit(String, Option<std::ops::Range<usize>>),
     Commit(String),
+    /// A space the IME commits during a Zoom tool drag on the canvas, where Space moves the marquee.
+    MarqueeSpace,
     Erase(ToolKey, Mods),
     /// An input method replaces text around the composition (upstream's character counts or
     /// the fork's exact UTF-8 byte counts), then commits.
@@ -82,6 +182,11 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     // Set once the IME commits text in this frame.
     let mut committed = false;
     for e in seq {
+        // With text marked, the IME's space commits that text as usual.
+        let e = match e {
+            Seq::MarqueeSpace if app.session.tool_composing() || app.ime_marked.is_some() => Seq::Commit(" ".into()),
+            e => e,
+        };
         // Before the UI, a changed composition or guard is settled `pending`: a token bound here
         // could outlive a route this pass invalidates later (a palette/dialog/Home) and attach to
         // the stock descriptor. The post-UI finalizer binds the confirmed replacement.
@@ -94,9 +199,15 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
             match &e {
                 // Accepted old payloads precede the fence even when their terminal arrives.
                 // None of these events proves the local reset has reached its boundary.
-                Seq::Commit(_) | Seq::DeleteSurrounding(..) | Seq::Preedit(..) => continue,
+                Seq::Commit(_) | Seq::MarqueeSpace | Seq::DeleteSurrounding(..) | Seq::Preedit(..) => continue,
                 _ => {}
             }
+        }
+        // Otherwise the IME's input ends there, and the space is not typed.
+        if matches!(e, Seq::MarqueeSpace) {
+            committed = true;
+            app.ime_compositions.remove(&viewport);
+            continue;
         }
         // A pointer/navigation/command notice has not reached its real handler yet. Text and
         // erases after it belong to the old caret, not to the destination it will establish.
@@ -135,11 +246,16 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
 }
 
 /// Take this frame's typed text, IME events, editing keys, Enter and clipboard events, in the order
-/// they arrived.
+/// they arrived. A space typed during the canvas's Zoom tool drag is not typed.
 fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
     let mut seq = vec![];
     let mut edits = vec![];
+    let zooming = crate::canvas::dragging_zoom(ctx);
     ctx.input_mut(|i| {
+        // On a Mac, Option types these characters itself.
+        if !crate::keymap::platform().is_mac() {
+            type_alt_chords(&mut i.events);
+        }
         // Move the events out instead of cloning their strings: a keyboard hook that reinjects a
         // batch keeps the batch in `seq` only, not in both the input list and a second copy.
         let mut kept = Vec::with_capacity(i.events.len());
@@ -155,10 +271,13 @@ fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
             .unwrap_or_else(|| i.pointer.primary_down());
         for e in std::mem::take(&mut i.events) {
             match e {
+                // The zoom drag lasts until the primary button goes up.
+                egui::Event::Text(t) if zooming && primary_down && t == " " => {}
                 egui::Event::Text(t) => seq.push(Seq::Text(t)),
                 egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
                     seq.push(Seq::Preedit(text, active_range_chars));
                 }
+                egui::Event::Ime(egui::ImeEvent::Commit(t)) if zooming && primary_down && t == " " => seq.push(Seq::MarqueeSpace),
                 egui::Event::Ime(egui::ImeEvent::Commit(t)) => seq.push(Seq::Commit(t)),
                 egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { before_chars, after_chars }) => {
                     seq.push(Seq::DeleteSurrounding(before_chars, after_chars, SurroundingUnit::Chars));
@@ -254,7 +373,7 @@ fn apply_type_event(
             }
             Ok(vec![])
         }
-        Seq::ResetCompleted(_) => Ok(vec![]),
+        Seq::ResetCompleted(_) | Seq::MarqueeSpace => Ok(vec![]),
         // Keys the IME passed through come as text only when nothing is marked. This is an
         // application edit (also a hook IME's reinjected characters): `Other` dominates.
         Seq::Text(t) if !app.session.tool_composing() && !shortcut_mods => {

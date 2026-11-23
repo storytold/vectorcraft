@@ -90,13 +90,14 @@ impl GridHandles {
     /// bounding box the Selection tool shows; its geometric bounds without one) at `zoom`.
     pub fn of(doc: &Document, selection: &Selection, frame: Option<OrientedBox>, zoom: f64) -> Option<Self> {
         let [id] = selection.objects.as_slice() else { return None };
-        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !doc.is_editable(*id) || !zoom.is_finite() || zoom <= 0.0 {
+        if !selection.anchors.is_empty() || !selection.segments.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return None;
         }
         let n = doc.node(*id)?;
         let NodeKind::Repeat(spec) = &n.kind else { return None };
         let RepeatKind::Grid { h_spacing, v_spacing, rows, cols, grid_type, .. } = spec.kind else { return None };
-        if !h_spacing.is_finite() || !v_spacing.is_finite() {
+        // After the kind: on a locked artboard it measures the art of the layer object holding `id`.
+        if !h_spacing.is_finite() || !v_spacing.is_finite() || !doc.is_editable(*id) {
             return None;
         }
         let source = spec.source_bounds()?;
@@ -369,6 +370,17 @@ mod tests {
         assert!(GridDrag::hit(&c, g.rows_at, Mods { alt: true, ..Mods::default() }).is_none());
     }
 
+    /// With the Selection tool, a handle drag reads where it is released, and a tool switch cancels
+    /// it.
+    #[test]
+    fn a_handle_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+        let (doc, selection) = grid();
+        let paint = paint();
+        let c = cx(&doc, &selection, &paint);
+        let g = GridHandles::of(&doc, &selection, crate::select::selection_box(&c), 1.0).unwrap();
+        crate::testutil::check_widget_release_and_tool_switch(&c, g.rows_at, g.rows_at + Vec2::new(0.0, 240.0), g.rows_at + Vec2::new(0.0, 360.0));
+    }
+
     #[test]
     fn a_bounding_box_handle_wins_where_they_overlap() {
         let (doc, selection) = grid();
@@ -391,5 +403,25 @@ mod tests {
         assert_eq!(cursor(&c, g.h_slider.unwrap()), Some(Cursor::ResizeH));
         assert_eq!(cursor(&c, g.rows_at), Some(Cursor::ResizeV));
         assert_eq!(cursor(&c, g.corner_at), Some(Cursor::ResizeNwSe));
+    }
+
+    #[test]
+    fn a_tool_switch_cancels_a_grid_handle_drag() {
+        use crate::{PointerEvent, PointerKind, Tool};
+        let (doc, selection) = grid();
+        let paint = paint();
+        let c = cx(&doc, &selection, &paint);
+        let g = GridHandles::of(&doc, &selection, crate::select::selection_box(&c), c.zoom).unwrap();
+        let mut t = crate::select::SelectionTool::default();
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, g.rows_at.x, g.rows_at.y)).is_empty());
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, g.rows_at.x, g.rows_at.y + 150.0));
+        assert!(preview(&a).is_some(), "{a:?}");
+        assert_eq!(t.deactivate(&c), vec![Action::Cancel]);
+        assert!(!t.busy());
+        // A press that has not changed the grid leaves nothing to cancel.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, g.rows_at.x, g.rows_at.y));
+        assert!(t.busy());
+        assert!(t.deactivate(&c).is_empty());
+        assert!(!t.busy());
     }
 }

@@ -2,6 +2,290 @@ use super::*;
 use crate::theme;
 
 #[test]
+fn help_f1_opens_discover_without_a_document() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let (_, help) = menu_tree().into_iter().find(|(title, _)| *title == "Help").unwrap();
+    assert!(help.iter().any(|item| matches!(item, Item::Cmd("VectorCraft Help…", "help.discover", _))));
+    assert_eq!(shortcut_of("help.discover"), Some("F1"));
+    assert!(enabled(&app, "help.discover"));
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::F1)], ..Default::default() }, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+    })
+    .textures_delta
+    .clear();
+    assert!(crate::panel_docking::showing(&app.ui, "discover"));
+    assert!(app.session.active().is_none());
+    app.run("help.discover", json!({})).unwrap();
+    assert!(crate::panel_docking::showing(&app.ui, "discover"));
+
+    let tools = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
+    let tool = tools["results"].as_array().unwrap().iter().position(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle").unwrap();
+    let active_tool = app.session.tool_id();
+    let picked = app.run("help.discover.choose", json!({"index": tool})).unwrap();
+    assert_eq!(picked["result"]["id"], "rectangle");
+    assert!(app.ui.learn_locate.is_some());
+    assert_eq!(app.session.tool_id(), active_tool);
+    for _ in 0..2 {
+        ctx.run_ui(egui::RawInput::default(), |ui| crate::panels::discover::show(&mut app, ui)).textures_delta.clear();
+    }
+    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        crate::panels::discover::show(&mut app, ui);
+    })
+    .textures_delta
+    .clear();
+    assert!(!crate::panel_docking::showing(&app.ui, "discover"));
+    app.run("help.discover", json!({})).unwrap();
+    app.run("help.discover.back", json!({})).unwrap();
+    assert_eq!(app.ui.discover.query, "rectangle");
+    assert!(app.ui.discover.selected.is_none());
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "tool:rectangle", "Shift+9");
+    crate::shortcut_editor::sync(&app.ui);
+    let tools = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
+    assert!(tools["results"].as_array().unwrap().iter().any(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle" && hit["shortcut"] == "Shift+9"));
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+
+    let commands = app.run("help.discover.search", json!({"query": "file.newDialog"})).unwrap();
+    let command = commands["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "file.newDialog").unwrap();
+    app.run("help.discover.choose", json!({"index": command})).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert!(app.session.active().is_none());
+
+    let tutorial = crate::panels::learn::catalog::SKILLS[0].tutorials.first().unwrap();
+    let found = app.run("help.discover.search", json!({"query": tutorial.title})).unwrap();
+    let index = found["results"].as_array().unwrap().iter().position(|hit| hit["kind"] == "tutorial" && hit["id"] == tutorial.id).unwrap();
+    app.run("help.discover.choose", json!({"index": index})).unwrap();
+    assert!(app.session.active().is_none());
+    let text = crate::tests_labels::painted_text(&mut app, crate::panels::discover::show);
+    assert!(text.contains(tutorial.title), "{text}");
+    app.ui.discover.focus = true;
+    ctx.run_ui(egui::RawInput::default(), |ui| crate::panels::discover::show(&mut app, ui)).textures_delta.clear();
+    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        crate::panels::discover::show(&mut app, ui);
+    })
+    .textures_delta
+    .clear();
+    assert!(!crate::panel_docking::showing(&app.ui, "discover"));
+
+    app.run("file.new", json!({})).unwrap();
+    app.run("help.discover", json!({})).unwrap();
+    app.select_tool(vectorcraft_tools::addons::polygonal_lasso::ID);
+    let view = app.view_info();
+    for (x, y) in [(40.0, 40.0), (80.0, 40.0)] {
+        let down = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, x, y);
+        let up = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Up, x, y);
+        app.session.pointer(&down, view).unwrap();
+        app.session.pointer(&up, view).unwrap();
+    }
+    assert!(app.session.tool_ends_on_escape(view));
+    let canvas_ctx = egui::Context::default();
+    canvas_ctx
+        .run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+        })
+        .textures_delta
+        .clear();
+    assert!(!app.session.tool_ends_on_escape(view));
+    assert!(crate::panel_docking::showing(&app.ui, "discover"));
+}
+
+/// With the toolbars hidden by Tab, choosing a tool in Help, or a tool's link in a tutorial Help
+/// shows, marks nothing and the status bar says why.
+#[test]
+fn discover_says_why_a_tool_cannot_be_marked() {
+    fn texts(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::panels::discover::show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts);
+        }
+        texts
+    }
+    fn click(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) {
+        texts(ctx, app, vec![]);
+        let drawn = texts(ctx, app, vec![]);
+        let pos = drawn.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("`{label}` not drawn: {drawn:?}")).1.center();
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+            texts(ctx, app, vec![e]);
+        }
+    }
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("window.dock", json!({})).unwrap();
+    assert!(app.ui.tab_hid.is_some() && !app.ui.toolbar);
+    let reason = app.run("learn.locateTool", json!({"tool": "rectangle"})).unwrap()["reason"].as_str().unwrap().to_string();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+
+    let found = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
+    let hit = found["results"].as_array().unwrap().iter().find(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle").unwrap().clone();
+    app.status("");
+    click(&ctx, &mut app, hit["label"].as_str().unwrap());
+    assert_eq!(app.ui.discover.selected.map(|i| app.ui.discover.results[i].id.as_str()), Some("rectangle"));
+    assert!(app.ui.learn_locate.is_none());
+    assert_eq!(app.ui.status, reason);
+
+    let (tutorial, tool) = crate::panels::learn::catalog::SKILLS
+        .iter()
+        .flat_map(|skill| skill.tutorials.iter())
+        .find_map(|t| t.steps.iter().find_map(|s| s.tool).map(|tool| (t, tool)))
+        .unwrap();
+    let found = app.run("help.discover.search", json!({"query": tutorial.title})).unwrap();
+    let index = found["results"].as_array().unwrap().iter().position(|hit| hit["kind"] == "tutorial" && hit["id"] == tutorial.id).unwrap();
+    app.run("help.discover.choose", json!({"index": index})).unwrap();
+    app.status("");
+    click(&ctx, &mut app, vectorcraft_tools::tool_info(tool).unwrap().label);
+    assert!(app.ui.learn_locate.is_none());
+    assert_eq!(app.ui.status, reason);
+}
+
+#[test]
+fn discover_rejects_invalid_search_and_selection_parameters() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
+    let before = app.ui.discover.query.clone();
+    for params in
+        [json!({}), json!({"query": null}), json!({"query": false}), json!({"query": "rectangle", "unknown": 1}), json!({"query": "a".repeat(1025)})]
+    {
+        assert!(app.run("help.discover.search", params).is_err());
+        assert_eq!(app.ui.discover.query, before);
+    }
+    for index in [json!(-1), json!(1.5), json!(1000000), json!("0"), Value::Null] {
+        assert!(app.run("help.discover.choose", json!({"index": index})).is_err());
+    }
+    for params in [json!(5), json!("rectangle"), json!([1]), json!(true)] {
+        for id in ["help.discover", "help.discover.search", "help.discover.choose", "help.discover.back"] {
+            assert!(app.run(id, params.clone()).is_err(), "{id} {params}");
+        }
+        assert_eq!(app.ui.discover.query, before);
+    }
+    app.run("help.discover.search", json!({"query": "   "})).unwrap();
+    assert!(app.ui.discover.results.is_empty());
+    assert!(app.run("help.discover.choose", json!({"index": 0})).is_err());
+}
+
+/// A kept command result follows its menu item: Show Grid reads Hide Grid once the grid shows.
+#[test]
+fn discover_command_results_follow_their_menu_label() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let found = app.run("help.discover.search", json!({"query": "view.grid"})).unwrap();
+    let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "view.grid" && hit["path"][0] == "View").unwrap();
+    assert_eq!(found["results"][index]["label"], "Show Grid");
+    app.run("help.discover.choose", json!({"index": index})).unwrap();
+    app.run("view.grid", json!({})).unwrap();
+    let back = app.run("help.discover", json!({})).unwrap();
+    assert_eq!(back["selected"], index);
+    assert_eq!(back["results"][index]["label"], "Hide Grid");
+}
+
+/// A menu entry's shown path translates the menus' own names and keeps a Scripts folder's name, as
+/// the menus draw it; Help shows that path.
+#[test]
+fn menu_entry_shown_paths_keep_script_folder_names() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    assert_ne!(crate::i18n::tr(de, "File"), "File");
+    let script = json!({"path": "File/a.jsx"});
+    let folder = vec![Item::Cmd("a", crate::scripts_menu::COMMAND, script)];
+    let items = vec![Item::Sub("Scripts", vec![Item::Sub("File", folder), Item::Cmd("Other Script…", "ui.runScript", Value::Null)])];
+    let mut out = vec![];
+    crate::i18n::set_current(de);
+    flatten(&app, vec!["File".into()], vec![crate::i18n::t("File").into()], &items, &mut out);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let script = out.iter().find(|e| e.command.as_deref() == Some(crate::scripts_menu::COMMAND)).unwrap();
+    assert_eq!(script.path, ["File", "Scripts", "File"]);
+    assert_eq!(script.shown_path, [crate::i18n::tr(de, "File"), crate::i18n::tr(de, "Scripts"), "File"]);
+}
+
+/// Outside macOS the window's menu bar has no VectorCraft menu, so Help lists no command under it.
+#[test]
+fn discover_leaves_out_menus_the_window_does_not_show() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let app_menu: Vec<String> =
+        menu_entries(&app).into_iter().filter(|e| e.path.first().is_some_and(|t| t == "VectorCraft")).filter_map(|e| e.command).collect();
+    assert!(!app_menu.is_empty());
+    for id in app_menu {
+        let found = app.run("help.discover.search", json!({"query": id})).unwrap();
+        let listed = found["results"].as_array().unwrap().iter().any(|hit| hit["path"][0] == "VectorCraft");
+        assert_eq!(listed, cfg!(target_os = "macos"), "{id}: {found}");
+    }
+}
+
+/// Help finds a command by the label its menu shows in the UI language, also where the menu names
+/// an effect by its own id (Effect › Pathfinder › Add reads Réunion in French).
+#[test]
+fn discover_finds_commands_by_their_shown_menu_label() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    let shown = crate::i18n::tr_id(fr, "pathfinder.add", "Add");
+    assert_ne!(shown, crate::i18n::tr(fr, "Add"));
+    crate::i18n::set_current(fr);
+    let found = app.run("help.discover.search", json!({"query": shown}));
+    let effect = crate::i18n::tr(fr, "Effect").to_string();
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let found = found.unwrap();
+    let hits = found["results"].as_array().unwrap();
+    assert!(
+        hits.iter().any(|hit| hit["kind"] == "command"
+            && hit["id"].as_str().is_some_and(|id| id.starts_with("effect."))
+            && hit["label"] == shown
+            && hit["path"][0] == effect),
+        "{found}"
+    );
+}
+
+#[test]
+fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let found = app.run("help.discover.search", json!({"query": "file.newDialog"})).unwrap();
+    let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "file.newDialog").unwrap();
+    assert_eq!(found["results"][index]["shortcut"], "Cmd+N");
+    app.run("help.discover.choose", json!({"index": index})).unwrap();
+    app.run("window.panel.close", json!({"panel": "discover"})).unwrap();
+    app.run("shortcuts.set", json!({"id": "file.newDialog", "shortcut": "Cmd+Alt+Shift+F9"})).unwrap();
+
+    let reopened = app.run("help.discover", json!({})).unwrap();
+    assert_eq!(reopened["query"], "file.newDialog");
+    assert_eq!(reopened["selected"], index);
+    assert_eq!(reopened["results"][index]["id"], "file.newDialog");
+    assert_eq!(reopened["results"][index]["shortcut"], "Cmd+Alt+Shift+F9");
+    let picked = app.run("help.discover.choose", json!({"index": index})).unwrap();
+    assert_eq!(picked["result"]["shortcut"], "Cmd+Alt+Shift+F9");
+    assert_eq!(picked["location"]["shortcut"], "Cmd+Alt+Shift+F9");
+
+    app.run("shortcuts.set", json!({"id": "file.newDialog", "shortcut": "Cmd+Alt+Shift+F8"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, crate::panels::discover::show);
+    assert!(text.contains(&pretty_shortcut("Cmd+Alt+Shift+F8")), "{text}");
+    assert!(!text.contains(&pretty_shortcut("Cmd+Alt+Shift+F9")), "{text}");
+
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    assert_ne!(crate::i18n::tr(de, "New…"), "New…");
+    crate::i18n::set_current(de);
+    let back = app.run("help.discover.back", json!({})).unwrap();
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(back["query"], "file.newDialog");
+    assert_eq!(back["results"][index]["label"], crate::i18n::tr(de, "New…"));
+    assert_eq!(back["results"][index]["path"][0], crate::i18n::tr(de, "File"));
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+#[test]
 fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     assert!(app.ui.help_bar);
@@ -59,6 +343,32 @@ fn file_ends_with_exit() {
     let (_, file) = tree.iter().find(|(t, _)| *t == "File").unwrap();
     let last = file.iter().rev().find(|i| !matches!(i, Item::Sep)).unwrap();
     assert!(matches!(last, Item::Cmd("Exit", "app.quit", _)), "{last:?}");
+}
+
+/// Help starts with Search Commands…, the command search's own command, showing its shortcut,
+/// then a separator; the menus list it once.
+#[test]
+fn help_starts_with_search_commands() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let tree = menu_tree();
+    let (_, help) = tree.iter().find(|(t, _)| *t == "Help").unwrap();
+    assert!(matches!(help[0], Item::Cmd("Search Commands…", "help.commandPalette", _)), "{:?}", help[0]);
+    assert!(matches!(help[1], Item::Sep), "{:?}", help[1]);
+    let Some(Entry::Item(row)) = entry(&app, &help[0]) else { panic!("Search Commands… is not shown") };
+    assert!(row.enabled);
+    assert_eq!(row.shortcut, shortcut_of("help.commandPalette"));
+    assert!(row.shortcut.is_some(), "the search's shortcut shows next to the item");
+    fn count(items: &[Item]) -> usize {
+        items
+            .iter()
+            .map(|it| match it {
+                Item::Cmd(_, "help.commandPalette", _) => 1,
+                Item::Sub(_, children) => count(children),
+                _ => 0,
+            })
+            .sum()
+    }
+    assert_eq!(tree.iter().map(|(_, items)| count(items)).sum::<usize>(), 1);
 }
 
 /// No application menu in the window (as in Illustrator): the bar starts at File.
@@ -416,6 +726,39 @@ fn center_on_top_and_bottom_are_type_on_a_path_items() {
     assert!((start - 0.625).abs() < 1e-6, "{start}");
 }
 
+/// Type › Size ends with a separator and Other…, which runs `type.highlightFontSize`: dimmed
+/// without selected type, enabled with it, and never checked.
+#[test]
+fn type_size_ends_with_other() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let id = "type.highlightFontSize";
+    assert!(!enabled(&app, id), "no document");
+    app.run("file.new", json!({})).unwrap();
+    let items: Vec<Item> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Sub("Size", children) => Some(children),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    let n = items.len();
+    assert!(n > 2, "{n} items");
+    assert!(matches!(items[n - 2], Item::Sep), "a separator comes before Other…");
+    assert!(matches!(&items[n - 1], Item::Cmd("Other…", c, p) if *c == id && p.is_null()), "Other… comes last");
+    assert!(items[..n - 2].iter().all(|i| matches!(i, Item::Cmd(_, "text.setStyle", _))), "the sizes come first");
+    assert!(!enabled(&app, id), "nothing selected");
+    let path = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [path]})).unwrap();
+    assert!(!enabled(&app, id), "a path selected");
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Size"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [text]})).unwrap();
+    assert!(enabled(&app, id), "type selected");
+    assert_eq!(checked(&app, id, &Value::Null), None);
+}
+
 /// Type › Dynamic Text Presets › Circle, Arch and Bow run `type.dynamicTextPreset` with their
 /// preset, enabled for point type and type on a path but not for area type alone.
 #[test]
@@ -544,6 +887,30 @@ fn color_settings_and_assign_profile_show_the_separations_panel() {
         app.run(id, json!({})).unwrap();
         assert!(shown(&app), "{id} shows the panel");
     }
+}
+
+/// Edit › Refresh Monitor Profile, after Assign Profile…, asks the desktop app's next frame to read
+/// the display's profile; it is off and refused with the preference off or nothing to read it.
+#[test]
+fn refresh_monitor_profile_asks_for_a_reading_of_the_display_profile() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let entries = menu_entries(&app);
+    let at = |label: &str| entries.iter().position(|e| e.label == label && e.path == ["Edit"]);
+    assert_eq!(at("Refresh Monitor Profile"), at("Assign Profile…").map(|i| i + 1));
+    let e = &entries[at("Refresh Monitor Profile").unwrap()];
+    assert_eq!((e.command.as_deref(), e.shortcut.as_str()), (Some("view.refreshMonitorProfile"), ""));
+    // Nothing reads the display's profile (the web build, tests).
+    assert!(!enabled(&app, "view.refreshMonitorProfile"));
+    assert_eq!(app.run("view.refreshMonitorProfile", json!({})).unwrap_err(), "this build doesn't read display profiles");
+    app.display_profile.attach_reader();
+    assert!(enabled(&app, "view.refreshMonitorProfile"));
+    assert_eq!(app.run("view.refreshMonitorProfile", json!({})).unwrap(), json!({"requested": true}));
+    assert!(app.display_profile.take_request());
+    // With the preference off nothing is asked for.
+    app.session.prefs.monitor_profile_display = false;
+    assert!(!enabled(&app, "view.refreshMonitorProfile"));
+    assert_eq!(app.run("view.refreshMonitorProfile", json!({})).unwrap_err(), "turn on Use Monitor Profile for Canvas first");
+    assert!(!app.display_profile.read_requested());
 }
 
 #[test]
@@ -843,6 +1210,32 @@ fn recent_fonts_and_corner_widget_toggle() {
     assert_eq!(dynamic_label(&app, "view.cornerWidget", ""), "Show Corner Widget");
 }
 
+/// Hide Shape Widgets (`view.shapeWidgets`, the shape tools' Control bar button) flips its label and
+/// the setting, `on` sets it, a non-boolean `on` is an error that leaves it, the setting is saved
+/// with the interface state, and state saved before the setting existed loads with the widgets on.
+#[test]
+fn shape_widgets_command_toggles_and_takes_on() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    assert!(app.ui.view.shape_widgets, "on by default");
+    assert_eq!(dynamic_label(&app, "view.shapeWidgets", ""), "Hide Shape Widgets");
+    assert_eq!(app.run("view.shapeWidgets", json!({})).unwrap(), json!(false));
+    assert_eq!(dynamic_label(&app, "view.shapeWidgets", ""), "Show Shape Widgets");
+    assert!(!app.view_info().shape_widgets);
+    assert_eq!(app.run("view.shapeWidgets", json!({"on": false})).unwrap(), json!(false));
+    assert!(app.run("view.shapeWidgets", json!({"on": "yes"})).is_err());
+    assert!(!app.ui.view.shape_widgets, "a bad `on` changes nothing");
+    assert_eq!(app.run("view.shapeWidgets", json!({"on": true})).unwrap(), json!(true));
+    assert!(app.view_info().shape_widgets);
+    app.ui.view.shape_widgets = false;
+    let mut saved = serde_json::to_value(&app.ui).unwrap();
+    let loaded: crate::UiState = serde_json::from_value(saved.clone()).unwrap();
+    assert!(!loaded.view.shape_widgets, "the setting is saved");
+    saved["view"].as_object_mut().unwrap().remove("shape_widgets");
+    let older: crate::UiState = serde_json::from_value(saved).unwrap();
+    assert!(older.view.shape_widgets, "older saved state shows the widgets");
+    assert!(UI_COMMANDS.iter().any(|c| c.0 == "view.shapeWidgets" && c.2.is_empty()), "no default key");
+}
+
 /// View › Precise Cursors has no menu item or default key, but the command (assignable in Keyboard Shortcuts)
 /// writes General › Use Precise Cursors, the value the dialog and the saved preferences read.
 #[test]
@@ -1006,6 +1399,57 @@ fn expand_appearance_is_an_object_menu_item_only() {
     let paths: Vec<Vec<String>> =
         menu_entries(&app).into_iter().filter(|e| e.command.as_deref() == Some("effect.expandAppearance")).map(|e| e.path).collect();
     assert_eq!(paths, [vec!["Object".to_string()]]);
+}
+
+/// Object › Distribute follows Object › Align and lists the Align panel's Distribute Objects and
+/// Distribute Spacing buttons, each item running the button's command: dimmed with nothing
+/// selected, spacing three objects evenly, and with a key object sending the Distribute Spacing value.
+#[test]
+fn object_distribute_runs_the_distribute_buttons() {
+    let object = menu_tree().into_iter().find(|(t, _)| *t == "Object").map(|(_, items)| items).unwrap_or_default();
+    let subs: Vec<&str> = object.iter().filter_map(|it| if let Item::Sub(l, _) = it { Some(*l) } else { None }).collect();
+    let align = subs.iter().position(|l| *l == "Align").unwrap_or_else(|| panic!("Object › Align: {subs:?}"));
+    assert_eq!(subs.get(align + 1), Some(&"Distribute"), "{subs:?}");
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let items = |app: &VectorcraftApp| -> Vec<MenuEntry> { menu_entries(app).into_iter().filter(|e| e.path == ["Object", "Distribute"]).collect() };
+    let listed: Vec<(String, Option<String>)> = items(&app).into_iter().map(|e| (e.label, e.command)).collect();
+    let expected: Vec<(String, Option<String>)> = [
+        ("Horizontal Distribute Left", "align.distributeHorizontalLeft"),
+        ("Horizontal Distribute Center", "align.distributeHorizontalCenter"),
+        ("Horizontal Distribute Right", "align.distributeHorizontalRight"),
+        ("Vertical Distribute Top", "align.distributeVerticalTop"),
+        ("Vertical Distribute Center", "align.distributeVerticalCenter"),
+        ("Vertical Distribute Bottom", "align.distributeVerticalBottom"),
+        ("Horizontal Distribute Space", "align.distributeHorizontalSpace"),
+        ("Vertical Distribute Space", "align.distributeVerticalSpace"),
+    ]
+    .into_iter()
+    .map(|(l, id)| (l.to_string(), Some(id.to_string())))
+    .collect();
+    assert_eq!(listed, expected);
+    assert!(items(&app).iter().all(|e| !e.enabled), "nothing selected");
+    let ids: Vec<Value> = [0, 30, 100]
+        .into_iter()
+        .map(|x| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 10, "height": 10})).unwrap()["id"].clone())
+        .collect();
+    app.run("select.set", json!({"ids": ids})).unwrap();
+    let lefts = |app: &VectorcraftApp| -> Vec<f64> {
+        let doc = &app.session.active().unwrap().doc;
+        ids.iter().map(|id| doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0).collect()
+    };
+    let click = |app: &mut VectorcraftApp, label: &str| {
+        let e = items(app).into_iter().find(|e| e.label == label).unwrap_or_else(|| panic!("{label}"));
+        assert!(e.enabled, "{label}");
+        let (id, p) = click_target(&e.label, e.command.as_deref().unwrap_or_default(), &e.params);
+        invoke(app, &id, p);
+    };
+    click(&mut app, "Horizontal Distribute Left");
+    assert_eq!(lefts(&app), [0.0, 50.0, 100.0], "{}", app.ui.status);
+    app.ui.align_spacing = 5.0;
+    app.run("select.key", json!({"id": ids[0]})).unwrap();
+    click(&mut app, "Horizontal Distribute Space");
+    assert_eq!(lefts(&app), [0.0, 15.0, 30.0], "{}", app.ui.status);
 }
 
 /// Isolation keeps the Lock and Hide actions available for selected members.
@@ -1261,4 +1705,83 @@ fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
     assert!(pos_pl("Warstwy") < pos_pl("Zmienne"), "Warstwy before Zmienne");
 
     set_current(prev);
+}
+
+/// A command reports the same failed valid tool choice as `tool.select`, rather than success
+/// with the old tool. The existing failure hook exercises the activation error boundary.
+#[test]
+fn selection_tools_toggle_propagates_a_failed_valid_choice() {
+    let failure = "selection tool choice failed";
+    let mut failures = Vec::new();
+    for (from, to) in [("selection", "directSelection"), ("directSelection", "selection")] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        assert!(vectorcraft_tools::tool_info(from).is_some() && vectorcraft_tools::tool_info(to).is_some());
+        app.run("tool.select", json!({"tool": from})).unwrap();
+        // The real successful command chooses the other valid selection tool.
+        assert_eq!(app.run("tool.switchSelectionTools", json!({})).unwrap(), json!({"tool": to}));
+        app.run("tool.select", json!({"tool": from})).unwrap();
+        app.ui.touch_drawing_tool = Some("paintbrush".into());
+        let snapshot = |app: &VectorcraftApp| {
+            let st = app.session.active().unwrap();
+            (serde_json::to_value(st.doc.as_ref()).unwrap(), st.selection.clone(), st.history.undo.len(), st.history.redo.len())
+        };
+        let before = snapshot(&app);
+        let groups = app.ui.group_tool.clone();
+        let drawing = app.ui.touch_drawing_tool.clone();
+        app.fail_next_tool_choice = Some(failure.into());
+        let result = app.run("tool.switchSelectionTools", json!({}));
+        assert!(app.fail_next_tool_choice.is_none(), "the valid activation consumed the failure hook");
+        assert_eq!(app.session.tool_id(), from, "a failed choice keeps the current tool");
+        assert_eq!(snapshot(&app), before, "failed choice preserves document, selection and history");
+        assert_eq!(app.ui.group_tool, groups, "failed choice does not remember the requested tool");
+        assert_eq!(app.ui.touch_drawing_tool, drawing);
+        // The hook is one-shot: ordinary success and the return direction still work afterwards.
+        assert_eq!(app.run("tool.switchSelectionTools", json!({})).unwrap(), json!({"tool": to}));
+        assert_eq!(app.run("tool.switchSelectionTools", json!({})).unwrap(), json!({"tool": from}));
+        assert_eq!(snapshot(&app), before, "successful selection toggles do not edit the artwork");
+        failures.push(result);
+    }
+    assert_eq!(failures, vec![Err(failure.to_string()), Err(failure.to_string())], "both failed valid choices must reach the command caller");
+}
+
+/// #8363: while Trim View is on, View › Guides › Show/Hide Guides and View › Show/Hide Grid are
+/// greyed out (in the menu bar, on their keys and in the canvas context menu, where they stay
+/// listed), refuse to run and leave the choices they keep alone; turning it off brings them back.
+#[test]
+fn trim_view_greys_out_show_guides_and_show_grid() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.ui.view.grid = true;
+    let listed = |app: &VectorcraftApp, id: &str| {
+        fn find(items: &[Item], id: &str) -> bool {
+            items.iter().any(|it| match it {
+                Item::Cmd(_, c, _) => *c == id,
+                Item::Sub(_, children) => find(children, id),
+                _ => false,
+            })
+        }
+        find(&context_items(app), id)
+    };
+    for id in ["view.guides", "view.grid"] {
+        assert!(enabled(&app, id), "{id} runs with Trim View off");
+        assert!(listed(&app, id), "{id} is in the canvas context menu");
+    }
+
+    app.run("view.trimView", json!({})).unwrap();
+    for id in ["view.guides", "view.grid"] {
+        assert!(!enabled(&app, id), "{id} is greyed out while Trim View is on");
+        assert!(listed(&app, id), "{id} stays in the canvas context menu, greyed out");
+        assert!(app.run(id, json!({})).is_err(), "{id} does not run while Trim View is on");
+    }
+    assert!(app.ui.view.guides && app.ui.view.grid, "the choices stay as they were");
+    assert_eq!((checked(&app, "view.grid", &Value::Null), dynamic_label(&app, "view.guides", "Show Guides").as_str()), (Some(true), "Hide Guides"));
+
+    app.run("view.trimView", json!({})).unwrap();
+    for id in ["view.guides", "view.grid"] {
+        assert!(enabled(&app, id), "{id} runs again with Trim View off");
+    }
+    app.run("view.guides", json!({})).unwrap();
+    assert!(!app.ui.view.guides);
 }

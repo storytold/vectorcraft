@@ -9,8 +9,12 @@
 //! For Fractions; OK runs `graph.column`.
 //! Marker: the design the selected graph series draw their data points with, or None (the default
 //! square marker); OK runs `graph.marker`.
+//! Column and Marker also list, under each library's name, the graph designs of the documents
+//! Window › Swatch Libraries › Other Library… loaded that the document lacks; OK on one copies it
+//! into the document with the resources its art uses.
 //!
 //! Fields: `selected` (the selected designs' names; Column and Marker: one name, null for None),
+//! in Column and Marker `library` (the library of the selected design, null for the document's),
 //! in Graph Design `name` (the name Rename gives), and in Column `columnType`, `each` and
 //! `fractions`.
 
@@ -46,6 +50,7 @@ pub(super) const COLUMN_SPEC: DialogSpec = DialogSpec {
     confirm: |app, d| {
         let p = json!({
             "design": d.fields.get("selected").and_then(Value::as_str),
+            "library": library_of(d),
             "columnType": d.str("columnType"),
             "each": d.f64("each", vectorcraft_doc::ColumnDesign::EACH),
             "fractions": d.str("fractions"),
@@ -59,7 +64,9 @@ pub(super) const COLUMN_SPEC: DialogSpec = DialogSpec {
 pub(super) const MARKER_SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Graph Marker").into(),
     body: marker_body,
-    confirm: |app, d| run_and_close(app, "graph.marker", json!({ "design": d.fields.get("selected").and_then(Value::as_str) })),
+    confirm: |app, d| {
+        run_and_close(app, "graph.marker", json!({ "design": d.fields.get("selected").and_then(Value::as_str), "library": library_of(d) }))
+    },
     min_width: 300.0,
     ..DialogSpec::FORM
 };
@@ -95,6 +102,24 @@ fn names(app: &VectorcraftApp) -> Result<Vec<String>, String> {
     Ok(st.doc.graph_designs.iter().map(|d| d.name.clone()).collect())
 }
 
+/// The designs of the loaded libraries that the document lacks (the document's own design of a name
+/// is the one used), by library: its id, its name and the design names, libraries with none left
+/// out.
+fn library_designs(app: &VectorcraftApp) -> Vec<(String, String, Vec<String>)> {
+    let own = names(app).unwrap_or_default();
+    app.session
+        .graph_design_libraries
+        .iter()
+        .map(|l| (l.id.clone(), l.name.clone(), l.doc.graph_designs.iter().map(|g| g.name.clone()).filter(|n| !own.contains(n)).collect::<Vec<_>>()))
+        .filter(|(.., names)| !names.is_empty())
+        .collect()
+}
+
+/// Column and Marker's `library`: the library of the selected design, `None` for the document's.
+fn library_of(d: &Dialog) -> Option<&str> {
+    d.fields.get("library").and_then(Value::as_str)
+}
+
 /// Graph Design's selected designs.
 fn selected(d: &Dialog) -> Vec<String> {
     d.fields.get("selected").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default()
@@ -105,8 +130,9 @@ fn select(d: &mut Dialog, names: Vec<String>) {
     d.fields.insert("selected".into(), json!(names));
 }
 
-/// A design's art drawn in `r` (cached by the art's identity).
-fn preview(ui: &egui::Ui, app: &VectorcraftApp, name: &str, r: egui::Rect) {
+/// A design's art drawn in `r` (cached by the art's identity): the document's design `name`, or
+/// with `library` that loaded library's.
+fn preview(ui: &egui::Ui, app: &VectorcraftApp, library: Option<&str>, name: &str, r: egui::Rect) {
     use std::cell::RefCell;
     use std::collections::HashMap;
     thread_local! {
@@ -114,11 +140,18 @@ fn preview(ui: &egui::Ui, app: &VectorcraftApp, name: &str, r: egui::Rect) {
         static CACHE: crate::graphics::TexCache<HashMap<usize, egui::TextureHandle>> = crate::graphics::TexCache::default();
     }
     let Some(st) = app.session.active() else { return };
-    let Some(art) = st.doc.graph_designs.iter().find(|x| x.name == name).map(|x| x.art.clone()) else { return };
+    let doc = match library {
+        Some(id) => match app.session.graph_design_libraries.get(id) {
+            Some(l) => &l.doc,
+            None => return,
+        },
+        None => &st.doc,
+    };
+    let Some(art) = doc.graph_designs.iter().find(|x| x.name == name).map(|x| x.art.clone()) else { return };
     let key = std::sync::Arc::as_ptr(&art) as usize;
     let px = (r.width() * ui.ctx().pixels_per_point()).round() as u32;
     let tex = CACHE.with(|c| c.borrow().get(&key).cloned()).or_else(|| {
-        let img = RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail(&st.doc, &art, px.max(16), Some([255, 255, 255, 255])))?;
+        let img = RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail(doc, &art, px.max(16), Some([255, 255, 255, 255])))?;
         let color = crate::canvas::color_image(&img);
         let tex = ui.ctx().load_texture(format!("graph-design-{key}"), color, egui::TextureOptions::LINEAR);
         CACHE.with(|c| {
@@ -177,7 +210,7 @@ fn design_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> b
             let (r, _) = ui.allocate_exact_size(egui::vec2(PREVIEW, PREVIEW), egui::Sense::hover());
             ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, egui::Color32::from_gray(160)), egui::StrokeKind::Inside);
             if let Some(n) = &one {
-                preview(ui, app, n, r.shrink(4.0));
+                preview(ui, app, None, n, r.shrink(4.0));
             }
             ui.add_space(6.0);
             let button =
@@ -220,37 +253,66 @@ fn design_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> b
     false
 }
 
-/// The list of Column and Marker: None, then the designs `names`; a click picks one into `selected` (null for None).
-fn one_design_list(ui: &mut egui::Ui, d: &mut Dialog, names: &[String], salt: &str) {
+/// The list of Column and Marker: None, the document's designs `names`, then each loaded library's
+/// name and the designs of it in `libraries` ([`library_designs`]); a click picks one into
+/// `selected` (null for None) and its library into `library` (null for the document's).
+fn one_design_list(ui: &mut egui::Ui, d: &mut Dialog, names: &[String], libraries: &[(String, String, Vec<String>)], salt: &str) {
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().id_salt(salt).min_scrolled_height(160.0).max_height(160.0).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.set_min_height(160.0);
             let current = d.fields.get("selected").and_then(Value::as_str).map(str::to_string);
+            let from = library_of(d).map(str::to_string);
+            let pick = |d: &mut Dialog, name: Option<&str>, library: Option<&str>| {
+                d.fields.insert("selected".into(), json!(name));
+                d.fields.insert("library".into(), json!(library));
+            };
             if ui.selectable_label(current.is_none(), tl!("None")).clicked() {
-                d.fields.insert("selected".into(), Value::Null);
+                pick(d, None, None);
             }
             for n in names {
-                if ui.selectable_label(current.as_deref() == Some(n.as_str()), n.as_str()).clicked() {
-                    d.fields.insert("selected".into(), json!(n));
+                if ui.selectable_label(from.is_none() && current.as_deref() == Some(n.as_str()), n.as_str()).clicked() {
+                    pick(d, Some(n), None);
+                }
+            }
+            for (id, library, designs) in libraries {
+                ui.add_space(4.0);
+                // The library's own name, not interface text.
+                widgets::dim_name(ui, library);
+                for n in designs {
+                    let on = from.as_deref() == Some(id.as_str()) && current.as_deref() == Some(n.as_str());
+                    if ui.selectable_label(on, n.as_str()).clicked() {
+                        pick(d, Some(n), Some(id));
+                    }
                 }
             }
         });
     });
 }
 
+/// The design Column or Marker has selected, with its library (`None`: the document's), when the
+/// document or that library still has it.
+fn shown_design(d: &Dialog, names: &[String], libraries: &[(String, String, Vec<String>)]) -> Option<(Option<String>, String)> {
+    let n = d.fields.get("selected").and_then(Value::as_str)?;
+    match library_of(d) {
+        None => names.iter().any(|x| x == n).then(|| (None, n.to_string())),
+        Some(id) => libraries.iter().any(|(l, _, designs)| l == id && designs.iter().any(|x| x == n)).then(|| (Some(id.to_string()), n.to_string())),
+    }
+}
+
 fn column_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let names = names(app).unwrap_or_default();
+    let libraries = library_designs(app);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(220.0);
-            one_design_list(ui, d, &names, "graph-columns");
+            one_design_list(ui, d, &names, &libraries, "graph-columns");
         });
         ui.add_space(10.0);
         let (r, _) = ui.allocate_exact_size(egui::vec2(PREVIEW, PREVIEW), egui::Sense::hover());
         ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, egui::Color32::from_gray(160)), egui::StrokeKind::Inside);
-        if let Some(n) = d.fields.get("selected").and_then(Value::as_str).filter(|n| names.iter().any(|x| x == n)) {
-            preview(ui, app, n, r.shrink(4.0));
+        if let Some((library, n)) = shown_design(d, &names, &libraries) {
+            preview(ui, app, library.as_deref(), &n, r.shrink(4.0));
         }
     });
     ui.add_space(8.0);
@@ -277,9 +339,10 @@ const EACH_RANGE: std::ops::RangeInclusive<f64> = 0.0001..=1_000_000_000.0;
 
 fn marker_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let names = names(app).unwrap_or_default();
+    let libraries = library_designs(app);
     // A list as wide as Graph Design's, not the whole window.
     ui.set_width(220.0);
-    one_design_list(ui, d, &names, "graph-markers");
+    one_design_list(ui, d, &names, &libraries, "graph-markers");
     false
 }
 
@@ -376,5 +439,34 @@ mod tests {
         d.fields.insert("selected".into(), json!(null));
         (super::COLUMN_SPEC.confirm)(&mut app, &d).unwrap();
         assert_eq!(app.session.execute("graph.column", &json!({})).unwrap()["design"], json!(null));
+    }
+
+    #[test]
+    fn marker_lists_a_loaded_documents_designs_and_ok_copies_the_one_picked_in() {
+        // A document with design "New Design", loaded as a swatch library (Other Library…).
+        let src = app_with_design();
+        let bytes = vectorcraft_format::save_file(&src.session.active().unwrap().doc);
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let p = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes), "name": "Dots.vectorcraft"});
+        app.run("swatch.library.load", p).unwrap();
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let g = app.run("graph.create", json!({"type": "line", "x": 100, "y": 100, "width": 200, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [g]})).unwrap();
+        let libraries = super::library_designs(&app);
+        assert_eq!(libraries.len(), 1);
+        let (id, _, designs) = &libraries[0];
+        assert_eq!(designs, &["New Design".to_string()]);
+        crate::menus::invoke(&mut app, "graph.marker", json!({}));
+        frame(&mut app);
+        let mut d: Dialog = app.ui.dialog.take().unwrap();
+        d.fields.insert("selected".into(), json!("New Design"));
+        d.fields.insert("library".into(), json!(id));
+        app.ui.dialog = Some(d.clone());
+        frame(&mut app);
+        (super::MARKER_SPEC.confirm)(&mut app, &d).unwrap();
+        assert_eq!(app.session.execute("graph.marker", &json!({})).unwrap()["design"], "New Design");
+        assert_eq!(super::names(&app).unwrap(), ["New Design"]);
+        // The document has it now, so the library lists it no more.
+        assert!(super::library_designs(&app).is_empty());
     }
 }

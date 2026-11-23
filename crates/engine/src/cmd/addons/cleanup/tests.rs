@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, LayerColor, Node, NodeId, NodeKind};
 use vectorcraft_geom::{FillRule, Rect};
 
 use crate::Session;
@@ -123,18 +123,100 @@ fn simplify_leaves_locked_and_hidden_paths_alone() {
     assert_eq!(r["before"], 16);
     assert!(anchors(&s, ids[0]) < 16);
     assert_eq!((anchors(&s, ids[1]), anchors(&s, ids[2])), (16, 16));
-    // Named by `ids`, or in a locked group, a path stays too, with no undo step.
-    let steps = undo_steps(&s);
-    s.execute("addon.cleanup.simplify", &json!({"ids": [ids[1].0, ids[2].0]})).unwrap();
-    assert_eq!((anchors(&s, ids[1]), anchors(&s, ids[2])), (16, 16));
-    assert_eq!(undo_steps(&s), steps);
+    // In a selected locked group, a path stays too, with no undo step.
     change(&mut s, ids[1], |n| n.locked = false);
     change(&mut s, g, |n| n.locked = true);
     let steps = undo_steps(&s);
-    let r = s.execute("addon.cleanup.simplify", &json!({"ids": [g.0]})).unwrap();
+    let r = s.execute("addon.cleanup.simplify", &json!({})).unwrap();
     assert_eq!((r["before"].as_u64(), r["after"].as_u64()), (Some(0), Some(0)));
     assert_eq!(anchors(&s, ids[1]), 16);
     assert_eq!(undo_steps(&s), steps);
+    // Named by `ids`, the locked group's paths, its hidden one included, are simplified.
+    let r = s.execute("addon.cleanup.simplify", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!(r["ids"], json!([ids[0].0, ids[1].0, ids[2].0]));
+    assert!(anchors(&s, ids[1]) < 16 && anchors(&s, ids[2]) < 16);
+    assert_eq!(undo_steps(&s), steps + 1);
+}
+
+/// A path of 16 anchors at (`x`, `y`): an ellipse with anchors added twice.
+fn ellipse16(s: &mut Session, x: f64, y: f64) -> NodeId {
+    let e = id_of(&s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": 50, "height": 50})).unwrap());
+    select(s, &[e]);
+    s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+    s.execute("object.path.addAnchorPoints", &json!({})).unwrap();
+    e
+}
+
+/// Simplify Anchors takes the locked and hidden paths `ids` names, those in the locked or hidden
+/// groups and layers it names (their locked and hidden members too) and a hidden compound path's
+/// member, as one undo step, without selecting them; from the selection it leaves them alone, and a
+/// path on a locked artboard stays even when named.
+#[test]
+fn simplify_named_locked_and_hidden_paths() {
+    let mut s = session();
+    let locked = ellipse16(&mut s, 10.0, 10.0);
+    let hidden = ellipse16(&mut s, 70.0, 10.0);
+    change(&mut s, locked, |n| n.locked = true);
+    change(&mut s, hidden, |n| n.visible = false);
+    // A locked group with a hidden member, and a hidden group with a locked member.
+    let in_locked = ellipse16(&mut s, 130.0, 10.0);
+    let locked_group = wrap(&mut s, in_locked, |c| NodeKind::Group { children: c, clip: false });
+    change(&mut s, locked_group, |n| n.locked = true);
+    change(&mut s, in_locked, |n| n.visible = false);
+    let in_hidden = ellipse16(&mut s, 190.0, 10.0);
+    let hidden_group = wrap(&mut s, in_hidden, |c| NodeKind::Group { children: c, clip: false });
+    change(&mut s, hidden_group, |n| n.visible = false);
+    change(&mut s, in_hidden, |n| n.locked = true);
+    // A member of a hidden compound path.
+    let member = ellipse16(&mut s, 250.0, 10.0);
+    let compound = wrap(&mut s, member, |c| NodeKind::Compound { children: c, rule: FillRule::NonZero });
+    change(&mut s, compound, |n| n.visible = false);
+    // A path in a locked layer, named itself.
+    let layer = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    let in_layer = ellipse16(&mut s, 10.0, 100.0);
+    let on_board = ellipse16(&mut s, 10.0, 200.0);
+    change(&mut s, layer, |n| n.locked = true);
+    let all = [locked, hidden, in_locked, in_hidden, member, in_layer];
+    select(&mut s, &[locked, hidden, locked_group, hidden_group, compound]);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.simplify", &json!({})).unwrap();
+    assert_eq!(r["ids"], json!([]), "from the selection, none is taken");
+    assert_eq!(undo_steps(&s), steps);
+    assert!(all.iter().all(|id| anchors(&s, *id) == 16));
+    select(&mut s, &[]);
+    s.edit("Select Anchors", |_, sel| {
+        sel.anchors.insert(locked, [(0, 1)].into());
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.simplify", &json!({"ids": [locked.0, hidden.0, locked_group.0, hidden_group.0, member.0, in_layer.0]})).unwrap();
+    assert_eq!(r["ids"], json!(all.iter().map(|i| i.0).collect::<Vec<_>>()));
+    assert_eq!(r["before"], 16 * 6);
+    assert_eq!(r["after"].as_u64(), Some(all.iter().map(|id| anchors(&s, *id) as u64).sum::<u64>()));
+    assert!(all.iter().all(|id| anchors(&s, *id) < 16), "{r}");
+    assert_eq!(undo_steps(&s), steps + 1);
+    let sel = &s.doc().unwrap().selection;
+    assert!(sel.objects.is_empty() && sel.anchors.is_empty(), "nothing is selected, and the changed path's anchors are not");
+    let n = node(&s, in_hidden).unwrap();
+    assert!(n.locked && n.visible && !node(&s, hidden_group).unwrap().visible);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(all.iter().all(|id| anchors(&s, *id) == 16));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(all.iter().all(|id| anchors(&s, *id) < 16));
+    // Nothing left to remove: no undo step.
+    let steps = undo_steps(&s);
+    s.execute("addon.cleanup.simplify", &json!({"ids": [locked.0]})).unwrap();
+    assert_eq!(undo_steps(&s), steps);
+    // On a locked artboard, a named path stays as it is.
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.simplify", &json!({"ids": [on_board.0]})).unwrap();
+    assert_eq!((r["ids"].clone(), anchors(&s, on_board), undo_steps(&s)), (json!([]), 16, steps));
 }
 
 /// Each kind: what makes the issue in a fresh document (beside a clean rectangle).
@@ -610,19 +692,122 @@ fn deep_ungroup_keeps_hidden_art_hidden_and_locked_art_locked() {
     assert!(!d.node(hidden).unwrap().visible && d.node(b).unwrap().visible);
     assert!(d.node(locked).unwrap().locked && d.node(e).unwrap().locked);
     assert_eq!(s.doc().unwrap().selection.objects, [a]);
-    // Named by `ids`, a locked group stays as it is, with no undo step.
+    // Named by `ids`, a locked group is taken apart as one undo step; its member becomes locked
+    // and is not selected.
     let steps = undo_steps(&s);
     let r = s.execute("addon.cleanup.deepUngroup", &json!({"ids": [locked.0]})).unwrap();
-    assert_eq!(r["ungrouped"], 0);
-    assert!(node(&s, locked).is_some());
-    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(r["ungrouped"], 1);
+    assert!(node(&s, locked).is_none() && node(&s, c).unwrap().locked);
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert_eq!(r["ids"], json!([]));
     // With nothing ungrouped, the selection stays and the reply lists it.
-    assert_eq!(r["ids"], json!([a.0]));
     let f = rect(&mut s, 130.0, 10.0, 20.0, 20.0);
     select(&mut s, &[a]);
     let r = s.execute("addon.cleanup.deepUngroup", &json!({"ids": [f.0]})).unwrap();
     assert_eq!((r["ids"].clone(), r["ungrouped"].clone()), (json!([a.0]), json!(0)));
     assert_eq!(s.doc().unwrap().selection.objects, [a]);
+}
+
+/// Put `ids` inside a new container that `kind` makes of its members.
+fn wrap_all(s: &mut Session, ids: &[NodeId], kind: fn(Vec<std::sync::Arc<Node>>) -> NodeKind) -> NodeId {
+    s.edit("t", |d, _| {
+        let w = d.alloc_id();
+        Ok(d.wrap(ids, |c| Node::new(w, kind(c)))?)
+    })
+    .unwrap()
+}
+
+fn plain_group(c: Vec<std::sync::Arc<Node>>) -> NodeKind {
+    NodeKind::Group { children: c, clip: false }
+}
+
+fn sublayer(c: Vec<std::sync::Arc<Node>>) -> NodeKind {
+    NodeKind::Layer { color: LayerColor::Preset(0), template: false, printable: true, children: c, clip: false, preview: true, dim_images: None }
+}
+
+/// Named by `ids`, Deep Ungroup takes apart locked and hidden groups, those nested in a group it
+/// names and those in a layer it names (its sublayers included, the layer staying), as one undo
+/// step; their members become locked or hidden as the groups were, keep the groups' opacity and are
+/// not selected. From the selection those groups stay whole, as do a clipping group and a group on a
+/// locked artboard even when named.
+#[test]
+fn deep_ungroup_named_locked_and_hidden_groups() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    let b = rect(&mut s, 40.0, 10.0, 20.0, 20.0);
+    let locked = wrap_all(&mut s, &[a], plain_group);
+    let hidden = wrap_all(&mut s, &[b], plain_group);
+    change(&mut s, locked, |n| n.locked = true);
+    change(&mut s, hidden, |n| {
+        n.visible = false;
+        n.opacity = 0.5;
+    });
+    select(&mut s, &[locked, hidden]);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.deepUngroup", &json!({})).unwrap();
+    assert_eq!((r["ungrouped"].clone(), undo_steps(&s)), (json!(0), steps), "from the selection, they stay whole");
+    assert!(node(&s, locked).is_some() && node(&s, hidden).is_some());
+    let r = s.execute("addon.cleanup.deepUngroup", &json!({"ids": [locked.0, hidden.0]})).unwrap();
+    assert_eq!((r["ungrouped"].clone(), r["ids"].clone()), (json!(2), json!([])));
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert!(node(&s, locked).is_none() && node(&s, hidden).is_none());
+    let (na, nb) = (node(&s, a).unwrap(), node(&s, b).unwrap());
+    assert!(na.locked && na.visible && !nb.visible && !nb.locked);
+    assert_eq!(nb.opacity, 0.5);
+    assert!(s.doc().unwrap().selection.objects.is_empty());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(node(&s, locked).is_some() && !node(&s, a).unwrap().locked && node(&s, b).unwrap().visible);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(node(&s, locked).is_none() && node(&s, a).unwrap().locked);
+    // Locked and hidden groups nested in a named group that can be edited.
+    let c = rect(&mut s, 70.0, 10.0, 20.0, 20.0);
+    let e = rect(&mut s, 100.0, 10.0, 20.0, 20.0);
+    let f = rect(&mut s, 130.0, 10.0, 20.0, 20.0);
+    let inner_locked = wrap_all(&mut s, &[e], plain_group);
+    let inner_hidden = wrap_all(&mut s, &[f], plain_group);
+    change(&mut s, inner_locked, |n| n.locked = true);
+    change(&mut s, inner_hidden, |n| n.visible = false);
+    let outer = wrap_all(&mut s, &[c, inner_locked, inner_hidden], plain_group);
+    let r = s.execute("addon.cleanup.deepUngroup", &json!({"ids": [outer.0]})).unwrap();
+    assert_eq!((r["ungrouped"].clone(), r["ids"].clone()), (json!(3), json!([c.0])));
+    assert!(node(&s, e).unwrap().locked && !node(&s, f).unwrap().visible);
+    assert_eq!(s.doc().unwrap().selection.objects, [c]);
+    // In a named layer and its sublayer; the layers and a clipping group stay.
+    let layer = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    let g = rect(&mut s, 10.0, 100.0, 20.0, 20.0);
+    let h = rect(&mut s, 40.0, 100.0, 20.0, 20.0);
+    let layer_locked = wrap_all(&mut s, &[g], plain_group);
+    change(&mut s, layer_locked, |n| n.locked = true);
+    let layer_hidden = wrap_all(&mut s, &[h], plain_group);
+    change(&mut s, layer_hidden, |n| n.visible = false);
+    let sub = wrap_all(&mut s, &[layer_hidden], sublayer);
+    let clipped = rect(&mut s, 100.0, 100.0, 10.0, 10.0);
+    let clip = rect(&mut s, 95.0, 95.0, 30.0, 30.0);
+    select(&mut s, &[clipped, clip]);
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    let clip_group = s.doc().unwrap().selection.objects[0];
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.deepUngroup", &json!({"ids": [layer.0]})).unwrap();
+    assert_eq!((r["ungrouped"].clone(), undo_steps(&s)), (json!(2), steps + 1));
+    assert!(node(&s, layer_locked).is_none() && node(&s, layer_hidden).is_none());
+    assert!(node(&s, layer).is_some() && node(&s, clip_group).is_some());
+    assert!(node(&s, g).unwrap().locked && !node(&s, h).unwrap().visible);
+    assert_eq!(s.doc().unwrap().doc.parent_of(h), Some(sub));
+    // On a locked artboard, a named group stays whole, with the selection as it was.
+    let k = rect(&mut s, 10.0, 200.0, 20.0, 20.0);
+    let on_board = wrap_all(&mut s, &[k], plain_group);
+    let off_board = rect(&mut s, 500.0, 10.0, 20.0, 20.0);
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    select(&mut s, &[off_board]);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.deepUngroup", &json!({"ids": [on_board.0]})).unwrap();
+    assert_eq!((r["ungrouped"].clone(), r["ids"].clone(), undo_steps(&s)), (json!(0), json!([off_board.0]), steps));
+    assert!(node(&s, on_board).is_some());
+    assert_eq!(s.doc().unwrap().selection.objects, [off_board]);
 }
 
 #[test]
@@ -645,4 +830,75 @@ fn rejoin_joins_pieces_within_the_gap_only() {
     for bad in [json!({"gap": -1}), json!({"gap": 7}), json!({"gap": "1"})] {
         assert!(s.execute("addon.cleanup.rejoin", &bad).is_err(), "{bad}");
     }
+}
+
+/// Named by `ids`, Rejoin Path Pieces takes locked and hidden pieces (in a locked group or layer
+/// too) and joins only pieces alike in being hidden and in being locked, whichever is topmost, as one
+/// undo step; a locked or hidden path it makes is not selected. From the selection it takes only
+/// pieces that can be edited, and compound path members and pieces on a locked artboard stay out.
+#[test]
+fn rejoin_named_locked_and_hidden_pieces() {
+    let mut s = session();
+    let a = line(&mut s, &[(10.0, 10.0), (50.0, 10.0)]);
+    let b = line(&mut s, &[(50.05, 10.0), (90.0, 10.0)]);
+    let g = wrap_all(&mut s, &[a, b], plain_group);
+    change(&mut s, g, |n| n.locked = true);
+    select(&mut s, &[g]);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.rejoin", &json!({})).unwrap();
+    assert_eq!((r["joined"].clone(), undo_steps(&s)), (json!(0), steps), "from the selection, none is taken");
+    let r = s.execute("addon.cleanup.rejoin", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((r["joined"].clone(), r["removed"].clone(), r["ids"].clone()), (json!(1), json!(1), json!([b.0])));
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert!(node(&s, a).is_none() && anchors(&s, b) == 3);
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the locked path is not selected");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(node(&s, a).is_some() && anchors(&s, b) == 2);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(node(&s, a).is_none() && anchors(&s, b) == 3);
+    // A shown piece and two hidden ones, the hidden on top: only the hidden pair joins.
+    let c = line(&mut s, &[(10.0, 40.0), (50.0, 40.0)]);
+    let e = line(&mut s, &[(50.05, 40.0), (90.0, 40.0)]);
+    let h = line(&mut s, &[(90.05, 40.0), (130.0, 40.0)]);
+    change(&mut s, e, |n| n.visible = false);
+    change(&mut s, h, |n| n.visible = false);
+    let r = s.execute("addon.cleanup.rejoin", &json!({"ids": [c.0, e.0, h.0]})).unwrap();
+    assert_eq!((r["joined"].clone(), r["removed"].clone(), r["ids"].clone()), (json!(1), json!(1), json!([h.0])));
+    assert!(node(&s, e).is_none() && anchors(&s, c) == 2 && anchors(&s, h) == 3);
+    assert!(!node(&s, h).unwrap().visible && node(&s, c).unwrap().visible);
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the hidden path is not selected");
+    // An unlocked piece under a locked one, and a hidden piece under a shown one: none joins.
+    let k = line(&mut s, &[(10.0, 70.0), (50.0, 70.0)]);
+    let m = line(&mut s, &[(50.05, 70.0), (90.0, 70.0)]);
+    let n = line(&mut s, &[(10.0, 100.0), (50.0, 100.0)]);
+    let o = line(&mut s, &[(50.05, 100.0), (90.0, 100.0)]);
+    change(&mut s, m, |x| x.locked = true);
+    change(&mut s, n, |x| x.visible = false);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.rejoin", &json!({"ids": [k.0, m.0, n.0, o.0]})).unwrap();
+    assert_eq!((r["joined"].clone(), r["removed"].clone(), undo_steps(&s)), (json!(0), json!(0), steps));
+    assert!([k, m, n, o].iter().all(|id| anchors(&s, *id) == 2));
+    // Named pieces in a locked layer join; members of a compound path stay out.
+    let layer = id_of(&s.execute("layer.new", &json!({})).unwrap());
+    let p = line(&mut s, &[(10.0, 130.0), (50.0, 130.0)]);
+    let q = line(&mut s, &[(50.05, 130.0), (90.0, 130.0)]);
+    let u = line(&mut s, &[(10.0, 160.0), (50.0, 160.0)]);
+    let v = line(&mut s, &[(50.05, 160.0), (90.0, 160.0)]);
+    wrap_all(&mut s, &[u, v], |c| NodeKind::Compound { children: c, rule: FillRule::NonZero });
+    let w = line(&mut s, &[(10.0, 200.0), (50.0, 200.0)]);
+    let x = line(&mut s, &[(50.05, 200.0), (90.0, 200.0)]);
+    change(&mut s, layer, |l| l.locked = true);
+    let r = s.execute("addon.cleanup.rejoin", &json!({"ids": [p.0, q.0, u.0, v.0]})).unwrap();
+    assert_eq!((r["joined"].clone(), r["ids"].clone()), (json!(1), json!([q.0])));
+    assert!(node(&s, p).is_none() && anchors(&s, u) == 2 && anchors(&s, v) == 2);
+    // On a locked artboard, named pieces stay as they are.
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.rejoin", &json!({"ids": [w.0, x.0]})).unwrap();
+    assert_eq!((r["joined"].clone(), undo_steps(&s)), (json!(0), steps));
+    assert!(node(&s, w).is_some() && node(&s, x).is_some());
 }

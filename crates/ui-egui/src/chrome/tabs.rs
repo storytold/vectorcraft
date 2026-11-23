@@ -16,8 +16,14 @@ fn view_tab_title(d: &vectorcraft_engine::DocState, number: Option<u32>, zoom: f
         let color = if d.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk { "CMYK" } else { "RGB" };
         format!("{color}/{}", if outline { tl!("Outline") } else { tl!("Preview") })
     };
+    format!("{} @ {} ({mode})", view_tab_name(d, number), zoom_label(zoom, display_print_size).replace('%', " %"))
+}
+
+/// The start of [`view_tab_title`], which an inactive document tab shows alone (#8582): "Name*",
+/// or for a view of a document with more than one view, "Name:2*".
+fn view_tab_name(d: &vectorcraft_engine::DocState, number: Option<u32>) -> String {
     let number = number.map(|n| format!(":{n}")).unwrap_or_default();
-    format!("{}{number}{} @ {} ({mode})", d.title(), if d.is_dirty() { "*" } else { "" }, zoom_label(zoom, display_print_size).replace('%', " %"))
+    format!("{}{number}{}", d.title(), if d.is_dirty() { "*" } else { "" })
 }
 
 /// The title of window `w`, a view of document `d`: with the view's zoom and Outline or Preview,
@@ -128,9 +134,63 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
     first
 }
 
-/// Document tab strip: "Name* @ 66.67% (RGB/Preview)". User Interface › Large Tabs makes the tabs
-/// taller, with larger titles. Tabs that don't fit are reached from a » button at the strip's
-/// right end, which lists every open document, and the active tab is always in view (#746).
+/// When the tabs `widths` wide from `first` to the last one leave at least `least` of `room` before
+/// the » button, the tab before `first` fills that room with its title shortened (#8584). → the
+/// first tab the strip shows and, when it is that tab, the width it gets.
+pub(super) fn leading_tab(widths: &[f32], first: usize, room: f32, least: f32) -> (usize, Option<f32>) {
+    let rest: f32 = widths.get(first..).map_or(0.0, |w| w.iter().sum());
+    if first > 0 && room - rest >= least { (first - 1, Some(room - rest)) } else { (first, None) }
+}
+
+/// The room a tab `w` wide has: `left` of the strip, or with a leading tab `lead` wide
+/// ([`leading_tab`]), `lead` for it (`leading`) and its whole width for each tab after it.
+pub(super) fn tab_room(lead: Option<f32>, leading: bool, w: f32, left: f32) -> f32 {
+    match lead {
+        Some(l) if leading => l,
+        Some(_) => w,
+        None => left,
+    }
+}
+
+/// `title` in one line at most `max_width` wide, ending in "…" when it is cut short, and whether
+/// it fits in `max_width`. egui rounds a wrap width to the nearest point, so the width is rounded
+/// down first.
+pub(super) fn shortened_title(
+    ctx: &egui::Context,
+    title: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+    max_width: f32,
+) -> (std::sync::Arc<egui::Galley>, bool) {
+    let max_width = max_width.max(0.0);
+    let mut job = egui::text::LayoutJob::simple_singleline(title.to_owned(), font, color);
+    job.wrap = egui::text::TextWrapping { max_width: max_width.floor(), max_rows: 1, break_anywhere: true, overflow_character: Some('…') };
+    let galley = ctx.fonts_mut(|f| f.layout_job(job));
+    let fits = galley.size().x <= max_width;
+    (galley, fits)
+}
+
+/// The × of a document tab `w` wide, drawn in `xr` and clicked within 3 pt of it, or `None` for a
+/// tab shortened narrower than the × and its click area.
+fn tab_close_box(ui: &Ui, t: &Tokens, xr: egui::Rect, w: f32, id: egui::Id) -> Option<egui::Response> {
+    /// The least width of a tab that holds its × and the ×'s click area.
+    const CLOSE_ROOM: f32 = 25.0;
+    if w < CLOSE_ROOM {
+        return None;
+    }
+    let xresp = ui.interact(xr.expand(3.0), id, Sense::click());
+    icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
+    Some(xresp)
+}
+
+/// Document tab strip: the active tab's title is "Name* @ 66.67 % (RGB/Preview)", and each other
+/// tab shows "Name*" alone, with the whole title in its tooltip (#8582). User Interface › Large
+/// Tabs makes the tabs taller, with larger titles. Tabs that don't fit are reached from a » button
+/// at the strip's right end, which lists every open document, and the active tab is always in view
+/// (#746). The first tab that doesn't fit whole fills the room left before the » button with its
+/// title shortened, when that room holds some of the title (#8584). When the active tab is among
+/// the last ones and the tabs from it to the end leave room, the tab before them fills that room
+/// instead. An active tab wider than the whole strip is shortened to it.
 /// Each view Window › New Window opened has a tab of its own. Windows floating have no tab
 /// ([`crate::doc_windows`]); while the current window is a floating one, the tab of the window the
 /// strip shows is the highlighted one. A tab dragged more than [`crate::doc_windows::TEAR_OFF`]
@@ -140,6 +200,10 @@ pub(super) fn first_tab_shown(widths: &[f32], active: Option<usize>, room: f32) 
 pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     /// The width of the » button.
     const MORE: f32 = 30.0;
+    /// A tab's width beyond its title's: the margins and the ×.
+    const TAB_PADDING: f32 = 50.0;
+    /// The least width of title a tab shortened to fit the strip shows.
+    const MIN_TITLE: f32 = 40.0;
     let t = Tokens::get(ui.ctx());
     let (height, title_size) = tab_size(app);
     let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -148,22 +212,28 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.painter().line_segment([strip.left_bottom(), strip.right_bottom()], Stroke::new(1.0, t.border));
     // On the Home screen no tab is the current one.
     let shown = crate::doc_windows::tab_window(app).filter(|_| app.ui.home.is_none());
-    // The windows under the tabs; `active` is the position of the highlighted one.
-    let docked = crate::doc_windows::docked_windows(app);
-    let active = docked.iter().position(|w| Some(*w) == shown);
-    let tabs: Vec<(String, std::sync::Arc<egui::Galley>)> = docked
-        .iter()
-        .filter_map(|w| Some((*w, app.session.documents().get(w.0)?)))
+    // The windows under the tabs, with the text each tab shows, its whole title and the text laid
+    // out; `active` is the position of the highlighted one. An inactive tab shows the name alone,
+    // without the zoom and the mode in parentheses (color mode and view, or the opacity mask being
+    // edited) (#8582), and its tooltip shows the whole title.
+    type Tab = (crate::doc_windows::Win, String, String, std::sync::Arc<egui::Galley>);
+    let tabs: Vec<Tab> = crate::doc_windows::docked_windows(app)
+        .into_iter()
+        .filter_map(|w| Some((w, app.session.documents().get(w.0)?)))
         .map(|(w, d)| {
             let title = window_tab_title(app, w, d);
-            let color = if Some(w) == shown { t.text_strong } else { t.text_dim };
-            (title.clone(), ui.painter().layout_no_wrap(title, theme::semibold(title_size), color))
+            let (text, color) =
+                if Some(w) == shown { (title.clone(), t.text_strong) } else { (view_tab_name(d, crate::doc_windows::label(app, w)), t.text_dim) };
+            let galley = ui.painter().layout_no_wrap(text.clone(), theme::semibold(title_size), color);
+            (w, text, title, galley)
         })
         .collect();
-    let widths: Vec<f32> = tabs.iter().map(|(_, g)| g.size().x + 50.0).collect();
+    let active = tabs.iter().position(|(w, ..)| Some(*w) == shown);
+    let widths: Vec<f32> = tabs.iter().map(|(.., g)| g.size().x + TAB_PADDING).collect();
     let overflow = widths.iter().sum::<f32>() > strip.width();
     let room = strip.width() - if overflow { MORE } else { 0.0 };
     let first = if overflow { first_tab_shown(&widths, active, room) } else { 0 };
+    let (first, lead) = leading_tab(&widths, first, room, TAB_PADDING + MIN_TITLE);
     let mut x = strip.left();
     let mut activate = None;
     let mut close = None;
@@ -173,15 +243,31 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     // the drag just ended), for moving it along the strip.
     let mut slots: Vec<(usize, egui::Rect)> = vec![];
     let mut dragged = None;
-    for (k, ((_, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
-        if x + w > strip.left() + room && Some(k) != active {
-            break;
-        }
-        let Some(&win) = docked.get(k) else { break };
-        let i = win.0;
+    for (k, ((win, text, title, galley), w)) in tabs.iter().zip(&widths).enumerate().skip(first) {
+        // A tab that doesn't fit whole takes the rest of the strip with its title shortened, as
+        // long as some of the title fits (#8584); its tooltip shows the whole title. The active
+        // tab always shows, shortened to the strip when it is wider than the whole strip. The
+        // leading tab before the ones that fit whole takes only the room they leave, and the tabs
+        // after it are drawn whole.
+        let left = tab_room(lead, k == first, *w, strip.left() + room - x);
         let is_active = Some(k) == active;
-        let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(*w, strip.height() - 1.0));
+        // A shortened title too wide for its room even as "…" is not drawn, so it stays clear of
+        // the ×.
+        let (galley, w, shortened, title_fits) = if *w > left {
+            if left < TAB_PADDING + MIN_TITLE && !is_active {
+                break;
+            }
+            let color = if Some(*win) == shown { t.text_strong } else { t.text_dim };
+            let (galley, fits) = shortened_title(ui.ctx(), text, theme::semibold(title_size), color, left - TAB_PADDING);
+            (galley, left.max(0.0), true, fits)
+        } else {
+            (galley.clone(), *w, false, true)
+        };
+        let win = *win;
+        let i = win.0;
+        let r = egui::Rect::from_min_size(egui::pos2(x, strip.top()), vec2(w, strip.height() - 1.0));
         let resp = ui.interact(r, ui.scope_id().with(("tab", i, win.1)), Sense::click_and_drag());
+        let resp = if shortened || text != title { super::status_bar::full_text_tooltip(resp, title.as_str()) } else { resp };
         slots.push((i, r));
         if resp.dragged() || resp.drag_stopped() {
             dragged = Some((i, resp.drag_stopped()));
@@ -196,13 +282,16 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
         // (#673).
         let (x_center, title_left) = if CLOSE_BEFORE_TITLE { (r.left() + 16.0, r.left() + 32.0) } else { (r.right() - 16.0, r.left() + 14.0) };
         let xr = egui::Rect::from_center_size(egui::pos2(x_center, r.center().y), vec2(12.0, 12.0));
-        let xresp = ui.interact(xr.expand(3.0), ui.scope_id().with(("tabx", i, win.1)), Sense::click());
-        icons::paint(ui, "x", xr, if xresp.hovered() { t.text_strong } else { t.text });
-        ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley.clone(), t.text);
-        hovering_art |= crate::document_drag::hover_tab(app, &resp, win, xr.expand(3.0));
+        let xresp = tab_close_box(ui, &t, xr, w, ui.scope_id().with(("tabx", i, win.1)));
+        if title_fits {
+            ui.painter().galley(egui::pos2(title_left, r.center().y - galley.size().y / 2.0), galley, t.text);
+        }
+        let x_area = if xresp.is_some() { xr.expand(3.0) } else { egui::Rect::NOTHING };
+        hovering_art |= crate::document_drag::hover_tab(app, &resp, win, x_area);
         // A middle-click anywhere on the tab closes it as the × does (#6506), so closing a
         // modified document's last view still asks to save first.
-        if xresp.clicked() || resp.middle_clicked() || xresp.middle_clicked() {
+        let x_clicked = xresp.as_ref().is_some_and(|x| x.clicked() || x.middle_clicked());
+        if x_clicked || resp.middle_clicked() {
             close = Some(win);
         } else if resp.clicked() {
             activate = Some(win);
@@ -339,7 +428,9 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         }
         let bar = egui::Rect::from_min_size(area.min, vec2(area.width(), 24.0));
         // Keeps the pointer off the canvas; not focusable (`click_and_drag` is), so Tab skips it.
-        ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
+        // A click on it, the current object's name included, outside the back arrow, the crumbs of
+        // the levels above and the pattern buttons leaves isolation mode.
+        let background = ui.interact(bar, ui.scope_id().with("iso-bar"), Sense::CLICK | Sense::DRAG);
         ui.painter().rect_filled(bar, 0.0, t.panel);
         let back = egui::Rect::from_min_size(bar.min + vec2(6.0, 3.0), vec2(18.0, 18.0));
         let bresp = ui.interact(back, ui.scope_id().with("iso-back"), Sense::click());
@@ -362,8 +453,10 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
                     ui.painter().rect_filled(crumb_rect, 3.0, t.hover);
                 }
                 if resp.clicked() {
-                    if crumb.is_layer {
-                        nav_cmd = Some(("object.exitIsolation", json!({})));
+                    // The top-level layer's crumb leaves isolation mode; a sublayer's or a group's
+                    // crumb isolates that level.
+                    if crumb.is_layer && i == 0 {
+                        nav_cmd = Some(("object.exitIsolation", json!({ "all": true })));
                     } else if let Some(target) = crumb.id {
                         nav_cmd = Some(("object.isolate", json!({ "id": target.0 })));
                     }
@@ -399,18 +492,45 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         if bresp.clicked() {
             pattern_cmd = pattern_cmd.or(pattern_edit.as_ref().map(|_| "object.pattern.done"));
             if pattern_cmd.is_none() {
-                // Up one level: the isolated object's parent, or out of isolation mode from a layer.
+                // Up one level: the isolated object's parent group, or `object.exitIsolation`, which
+                // goes from an isolated sublayer to its parent layer and otherwise leaves isolation mode.
                 nav_cmd = Some(match ancestry.iter().rev().nth(1).filter(|p| st.doc.node(**p).is_some_and(|n| !n.is_layer())) {
                     Some(parent) => ("object.isolate", json!({ "id": parent.0 })),
                     None => ("object.exitIsolation", json!({})),
                 });
             }
         }
+        // A click on the background leaves isolation mode altogether, symbol editing mode included.
+        // While a pattern is edited it does nothing: Save a Copy, Done and Cancel end pattern editing.
+        let leave = background.clicked() && nav_cmd.is_none() && pattern_cmd.is_none() && pattern_edit.is_none();
         if let Some((cmd, params)) = nav_cmd {
             app.run(cmd, params).ok();
         }
         if let Some(cmd) = pattern_cmd {
             app.run(cmd, json!({})).ok();
+        }
+        if leave {
+            leave_isolation(app);
+        }
+    }
+}
+
+/// Runs `object.exitIsolation` until the current document is out of isolation mode. Leaving symbol
+/// editing mode from a group isolated inside the symbol's art first goes back to the art, and leaving
+/// the mode restores the isolation it was entered from; each of these is left in turn. It stops at
+/// pattern editing, which only its own buttons end, and when a step fails or changes nothing.
+fn leave_isolation(app: &mut VectorcraftApp) {
+    // Each step leaves one level; a document has far fewer levels than this.
+    const MAX_STEPS: usize = 64;
+    let state = |app: &VectorcraftApp| {
+        app.session
+            .active()
+            .map(|d| (d.isolation, d.doc.symbol_edit.as_ref().map(|e| e.layer), d.doc.mask_edit.is_some(), d.doc.pattern_edit.is_some()))
+    };
+    for _ in 0..MAX_STEPS {
+        let Some(before) = state(app) else { return };
+        if before.0.is_none() || before.3 || app.run("object.exitIsolation", json!({})).is_err() || state(app) == Some(before) {
+            return;
         }
     }
 }
@@ -454,10 +574,12 @@ pub(super) fn artboard_list(app: &VectorcraftApp, ui: &mut Ui, cur: usize) -> Op
                     }
                     // Every number ends where the widest one ends.
                     let numbers = ui.painter().layout_no_wrap(boards.len().to_string(), egui::FontId::proportional(12.0), t.text_dim).size().x;
-                    let width = ui.available_width().max(LIST_W);
                     let mut chosen = None;
                     ui.spacing_mut().item_spacing.y = 0.0;
                     area.show_rows(ui, ROW_H, boards.len(), |ui, range| {
+                        // The width beside the scroll bar's column: rows as wide as the list
+                        // itself would widen it by the bar on every pass.
+                        let width = ui.available_width().max(LIST_W);
                         for i in range {
                             let Some(board) = boards.get(i) else { continue };
                             let (r, resp) = ui.allocate_exact_size(vec2(width, ROW_H), Sense::click());

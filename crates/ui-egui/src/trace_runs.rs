@@ -8,7 +8,8 @@
 //!
 //! When it is done, what it traced is handed to its command with the same parameters
 //! ([`Traced::hand_in`]), so the edit is one undo step like any trace, unless the image or the
-//! settings changed meanwhile: then nothing changes and the status bar says to trace it again. The
+//! settings changed meanwhile or File › Revert replaced the document's content: then nothing
+//! changes and the status bar says to trace it again. The
 //! control channel, MCP and scripts run the commands at once, and so does every trace on the web,
 //! in unit tests that don't set `off_the_ui_thread`, and with `VECTORCRAFT_SYNC_OPEN` set
 //! ([`available`]).
@@ -75,6 +76,14 @@ pub struct TraceRuns {
     next_id: u64,
     /// Set by unit tests whose app traces off the UI thread.
     pub(crate) off_the_ui_thread: bool,
+    /// The status bar's message the latest Image Trace with notes left, with
+    /// [`crate::state::UiState::status_sets`] then.
+    pub(crate) notes_status: Option<(String, u64)>,
+}
+
+/// The status bar's line after an Image Trace with `n` notes, the first of them `first`.
+pub(crate) fn traced_with_notes(n: usize, first: &str) -> String {
+    crate::i18n::msg_n(n as u64, "Traced with {n} note: {first}", "Traced with {n} notes: {first}", &[("first", first)])
 }
 
 /// Does `app` trace off the UI thread? Where documents open off it ([`crate::opening::available`]),
@@ -158,8 +167,8 @@ pub fn poll(app: &mut VectorcraftApp) {
 }
 
 /// Applies trace `r`'s result in its document, which becomes the active one again, as its command
-/// would while the object, its image and the settings are as they were; else why it has none, in
-/// the status bar.
+/// would while the object, its image and the settings are as they were and the document was not
+/// reverted; else why it has none, in the status bar.
 fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
     // Cancel changes nothing, even when the trace ended just before it.
     if r.token.is_cancelled() {
@@ -184,6 +193,10 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
         return;
     };
     app.session.set_active(i);
+    if run.reverted(&app.session) {
+        app.status("Image Trace finished, but its document was reverted: trace it again");
+        return;
+    }
     if !run.current(&app.session) {
         app.status("Image Trace finished, but the image or its settings changed meanwhile: trace it again");
         return;

@@ -133,12 +133,13 @@ fn pen_sample(pressure: u32, pen_mask: u32, pen_flags: u32, in_contact: bool, po
 
 /// How a pen whose `POINTER_PEN_INFO` holds `pen_mask`, `tilt_x`, `tilt_y` and `rotation` is
 /// held: the tilt when the pen reports it along either axis (0 along an axis it doesn't), the
-/// rotation when it reports one, each kept within [`PenPose`]'s ranges.
+/// rotation when it reports one, each kept within [`PenPose`]'s ranges. `POINTER_PEN_INFO` has no
+/// field for an airbrush pen's finger wheel, so the pose has none.
 fn pen_pose(pen_mask: u32, tilt_x: i32, tilt_y: i32, rotation: u32) -> PenPose {
     let along = |mask: u32, t: i32| if pen_mask & mask != 0 { t as f32 } else { 0.0 };
     let tilt = (pen_mask & (PEN_MASK_TILT_X | PEN_MASK_TILT_Y) != 0).then(|| [along(PEN_MASK_TILT_X, tilt_x), along(PEN_MASK_TILT_Y, tilt_y)]);
     let rotation = (pen_mask & PEN_MASK_ROTATION != 0).then_some(rotation as f32);
-    PenPose { tilt, rotation }.sanitized()
+    PenPose { tilt, rotation, wheel: None }.sanitized()
 }
 
 /// Whether a mouse message with this extra information (`GetMessageExtraInfo`) comes from a mouse,
@@ -426,12 +427,12 @@ mod tests {
     #[test]
     fn a_pens_tilt_and_rotation_come_where_it_reports_them() {
         let all = PEN_MASK_TILT_X | PEN_MASK_TILT_Y | PEN_MASK_ROTATION;
-        assert_eq!(pen_pose(all, 30, -45, 90), PenPose { tilt: Some([30.0, -45.0]), rotation: Some(90.0) });
+        assert_eq!(pen_pose(all, 30, -45, 90), PenPose { tilt: Some([30.0, -45.0]), rotation: Some(90.0), wheel: None });
         assert_eq!(pen_pose(PEN_MASK_PRESSURE, 30, -45, 90), PenPose::default(), "a pen that reports neither");
-        assert_eq!(pen_pose(PEN_MASK_TILT_X, 30, -45, 90), PenPose { tilt: Some([30.0, 0.0]), rotation: None }, "one axis");
-        assert_eq!(pen_pose(PEN_MASK_ROTATION, 0, 0, 359), PenPose { tilt: None, rotation: Some(359.0) }, "a 6D Art Pen's barrel");
+        assert_eq!(pen_pose(PEN_MASK_TILT_X, 30, -45, 90), PenPose { tilt: Some([30.0, 0.0]), ..PenPose::default() }, "one axis");
+        assert_eq!(pen_pose(PEN_MASK_ROTATION, 0, 0, 359), PenPose { rotation: Some(359.0), ..PenPose::default() }, "a 6D Art Pen's barrel");
         let wild = pen_pose(all, 400, i32::MIN, 720);
-        assert_eq!(wild, PenPose { tilt: Some([90.0, -90.0]), rotation: Some(0.0) }, "kept within the ranges");
+        assert_eq!(wild, PenPose { tilt: Some([90.0, -90.0]), rotation: Some(0.0), wheel: None }, "kept within the ranges");
         let pose = pen_pose(all, 10, 20, 180);
         assert_eq!(pen_sample(512, PEN_MASK_PRESSURE | all, 0, true, pose).pose, pose);
     }

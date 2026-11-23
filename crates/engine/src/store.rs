@@ -17,9 +17,8 @@
 //! * **Plug-ins**: the module of each plug-in `plugin.install` installs, as a `.wasm` file named
 //!   after its id (as Illustrator keeps plug-ins in its Plug-ins folder); `plugin.remove` deletes it.
 //!   Attaching the folder installs them again, except in Safe Mode and except the ones the user
-//!   disabled, which `disabled.json` in the same folder lists (`plugin.setEnabled`; a window locks
-//!   `disabled.lock` while it writes the list). The Additional Plug-ins Folder preference is not
-//!   copied: it is loaded from where it is. `grants.json` holds what the user granted the plug-ins
+//!   disabled, which `disabled.json` in the same folder lists (`plugin.setEnabled`). The Additional
+//!   Plug-ins Folder preference is not copied: it is loaded from where it is. `grants.json` holds what the user granted the plug-ins
 //!   stored there that list permissions (id, module hash, permissions); a stored plug-in whose
 //!   permissions it doesn't grant is skipped with a log record, and stays in the folder.
 //! * **Plug-in settings and caches**: `storage/id-<id>/` in the plug-in store, the id written as
@@ -27,6 +26,11 @@
 //!   keeps with the `settings` and `cache` permissions ([`PluginStorage`]): `settings.json` and a
 //!   `cache` folder with one file per entry. The host names every file; a plug-in only names keys.
 //!   Replacing a plug-in keeps them, and `plugin.remove` deletes them.
+//! * **Turns on the plug-in store**: a window or process locks `disabled.lock` in the plug-in folder
+//!   ([`StoreTurn`]) while it reads and changes the stored plug-ins, `grants.json`, `disabled.json`
+//!   and the plug-ins' settings and caches, so that two of them using one folder change it one after
+//!   the other: an install's module and grant are written in one turn, and a grant written for one
+//!   plug-in doesn't undo another one's.
 //!
 //! The files are untrusted input like any other: sizes and counts are capped, a file that does not
 //! parse is skipped with a log record, and every write is atomic.
@@ -62,12 +66,15 @@ pub const MAX_PLUGIN_STORE: u64 = 512 << 20;
 const PLUGIN_EXT: &str = "wasm";
 /// The file in the plug-in folder that lists the plug-ins the user disabled.
 pub const DISABLED_FILE: &str = "disabled.json";
-/// The file in the plug-in folder that a window locks while it reads and writes [`DISABLED_FILE`].
+/// The file in the plug-in folder that a window locks while it reads and changes the plug-in store
+/// ([`StoreTurn`]), [`DISABLED_FILE`] included.
 pub const DISABLED_LOCK: &str = "disabled.lock";
 /// The file in the plug-in store that holds the permissions the user granted.
 const GRANTS_FILE: &str = "grants.json";
 /// The error of a `plugin.remove` that can't remove the plug-in's grant from [`GRANTS_FILE`].
 pub(crate) const GRANT_NOT_REMOVED: &str = "the plug-in's grant can't be removed from the plug-in store";
+/// The error of a change to the plug-in store that can't take its turn ([`StoreTurn`]).
+pub(crate) const STORE_NOT_LOCKED: &str = "the plug-in store can't be locked";
 /// The largest grants file read.
 const MAX_GRANTS_FILE: u64 = 1 << 20;
 /// The folder in the plug-in store that holds each plug-in's settings and cache.
@@ -84,7 +91,7 @@ const CACHE_EXT: &str = "bin";
 /// A write to a folder that holds more is refused as full.
 pub(crate) const MAX_CACHE_SCAN: usize = storage::MAX_CACHE_ENTRIES * 2;
 /// Held while a plug-in's settings or cache change, so two runs can't pass a cap together or lose
-/// each other's settings.
+/// each other's settings. Taken after the plug-in store's turn ([`StoreTurn`]), never before it.
 static PLUGIN_DATA_LOCK: Mutex<()> = Mutex::new(());
 /// The state of each plug-in folder's storage, shared by every storage made for the folder until
 /// the plug-in is removed, which closes it and drops it.
@@ -99,7 +106,7 @@ const MAX_GRANT_WRITES_KEPT: usize = 256;
 struct IgnoredGrants {
     /// The grants that should be gone but could not be removed: no session in the process counts
     /// them ([`Session::ignore_stored_grant`]) until one writes the store's grants for the id
-    /// ([`Session::store_grant`]).
+    /// ([`Session::store_grant_in`]).
     ignored: BTreeSet<(PathBuf, String)>,
     /// The latest grant writes of the process, at most [`MAX_GRANT_WRITES_KEPT`], each with the
     /// count of writes it made ([`IgnoredGrants::writes`]).
@@ -217,23 +224,53 @@ fn write_atomic(_: &Path, _: &[u8]) -> std::io::Result<()> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
-/// [`DISABLED_LOCK`] in `dir`, locked until the file is dropped, waiting while another window holds
-/// it; `None` when it can't be opened or locked.
+/// [`DISABLED_LOCK`] in the plug-in store `dir`, locked until the file is dropped, waiting while
+/// another window or process holds it, or another handle in this process. The file is opened for
+/// reading and writing (a handle that only appends can't be locked on Windows) and is never
+/// replaced or removed, so that every window locks the same file.
 #[cfg(not(target_arch = "wasm32"))]
-fn lock_disabled(dir: &Path) -> Option<std::fs::File> {
-    let opened = std::fs::create_dir_all(dir)
-        .and_then(|()| std::fs::File::options().create(true).truncate(false).read(true).write(true).open(dir.join(DISABLED_LOCK)));
-    let file = opened.and_then(|f| f.lock().map(|()| f));
-    if let Err(e) = &file {
-        log::warn!("can't lock {}: {e}", dir.join(DISABLED_LOCK).display());
+fn lock_store(dir: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::create_dir_all(dir)?;
+    let file = std::fs::File::options().create(true).truncate(false).read(true).write(true).open(dir.join(DISABLED_LOCK))?;
+    match file.try_lock() {
+        Ok(()) => return Ok(file),
+        Err(std::fs::TryLockError::WouldBlock) => {}
+        Err(std::fs::TryLockError::Error(e)) => return Err(e),
     }
-    file.ok()
+    #[cfg(test)]
+    if let Some(waiting) = WHILE_STORE_LOCKED.take() {
+        waiting();
+    }
+    file.lock()?;
+    Ok(file)
 }
 
 /// The browser has no folders to keep anything in.
 #[cfg(target_arch = "wasm32")]
-fn lock_disabled(_: &Path) -> Option<std::fs::File> {
-    None
+fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
+}
+
+/// A turn on a plug-in store ([`Session::plugin_store_turn`]): while it is held, no other window or
+/// process that takes one reads and changes the store's plug-ins, grants, disabled list, settings
+/// or caches. Dropping it ends the turn. A turn is taken once per operation and handed to the
+/// functions it calls, since a second lock of the same file by the same thread waits for ever.
+pub(crate) struct StoreTurn {
+    /// [`DISABLED_LOCK`], locked; `None` without a store, and for a load that goes ahead without
+    /// a turn ([`Session::plugin_store_turn_for_load`]), which then writes nothing to the store.
+    lock: Option<std::fs::File>,
+}
+
+impl StoreTurn {
+    /// A turn that isn't held, for a load that goes ahead without one: it writes nothing.
+    pub(crate) fn unheld() -> Self {
+        StoreTurn { lock: None }
+    }
+
+    /// Whether the store may be written in this turn.
+    fn held(&self) -> bool {
+        self.lock.is_some()
+    }
 }
 
 #[cfg(test)]
@@ -252,6 +289,15 @@ thread_local! {
     /// Tests: writing the `.delete` file beside a folder about to be deleted ([`delete_aside`])
     /// fails on this thread, as on a full volume.
     pub(crate) static MARKER_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: runs once on this thread when locking the plug-in store ([`lock_store`]) finds it
+    /// locked and waits.
+    pub(crate) static WHILE_STORE_LOCKED: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once on this thread when a grant write has read `grants.json` and before it
+    /// writes the file.
+    pub(crate) static AFTER_GRANTS_READ: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once on this thread when a change of a plug-in's settings has read them and
+    /// before it writes them.
+    pub(crate) static AFTER_SETTINGS_READ: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Remove `dir/file` → whether it is gone; a file that isn't there is what was wanted.
@@ -401,11 +447,14 @@ impl Session {
     /// Keep the plug-ins this session installs in `dir`, take the disabled plug-ins saved there
     /// ([`DISABLED_FILE`]), and install the stored ones ([`Session::load_stored_plugins`]).
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
-        let disabled =
-            read_capped(&dir.join(DISABLED_FILE), safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
-        safe_mode::set_disabled(disabled);
+        let path = dir.join(DISABLED_FILE);
         self.plugin_dir = Some(dir);
-        self.load_stored_plugins();
+        // A `plugin.install` in another session or process writes the store before this reads it.
+        let _held = crate::cmd::plugin::hold_plugin_changes();
+        let turn = self.plugin_store_turn_for_load();
+        let disabled = read_capped(&path, safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
+        safe_mode::set_disabled(disabled);
+        self.load_stored_plugins_in(&turn);
     }
 
     /// Install the plug-ins kept in the plug-in folder: none in Safe Mode, and none the user
@@ -415,14 +464,25 @@ impl Session {
     /// stays in the folder with its grant. A grant for an id whose stored module lists no
     /// permissions is forgotten; one that can't be removed from the grants file doesn't count for
     /// any session in the process attached to the folder until the file can be written for the id
-    /// ([`Session::ignore_stored_grant`]).
+    /// ([`Session::ignore_stored_grant`]). The folder is read and changed in one turn on it
+    /// ([`Session::plugin_store_turn_for_load`]).
     pub fn load_stored_plugins(&mut self) {
+        if self.plugin_dir.is_none() || safe_mode::active() {
+            return;
+        }
+        // A `plugin.install` in another session or process writes the store before this reads it.
+        let _held = crate::cmd::plugin::hold_plugin_changes();
+        let turn = self.plugin_store_turn_for_load();
+        self.load_stored_plugins_in(&turn);
+    }
+
+    /// [`Session::load_stored_plugins`] in `turn`, while [`crate::cmd::plugin::hold_plugin_changes`]
+    /// is held.
+    fn load_stored_plugins_in(&mut self, turn: &StoreTurn) {
         let Some(dir) = self.plugin_dir.clone() else { return };
         if safe_mode::active() {
             return;
         }
-        // A `plugin.install` in another session writes the store before this reads it.
-        let _held = crate::cmd::plugin::hold_plugin_changes();
         let grants = self.counted_grants(&dir);
         let limits = vectorcraft_plugins::Limits::default();
         let mut left = MAX_PLUGIN_STORE;
@@ -454,7 +514,7 @@ impl Session {
                         Some(g) => {
                             asks_nothing.remove(&m.id);
                             vectorcraft_plugins::registry::grant(GrantToken::from_engine_grants_file(g.clone()));
-                            vectorcraft_plugins::registry::set_storage(&m.id, plugin_storage(Some(&dir), &m.id));
+                            vectorcraft_plugins::registry::set_storage(&m.id, plugin_storage(Some(&dir), &m.id, turn));
                             if let Err(e) = vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
                                 log::warn!("skipping the stored plug-in {}: {e}", path.display());
                             }
@@ -466,7 +526,7 @@ impl Session {
                 }
                 Ok(plugin) => {
                     asks_nothing.insert(plugin.id().to_string());
-                    vectorcraft_plugins::registry::set_storage(plugin.id(), plugin_storage(Some(&dir), plugin.id()));
+                    vectorcraft_plugins::registry::set_storage(plugin.id(), plugin_storage(Some(&dir), plugin.id(), turn));
                     if let Err(e) = vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
                         log::warn!("skipping the stored plug-in {}: {e}", path.display());
                     }
@@ -483,10 +543,31 @@ impl Session {
             };
             if named {
                 let writes = self.grant_writes();
-                if !self.store_grant(id, None) && self.holds_plugin_grant(id) {
+                if !self.store_grant_in(turn, id, None) && self.holds_plugin_grant(id) {
                     self.ignore_stored_grant(id, writes);
                 }
             }
+        }
+    }
+
+    /// Take a turn on the attached plug-in store ([`StoreTurn`]), waiting while another window or
+    /// process holds one; without a store, a turn that writes nothing. An error, with a log record,
+    /// when the lock file can't be made, opened or locked. Taken after
+    /// [`crate::cmd::plugin::hold_plugin_changes`] when both are needed, and never by a thread that
+    /// holds a turn already.
+    pub(crate) fn plugin_store_turn(&self) -> std::io::Result<StoreTurn> {
+        let Some(dir) = self.plugin_dir.as_deref() else { return Ok(StoreTurn::unheld()) };
+        lock_store(dir)
+            .map(|file| StoreTurn { lock: Some(file) })
+            .inspect_err(|e| log::warn!("can't lock {}: {e}", dir.join(DISABLED_LOCK).display()))
+    }
+
+    /// [`Session::plugin_store_turn`] for a load, which goes ahead without the turn when the store
+    /// folder isn't there (nothing is stored) or can't be locked, and then writes nothing to it.
+    pub(crate) fn plugin_store_turn_for_load(&self) -> StoreTurn {
+        match self.plugin_dir.as_deref() {
+            Some(dir) if dir.is_dir() => self.plugin_store_turn().unwrap_or_else(|_| StoreTurn::unheld()),
+            _ => StoreTurn::unheld(),
         }
     }
 
@@ -499,8 +580,15 @@ impl Session {
     /// a file that can't be read (too large, say) or that a later version wrote
     /// ([`safe_mode::read_disabled_file`]): it is kept as it is.
     pub fn store_disabled_plugins(&self) -> bool {
+        self.plugin_store_turn().is_ok_and(|turn| self.store_disabled_plugins_in(&turn))
+    }
+
+    /// [`Session::store_disabled_plugins`] in `turn`; `false` when it isn't held.
+    pub(crate) fn store_disabled_plugins_in(&self, turn: &StoreTurn) -> bool {
         let Some(dir) = self.plugin_dir.as_deref() else { return false };
-        let Some(_turn) = lock_disabled(dir) else { return false };
+        if !turn.held() {
+            return false;
+        }
         let path = dir.join(DISABLED_FILE);
         let theirs = match read_capped(&path, safe_mode::MAX_DISABLED_FILE_BYTES) {
             Ok(bytes) => match safe_mode::read_disabled_file(&bytes) {
@@ -580,10 +668,10 @@ impl Session {
         grants
     }
 
-    /// Write the module `bytes` of the plug-in `id` to the store → whether they went there (`false`
-    /// without a folder).
-    pub(crate) fn store_plugin(&self, id: &str, bytes: &[u8]) -> bool {
-        self.plugin_dir.as_deref().is_some_and(|dir| put(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)), bytes))
+    /// Write the module `bytes` of the plug-in `id` to the store in `turn` → whether they went there
+    /// (`false` without a folder, and when `turn` isn't held).
+    pub(crate) fn store_plugin(&self, turn: &StoreTurn, id: &str, bytes: &[u8]) -> bool {
+        turn.held() && self.plugin_dir.as_deref().is_some_and(|dir| put(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)), bytes))
     }
 
     /// The module the store holds for the plug-in `id`: `None` without a folder or such a file, and
@@ -601,14 +689,15 @@ impl Session {
     /// Return the store's module for the plug-in `id` to `previous`, the bytes it held before a
     /// write ([`Session::stored_plugin_bytes`]): with `None`, the file is removed. → whether the
     /// write reported success; a write that reports a failure may still have put `previous` back.
-    pub(crate) fn put_back_plugin(&self, id: &str, previous: Option<&[u8]>) -> bool {
+    /// In `turn`, the one the write was made in.
+    pub(crate) fn put_back_plugin(&self, turn: &StoreTurn, id: &str, previous: Option<&[u8]>) -> bool {
         #[cfg(test)]
         if PUT_BACK_FAILS.get() {
             return false;
         }
         let back = match previous {
-            Some(bytes) => self.store_plugin(id, bytes),
-            None => self.unstore_plugin(id),
+            Some(bytes) => self.store_plugin(turn, id, bytes),
+            None => self.unstore_plugin(turn, id),
         };
         #[cfg(test)]
         if PUT_BACK_FAILS_AFTER_WRITE.get() {
@@ -623,15 +712,23 @@ impl Session {
         self.plugin_dir.as_ref().map(|dir| dir.join(format!("{}.{PLUGIN_EXT}", file_stem(id))).display().to_string())
     }
 
+    /// Tests: [`Session::store_grant_in`] in a turn of its own ([`Session::plugin_store_turn`]);
+    /// `false` when it can't be taken.
+    #[cfg(test)]
+    pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
+        self.plugin_store_turn().is_ok_and(|turn| self.store_grant_in(&turn, id, grant))
+    }
+
     /// Record in the store what the user granted plug-in `id` (`None`: nothing), leaving the store's
     /// other grants as they are; with none left, remove the file. Entries this version can't use
     /// are written back as they were, except one for `id`. A grants file that is too large, can't
     /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
-    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. → whether the store now
-    /// holds what was asked (`false` without a folder). When it does, the grant kept for `id` counts
-    /// again, for every session in the process attached to the store ([`Session::ignore_stored_grant`]).
-    pub(crate) fn store_grant(&self, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
-        let done = self.write_grant(id, grant);
+    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. The file is read and
+    /// written in `turn`. → whether the store now holds what was asked (`false` without a folder,
+    /// and when `turn` isn't held). When it does, the grant kept for `id` counts again, for every
+    /// session in the process attached to the store ([`Session::ignore_stored_grant`]).
+    pub(crate) fn store_grant_in(&self, turn: &StoreTurn, id: &str, grant: Option<vectorcraft_plugins::permissions::Grant>) -> bool {
+        let done = turn.held() && self.write_grant(id, grant);
         if done && let Some(key) = self.plugin_dir.as_deref().map(plugin_store_key) {
             let mut shared = IGNORED_PLUGIN_GRANTS.lock().unwrap_or_else(|e| e.into_inner());
             let entry = (key, id.to_string());
@@ -648,7 +745,7 @@ impl Session {
         done
     }
 
-    /// How many grant writes the sessions of the process have made ([`Session::store_grant`]).
+    /// How many grant writes the sessions of the process have made ([`Session::store_grant_in`]).
     /// Taken before a write that may fail, for [`Session::ignore_stored_grant`].
     pub(crate) fn grant_writes(&self) -> u64 {
         IGNORED_PLUGIN_GRANTS.lock().unwrap_or_else(|e| e.into_inner()).writes
@@ -661,7 +758,7 @@ impl Session {
     }
 
     /// Stop counting the attached store's grant for the plug-in `id`, in every session in the
-    /// process attached to the same folder, until [`Session::store_grant`] next succeeds for it in
+    /// process attached to the same folder, until [`Session::store_grant_in`] next succeeds for it in
     /// one of them: for a grant that should be gone and could not be removed, which would otherwise
     /// approve the bytes it covers. `writes` is [`Session::grant_writes`] from before the failed
     /// write: when a session has written the store's grants for `id` since, the file holds what that
@@ -687,6 +784,10 @@ impl Session {
                 return false;
             }
         };
+        #[cfg(test)]
+        if let Some(between) = AFTER_GRANTS_READ.take() {
+            between();
+        }
         let others = file.other.len();
         file.other.retain(|entry| entry.get("id").and_then(serde_json::Value::as_str) != Some(id));
         let changed = match grant {
@@ -724,16 +825,17 @@ impl Session {
         })
     }
 
-    /// Remove the plug-in `id` from the store → whether its file is gone (`false` without a folder).
-    pub(crate) fn unstore_plugin(&self, id: &str) -> bool {
-        self.plugin_dir.as_deref().is_some_and(|dir| take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id))))
+    /// Remove the plug-in `id` from the store in `turn` → whether its file is gone (`false` without a
+    /// folder, and when `turn` isn't held).
+    pub(crate) fn unstore_plugin(&self, turn: &StoreTurn, id: &str) -> bool {
+        turn.held() && self.plugin_dir.as_deref().is_some_and(|dir| take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id))))
     }
 
     /// Keep the settings and cache of plug-in `id` in the attached plug-in store from now on; without
     /// one, nowhere (its storage calls then fail as unavailable). Settings and cache that a removal
-    /// kept are moved back first ([`plugin_storage`]).
-    pub(crate) fn attach_plugin_storage(&self, id: &str) {
-        vectorcraft_plugins::registry::set_storage(id, plugin_storage(self.plugin_dir.as_deref(), id));
+    /// kept are moved back first, in `turn` ([`plugin_storage`]).
+    pub(crate) fn attach_plugin_storage(&self, turn: &StoreTurn, id: &str) {
+        vectorcraft_plugins::registry::set_storage(id, plugin_storage(self.plugin_dir.as_deref(), id, turn));
     }
 
     /// Does the attached plug-in store have a folder of settings and cache for plug-in `id`, or one
@@ -757,9 +859,13 @@ impl Session {
     /// that rename fails too, the error also names both paths and the reason, and the next attach or
     /// removal for the id moves the folder back. Once `forget` returns `true`, the folder and the
     /// kept settings are deleted ([`delete_aside`]); what that deletion leaves stays, with a log
-    /// record, and a later call for the id tries to delete it again.
-    pub(crate) fn remove_plugin_storage(&self, id: &str, forget: impl FnOnce() -> bool) -> Result<(), StorageError> {
+    /// record, and a later call for the id tries to delete it again. All of it happens in `turn`;
+    /// with a store and a turn that isn't held, nothing changes and this fails.
+    pub(crate) fn remove_plugin_storage(&self, turn: &StoreTurn, id: &str, forget: impl FnOnce() -> bool) -> Result<(), StorageError> {
         let not_forgotten = || StorageError::Io(GRANT_NOT_REMOVED.to_string());
+        if self.plugin_dir.is_some() && !turn.held() {
+            return Err(StorageError::Io(STORE_NOT_LOCKED.to_string()));
+        }
         vectorcraft_plugins::registry::set_storage(id, None);
         let Some(dir) = &self.plugin_dir else {
             return if forget() { Ok(()) } else { Err(not_forgotten()) };
@@ -943,13 +1049,16 @@ fn restore_removed(path: &Path) -> std::io::Result<()> {
 /// Where plug-in `id` keeps its settings and cache in the plug-in store `dir`. Settings and cache
 /// that a removal kept are moved back first ([`restore_removed`]); when that fails, the failure is
 /// logged and there is no storage (its calls fail as unavailable), so that nothing the plug-in
-/// writes takes their place. A later attach or load tries again.
-fn plugin_storage(dir: Option<&Path>, id: &str) -> Option<Arc<dyn Storage>> {
+/// writes takes their place. A later attach or load tries again. They are moved in `turn`; when it
+/// isn't held, they stay where they are, as when moving them fails.
+fn plugin_storage(dir: Option<&Path>, id: &str, turn: &StoreTurn) -> Option<Arc<dyn Storage>> {
     let dir = dir?;
     let data = plugin_data_dir(dir, id);
     if !is_link(&dir.join(PLUGIN_DATA_DIR)) {
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        if let Err(e) = restore_removed(&data) {
+        let kept_aside = || std::fs::symlink_metadata(&data).is_err() && aside_paths(&data).iter().any(|a| is_kept(a));
+        let restored = if turn.held() || !kept_aside() { restore_removed(&data) } else { Err(std::io::Error::other(STORE_NOT_LOCKED)) };
+        if let Err(e) = restored {
             log::warn!("can't move the settings and cache of {} back: {e}", data.display());
             return None;
         }
@@ -1088,6 +1197,12 @@ impl PluginStorage {
         Ok(())
     }
 
+    /// A turn on the plug-in store ([`lock_store`]), taken before [`PLUGIN_DATA_LOCK`], so that a
+    /// window or process changing the same settings or cache waits for this change.
+    fn turn(&self) -> Result<std::fs::File, StorageError> {
+        lock_store(&self.root).map_err(|e| StorageError::Io(format!("{STORE_NOT_LOCKED}: {e}")))
+    }
+
     fn kept(&self) -> MutexGuard<'_, Kept> {
         self.state.kept.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -1212,6 +1327,8 @@ impl PluginStorage {
 
 impl Storage for PluginStorage {
     fn setting(&self, key: &str, meter: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        // Reading may move a settings file that doesn't read aside.
+        let _turn = self.turn()?;
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
         let mut kept = self.kept();
@@ -1219,10 +1336,15 @@ impl Storage for PluginStorage {
     }
 
     fn set_setting(&self, key: &str, value: &[u8], meter: &mut Meter) -> Result<(), StorageError> {
+        let _turn = self.turn()?;
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
         let mut kept = self.kept();
         let settings = &mut self.read_settings(&mut kept.settings, meter)?.values;
+        #[cfg(test)]
+        if let Some(between) = AFTER_SETTINGS_READ.take() {
+            between();
+        }
         if value.len() > storage::MAX_SETTING_BYTES || (!settings.contains_key(key) && settings.len() >= storage::MAX_SETTINGS) {
             return Err(StorageError::Full);
         }
@@ -1234,6 +1356,7 @@ impl Storage for PluginStorage {
     }
 
     fn delete_setting(&self, key: &str, meter: &mut Meter) -> Result<bool, StorageError> {
+        let _turn = self.turn()?;
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
         let mut kept = self.kept();
@@ -1258,6 +1381,8 @@ impl Storage for PluginStorage {
     }
 
     fn set_cache_entry(&self, name: &str, value: &[u8], meter: &mut Meter) -> Result<(), StorageError> {
+        // The cache's size and count are added up and the entry written in one turn.
+        let _turn = self.turn()?;
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
         let path = self.entry_path(name);
@@ -1281,6 +1406,7 @@ impl Storage for PluginStorage {
     }
 
     fn remove_cache_entry(&self, name: &str) -> Result<bool, StorageError> {
+        let _turn = self.turn()?;
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
         let path = self.entry_path(name);
@@ -1296,6 +1422,7 @@ impl Storage for PluginStorage {
     }
 
     fn clear_cache(&self) -> Result<u64, StorageError> {
+        let _turn = self.turn()?;
         let _held = PLUGIN_DATA_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         self.open()?;
         let dir = self.cache_dir();

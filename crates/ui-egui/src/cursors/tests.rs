@@ -79,6 +79,22 @@ fn loaded_text_cursor_is_not_the_text_i_beam() {
     assert!(pixel(&loaded, hx, hy)[3] > 200, "hotspot lies on the drawn frame");
 }
 
+/// Loaded text over an object a click threads it into is drawn as its own glyph: the loaded
+/// text's block with a link badge below right, so it has more ink than the plain loaded text.
+#[test]
+fn loaded_text_link_cursor_is_the_loaded_text_with_a_link_badge() {
+    assert!(Cursor::LoadedTextLink.stand_in().is_none());
+    for ppp in [1.0f32, 2.0] {
+        let link = rasterize(Cursor::LoadedTextLink, ppp).expect("link bitmap");
+        let loaded = rasterize(Cursor::LoadedText, ppp).expect("loaded text bitmap");
+        assert_ne!(link, loaded, "a glyph of its own at {ppp}x");
+        let ink = |img: &CustomCursorImage| img.rgba.as_chunks::<4>().0.iter().filter(|p| p[0] < 64 && p[3] > 200).count();
+        assert!(ink(&link) > ink(&loaded), "the badge adds ink at {ppp}x");
+        let [hx, hy] = link.hotspot.map(usize::from);
+        assert!(pixel(&link, hx, hy)[3] > 200, "hotspot lies on the drawn frame at {ppp}x");
+    }
+}
+
 #[test]
 fn every_glyph_becomes_a_bitmap_with_its_hotspot_inside() {
     for ppp in [1.0, 1.25, 1.5, 2.0, 3.0] {
@@ -244,7 +260,7 @@ fn the_pencil_new_path_cursor_is_the_crosshair_with_a_star() {
     }
 }
 
-/// The Pencil's straight-line cursor is the crosshair with a short straight line below right,
+/// The Pencil's straight-line cursor is the crosshair with a short level line below right,
 /// through the point where the closing cursor's ring is hollow.
 #[test]
 fn the_pencil_straight_line_cursor_is_the_crosshair_with_a_line() {
@@ -264,15 +280,18 @@ fn the_pencil_straight_line_cursor_is_the_crosshair_with_a_line() {
         assert_eq!(at(&cross, 8.5, 8.5)[3], 0, "the crosshair has no badge at {ppp}");
         // Along the line, not across it: no ink off its ends.
         assert!(!inked(at(&img, 5.0, 5.0)) && !inked(at(&img, 12.0, 12.0)), "a line, not a cross, at {ppp}");
+        // Level: inked at both ends of it, and not where the continuation cursor's line rises.
+        assert!(inked(at(&img, 4.5, 8.5)) && inked(at(&img, 12.5, 8.5)), "a level line at {ppp}");
+        assert!(!inked(at(&img, 6.0, 11.0)) && !inked(at(&img, 11.0, 6.0)), "not a rising one at {ppp}");
         assert_ne!(img, ring, "at {ppp}");
         assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "the arms are the crosshair's at {ppp}");
     }
 }
 
-/// The Pencil's continuation cursor is the straight-line cursor with a filled square on the
-/// line's lower end, beside the line where the straight-line cursor has no ink.
+/// The Pencil's continuation cursor is the crosshair with a short line rising to the right below
+/// right, where the straight-line cursor's line is level.
 #[test]
-fn the_pencil_continuation_cursor_is_the_straight_line_cursor_with_an_end_point() {
+fn the_pencil_continuation_cursor_is_the_crosshair_with_a_rising_line() {
     for ppp in [1.0, 2.0] {
         let cross = rasterize(Cursor::Crosshair, ppp).unwrap();
         let img = rasterize(Cursor::PencilContinue, ppp).unwrap();
@@ -285,8 +304,10 @@ fn the_pencil_continuation_cursor_is_the_straight_line_cursor_with_an_end_point(
         };
         let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
         assert!(inked(at(&img, 8.5, 8.5)), "the line crosses the badge's middle at {ppp}");
-        assert!(inked(at(&img, 3.5, 13.5)), "the end point's square at {ppp}");
-        assert!(!inked(at(&straight, 3.5, 13.5)), "the straight-line cursor has no end point at {ppp}");
+        assert!(inked(at(&img, 5.0, 11.0)) && inked(at(&img, 10.0, 6.0)), "the line rises to the right at {ppp}");
+        assert!(!inked(at(&straight, 6.0, 11.0)), "the straight-line cursor's line is level at {ppp}");
+        assert!(!inked(at(&img, 4.5, 8.5)) && !inked(at(&img, 12.5, 8.5)), "not a level one at {ppp}");
+        assert!(!inked(at(&img, 3.5, 13.5)), "no end point square at {ppp}");
         assert!(!inked(at(&img, 12.0, 12.0)), "a line, not a cross, at {ppp}");
         assert_eq!(at(&img, -6.0, 0.0), at(&cross, -6.0, 0.0), "the arms are the crosshair's at {ppp}");
     }
@@ -328,6 +349,34 @@ fn the_live_paint_bucket_shows_a_bucket_or_a_brush() {
             assert_eq!(rasterize(c.precise(), ppp).as_ref(), Some(&cross), "{c:?} with Use Precise Cursors at {ppp}");
         }
         assert!(empty != filled && filled != brush && empty != brush, "three looks at {ppp}");
+    }
+}
+
+/// The Knife's cursor, which the Trim at Crossings Tool shows too, is drawn, not the crosshair: a
+/// knife with the blade's point on the hotspot, the white blade, then the black handle up-right.
+#[test]
+fn the_knife_shows_a_knife_with_its_point_on_the_hotspot() {
+    for ppp in [1.0f32, 2.0] {
+        let img = |c| rasterize(c, ppp).unwrap_or_else(|| panic!("{c:?} at {ppp}"));
+        let (cross, knife, brush) = (img(Cursor::Crosshair), img(Cursor::Knife), img(Cursor::LivePaintBucketEdge));
+        // The pixel nearest the point `u` points up-right of the hotspot and `v` down-right across.
+        let at = |img: &CustomCursorImage, u: f32, v: f32| {
+            let s = std::f32::consts::FRAC_1_SQRT_2;
+            let [hx, hy] = img.hotspot.map(f32::from);
+            let (x, y) = ((hx + (u + v) * s * ppp - 0.5).round(), (hy + (v - u) * s * ppp - 0.5).round());
+            let inside = x >= 0.0 && y >= 0.0 && x < f32::from(img.size[0]) && y < f32::from(img.size[1]);
+            if inside { pixel(img, x as usize, y as usize) } else { [0; 4] }
+        };
+        let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
+        let white = |p: [u8; 4]| p[3] > 200 && p[0] > 192;
+        assert!(at(&knife, 0.0, 0.0)[3] > 0, "the point covers the hotspot at {ppp}");
+        assert!(white(at(&knife, 8.0, 0.5)), "the white blade at {ppp}");
+        assert!(inked(at(&knife, 16.0, 0.2)), "the black handle at {ppp}");
+        assert!(!inked(at(&knife, -4.0, 0.0)), "nothing beyond the point at {ppp}");
+        assert!(Cursor::Knife.stand_in().is_none(), "the Knife is drawn");
+        assert_ne!(knife, cross, "the Knife is not the crosshair at {ppp}");
+        assert_ne!(knife, brush, "the Knife is not the Live Paint brush at {ppp}");
+        assert_eq!(rasterize(Cursor::Knife.precise(), ppp).as_ref(), Some(&cross), "with Use Precise Cursors at {ppp}");
     }
 }
 

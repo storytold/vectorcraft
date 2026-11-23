@@ -10,10 +10,15 @@ use vectorcraft_engine::Session;
 const WINDOW: egui::Vec2 = vec2(1200.0, 900.0);
 
 /// One canvas frame in a `WINDOW` window at `native` device pixels a point, with the interface
-/// zoomed by `ui_zoom`.
+/// zoomed by `ui_zoom`, on a display whose textures are up to 8,192 pixels a side.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, (native, ui_zoom): (f32, f32), events: Vec<egui::Event>) {
     ctx.set_zoom_factor(ui_zoom);
-    let mut input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, WINDOW / ui_zoom)), events, ..Default::default() };
+    let mut input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, WINDOW / ui_zoom)),
+        max_texture_side: Some(8192),
+        events,
+        ..Default::default()
+    };
     input.viewports.entry(egui::ViewportId::ROOT).or_default().native_pixels_per_point = Some(native);
     let mut out = ctx.run_ui(input, |ui| show(app, ui));
     out.textures_delta.clear();

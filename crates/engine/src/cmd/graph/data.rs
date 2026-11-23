@@ -42,7 +42,7 @@ fn cell(c: &str) -> Cell {
     }
 }
 
-pub(super) fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<f64>>>) {
+pub(crate) fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<f64>>>) {
     let csv = csv.strip_prefix('\u{feff}').unwrap_or(csv);
     // Records end at line breaks outside quotes; a record is tab-separated if it has a tab outside quotes.
     let rows: Vec<Vec<Cell>> = split_unquoted(csv, '\n')
@@ -89,6 +89,102 @@ pub(super) fn parse_csv(csv: &str) -> (Vec<String>, Vec<String>, Vec<Vec<Option<
 
 pub(super) fn to_csv(g: &GraphSpec) -> String {
     g.to_csv()
+}
+
+// ---------- graph data files ----------
+
+/// The largest graph data file that Graph Data's Import Data and Import Data Sets' `%` columns
+/// read, 1 MB (1,048,576 bytes).
+pub const MAX_GRAPH_DATA_FILE: usize = 1 << 20;
+
+/// A graph data sheet's size: a row of labels over a graph's categories, a column of labels
+/// before its series; a cell's longest text.
+const SHEET_ROWS: usize = vectorcraft_doc::MAX_GRAPH_CATEGORIES + 1;
+const SHEET_COLS: usize = vectorcraft_doc::MAX_GRAPH_SERIES + 1;
+const SHEET_CELL: usize = 256;
+
+/// A graph data file's bytes as text: UTF-16 with its byte-order mark (spreadsheets' "Unicode
+/// Text"), else UTF-16 without one when the bytes hold NUL bytes and Import Data Sets' rule gives
+/// them a byte order ([`crate::cmd::utf16_order_without_mark`]), else UTF-8 with or without one.
+/// UTF-16 is read as it is after a byte-order mark: an odd last byte is left out, and an unpaired
+/// surrogate reads as U+FFFD.
+pub fn graph_data_text(bytes: &[u8]) -> String {
+    let utf16 = |rest: &[u8], le: bool| {
+        let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|p| if le { u16::from_le_bytes(*p) } else { u16::from_be_bytes(*p) }).collect();
+        String::from_utf16_lossy(&units)
+    };
+    match bytes {
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
+        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
+        _ => match bytes.contains(&0).then(|| crate::cmd::utf16_order_without_mark(bytes)).flatten() {
+            Some(le) => utf16(bytes, le),
+            None => String::from_utf8_lossy(bytes).into_owned(),
+        },
+    }
+}
+
+/// A graph data sheet cell's text: one line (tabs and line breaks become spaces), at most 256
+/// characters.
+pub fn graph_cell_text(s: &str) -> String {
+    s.chars().map(|c| if matches!(c, '\t' | '\r' | '\n') { ' ' } else { c }).take(SHEET_CELL).collect()
+}
+
+/// Text from a file or the clipboard as graph data sheet cells: tab-separated when any line holds
+/// a tab, else comma-separated (decided once, so a label with a comma in a tab-separated file
+/// stays whole), at most a graph's rows and columns.
+pub fn graph_grid_from_text(text: &str) -> Vec<Vec<String>> {
+    let sep = if text.contains('\t') { '\t' } else { ',' };
+    text.lines().take(SHEET_ROWS).map(|l| l.trim_end_matches('\r').split(sep).take(SHEET_COLS).map(|c| graph_cell_text(c.trim())).collect()).collect()
+}
+
+/// A graph data sheet as `graph.setData` takes it: the first row holds the series labels, the
+/// first column the category labels (none when all are blank), and the other cells the values (a
+/// blank cell, or text that isn't a number, has none), without the empty rows and columns past
+/// the data.
+pub fn graph_data_from_grid(grid: &[Vec<String>]) -> Value {
+    let cell = |r: usize, c: usize| grid.get(r).and_then(|row| row.get(c)).cloned().unwrap_or_default();
+    let filled = |s: &String| !s.trim().is_empty();
+    // At most a graph's rows and columns, as a file gives (`graph_grid_from_text`): a grid sent by
+    // automation is any size, and the values are their product.
+    let grid = &grid[..grid.len().min(SHEET_ROWS)];
+    let rows = grid.iter().rposition(|r| r.iter().take(SHEET_COLS).any(filled)).map_or(1, |i| i + 1).max(1);
+    let cols = grid.iter().take(rows).filter_map(|r| r.iter().take(SHEET_COLS).rposition(filled)).max().map_or(1, |i| i + 1).max(1);
+    let label = |s: &str| {
+        let s = s.trim();
+        // A label typed in straight quotes (as the CSV form takes a number as a label) is the text inside.
+        s.strip_prefix('"').and_then(|t| t.strip_suffix('"')).unwrap_or(s).to_string()
+    };
+    // Series labels up to the last one given (none when all are blank).
+    let mut series: Vec<String> = (1..cols).map(|c| label(&cell(0, c))).collect();
+    while series.last().is_some_and(String::is_empty) {
+        series.pop();
+    }
+    let mut categories: Vec<String> = (1..rows).map(|r| label(&cell(r, 0))).collect();
+    if categories.iter().all(String::is_empty) {
+        categories.clear();
+    }
+    let values: Vec<Vec<Value>> = (1..rows)
+        .map(|r| {
+            (1..cols)
+                .map(|c| {
+                    let t = cell(r, c);
+                    t.trim().parse::<f64>().ok().filter(|v| v.is_finite() && !t.trim().starts_with('"')).map_or(Value::Null, |v| json!(v))
+                })
+                .collect()
+        })
+        .collect();
+    json!({ "series": series, "categories": categories, "rows": values })
+}
+
+/// The graph value (the CSV form [`apply_csv`] reads) of a graph data file's bytes, read as Graph
+/// Data's Import Data reads the file into its sheet and Apply sends the sheet: so applying the
+/// value gives a graph the data that Import Data and Apply give it.
+pub(crate) fn graph_csv_from_file(bytes: &[u8]) -> Result<String> {
+    let data = graph_data_from_grid(&graph_grid_from_text(&graph_data_text(bytes)));
+    let mut spec = GraphSpec::default();
+    apply_data(&mut spec, &data, "dataset.import")?;
+    Ok(spec.to_csv())
 }
 
 /// Apply CSV graph data to the graph root `id` and rebuild its art (Variables data merge), as `graph.setData` with
@@ -149,6 +245,11 @@ pub(super) fn apply_data(g: &mut GraphSpec, p: &Value, cmd: &str) -> Result<bool
     if let Some(csv) = csv {
         let (s, c, r) = parse_csv(csv);
         g.series = s;
+        // Series labels up to the last one given, as Graph Data's sheet keeps them
+        // ([`graph_data_from_grid`]): `to_csv` writes a blank label for each series without one.
+        while g.series.last().is_some_and(String::is_empty) {
+            g.series.pop();
+        }
         g.categories = c;
         g.set_cells(r);
         changed = true;

@@ -1,7 +1,7 @@
 //! Attributes in other applications' XML namespaces (https://www.w3.org/TR/xml-names/) survive a
 //! round trip through VectorCraft: kept on import, written back on export with their namespaces
 //! declared on the root.
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_doc::{Document, ForeignAttribute, Node, NodeKind};
 use vectorcraft_svg::{ExportOptions, MAX_FOREIGN, MAX_FOREIGN_VALUE, export, export_full, import, import_with_report};
 

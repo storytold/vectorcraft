@@ -173,7 +173,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clipboard Formats",
             [],
             None,
-            "{} → {flavours: [mime…]} what Copy offers other apps for the current clipboard, best first, by the Clipboard Handling preferences: text/plain (a type-only copy's text, else the SVG markup with copyAsSvg when the images it embeds total at most 1 MiB), image/svg+xml (copyAsSvg), application/pdf (copyAsPdf), image/png (always; PDF and PNG only for objects with an area); the app publishes them on Copy and Cut",
+            "{} → {flavours: [mime…]} what Copy offers other apps for the current clipboard, best first, by the Clipboard Handling preferences: text/plain (a type-only copy's text, else the SVG markup with copyAsSvg when the images it embeds total at most 1 MiB), image/svg+xml (copyAsSvg), application/pdf (copyAsPdf), image/png (always; PDF and PNG only for objects with an area); under read roots, SVG and its markup as text are left out when clipboard.exportSvg would refuse; the app publishes them on Copy and Cut",
             always,
             flavours
         ),
@@ -209,7 +209,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Metafile into Clipboard",
             [],
             None,
-            "{dataBase64 (EMF or WMF bytes), center?: [x, y]} replace the clipboard with the picture's objects (paths, clipping groups, images, point type; the images they use), centred on `center` (default: the first artboard) → {count, warnings}; records VectorCraft doesn't read are skipped with one warning; then run edit.paste",
+            "{dataBase64 (EMF or WMF bytes), center?: [x, y]} replace the clipboard with the picture's objects (paths, clipping groups, images, point type; the images they use), centred on `center` (default: the first artboard) → {count, warnings}; records VectorCraft doesn't read are skipped with one warning; a picture cut short by a reader limit, images and pattern brushes that can't be read, clips that can't be applied and raster operations other than a plain copy each add a warning; then run edit.paste",
             has_doc,
             import_emf
         ),
@@ -369,13 +369,20 @@ impl Session {
 
     /// The MIME types of [`Self::clipboard_flavours`], without making them.
     pub fn clipboard_flavour_types(&self) -> Vec<&'static str> {
-        self.clipboard.flavour_types(self.prefs.copy_as_svg, self.prefs.copy_as_pdf)
+        self.clipboard.flavour_types(self.clipboard_svg_offered(), self.prefs.copy_as_pdf)
     }
 
     /// What Copy offers other apps, best first (see `clipboard.flavours`): [`Clipboard::flavours`]
-    /// by the Clipboard Handling preferences.
+    /// by the Clipboard Handling preferences, without the SVG (and the SVG markup as text) that
+    /// [`Self::clipboard_svg_refused`] withholds from the caller asking now.
     pub fn clipboard_flavours(&self) -> Vec<Flavour> {
-        self.clipboard.flavours(self.prefs.copy_as_svg, self.prefs.copy_as_pdf)
+        self.clipboard.flavours(self.clipboard_svg_offered(), self.prefs.copy_as_pdf)
+    }
+
+    /// Does Copy offer the SVG: Include SVG Code is on and the SVG is not withheld from the caller
+    /// asking now.
+    fn clipboard_svg_offered(&self) -> bool {
+        self.prefs.copy_as_svg && !self.clipboard_svg_refused()
     }
 
     /// Replace the clipboard with `clip`, centred on `p`'s `center` (default: the first

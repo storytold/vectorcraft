@@ -152,6 +152,16 @@ impl Tool for AnchorEraserTool {
             _ => {}
         }
     }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "size" => c::number(key, v, SIZE_RANGE.0, SIZE_RANGE.1),
+            "tolerance" => c::number(key, v, TOLERANCE_RANGE.0, TOLERANCE_RANGE.1),
+            "pressure" => c::boolean(key, v),
+            _ => Err(c::unknown(key)),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -10,8 +10,8 @@ use super::object::choice;
 use super::threads::ThreadIndex;
 use super::typecmd::{area_text, block_gaps, needed_room, refresh_bounds};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, number_or,
-    switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, index_opt,
+    named_ids, number_or, object_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smart Punctuation…",
             ["Type"],
             None,
-            "{quotes?: true (straight quotes become the Document Setup quotes), dashes?: true (-- → en dash, --- → em dash), ellipsis?: true (... → …), scope?: \"selection\"|\"document\"} → {changed}",
+            "{fiLigatures?: false (ff, fi, ffi → the ligatures U+FB00, U+FB01, U+FB03), flLigatures?: false (ff, fl, ffl → U+FB00, U+FB02, U+FB04), quotes?: true (straight quotes become the Document Setup quotes), spaces?: false (two or more spaces after a period → one), dashes?: true (-- → en dash, --- → em dash), ellipsis?: true (... → …), fractions?: false (1/2, 1/4, 3/4 and the other fractions Unicode encodes as one character, with no digit, slash or decimal point next to them, → ½, ¼, ¾ …), scope?: \"selection\"|\"document\"} the selected type, or every text object with scope document or nothing selected; a ligature or a fraction is written only where the run's font has a glyph for it. Nothing to replace records no undo step → {changed: text objects changed, replaced: {fiLigatures, flLigatures, quotes, spaces, dashes, ellipses, fractions}: how many of each were replaced}",
             has_doc,
             smart_punctuation
         ),
@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type on a Path Options…",
             ["Type", "Type on a Path"],
             None,
-            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
+            "{ids?|id?, start?: -1000000..1 (below 0 only on an open path), end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path); on an open path a start below 0 starts the text that far before the path's start, and the characters whose middle falls before it are not drawn (on a closed path it is the path's start), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
             has_selection,
             path_options
         ),
@@ -111,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Character",
             ["Type"],
             None,
-            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} append to the selected text objects",
+            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} insert at the Type tool's caret, replacing its selection, while it edits text and no ids are given; otherwise append to the selected text objects. forcedLineBreak is U+2028, a new line in the same paragraph; paragraphReturn is a line feed, which starts a new paragraph",
             has_selection,
             insert_char
         ),
@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find and Replace…",
             ["Edit"],
             None,
-            "{find, replace?: \"\", matchCase?: false, wholeWord?: false, ids?} replace in every text object (or ids) → {count}. Matches never span style runs.",
+            "{find, replace?: \"\", matchCase?: false, wholeWord?: false, hiddenLayers?: false, lockedLayers?: false, ids?} replace every match in the type the search reaches (or in ids, whatever their layers), as one undo step → {count (every match), replaced (the matches that did not already read as `replace`)}. The search reaches visible, unlocked type on visible, unlocked layers, off locked artboards; hiddenLayers adds the type of hidden layers and sublayers and lockedLayers that of locked ones, while a hidden or locked object or group keeps its type out. Matches never span style runs. When nothing matches, or every match already reads as `replace`, nothing changes and no undo step is recorded.",
             has_doc,
             find_replace
         ),
@@ -129,16 +129,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Find Next",
             ["Edit"],
             None,
-            "{find, matchCase?, wholeWord?} select the next text object (after the selected one, wrapping) containing `find` → {id|null}",
+            "{find, matchCase?: false, wholeWord?: false, backwards?: false, hiddenLayers?: false, lockedLayers?: false, from?: {id, start, end} (a match this command returned, or the range edit.replaceMatch returned)} find the next match of `find` in the type edit.findReplace reaches and select its type object → {id, start, end (the match's bytes in the object's plain text), index (its place among all the matches, from 1), count, selected} or {id: null, count: 0}. The search visits type objects from the top of the stacking order down and each object's matches in reading order; backwards visits the objects from the bottom up and each object's matches from the last. It goes on after `from` and, past the last match, starts again at the first. Without `from` it goes on after the first selected type object, and with no type selected, or with a null `from`, it starts at the first match. A match on a hidden or locked layer is returned with selected false and the selection stays as it is. Nothing is recorded for undo.",
             has_doc,
             find_next
+        ),
+        cmd!(
+            "edit.replaceMatch",
+            "Replace",
+            [],
+            None,
+            "{find, replace?: \"\", matchCase?: false, wholeWord?: false, id, start, end} replace one match of `find`, the bytes start..end of type object id as edit.findNext returns them, with `replace`, as one undo step → {id, start, end (the replacement's bytes; pass them to edit.findNext as `from` to go on), replaced}. Bytes that are no match of `find` are refused. When the match already reads as `replace`, nothing changes, no undo step is recorded and replaced is false.",
+            has_doc,
+            replace_one
         ),
         cmd!(
             "edit.pasteWithoutFormatting",
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind → {ids, added, merged, renamed}",
+            "{center?, dx?, dy?, swatchConflict?, profileMismatch?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs, which take a new graph's label character style and paragraph attributes (keeping their alignment); a pasted graph no longer keeps its labels' character and paragraph formats, so a later redraw sets them the same way → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),
@@ -268,24 +277,227 @@ fn change_case(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Smart Punctuation ----------
 
-#[derive(Default)]
-struct PunctState {
-    prev: Option<char>,
+/// What Smart Punctuation replaces: each option of its dialog.
+struct Punct {
+    /// ff, fi and ffi become the ligatures U+FB00, U+FB01 and U+FB03.
+    fi_ligatures: bool,
+    /// ff, fl and ffl become the ligatures U+FB00, U+FB02 and U+FB04.
+    fl_ligatures: bool,
+    /// Straight quotes become these quotes (the Document Setup quotes).
+    quotes: Option<Quotes>,
+    /// Two or more spaces after a period become one.
+    spaces: bool,
+    /// `--` becomes an en dash and `---` an em dash.
+    dashes: bool,
+    /// `...` becomes an ellipsis.
+    ellipses: bool,
+    /// `1/2` and the other fractions [`FRACTIONS`] lists become their one-character forms.
+    fractions: bool,
 }
 
-/// Dashes (`--` en, `---` em), ellipses and, with `quotes`, typographer's quotes.
-pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: Option<&Quotes>, dashes: bool, ellipsis: bool) -> String {
-    let mut s = text.to_string();
-    if dashes {
-        s = s.replace("---", "—").replace("--", "–");
+/// How many of each replacement Smart Punctuation made.
+#[derive(Default)]
+struct PunctCounts {
+    fi_ligatures: usize,
+    fl_ligatures: usize,
+    quotes: usize,
+    spaces: usize,
+    dashes: usize,
+    ellipses: usize,
+    fractions: usize,
+}
+
+/// The text before the run being rewritten, across the runs of one text object.
+#[derive(Default)]
+struct PunctState {
+    /// The character before the run.
+    prev: Option<char>,
+    /// The number of spaces since the last period, while only spaces follow it.
+    after_period: Option<usize>,
+    /// An inline graphic comes right before the run.
+    after_graphic: bool,
+}
+
+/// The fractions Expert Fractions writes as one character: every fraction Unicode encodes as a
+/// vulgar fraction with a numerator of 1 to 7 and a denominator of 2 to 10.
+const FRACTIONS: [(&str, char); 18] = [
+    ("1/2", '½'),
+    ("1/3", '⅓'),
+    ("2/3", '⅔'),
+    ("1/4", '¼'),
+    ("3/4", '¾'),
+    ("1/5", '⅕'),
+    ("2/5", '⅖'),
+    ("3/5", '⅗'),
+    ("4/5", '⅘'),
+    ("1/6", '⅙'),
+    ("5/6", '⅚'),
+    ("1/7", '⅐'),
+    ("1/8", '⅛'),
+    ("3/8", '⅜'),
+    ("5/8", '⅝'),
+    ("7/8", '⅞'),
+    ("1/9", '⅑'),
+    ("1/10", '⅒'),
+];
+
+/// `s` with every `from` replaced by `to`, adding the number replaced to `n`.
+fn replace_counted(s: String, from: &str, to: &str, n: &mut usize) -> String {
+    let found = s.matches(from).count();
+    if found == 0 {
+        return s;
     }
-    if ellipsis {
-        s = s.replace("...", "…");
+    *n += found;
+    s.replace(from, to)
+}
+
+/// Smart Spaces: `text` without the second and later spaces after a period, adding the number of
+/// periods whose spaces it shortened to `n`. `after` carries the spaces after a period from one run
+/// to the next.
+fn smart_spaces(text: &str, after: &mut Option<usize>, n: &mut usize) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match (c, *after) {
+            (' ', Some(k)) => {
+                *after = Some(k + 1);
+                if k >= 1 {
+                    if k == 1 {
+                        *n += 1;
+                    }
+                    continue;
+                }
+            }
+            ('.', _) => *after = Some(0),
+            _ => *after = None,
+        }
+        out.push(c);
     }
-    match quotes {
-        Some(q) => q.apply(&s, prev),
+    out
+}
+
+/// The fraction `cs` starts with, and its length in characters: one of [`FRACTIONS`] that no digit,
+/// slash or decimal part follows, so `1/25`, `1/2/2026` and `1/2.5` are left as they are. A digit
+/// counts in any script.
+fn fraction_at(cs: &[char]) -> Option<(usize, char)> {
+    FRACTIONS.iter().find_map(|(text, f)| {
+        let len = text.chars().count();
+        if cs.len() < len || !cs[..len].iter().copied().eq(text.chars()) {
+            return None;
+        }
+        let ends = match &cs[len..] {
+            [c, ..] if c.is_numeric() || *c == '/' => false,
+            ['.' | ',', d, ..] if d.is_numeric() => false,
+            _ => true,
+        };
+        ends.then_some((len, *f))
+    })
+}
+
+/// Expert Fractions: `text` with each fraction [`fraction_at`] finds, and no digit, slash or
+/// decimal point before, written as one character when `covers` it. `prev` is the character before
+/// `text`, and `next` the two characters after it (in the next runs), so a fraction at the end of
+/// a run is checked against what follows it.
+fn expert_fractions(text: &str, prev: Option<char>, next: [Option<char>; 2], covers: &mut impl FnMut(char) -> bool, n: &mut usize) -> String {
+    let mut cs: Vec<char> = text.chars().collect();
+    let len_text = cs.len();
+    cs.extend(next.into_iter().flatten());
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < len_text {
+        let before = if i == 0 { prev } else { Some(cs[i - 1]) };
+        let free = !before.is_some_and(|c| c.is_numeric() || matches!(c, '/' | '.' | ','));
+        let found = fraction_at(&cs[i..]).filter(|(len, f)| i + len <= len_text && covers(*f));
+        if free && let Some((len, f)) = found {
+            out.push(f);
+            *n += 1;
+            i += len;
+            continue;
+        }
+        out.push(cs[i]);
+        i += 1;
+    }
+    out
+}
+
+/// The ligatures and their letters, longest first, with whether each comes with the ff, fi, ffi
+/// option (else with the ff, fl, ffl option). ff comes with both.
+const LIGATURES: [(&str, char, bool); 5] =
+    [("ffi", '\u{FB03}', true), ("ffl", '\u{FB04}', false), ("ff", '\u{FB00}', true), ("fi", '\u{FB01}', true), ("fl", '\u{FB02}', false)];
+
+/// The ligature options: `text` with the letters of each ligature an option `o` asks for written
+/// as the ligature, the longest first, when `covers` it.
+fn ligatures(text: &str, o: &Punct, covers: &mut impl FnMut(char) -> bool, n: &mut PunctCounts) -> String {
+    let cs: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < cs.len() {
+        let found = (cs[i] == 'f').then(|| {
+            LIGATURES.iter().find(|(letters, lig, fi)| {
+                let on = if *letters == "ff" {
+                    o.fi_ligatures || o.fl_ligatures
+                } else if *fi {
+                    o.fi_ligatures
+                } else {
+                    o.fl_ligatures
+                };
+                let len = letters.chars().count();
+                on && cs.len() - i >= len && cs[i..i + len].iter().copied().eq(letters.chars()) && covers(*lig)
+            })
+        });
+        if let Some(&(letters, lig, fi)) = found.flatten() {
+            out.push(lig);
+            // ff counts with the ff, fi, ffi option when that option is on.
+            if fi && (letters != "ff" || o.fi_ligatures) {
+                n.fi_ligatures += 1;
+            } else {
+                n.fl_ligatures += 1;
+            }
+            i += letters.chars().count();
+            continue;
+        }
+        out.push(cs[i]);
+        i += 1;
+    }
+    out
+}
+
+/// One run's text with the replacements `o` asks for, counted in `n`. Ligatures and fractions are
+/// written only where the run's font has a glyph for them. `next` holds the two characters after
+/// the run.
+fn smarten(text: &str, style: &CharStyle, next: [Option<char>; 2], o: &Punct, st: &mut PunctState, n: &mut PunctCounts) -> String {
+    let mut s = if o.spaces { smart_spaces(text, &mut st.after_period, &mut n.spaces) } else { text.to_string() };
+    if o.dashes {
+        s = replace_counted(s, "---", "—", &mut n.dashes);
+        s = replace_counted(s, "--", "–", &mut n.dashes);
+    }
+    if o.ellipses {
+        s = replace_counted(s, "...", "…", &mut n.ellipses);
+    }
+    // The run's font, looked up once and only for a ligature or a fraction.
+    let mut face = None;
+    let mut covers = |c: char| {
+        face.get_or_insert_with(|| {
+            vectorcraft_text::FontDb::global().face_version(&style.font_family, &style.font_style, style.font_version.as_deref())
+        })
+        .as_ref()
+        .is_some_and(|f| f.covers(c))
+    };
+    if o.fractions && s.contains('/') {
+        let before = if st.after_graphic { None } else { st.prev };
+        s = expert_fractions(&s, before, next, &mut covers, &mut n.fractions);
+    }
+    st.after_graphic = false;
+    if (o.fi_ligatures || o.fl_ligatures) && s.contains('f') {
+        s = ligatures(&s, o, &mut covers, n);
+    }
+    match &o.quotes {
+        Some(q) => {
+            let out = q.apply(&s, &mut st.prev);
+            n.quotes += s.chars().zip(out.chars()).filter(|(a, b)| a != b).count();
+            out
+        }
         None => {
-            *prev = s.chars().last().or(*prev);
+            st.prev = s.chars().last().or(st.prev);
             s
         }
     }
@@ -293,12 +505,20 @@ pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: Option<&Quote
 
 fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.smartPunctuation";
-    let (d, e) = (switch_or(p, "dashes", true, C)?, switch_or(p, "ellipsis", true, C)?);
     let quotes = switch_or(p, "quotes", true, C)?;
+    let mut o = Punct {
+        fi_ligatures: switch_or(p, "fiLigatures", false, C)?,
+        fl_ligatures: switch_or(p, "flLigatures", false, C)?,
+        quotes: None,
+        spaces: switch_or(p, "spaces", false, C)?,
+        dashes: switch_or(p, "dashes", true, C)?,
+        ellipses: switch_or(p, "ellipsis", true, C)?,
+        fractions: switch_or(p, "fractions", false, C)?,
+    };
     let document = choice(p, C, "scope", &["selection", "document"])? == Some("document");
     let st = s.doc()?;
     // Quotes in the document's style (Document Setup → Type).
-    let q = quotes.then_some(st.doc.setup.quotes);
+    o.quotes = quotes.then_some(st.doc.setup.quotes);
     let ids = if document || st.selection.is_empty() {
         let mut v = vec![];
         st.doc.walk(|n| {
@@ -310,8 +530,93 @@ fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         text_ids(&st.doc, &st.selection.objects)
     };
-    let n = edit_runs::<PunctState>(s, "Smart Punctuation", &ids, |text, st| smarten(text, &mut st.prev, q.as_ref(), d, e))?;
-    Ok(json!({ "changed": n }))
+    let mut n = PunctCounts::default();
+    let changed = super::overprint::edit_counted(s, "Smart Punctuation", |d| {
+        let mut changed = 0;
+        for id in &ids {
+            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            let mut st = PunctState::default();
+            let mut any = false;
+            // The ruby spans' ends, in the plain text as it was. Each run is rewritten in pieces
+            // between them, so no replacement crosses one, and `moved` records where each end and
+            // each run's start lands in the new text.
+            let mut edges: Vec<usize> = t.ruby.iter().flat_map(|r| [r.start, r.end]).collect();
+            edges.sort_unstable();
+            edges.dedup();
+            let mut moved = vec![];
+            let (mut old_at, mut new_at) = (0, 0);
+            // Inline graphics are art, not characters to rewrite. Each run sees the first two
+            // characters of the runs after it, up to the next inline graphic, as they were.
+            for i in 0..t.runs.len() {
+                let len = t.runs[i].text.len();
+                moved.push((old_at, new_at));
+                if t.runs[i].inline.is_some() {
+                    // A graphic separates the characters on either side of it for Smart Spaces and
+                    // Expert Fractions; quotes still read the character before it.
+                    st.after_period = None;
+                    st.after_graphic = true;
+                    (old_at, new_at) = (old_at + len, new_at + len);
+                    continue;
+                }
+                let mut after = t.runs[i + 1..].iter().take_while(|r| r.inline.is_none()).flat_map(|r| r.text.chars());
+                let following = [after.next(), after.next()];
+                // Smart Spaces counts no space across a ruby span's end, so it removes no space on
+                // the other side of one.
+                if edges.binary_search(&old_at).is_ok() {
+                    st.after_period = None;
+                }
+                let r = &mut t.runs[i];
+                let mut cuts: Vec<usize> =
+                    edges.iter().filter(|&&e| e > old_at && e < old_at + len && r.text.is_char_boundary(e - old_at)).map(|e| e - old_at).collect();
+                cuts.push(len);
+                let mut new = String::with_capacity(len);
+                let mut from = 0;
+                for cut in cuts {
+                    if from > 0 {
+                        moved.push((old_at + from, new_at + new.len()));
+                        st.after_period = None;
+                    }
+                    let mut after = r.text[cut..].chars().chain(following.into_iter().flatten());
+                    let next = [after.next(), after.next()];
+                    new.push_str(&smarten(&r.text[from..cut], &r.style, next, &o, &mut st, &mut n));
+                    from = cut;
+                }
+                (old_at, new_at) = (old_at + len, new_at + new.len());
+                if new != r.text {
+                    r.text = new;
+                    any = true;
+                }
+            }
+            moved.push((old_at, new_at));
+            if any {
+                changed += 1;
+                // Each ruby end moves with the text before it; an end inside a character keeps its
+                // distance from the last place recorded before it.
+                let to_new = |v: usize| {
+                    let k = moved.partition_point(|&(old, _)| old <= v).saturating_sub(1);
+                    moved.get(k).map_or(v, |&(old, new)| new + (v - old.min(v)))
+                };
+                for span in &mut t.ruby {
+                    (span.start, span.end) = (to_new(span.start), to_new(span.end));
+                }
+                t.normalize_ruby();
+                refresh_bounds(t);
+            }
+        }
+        Ok(changed)
+    })?;
+    Ok(json!({
+        "changed": changed,
+        "replaced": {
+            "fiLigatures": n.fi_ligatures,
+            "flLigatures": n.fl_ligatures,
+            "quotes": n.quotes,
+            "spaces": n.spaces,
+            "dashes": n.dashes,
+            "ellipses": n.ellipses,
+            "fractions": n.fractions,
+        },
+    }))
 }
 
 // ---------- Area / Point conversion ----------
@@ -329,32 +634,38 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
             if !matches!(t.kind, TextKind::Point) {
                 continue;
             }
-            let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
-            // The frame is worked out in line space, where the lines are; vertical type turns it
-            // into text space with the lines.
-            let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
-            let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
-            // Across, the frame spans the lines as they are aligned: from their starts to their ends
-            // without the tracking after their last characters (`LineInfo::trailing`), not to the
-            // ink, which tracking can pull past an advance. Area type aligns them alike.
-            let (x0, x1) = lay.lines.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), l| (a.min(l.x0), z.max(l.x1 - l.trailing)));
-            if x0.is_finite() && x1.is_finite() && x0 <= x1 {
-                (b.x0, b.x1) = (x0, x1);
-            }
-            // Line breaking counts that tracking: the slack holds the most of it.
-            let trailing = lay.lines.iter().map(|l| l.trailing).filter(|t| t.is_finite()).fold(0.0, f64::max);
-            let size = t.first_style().size;
-            // A little slack on the right so the text doesn't rewrap.
-            let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
-            let slack = size * 0.5 + trailing;
-            let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
-            let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
-            t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
-            refresh_bounds(t);
+            point_to_area(t);
         }
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// Point type `t` turned into area type in a frame around its lines, with a little slack where its
+/// alignment leaves room, so the text stays where it is and does not rewrap.
+pub(super) fn point_to_area(t: &mut TextObject) {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    // The frame is worked out in line space, where the lines are; vertical type turns it
+    // into text space with the lines.
+    let text_bounds = if lay.bounds.area() > 0.0 { lay.bounds } else { t.estimate_bounds() };
+    let mut b = lay.line_xf.inverse().transform_rect_bbox(text_bounds);
+    // Across, the frame spans the lines as they are aligned: from their starts to their ends
+    // without the tracking after their last characters (`LineInfo::trailing`), not to the
+    // ink, which tracking can pull past an advance. Area type aligns them alike.
+    let (x0, x1) = lay.lines.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, z), l| (a.min(l.x0), z.max(l.x1 - l.trailing)));
+    if x0.is_finite() && x1.is_finite() && x0 <= x1 {
+        (b.x0, b.x1) = (x0, x1);
+    }
+    // Line breaking counts that tracking: the slack holds the most of it.
+    let trailing = lay.lines.iter().map(|l| l.trailing).filter(|t| t.is_finite()).fold(0.0, f64::max);
+    let size = t.first_style().size;
+    // A little slack on the right so the text doesn't rewrap.
+    let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
+    let slack = size * 0.5 + trailing;
+    let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
+    let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
+    t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
+    refresh_bounds(t);
 }
 
 /// How `slack` added to point type's lines in a frame is shared before and after them: where the
@@ -490,8 +801,9 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
             // Soft wraps → explicit breaks (replace the space before the wrap when there is one).
-            let mut breaks: Vec<usize> =
-                lay.lines.iter().skip(1).map(|l| l.start).filter(|&b| b > 0 && plain.as_bytes().get(b - 1) != Some(&b'\n')).collect();
+            // A line after a paragraph return or a forced line break (U+2028) already starts there.
+            let hard = |b: usize| plain.get(..b).is_some_and(|s| s.ends_with(['\n', '\u{2028}']));
+            let mut breaks: Vec<usize> = lay.lines.iter().skip(1).map(|l| l.start).filter(|&b| b > 0 && !hard(b)).collect();
             breaks.sort_unstable();
             breaks.dedup();
             for b in breaks.into_iter().rev() {
@@ -722,7 +1034,18 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
             Some(v) => v.as_f64().filter(|x| x.is_finite()).map(|x| Some(x.clamp(0.0, 1.0))).ok_or_else(|| bad(C, format!("`{k}` is a number 0..1"))),
         }
     };
-    let start = fraction("start")?;
+    // On an open path the text may start before the path's start (below 0, see
+    // `TextKind::path_text_start`); on a closed path a start below 0 is the path's start.
+    let start = match p.get("start") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_f64()
+                .filter(|x| x.is_finite())
+                .map(|x| x.clamp(-vectorcraft_doc::PATH_LEAD_MAX, 1.0))
+                .ok_or_else(|| bad(C, "`start` is a number up to 1 (below 0: before an open path's start)"))?,
+        ),
+    };
+    let start_on = |path: &vectorcraft_geom::PathData, v: f64| if path.is_closed() { v.max(0.0) } else { v };
     // `end: null` puts the end bracket back at the end of the path.
     let end = p.get("end").map(|_| fraction("end")).transpose()?;
     let flip = switch_or(p, "flip", false, C)?;
@@ -741,8 +1064,8 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     // Without a flip, when every object already has every value given, the document and its undo
     // history stay as they are.
     let has_values = |t: &TextObject| match &t.kind {
-        TextKind::OnPath { start: st, end: en, .. } => {
-            start.is_none_or(|v| v == *st)
+        TextKind::OnPath { path, start: st, end: en } => {
+            start.is_none_or(|v| start_on(path, v) == *st)
                 && end.is_none_or(|v| v == *en)
                 && effect.is_none_or(|e| t.path_effect == e)
                 && align.is_none_or(|a| t.path_align == a)
@@ -757,9 +1080,9 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Type on a Path Options", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            let TextKind::OnPath { start: st, end: en, .. } = &mut t.kind else { continue };
+            let TextKind::OnPath { path, start: st, end: en } = &mut t.kind else { continue };
             if let Some(v) = start {
-                *st = v;
+                *st = start_on(path, v);
             }
             if let Some(v) = end {
                 *en = v;
@@ -1218,8 +1541,9 @@ pub(crate) fn special_char(name: &str) -> Option<&'static str> {
         "thirdSpace" => "\u{2004}",
         "quarterSpace" => "\u{2005}",
         "tab" => "\t",
-        // Our text model breaks lines at paragraph returns only.
-        "forcedLineBreak" | "paragraphReturn" => "\n",
+        // A line break inside the paragraph, as Shift+Enter types it.
+        "forcedLineBreak" => "\u{2028}",
+        "paragraphReturn" => "\n",
         _ => return None,
     })
 }
@@ -1269,6 +1593,11 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
         (None, None, None, Some(u)) => unicode_char(u).ok_or_else(|| bad(C, format!("`{u}` is no Unicode character")))?.to_string(),
         (None, None, None, None) => return Err(bad(C, "give `char`, `text`, `code` or `unicode`")),
     };
+    if named_ids(p)?.is_none()
+        && let Some(r) = insert_at_type_caret(s, &text)?
+    {
+        return Ok(r);
+    }
     let ids = texts(s, p, C)?;
     // When `text` is empty and every object ends with a run of text, the document and its undo
     // history stay as they are.
@@ -1299,20 +1628,53 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(ids_json(&ids))
 }
 
+/// `type.insert` while the Type tool edits text: `text` replaces the tool's selection (inserts at
+/// its caret) as one undo step, and the caret goes after it. `None` when no text is being edited.
+fn insert_at_type_caret(s: &mut Session, text: &str) -> Result<Option<Value>> {
+    let tool = s.tool_options();
+    let Some(id) = tool.get("editing").and_then(Value::as_u64).map(NodeId) else { return Ok(None) };
+    let d = &s.doc()?.doc;
+    let Some(NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else { return Ok(None) };
+    let len = vectorcraft_text::edit::runs_len(&t.runs);
+    let g = |k: &str| tool.get(k).and_then(Value::as_u64).map_or(len, |v| (v as usize).min(len));
+    let (x, y) = (g("start"), g("end"));
+    let (a, b) = (x.min(y), x.max(y));
+    // After Select All in threaded text the whole story is selected: the other frames' text goes
+    // in the same edit, as when typing replaces it.
+    let story: Vec<NodeId> = tool.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+    let clear: Vec<u64> = if a == 0 && b == len && story.contains(&id) {
+        let has_text = |f: &NodeId| matches!(d.node(*f).map(|n| &n.kind), Some(NodeKind::Text(o)) if !o.runs.iter().all(|r| r.text.is_empty()));
+        story.iter().filter(|f| **f != id && has_text(f)).map(|f| f.0).collect()
+    } else {
+        vec![]
+    };
+    if text.is_empty() && a == b && clear.is_empty() {
+        return Ok(Some(ids_json(&[id])));
+    }
+    // A typing session ends first: the insertion is a step of its own.
+    if tool.get("typing").and_then(Value::as_bool) == Some(true) {
+        s.set_tool_option("commitTyping", &Value::Bool(true));
+        s.commit_interaction()?;
+    }
+    // The frame's place in the story once the edit has cleared the frames in `clear`.
+    let start: usize =
+        super::panelcmds::story_frames(s, id).iter().take_while(|(f, _)| *f != id).filter(|(f, _)| !clear.contains(&f.0)).map(|(_, n)| n).sum();
+    let r = super::textedit::edit_range(s, &json!({"id": id.0, "start": a, "end": b, "insert": text, "clear": clear}))?;
+    let caret = r.get("caret").and_then(Value::as_u64).map_or(a + text.len(), |c| c as usize);
+    // Threaded text re-flows in the edit: the caret goes to the frame its place moved to.
+    super::panelcmds::select_story_range(s, id, start + caret, start + caret)?;
+    Ok(Some(ids_json(&[id])))
+}
+
 // ---------- Find and Replace ----------
 
 fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-/// Byte ranges of `needle` in `hay`.
-pub(crate) fn find_all(hay: &str, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
-    find_all_between(hay, needle, match_case, whole_word, None, None)
-}
-
-/// [`find_all`] in run `i` of `runs`: a whole word looks past the run's ends at the characters
-/// next to it, so a change of style inside a word is not a word boundary (#5901). Matches stay
-/// inside the run.
+/// Byte ranges of `needle` in run `i` of `runs`: a whole word looks past the run's ends at the
+/// characters next to it, so a change of style inside a word is not a word boundary (#5901).
+/// Matches stay inside the run.
 fn find_in_run(runs: &[TextRun], i: usize, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
     let Some(run) = runs.get(i) else { return vec![] };
     let before = runs.get(..i).and_then(|r| r.iter().rev().find_map(|r| r.text.chars().next_back()));
@@ -1320,8 +1682,8 @@ fn find_in_run(runs: &[TextRun], i: usize, needle: &str, match_case: bool, whole
     find_all_between(&run.text, needle, match_case, whole_word, before, after)
 }
 
-/// [`find_all`], with `before` and `after` the characters on either side of `hay` (none at the
-/// text's ends), which a whole word must not touch either.
+/// Byte ranges of `needle` in `hay`, with `before` and `after` the characters on either side of
+/// `hay` (none at the text's ends), which a whole word must not touch either.
 fn find_all_between(hay: &str, needle: &str, match_case: bool, whole_word: bool, before: Option<char>, after: Option<char>) -> Vec<(usize, usize)> {
     let nc: Vec<char> = needle.chars().collect();
     if nc.is_empty() {
@@ -1353,102 +1715,234 @@ fn find_all_between(hay: &str, needle: &str, match_case: bool, whole_word: bool,
 /// The visible, unlocked type objects of visible, unlocked layers, off locked artboards, in paint
 /// order: the text Find and Replace and Check Spelling go through.
 pub(crate) fn all_texts(d: &Document) -> Vec<NodeId> {
-    fn visit(n: &Node, locks: &LockedArtboards<'_>, v: &mut Vec<NodeId>) {
-        if !n.visible || n.locked {
+    searched_texts(d, false, false)
+}
+
+/// [`all_texts`], with the type of hidden layers (`hidden_layers`) and of locked layers
+/// (`locked_layers`) as well, as Check Hidden Layers and Check Locked Layers of Find and Replace
+/// ask. The switches are about layers and sublayers: a hidden or locked object or group keeps its
+/// type out, and so does a locked artboard.
+fn searched_texts(d: &Document, hidden_layers: bool, locked_layers: bool) -> Vec<NodeId> {
+    fn visit(n: &Node, locks: &LockedArtboards<'_>, layers: (bool, bool), v: &mut Vec<NodeId>) {
+        let layer = matches!(n.kind, NodeKind::Layer { .. });
+        if (!n.visible && !(layer && layers.0)) || (n.locked && !(layer && layers.1)) {
             return;
         }
         if matches!(n.kind, NodeKind::Text(_)) && !locks.holds_id(n.id) {
             v.push(n.id);
         }
         for c in n.children().into_iter().flatten() {
-            visit(c, locks, v);
+            visit(c, locks, layers, v);
         }
     }
     let mut v = vec![];
     let locks = d.locked_artboards();
     for l in &d.layers {
-        visit(l, &locks, &mut v);
+        visit(l, &locks, (hidden_layers, locked_layers), &mut v);
     }
     v
 }
 
+/// What Find and Replace looks for: the text, Match Case and Find Whole Word.
+struct Query {
+    find: String,
+    match_case: bool,
+    whole_word: bool,
+}
+
+impl Query {
+    /// The `find`, `matchCase` and `wholeWord` params of command `c`. An empty or missing `find`
+    /// is an error.
+    fn of(p: &Value, c: &str) -> Result<Self> {
+        let find = text_param(p, "find", c)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(c, "missing `find`"))?.to_string();
+        Ok(Self { find, match_case: switch_or(p, "matchCase", false, c)?, whole_word: switch_or(p, "wholeWord", false, c)? })
+    }
+
+    /// The matches in `t`, in reading order, each as (run, start, end) with `start..end` the bytes
+    /// of the match in the object's plain text. A match stays inside one style run, and an inline
+    /// graphic is art, not characters to find.
+    fn matches(&self, t: &TextObject) -> Vec<(usize, usize, usize)> {
+        let mut hits = vec![];
+        let mut base = 0;
+        for (ri, r) in t.runs.iter().enumerate() {
+            if r.inline.is_none() {
+                hits.extend(
+                    find_in_run(&t.runs, ri, &self.find, self.match_case, self.whole_word).into_iter().map(|(a, b)| (ri, base + a, base + b)),
+                );
+            }
+            base += r.text.len();
+        }
+        hits
+    }
+}
+
+/// Replace bytes `start..end` of the plain text of `t`, which lie inside run `run`, with `rep`.
+/// The paragraph styles and the ruby follow the edit, as `text.editRange` moves them. The caller
+/// refreshes the bounds.
+fn replace_match(t: &mut TextObject, run: usize, start: usize, end: usize, rep: &str) {
+    let base: usize = t.runs.iter().take(run).map(|r| r.text.len()).sum();
+    let (Some(a), Some(b)) = (start.checked_sub(base), end.checked_sub(base)) else { return };
+    if !t.runs.get(run).is_some_and(|r| a <= b && r.text.is_char_boundary(a) && r.text.is_char_boundary(b)) {
+        return;
+    }
+    t.splice_paras(start, end, rep);
+    if let Some(r) = t.runs.get_mut(run) {
+        r.text.replace_range(a..b, rep);
+    }
+    t.ruby_after_replace(start, end, rep.len());
+}
+
 fn find_replace(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.findReplace";
-    let find = text_param(p, "find", C)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `find`"))?.to_string();
+    let q = Query::of(p, C)?;
     let rep = text_param(p, "replace", C)?.unwrap_or("").to_string();
-    let (mc, ww) = (switch_or(p, "matchCase", false, C)?, switch_or(p, "wholeWord", false, C)?);
+    let (hidden, locked) = (switch_or(p, "hiddenLayers", false, C)?, switch_or(p, "lockedLayers", false, C)?);
     let ids = match p.get("ids").filter(|v| !v.is_null()) {
         Some(_) => text_ids(&s.doc()?.doc, &checked_ids_param(s, p, "ids", C)?),
-        None => all_texts(&s.doc()?.doc),
+        None => searched_texts(&s.doc()?.doc, hidden, locked),
     };
     let st = s.doc()?;
-    let total: usize = ids
+    // Every match, and the matches that do not already read as the replacement.
+    let (total, replaced) = ids
         .iter()
         .filter_map(|id| match &st.doc.node(*id)?.kind {
-            NodeKind::Text(t) => Some((0..t.runs.len()).map(|i| find_in_run(&t.runs, i, &find, mc, ww).len()).sum::<usize>()),
+            NodeKind::Text(t) => {
+                let plain = t.plain_text();
+                let hits = q.matches(t);
+                Some((hits.len(), hits.iter().filter(|(_, a, b)| plain.get(*a..*b) != Some(rep.as_str())).count()))
+            }
             _ => None,
         })
-        .sum();
-    if total == 0 {
-        return Ok(json!({ "count": 0 }));
+        .fold((0, 0), |(n, r), (hn, hr)| (n + hn, r + hr));
+    if replaced == 0 {
+        return Ok(json!({ "count": total, "replaced": 0 }));
     }
     super::overprint::edit_counted(s, "Replace", |d| {
         let mut changed = 0;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            // Matches as (run, start, end) with offsets inside the run. Inline graphics are art, not
-            // characters to rewrite.
-            let mut hits = vec![];
-            let mut base = 0;
-            for (ri, r) in t.runs.iter().enumerate() {
-                if r.inline.is_none() {
-                    for (a, b) in find_in_run(&t.runs, ri, &find, mc, ww) {
-                        if r.text.get(a..b) != Some(rep.as_str()) {
-                            hits.push((ri, base + a, base + b, a, b));
-                        }
-                    }
-                }
-                base += r.text.len();
-            }
+            let plain = t.plain_text();
+            let hits: Vec<_> = q.matches(t).into_iter().filter(|(_, a, b)| plain.get(*a..*b) != Some(rep.as_str())).collect();
             if hits.is_empty() {
                 continue;
             }
-            // Last match first, so the offsets of earlier ones stay valid. The paragraph styles follow
-            // each edit, as `text.editRange` does.
-            for (ri, ta, tb, a, b) in hits.into_iter().rev() {
-                t.splice_paras(ta, tb, &rep);
-                if let Some(r) = t.runs.get_mut(ri) {
-                    r.text.replace_range(a..b, &rep);
-                }
+            // Last match first, so the offsets of earlier ones stay valid.
+            for (ri, a, b) in hits.into_iter().rev() {
+                replace_match(t, ri, a, b, &rep);
             }
             changed += 1;
             refresh_bounds(t);
         }
         Ok(changed)
     })?;
-    Ok(json!({ "count": total }))
+    Ok(json!({ "count": total, "replaced": replaced }))
+}
+
+/// A match of Find and Replace: bytes `start..end` of the plain text of type object `id`.
+#[derive(Clone, Copy)]
+struct Match {
+    id: NodeId,
+    start: usize,
+    end: usize,
+}
+
+impl Match {
+    /// The `id`, `start` and `end` that `p` gives for a match, under command `c`: an object id and
+    /// two byte offsets, put in order as `text.editRange` orders its own.
+    fn of(p: &Value, c: &str) -> Result<Self> {
+        let whole = |key: &str| index_opt(p, key, c)?.ok_or_else(|| bad(c, format!("missing `{key}`")));
+        let id = object_param(p, "id", c)?.ok_or_else(|| bad(c, "missing `id`"))?;
+        let (start, end) = (whole("start")?, whole("end")?);
+        Ok(Self { id, start: start.min(end), end: start.max(end) })
+    }
 }
 
 fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.findNext";
-    let find = text_param(p, "find", C)?.filter(|f| !f.is_empty()).ok_or_else(|| bad(C, "missing `find`"))?.to_string();
-    let (mc, ww) = (switch_or(p, "matchCase", false, C)?, switch_or(p, "wholeWord", false, C)?);
+    let q = Query::of(p, C)?;
+    let backwards = switch_or(p, "backwards", false, C)?;
+    let (hidden, locked) = (switch_or(p, "hiddenLayers", false, C)?, switch_or(p, "lockedLayers", false, C)?);
+    // A `from` that is no object gives no `id`, and is refused as one without it. A null `from`
+    // starts at the first match, whatever is selected.
+    let from = match p.get("from") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(v) => Some(Some(Match::of(v, C)?)),
+    };
     let st = s.doc()?;
-    let all = all_texts(&st.doc);
-    let cur = st.selection.objects.first().and_then(|id| all.iter().position(|x| x == id));
-    let n = all.len();
-    let start = cur.map(|c| c + 1).unwrap_or(0);
-    let hit = (0..n).map(|k| all[(start + k) % n.max(1)]).find(|id| match st.doc.node(*id).map(|n| &n.kind) {
-        Some(NodeKind::Text(t)) => !find_all(&t.plain_text(), &find, mc, ww).is_empty(),
-        _ => false,
-    });
-    match hit {
-        Some(id) => {
-            s.select(|_, sel| sel.set([id]))?;
-            Ok(json!({ "id": id.0 }))
-        }
-        None => Ok(json!({ "id": null })),
+    // The objects in the order the search visits them: from the top of the stacking order down,
+    // or with Search Backwards from the bottom up.
+    let mut order = searched_texts(&st.doc, hidden, locked);
+    if !backwards {
+        order.reverse();
     }
+    // Every match in that order as (object's place, match): inside an object in reading order, or
+    // with Search Backwards from its end.
+    let mut all: Vec<(usize, Match)> = vec![];
+    for (place, id) in order.iter().enumerate() {
+        let Some(NodeKind::Text(t)) = st.doc.node(*id).map(|n| &n.kind) else { continue };
+        let mut hits = q.matches(t);
+        if backwards {
+            hits.reverse();
+        }
+        all.extend(hits.into_iter().map(|(_, start, end)| (place, Match { id: *id, start, end })));
+    }
+    if all.is_empty() {
+        return Ok(json!({ "id": null, "count": 0 }));
+    }
+    // The search goes on from `from`, or from the whole of the first selected type object it
+    // visits, so that the same call again reaches the next object. From anywhere else it starts
+    // at the first match.
+    let from = from.unwrap_or_else(|| {
+        st.selection.objects.iter().filter(|id| order.contains(id)).find_map(|id| match &st.doc.node(*id)?.kind {
+            NodeKind::Text(t) => Some(Match { id: *id, start: 0, end: t.runs.iter().map(|r| r.text.len()).sum() }),
+            _ => None,
+        })
+    });
+    let after = |(place, m): &(usize, Match), at: usize, f: &Match| {
+        *place > at || (*place == at && if backwards { m.end <= f.start } else { m.start >= f.end })
+    };
+    let k = from
+        .and_then(|f| order.iter().position(|id| *id == f.id).map(|at| (at, f)))
+        .and_then(|(at, f)| all.iter().position(|hit| after(hit, at, &f)))
+        .unwrap_or(0);
+    let Some((_, m)) = all.get(k).copied() else { return Ok(json!({ "id": null, "count": 0 })) };
+    let count = all.len();
+    // Type that a selection tool can't reach (on a hidden or locked layer) is found without being
+    // selected.
+    let selected = all_texts(&st.doc).contains(&m.id);
+    if selected && st.selection.objects != [m.id] {
+        s.select(|_, sel| sel.set([m.id]))?;
+    }
+    let index = if backwards { count - k } else { k + 1 };
+    Ok(json!({ "id": m.id.0, "start": m.start, "end": m.end, "index": index, "count": count, "selected": selected }))
+}
+
+fn replace_one(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "edit.replaceMatch";
+    let q = Query::of(p, C)?;
+    let rep = text_param(p, "replace", C)?.unwrap_or("").to_string();
+    let m = Match::of(p, C)?;
+    let st = s.doc()?;
+    let t = match st.doc.node(m.id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => t,
+        Some(_) => return Err(bad(C, format!("node {} is not text", m.id.0))),
+        None => return Err(EngineError::NoNode(m.id)),
+    };
+    let Some((run, ..)) = q.matches(t).into_iter().find(|(_, a, b)| (*a, *b) == (m.start, m.end)) else {
+        return Err(bad(C, format!("no match of `find` at bytes {}..{} of object {}", m.start, m.end, m.id.0)));
+    };
+    let end = m.start + rep.len();
+    if t.plain_text().get(m.start..m.end) == Some(rep.as_str()) {
+        return Ok(json!({ "id": m.id.0, "start": m.start, "end": end, "replaced": false }));
+    }
+    s.edit("Replace", |d, _| {
+        let Some(NodeKind::Text(t)) = d.node_mut(m.id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(m.id)) };
+        replace_match(t, run, m.start, m.end, &rep);
+        refresh_bounds(t);
+        Ok(())
+    })?;
+    Ok(json!({ "id": m.id.0, "start": m.start, "end": end, "replaced": true }))
 }
 
 // ---------- Paste without Formatting ----------
@@ -1460,6 +1954,13 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
         t.set_all_paras(Default::default());
         refresh_bounds(t);
     }
+    // A graph keeps its labels' character and paragraph formats for each redraw: they go with the
+    // labels' own formatting, and the labels are set in a new graph's label formats. The graph's generated
+    // bounds follow its changed labels, so the next redraw does not read them as a move.
+    if n.extras().graph.is_some() {
+        super::graph::edit_graph_art(n, |n| super::graph::plain_labels(n, &strip_formatting));
+        return;
+    }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {
             strip_formatting(std::sync::Arc::make_mut(c));
@@ -1469,6 +1970,13 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
 
 fn paste_plain(s: &mut Session, p: &Value) -> Result<Value> {
     let saved = s.clipboard.nodes.clone();
+    // Pasted colors linked to a swatch merged with the document's show its color, so a pasted pie's legend labels take
+    // the contrast of the wedges as pasted. A `swatchConflict` the paste refuses is left to its error.
+    if let (Ok(choices), Ok(st)) = (super::clipboard::SwatchChoices::parse("edit.pasteWithoutFormatting", p), s.doc()) {
+        let same_doc = s.clipboard.source_doc == Some(st.uid);
+        let d = std::sync::Arc::clone(&st.doc);
+        s.clipboard.show_merged_colors(&d, &choices, same_doc);
+    }
     for n in &mut s.clipboard.nodes {
         strip_formatting(n);
     }

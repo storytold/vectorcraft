@@ -316,6 +316,7 @@ fn content_hash(text: &crate::TextObject) -> Option<[u64; 2]> {
     let inline_bounds = text.runs.iter().filter_map(|r| r.inline.as_ref()).map(|i| i.bounds.map(|b| [b.x0, b.y0, b.x1, b.y1].map(f64::to_bits)));
     for h in &mut feed.0 {
         h.write_u8(u8::from(text.first_para_continues));
+        h.write_u32(text.first_para_lead.map_or(u32::MAX, u32::from));
         for b in inline_bounds.clone() {
             match b {
                 None => h.write_u8(0),

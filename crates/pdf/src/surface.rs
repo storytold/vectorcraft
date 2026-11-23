@@ -81,6 +81,11 @@ impl<'a> Surface<'a> {
         self.group(|s| s.push_isolated());
     }
 
+    /// A transparency group with `options` (isolated, knockout), as [`Self::push_isolated`].
+    pub fn push_group(&mut self, options: krilla::blend::GroupOptions) {
+        self.group(|s| s.push_group(options));
+    }
+
     /// The mask's stream is already in [`Self::group_transform`]'s space, like the group's art.
     pub fn push_mask(&mut self, mask: Mask) {
         self.group(|s| s.push_mask(mask));

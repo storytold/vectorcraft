@@ -43,7 +43,7 @@ pub enum StrokeDirection {
 }
 
 impl StrokeDirection {
-    const ALL: [StrokeDirection; 4] =
+    pub(super) const ALL: [StrokeDirection; 4] =
         [StrokeDirection::RightDiagonal, StrokeDirection::Horizontal, StrokeDirection::LeftDiagonal, StrokeDirection::Vertical];
 
     /// The direction of `value` (a [`STROKE_DIRECTIONS`] value, any case); Right Diagonal
@@ -53,7 +53,7 @@ impl StrokeDirection {
     }
 
     /// The unit vector along the strokes (document axes, y down).
-    fn along(self) -> Vec2 {
+    pub(super) fn along(self) -> Vec2 {
         match self {
             StrokeDirection::RightDiagonal => RIGHT,
             StrokeDirection::Horizontal => Vec2::new(1.0, 0.0),

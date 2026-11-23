@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeKind};
-use vectorcraft_geom::{FillRule, PathData, Point, Rect, SubPath};
+use vectorcraft_geom::{FillRule, PathData, Rect, SubPath};
 use vectorcraft_pathops as po;
 
 use super::{MAX_MEMBERS, Scope, geometry, is_container, members, profile, region, reshape_members, solid_paints};
@@ -144,18 +144,17 @@ impl Resolver<'_> {
     }
 
     /// Does the plain image `c` lie wholly outside what the clips around it show together, each
-    /// clipping path with its own fill rule? Its frame, the pixel rectangle as its transform places
-    /// it, is cut to each clip in turn until nothing is left. An error when a cut fails or the cuts
-    /// pass [`MAX_IMAGE_CUTS`]: the image may show, so it can't be left out.
+    /// clipping path with its own fill rule? Its frame, the quadrilateral of its corners
+    /// ([`Node::image_corners`]: a distorted image's corners, else the pixel rectangle as its
+    /// transform places it), is cut to each clip in turn until nothing is left. An error when a
+    /// cut fails or the cuts pass [`MAX_IMAGE_CUTS`]: the image may show, so it can't be left out.
     fn hidden(&mut self, c: &Node) -> Result<bool, String> {
         let Some(shown) = &self.shown else { return Ok(false) };
-        let NodeKind::Image(im) = &c.kind else { return Ok(false) };
+        let Some(corners) = c.image_corners() else { return Ok(false) };
         let Some(b) = c.visual_bounds() else { return Ok(true) };
         if b.intersect(shown.bounds).area() <= 0.0 {
             return Ok(true);
         }
-        let (w, h) = (f64::from(im.width), f64::from(im.height));
-        let corners = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)].map(|(x, y)| im.xf * Point::new(x, y));
         if corners.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
             return Err(image_refusal(self.label));
         }

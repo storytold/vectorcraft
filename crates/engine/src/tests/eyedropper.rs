@@ -562,7 +562,41 @@ fn clicking_an_image_samples_its_pixel() {
     // Two pixels, orange and teal, 100 pt each, at (300, 0).
     let img = image::RgbaImage::from_raw(2, 1, [[255, 128, 0, 255], [0, 128, 128, 255]].concat()).unwrap();
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, _| {
         d.images.insert("px".into(), ImageBlob::png(png));
         let l = d.layers[0].id;
@@ -581,6 +615,141 @@ fn clicking_an_image_samples_its_pixel() {
     assert_eq!(node(&s, dst).appearance.fill_paint().color(), Some(Color::rgb8(128, 128, 64)), "5 x 5 average of both pixels");
 }
 
+/// Gradient mesh points picked with Direct Selection or the Mesh tool take the color the
+/// Eyedropper then samples from an image or from other art, each sample one undo step, and only
+/// they change: the mesh's other points and its appearance stay as they were (#8090).
+#[test]
+fn picked_mesh_points_take_the_eyedropper_sample() {
+    let mut s = session();
+    // Two pixels, orange and teal, 100 pt each, at (300, 0).
+    let rgba = [[255u8, 128, 0, 255], [0, 128, 128, 255]].concat();
+    let img = craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    s.edit("Place", |d, _| {
+        d.images.insert("px".into(), ImageBlob::png(png.to_vec()));
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
+        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| crate::EngineError::Other(e.to_string()))
+    })
+    .unwrap();
+    let m = rect(&mut s, 10.0);
+    s.execute("object.mesh.create", &json!({"ids": [m.0], "rows": 1, "cols": 1})).unwrap();
+    let red = rect(&mut s, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let colors = |s: &Session| match node(s, m).kind {
+        NodeKind::Mesh(g) => g.points.iter().map(|p| p.color).collect::<Vec<_>>(),
+        k => panic!("not a mesh: {k:?}"),
+    };
+    let white = colors(&s)[0];
+    assert!(colors(&s).iter().all(|c| *c == white && *c != Color::rgb8(255, 0, 0)));
+    let appearance = node(&s, m).appearance;
+    let v = ViewInfo::default();
+    let pick = |s: &mut Session, tool: &str, i: usize, shift: bool| {
+        s.select_tool(tool, v).unwrap();
+        let q = match node(s, m).kind {
+            NodeKind::Mesh(g) => g.points[i].p,
+            k => panic!("not a mesh: {k:?}"),
+        };
+        let mods = Mods { shift, ..Default::default() };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, q.x, q.y).with_mods(mods), v).unwrap();
+        }
+    };
+    let (teal, orange) = (Color::rgb8(0, 128, 128), Color::rgb8(255, 128, 0));
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    pick(&mut s, "directSelection", 0, false);
+    let undo = undo_len(&s);
+    click(&mut s, 450.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [teal, white, white, white], "the picked point takes the image's color");
+    assert_eq!(node(&s, m).appearance, appearance, "the mesh's appearance stays");
+    assert_eq!(undo_len(&s), undo + 1, "one undo step");
+    // The Eyedropper keeps the picks: a Shift-click samples into the point again.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 350.0, 50.0).with_mods(Mods { shift: true, ..Default::default() }), v).unwrap();
+    assert_eq!(colors(&s), [orange, white, white, white]);
+    assert_eq!(undo_len(&s), undo + 2);
+    // A sample of the color the point already has changes nothing and adds no step.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 350.0, 50.0), v).unwrap();
+    assert_eq!(undo_len(&s), undo + 2, "no step when nothing changes");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(colors(&s), [teal, white, white, white]);
+    // Two points picked with the Mesh tool both take a plain click's sample of other art, and the
+    // art keeps its fill.
+    pick(&mut s, "mesh", 1, false);
+    pick(&mut s, "mesh", 3, true);
+    let undo = undo_len(&s);
+    click(&mut s, 125.0, 35.0, Mods::default());
+    let r = Color::rgb8(255, 0, 0);
+    assert_eq!(colors(&s), [teal, r, white, r]);
+    assert_eq!(undo_len(&s), undo + 1, "one undo step for every picked point");
+    assert_eq!(node(&s, m).appearance, appearance);
+    assert_eq!(node(&s, red).appearance.fill_paint().color(), Some(r));
+    // Back in the Mesh tool the two points are still picked: a fill color recolors just them.
+    s.select_tool("mesh", v).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    let b = Color::rgb8(0, 0, 255);
+    assert_eq!(colors(&s), [teal, b, white, b], "the picks go back to the Mesh tool");
+    // Without picked points a click on an image samples into the whole selected mesh as before.
+    s.select_tool("selection", v).unwrap();
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    click(&mut s, 450.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [teal, b, white, b], "the points keep their colors");
+    assert_ne!(node(&s, m).appearance, appearance);
+}
+
+/// A Cmd-click with the Direct Selection tool the Eyedropper lends picks gradient mesh points for
+/// the Eyedropper: the lent tool starts from the Eyedropper's picks, so a Shift-click adds to
+/// them, and the Eyedropper samples into what the lent tool left picked (#8090).
+#[test]
+fn mesh_points_picked_through_the_lent_tool_take_the_eyedropper_sample() {
+    let mut s = session();
+    // Two pixels, orange and teal, 100 pt each, at (300, 0).
+    let rgba = [[255u8, 128, 0, 255], [0, 128, 128, 255]].concat();
+    let img = craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    s.edit("Place", |d, _| {
+        d.images.insert("px".into(), ImageBlob::png(png.to_vec()));
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let xf = vectorcraft_geom::Affine::translate((300.0, 0.0)) * vectorcraft_geom::Affine::scale(100.0);
+        let im = ImageObject { key: "px".into(), width: 2, height: 1, xf, link: None, placement: Default::default(), pixels: None };
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Image(Box::new(im)))).map_err(|e| crate::EngineError::Other(e.to_string()))
+    })
+    .unwrap();
+    let m = rect(&mut s, 10.0);
+    s.execute("object.mesh.create", &json!({"ids": [m.0], "rows": 1, "cols": 1})).unwrap();
+    let colors = |s: &Session| match node(s, m).kind {
+        NodeKind::Mesh(g) => g.points.iter().map(|p| p.color).collect::<Vec<_>>(),
+        k => panic!("not a mesh: {k:?}"),
+    };
+    let white = colors(&s)[0];
+    let v = ViewInfo::default();
+    let press = |s: &mut Session, i: usize, mods: Mods| {
+        let q = match node(s, m).kind {
+            NodeKind::Mesh(g) => g.points[i].p,
+            k => panic!("not a mesh: {k:?}"),
+        };
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, q.x, q.y).with_mods(mods), v).unwrap();
+        }
+    };
+    let (teal, orange) = (Color::rgb8(0, 128, 128), Color::rgb8(255, 128, 0));
+    s.execute("select.set", &json!({"ids": [m.0]})).unwrap();
+    s.select_tool("directSelection", v).unwrap();
+    press(&mut s, 0, Mods::default());
+    s.select_tool("eyedropper", v).unwrap();
+    // Cmd-click point 3: Direct Selection, lent, picks it in place of point 0.
+    press(&mut s, 3, Mods { cmd: true, ..Default::default() });
+    assert_eq!(s.tool_id(), "eyedropper");
+    click(&mut s, 450.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [white, white, white, teal], "the point the lent tool picked takes the sample");
+    // Cmd+Shift-click point 0 adds it to the Eyedropper's pick.
+    press(&mut s, 0, Mods { cmd: true, shift: true, ..Default::default() });
+    click(&mut s, 350.0, 50.0, Mods::default());
+    assert_eq!(colors(&s), [orange, white, white, orange], "both picked points take the sample");
+}
+
 /// A CMYK document with one image of `px` (one row, 100 pt a pixel) at (300, 0).
 fn cmyk_doc_with_image(px: &[[u8; 4]]) -> Session {
     let mut s = Session::new();
@@ -588,7 +757,41 @@ fn cmyk_doc_with_image(px: &[[u8; 4]]) -> Session {
     let w = px.len() as u32;
     let img = image::RgbaImage::from_raw(w, 1, px.concat()).unwrap();
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, _| {
         d.images.insert("px".into(), ImageBlob::png(png));
         let l = d.layers[0].id;

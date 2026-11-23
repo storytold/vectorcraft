@@ -55,10 +55,19 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         ]);
     } else {
         v.extend([c("Cut", "edit.cut"), c("Copy", "edit.copy"), c("Paste", "edit.paste"), Sep]);
+        // With one group or compound path selected the menu has Isolate Selected Group, and with
+        // one path selected (a member of a group or a compound path too) it has Isolate Selected
+        // Path, as the help page
+        // (https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=324)
+        // lists them. Neither shows for an object that `object.isolate` refuses.
         if let [one] = roots.as_slice()
-            && one.is_container()
+            && isolatable(app, &st.doc, one)
         {
-            v.push(c("Isolate Selected Group", "object.isolate"));
+            if one.is_container() {
+                v.push(c("Isolate Selected Group", "object.isolate"));
+            } else if matches!(one.kind, NodeKind::Path { .. }) {
+                v.push(c("Isolate Selected Path", "object.isolate"));
+            }
         }
         if several {
             v.push(c("Group", "object.group"));
@@ -73,10 +82,12 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         if !st.selection.anchors.is_empty() {
             v.extend([c("Remove Anchor Points", "path.removeAnchors"), c("Cut Path at Selected Anchor Points", "path.cutAtAnchors")]);
         }
-        // Object › Path › Smooth…, which opens the Smooth slider (`invoke`). `prune` leaves it out
-        // unless object.path.smooth can run: the selection holds a path, in a group or a compound
-        // path too.
-        v.push(c("Smooth…", "object.path.smooth"));
+        // Object › Path › Simplify… and Smooth…, in that menu's order (#8344). Each opens what the
+        // menu item opens (`invoke`): the Simplify slider, or the Simplify dialog when its "Open
+        // this dialog with these settings next time" was ticked, and the Smooth slider. `prune`
+        // leaves each out unless its command can run: the selection holds a path, in a group or a
+        // compound path too.
+        v.extend([c("Simplify…", "object.path.simplify"), c("Smooth…", "object.path.smooth")]);
         if several {
             v.push(c("Make Clipping Mask", "object.clippingMask.make"));
         }
@@ -96,10 +107,13 @@ pub fn context_items(app: &VectorcraftApp) -> Vec<Item> {
         // The paragraphs of the selected type, or those the Type tool's selection touches.
         if crate::panels::character::text_style(app).is_some() {
             v.push(sub("Bullets and Numbering", vec![c("Apply Bullets", "type.applyBullets"), c("Apply Numbers", "type.applyNumbers")]));
-            // A right-click on type turns Auto Spell Check on or off, as Edit › Spelling does, per
-            // the public [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
-            // page. Its submenu holds only toggles, so it shows the check mark (`render_items`).
-            v.push(sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck")]));
+            // A right-click on type turns Auto Spell Check on or off and opens Check Spelling…, as
+            // Edit › Spelling does, per the public [Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)
+            // page. The submenu shows Auto Spell Check's check mark (`render_items`).
+            v.push(sub(
+                "Spelling",
+                vec![c("Auto Spell Check", "edit.autoSpellCheck"), c("Check Spelling…", crate::dialogs::check_spelling::COMMAND)],
+            ));
         }
         v.extend([c("Make Guides", "view.guides.make"), Sep, sub("Transform", transform_items())]);
         if intertwine.is_none() {
@@ -244,8 +258,21 @@ fn artboard_items(app: &VectorcraftApp) -> Vec<Item> {
     v
 }
 
-/// `items` without the commands that can't run now (Undo and Redo stay, greyed out), submenus
-/// left empty, and separators that no longer separate anything.
+/// Does `object.isolate` take `n`? It and every group and layer above it are shown and unlocked
+/// (for a Shaper Group, its source group, which is the group isolated), it is not on a locked
+/// artboard, it is not a guide path while Lock Guides is on, and while a symbol is edited it is on
+/// the symbol's editing layer. A selection set by a command can still hold an object that fails
+/// this.
+fn isolatable(app: &VectorcraftApp, doc: &vectorcraft_doc::Document, n: &vectorcraft_doc::Node) -> bool {
+    let target = if n.extras().shaper.is_some() { n.children().and_then(|c| c.first()).map_or(n.id, |c| c.id) } else { n.id };
+    doc.is_editable(target)
+        && !(app.session.guides_locked() && doc.node(target).is_some_and(|t| t.is_guide()))
+        && doc.symbol_edit.as_ref().is_none_or(|e| doc.ancestry(target).is_some_and(|a| a.contains(&e.layer)))
+}
+
+/// `items` without the commands that can't run now (Undo and Redo stay, greyed out, and so do Show
+/// Grid and Hide Guides while Trim View holds them off: #8363), submenus left empty, and separators
+/// that no longer separate anything.
 fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
     let mut out: Vec<Item> = Vec::with_capacity(items.len());
     for it in items {
@@ -254,7 +281,7 @@ fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
             it => it,
         };
         let keep = match &it {
-            Item::Cmd(_, id, _) => matches!(*id, "edit.undo" | "edit.redo") || enabled(app, id),
+            Item::Cmd(_, id, _) => matches!(*id, "edit.undo" | "edit.redo" | "view.guides" | "view.grid") || enabled(app, id),
             Item::Sub(_, children) => !children.is_empty(),
             Item::Sep => out.last().is_some_and(|l| !matches!(l, Item::Sep)),
             _ => true,
@@ -272,9 +299,9 @@ fn prune(app: &VectorcraftApp, items: Vec<Item>) -> Vec<Item> {
 /// The canvas context menu's popup; the item clicked goes in `clicked`, for [`invoke`].
 pub fn context_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(200.0);
+        widgets::menu_min_width(ui, 200.0);
         // Its toggles already say what they do (Show Rulers, Hide Guides): no check-mark gutter,
-        // except in a submenu of toggles alone (Spelling › Auto Spell Check).
+        // except in a submenu of toggles alone and in Spelling, for Auto Spell Check.
         render_items(app, ui, &context_items(app), false, clicked);
     });
 }
@@ -289,7 +316,7 @@ pub fn ruler_unit_items() -> Vec<Item> {
 /// `clicked`, for [`invoke`].
 pub fn ruler_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(160.0);
+        widgets::menu_min_width(ui, 160.0);
         render_items(app, ui, &ruler_unit_items(), true, clicked);
     });
 }

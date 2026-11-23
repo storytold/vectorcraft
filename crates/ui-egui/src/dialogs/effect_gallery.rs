@@ -1,4 +1,4 @@
-//! Effect → Effect Gallery: browse Photoshop-style raster filters by category, build a stack, and
+//! Effect → Effect Gallery: browse raster filters by category, build a stack, and
 //! apply it as separate appearance effects in one undo step.
 //!
 //! Each filter has a thumbnail, and the dialog has its own preview, as the
@@ -29,7 +29,7 @@ const PREVIEW_H: usize = 84;
 /// Dialog kind for the Effect Gallery.
 pub const KIND: &str = "effectGallery";
 
-/// Raster effect submenus in the gallery (the six Photoshop-style folders it holds).
+/// Raster effect submenus in the gallery (the six raster filter folders it holds).
 const CATEGORIES: [(&str, &[&str]); 6] = [
     ("Artistic", &["Effect", "Artistic"]),
     ("Brush Strokes", &["Effect", "Brush Strokes"]),
@@ -52,6 +52,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 
 #[derive(Clone)]
 struct StackEntry {
+    /// The row's own number, kept while the row moves (a file dialog's late answer finds it).
+    id: u64,
     effect: String,
     visible: bool,
     params: Map<String, Value>,
@@ -63,12 +65,19 @@ pub fn open(app: &mut VectorcraftApp, _p: &Value) -> Result<Value, String> {
         return Err(tl!("Select artwork to apply effects").into());
     }
     let selected = effects_in_category(0).first().map(|e| e.id).unwrap_or("");
+    // Each gallery opened has a number of its own, so a file dialog's late answer for one that
+    // closed never reaches the next.
+    static OPENED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let opened = OPENED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     app.ui.dialog = Some(Dialog::new(
         KIND,
-        json!({ "category": 0, "selected": selected, "stack": [], "stackSelected": 0, "stackFocus": false, "preview": true }),
+        json!({ "category": 0, "selected": selected, "stack": [], "stackSelected": 0, "stackFocus": false, "preview": true, OPENED_FIELD: opened }),
     ));
     Ok(Value::Null)
 }
+
+/// Field of the gallery holding the number it was opened with.
+const OPENED_FIELD: &str = "opened";
 
 fn effects_in_category(cat: usize) -> Vec<EffectInfo> {
     let path = CATEGORIES.get(cat).map(|(_, p)| *p).unwrap_or(CATEGORIES[0].1);
@@ -92,31 +101,48 @@ fn merged_params(id: &str, stored: &Map<String, Value>) -> Map<String, Value> {
     }
 }
 
+/// The stack's rows. A row without a number of its own, or with one an earlier row has, gets the
+/// next number after the highest one.
 fn stack_of(d: &Dialog) -> Vec<StackEntry> {
-    d.fields
-        .get("stack")
-        .and_then(Value::as_array)
-        .map(|rows| {
-            rows.iter()
-                .filter_map(|row| {
-                    let effect = row.get("effect").and_then(Value::as_str)?;
-                    let visible = row.get("visible").and_then(Value::as_bool).unwrap_or(true);
-                    let params = row
-                        .get("params")
-                        .and_then(Value::as_object)
-                        .cloned()
-                        .map(|m| merged_params(effect, &m))
-                        .unwrap_or_else(|| default_params(effect));
-                    Some(StackEntry { effect: effect.to_string(), visible, params })
-                })
-                .collect()
+    let rows = d.fields.get("stack").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+    let mut next = rows.iter().filter_map(|row| row.get("id").and_then(Value::as_u64)).max().map_or(0, |m| m.saturating_add(1));
+    next = next.max(d.fields.get(NEXT_ROW).and_then(Value::as_u64).unwrap_or(0));
+    let mut seen = std::collections::HashSet::new();
+    rows.iter()
+        .filter_map(|row| {
+            let effect = row.get("effect").and_then(Value::as_str)?;
+            let visible = row.get("visible").and_then(Value::as_bool).unwrap_or(true);
+            let params =
+                row.get("params").and_then(Value::as_object).cloned().map(|m| merged_params(effect, &m)).unwrap_or_else(|| default_params(effect));
+            let id = match row.get("id").and_then(Value::as_u64) {
+                Some(id) if seen.insert(id) => id,
+                _ => {
+                    let id = next;
+                    next = next.saturating_add(1);
+                    seen.insert(id);
+                    id
+                }
+            };
+            Some(StackEntry { id, effect: effect.to_string(), visible, params })
         })
-        .unwrap_or_default()
+        .collect()
+}
+
+/// Field of the gallery holding the number the next new row takes.
+const NEXT_ROW: &str = "nextRowId";
+
+/// A number for a new row of `stack` in `d`: after the highest one, and never one that a removed
+/// row had.
+fn next_row_id(d: &Dialog, stack: &[StackEntry]) -> u64 {
+    let after = stack.iter().map(|e| e.id).max().map_or(0, |m| m.saturating_add(1));
+    after.max(d.fields.get(NEXT_ROW).and_then(Value::as_u64).unwrap_or(0))
 }
 
 fn write_stack(d: &mut Dialog, stack: &[StackEntry]) {
-    let rows: Vec<Value> = stack.iter().map(|e| json!({ "effect": e.effect, "visible": e.visible, "params": e.params })).collect();
+    let rows: Vec<Value> = stack.iter().map(|e| json!({ "id": e.id, "effect": e.effect, "visible": e.visible, "params": e.params })).collect();
     d.fields.insert("stack".into(), Value::Array(rows));
+    let next = next_row_id(d, stack);
+    d.fields.insert(NEXT_ROW.into(), json!(next));
 }
 
 fn category_ix(d: &Dialog) -> usize {
@@ -177,8 +203,79 @@ fn write_param_target(d: &mut Dialog, stack: &mut [StackEntry], stack_sel: usize
     }
 }
 
-/// Reuse the live effect dialog's fields for `effect_id` and `params`.
-fn effect_param_fields(app: &mut VectorcraftApp, ui: &mut egui::Ui, effect_id: &str, params: &mut Map<String, Value>) {
+/// Field of the effect dialog the gallery's Settings draw in ([`effect_param_fields`]): which
+/// values they edit ([`settings_key`]).
+pub(super) const SETTINGS: &str = "__gallerySettings";
+
+/// Field of the stand-in dialog [`load_texture`] asks the file dialog with.
+const ASKING: &str = "__asking";
+
+/// The stack row the Settings of `d` edit when the stack has the focus, of `rows` rows.
+fn settings_row(d: &Dialog, rows: usize) -> Option<usize> {
+    let row = (d.fields.get("stackSelected").and_then(Value::as_u64).unwrap_or(0) as usize).min(rows.saturating_sub(1));
+    stack_focus(d).then_some(row)
+}
+
+/// Which values the Settings of gallery `d` edit: `{opened, row}`, the gallery's number and the
+/// number of the stack row, or `null` for the row when they edit the filter being browsed.
+fn settings_key(d: &Dialog, stack: &[StackEntry]) -> Value {
+    let row = settings_row(d, stack.len()).and_then(|row| stack.get(row)).map(|e| e.id);
+    json!({ "opened": d.fields.get(OPENED_FIELD), "row": row })
+}
+
+/// Load Texture… in the gallery's Settings (`temp`, for Glass, Texturizer or Rough Pastels): the
+/// image picked goes into `temp` when the file dialog answers at once. When it answers later
+/// (shown off the UI thread) it goes into the values that asked: the stack row of that number
+/// wherever it moved, or the filter being browsed. An answer for a row that was removed, or for a
+/// filter no longer browsed, or for a gallery that closed, is dropped.
+pub(super) fn load_texture(app: &mut VectorcraftApp, temp: &mut Dialog) -> Result<(), String> {
+    use vectorcraft_effects::pixel::TEXTURE_IMAGE;
+    let effect = temp.str("__effect");
+    let key = temp.fields.get(SETTINGS).cloned().unwrap_or(Value::Null);
+    let opened = key.get("opened").cloned().unwrap_or(Value::Null);
+    let row = key.get("row").and_then(Value::as_u64);
+    let mut asking = Dialog::new(KIND, json!({ ASKING: true }));
+    crate::picks::in_dialog(app, &mut asking, move |app, d| {
+        if d.fields.contains_key(ASKING) {
+            return effect::load_texture(app, d);
+        }
+        let mut picked = Dialog::new(KIND, json!({}));
+        effect::load_texture(app, &mut picked)?;
+        if d.fields.get(OPENED_FIELD).unwrap_or(&Value::Null) != &opened {
+            return Ok(());
+        }
+        match row {
+            Some(row) => {
+                let mut stack = stack_of(d);
+                if let Some(e) = stack.iter_mut().find(|e| e.id == row && e.effect == effect) {
+                    e.params.extend(picked.fields);
+                    write_stack(d, &stack);
+                }
+            }
+            None if selected_id(d) == effect => {
+                let mut params = if d.fields.get("browseEffect").and_then(Value::as_str) == Some(effect.as_str()) {
+                    browse_params(d)
+                } else {
+                    default_params(&effect)
+                };
+                params.extend(picked.fields);
+                set_browse_params(d, &effect, params);
+            }
+            None => {}
+        }
+        Ok(())
+    })?;
+    for key in [TEXTURE_IMAGE, "texture"] {
+        if let Some(v) = asking.fields.remove(key) {
+            temp.fields.insert(key.into(), v);
+        }
+    }
+    Ok(())
+}
+
+/// Reuse the live effect dialog's fields for `effect_id` and `params`, the values `key` names
+/// ([`settings_key`]).
+fn effect_param_fields(app: &mut VectorcraftApp, ui: &mut egui::Ui, effect_id: &str, params: &mut Map<String, Value>, key: Value) {
     if effect_id.is_empty() {
         return;
     }
@@ -188,6 +285,7 @@ fn effect_param_fields(app: &mut VectorcraftApp, ui: &mut egui::Ui, effect_id: &
     fields.insert("__effect".into(), json!(effect_id));
     fields.insert("__label".into(), json!(label));
     fields.insert("preview".into(), json!(false));
+    fields.insert(SETTINGS.into(), key);
     let mut temp = Dialog::new("effect", Value::Object(fields));
     (effect::SPEC.body)(app, ui, &mut temp);
     if let Value::Object(m) = form::params(&temp) {
@@ -215,11 +313,20 @@ fn stack_batch_params(stack: &[StackEntry]) -> Value {
 }
 
 /// Live canvas preview of the stack (`command.batch` would settle the dialog interaction each frame).
+/// Typing in progress is kept as its own undo step first; only the gallery's own earlier preview is
+/// canceled.
 fn preview_stack_on_canvas(app: &mut VectorcraftApp, stack: &[StackEntry]) {
+    if let Err(e) = app.keep_typing() {
+        app.status(e);
+        return;
+    }
     if app.session.in_interaction() {
         let _ = app.session.cancel_interaction();
     }
-    let _ = app.session.begin_interaction("Effect Gallery");
+    if let Err(e) = app.begin_interaction("Effect Gallery") {
+        app.status(e);
+        return;
+    }
     for (i, entry) in stack.iter().enumerate() {
         let params = Value::Object(entry.params.clone());
         if app.run("effect.apply", json!({ "effect": entry.effect, "params": params })).is_err() {
@@ -271,6 +378,7 @@ fn preview_space(w: usize, h: usize) -> PixelSpace {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(wf / 2.0, hf / 2.0),
+        size: vectorcraft_geom::Vec2::new(wf, hf),
         channels: vectorcraft_effects::pixel::Channels::Rgb,
         line: 1.0,
         extent: 0.5 * wf.hypot(hf),
@@ -326,7 +434,7 @@ fn sample_drawing(w: usize, h: usize) -> Vec<u8> {
     out
 }
 
-/// Run one Photoshop-style filter on a premultiplied RGBA buffer. Leaves it unchanged when `id`
+/// Run one raster filter on a premultiplied RGBA buffer. Leaves it unchanged when `id`
 /// is not one of those filters or the buffer is the wrong size.
 fn apply_pixel(id: &str, params: &Map<String, Value>, data: &mut [u8], w: usize, h: usize) {
     let Some(n) = w.checked_mul(h).and_then(|n| n.checked_mul(4)) else { return };
@@ -474,8 +582,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (param_effect, mut param_values) = param_target(d, &stack, stack_sel, &sel);
     if !param_effect.is_empty() {
         widgets::subheader(ui, tl!("Settings"));
+        let key = settings_key(d, &stack);
         egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
-            effect_param_fields(app, ui, &param_effect, &mut param_values);
+            effect_param_fields(app, ui, &param_effect, &mut param_values, key);
         });
         write_param_target(d, &mut stack, stack_sel, &sel, &param_effect, param_values);
     }
@@ -603,7 +712,7 @@ fn add_selected(d: &mut Dialog, id: &str) {
     let params =
         if !stack_focus(d) && d.fields.get("browseEffect").and_then(Value::as_str) == Some(id) { browse_params(d) } else { default_params(id) };
     let mut stack = stack_of(d);
-    stack.push(StackEntry { effect: id.to_string(), visible: true, params });
+    stack.push(StackEntry { id: next_row_id(d, &stack), effect: id.to_string(), visible: true, params });
     write_stack(d, &stack);
     d.fields.insert("stackSelected".into(), json!(stack.len().saturating_sub(1)));
     set_stack_focus(d, true);
@@ -664,6 +773,39 @@ mod tests {
         crate::dialogs::cancel(&mut app);
         assert!(!app.session.in_interaction());
         assert!(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects.is_empty());
+    }
+
+    /// With Real-time Drawing off, typing in progress when the stack previews is kept as a step of
+    /// its own, not canceled with the gallery's earlier preview.
+    #[test]
+    fn stack_preview_keeps_typing_in_progress() {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("prefs.set", json!({"key": "realTimeDrawing", "value": false})).unwrap();
+        let id = app.run("text.create", json!({"x": 100, "y": 100, "text": "Hello", "size": 20})).unwrap()["id"].as_u64().unwrap();
+        let id = vectorcraft_doc::NodeId(id);
+        let v = vectorcraft_engine::ViewInfo::default();
+        app.session.select_tool("type", v).unwrap();
+        let b = app.session.active().unwrap().doc.bounds_of(&[id], false).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(k, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        app.session.tool_text(" world", v).unwrap();
+        let plain = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(id).unwrap().kind {
+            vectorcraft_doc::NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        };
+        assert_eq!(plain(&app), "Hello", "the typing waits");
+        let steps = app.session.active().unwrap().history.undo.len();
+        app.run("ui.effectGalleryDialog", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("stack".into(), json!([{ "effect": "artistic.cutout", "visible": true, "params": { "levels": 3 } }]));
+        frame(&mut app);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.interaction.as_ref().map(|it| it.label.as_str()), Some("Effect Gallery"));
+        assert_eq!(st.history.undo.len(), steps + 1, "the typing is a step of its own");
+        assert_eq!(plain(&app), "Hello world");
     }
 
     #[test]
@@ -737,5 +879,89 @@ mod tests {
             super::PREVIEW_H,
         );
         assert_ne!(soft, hard, "the preview follows the filter's settings");
+    }
+
+    /// Load Texture… in the Settings, with the file dialog shown off the UI thread: the image
+    /// goes into the values whose Settings asked (the filter browsed, or a stack row wherever it
+    /// moved) when the dialog answers, and an answer for a removed row, or for a filter no longer
+    /// browsed, is dropped.
+    #[test]
+    fn settings_load_texture_answers_into_the_gallery() {
+        use vectorcraft_effects::pixel::{TEXTURE_IMAGE, texture};
+        let dir = std::env::temp_dir().join(format!("vectorcraft-gallery-texture-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("texture.png");
+        image::RgbaImage::from_fn(6, 4, |x, y| image::Rgba([(x * 40) as u8, (y * 60) as u8, 90, 255])).save(&path).unwrap();
+        let picked = path.to_string_lossy().into_owned();
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut app.services);
+        app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+        app.run("ui.effectGalleryDialog", json!({})).unwrap();
+        let effect = "artistic.roughPastels";
+        let loaded = |params: &serde_json::Map<String, serde_json::Value>| {
+            params.get(TEXTURE_IMAGE).and_then(serde_json::Value::as_str).and_then(texture).map(|t| t.size()) == Some((6, 4))
+                && params.get("texture") == Some(&json!("loaded"))
+        };
+        // Asks from the Settings of `row` (None: the filter browsed), then `meanwhile` changes the
+        // gallery before the dialog answers.
+        let ask = |app: &mut VectorcraftApp, row: Option<usize>, meanwhile: &dyn Fn(&mut crate::state::Dialog)| {
+            let gallery = app.ui.dialog.as_mut().unwrap();
+            gallery.fields.remove("browseEffect");
+            gallery.fields.remove("browseParams");
+            gallery.fields.insert("selected".into(), json!(effect));
+            gallery.fields.remove(super::NEXT_ROW);
+            gallery.fields.insert("stack".into(), json!([{"effect": effect, "params": {}}, {"effect": effect, "params": {}}]));
+            let rows = super::stack_of(gallery);
+            super::write_stack(gallery, &rows);
+            gallery.fields.insert("stackFocus".into(), json!(row.is_some()));
+            gallery.fields.insert("stackSelected".into(), json!(row.unwrap_or(0)));
+            let key = super::settings_key(gallery, &super::stack_of(gallery));
+            let mut temp = crate::state::Dialog::new("effect", json!({"__effect": effect, super::SETTINGS: key, "texture": "canvas"}));
+            assert_eq!(super::load_texture(app, &mut temp), Err("cancelled".to_string()), "asked, not answered yet");
+            assert!(temp.fields.get(TEXTURE_IMAGE).is_none());
+            meanwhile(app.ui.dialog.as_mut().unwrap());
+            shown.answer(&[picked.as_str()]);
+            crate::picks::poll(app, &egui::Context::default());
+            let d = app.ui.dialog.as_ref().expect("the gallery stays open");
+            (super::browse_params(d), super::stack_of(d).into_iter().map(|e| loaded(&e.params)).collect::<Vec<_>>())
+        };
+        // The filter browsed gets it, and so does the stack row whose Settings asked.
+        let (browsed, rows) = ask(&mut app, None, &|_| {});
+        assert!(loaded(&browsed) && rows == [false, false], "{browsed:?}");
+        let (browsed, rows) = ask(&mut app, Some(1), &|_| {});
+        assert!(!loaded(&browsed) && rows == [false, true], "{rows:?}");
+        // The row that asked gets it after it moved, or after another row was selected.
+        let (_, rows) = ask(&mut app, Some(0), &|d| {
+            let mut stack = super::stack_of(d);
+            stack.swap(0, 1);
+            super::write_stack(d, &stack);
+        });
+        assert_eq!(rows, [false, true], "moved down");
+        let (_, rows) = ask(&mut app, Some(0), &|d| {
+            d.fields.insert("stackSelected".into(), json!(1));
+        });
+        assert_eq!(rows, [true, false], "another row selected");
+        // A row removed (and another of the same effect added in its place), or a filter no
+        // longer browsed: dropped.
+        let (browsed, rows) = ask(&mut app, Some(1), &|d| {
+            let mut stack = super::stack_of(d);
+            stack.pop();
+            super::write_stack(d, &stack);
+            super::add_selected(d, effect);
+        });
+        assert!(!loaded(&browsed) && rows == [false, false], "{rows:?}");
+        let (browsed, rows) = ask(&mut app, None, &|d| {
+            d.fields.insert("selected".into(), json!("artistic.cutout"));
+        });
+        assert!(!loaded(&browsed) && rows == [false, false], "{browsed:?}");
+        // The gallery that asked closed and another one opened.
+        let (browsed, rows) = ask(&mut app, Some(1), &|d| {
+            let next = d.fields.get(super::OPENED_FIELD).and_then(serde_json::Value::as_u64).unwrap() + 1;
+            d.fields.insert(super::OPENED_FIELD.into(), json!(next));
+        });
+        assert!(!loaded(&browsed) && rows == [false, false], "{rows:?}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

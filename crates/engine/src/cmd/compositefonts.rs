@@ -1,15 +1,18 @@
 //! Type › Composite Fonts…: the document's composite fonts ([`vectorcraft_doc::CompositeFont`]),
 //! which set each class of character (Kanji, Kana, Punctuation, Symbols, Roman, Numerals) in a
-//! font of its own. Type names a composite font as its family, and the font menus list them first.
-//! The font database holds the active document's composite fonts ([`sync`]); a file exported here
-//! carries them to another document.
+//! font of its own, and the characters of each custom character set in the set's font. Type names
+//! a composite font as its family, and the font menus list them first. The font database holds the
+//! active document's composite fonts ([`sync`]); a file exported here carries them to another
+//! document.
 //!
 //! Behavior reference (public documentation):
-//! <https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=347>.
+//! <https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=347>,
+//! custom character sets:
+//! <https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=348>.
 
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::text::{COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX};
-use vectorcraft_doc::{CharClass, CompositeFont, CompositePart, CompositeParts};
+use vectorcraft_doc::text::{COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX};
+use vectorcraft_doc::{CharClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet};
 use vectorcraft_text::FontDb;
 
 use super::fileio::{read_file_head, write_file};
@@ -26,6 +29,10 @@ const MAX_FILE_BYTES: usize = 4 << 20;
 /// The keys a part may give.
 const PART_KEYS: [&str; 7] = ["font", "style", "size", "baseline", "hScale", "vScale", "scaleAtCenter"];
 
+/// The keys a custom character set may give: its name and characters, then its part's values
+/// (a set is never scaled at the center).
+const SET_KEYS: [&str; 8] = ["name", "characters", "font", "style", "size", "baseline", "hScale", "vScale"];
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -33,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Composite Fonts",
             [],
             None,
-            "{} the active document's composite fonts → {fonts: [{name, parts: {kanji, kana, punctuation, symbols, roman, numerals: {font, style, size: % of the type size, baseline: % of the type size (positive raises), hScale: %, vScale: %, scaleAtCenter?: bool}}}]}",
+            "{} the active document's composite fonts → {fonts: [{name, parts: {kanji, kana, punctuation, symbols, roman, numerals: {font, style, size: % of the type size, baseline: % of the type size (positive raises), hScale: %, vScale: %, scaleAtCenter?: bool}}, custom?: [{name, characters, font, style, size, baseline, hScale, vScale}]}]}",
             has_doc,
             list
         ),
@@ -42,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Composite Fonts…",
             ["Type"],
             None,
-            "{fonts: [{name, parts: {kanji: {font, style?: \"Regular\", size?: % 10..400 = 100, baseline?: % -100..100 = 0}, kana?, punctuation?, symbols?, roman?, numerals?: {font, style?, size?, baseline?, hScale?, vScale?: % 10..400 = 100, scaleAtCenter?: bool = false}}}]} replace the active document's composite fonts (Type › Composite Fonts…'s OK), as one undo step, none when nothing changes. A composite font sets each class of character in its part's font: kanji (the base: ideographs, full-width letters and digits and anything no other class takes), kana (hiragana and katakana, both widths), punctuation (East Asian and full-width punctuation, quotes and dashes), symbols (arrows, math, shapes and other symbols), roman (half-width letters, their punctuation and spaces) and numerals (the digits 0 to 9); a part left out is the kanji part. size and baseline are percent of the type's size, hScale and vScale scale kana, roman and numerals only, and scaleAtCenter (kana only) scales them from the em box's center instead of the baseline. Names are trimmed, unique in any case, at most 255 characters, and may not name an installed font; a part's font may not be a composite font; at most 256. Type set in a composite font names it as its family (text.setStyle {font: name}), and the font menus list composite fonts first. A font taken out stays named by its type, which then shows as missing → {fonts}",
+            "{fonts: [{name, parts: {kanji: {font, style?: \"Regular\", size?: % 10..400 = 100, baseline?: % -100..100 = 0}, kana?, punctuation?, symbols?, roman?, numerals?: {font, style?, size?, baseline?, hScale?, vScale?: % 10..400 = 100, scaleAtCenter?: bool = false}}, custom?: [{name, characters?: string = \"\", font?, style?, size?, baseline?, hScale?, vScale?}]}]} replace the active document's composite fonts (Type › Composite Fonts…'s OK), as one undo step, none when nothing changes. A composite font sets each class of character in its part's font: kanji (the base: ideographs, full-width letters and digits and anything no other class takes), kana (hiragana and katakana, both widths), punctuation (East Asian and full-width punctuation, quotes and dashes), symbols (arrows, math, shapes and other symbols), roman (half-width letters, their punctuation and spaces) and numerals (the digits 0 to 9); a part left out is the kanji part. size and baseline are percent of the type's size, hScale and vScale scale kana, roman and numerals only, and scaleAtCenter (kana only) scales them from the em box's center instead of the baseline. custom lists custom character sets: each sets the characters it lists in its own font, style, size, baseline and scales (values left out are the kanji part's), ahead of their class; a character two sets list is set by the later one. A set's name is trimmed and unique in the font in any case; its characters are each listed once, at most 8192, none a control character or past U+FFFF; at most 64 sets. Names are trimmed, unique in any case, at most 255 characters, and may not name an installed font; a part's font may not be a composite font; at most 256. Type set in a composite font names it as its family (text.setStyle {font: name}), and the font menus list composite fonts first. A font taken out stays named by its type, which then shows as missing → {fonts}",
             has_doc,
             set
         ),
@@ -51,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Composite Fonts",
             [],
             None,
-            "{path?: .vccomposite file, names?: [name] (default: all), fonts?: [{name, parts}] (as type.compositeFonts.set takes them)} write the active document's composite fonts (all, or those named, any case), or the fonts given, to a file type.compositeFonts.import reads; without path the file's text comes back as data → {path, count} | {data, count}",
+            "{path?: .vccomposite file, names?: [name] (default: all), fonts?: [{name, parts}] (as type.compositeFonts.set takes them)} write the active document's composite fonts (all, or those named, any case), or the fonts given, to a file type.compositeFonts.import reads (a file over 4 MB is refused); without path the file's text comes back as data → {path, count} | {data, count}",
             has_doc,
             export
         ),
@@ -121,8 +128,8 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
 /// copy of the Kanji part, and keys or values a part can't take refused.
 fn parse_font(v: &Value, c: &str) -> Result<CompositeFont> {
     let o = v.as_object().ok_or_else(|| bad(c, "each font must be {name, parts}"))?;
-    if let Some(k) = o.keys().find(|k| !["name", "parts"].contains(&k.as_str())) {
-        return Err(bad(c, format!("unknown key `{k}`; a font takes name and parts")));
+    if let Some(k) = o.keys().find(|k| !["name", "parts", "custom"].contains(&k.as_str())) {
+        return Err(bad(c, format!("unknown key `{k}`; a font takes name, parts and custom")));
     }
     let raw = o.get("name").and_then(Value::as_str).ok_or_else(|| bad(c, "each font needs a name"))?;
     let name = CompositeFont::clean_name(raw)
@@ -140,7 +147,17 @@ fn parse_font(v: &Value, c: &str) -> Result<CompositeFont> {
         serde_json::from_value(p.clone()).map(Some).map_err(|e| bad(c, format!("`{name}`: {}: {e}", class.key())))
     };
     let kanji = part(CharClass::Kanji)?.ok_or_else(|| bad(c, format!("`{name}`: give the kanji part")))?;
-    let mut f = CompositeFont { name: name.clone(), parts: CompositeParts::all(kanji) };
+    let custom = match o.get("custom") {
+        None => Vec::new(),
+        Some(Value::Array(sets)) => {
+            if sets.len() > CUSTOM_SETS_MAX {
+                return Err(bad(c, format!("`{name}`: a composite font keeps at most {CUSTOM_SETS_MAX} character sets")));
+            }
+            sets.iter().map(|s| parse_set(s, &name, &kanji, c)).collect::<Result<Vec<_>>>()?
+        }
+        Some(_) => return Err(bad(c, format!("`{name}`: custom must be a list of character sets"))),
+    };
+    let mut f = CompositeFont { name: name.clone(), parts: CompositeParts::all(kanji), custom };
     for class in CharClass::ALL.into_iter().skip(1) {
         if let Some(p) = part(class)? {
             *f.parts.get_mut(class) = p;
@@ -148,6 +165,38 @@ fn parse_font(v: &Value, c: &str) -> Result<CompositeFont> {
     }
     f.check().map_err(|e| bad(c, format!("`{}`: {e}", f.name)))?;
     Ok(f)
+}
+
+/// Custom character set `v` of composite font `font` from command parameters or a file: its name
+/// trimmed, the part values it leaves out those of `kanji`, and keys or values it can't take
+/// refused. [`CompositeFont::check`] checks its characters and values.
+fn parse_set(v: &Value, font: &str, kanji: &CompositePart, c: &str) -> Result<CustomCharSet> {
+    let o = v.as_object().ok_or_else(|| bad(c, format!("`{font}`: each character set must be {{name, characters, font…}}")))?;
+    if let Some(k) = o.keys().find(|k| !SET_KEYS.contains(&k.as_str())) {
+        return Err(bad(c, format!("`{font}`: unknown key `{k}` in a character set")));
+    }
+    let raw = o.get("name").and_then(Value::as_str).ok_or_else(|| bad(c, format!("`{font}`: each character set needs a name")))?;
+    let name = CompositeFont::clean_name(raw)
+        .ok_or_else(|| bad(c, format!("`{raw}` can't name a character set (1 to {COMPOSITE_NAME_MAX} characters, no control characters)")))?;
+    let characters = match o.get("characters") {
+        None => String::new(),
+        Some(Value::String(s)) => s.clone(),
+        Some(_) => return Err(bad(c, format!("`{font}`: `{name}`: characters must be a string"))),
+    };
+    // Checked here as well as by `check`, so a huge list is refused before it is copied again.
+    if characters.chars().nth(CUSTOM_CHARS_MAX).is_some() {
+        return Err(bad(c, format!("`{font}`: `{name}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters")));
+    }
+    let mut part = serde_json::to_value(kanji).map_err(|e| bad(c, e.to_string()))?;
+    if let Some(p) = part.as_object_mut() {
+        for k in &SET_KEYS[2..] {
+            if let Some(given) = o.get(*k) {
+                p.insert(k.to_string(), given.clone());
+            }
+        }
+    }
+    let part: CompositePart = serde_json::from_value(part).map_err(|e| bad(c, format!("`{font}`: `{name}`: {e}")))?;
+    Ok(CustomCharSet { name, characters, part })
 }
 
 /// Error unless `fonts` can stand together in a document: names unique in any case, none naming
@@ -167,10 +216,10 @@ fn check_set(fonts: &[CompositeFont], c: &str) -> Result<()> {
         }
     }
     for f in fonts {
-        for class in CharClass::ALL {
-            let font = &f.parts.get(class).font;
+        let classes = CharClass::ALL.into_iter().map(|class| (class.key(), &f.parts.get(class).font));
+        for (part, font) in classes.chain(f.custom.iter().map(|s| (s.name.as_str(), &s.part.font))) {
             if names.contains(&font.to_lowercase()) || db.composite_font(font).is_some() {
-                return Err(bad(c, format!("`{}`: {} is set in `{font}`, a composite font", f.name, class.key())));
+                return Err(bad(c, format!("`{}`: {} is set in `{font}`, a composite font", f.name, part)));
             }
         }
     }
@@ -260,6 +309,9 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let mut file = Map::new();
     file.insert("compositeFonts".into(), json!(fonts));
     let text = serde_json::to_string_pretty(&file).map_err(|e| bad(C, e.to_string()))?;
+    if text.len() > MAX_FILE_BYTES {
+        return Err(bad(C, "the composite fonts make a file larger than 4 MB, which Import can't read; export fewer of them"));
+    }
     match path {
         Some(path) => {
             write_file(path, text.as_bytes())?;

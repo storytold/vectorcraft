@@ -38,6 +38,11 @@ fn page(drawn: &[char], sign_width: Option<f64>) -> Vec<u8> {
 /// graphics state, to set between glyphs or before them, with `objects` it refers to (the first
 /// is object `first_extra(1) + 4`).
 fn page_with(ops: impl Fn(&dyn Fn(char) -> String) -> String, extra: &str, objects: &[String], sign_width: Option<f64>) -> Vec<u8> {
+    page_in("Identity-H", ops, extra, objects, sign_width)
+}
+
+/// [`page_with`] with the Type 0 font's encoding `encoding` (`Identity-V`: vertical writing).
+fn page_in(encoding: &str, ops: impl Fn(&dyn Fn(char) -> String) -> String, extra: &str, objects: &[String], sign_width: Option<f64>) -> Vec<u8> {
     FontDb::global().add_font(matra_font().expect("the test font builds"));
     let program = matra_font().unwrap();
     let hex: String = program.iter().map(|b| format!("{b:02X}")).collect::<String>() + ">";
@@ -66,7 +71,7 @@ fn page_with(ops: impl Fn(&dyn Fn(char) -> String) -> String, extra: &str, objec
     ];
     let refs: Vec<&str> = objs.iter().chain(objects).map(String::as_str).collect();
     let resources = format!(
-        "/Font << /F1 << /Type /Font /Subtype /Type0 /BaseFont /MatratestSans-Regular /Encoding /Identity-H /DescendantFonts [{} 0 R] /ToUnicode {} 0 R >> >> {extra}",
+        "/Font << /F1 << /Type /Font /Subtype /Type0 /BaseFont /MatratestSans-Regular /Encoding /{encoding} /DescendantFonts [{} 0 R] /ToUnicode {} 0 R >> >> {extra}",
         n + 2,
         n + 3
     );
@@ -217,4 +222,23 @@ fn outlined_glyphs_under_a_varying_soft_mask_are_masked_one_by_one() {
     assert_eq!(texts(&report.document), [""; 0]);
     assert_eq!(outlines(&report.document), 3, "a path each");
     assert_eq!(masked_outlines(&report.document), 3, "each path has its own mask");
+}
+
+/// A vertical line (upright glyphs) with one glyph filled and stroked: its glyphs aren't kept as
+/// outlines, so it can't come in as the outlines of that glyph alone, losing the glyph filled
+/// only. Every glyph comes in filled (#8015).
+#[test]
+fn a_vertical_line_with_one_glyph_filled_and_stroked_keeps_every_glyph_filled() {
+    let bytes = page_in("Identity-V", |id| format!("1 0 0 rg 0 0 1 RG 2 w {} Tj 2 Tr {} Tj 0 Tr", id(KA), id(SIGN_I)), "", &[], None);
+    let report = open(&bytes);
+    let mut runs = vec![];
+    report.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            runs.extend(t.runs.iter().map(|r| (r.text.clone(), !r.style.fill.is_none(), !r.style.stroke.is_none())));
+        }
+    });
+    let filled: String = runs.iter().filter(|r| r.1).map(|r| r.0.as_str()).collect();
+    assert_eq!(filled, format!("{KA}{SIGN_I}"), "every glyph filled: {runs:?}");
+    let stroked: String = runs.iter().filter(|r| r.2).map(|r| r.0.as_str()).collect();
+    assert_eq!(stroked, SIGN_I.to_string(), "{runs:?}");
 }

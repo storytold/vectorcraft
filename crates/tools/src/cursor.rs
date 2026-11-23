@@ -94,6 +94,9 @@ pub enum Cursor {
     /// The Selection tool loaded with the text of area type or type on a path by a click on its out
     /// or in port (a click threads it into a path or a new frame, a drag draws the new frame).
     LoadedText,
+    /// The same loaded Selection tool over a closed path, area type or type on a path that a click
+    /// threads the text into: the loaded text with a link badge.
+    LoadedTextLink,
     /// The Shape Builder: a crosshair with a plus (merge mode)...
     ShapeBuilder,
     /// ...or, with Alt held, a minus (erase mode).
@@ -110,14 +113,16 @@ pub enum Cursor {
     /// The Pencil tool with Alt pressed after the drag starts and Alt key toggles to Smooth Tool off:
     /// releasing the mouse button with Alt still held closes the path. A drag started with Shift or
     /// Alt held draws an open straight line instead. Also while a freehand stroke is drawn back near
-    /// its start, where releasing the mouse button closes the path. A crosshair with a ring.
+    /// its start, or a stroke continuing a selected path near that path's other end, where
+    /// releasing the mouse button closes the path. A crosshair with a ring.
     PencilClose,
     /// The Pencil tool before a press that draws a straight line (Shift or Alt held). A crosshair with a
-    /// short straight line.
+    /// short level line.
     PencilStraight,
-    /// The Pencil tool before a press that draws a straight line (Shift or Alt held), over an end of
-    /// a selected open path: the line continues the path from that end. A crosshair with a short
-    /// straight line leaving a square end point.
+    /// The Pencil tool before a press over an end of a selected open path: the stroke, freehand or a
+    /// straight line, continues the path from that end. Also while a continuing stroke ends near an
+    /// open end of another path selected at the press, where releasing the mouse button connects the
+    /// two. A crosshair with a short line rising to the right.
     PencilContinue,
     /// The Paintbrush tool.
     Paintbrush,
@@ -137,7 +142,7 @@ pub enum Cursor {
     PathEraser,
     /// The Join tool.
     Join,
-    /// The Knife tool.
+    /// The Knife tool and the Trim at Crossings Tool.
     Knife,
     /// The Shaper tool.
     Shaper,
@@ -337,7 +342,6 @@ impl Cursor {
             | Cursor::Smooth
             | Cursor::PathEraser
             | Cursor::Join
-            | Cursor::Knife
             | Cursor::Shaper
             | Cursor::Measure
             | Cursor::ObjectsOnPath

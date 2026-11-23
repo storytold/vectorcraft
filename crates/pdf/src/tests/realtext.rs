@@ -304,6 +304,26 @@ fn real_text_lands_within_half_a_point_of_the_outlines() {
     }
 }
 
+/// Type on an open path that starts before the path writes only the characters drawn on the path,
+/// as text and as outlines.
+#[test]
+fn type_starting_before_its_open_path_writes_only_what_is_drawn() {
+    let mut line = BezPath::new();
+    line.move_to((20.0, 150.0));
+    line.line_to((380.0, 150.0));
+    let mut t = TextObject::point(Point::ZERO, "A C DEF", style(20.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t.xf = Affine::IDENTITY;
+    let laid = vectorcraft_text::layout(FontDb::global(), &t);
+    // Four glyphs, two of them spaces, and a little more before the start: "DEF" is drawn.
+    let lead: f64 = laid.glyphs.iter().take(4).map(|g| g.advance).sum::<f64>() + 1.0;
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: -lead / 360.0, end: None };
+    let d = doc(vec![t]);
+    assert_eq!(texts(&import_as(&pdf(&d, false).bytes, TextAs::Text)).concat(), "DEF");
+    let outlined = ink(&import_as(&pdf(&d, true).bytes, TextAs::Outlines));
+    assert!(outlined.x0 > 20.0 - 1e-6, "{outlined:?}");
+}
+
 /// Area type 200 points wide holding `text`, its paragraphs in lists `lists`, with an 18 pt
 /// hanging indent.
 fn listed(text: &str, lists: &[Option<ParaList>]) -> TextObject {

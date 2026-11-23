@@ -1,4 +1,5 @@
 use super::{Affine, Arc, BezPath, BlendMode, Color, FillRule, GradientStop, HashMap, Node, PathData, Point, XNode, roxmltree};
+use craft_svg::tree::usvg;
 use vectorcraft_geom::path::{Anchor, AnchorKind, SubPath};
 use vectorcraft_geom::shapes::KAPPA;
 
@@ -105,7 +106,7 @@ pub(super) fn only_clips(g: &usvg::Group) -> bool {
 }
 
 pub(super) fn blend(b: usvg::BlendMode) -> BlendMode {
-    use usvg::BlendMode as B;
+    use craft_svg::tree::usvg::BlendMode as B;
     match b {
         B::Normal => BlendMode::Normal,
         B::Multiply => BlendMode::Multiply,
@@ -127,7 +128,7 @@ pub(super) fn blend(b: usvg::BlendMode) -> BlendMode {
 }
 
 pub(super) fn bezpath(p: &usvg::tiny_skia_path::Path, m: Affine) -> BezPath {
-    use usvg::tiny_skia_path::PathSegment as S;
+    use craft_svg::tree::usvg::tiny_skia_path::PathSegment as S;
     let pt = |p: usvg::tiny_skia_path::Point| m * Point::new(p.x as f64, p.y as f64);
     let mut bp = BezPath::new();
     for s in p.segments() {
@@ -147,7 +148,7 @@ pub(super) fn bezpath(p: &usvg::tiny_skia_path::Path, m: Affine) -> BezPath {
 /// smooth anchors on the axes in the same order, each quarter a cubic with handles [`KAPPA`] of the
 /// radii long, the ellipse export writes as `<ellipse>`. `None` when `p` is not such an outline.
 pub(super) fn drawn_ellipse(p: &usvg::tiny_skia_path::Path) -> Option<PathData> {
-    use usvg::tiny_skia_path::PathSegment as S;
+    use craft_svg::tree::usvg::tiny_skia_path::PathSegment as S;
     let mut ends = vec![];
     let mut closed = false;
     for s in p.segments() {

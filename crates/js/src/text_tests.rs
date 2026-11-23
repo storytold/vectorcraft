@@ -435,6 +435,32 @@ fn a_call_keeps_its_operands_while_a_string_receiver_is_boxed() {
 }
 
 #[test]
+fn a_computed_key_stays_counted_while_its_getter_or_setter_runs() {
+    // `o` has an accessor named by a flat string of 131,073 units. `key`'s toString returns a new
+    // rope with the same units, so using `key` as a name makes a second flat copy, which must stay
+    // counted while an accessor makes a third. The heap has room for one more copy, not two.
+    let build = "var s = 'x'; for (var i = 0; i < 17; i++) s = s + s; function f(c) { return s + c; } \
+                 function copy() { var g = f('g'); g[0]; return 1; } var o = {}, name = f('k'); name[0]; \
+                 Object.defineProperty(o, name, { get: copy, set: copy }); \
+                 var key = { toString: function () { return f('k'); } }; 0";
+    let realm = || {
+        let mut realm = Realm::with_options(Options::default(), Limits::default());
+        assert_eq!(realm.run(build), Ok(JsValue::Number(0.0)));
+        let interp = realm.interp();
+        interp.collect_garbage();
+        let copy = crate::heap::string_bytes(131_073);
+        interp.limits.heap_bytes = interp.heap.bytes + copy + copy / 2;
+        interp.reset_gc_threshold();
+        realm
+    };
+    assert_eq!(realm().run("o[name]"), Ok(JsValue::Number(1.0)), "the accessor's own copy fits");
+    for read in ["o[key]", "o[key] = 1", "o[key]++", "Object.defineProperty({}, key, { get value() { return copy(); } })"] {
+        let result = realm().run(read);
+        assert!(matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap)), "{read}: {result:?}");
+    }
+}
+
+#[test]
 fn compiling_a_pattern_counts_against_the_heap() {
     let src = "var s = '[\\\\s\\\\S]a*'; for (var i = 0; i < 14; i++) s = s + s; new RegExp(s).source.length";
     let e = fail_with(Realm::with_options(Options::default(), Limits { heap_bytes: 2 << 20, ..Limits::default() }), src);

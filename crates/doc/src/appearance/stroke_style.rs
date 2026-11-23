@@ -68,6 +68,10 @@ pub struct CustomArrowhead {
     /// across it, positive to the right of the direction the head points. A head is 4 units wide,
     /// as the built-in heads are, and a unit is the head's weight.
     pub path: PathData,
+    /// Where the stroke ends under the head, in head units back from the tip, when the head says
+    /// so ([`Self::with_stop`]); `None`: halfway along its length ([`Self::stop`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -75,11 +79,17 @@ struct CustomArrowheadData {
     name: String,
     #[serde(default)]
     path: PathData,
+    #[serde(default)]
+    stop: Option<f64>,
 }
 
 impl From<CustomArrowheadData> for CustomArrowhead {
     fn from(d: CustomArrowheadData) -> Self {
-        CustomArrowhead::new(d.name, d.path)
+        let head = CustomArrowhead::new(d.name, d.path);
+        match d.stop {
+            Some(stop) => head.with_stop(stop),
+            None => head,
+        }
     }
 }
 
@@ -94,7 +104,17 @@ impl CustomArrowhead {
     /// than [`Self::MAX_UNITS`] from the tip is dropped: the head then draws nothing.
     pub fn new(name: String, path: PathData) -> Self {
         let path = if Self::fits(&path) { path } else { PathData::default() };
-        CustomArrowhead { name, path }
+        CustomArrowhead { name, path, stop: None }
+    }
+    /// The head with the stroke ending `stop` head units back from its tip (an arrowhead an
+    /// Illustrator file defines draws its line to a point of its own). A stop that is not finite,
+    /// is negative or is farther than [`Self::MAX_UNITS`] is left out: the stroke then ends
+    /// halfway along the head.
+    /// A head whose outline was dropped ([`Self::new`]) draws nothing and keeps no stop.
+    pub fn with_stop(mut self, stop: f64) -> Self {
+        let fits = !self.path.subpaths.is_empty() && stop.is_finite() && (0.0..=Self::MAX_UNITS).contains(&stop);
+        self.stop = fits.then_some(stop);
+        self
     }
     /// Whether outline `path` has at most [`Self::MAX_ANCHORS`] anchors and as many subpaths, with
     /// finite points within [`Self::MAX_UNITS`] only.
@@ -116,10 +136,10 @@ impl CustomArrowhead {
     pub fn half_width(&self) -> f64 {
         self.bounds().map_or(0.0, |b| b.y0.abs().max(b.y1.abs()))
     }
-    /// Where the stroke ends under the head, in head units back from the tip: halfway along the
-    /// head's length.
+    /// Where the stroke ends under the head, in head units back from the tip: its own stop
+    /// ([`Self::with_stop`]), else halfway along the head's length.
     pub fn stop(&self) -> f64 {
-        self.bounds().map_or(0.0, |b| b.x1.max(0.0) / 2.0)
+        self.stop.unwrap_or_else(|| self.bounds().map_or(0.0, |b| b.x1.max(0.0) / 2.0))
     }
 }
 
