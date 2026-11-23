@@ -10807,6 +10807,54 @@ breakText	Glyphs	Glyffer
 	Box	Ramme
 	Swatch	Farveprøve
 	Direction	Retning
+	Concept to Vector	Koncept til vektor
+	Concept to Vector…	Koncept til vektor…
+	Cancel Concept to Vector Job	Annuller jobbet Koncept til vektor
+	Cancel Concept to Vector	Annuller Koncept til vektor
+	Concept to Vector Providers	Udbydere til Koncept til vektor
+	Concept to Vector Results	Resultater fra Koncept til vektor
+	Generate Concept to Vector Styles	Lav stilarter til Koncept til vektor
+	Insert Concept to Vector Styles	Indsæt stilarter fra Koncept til vektor
+	Offline Image Trace styles, made on this computer	Offline-stilarter til billedsporing, lavet på denne computer
+	Offline styles do not use prompts	Offline-stilarter bruger ikke prompter
+	Styles	Stilarter
+	Ink Lines	Tuschstreger
+	Flat Color	Flad farve
+	Detailed Color	Detaljeret farve
+	Gray Tones	Gråtoner
+	Generate	Lav
+	Insert Selected	Indsæt valgte
+	The preview leaves out part of this style	Eksemplet udelader en del af denne stilart
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Koncept til vektor stoppede: dens tråd sluttede uden resultater (meld venligst denne fejl)
+@msg	`detail` must be a whole number from 0 to 100	`detail` skal være et heltal fra 0 til 100
+@msg	`job` must be a job number from conceptVector.generate	`job` skal være et jobnummer fra conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` skal angive 1 til 8 forskellige stilart-id’er for `{pid}` (se conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` skal angive forskellige stilart-id’er fra job {job}
+@msg	a provider with the id `{id}` is registered already	en udbyder med id’et `{id}` er allerede registreret
+@msg	job {job} has no results to insert: it was canceled	job {job} har ingen resultater at indsætte: det blev annulleret
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	job {job} gælder ikke længere: dets dokument, billede eller billedets placering er ændret, så lav det igen
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Job fra Koncept til vektor gemmes ikke, så en optaget indsættelse eller annullering afspilles ikke igen: lav dem igen
+@msg	missing `provider` (see conceptVector.providers)	`provider` mangler (se conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	intet job {job} i Koncept til vektor: det blev aldrig lavet eller er fjernet (se conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	ingen udbyder `{name}` til Koncept til vektor (se conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	markér ét billede eller et billedsporingsobjekt, der ikke er udvidet
+@msg	the image is locked or hidden	billedet er låst eller skjult
+@msg	the provider stopped with an internal error: {0}	udbyderen stoppede med en intern fejl: {0}
+@msg	the provider's results do not match the request or are malformed	udbyderens resultater passer ikke til anmodningen eller er ugyldige
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	resultaterne ville have flere end {0} ankerpunkter: sænk Detalje eller vælg færre stilarter
+@msg	there is no room for the results to the right of the image	der er ikke plads til resultaterne til højre for billedet
+@msg	the image is on a layer with a clipping mask, which would hide the results	billedet ligger på et lag med en beskæringsmaske, som ville skjule resultaterne
+@msg	the image is on a layer with an opacity mask, which would hide the results	billedet ligger på et lag med en opacitetsmaske, som ville skjule resultaterne
+@msg	the image is on a layer with effects of its own, which would apply to the results	billedet ligger på et lag med sine egne effekter, som også ville blive anvendt på resultaterne
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	billedet eller en gruppe omkring det har effekter, der flytter eller omformer det, så resultaterne ikke ville komme til at ligge ved siden af det
+@msg	the image is distorted, so the results would not go beside it	billedet er forvrænget, så resultaterne ikke ville komme til at ligge ved siden af det
+@msg	`output` must be "vector"	`output` skal være "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` tager ingen prompt og laver kun vektorgrafik
+@msg	`{pid}` takes no prompt	`{pid}` tager ingen prompt
+@msg	`{pid}` does not take an image	`{pid}` tager intet billede
+@msg	`{pid}` does not make vector art	`{pid}` laver ikke vektorgrafik
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	billedet ligger på et lag med sine egne udfyldninger eller streger, som også ville blive anvendt på resultaterne
+@msg	Making the Concept to Vector styles	Laver stilarter til Koncept til vektor
 	Banner Hems and Grommets…	Bannersømme og maljer…
 	Banner Hems and Grommets	Bannersømme og maljer
 	Hem	Søm

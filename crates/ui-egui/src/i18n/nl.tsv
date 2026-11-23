@@ -10633,6 +10633,53 @@ breakText	Glyphs	Glyphs
 	Box	Kader
 	Swatch	Staal
 	Direction	Richting
+	Concept to Vector	Concept naar vector
+	Concept to Vector…	Concept naar vector…
+	Cancel Concept to Vector Job	Taak Concept naar vector annuleren
+	Cancel Concept to Vector	Concept naar vector annuleren
+	Concept to Vector Providers	Aanbieders voor Concept naar vector
+	Concept to Vector Results	Resultaten van Concept naar vector
+	Generate Concept to Vector Styles	Stijlen voor Concept naar vector maken
+	Insert Concept to Vector Styles	Stijlen van Concept naar vector invoegen
+	Offline Image Trace styles, made on this computer	Offline stijlen voor afbeelding traceren, gemaakt op deze computer
+	Offline styles do not use prompts	Offline stijlen gebruiken geen prompts
+	Styles	Stijlen
+	Ink Lines	Inktlijnen
+	Flat Color	Egale kleur
+	Detailed Color	Gedetailleerde kleur
+	Gray Tones	Grijstinten
+	Generate	Maken
+	Insert Selected	Selectie invoegen
+	The preview leaves out part of this style	De voorvertoning laat een deel van deze stijl weg
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Concept naar vector is gestopt: de thread is beëindigd zonder resultaten (meld deze bug alsjeblieft)
+@msg	`detail` must be a whole number from 0 to 100	`detail` moet een geheel getal van 0 tot 100 zijn
+@msg	`job` must be a job number from conceptVector.generate	`job` moet een taaknummer van conceptVector.generate zijn
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` moet 1 tot 8 verschillende stijl-id's van `{pid}` bevatten (zie conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` moet verschillende stijl-id's van taak {job} bevatten
+@msg	a provider with the id `{id}` is registered already	er is al een aanbieder met de id `{id}` geregistreerd
+@msg	job {job} has no results to insert: it was canceled	taak {job} heeft geen resultaten om in te voegen: de taak is geannuleerd
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	taak {job} geldt niet meer: het document, de afbeelding of de plaatsing van de afbeelding is gewijzigd, dus maak de resultaten opnieuw
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Taken van Concept naar vector worden niet bewaard, dus een opgenomen invoeging of annulering wordt niet opnieuw afgespeeld: maak ze opnieuw
+@msg	missing `provider` (see conceptVector.providers)	`provider` ontbreekt (zie conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	geen taak {job} van Concept naar vector: de taak is nooit gemaakt of is verwijderd (zie conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	geen aanbieder `{name}` voor Concept naar vector (zie conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	selecteer één afbeelding of een niet-uitgebreid object van Afbeelding traceren
+@msg	the image is locked or hidden	de afbeelding is vergrendeld of verborgen
+@msg	the provider stopped with an internal error: {0}	de aanbieder is gestopt met een interne fout: {0}
+@msg	the provider's results do not match the request or are malformed	de resultaten van de aanbieder passen niet bij het verzoek of zijn ongeldig
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	de resultaten zouden meer dan {0} ankerpunten hebben: verlaag Detail of kies minder stijlen
+@msg	there is no room for the results to the right of the image	er is geen ruimte voor de resultaten rechts van de afbeelding
+@msg	the image is on a layer with a clipping mask, which would hide the results	de afbeelding staat op een laag met een knipmasker, dat de resultaten zou verbergen
+@msg	the image is on a layer with an opacity mask, which would hide the results	de afbeelding staat op een laag met een dekkingmasker, dat de resultaten zou verbergen
+@msg	the image is on a layer with effects of its own, which would apply to the results	de afbeelding staat op een laag met eigen effecten, die ook op de resultaten zouden worden toegepast
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	de afbeelding of een groep eromheen heeft effecten die haar verplaatsen of vervormen, zodat de resultaten er niet naast zouden komen
+@msg	`output` must be "vector"	`output` moet "vector" zijn
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` gebruikt geen prompt en maakt alleen vectorillustraties
+@msg	`{pid}` takes no prompt	`{pid}` gebruikt geen prompt
+@msg	`{pid}` does not take an image	`{pid}` gebruikt geen afbeelding
+@msg	`{pid}` does not make vector art	`{pid}` maakt geen vectorillustraties
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	de afbeelding staat op een laag met eigen vullingen of contouren, die ook op de resultaten zouden worden toegepast
+@msg	Making the Concept to Vector styles	De stijlen voor Concept naar vector worden gemaakt
 	Banner Hems and Grommets…	Bannerzomen en zeilringen…
 	Banner Hems and Grommets	Bannerzomen en zeilringen
 	Hem	Zoom

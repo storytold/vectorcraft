@@ -297,6 +297,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// The Concept to Vector panel's settings and its run off the UI thread ([`panels::concept_vector`]).
+    pub concept_runs: panels::concept_vector::ConceptRuns,
     /// The messages shown over the window ([`toasts`]).
     pub toasts: toasts::Shown,
     /// Data Recovery's timer and startup question ([`recovery`]).

@@ -56,6 +56,7 @@ pub fn long_operation_busy(app: &VectorcraftApp) -> bool {
         || !app.plugin_runs.running.is_empty()
         || !app.placing.pending.is_empty()
         || !app.trace_runs.running.is_empty()
+        || app.concept_runs.busy()
 }
 
 /// Does opening happen off the UI thread here? Not on wasm (no threads), in unit tests (they look

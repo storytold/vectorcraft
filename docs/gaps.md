@@ -938,9 +938,13 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G18 Generative AI features
 
+- **Done:** Concept to Vector in part: Window › Concept to Vector makes 1 to 5 styles of one selected image
+  side by side and inserts the ticked ones beside it as one undo step (`conceptVector.*`). Providers plug in
+  by id (`crates/engine/src/concept_vector.rs`), and a request to any provider makes up to 8 variations; the
+  only provider is built in and makes five offline Image Trace styles.
 - **Missing:** Text to Vector Graphic, Generative Recolor, Generative Shape Fill (#766), Generative Expand,
-  Concept to Vector, Prompt to Edit, Rewrite Text. Adobe's run on its cloud models; ours would be a pluggable
-  provider.
+  Concept to Vector's prompt-led generation and raster output, Prompt to Edit, Rewrite Text. In the reference
+  app these run on cloud models; ours would be a pluggable provider.
 - **Needs:** an owner decision on models and providers.
 - **Estimate:** 30–60 h after that decision.
 

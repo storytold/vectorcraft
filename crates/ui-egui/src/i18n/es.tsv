@@ -8879,6 +8879,54 @@ breakText	Glyphs	Glifos
 	Margin	Margen
 	Box	Caja
 	Swatch	Muestra
+	Concept to Vector	Concepto a vector
+	Concept to Vector…	Concepto a vector…
+	Cancel Concept to Vector Job	Cancelar tarea de Concepto a vector
+	Cancel Concept to Vector	Cancelar Concepto a vector
+	Concept to Vector Providers	Proveedores de Concepto a vector
+	Concept to Vector Results	Resultados de Concepto a vector
+	Generate Concept to Vector Styles	Generar estilos de Concepto a vector
+	Insert Concept to Vector Styles	Insertar estilos de Concepto a vector
+	Offline Image Trace styles, made on this computer	Estilos de calco de imagen sin conexión, creados en este equipo
+	Offline styles do not use prompts	Los estilos sin conexión no usan indicaciones
+	Styles	Estilos
+	Ink Lines	Líneas de tinta
+	Flat Color	Color plano
+	Detailed Color	Color detallado
+	Gray Tones	Tonos de gris
+	Generate	Generar
+	Insert Selected	Insertar selección
+	The preview leaves out part of this style	La vista previa omite parte de este estilo
+@msg	Concept to Vector stopped: its thread ended without results (please report this bug)	Concepto a vector se detuvo: su hilo terminó sin resultados (informe de este error)
+@msg	`detail` must be a whole number from 0 to 100	`detail` debe ser un número entero entre 0 y 100
+@msg	`job` must be a job number from conceptVector.generate	`job` debe ser un número de tarea de conceptVector.generate
+@msg	`styles` must list 1 to 8 different style ids of `{pid}` (see conceptVector.providers)	`styles` debe incluir de 1 a 8 identificadores de estilo distintos de `{pid}` (consulte conceptVector.providers)
+@msg	`variations` must list different style ids of job {job}	`variations` debe incluir identificadores de estilo distintos de la tarea {job}
+@msg	a provider with the id `{id}` is registered already	Ya hay registrado un proveedor con el identificador `{id}`
+@msg	job {job} has no results to insert: it was canceled	La tarea {job} no tiene resultados que insertar: se canceló
+@msg	job {job} no longer applies: its document, image or image placement changed, so generate again	La tarea {job} ya no es válida: cambió su documento, su imagen o la colocación de la imagen; vuelva a generarla
+@msg	Concept to Vector jobs are not saved, so a recorded insert or cancel does not play again: generate again	Las tareas de Concepto a vector no se guardan, así que una inserción o una cancelación grabadas no se vuelven a reproducir; vuelva a generarlas
+@msg	missing `provider` (see conceptVector.providers)	Falta `provider` (consulte conceptVector.providers)
+@msg	no Concept to Vector job {job}: it was never made, or was dropped (see conceptVector.results)	No hay ninguna tarea de Concepto a vector {job}: nunca se creó o se descartó (consulte conceptVector.results)
+@msg	no Concept to Vector provider `{name}` (see conceptVector.providers)	No hay ningún proveedor de Concepto a vector `{name}` (consulte conceptVector.providers)
+@msg	select one image or an unexpanded Image Trace object	Seleccione una imagen o un objeto de calco de imagen sin expandir
+@msg	the image is locked or hidden	La imagen está bloqueada u oculta
+@msg	the provider stopped with an internal error: {0}	El proveedor se detuvo con un error interno: {0}
+@msg	the provider's results do not match the request or are malformed	Los resultados del proveedor no coinciden con la solicitud o están mal formados
+@msg	the results would have more than {0} anchor points: lower Detail or choose fewer styles	Los resultados tendrían más de {0} puntos de ancla: reduzca Detalle o elija menos estilos
+@msg	there is no room for the results to the right of the image	No hay espacio para los resultados a la derecha de la imagen
+@msg	the image is on a layer with a clipping mask, which would hide the results	La imagen está en una capa con una máscara de recorte, que ocultaría los resultados
+@msg	the image is on a layer with an opacity mask, which would hide the results	La imagen está en una capa con una máscara de opacidad, que ocultaría los resultados
+@msg	the image is on a layer with effects of its own, which would apply to the results	La imagen está en una capa con efectos propios, que se aplicarían a los resultados
+@msg	the image or a group around it has effects that move or reshape it, so the results would not go beside it	La imagen o un grupo que la contiene tiene efectos que la mueven o la deforman, por lo que los resultados no quedarían a su lado
+@msg	the image is distorted, so the results would not go beside it	La imagen está distorsionada, por lo que los resultados no quedarían a su lado
+@msg	`output` must be "vector"	`output` debe ser "vector"
+@msg	`{pid}` takes no prompt and makes vector art only	`{pid}` no admite indicaciones y solo crea ilustraciones vectoriales
+@msg	`{pid}` takes no prompt	`{pid}` no admite indicaciones
+@msg	`{pid}` does not take an image	`{pid}` no admite imágenes
+@msg	`{pid}` does not make vector art	`{pid}` no crea ilustraciones vectoriales
+@msg	the image is on a layer with fills or strokes of its own, which would apply to the results	La imagen está en una capa con rellenos o trazos propios, que se aplicarían a los resultados
+@msg	Making the Concept to Vector styles	Creando los estilos de Concepto a vector
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' y 'arguments' no se pueden usar en funciones en modo estricto
 @msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Se llamó a Boolean.prototype.{name} con un valor que no es un Boolean
 @msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	Las imágenes CMYK cuyas muestras no se pudieron leer en CMYK se importaron en RGB
