@@ -1561,7 +1561,7 @@ impl<'p> Builder<'p> {
     /// `key` (drawn with `look`) go into: when the file carries the font's program, no installed
     /// face has its PostScript name, and its family and style aren't available as named. Decided
     /// once per font.
-    fn file_font(&mut self, key: u128, o: &craft_pdf::interpret::font::OutlineGlyph, look: &Look) -> Option<usize> {
+    fn file_font(&mut self, key: u128, o: &craft::pdf::interpret::font::OutlineGlyph, look: &Look) -> Option<usize> {
         if let Some(f) = self.file_fonts.get(&key) {
             return *f;
         }
