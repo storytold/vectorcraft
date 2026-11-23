@@ -18,18 +18,22 @@
 // `set_presets`, `set_message`, `set_sheet(Option<_>)`, `set_field`, `sheet_index`); export-w7 writes them.
 use std::sync::{Arc, LazyLock, mpsc};
 
-use craft::behavior::{EditEvent, EditEvents, IconId, Mixed};
+use craft::behavior::{ColumnWidth, EditEvent, EditEvents, IconId, Mixed};
 use craft::print::ui::{HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
 use craft::ui::buttons::ToggleButton;
-use craft::ui::contract::{Bind, Props as _, Show as _};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, StackDialog as _};
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout::empty_cell;
+use craft::ui::layout_components::Grid;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
 use craft::ui::patterns::presets::{NamedPresetEvent, PresetError, PresetRow};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::shell::WindowDialogs;
-use craft::ui::text::{LinkMode, LinkedFields};
+use craft::ui::text::{LinkMode, LinkedFields, NumberField};
 use serde_json::{Map, Value, json};
 use vectorcraft_color::cms::Intent;
 use vectorcraft_engine::cmd::printpresets::DEFAULT_PRESET;
@@ -827,43 +831,51 @@ fn ink_table(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut craft::ui::pa
         _ => Vec::new(),
     };
     if fields.text("output.mode") != Some(OutputMode::Separations.id()) || inks.is_empty() {
-        return ui.label(tl!("Separations list the document's inks here: one page per ink that prints."));
+        return Text::new(tl!("Separations list the document's inks here: one page per ink that prints.")).shade(Shade::Muted).show(ui);
     }
     let all_spots = fields.bool("output.spotsToProcess") == Some(true);
-    ui.vertical(|ui| {
-        // PLAN: port to the framework's `Table` with `ToggleCell` check and icon faces (spot/process glyph assets) once its row API is in the tree.
-        egui::Grid::new("print-inks").num_columns(5).show(ui, |ui| {
-            for h in [tl!("Print"), "", tl!("Ink"), tl!("Frequency"), tl!("Angle")] {
-                ui.label(h);
+    ui.scope(|ui| {
+        Grid::new(&[ColumnWidth::Content; 5]).show(ui, |ui, _| {
+            for head in [tl!("Print"), "", tl!("Ink"), tl!("Frequency"), tl!("Angle")] {
+                if head.is_empty() {
+                    empty_cell(ui);
+                } else {
+                    Text::new(head).shade(Shade::Muted).show(ui);
+                }
             }
-            ui.end_row();
             for ink in &inks {
                 let name = ink["name"].as_str().unwrap_or_default();
                 let spot = ink["spot"] == true;
                 // A spot ink printing as process has no plate: its plate options wait for it to print as a spot ink again.
                 let process = ink["convertToProcess"] == true;
-                let mut on = ink["print"].as_bool().unwrap_or(true);
-                if ui.add_enabled(!process, egui::Checkbox::without_text(&mut on)).changed() {
-                    set_ink(fields, name, "print", json!(on));
+                // The row's label names the box, which the Ink column beside it shows.
+                let on = ink["print"].as_bool().unwrap_or(true);
+                let mut print = on;
+                Checkbox::new(Bind::bound(&mut print)).label(name.to_string()).enabled(!process).id_salt(("print-ink", name)).show(ui);
+                if print != on {
+                    set_ink(fields, name, "print", json!(print));
                 }
-                if spot {
-                    if let Some(on) = ink_kind_button(ui, name, process, !all_spots) {
-                        set_ink(fields, name, "convertToProcess", json!(on));
+                match spot.then(|| ink_kind_button(ui, name, process, !all_spots)) {
+                    Some(Some(on)) => set_ink(fields, name, "convertToProcess", json!(on)),
+                    Some(None) => {}
+                    None => empty_cell(ui),
+                }
+                Text::new(if spot { format!("{name} ({})", tl!("spot")) } else { name.to_string() }).show(ui);
+                for (k, heading, unit) in [("frequency", tl!("Frequency"), tl!("lpi")), ("angle", tl!("Angle"), "°")] {
+                    let v = ink[k].as_f64().unwrap_or(0.0);
+                    let typed = NumberField::new(format!("{heading} {name}"), Bind::given(Some(v)))
+                        .unit(unit)
+                        .fixed_decimals(2)
+                        .enabled(!process)
+                        .id_salt(("print-ink", name, k))
+                        .show(ui);
+                    if let Some(Some(x)) = typed.edit.value() {
+                        set_ink(fields, name, k, json!(x));
                     }
-                } else {
-                    ui.label("");
                 }
-                ui.label(if spot { format!("{name} ({})", tl!("spot")) } else { name.to_string() });
-                for (k, suffix) in [("frequency", " lpi"), ("angle", "°")] {
-                    let mut v = ink[k].as_f64().unwrap_or(0.0);
-                    if ui.add_enabled(!process, egui::DragValue::new(&mut v).suffix(suffix).fixed_decimals(2)).changed() {
-                        set_ink(fields, name, k, json!(v));
-                    }
-                }
-                ui.end_row();
             }
         });
-        ui.label(tl!("Frequencies and angles are the output device's to apply."));
+        Text::new(tl!("Frequencies and angles are the output device's to apply.")).shade(Shade::Muted).show(ui);
     })
     .response
 }

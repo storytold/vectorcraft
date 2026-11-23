@@ -89,11 +89,21 @@ pub(super) fn confirm(app: &mut VectorcraftApp) {
     pump(app);
 }
 
-/// One control request, answered as the control channel answers it.
+/// One control request, answered as the control channel answers it: at once, or, for synthetic input (`ui.text`,
+/// `ui.key`), once the frames after it have processed the input.
 pub(super) fn call_raw(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
     let ctx = ctx(app);
     let (req, _reply) = craft::automation::ControlRequest::new(method, params);
-    let craft::automation::Reply::Done(reply) = crate::control::handle(app, &ctx, &req) else { panic!("{method} is answered at once") };
+    let reply = match crate::control::handle(app, &ctx, &req) {
+        craft::automation::Reply::Done(reply) => reply,
+        craft::automation::Reply::AfterInput => {
+            for _ in 0..2 {
+                crate::testing::app_frame(app, &ctx, Default::default());
+            }
+            json!({"ok": true, "result": null})
+        }
+        _ => panic!("{method} is answered at once or after its input"),
+    };
     pump(app);
     reply
 }
