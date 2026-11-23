@@ -271,7 +271,8 @@ fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     for (k, double) in [false, true].into_iter().enumerate() {
         app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
         nodes = settled(&mut app, &ctx, k as f64 * 10.0, 900.0);
-        let rail = named_rect(&nodes, "Tools");
+        // The rail itself, not its dock grip, which is named for the pane too.
+        let rail = nodes.iter().find(|n| n.role() == Role::Toolbar && n.label() == Some("Tools")).and_then(bounds).expect("the rail is drawn");
         for label in &footer[..if double { 6 } else { 4 }] {
             let r = named_rect(&nodes, label);
             assert!(rail.expand(0.5).contains_rect(r), "double {double}: {label} {r:?} in {rail:?}");
