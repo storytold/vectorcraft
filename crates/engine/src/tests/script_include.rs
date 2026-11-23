@@ -521,12 +521,15 @@ fn script_included_error_has_local_file_and_line() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// `$.stack`'s text with each frame's file cut to its name: `function@name:line` a line.
+/// `$.stack`'s text with each frame's file cut to its name. The first line is the run's name
+/// (`[script name]`) and is kept as written; each line after it is `function@name:line`.
 pub(crate) fn short_stack(stack: &Value) -> String {
     let stack = stack.as_str().unwrap_or_else(|| panic!("a stack: {stack}"));
     stack
         .lines()
-        .map(|frame| match (frame.split_once('@'), frame.rsplit_once(':')) {
+        .enumerate()
+        .map(|(i, frame)| match (frame.split_once('@'), frame.rsplit_once(':')) {
+            _ if i == 0 => format!("{frame}\n"),
             (Some((name, _)), Some((place, line))) => {
                 let file = place.split_once('@').map_or(place, |(_, f)| f).rsplit(['/', '\\']).next().unwrap_or_default();
                 format!("{name}@{file}:{line}\n")
