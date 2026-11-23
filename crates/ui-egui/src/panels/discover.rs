@@ -8,7 +8,6 @@ use craft::ui::display::{Kbd, Shade, Text};
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
 use craft::ui::menu::search::{HelpEntry, SearchIndex, SearchWords, Synonyms, rank};
-use craft::ui::runtime::commands;
 use craft::ui::runtime::focus::{self, FocusTarget};
 use craft::ui::style::TypeRole;
 use craft::ui::text::TextField;
@@ -53,10 +52,7 @@ pub struct View {
 
 /// The text of a tool's shortcut in the window's keymap, empty when it has none.
 fn tool_shortcut(app: &VectorcraftApp, id: &str) -> String {
-    app.ui_ctx
-        .as_ref()
-        .and_then(|ctx| commands::chord(ctx, &CommandRef::new(format!("tool:{id}"))))
-        .map_or_else(String::new, |chord| chord.display(crate::keymap::platform()))
+    menus::shortcut_of(app, &format!("tool:{id}")).map_or_else(String::new, |chord| chord.display(crate::keymap::platform()))
 }
 
 /// Updates the retained results' labels, menu paths and shortcuts after the menu state changes (a

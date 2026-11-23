@@ -190,7 +190,17 @@ pub fn plugin_revision() -> u64 {
 /// the window's keymap, under the user's set in use (Edit → Keyboard Shortcuts). `None` before the
 /// window's first frame.
 pub fn shortcut_of(app: &VectorcraftApp, key: &str) -> Option<Chord> {
-    commands::chord(app.ui_ctx.as_ref()?, &crate::keymap::command_of(key))
+    let ctx = app.ui_ctx.as_ref()?;
+    let command = crate::keymap::command_of(key);
+    let window = commands::keymap(ctx)?;
+    let (now, built) = (&*app.shortcut_overrides, window.overrides());
+    if now.len() == built.len() && now.iter().all(|(k, texts)| built.get(k) == Some(texts)) {
+        return commands::chord(ctx, &command);
+    }
+    // The window's keymap takes a change of the set (`shortcuts.set`) from its next frame; the set is read until then.
+    let mut keymap = (*window).clone();
+    keymap.set_overrides(now.clone());
+    keymap.bindings(&command).into_iter().find(|b| b.trigger.press == craft::keymap::PressKind::Single).map(|b| b.trigger.chord)
 }
 
 /// Is a command currently enabled?
