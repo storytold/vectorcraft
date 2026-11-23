@@ -300,6 +300,9 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         ("stylize.outerGlow", json!({"color": {"model": "gray", "k": 0.5}})),
         ("stylize.innerGlow", json!({"color": {"model": "cmyk", "c": 0, "m": 1, "y": 0, "k": 0}})),
         ("stylize.innerGlow", json!({"color": {"model": "lab", "l": 100, "a": -128, "b": 127}})),
+        // Curves' `points` is also taken as [[x, y], …], and a Transform's whole numbers as such.
+        ("adjust.curves", json!({"points": [[0, 255], [255, 0]]})),
+        ("distort.transform", json!({"copies": 2, "reference": 0.0})),
     ] {
         assert_eq!(check(&e(id, params.clone()), false), Ok(()), "{id} {params}");
     }
@@ -343,6 +346,10 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         ("stylize.outerGlow", json!({"color": {"model": "rgb", "r": 2.0, "g": 0.0, "b": 0.0}}), "color"),
         ("stylize.innerGlow", json!({"color": {"model": "gray", "k": -0.5}}), "color"),
         ("stylize.innerGlow", json!({"color": {"model": "lab", "l": 101, "a": 0, "b": 0}}), "color"),
+        ("adjust.curves", json!({"points": [[0, 255], [255]]}), "points"),
+        ("adjust.curves", json!({"points": ["0,0", "255,255"]}), "points"),
+        ("distort.transform", json!({"copies": 1.5}), "copies"),
+        ("distort.transform", json!({"reference": 4.5}), "reference"),
         ("adjust.levels", json!({"channel": "cyan"}), "channel"),
         ("blur.radial", json!({"centerX": 1.5}), "centerX"),
         ("blur.gaussian", json!({"linear": 1}), "linear"),
