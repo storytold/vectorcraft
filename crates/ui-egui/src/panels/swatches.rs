@@ -651,6 +651,11 @@ static CMYK_MODE: ModelGlyph = ModelGlyph { cells: &CMYK_INKS, bars: false };
 static LAB_MODE: ModelGlyph = ModelGlyph { cells: &LAB_AXES, bars: false };
 static RGB_MODE: ModelGlyph = ModelGlyph { cells: &RGB_BARS, bars: true };
 
+/// The CMYK glyph: four ink quarters, the mark of a colour that prints as process inks.
+pub(crate) fn cmyk_glyph() -> IconSpec<'static> {
+    IconSpec::glyph(&CMYK_MODE)
+}
+
 /// A swatch's kind in words, for list tooltips ("Global Process Color, CMYK").
 pub(crate) fn describe(paint: &Paint, global: bool, spot: bool) -> String {
     match paint {
@@ -688,7 +693,7 @@ pub(super) fn kind_icons(paint: &Paint, global: bool, spot: bool) -> Vec<(IconSp
                 ("dc-swatch-process", tl!("Process Color"))
             };
             let model = match color {
-                Color::Cmyk { .. } => IconSpec::glyph(&CMYK_MODE),
+                Color::Cmyk { .. } => cmyk_glyph(),
                 Color::Lab { .. } => IconSpec::glyph(&LAB_MODE),
                 Color::Rgb { .. } => IconSpec::glyph(&RGB_MODE),
                 Color::Gray { .. } => IconSpec::swatch(Srgba::rgb(0.5, 0.5, 0.5)),

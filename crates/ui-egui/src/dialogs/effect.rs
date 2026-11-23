@@ -261,9 +261,16 @@ fn launch(app: &mut VectorcraftApp, mut open: Open, baseline: Map<String, Value>
     });
     let options = HeldOptions { cancel: Some(cancel), ..Default::default() };
     let dialog_id = open_held_with(app, dialog, move |app, result| finish(app, &ctx, result), options).ok_or("no window")?;
+    // Free Distort's Reset puts the corners back on the box, wherever they were when it opened.
+    let reset_to = (id == super::free_distort::FREE_DISTORT)
+        .then(|| form::fields_of(&rows, &Map::from_iter([("corners".to_string(), json!(super::free_distort::IDENTITY))])));
     open.id = dialog_id;
     open.asking = false;
     app.effect_dialogs.effect = Some(open);
+        let dialog = match &reset_to {
+            Some(target) => dialog.reset_to(target.clone()),
+            None => dialog,
+        };
     Ok(Value::Null)
 }
 

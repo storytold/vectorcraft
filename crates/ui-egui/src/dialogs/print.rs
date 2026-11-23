@@ -18,13 +18,15 @@
 // `set_presets`, `set_message`, `set_sheet(Option<_>)`, `set_field`, `sheet_index`); export-w7 writes them.
 use std::sync::{Arc, LazyLock, mpsc};
 
-use craft::behavior::{EditEvent, EditEvents, Mixed};
+use craft::behavior::{EditEvent, EditEvents, IconId, Mixed};
 use craft::print::ui::{HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
-use craft::ui::contract::{Bind, Show as _};
+use craft::ui::buttons::ToggleButton;
+use craft::ui::contract::{Bind, Props as _, Show as _};
 use craft::ui::dialog::{DialogId, StackDialog as _};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamKind};
 use craft::ui::patterns::presets::{NamedPresetEvent, PresetError, PresetRow};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
+use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use craft::ui::shell::WindowDialogs;
 use craft::ui::text::{LinkMode, LinkedFields};
@@ -52,7 +54,7 @@ static KEYS: LazyLock<Vec<Param>> = LazyLock::new(|| sections(&Lists::default())
 const PLACED: &str = "tileOrigin.placed";
 
 /// The fields that aren't print settings.
-const NOT_SETTINGS: [&str; 2] = ["name", "directPdf"];
+const NOT_SETTINGS: [&str; 1] = ["directPdf"];
 
 /// The Printer list's entries besides the system's printers; `PDF_FILE` is the destination that
 /// saves the job as a PDF.
@@ -111,6 +113,8 @@ type ArtKey = (u64, u64, PrintLayers, [u64; 4], u32);
 /// What the pump took from the dialog this pass.
 struct Drained {
     refresh: bool,
+    /// The preset editor's name.
+    name: String,
     setup: Option<String>,
     moves: EditEvents<egui::Pos2>,
     events: Vec<NamedPresetEvent<String>>,
@@ -143,7 +147,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     // The saved preset these settings are, if any (else [Default], shown as [Custom] if they differ).
     let preset = app.session.prefs.print_presets.iter().find(|p| p.settings == saved).map_or(DEFAULT_PRESET, |p| p.name.as_str()).to_string();
     let fields = fields_of(&saved)?;
-    start(app, PrintMode::Print, fields, preset, String::new())
+    start(app, PrintMode::Print, fields, preset, Default::default())
 }
 
 /// Open the preset editor on the saved preset `name`, or on a new preset starting from `preset`
@@ -159,14 +163,20 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
         None => (s("preset").unwrap_or(DEFAULT_PRESET).to_string(), app.session.new_print_preset_name(), String::new()),
     };
     let set = app.session.print_preset_settings(&base).ok_or_else(|| format!("no print preset named `{base}`"))?;
-    let mut fields = fields_of(&set)?;
-    fields.set("name", name);
-    start(app, PrintMode::PresetEditor, fields, base, editing)
+    start(app, PrintMode::PresetEditor, fields_of(&set)?, base, (editing, name))
 }
 
-/// Host the dialog over the settings `fields`.
-fn start(app: &mut VectorcraftApp, mode: PrintMode, fields: DialogFields, preset: String, editing: String) -> Result<Value, String> {
+/// Host the dialog over the settings `fields`; the preset editor edits the saved preset `editing` (empty: a new one)
+/// and starts on the name `name`.
+fn start(
+    app: &mut VectorcraftApp,
+    mode: PrintMode,
+    fields: DialogFields,
+    preset: String,
+    (editing, name): (String, String),
+) -> Result<Value, String> {
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
+    let ctx = app.ui_ctx.clone().ok_or("no window to show the dialog in")?;
     let (printers, service) = destinations(app);
     let mut state = State::default();
     state.settings.printer =
@@ -182,13 +192,17 @@ fn start(app: &mut VectorcraftApp, mode: PrintMode, fields: DialogFields, preset
     };
     let taken: Vec<String> = taken_names(app);
     let named = editing.clone();
-    let hosted = HostedPrint::new(state, fields, sections(&Lists::of(app)))
+    let mut hosted = HostedPrint::new(state, fields, sections(&Lists::of(app)))
         .mode(mode)
         .layout(PrintLayout::Sections)
         .header(header)
         .json_form(|fields, out| out.extend(nested(form::json_of(&KEYS, fields))))
         .check_name(move |name: &str| refusal(&taken, &named, name).map(|_| PresetError::NameTaken))
         .held_ok();
+    // The name row is the dialog's own.
+    if mode == PrintMode::PresetEditor {
+        hosted.set_json_field(&ctx, "name", json!(name))?;
+    }
     let id = dialogs.with(|h| h.open(hosted));
     app.print_dialog.open = Some(Open { id, mode, preset, editing, art: None, preview: None });
     Ok(Value::Null)
@@ -303,6 +317,7 @@ fn on<R>(dialogs: &WindowDialogs, f: impl FnOnce(&mut HostedPrint) -> R) -> Opti
 fn serve(app: &mut VectorcraftApp, dialogs: &WindowDialogs, open: &mut Open) -> bool {
     let Some(mut d) = on(dialogs, |p| Drained {
         refresh: p.take_refresh(),
+        name: p.preset_name().to_string(),
         // Print Settings… opens the driver's dialog of the printer chosen.
         setup: if p.take_setup() { p.json_fields().and_then(|f| f["printer"].as_str().map(str::to_string)) } else { None },
         moves: p.take_moves(),
@@ -380,7 +395,7 @@ fn serve(app: &mut VectorcraftApp, dialogs: &WindowDialogs, open: &mut Open) -> 
         on(dialogs, |p| p.set_presets(rows, held, vec![DEFAULT_PRESET.to_string()]));
     }
     if let Some(answer) = d.ok {
-        let result = accept(app, open, &answer);
+        let result = accept(app, open, &answer, &d.name);
         on(dialogs, |p| p.answer_ok(result.map_err(Into::into)));
     }
     true
@@ -436,11 +451,11 @@ fn drags(moves: EditEvents<egui::Pos2>) -> Vec<(f64, f64)> {
 }
 
 /// Print, or Done: keep the settings with the document (one undo step when they changed), then print them; settings
-/// that can't print are refused, and the dialog stays open. The preset editor saves the preset instead.
-fn accept(app: &mut VectorcraftApp, open: &Open, answer: &PrintAnswer) -> Result<(), String> {
+/// that can't print are refused, and the dialog stays open. The preset editor saves the preset under `name` instead.
+fn accept(app: &mut VectorcraftApp, open: &Open, answer: &PrintAnswer, name: &str) -> Result<(), String> {
     let settings = settings(&answer.fields);
     if open.mode == PrintMode::PresetEditor {
-        return save_preset(app, open, &answer.fields, settings);
+        return save_preset(app, open, name, settings);
     }
     // Laid out first, so a bad range or overlap is refused before anything is kept.
     app.session.execute("print.preview", &json!({ "settings": settings })).map_err(|e| e.to_string())?;
@@ -458,9 +473,8 @@ fn accept(app: &mut VectorcraftApp, open: &Open, answer: &PrintAnswer) -> Result
 }
 
 /// Save Preset (the preset editor's OK): `print.presets.save`, then back to Edit → Print Presets on it.
-fn save_preset(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields, settings: Value) -> Result<(), String> {
-    let name = fields.text("name").unwrap_or_default().to_string();
-    if let Some(why) = refusal(&taken_names(app), &open.editing, &name) {
+fn save_preset(app: &mut VectorcraftApp, open: &Open, name: &str, settings: Value) -> Result<(), String> {
+    if let Some(why) = refusal(&taken_names(app), &open.editing, name) {
         return Err(why);
     }
     let p = if open.editing.is_empty() {
@@ -819,7 +833,7 @@ fn ink_table(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut craft::ui::pa
     ui.vertical(|ui| {
         // PLAN: port to the framework's `Table` with `ToggleCell` check and icon faces (spot/process glyph assets) once its row API is in the tree.
         egui::Grid::new("print-inks").num_columns(5).show(ui, |ui| {
-            for h in [tl!("Print"), tl!("Process"), tl!("Ink"), tl!("Frequency"), tl!("Angle")] {
+            for h in [tl!("Print"), "", tl!("Ink"), tl!("Frequency"), tl!("Angle")] {
                 ui.label(h);
             }
             ui.end_row();
@@ -832,9 +846,12 @@ fn ink_table(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut craft::ui::pa
                 if ui.add_enabled(!process, egui::Checkbox::without_text(&mut on)).changed() {
                     set_ink(fields, name, "print", json!(on));
                 }
-                let mut as_process = process;
-                if ui.add_enabled(spot && !all_spots, egui::Checkbox::without_text(&mut as_process)).changed() {
-                    set_ink(fields, name, "convertToProcess", json!(as_process));
+                if spot {
+                    if let Some(on) = ink_kind_button(ui, name, process, !all_spots) {
+                        set_ink(fields, name, "convertToProcess", json!(on));
+                    }
+                } else {
+                    ui.label("");
                 }
                 ui.label(if spot { format!("{name} ({})", tl!("spot")) } else { name.to_string() });
                 for (k, suffix) in [("frequency", " lpi"), ("angle", "°")] {
@@ -849,6 +866,26 @@ fn ink_table(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut craft::ui::pa
         ui.label(tl!("Frequencies and angles are the output device's to apply."));
     })
     .response
+}
+
+/// The icon before spot ink `name`'s name: the spot icon while it prints as a spot ink, the four process inks while it
+/// prints as process (`process`). A click switches it; dimmed (`enabled` off) while Convert All Spot Colors to Process
+/// converts every spot ink. Whether it prints as process after a click.
+fn ink_kind_button(ui: &mut egui::Ui, name: &str, process: bool, enabled: bool) -> Option<bool> {
+    let label = if process {
+        crate::i18n::fmt(tl!("Keep {name} as spot"), &[("name", name)])
+    } else {
+        crate::i18n::fmt(tl!("Convert {name} to process"), &[("name", name)])
+    };
+    ToggleButton::new(label, Bind::given(process))
+        .icon(IconSpec::svg(IconId::new("dc-swatch-spot")))
+        .on_icon(crate::panels::swatches::cmyk_glyph())
+        .icon_only()
+        .enabled(enabled)
+        .id_salt(("print-ink-kind", name))
+        .show(ui)
+        .value()
+        .copied()
 }
 
 /// Set option `key` of ink `name` in `output.inks` (the ink gets its own entry the first time).

@@ -209,7 +209,8 @@ fn finish_warp_dialog(
     (undo, redo): (usize, usize),
 ) {
     let state = app.session.doc().unwrap();
-    if approved {
+    // OK with nothing changed records no step, as Cancel does.
+    if approved && expected != before {
         // Whole-document equality also checks both targets, sibling effects and
         // the first visible / second hidden Warp. Existing OK history stays one step.
         assert_eq!(state.doc.as_ref(), expected.as_ref());
@@ -224,7 +225,7 @@ fn finish_warp_dialog(
         assert_eq!((state.history.undo.len(), state.history.redo.len()), (undo, redo));
         assert!(!state.is_dirty());
         app.run("edit.redo", json!({})).unwrap();
-        assert_ne!(app.session.doc().unwrap().doc.as_ref(), before.as_ref(), "Cancel keeps the original Redo usable");
+        assert_ne!(app.session.doc().unwrap().doc.as_ref(), before.as_ref(), "Cancel, or OK with nothing changed, keeps the original Redo usable");
     }
 }
 

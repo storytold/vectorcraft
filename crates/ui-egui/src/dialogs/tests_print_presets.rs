@@ -31,10 +31,11 @@ fn the_print_dialog_saves_and_loads_presets() {
     app.run("file.print", json!({})).unwrap();
     pump(&mut app);
     assert_eq!(fields(&app)["preset"], DEFAULT_PRESET, "never set up: [Default]");
-    // Save Preset… asks for a name; Enter then saves the preset, not printing.
+    // Save Preset (the preset row's New…, as the framework names it) asks for a name; Enter then saves the preset,
+    // not printing.
     set(&mut app, "copies", json!(4));
     set(&mut app, "media", json!("a4"));
-    super::tests_print::press(&mut app, "Save Preset…");
+    super::tests_print::press(&mut app, "New…");
     call(&mut app, "ui.text", json!({"text": "Proofs"}));
     call(&mut app, "ui.key", json!({"key": "Enter"}));
     pump(&mut app);

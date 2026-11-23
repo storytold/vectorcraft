@@ -116,6 +116,7 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
 
     app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file})).unwrap();
     assert_eq!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
+    assert!(!app.plugin_dialog.as_ref().is_some_and(plugin::PluginDialog::opens_picked), "a named file opens in the pump");
     assert_eq!(fields(&app)["density"], json!(4.0));
     assert!(app.session.documents().is_empty(), "nothing opened before Open");
     frame(&mut app);
@@ -126,18 +127,17 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     assert_eq!(artboard(&app), (10.0, 20.0, 110.0, 70.0));
     assert_eq!(app.ui.recent_files, std::slice::from_ref(&file));
 
-    // A caller naming `path` gets the document in the pump; a file from the picker goes through
-    // `opening`, so the documents stay as they were until it has polled.
+    // A caller naming `path` gets the document in the pump; a file from the picker is marked to go through
+    // `opening`, off the UI thread where the app can. Tests open at once (`opening::available` is off).
     let picker = scripted(&mut app);
     app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams"})).unwrap();
     picker.answer(&[&file]);
     poll(&mut app, &crate::testing::ui_context());
     assert_eq!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
+    assert!(app.plugin_dialog.as_ref().is_some_and(plugin::PluginDialog::opens_picked), "a picked file goes through `opening`");
     frame(&mut app);
     set(&mut app, "density", json!(7));
     try_confirm(&mut app).unwrap();
-    assert_eq!(app.session.documents().len(), 1, "not before the open has run");
-    crate::opening::poll(&mut app);
     assert_eq!(app.session.documents().len(), 2);
 
     let r = app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file, "params": {"density": 7}})).unwrap();

@@ -187,10 +187,12 @@ fn label_and_value_colons_follow_the_ui_language() {
     assert_eq!(super::form::attribute_line("fontSize", &json!(12)), "Font Size: 12");
 }
 
-/// A value the rows accept that the engine refuses (the selection is gone at OK) keeps the dialog open, with Preview on
-/// or off, and leaves the document and the last effect as they were.
+/// Drop Shadow's Color as text the effect can't draw: the row refuses it as it is set, and the value put in the dialog
+/// directly is refused by the engine at OK, which keeps the dialog open, with Preview on or off, and leaves the
+/// document and the last effect as they were.
 #[test]
 fn effect_dialog_refuses_a_color_it_cannot_draw() {
+    use craft::ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
     for preview in [true, false] {
         let mut app = app();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
@@ -198,8 +200,12 @@ fn effect_dialog_refuses_a_color_it_cannot_draw() {
         let before = app.session.doc().unwrap().doc.clone();
         app.run("effect.dialog", json!({"effect": "stylize.dropShadow"})).unwrap();
         set(&mut app, "preview", json!(preview));
+        let (id, ctx) = (top(&app).0, app.ui_ctx.clone().expect("a window app"));
+        let host = app.dialogs().expect("a window app");
+        assert!(host.with(|h| h.set_json_field(&ctx, id, "color", json!("not-a-color"))).is_err(), "preview {preview}");
+        host.with(|h| h.get_mut_by_id::<HostedParamDialog>(id).map(|d| d.set_field("color", FieldValue::from("not-a-color"))))
+            .expect("a parameter dialog");
         frame(&mut app, vec![]);
-        app.run("select.none", json!({})).unwrap();
         confirm(&mut app);
         // PLAN: the reason the dialog shows is the framework's row for a refused answer; it is not read here.
         assert!(is_open(&app) && app.last_effect.is_none(), "preview {preview}");

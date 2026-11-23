@@ -158,6 +158,13 @@ impl PluginDialog {
     pub(crate) fn plugin(&self) -> &str {
         self.kind.plugin()
     }
+
+    /// Whether the dialog is an importer's whose Open opens a file the picker chose, which is read off the UI thread
+    /// where the app can.
+    #[cfg(test)]
+    pub(crate) fn opens_picked(&self) -> bool {
+        matches!(&self.kind, Opened::Import { open, .. } if open["picked"] == true)
+    }
 }
 
 impl Opened {
