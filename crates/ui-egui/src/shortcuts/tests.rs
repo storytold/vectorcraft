@@ -50,6 +50,15 @@ fn ready(app: &mut VectorcraftApp) -> egui::Context {
     ctx
 }
 
+/// A context whose last frame had the Type tool's editor focused, as a window that has drawn a while has: an Alt
+/// chord's text is held back for a binding around the focus of the last pass, and the editor takes the focus in its
+/// first.
+fn typing_ready(app: &mut VectorcraftApp) -> egui::Context {
+    let ctx = ready(app);
+    key_frame(app, &ctx, vec![]);
+    ctx
+}
+
 /// One whole app frame delivering `events`, in a context of its own.
 fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) {
     let ctx = ready(app);
@@ -822,7 +831,8 @@ fn alt_chords_type_special_characters_while_editing_text() {
     for (key, shift, own, character) in ALT_CHARACTER_CHORDS {
         for typed in [None, Some(own), Some(own.to_uppercase().as_str())] {
             let (mut app, id) = editing_hi();
-            frame(&mut app, alt_press(key, shift, typed));
+            let ctx = typing_ready(&mut app);
+            key_frame(&mut app, &ctx, alt_press(key, shift, typed));
             let case = format!("{key:?} shift={shift} text={typed:?}");
             let text = text_and_layers(&mut app, id).0;
             if text != format!("Hi{character}") {
@@ -847,7 +857,7 @@ fn alt_chord_replaces_selected_text_and_repeats() {
     }
     let (mut app, id) = editing_hi();
     app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
-    let ctx = ready(&mut app);
+    let ctx = typing_ready(&mut app);
     key_frame(&mut app, &ctx, alt_press(Key::G, false, Some("g")));
     assert_eq!(text_and_layers(&mut app, id).0, "\u{00A9}");
     let mut held = alt_press(Key::Num8, false, Some("8"));
