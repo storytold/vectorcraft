@@ -2972,8 +2972,8 @@ fn the_description_line_keeps_the_fields_column_height() {
 }
 
 /// Each sentence describes a setting the dialog shows on this platform or, like System Title Bar,
-/// on another one, and every complete catalog translates it into at most the three lines the
-/// description line holds.
+/// on another one. The actual translation, or English fallback for a new sentence, fits the three
+/// lines the description line holds.
 #[test]
 fn every_description_names_a_setting_and_fits_in_every_language() {
     let ctx = egui::Context::default();
@@ -2986,13 +2986,14 @@ fn every_description_names_a_setting_and_fits_in_every_language() {
             }
             for lang in crate::i18n::Lang::all() {
                 let text = crate::i18n::tr(lang, sentence);
-                if lang != crate::i18n::Lang::EN && text == *sentence {
-                    bad.push(format!("{}: no row for {sentence:?}", lang.code()));
+                let translated = crate::i18n::has(lang, sentence);
+                if lang != crate::i18n::Lang::EN && translated && text == *sentence {
+                    bad.push(format!("{}: the available translation for {sentence:?} was not used", lang.code()));
                 }
-                let mut job = egui::text::LayoutJob::simple(text.to_string(), egui::FontId::proportional(11.5), egui::Color32::WHITE, 530.0);
-                job.wrap.max_rows = 3;
-                let galley = ui.painter().layout_job(job);
-                if galley.elided || galley.size().y > DESCRIPTION_HEIGHT {
+                if !translated && text != *sentence {
+                    bad.push(format!("{}: missing {sentence:?} did not fall back to English", lang.code()));
+                }
+                if !description_fits(ui, text) {
                     bad.push(format!("{}: {text:?} takes more than three lines", lang.code()));
                 }
             }
@@ -3000,4 +3001,30 @@ fn every_description_names_a_setting_and_fits_in_every_language() {
     });
     out.textures_delta.clear();
     assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+fn description_fits(ui: &egui::Ui, text: &str) -> bool {
+    let mut job = egui::text::LayoutJob::simple(text.to_string(), egui::FontId::proportional(11.5), egui::Color32::WHITE, 530.0);
+    job.wrap.max_rows = 3;
+    let galley = ui.painter().layout_job(job);
+    !galley.elided && galley.size().y <= DESCRIPTION_HEIGHT
+}
+
+/// English fallback still has to fit: accepting a missing catalog row must not hide overflow.
+#[test]
+fn description_layout_rejects_overflow_even_for_english_fallback() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let short = "A new setting without a catalog row.";
+    let long = format!("{short} ").repeat(100);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        for lang in crate::i18n::Lang::all() {
+            assert!(!crate::i18n::has(lang, short) && !crate::i18n::has(lang, &long));
+            assert_eq!(crate::i18n::tr(lang, short), short);
+            assert_eq!(crate::i18n::tr(lang, &long), long);
+            assert!(description_fits(ui, crate::i18n::tr(lang, short)));
+            assert!(!description_fits(ui, crate::i18n::tr(lang, &long)), "{}: overflowing fallback was accepted", lang.code());
+        }
+    });
+    out.textures_delta.clear();
 }
