@@ -203,7 +203,7 @@ fn ui_coords(face: &FontFace) -> VariationCoords {
 
 /// [`ui_coords`] for a face's named-instance settings and its weight axis (min, default, max).
 fn coords_for(variations: &[([u8; 4], f32)], wght: Option<(f32, f32, f32)>) -> VariationCoords {
-    let mut coords = VariationCoords::new(variations.iter().filter(|(_, v)| v.is_finite()).map(|(t, v)| (*t, *v)));
+    let mut coords = VariationCoords::new(variations.iter().filter(|(t, v)| v.is_finite() && is_axis_tag(t)).map(|(t, v)| (*t, *v)));
     if !variations.iter().any(|(t, _)| t == b"wght")
         && let Some((min, default, max)) = wght.filter(|(a, b, c)| a.is_finite() && b.is_finite() && c.is_finite())
     {
@@ -213,6 +213,14 @@ fn coords_for(variations: &[([u8; 4], f32)], wght: Option<(f32, f32, f32)>) -> V
         }
     }
     coords
+}
+
+/// Is `tag` a well-formed OpenType tag: printable ASCII (0x20 to 0x7E), not starting with a space,
+/// spaces only at the end? egui panics on any other `[u8; 4]` axis tag, and a damaged font's
+/// `fvar` can hold one (the font database passes its named instances' tags on as read).
+fn is_axis_tag(tag: &[u8; 4]) -> bool {
+    let end = tag.iter().position(|&b| b == b' ').unwrap_or(tag.len());
+    end > 0 && tag.iter().enumerate().all(|(i, &b)| if i < end { (0x21..=0x7e).contains(&b) } else { b == b' ' })
 }
 
 /// Call `f` with the text of `shape` and the shapes it holds.
@@ -423,6 +431,11 @@ mod tests {
         assert!(coords(&coords_for(&[], Some((f32::NAN, 100.0, 900.0)))).is_empty(), "damaged axis");
         assert_eq!(coords(&coords_for(&[(*b"wght", 700.0)], thin)), vec![(*b"wght", 700.0)], "named instance");
         assert_eq!(coords(&coords_for(&[(*b"wdth", 75.0)], thin)), vec![(*b"wdth", 75.0), (*b"wght", 400.0)], "other axes kept");
+        // A damaged `fvar` can name an axis with a tag egui refuses (it panics on one): skipped.
+        let bad = [[0, 0, 0, 0], *b" wdt", *b"w dt", [b'w', b'd', b't', 0x7f]];
+        let damaged: Vec<_> = bad.iter().map(|t| (*t, 75.0)).chain([(*b"opsz", 12.0)]).collect();
+        assert_eq!(coords(&coords_for(&damaged, thin)), vec![(*b"opsz", 12.0), (*b"wght", 400.0)], "invalid axis tags");
+        assert_eq!(coords(&coords_for(&[(*b"ab  ", 1.0)], None)), vec![(*b"ab  ", 1.0)], "trailing spaces are valid");
 
         // Real faces, as the font database hands them out.
         let db = FontDb::with_font_dirs(vec![]);
