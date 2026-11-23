@@ -1736,11 +1736,17 @@ fn pathfinder_options_round_trip_and_refuse_bad_values() {
     assert_eq!(s.execute("prefs.get", &json!({"key": "pathfinder"})).unwrap(), set);
     let mm = s.execute("object.pathfinder.options", &json!({"precision": "1 mm"})).unwrap()["precision"].as_f64().unwrap();
     assert!((mm - 72.0 / 25.4).abs() < 1e-9, "a length with a unit: {mm}");
+    for (given, want) in [("10 pt", 10.0), ("0.25", 0.25)] {
+        let r = s.execute("object.pathfinder.options", &json!({"precision": given})).unwrap();
+        assert_eq!(r["precision"], json!(want), "{given}");
+    }
     s.execute("object.pathfinder.options", &json!({"precision": 0.5})).unwrap();
     for bad in [
         json!({"precision": 0}),
         json!({"precision": 11}),
         json!({"precision": "x"}),
+        json!({"precision": "1abc"}),
+        json!({"precision": "0.5 extra"}),
         json!({"precision": -1}),
         json!({"removeRedundantPoints": "yes"}),
         json!({"removeUnpainted": 1}),

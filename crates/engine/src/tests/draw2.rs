@@ -3335,6 +3335,66 @@ fn path_eraser_width_outside_its_range_is_refused() {
     }
 }
 
+/// `path.smoothRegion` refuses a `radius` outside 0.001 to 1000 pt and a `fidelity` outside the
+/// Smooth tool's tolerance range, and `path.joinScrub` a `tolerance` outside 0.001 to 1000 pt: the
+/// document, the selection and the undo history do not change. The ends of each range are taken,
+/// and null is read as the key left out, which smooths or joins in one undo step.
+#[test]
+fn smooth_and_join_refuse_a_reach_or_fidelity_outside_its_range() {
+    let mut s = session();
+    let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 100.0 + i as f64 * 5.0, "y": if i % 2 == 0 { 200.0 } else { 203.0 }})).collect();
+    let r = s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let drag = json!({"points": [[90, 200], [200, 200], [310, 200]]});
+    let (lo, hi) = (vectorcraft_tools::draw2::SMOOTH_MIN_TOLERANCE, vectorcraft_tools::draw2::SMOOTH_MAX_TOLERANCE);
+    let reaches = [json!(0), json!(-1), json!(0.0009), json!(1e-300), json!(1000.01), json!(1e300)];
+    let fidelities = [json!(0), json!(-1), json!(lo / 2.0), json!(hi * 1.01), json!(1e300)];
+    let refused = reaches
+        .iter()
+        .map(|x| ("radius", x, "`radius` must be from 0.001 to 1000".to_string()))
+        .chain(fidelities.iter().map(|x| ("fidelity", x, format!("`fidelity` must be from {lo} to {hi} pt"))));
+    for (key, x, want) in refused {
+        let sel = s.doc().unwrap().selection.clone();
+        refuses_with(&mut s, "path.smoothRegion", &with(&drag, json!({ key: x })), &want);
+        assert_eq!(s.doc().unwrap().selection, sel, "{key} {x} changed the selection");
+    }
+    for extra in [json!({"radius": 0.001}), json!({"radius": 1000}), json!({"fidelity": lo}), json!({"fidelity": hi})] {
+        let undo = undo_steps(&s);
+        s.execute("path.smoothRegion", &with(&drag, extra.clone())).unwrap_or_else(|e| panic!("{extra}: {e}"));
+        while undo_steps(&s) > undo {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    }
+    let before = path(&s, id);
+    let undo = undo_steps(&s);
+    s.execute("path.smoothRegion", &with(&drag, json!({"radius": null, "fidelity": null}))).unwrap();
+    assert!(path(&s, id) != before, "the default radius and fidelity smoothed nothing");
+    assert_eq!(undo_steps(&s), undo + 1);
+
+    let mut s = session();
+    line(&mut s, 100.0, 100.0, 200.0, 100.0);
+    line(&mut s, 205.0, 100.0, 300.0, 150.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let scrub = json!({"points": [[202, 90], [202, 110]]});
+    for x in &reaches {
+        refuses_with(&mut s, "path.joinScrub", &with(&scrub, json!({"tolerance": x})), "`tolerance` must be from 0.001 to 1000");
+        assert_eq!(paths(&s).len(), 2, "tolerance {x}");
+    }
+    s.execute("path.joinScrub", &with(&scrub, json!({"tolerance": 0.001}))).unwrap();
+    assert_eq!(paths(&s).len(), 2, "0.001 pt reaches neither end");
+    let undo = undo_steps(&s);
+    s.execute("path.joinScrub", &with(&scrub, json!({"tolerance": 1000}))).unwrap();
+    while undo_steps(&s) > undo {
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("path.joinScrub", &with(&scrub, json!({"tolerance": null}))).unwrap();
+    assert_eq!(paths(&s).len(), 1, "the default tolerance joined nothing");
+    assert_eq!(undo_steps(&s), undo + 1);
+}
+
 /// The Eraser, Path Eraser, Smooth, Join and Blob Brush commands refuse a size, angle, roundness,
 /// width, radius, fidelity or tolerance given as text or as another value that is not a number, and change
 /// nothing; null is read as the key left out.

@@ -1386,6 +1386,34 @@ fn glyphs_side_by_side_in_an_even_odd_compound_still_become_type() {
 }
 
 #[test]
+fn a_glyph_with_only_some_contours_turned_in_an_even_odd_compound_still_becomes_type() {
+    // An even-odd compound paints the same whichever way its contours run, so an o's counter may
+    // run the same way as its outer contour: neither the part as it is nor all its contours turned
+    // is the glyph. Filled by the nonzero rule, the same contours paint the o's counter, and the
+    // compound stays an outline.
+    for turned in [1usize, 2] {
+        let mut s = session();
+        let c = one_compound(&mut s, "do");
+        // One path per contour: the d's two, then the o's two.
+        let paths = children_of(&s, c);
+        assert_eq!(paths.len(), 4, "a d and an o are two contours each");
+        let p = paths[paths.len() - turned];
+        s.edit("test", |d, _| {
+            let data = d.node_mut(NodeId(p)).unwrap().path_data_mut().unwrap();
+            *data = vectorcraft_geom::PathData::from_bezpath(&data.to_bezpath().reverse_subpaths());
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        assert!(s.execute("type.retype", &json!({})).is_err(), "nonzero, contour {turned} turned paints the counter");
+        s.execute("path.setFillRule", &json!({"rule": "evenOdd", "ids": [c]})).unwrap();
+        let r = s.execute("type.retype", &json!({})).unwrap();
+        assert_eq!(r["texts"], json!(["do"]), "contour {turned} turned: {r}");
+        assert_eq!(r["unmatched"], json!([]), "{r}");
+    }
+}
+
+#[test]
 fn a_compound_whose_glyph_stays_an_outline_keeps_its_other_glyphs_too() {
     let mut s = session();
     // An A (two contours), and far below it a period: a lone one-contour glyph beside other

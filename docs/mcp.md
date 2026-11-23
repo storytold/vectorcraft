@@ -1563,6 +1563,7 @@ are compared with the first page only. An artboard, or the page of an EPS's edit
 a point of its page's is compared on an area of the page's size. A file whose editing data is for a page of another
 size opens the same way, and its warning gives both sizes in points, with the scale of the editing data's page to the
 file's page (1:10 for a tenth of its size) when their sides are in proportion.
+Type in a font a PDF embeds and this machine lacks is drawn in glyphs built from the file's own, kept with the document (#4568); `embeddedFonts: false` (default `true`) sets it in the fallback font with the missing-font warning instead, as before. Preferences › File Handling › Use fonts embedded in imported PDFs (`pdfImportEmbeddedFonts`, on by default) is the choice `document.open` and `file.place` take when they give none; a call's own `embeddedFonts` wins. With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
 With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
 saved with Illustrator's editing data holds it in `AIPDFPrivateData` streams and opens from it as a `.ai` file does.
 
@@ -2432,11 +2433,15 @@ with `` `font` must be a string ``, and a `features` list with an entry that is 
 `text.setStyle` and `text.setRangeStyle` refuse a `size` outside 0.1 to 1,296 pt with
 `` `size` must be from 0.1 to 1296 `` and change nothing. `type.ruby` refuses a `text`,
 `position` or `align` that is not a string, and `text.setPathHandle` refuses a `which` other than `in` or `out` with
-`` `which` must be one of in, out ``. Each leaves the document, the selection and the undo history as they were, also
-when the call gives another param it could apply. A null is read as a key left out.
+`` `which` must be one of in, out ``. `text.editRange` refuses an `insert` that is not a string, `text.setText` a `text`
+that is not a string, and `text.createInPath` a `mode` or `text` that is not a string, each with
+`` `insert` must be a string ``, naming the key; `text.createInPath` refuses an `at` that is not two numbers with
+`` `at` must be a point: [x, y] ``, in area mode too. Each leaves the document, the selection and the undo history as
+they were, also when the call gives another param it could apply. A null is read as a key left out.
 
 A byte offset must be a whole number of at least 0. `at` in `text.startList`, and `start` and `end` in
-`text.editRange`, `text.getRange` and `text.setRangeStyle`, and in `type.step` and `addon.type.textTweaker` given an `id`,
+`text.editRange`, `text.getRange` and `text.setRangeStyle`, `start` in `text.touchType`, `text.glyphAlternates` and
+`text.setGlyphAlternate`, and `start` and `end` in `type.step` and `addon.type.textTweaker` given an `id`,
 refuse a negative or fractional number with
 `` `at` must be a whole number ``, naming the key, and change nothing. `2.0` is read as `2`, and a null as the key left out.
 
@@ -2561,8 +2566,15 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   whose argument isn't a string literal.
 - `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
   File object's `length`, `hidden` or `readonly` counts too, on any object that may be a File object; only
-  `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out; a
-  document's `saveAs` or `exportFile` counts too), `filesOpened` (files opened in other apps), `network`,
+  `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out, and
+  nothing is left out in a check whose files use `with`, name `eval`, `Function`, `evalFile` or `constructor` as a
+  word or as a string literal in brackets, read, call or assign a property in brackets (a `[` after a value, not an
+  array literal) when the brackets hold anything but one number or string literal (`o[k]`, `this['ev' + 'al'](s)`,
+  `this[('eval')](s)`, `this[0, 'eval'](s)`, `o[a[0]]`, or a preprocessor line inside the brackets) or the `[` opens
+  while 4,096 other `[` are open, assign a property in brackets whose name is a string literal of more than 256
+  characters, assign properties of more than 1,000 different names on members (`o.d = …`, `o['d'] = …`), or
+  assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
+  object; a document's `saveAs` or `exportFile` counts too), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -6385,7 +6397,8 @@ editing the pattern first". While a mask is edited, `object.pattern.edit` and `o
 
 Pathfinder Options: `object.pathfinder.options {precision?, removeRedundantPoints?, removeUnpainted?}` (or
 `prefs.get`/`prefs.set` with key `pathfinder`) reads and sets the options every later Shape Mode and Pathfinder
-operation uses: `precision` (0.001–10 pt, default 0.01; a string with a unit also reads) is how closely results follow
+operation uses: `precision` (0.001–10 pt, default 0.01; a string with a unit or a string that is all one number also reads, and
+any other string, such as `"1abc"`, is an error) is how closely results follow
 the paths (they are refit to within it and pieces thinner than it are dropped), `removeRedundantPoints` takes the
 anchors that don't change a result's shape off it, and `removeUnpainted` makes Divide and Outline leave out the pieces
 of objects with no fill (or only hidden fills). Both default to false; `{}` reads the options. Each Shape Mode and
@@ -7242,6 +7255,14 @@ VectorCraft's own values.
 `` `width` must be from 0.001 to 1000 ``. The document and the selection do not change and no undo step is recorded.
 Left out or null, `width` is 8 pt. The range is VectorCraft's own value.
 
+`path.smoothRegion` (the Smooth tool) refuses a `radius` outside 0.001 to 1000 pt with
+`` `radius` must be from 0.001 to 1000 `` and a `fidelity` outside 0.000078125 to about 3195 pt (the Smooth tool's
+0.05 to 100 px at the highest and the lowest zoom) with `` `fidelity` must be from 0.000078125 to 3194.8881789137376 pt ``.
+`path.joinScrub` (the Join tool) refuses a `tolerance` outside 0.001 to 1000 pt with
+`` `tolerance` must be from 0.001 to 1000 ``. The document and the selection do not change and no undo step is
+recorded. Left out or null, `radius` is 12 pt, `fidelity` is 2.5 pt and `tolerance` is 12 pt. The tools send these in screen
+pixels divided by the zoom, kept within the ranges. The `radius` and `tolerance` ranges are VectorCraft's own values.
+
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
 `independent` in `path.close` and `path.setHandle`; `symmetric` and `link` in `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
@@ -7293,8 +7314,10 @@ result and the original path stay within `tolerance` of each other, except that 
 is dropped, so a small circle in a compound path can be removed at a large `tolerance`. A segment that would need more
 than 65,536 samples at that tolerance stays as it is, and so does a segment after a run's first 16,777,216 samples or
 2,097,152 result segments. With `straightLines`, such a segment becomes evenly spaced lines, up to 65,536, and past those
-limits the lines can be farther than `tolerance` from the segment. With `level` or `auto`, the reply also has the `level`
-used:
+limits the lines can be farther than `tolerance` from the segment. A closed path keeps its start, where its dashes
+begin: it starts at its old first anchor when the refit keeps an anchor there, otherwise at a new anchor where the refit
+passes nearest that point when the result with that anchor still has fewer anchors than the path had, and otherwise at
+the refit's anchor nearest that point. It runs the same way around as before. With `level` or `auto`, the reply also has the `level` used:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.path.simplify","params":{"auto":true}}}
@@ -7303,7 +7326,8 @@ used:
 With segments of a path direct-selected (`select.segments`, or `select.anchors` with both anchors of a segment), Simplify
 refits only each run of consecutive selected segments, between the run's end anchors: they stay where they are, with
 their handles on the side away from the run, and every other anchor and segment of the path stays exactly as it was. A
-closed path's run may cross its start point; the path then starts at the run's end anchor. Separate runs on one path
+closed path's run may cross its start point; the path then keeps its start as a whole path does, with the new start on
+that run. Separate runs on one path
 simplify independently, in one undo step, and the runs stay direct-selected (as segments when segments were picked).
 A path with only lone anchors selected, and every path with `wholePaths: true`, simplifies whole:
 
@@ -7331,7 +7355,7 @@ side) to 100 (maximum smoothing); `auto: true` (Auto-Smooth) uses level 50, the 
 its length (by up to 5% of its longer side; none at level 0) and refitted with curves within 0.1% to 2.5% of it,
 keeping a corner only where it turns back on itself, so bumps, jags and kinks become one curve; with anchor points or
 segments of a path direct-selected (and no `ids`), only the sections between them are smoothed, as Simplify does. A refit never has more anchor points than the path had, so a shape whose corners the tolerance can't
-round, such as a rectangle, stays as it is. Closed paths stay closed and open paths keep their end points. The reply has the anchor counts `before` and `after` and the `level` used:
+round, such as a rectangle, stays as it is. Closed paths stay closed and keep their start as Simplify keeps it, and open paths keep their end points. The reply has the anchor counts `before` and `after` and the `level` used:
 
 ```json
 {"name":"run_command","arguments":{"command":"object.path.smooth","params":{"level":80}}}
@@ -11686,8 +11710,9 @@ at a leftover distance of 0.05. A compound path that holds several
 glyphs, such as a word made into one compound path, is split into groups of contours (a contour with the contours
 inside it) in path order, and runs of up to three groups are matched, the longest first among those after which the
 remaining groups can still all be matched, so an i's stem and dot become one i. A group whose contours run the other
-way round, as Make Compound Path leaves some of them, still matches exactly. Exact matches of the whole shape come
-first, then exact matches of its groups, then near matches of the whole shape, then near matches of its groups. The
+way round, as Make Compound Path leaves some of them, still matches exactly, and so does one where only some of its
+contours run the other way round (in an even-odd compound, an o's counter and not its outer contour). Exact matches
+of the whole shape come first, then exact matches of its groups, then near matches of the whole shape, then near matches of its groups. The
 compound becomes type only when every one of its glyphs does; otherwise it stays as it is and is reported once in
 `unmatched` when another shape of the selection becomes type, and the command returns an error when no shape does. A
 glyph also has to paint the area the shape paints under the shape's fill rule: a compound filled by the nonzero rule
@@ -13505,7 +13530,8 @@ runs: `plugin.install`, `plugin.run`, `plugin.reload` and exporters return an er
 object's geometry unchanged while the object keeps the effect: `effect.list` gives that effect `skipped: true`, and the
 Appearance panel shows "(Safe Mode)" after its name and the plug-in's id in its tooltip. `effect.expandAppearance` returns an
 error and changes nothing when an object it would expand holds such an effect, in it or in a symbol it places. That includes a
-plain symbol instance in a group or layer with a raster effect, since the group's image draws the symbol's art. `vectorcraft` rejects an option it does not know (such as
+visible plain symbol instance in a group or layer with a raster effect, since the group's image draws the symbol's art. A
+hidden instance, or one in a template sublayer, draws nothing in that image, so its symbol's art does not count. `vectorcraft` rejects an option it does not know (such as
 `--safe-mod`) instead of opening it as a file; `--` before a file name that starts with `-` opens it. The web build keeps
 no installed plug-ins from one page load to the next and has no launch marker, so it never offers the choice. `plugin.safeMode` returns `{active, source, disabled,
 pendingItem}`; a command does not turn Safe Mode on or off. `plugin.setEnabled {id | file, enabled}` turns a plug-in on or

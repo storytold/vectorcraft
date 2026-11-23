@@ -105,12 +105,17 @@ impl Drop for SteadyFonts {
 
 /// [`SteadyFonts`] for `db`. Catalogs `db`'s installed fonts first: a first scan does not wait for
 /// any guard, so this thread can wait for one running on another thread while it holds a guard. A
-/// thread's first guard waits for the font changes under way or waiting.
+/// thread's first guard waits for a font change under way, and for a waiting change that can start
+/// now. It does not wait for a change that is waiting for guards other threads hold: the thread
+/// waiting for this guard may hold one of them.
 pub fn steady_fonts(db: &crate::FontDb) -> SteadyFonts {
     db.ensure_catalog();
     if STEADY.with(std::cell::Cell::get) == 0 {
         let mut s = steadiness();
-        while !CHANGING.with(std::cell::Cell::get) && (s.changing || s.waiting > 0) {
+        let waits = |s: &Steadiness| !CHANGING.with(std::cell::Cell::get) && (s.changing || (s.waiting > 0 && s.holders == s.holders_waiting));
+        #[cfg(test)]
+        gate_decisions().push((std::thread::current().id(), GateAsk::Guard, waits(&s)));
+        while waits(&s) {
             s = await_steadiness(s);
         }
         s.holders += 1;
@@ -150,7 +155,10 @@ pub(crate) fn font_change() -> FontChange {
     font_changers().push(std::thread::current().id());
     s.waiting += 1;
     s.holders_waiting += usize::from(holder);
-    while s.changing || if holder { s.holders > s.holders_waiting } else { s.holders > 0 } {
+    let waits = |s: &Steadiness| s.changing || if holder { s.holders > s.holders_waiting } else { s.holders > 0 };
+    #[cfg(test)]
+    gate_decisions().push((std::thread::current().id(), GateAsk::Change, waits(&s)));
+    while waits(&s) {
         s = await_steadiness(s);
     }
     s.waiting -= 1;
@@ -173,6 +181,22 @@ pub(crate) fn font_changes_held_back() -> bool {
 pub(crate) fn font_changers() -> std::sync::MutexGuard<'static, Vec<std::thread::ThreadId>> {
     static CHANGERS: std::sync::Mutex<Vec<std::thread::ThreadId>> = std::sync::Mutex::new(Vec::new());
     CHANGERS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// What a thread asked the gate for: its first [`SteadyFonts`] or a [`FontChange`].
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GateAsk {
+    Guard,
+    Change,
+}
+
+/// Each ask made of the gate, with whether it waited when it was made, recorded under the gate's
+/// lock ([`steady_fonts`], [`font_change`]).
+#[cfg(test)]
+pub(crate) fn gate_decisions() -> std::sync::MutexGuard<'static, Vec<(std::thread::ThreadId, GateAsk, bool)>> {
+    static DECISIONS: std::sync::Mutex<Vec<(std::thread::ThreadId, GateAsk, bool)>> = std::sync::Mutex::new(Vec::new());
+    DECISIONS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// The family of [`variable_font`].
@@ -374,22 +398,7 @@ pub fn two_axis_font() -> Option<Vec<u8>> {
 
 /// A `name` table of Windows English (US) records (name id, string).
 pub fn name_table(records: &[(u16, &str)]) -> Option<Vec<u8>> {
-    let mut records = records.to_vec();
-    records.sort_by_key(|r| r.0);
-    let n = u16::try_from(records.len()).ok()?;
-    let (mut head, mut strings) = (Vec::new(), Vec::new());
-    for v in [0, n, 6 + 12 * n] {
-        head.extend_from_slice(&v.to_be_bytes());
-    }
-    for (id, s) in records {
-        let bytes: Vec<u8> = s.encode_utf16().flat_map(u16::to_be_bytes).collect();
-        for v in [3, 1, 0x0409, id, u16::try_from(bytes.len()).ok()?, u16::try_from(strings.len()).ok()?] {
-            head.extend_from_slice(&v.to_be_bytes());
-        }
-        strings.extend(bytes);
-    }
-    head.extend(strings);
-    Some(head)
+    crate::file_font::name_table(records)
 }
 
 /// The family of [`vertical_font`].

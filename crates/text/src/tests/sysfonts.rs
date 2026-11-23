@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::fontdb::fonts_outside;
+use crate::test_fonts::GateAsk;
 use crate::*;
 
 const FAMILY: &str = "Sysfont Sans3";
@@ -83,10 +84,8 @@ fn steady_fonts_hold_back_other_threads_font_changes() {
                 let _steady = guarded.then(|| crate::test_fonts::steady_fonts(&db));
                 db.add_font(font)
             });
-            let id = adding.thread().id();
-            while !adding.is_finished() && !crate::test_fonts::font_changers().contains(&id) {
-                std::thread::yield_now();
-            }
+            let waits = first_decision(adding.thread().id(), GateAsk::Change, || adding.is_finished());
+            assert_eq!(waits, Some(true), "guarded {guarded}: the other thread's change waits for the guard");
             assert_eq!(db.generation(), before, "guarded {guarded}: the other thread's change waits for the guard");
             let listed = db.families().iter().any(|f| f == crate::test_fonts::VARIABLE_FAMILY);
             assert!(!listed, "guarded {guarded}: the other thread publishes the font only once the guard is dropped");
@@ -99,10 +98,8 @@ fn steady_fonts_hold_back_other_threads_font_changes() {
     let steady = crate::test_fonts::steady_fonts(&db);
     std::thread::scope(|scope| {
         let adding = scope.spawn(|| db.add_font(crate::test_fonts::two_axis_font().unwrap()));
-        let id = adding.thread().id();
-        while !adding.is_finished() && !crate::test_fonts::font_changers().contains(&id) {
-            std::thread::yield_now();
-        }
+        let waits = first_decision(adding.thread().id(), GateAsk::Change, || adding.is_finished());
+        assert_eq!(waits, Some(true), "the other thread's change waits for the guard");
         let before = db.generation();
         assert!(db.add_font(crate::test_fonts::variable_font().unwrap()) > 0);
         let after = db.generation();
@@ -112,6 +109,65 @@ fn steady_fonts_hold_back_other_threads_font_changes() {
         drop(steady);
         assert!(adding.join().unwrap() > 0);
     });
+}
+
+/// Whether the first `ask` that the thread `id` made of the font gate waited, once the thread has
+/// made it; `None` when `finished` says the thread ended without making it.
+fn first_decision(id: std::thread::ThreadId, ask: GateAsk, finished: impl Fn() -> bool) -> Option<bool> {
+    loop {
+        let done = finished();
+        let waits = crate::test_fonts::gate_decisions().iter().find(|(t, a, _)| *t == id && *a == ask).map(|(_, _, waits)| *waits);
+        if waits.is_some() || done {
+            return waits;
+        }
+        std::thread::yield_now();
+    }
+}
+
+/// While a thread holds [`test_fonts::steady_fonts`] and a font change on another thread waits for
+/// it, a third thread's first guard does not wait for that change, which cannot start before the
+/// first guard is dropped.
+#[test]
+fn a_first_guard_does_not_wait_for_a_change_that_waits_for_other_guards() {
+    let db = FontDb::with_font_dirs(vec![]);
+    std::thread::scope(|scope| {
+        let steady = crate::test_fonts::steady_fonts(&db);
+        let adding = scope.spawn(|| db.add_font(crate::test_fonts::variable_font().unwrap()));
+        assert_eq!(first_decision(adding.thread().id(), GateAsk::Change, || adding.is_finished()), Some(true), "the change waits for the guard");
+        let guarding = scope.spawn(|| drop(crate::test_fonts::steady_fonts(&db)));
+        let waits = first_decision(guarding.thread().id(), GateAsk::Guard, || guarding.is_finished());
+        assert_eq!(waits, Some(false), "the new guard does not wait for the change that waits for this thread's guard");
+        guarding.join().unwrap();
+        drop(steady);
+        assert!(adding.join().unwrap() > 0, "the font is new to this database");
+    });
+}
+
+/// A version of a family looked up while a rescan of the font folders is under way, before the
+/// rescan publishes what it found, does not hide a version of that family the rescan found.
+#[test]
+fn a_version_looked_up_during_a_rescan_is_found_after_it() {
+    use crate::test_fonts::{TWIN_FAMILY, TWIN_VERSIONS, twin_font};
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-rescan-versions", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Older.ttf"), twin_font(false).unwrap()).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    assert_eq!(db.load_system_fonts(), 1);
+    let face = db.face(TWIN_FAMILY, "Regular").expect("the installed face");
+    assert_eq!(face.version, TWIN_VERSIONS[0]);
+    std::fs::write(dir.join("Newer.ttf"), twin_font(true).unwrap()).unwrap();
+    let versions = |db: &FontDb| db.versions(&face).iter().map(|f| f.version.clone()).collect::<Vec<_>>();
+    std::thread::scope(|scope| {
+        let steady = crate::test_fonts::steady_fonts(&db);
+        let rescanning = scope.spawn(|| db.load_system_fonts());
+        let waits = first_decision(rescanning.thread().id(), GateAsk::Change, || rescanning.is_finished());
+        assert_eq!(waits, Some(true), "the rescan waits for the guard before it publishes");
+        assert_eq!(versions(&db), [TWIN_VERSIONS[0]], "before the rescan publishes, only the older file is cataloged");
+        drop(steady);
+        assert_eq!(rescanning.join().unwrap(), 2);
+    });
+    assert_eq!(versions(&db), TWIN_VERSIONS, "the version the rescan found is loaded");
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 /// The first scan of a database's installed fonts does not wait for [`test_fonts::steady_fonts`]

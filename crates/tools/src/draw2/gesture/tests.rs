@@ -309,6 +309,45 @@ fn fidelity_sent_stays_within_what_path_freehand_takes() {
     }
 }
 
+/// `path.smoothRegion`, `path.joinScrub` and `path.eraseSegments` refuse a radius, Fidelity,
+/// tolerance or width outside their ranges, so at a zoom beyond the view's range the Smooth, Join
+/// and Path Eraser tools, and an Alt smoothing drag, send the nearer end of each.
+#[test]
+fn smooth_join_and_path_eraser_send_values_their_commands_take() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let (reach_lo, reach_hi) = crate::draw2::REACH_RANGE;
+    let (tol_lo, tol_hi) = (crate::draw2::SMOOTH_MIN_TOLERANCE, crate::draw2::SMOOTH_MAX_TOLERANCE);
+    let alt = Mods { alt: true, ..Default::default() };
+    for (zoom, fidelity, reach, tol) in [(0.001, 100.0, reach_hi, tol_hi), (100_000.0, 0.05, reach_lo, tol_lo)] {
+        cx.zoom = zoom;
+        // The same drag on screen at each zoom.
+        let pts: Vec<_> = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)].iter().map(|&(x, y)| (x / zoom, y / zoom)).collect();
+        let sent = |acts: &[Vec<Action>]| match acts.last().and_then(|a| a.first()) {
+            Some(Action::Exec(c, v)) => (c.clone(), v.clone()),
+            a => panic!("expected a command at {zoom}x, got: {a:?} in {acts:?}"),
+        };
+        let mut smooth = GestureTool::new("smooth");
+        smooth.set_option("fidelity", &json!(fidelity));
+        let mut pencil = GestureTool::new("pencil");
+        pencil.set_option("altSmooth", &json!(true));
+        pencil.set_option("smoothFidelity", &json!(fidelity));
+        for (what, acts) in [("smooth", drag(&mut smooth, &cx, &pts, Mods::default())), ("pencil", drag_held(&mut pencil, &cx, &pts, alt))] {
+            let (c, v) = sent(&acts);
+            assert_eq!(c, "path.smoothRegion", "{what} at {zoom}x");
+            assert_eq!((v["radius"].as_f64(), v["fidelity"].as_f64()), (Some(reach), Some(tol)), "{what} at {zoom}x: {v}");
+        }
+        let (c, v) = sent(&drag(&mut GestureTool::new("join"), &cx, &pts, Mods::default()));
+        assert_eq!((c.as_str(), v["tolerance"].as_f64()), ("path.joinScrub", Some(reach)), "join at {zoom}x: {v}");
+        let (c, v) = sent(&drag(&mut GestureTool::new("pathEraser"), &cx, &pts, Mods::default()));
+        assert_eq!((c.as_str(), v["width"].as_f64()), ("path.eraseSegments", Some(reach)), "path eraser at {zoom}x: {v}");
+    }
+}
+
 /// The Blob Brush's Fidelity stays in points (#5729 is the Pencil's and the Paintbrush's): its
 /// stroke, and another tool chosen while it is drawn, send it as set at any zoom.
 #[test]
@@ -1600,6 +1639,38 @@ fn smoothing_band_shows_no_seam_where_it_turns_across_a_square_side() {
             }
         }
     }
+}
+
+/// Zoomed out far enough that the Smooth tool's radius in points passes the top of
+/// [`crate::draw2::REACH_RANGE`], the band a smoothing drag shows has the radius its release sends.
+#[test]
+fn smoothing_band_at_the_lowest_zoom_has_the_radius_the_release_sends() {
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    cx.zoom = 0.005;
+    let r = crate::draw2::REACH_RANGE.1;
+    assert!(cx.tol(SMOOTH_RADIUS) > r, "the radius on screen is past the range at {}x", cx.zoom);
+    let ends = [Point::new(1000.0, 1000.0), Point::new(5000.0, 1000.0)];
+    let mut t = GestureTool::new("smooth");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, ends[0].x, ends[0].y));
+    for i in 1..=20 {
+        let q = ends[0].lerp(ends[1], f64::from(i) / 20.0);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, q.x, q.y));
+    }
+    let mut frames = 0;
+    while t.overlays_pending() {
+        assert!(frames < 10_000, "the band reaches the whole drag");
+        bands(&t, &cx);
+        frames += 1;
+    }
+    check_band(&t, &cx, r);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, ends[1].x, ends[1].y));
+    let Some(Action::Exec(c, v)) = acts.first() else { panic!("expected a command, got {acts:?}") };
+    assert_eq!((c.as_str(), v["radius"].as_f64()), ("path.smoothRegion", Some(r)), "{v}");
 }
 
 /// One straight piece of a square's outline along a side, where the band goes on across only part

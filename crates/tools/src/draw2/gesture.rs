@@ -96,6 +96,20 @@ fn fit_tolerance(cx: &ToolContext, px: f64) -> f64 {
     cx.tol(px).clamp(super::MIN_FIT_TOLERANCE, super::MAX_FIT_TOLERANCE)
 }
 
+/// The `fidelity` (points) the Smooth tool, and an Alt smoothing drag, send `path.smoothRegion` for
+/// `px` screen pixels at the current zoom, within the range the command takes
+/// ([`super::SMOOTH_MIN_TOLERANCE`]..[`super::SMOOTH_MAX_TOLERANCE`]).
+fn smooth_tolerance(cx: &ToolContext, px: f64) -> f64 {
+    cx.tol(px).clamp(super::SMOOTH_MIN_TOLERANCE, super::SMOOTH_MAX_TOLERANCE)
+}
+
+/// The distance (points) the Smooth, Join and Path Eraser tools send for `px` screen pixels at the
+/// current zoom, within [`super::REACH_RANGE`].
+fn reach(cx: &ToolContext, px: f64) -> f64 {
+    let (lo, hi) = super::REACH_RANGE;
+    cx.tol(px).clamp(lo, hi)
+}
+
 pub struct GestureTool {
     /// How many points the last preview of the stroke had ([`crate::previews_at`]); 0 when it was
     /// fitted coarser than the stroke kept ([`PREVIEW_FIDELITY_PX`]).
@@ -1550,13 +1564,13 @@ impl GestureTool {
     fn finish(&mut self, cx: &ToolContext, m: Mods) -> Vec<Action> {
         let pts = &self.points;
         let has_sel = !cx.selection.is_empty();
-        let tol = cx.tol(self.edit_within);
-        let radius = cx.tol(SMOOTH_RADIUS);
+        let tol = reach(cx, self.edit_within);
+        let radius = reach(cx, SMOOTH_RADIUS);
         if self.smoothing {
             if pts.len() >= 2 && has_selected_smooth_path(cx) {
                 return vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.smooth_fidelity)}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": smooth_tolerance(cx, self.smooth_fidelity)}),
                 )];
             }
             return vec![];
@@ -1621,10 +1635,10 @@ impl GestureTool {
             "smooth" if pts.len() >= 2 && has_selected_smooth_path(cx) => {
                 vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.fidelity)}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": smooth_tolerance(cx, self.fidelity)}),
                 )]
             }
-            "pathEraser" if has_sel => vec![Action::Exec("path.eraseSegments".into(), json!({"points": points_json(pts), "width": cx.tol(8.0)}))],
+            "pathEraser" if has_sel => vec![Action::Exec("path.eraseSegments".into(), json!({"points": points_json(pts), "width": reach(cx, 8.0)}))],
             "join" if pts.len() >= 2 => vec![Action::Exec("path.joinScrub".into(), json!({"points": points_json(pts), "tolerance": tol}))],
             _ => vec![],
         }
@@ -1906,7 +1920,7 @@ impl Tool for GestureTool {
         // release smooths.
         if (self.id == "smooth" || self.smoothing)
             && has_selected_smooth_path(cx)
-            && let Some(path) = self.smooth_band(cx.tol(SMOOTH_RADIUS))
+            && let Some(path) = self.smooth_band(reach(cx, SMOOTH_RADIUS))
         {
             o.push(Overlay::SharedPath { path, color: FEEDBACK, width: 1.0, dash: Some(0.0) });
         }

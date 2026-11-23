@@ -75,8 +75,9 @@ pub struct Session {
     /// back as it was at the release ([`Session::pointer`]).
     pub(crate) lender: Option<Box<dyn Tool>>,
     /// Set while tool actions that end by switching back to the Live Paint Bucket are applied (the
-    /// Eyedropper's sample into a stop of the bucket's gradient): their paint commands change the
-    /// colors the bucket paints with ([`Session::bucket_paints`]).
+    /// Eyedropper's sample into a stop of the bucket's gradient), and while a tool the bucket lent
+    /// is deactivated as it goes back: their paint commands change the colors the bucket paints
+    /// with ([`Session::bucket_paints`]).
     pub(crate) back_to_bucket: bool,
     /// Pointer and key input that came while the tool computed an edit on another thread, each with
     /// its number and view, made in order once the edit is applied.
