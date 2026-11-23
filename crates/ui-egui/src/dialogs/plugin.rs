@@ -346,22 +346,24 @@ fn described(ui: &mut egui::Ui, d: &Dialog) -> Option<Arc<Plugin>> {
     Some(plugin)
 }
 
+/// The field of a plug-in command's dialog holding the uid of the document it opened on.
+const DOC: &str = "__doc";
+
 /// Opens the dialog of plug-in command `id` (`plugin.<plug-in id>.<command id>`), given no params
 /// or only `ids` (a context menu's objects), when it has parameters and a document is open: its
-/// fields at their defaults (`__command` is the command id, `__ids` the objects given) with a live
-/// Preview, and OK keeps the run on those objects as one undo step. False for any other command or
-/// params, which then run as they were given.
+/// fields at their defaults (`__command` is the command id, `__ids` the objects given, `__doc` the
+/// uid of the active document) with a live Preview, and OK keeps the run on those objects as one
+/// undo step. False for any other command or params, which then run as they were given.
 pub fn open_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     let only_ids = p.as_object().is_none_or(|o| o.keys().all(|k| k == "ids")) && p.get("ids").is_none_or(Value::is_array);
     if !only_ids {
         return false;
     }
     let Some((plugin, c)) = vectorcraft_engine::cmd::plugin::command_of(id) else { return false };
-    if c.params.is_empty() || app.session.active().is_none() {
-        return false;
-    }
+    let Some(doc) = app.session.active().map(|st| st.uid).filter(|_| !c.params.is_empty()) else { return false };
     let mut fields = fields_for(&plugin.manifest().for_command(&c));
     fields.insert("__command".into(), json!(id));
+    fields.insert(DOC.into(), json!(doc));
     if let Some(ids) = p.get("ids") {
         fields.insert("__ids".into(), ids.clone());
     }
@@ -376,6 +378,12 @@ pub fn open_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
 fn command_of(d: &Dialog) -> Option<Manifest> {
     let (plugin, c) = vectorcraft_engine::cmd::plugin::command_of(&d.str("__command"))?;
     Some(plugin.manifest().for_command(&c))
+}
+
+/// Whether dialog `d` may run on the active document: a plug-in command's dialog runs only on the
+/// document it opened on, and a filter's dialog runs on any document.
+pub(super) fn on_its_document(app: &VectorcraftApp, d: &Dialog) -> bool {
+    d.str("__command").is_empty() || app.session.active().is_some_and(|st| d.fields.get(DOC).and_then(Value::as_u64) == Some(st.uid))
 }
 
 /// The command dialog `d` runs: its plug-in command, or `plugin.run`.
@@ -416,11 +424,12 @@ fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, Str
 
 /// The plug-in's description and fields (a command's: its own parameters), then the live
 /// Preview; a heavy filter has a note instead that it runs in the background, since a run may take
-/// minutes. A command dialog closes once the plug-in no longer has the command.
+/// minutes. A command dialog closes once the plug-in no longer has the command, or once another
+/// document is the active one.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let Some(plugin) = described(ui, d) else { return true };
     let run_with = command_of(d);
-    if run_with.is_none() && !d.str("__command").is_empty() {
+    if (run_with.is_none() && !d.str("__command").is_empty()) || !on_its_document(app, d) {
         return true;
     }
     form::schema_fields(app, ui, d, run_with.as_ref().unwrap_or(plugin.manifest()));
@@ -442,8 +451,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// OK: a filter keeps its previewed run as one undo step; a heavy one, which has no preview, and a
 /// light one that runs in the background ([`in_background`]) with Preview off or a failed preview,
 /// start in the background ([`run`]) and the dialog closes. A preview still shown when Preview was
-/// just turned off, or a preview that failed, is rolled back first.
+/// just turned off, or a preview that failed, is rolled back first. Once another document is
+/// the active one, a command dialog closes and changes no document.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if !on_its_document(app, d) {
+        app.ui.dialog = None;
+        return Ok(json!({}));
+    }
     let own_run = d.str("__command").is_empty();
     let kept = |plugin: &Plugin| {
         plugin.manifest().budget == Budget::Light && d.bool("preview") && app.session.in_interaction() && !d.fields.contains_key(form::REFUSED)

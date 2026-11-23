@@ -961,6 +961,59 @@ fn plugin_commands_are_listed_in_the_canvas_and_layers_context_menus() {
     assert!(rows(&[other.0]).is_empty());
 }
 
+/// A command dialog opened for objects of one document changes no document once another document
+/// is the active one, even one holding an object with the same id: drawn, the dialog closes and
+/// leaves that document's edit in progress, and OK closes it. On its own document, OK runs the
+/// command on those objects.
+#[test]
+fn a_plugin_command_dialog_stays_with_its_document() {
+    let mut app = app();
+    let id = "test.ui.context.doc";
+    let size = vectorcraft_engine::cmd::plugin::command_id(id, "size");
+    let commands = r#"[{"id":"size","label":"Size","params":{"by":{"type":"number","min":0,"max":10,"default":2}}}]"#;
+    app.run("plugin.install", json!({"dataBase64": context_plugin(id, commands)})).unwrap();
+    let target = red_rect(&mut app);
+    app.run("layer.setProps", json!({"ids": [target.0], "name": "Target"})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let twin = red_rect(&mut app);
+    app.run("layer.setProps", json!({"ids": [twin.0], "name": "Target"})).unwrap();
+    assert_eq!(twin, target, "the second document's object has the first one's id");
+    let ids = json!({"ids": [target.0]});
+    let undos = |app: &VectorcraftApp| app.session.documents().iter().map(|st| st.history.undo.len()).collect::<Vec<_>>();
+    let kept = |app: &VectorcraftApp| app.session.documents().iter().map(|st| st.doc.node(target).is_some()).collect::<Vec<_>>();
+
+    // Drawn while the other document is active, the dialog closes.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    menus::invoke(&mut app, &size, ids.clone());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__command")), Some(size.clone()));
+    let before = undos(&app);
+    frame(&mut app);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.begin_interaction("Edit").unwrap();
+    frame(&mut app);
+    assert!(app.ui.dialog.is_none(), "the dialog closes on another document");
+    assert!(app.session.in_interaction(), "closing it leaves the other document's edit in progress");
+    app.session.cancel_interaction().unwrap();
+    assert_eq!((undos(&app), kept(&app)), (before.clone(), vec![true, true]));
+
+    // OK while the other document is active closes the dialog and changes neither document.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    menus::invoke(&mut app, &size, ids.clone());
+    frame(&mut app);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    assert_eq!(dialogs::confirm(&mut app).unwrap(), json!({}));
+    assert!(app.ui.dialog.is_none());
+    assert_eq!((undos(&app), kept(&app)), (before.clone(), vec![true, true]));
+
+    // On its own document, OK runs the command on the objects it opened for.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    menus::invoke(&mut app, &size, ids);
+    frame(&mut app);
+    dialogs::confirm(&mut app).unwrap();
+    assert_eq!((undos(&app), kept(&app)), (vec![before[0] + 1, before[1]], vec![false, true]));
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
 /// A shortcut the user gives a plug-in command runs it.
 #[test]
 fn a_shortcut_runs_a_plugin_command() {
