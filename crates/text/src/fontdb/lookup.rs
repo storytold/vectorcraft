@@ -1,4 +1,4 @@
-use craft::font_catalog::Match;
+use craft::font_catalog::{FaceInfo, Match, Source};
 
 #[cfg(not(target_arch = "wasm32"))]
 use super::PathBuf;
@@ -136,7 +136,7 @@ impl FontDb {
                 .flat_map(|f| Alias::of(&f.family, &f.style, &f.keys))
                 .find(|(k, a)| *k == joined && face(a))
                 .map(|(_, a)| (a.family, a.style.unwrap_or_else(|| style.to_string())));
-            if let Some(answer) = ps.or_else(|| self.catalog.by_postscript_name(&joined).map(|f| (f.family, f.style))) {
+            if let Some(answer) = ps.or_else(|| self.cataloged_postscript(&joined).map(|f| (f.family, f.style))) {
                 return answer;
             }
         }
@@ -156,7 +156,7 @@ impl FontDb {
             (_, Some(a)) => (a.family.clone(), style.to_string()),
             // A legacy family name whose legacy style isn't the one asked for: the face of the
             // PostScript name it reads as, if any, else its family in the style asked for.
-            (Some((face, _)), None) => match self.catalog.by_postscript_name(family) {
+            (Some((face, _)), None) => match self.cataloged_postscript(family) {
                 Some(named) => (named.family, named.style),
                 None => (face.family, style.to_string()),
             },
@@ -260,7 +260,7 @@ impl FontDb {
         if let Some(f) = loaded(self) {
             return Some(f);
         }
-        let face = self.catalog.by_postscript_name(name)?;
+        let face = self.cataloged_postscript(name)?;
         self.face(&face.family, &face.style)?;
         loaded(self)
     }
@@ -275,7 +275,7 @@ impl FontDb {
         let Some(first) = self.find_postscript(name) else { return vec![] };
         let key = norm(name);
         let mut families: Vec<String> = vec![first.family.clone()];
-        let named = |f: &&craft::font_catalog::FaceInfo| f.postscript_name.as_deref().is_some_and(|p| norm(p) == key);
+        let named = |f: &&FaceInfo| f.postscript_name.as_deref().is_some_and(|p| norm(p) == key);
         for f in self.catalog.faces().iter().filter(named) {
             if families.len() < MAX_POSTSCRIPT_FACES && !families.iter().any(|known| known.eq_ignore_ascii_case(&f.family)) {
                 families.push(f.family.clone());
@@ -295,7 +295,19 @@ impl FontDb {
     /// case). Documents name fonts this way, and a family can hold hyphens
     /// ("Rounded-X-Mplus-1c-black" is Rounded-X M+ 1c, black), so the name can't be split.
     pub fn by_postscript_name(&self, name: &str) -> Option<(String, String)> {
-        self.catalog.by_postscript_name(name).map(|f| (f.family, f.style))
+        self.cataloged_postscript(name).map(|f| (f.family, f.style))
+    }
+
+    /// The cataloged face of PostScript name `name`: an installed face before a bundled face of another family with the
+    /// same name, as the installed faces alone answered before the bundled ones were cataloged.
+    fn cataloged_postscript(&self, name: &str) -> Option<FaceInfo> {
+        let face = self.catalog.by_postscript_name(name)?;
+        if face.source != Source::Bundled {
+            return Some(face);
+        }
+        let key = norm(name);
+        let named = |f: &&FaceInfo| f.source != Source::Bundled && f.postscript_name.as_deref().is_some_and(|p| norm(p) == key);
+        Some(self.catalog.faces().iter().find(named).cloned().unwrap_or(face))
     }
 
     /// Load the files of the installed `family`, every cataloged version of its faces included,
