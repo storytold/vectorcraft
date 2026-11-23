@@ -6,6 +6,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use craft::behavior::MotionMode;
 use craft::ui::menu::bar::{is_focused, is_open};
 use craft::ui::runtime::env::WindowKey;
 use craft::ui::shell::{WindowDialogs, embed};
@@ -78,7 +79,12 @@ impl Scene {
             ..Default::default()
         };
         let app = &mut self.app;
-        embed::before_input(&self.ctx, |out| app.frame_input(out));
+        // Motion off: a closed menu leaves at once instead of keeping focus through its exit fade.
+        embed::before_input(&self.ctx, |out| {
+            let mut input = app.frame_input(out);
+            input.root = std::mem::take(&mut input.root).motion(MotionMode::Off);
+            input
+        });
         let mut out = self.ctx.run_ui(raw, |ui| {
             app.tick(ui.ctx());
             app.ui(ui);
