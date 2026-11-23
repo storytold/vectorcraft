@@ -19,6 +19,8 @@ use crate::{Services, VectorcraftApp, background};
 #[derive(Default)]
 pub(super) struct Board {
     flavours: Vec<Flavour>,
+    /// The app wrote what the clipboard holds (the platform's owner marker): nothing was copied since.
+    ours: bool,
     /// How many times the app wrote it.
     writes: usize,
     /// Another app has the clipboard open: the app's writes fail and change nothing, and reads
@@ -79,13 +81,14 @@ impl ClipboardBackend for Fake {
             if b.race_with_our_formats {
                 b.flavours.extend(ours.into_iter().filter(|f| f.mime != TEXT));
             }
+            b.ours = false;
             return Err(ClipboardError::Other("another app has the clipboard open".into()));
         }
         if b.partial {
             b.flavours = if b.partial_keeps_others { ours.into_iter().filter(|f| f.mime != TEXT).collect() } else { vec![] };
             return Err(ClipboardError::Other("a format could not be written".into()));
         }
-        *b = Board { flavours: ours, writes: b.writes + 1, ..std::mem::take(&mut *b) };
+        *b = Board { flavours: ours, ours: true, writes: b.writes + 1, ..std::mem::take(&mut *b) };
         Ok(0)
     }
 
@@ -107,6 +110,10 @@ impl ClipboardBackend for Fake {
 
     fn read_files(&mut self, _limit: usize) -> Result<Option<Vec<std::path::PathBuf>>, ClipboardError> {
         Ok(None)
+    }
+
+    fn owns(&mut self) -> Option<bool> {
+        Some(self.board().ours)
     }
 
     fn has(&mut self, mimes: &[&str]) -> bool {
@@ -145,7 +152,7 @@ pub(super) fn app() -> (VectorcraftApp, Arc<Mutex<Board>>) {
 pub(super) fn copy_elsewhere(board: &Arc<Mutex<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
     let flavours = flavours.into_iter().map(|(mime, data)| Flavour { mime, data }).collect();
     let mut b = board.lock().unwrap();
-    *b = Board { flavours, ..std::mem::take(&mut *b) };
+    *b = Board { flavours, ours: false, ..std::mem::take(&mut *b) };
 }
 
 /// Another app opens the clipboard (`true`) or closes it.
@@ -332,18 +339,20 @@ fn app_with_worker() -> (VectorcraftApp, Arc<Mutex<Board>>) {
 }
 
 /// [`app_with_worker`], its worker busy with a job labeled `label` (none: another Copy's formats)
-/// until the sender is dropped, or for 10 s.
+/// until the sender is dropped.
 pub(super) fn app_with_busy_worker(label: &str) -> (VectorcraftApp, Arc<Mutex<Board>>, Sender<()>) {
     let (mut app, board) = app_with_worker();
     let hold = hold_worker(&mut app, label);
     (app, board, hold)
 }
 
-/// Start a job labeled `label` that holds the worker until the sender is dropped, or for 10 s.
+/// Start a job labeled `label` that holds the worker until the sender is dropped (also when the
+/// test panics). No time limit: a test slowed past one by a loaded machine would see the held
+/// work run early.
 fn hold_worker(app: &mut VectorcraftApp, label: &str) -> Sender<()> {
     let (hold, held) = channel::<()>();
     let work = move |_: background::Writer| {
-        let _ = held.recv_timeout(std::time::Duration::from_secs(10));
+        let _ = held.recv();
         Ok(Value::Null)
     };
     background::run(app, true, label.into(), None, work, |_, r| r).unwrap();

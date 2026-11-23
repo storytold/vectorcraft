@@ -520,8 +520,9 @@ fn controls(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<egui::accesski
     out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
 }
 
+/// The control named `label`: a row's side label carries the same name, in no set order among the nodes.
 fn named<'a>(nodes: &'a [egui::accesskit::Node], label: &str) -> &'a egui::accesskit::Node {
-    nodes.iter().find(|n| n.label() == Some(label)).unwrap_or_else(|| panic!("no {label:?}"))
+    nodes.iter().find(|n| n.role() != egui::accesskit::Role::Label && n.label() == Some(label)).unwrap_or_else(|| panic!("no {label:?}"))
 }
 
 /// A checkbox setting the selected effects hold with different values shows a dash, leaves the

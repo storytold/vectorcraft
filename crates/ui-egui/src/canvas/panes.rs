@@ -378,12 +378,7 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
             super::drops::show(app, &mut catcher, w, BodyKind::Pane);
         }
         drop_released(app);
-        // Note the fits this frame made, for `refit_resized`.
-        for ((w, area), was_unfitted) in areas.iter().zip(unfitted) {
-            if let (true, Some(v), Some(s)) = (was_unfitted, crate::doc_windows::view(app, *w).filter(|v| v.fitted).copied(), slot(app, *w)) {
-                app.canvas.panes.fits.insert(s, (area.size(), v.zoom, v.center));
-            }
-        }
+        note_fits(app, &areas, &unfitted);
     });
     let activated = split.output.activated;
     app.canvas.panes.at = lines;
@@ -432,6 +427,16 @@ pub(crate) fn refit_resized(app: &mut VectorcraftApp, areas: &[(Win, egui::Rect)
             !v.fitted
         })
         .collect()
+}
+
+/// Note the fits this frame made, for [`refit_resized`]: each of `areas`' views that was unfitted
+/// (`unfitted`, as `refit_resized` returned) and is fitted now, with its area's size.
+pub(crate) fn note_fits(app: &mut VectorcraftApp, areas: &[(Win, egui::Rect)], unfitted: &[bool]) {
+    for ((w, area), was_unfitted) in areas.iter().zip(unfitted) {
+        if let (true, Some(v), Some(s)) = (*was_unfitted, crate::doc_windows::view(app, *w).filter(|v| v.fitted).copied(), slot(app, *w)) {
+            app.canvas.panes.fits.insert(s, (area.size(), v.zoom, v.center));
+        }
+    }
 }
 
 /// Fit `v` to show its artboard (the first if it has gone) in `area`, with the interface zoomed by

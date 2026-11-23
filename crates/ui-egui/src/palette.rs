@@ -1382,8 +1382,10 @@ mod tests {
         assert_eq!(window.app.ui.recent_commands, recorded);
         // Cancel closes the dialog without running the command.
         close_dialogs(&mut window.app, false);
-        assert!(!window.app.any_dialog_open());
+        assert!(crate::tests::picks::open_dialogs(&window.app).is_empty());
+        // The window's next pass draws it gone: until then its layer, last drawn, is still up.
         window.frame(vec![]);
+        assert!(!window.app.any_dialog_open());
         assert_eq!(window.app.ui.recent_commands, recorded);
         assert_eq!(window.app.ui.command_uses.count_of(&clean_up.key_text()), 1, "counted once, at the pick");
     }
@@ -1587,8 +1589,10 @@ mod tests {
         // selected tool), the status line aside.
         let look = |app: &VectorcraftApp| {
             let mut ui = serde_json::to_value(&app.ui).unwrap_or_default();
+            // The pick's count is the palette's record of the pick ([`record_pick`]), not the command's doing.
             if let Some(o) = ui.as_object_mut() {
                 o.remove("status");
+                o.remove("command_uses");
             }
             let doc = app.session.active().map(|st| {
                 (st.doc.clone(), format!("{:?}", st.selection), st.history.undo.len(), st.revision, st.active_layer, st.layer_rows.clone())
@@ -2024,9 +2028,20 @@ mod tests {
         window.app.ui.recent_commands = vec![CommandRef::new("object.ungroup"), CommandRef::new("select.all")];
         window.app.ui.palette_open = true;
         window.frame(vec![]);
-        assert!(!window.resolved("object.ungroup").enabled);
-        let all = window.resolved("select.all");
-        assert!(all.enabled && hint_of(&all).is_none());
+        // The rows are judged from the window under the palette, where a pick runs; a command read from
+        // inside the open palette is under its modal layer.
+        let nodes = window.frame(vec![]);
+        let names = names(Lang::EN);
+        let row = |id: &str| {
+            // A row shows the result's label; its name's menu path is the row's path.
+            let name =
+                names.iter().find(|(at, _)| at == id).and_then(|(_, name)| name.rsplit(" › ").next()).unwrap_or_else(|| panic!("{id} has a name"));
+            let option =
+                |n: &&egui::accesskit::Node| n.role() == egui::accesskit::Role::ListBoxOption && n.label().is_some_and(|l| l.starts_with(name));
+            nodes.iter().find(option).unwrap_or_else(|| panic!("a row for {name}"))
+        };
+        assert!(row("object.ungroup").is_disabled());
+        assert!(!row("select.all").is_disabled());
     }
 
     /// Paste is dimmed while the clipboard is empty and nothing can be pasted from the system
@@ -2034,6 +2049,8 @@ mod tests {
     #[test]
     fn paste_is_dimmed_only_while_nothing_can_be_pasted() {
         let mut window = Window::on(Fixture::Multi.session());
+        // A still clock: the tick's next look at the (empty) system clipboard would undo the flag.
+        window.app.now_override = Some(window.app.system_paste_at.max(0.0));
         window.app.system_paste = false;
         window.frame(vec![]);
         let hint = hint_of(&window.resolved("edit.paste")).expect("Paste is dimmed");

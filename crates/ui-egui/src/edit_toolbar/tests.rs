@@ -71,6 +71,11 @@ fn inside(nodes: &Nodes, name: &str, within: Rect) -> Rect {
     named(nodes, name).into_iter().find(|r| within.contains(r.center())).unwrap_or_else(|| panic!("no `{name}` inside {within:?}"))
 }
 
+/// The open drawer: the Edit Toolbar node that holds its cells, larger than the ••• buttons of that name.
+fn drawer(nodes: &Nodes) -> Rect {
+    named(nodes, EDIT).into_iter().max_by(|a, b| a.area().total_cmp(&b.area())).expect("the drawer is open")
+}
+
 /// The toolbar button of `tool`: the rail names a tool by its label (its shortcut is in its tip).
 fn button_name(tool: &str) -> String {
     tl!(tool_info(tool).unwrap().label).to_string()
@@ -283,18 +288,18 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     // Dragged onto the blank toolbar, a tool is added to it.
     let nodes = settle(&mut app, &ctx, 2.0);
     let bar = one(&nodes, "Mine");
-    drag(&mut app, &ctx, 3.0, one(&nodes, "Ellipse Tool").center(), bar.center());
+    drag(&mut app, &ctx, 3.0, inside(&nodes, "Ellipse Tool", drawer(&nodes)).center(), bar.center());
     assert_eq!(held(&app, "Mine"), [["ellipse"]]);
     assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
     // Onto the lower third of its tool: a slot of its own after it.
     let nodes = settle(&mut app, &ctx, 4.0);
     let tool = inside(&nodes, &button_name("ellipse"), one(&nodes, "Mine"));
-    drag(&mut app, &ctx, 5.0, one(&nodes, "Artboard Tool").center(), pos2(tool.center().x, tool.top() + 0.85 * tool.height()));
+    drag(&mut app, &ctx, 5.0, inside(&nodes, "Artboard Tool", drawer(&nodes)).center(), pos2(tool.center().x, tool.top() + 0.85 * tool.height()));
     assert_eq!(held(&app, "Mine"), [["ellipse"], ["artboard"]]);
     // Onto the middle of the first tool: into its group.
     let nodes = settle(&mut app, &ctx, 6.0);
     let tool = inside(&nodes, &button_name("ellipse"), one(&nodes, "Mine"));
-    drag(&mut app, &ctx, 7.0, one(&nodes, "Slice Tool").center(), tool.center());
+    drag(&mut app, &ctx, 7.0, inside(&nodes, "Slice Tool", drawer(&nodes)).center(), tool.center());
     assert_eq!(held(&app, "Mine"), [vec!["ellipse", "slice"], vec!["artboard"]]);
     // A click on a tool picks it; the drawer stays open.
     let nodes = settle(&mut app, &ctx, 8.0);
@@ -304,7 +309,7 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     assert!(app.ui.tools_drawer);
     // Dragged from the toolbar into the drawer, a tool leaves it.
     let artboard = inside(&nodes, &button_name("artboard"), one(&nodes, "Mine"));
-    drag(&mut app, &ctx, 10.0, artboard.center(), one(&nodes, "Ellipse Tool").center());
+    drag(&mut app, &ctx, 10.0, artboard.center(), inside(&nodes, "Ellipse Tool", drawer(&nodes)).center());
     assert_eq!(held(&app, "Mine"), [["ellipse", "slice"]]);
     assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
     // The Tools panel's ••• button takes the drawer back beside its toolbar.
@@ -324,10 +329,10 @@ fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
     let ctx = ctx();
     let shipped = slots(&app);
     app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
-    // The menu's items called `name`, top first (the toolbar's own buttons aside).
+    // The menu's items called `name`, top first: inside the menu, the Add Tool… node larger than the + button.
     let items = |nodes: &Nodes, name: &str| -> Vec<Rect> {
-        let bar = one(nodes, "Mine");
-        named(nodes, name).into_iter().filter(|r| !bar.contains(r.center())).collect()
+        let menu = named(nodes, ADD).into_iter().max_by(|a, b| a.area().total_cmp(&b.area())).expect("the menu is open");
+        named(nodes, name).into_iter().filter(|r| menu.contains(r.center())).collect()
     };
     // The menu at `time`, opened with a click on the + button unless it is open.
     let open = |app: &mut VectorcraftApp, time: f64| -> Nodes {
@@ -373,6 +378,9 @@ fn the_drawer_moves_between_new_toolbars() {
     for name in ["A", "B"] {
         app.run("window.toolbar.new", json!({"name": name})).unwrap();
     }
+    // B away from A, which the cascade puts it over.
+    let b = crate::custom_toolbars::panel_id(crate::custom_toolbars::find(&app.ui, "B").unwrap().id);
+    crate::panel_docking::place_floating(&mut app, &b, pos2(600.0, 900.0), 0.0).unwrap();
     for (k, name) in ["B", "A", "B"].into_iter().enumerate() {
         let nodes = settle(&mut app, &ctx, 1.0 + 2.0 * k as f64);
         let edit = inside(&nodes, EDIT, one(&nodes, name));

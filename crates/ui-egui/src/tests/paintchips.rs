@@ -18,6 +18,9 @@ fn fill_hex(app: &VectorcraftApp) -> String {
     panels::current_paints(app).0.color().map(|c| c.to_hex()).unwrap_or_default()
 }
 
+/// The Red swatch's name in the swatch popover.
+const RED: &str = "Red, #ed1c24";
+
 /// A point of the panel's room that holds no control.
 fn outside() -> Pos2 {
     Pos2::new(ROOM.x - 5.0, ROOM.y - 5.0)
@@ -37,16 +40,19 @@ fn a_popover_tile_click_sets_the_fill() {
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     app.run("paint.toggleActive", json!({"fill": false})).unwrap();
     let mut panel = Panel::new(app, chrome::control_bar);
+    // The Control bar ranks its groups out of a panel's width; a window's width shows Fill and Stroke.
+    panel.room(egui::vec2(2200.0, 200.0));
     panel.click("Fill");
     assert!(panel.app().session.fill_active, "the Fill chip brings its proxy forward");
-    panel.click("Red");
+    // A colour swatch is named by its name and value.
+    panel.click(RED);
     assert_eq!(fill_hex(&panel.app()), "#ed1c24");
     assert_eq!(panel.app().session.doc().unwrap().history.undo.last().unwrap().label, "Fill Color", "through paint.setFill");
     // The Stroke chip: its proxy comes forward; Shift-click shows the mixer instead of swatches.
     panel.key(Key::Escape, Modifiers::NONE);
     panel.click_with("Stroke", Modifiers::SHIFT);
     assert!(!panel.app().session.fill_active);
-    assert!(!panel.shows("Red"), "no swatches in the mixer");
+    assert!(!panel.shows(RED), "no swatches in the mixer");
     assert!(panel.shows("Recent Colors"), "the Color panel's body");
 }
 
@@ -60,14 +66,14 @@ fn the_properties_panel_has_the_control_bars_fill_and_stroke() {
     }
     assert!(panel.rect("Stroke").top() > panel.rect("Fill").bottom(), "Fill above Stroke");
     panel.click("Fill");
-    panel.click("Red");
+    panel.click(RED);
     assert_eq!(fill_hex(&panel.app()), "#ed1c24", "the next object's fill");
     panel.app().run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     assert_eq!(fill_hex(&panel.app()), "#ed1c24", "the new rectangle (selected) has it");
     // With the rectangle selected: the same chips, under the Transform section.
     panel.key(Key::Escape, Modifiers::NONE);
     panel.click("Fill");
-    panel.click("Black");
+    panel.click("Black, #000000");
     assert_eq!(fill_hex(&panel.app()), "#000000");
     assert_eq!(panel.app().session.doc().unwrap().history.undo.last().unwrap().label, "Fill Color");
 }

@@ -170,6 +170,8 @@ pub struct VectorcraftApp {
     run_count: u64,
     /// The control channel's requests and their replies, while the host opened one.
     pub(crate) channel: Option<ControlChannel>,
+    /// A `ui.pointer` or `ui.tool.select` held until the synthetic input sent before it reached the tool.
+    deferred_control: Option<ControlRequest>,
     /// Where a control-channel Rotate View drag began, kept between its requests.
     pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// The `ui.pointer` replies that wait for the edit their gesture started on another thread.
@@ -188,6 +190,9 @@ pub struct VectorcraftApp {
     /// Text to copy to the system clipboard next (`flush_clipboard_out`) and what came with a
     /// paste (a Paste event's text, a picture or file the host read: [`Self::paste_from_host`]).
     clipboard_out: Option<String>,
+    /// The text of the latest copy the fallback clipboard took (no host clipboard: tests, the web before its host
+    /// sets one); it goes out through egui ([`Self::flush_clipboard_out`]).
+    fallback_copy: Arc<Mutex<Option<String>>>,
     pub(crate) clipboard_in: Option<vectorcraft_engine::cmd::clipboard::Flavour>,
     /// The Copy or Cut whose formats go to the system clipboard ([`Self::publish_clipboard`]).
     clipboard_publishing: sysclip::Publishing,

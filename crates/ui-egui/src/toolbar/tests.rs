@@ -258,8 +258,9 @@ fn polygon_and_star_canvas_counts_persist_without_new_toolbar_dialogs() {
     }
 }
 
-/// The paint chips, drawing modes and the rest of the footer lie inside the rail at one and at two columns, and in two
-/// columns the three drawing modes sit side by side, each setting its mode (#1129).
+/// The paint chips, drawing modes and the rest of the footer lie inside the rail at one and at two columns (one column
+/// shows the current drawing mode alone), and in two columns the three drawing modes sit side by side, each setting
+/// its mode (#1129).
 #[test]
 fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     let mut app = app_with(200, 200);
@@ -271,7 +272,7 @@ fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
         app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
         nodes = settled(&mut app, &ctx, k as f64 * 10.0, 900.0);
         let rail = named_rect(&nodes, "Tools");
-        for label in footer {
+        for label in &footer[..if double { 6 } else { 4 }] {
             let r = named_rect(&nodes, label);
             assert!(rail.expand(0.5).contains_rect(r), "double {double}: {label} {r:?} in {rail:?}");
         }

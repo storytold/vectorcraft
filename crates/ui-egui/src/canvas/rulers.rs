@@ -129,9 +129,10 @@ pub(super) fn hidden(app: &mut VectorcraftApp) {
     app.session.end_ruler_origin_drag();
 }
 
-/// The strips of a body's rulers, counting from `zero`. A pane's strips only paint.
-pub(super) fn strips(zero: &mut Point, kind: BodyKind) -> Rulers<'_> {
-    Rulers::new(tl!("Rulers"), Bind::bound(zero)).units(units()).interactive(kind == BodyKind::Live)
+/// The strips of a body's rulers, counting from `zero`. A pane's strips only paint. The zero point is given: the
+/// document keeps it, and a drag edits it once, at its release ([`apply`]).
+pub(super) fn strips(zero: Point, kind: BodyKind) -> Rulers<'static> {
+    Rulers::new(tl!("Rulers"), Bind::given(zero)).units(units()).interactive(kind == BodyKind::Live)
 }
 
 /// A drag in progress, kept between passes: what it started in, and whether it no longer counts.

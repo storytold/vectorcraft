@@ -17,7 +17,7 @@ use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, Tran
 use craft::theme::{ControlSize, Size};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, BodyCx, Entry, Props as _, Show as _, ShowContainer as _, ThemeScope, Tracked};
+use craft::ui::contract::{Bind, BodyCx, Entry, Gap, Props as _, Show as _, ShowContainer as _, ThemeScope, Tracked};
 use craft::ui::display::Divider;
 use craft::ui::docking::{DockGrid, DockSizes, GroupAt};
 use craft::ui::form::Field;
@@ -733,18 +733,23 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
     ];
     let mode_button = |ui: &mut Ui, icon: &'static str, name: &str, on: bool| {
         let tip = format!("{} (Shift+D)", tl!(name));
-        IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip).selected(on).show(ui).clicked()
+        let button = IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip).selected(on);
+        // Small in two columns, where the three sit side by side in the rail's width.
+        let button = if two { button.size(ControlSize::Sm) } else { button };
+        button.show(ui).clicked()
     };
     let mut run = None;
     Row::new().wrap(true).show(ui, |ui, _| {
         if show.draw_mode {
             if two {
-                // Side by side, each one a click away.
-                for (mode, icon, name, id) in modes {
-                    if mode_button(ui, icon, name, app.session.draw_mode == mode) {
-                        run = Some(("view.drawMode", json!({ "mode": id })));
+                // Side by side, each one a click away, a tight gap apart to fit the rail's width.
+                Row::new().gap(Gap::Tight).show(ui, |ui, _| {
+                    for (mode, icon, name, id) in modes {
+                        if mode_button(ui, icon, name, app.session.draw_mode == mode) {
+                            run = Some(("view.drawMode", json!({ "mode": id })));
+                        }
                     }
-                }
+                });
             } else if let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
                 && mode_button(ui, icon, name, mode != vectorcraft_engine::DrawMode::Normal)
             {

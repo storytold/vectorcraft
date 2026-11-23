@@ -35,6 +35,7 @@ use craft::ui::contract::Show as _;
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, Prompt, StackDialog, dialog_id};
 use craft::ui::display::{Shade, Text};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog};
+use craft::ui::runtime::windows::WindowHost;
 use craft::ui::sections::{DialogRole, FooterButton};
 use egui::Ui;
 use serde_json::{Map, Value, json};
@@ -535,7 +536,8 @@ impl InstallPrompt {
 }
 
 impl StackDialog for InstallPrompt {
-    type Result = ();
+    /// OK was pressed in a pass automation's injected input drove: the answer is read after that pass.
+    type Result = bool;
 
     fn id(&self) -> DialogId {
         self.id
@@ -545,7 +547,7 @@ impl StackDialog for InstallPrompt {
         Some(INSTALL_KIND)
     }
 
-    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<()>> {
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<bool>> {
         let mut prompt = Prompt::new(tl!("Install Plug-in"), self.message.clone()).paragraph(self.detail.clone());
         if self.automated {
             prompt = prompt.paragraph(automation_asked_note());
@@ -558,7 +560,7 @@ impl StackDialog for InstallPrompt {
             ])
             .show(ui);
         match shown.picked {
-            Some(0) => Some(DialogResult::Ok(())),
+            Some(0) => Some(DialogResult::Ok(WindowHost::of(ui.ctx()).injected_pass())),
             Some(1) => Some(DialogResult::Cancel),
             _ => None,
         }
@@ -595,20 +597,21 @@ fn pump_install(app: &mut VectorcraftApp) {
     });
     let Some(answer) = answer else { return };
     match answer.ok() {
-        Some(()) => approve(app),
+        Some(injected) => approve(app, injected),
         None => app.pending_plugin_install = None,
     }
 }
 
-/// OK of the install question. A question automation asked has no OK that installs, and automation
-/// can't press one: either asks again, a new question that waits its delay.
-fn approve(app: &mut VectorcraftApp) {
+/// OK of the install question, `injected` when automation's input pressed it. A question automation
+/// asked has no OK that installs, and automation can't press one: either asks again, a new question
+/// that waits its delay.
+fn approve(app: &mut VectorcraftApp, injected: bool) {
     let Some(pending) = app.pending_plugin_install.take() else { return };
     if pending.origin == InstallOrigin::Automation {
         ask_install(app, pending);
         return;
     }
-    if app.automation_is_acting() {
+    if injected || app.automation_is_acting() {
         app.status("Only the person at the keyboard can approve installing a plug-in".to_string());
         ask_install(app, pending);
         return;

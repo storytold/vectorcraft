@@ -74,7 +74,7 @@ fn number_row(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, value:
         let bind = Bind::given(value);
         let field = match quantity {
             Quantity::Length => NumberField::length(label, bind, general_lengths(app)),
-            Quantity::Degrees => NumberField::new(label, bind).unit("°").fixed_decimals(1),
+            Quantity::Degrees => NumberField::new(label, bind).unit("°").commit_decimals(1),
             Quantity::Sides => NumberField::new(label, bind).range(3.0..=1000.0).fixed_decimals(0),
         };
         edit = Some(field.show(ui).edit);

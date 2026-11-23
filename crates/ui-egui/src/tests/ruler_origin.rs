@@ -178,7 +178,9 @@ fn ruler_origin_cancelled_drags_do_not_modify_either_document() {
                 to
             }
             Cancel::Focus => {
-                let mut out = ctx.run_ui(egui::RawInput { focused: false, ..Default::default() }, |ui| canvas::show(&mut app, ui));
+                // As the host reports it: the window unfocused, and the event that says so.
+                let lost = egui::RawInput { focused: false, events: vec![Event::WindowFocused(false)], ..Default::default() };
+                let mut out = ctx.run_ui(lost, |ui| canvas::show(&mut app, ui));
                 out.textures_delta.clear();
                 to
             }

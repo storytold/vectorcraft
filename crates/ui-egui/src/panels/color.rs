@@ -103,7 +103,7 @@ fn srgba(c: &Color) -> Srgba {
 
 /// RGB in the active working space, 0 to 255: the panel's RGB rows show and edit the stored components, so a wide
 /// working space shows its own numbers rather than sRGB's.
-struct WorkingRgb;
+pub(crate) struct WorkingRgb;
 
 impl ColorModel for WorkingRgb {
     fn id(&self) -> &'static str {

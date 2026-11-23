@@ -1025,6 +1025,19 @@ mod tests {
         // PLAN: files-w11 owns Missing Fonts' hosted type; its test asserts the search there
     }
 
+    /// `f`'s answer, read while the font menu held still: tests running alongside add fonts to
+    /// the shared database and lend it composite fonts.
+    fn while_fonts_hold<T>(mut f: impl FnMut() -> T) -> T {
+        let db = vectorcraft_text::FontDb::global();
+        loop {
+            let before = db.menu_family_list();
+            let out = f();
+            if before == db.menu_family_list() {
+                return out;
+            }
+        }
+    }
+
     /// A document set in Inter and Source Serif 4 (Inter twice), with Inter the one recent font.
     fn two_font_document() -> VectorcraftApp {
         let mut app = new_app();
@@ -1160,12 +1173,11 @@ mod tests {
         assert!(recent.iter().all(|r| r.family == "Inter"), "{recent:?}");
         assert_eq!(recent.len(), db.styles("Inter").len(), "each style once, the closest not repeated");
         assert!(recent.iter().all(|r| !r.style.is_empty()), "every row names its style: {recent:?}");
-        let system = replacement_rows(&app, "system", &used);
+        let (system, menu) = while_fonts_hold(|| (replacement_rows(&app, "system", &used), db.menu_family_list()));
         assert!(system.iter().any(|r| r.family == "Source Sans 3" && r.style == "Regular"), "{system:?}");
         assert!(!system.iter().any(|r| r.family.starts_with('.')), "the font menu's hidden families stay out");
         // A composite font is a family without styles of its own, listed by its name alone.
         assert!(system.iter().all(|r| !r.style.is_empty() || db.styles(&r.family).is_empty()), "no nameless rows: {system:?}");
-        let menu = db.menu_family_list();
         let listed: std::collections::BTreeSet<&str> = system.iter().map(|r| r.family.as_str()).collect();
         assert_eq!(listed.len(), menu.len(), "every family the font menu shows is listed");
         let mut unique = system.clone();
@@ -1173,8 +1185,11 @@ mod tests {
         assert_eq!(unique.len(), system.len(), "no family and style is listed twice");
         // The dialog stores the rows when it opens and when the source changes, and a picked row
         // sets both fields Change then uses.
-        open(&mut app);
-        assert_eq!(opened(&app).rows.len(), system.len());
+        let (rows, system) = while_fonts_hold(|| {
+            open(&mut app);
+            (opened(&app).rows, replacement_rows(&app, "system", &used))
+        });
+        assert_eq!(rows.len(), system.len());
         let mut d = opened(&app);
         set_source(&app, &mut d, "document", &used);
         assert_eq!(d.rows.len(), document.len());

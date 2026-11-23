@@ -348,8 +348,8 @@ impl Component for TypeEditor<'_> {
 }
 
 /// Shows the editor part over the Type tool's caret while the tool edits text, before the tool host. A new edit target
-/// is a new IME owner, so a reloaded document interrupts its composition.
-pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+/// is a new IME owner, so a reloaded document interrupts its composition. `canvas` is the document canvas's id.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, canvas: egui::Id) {
     if !app.session.tool_wants_text() || app.viewport_hidden(ui.ctx()) {
         return;
     }
@@ -359,8 +359,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let Some(canvas_view) = app.canvas_view() else { return };
     let caret = Rect::from_two_pos(canvas_view.to_screen(a), canvas_view.to_screen(b)).expand2(egui::vec2(1.0, 0.0));
     let out = ui.scope_builder(egui::UiBuilder::new().max_rect(caret), |ui| TypeEditor::new(app, caret).id_salt(target).show(ui)).inner;
-    // Typing goes to the edit that starts, as a click on the part would take the keys.
-    if out.unfocused_start {
+    // Typing goes to the edit that starts, as a click on the part would take the keys. The press that started it
+    // focuses the canvas as its pass ends, so the editor takes the keys back from its canvas in the next pass.
+    if out.unfocused_start || focus::has(ui.ctx(), canvas) {
         focus::request(ui.ctx(), FocusTarget::Id(out.response.id));
     }
 }

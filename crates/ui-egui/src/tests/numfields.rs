@@ -99,12 +99,13 @@ fn a_press_on_the_canvas_commits_to_the_object_being_edited() {
     let app = Rc::new(RefCell::new(app));
     let shared = app.clone();
     let mut fixture = Fixture::new(move |ui| window(&mut shared.borrow_mut(), ui));
-    fixture.settle();
-    // The Transform panel's W field is named by its label, "W"; a click on it focuses the field.
-    let label = fixture.by_label("W").expect("the Transform panel shows the W field");
+    // A window as large as the scrub tests', with the docked Transform panel; the fixture's own room is too small for it.
+    fixture.room(egui::vec2(1600.0, 900.0)).settle();
+    // The W field shows the label "W" and is named "Width"; a click on it focuses the field.
+    let label = fixture.by_label("Width").expect("the Transform panel shows the W field");
     fixture.click(&label).idle(2).key(Key::A, Modifiers::COMMAND).type_text("42").idle(1);
-    // PLAN: assumed the artboard is centred in the window, so the window's centre is on the big rectangle only.
-    let canvas = fixture.ctx().content_rect().center();
+    // A point of the big rectangle away from the small one, where the canvas shows it.
+    let canvas = app.borrow().canvas_view().expect("the canvas is laid out").to_screen(vectorcraft_geom::Point::new(250.0, 200.0));
     fixture.click_at(canvas).idle(3);
 
     let app = app.borrow();

@@ -64,10 +64,24 @@ impl VectorcraftApp {
         let views = session.documents().iter().map(View::of).collect();
         let view_uids = session.documents().iter().map(|d| d.uid).collect();
         let known = session.documents().iter().map(|d| d.uid).collect();
-        // Without a host clipboard (tests, the web before its host sets one) copies stay inside the app.
+        // Without a host clipboard (tests, the web before its host sets one) a copy's text goes out through egui, as
+        // a text field's does.
+        let fallback_copy = Arc::new(std::sync::Mutex::new(None));
         let clipboard = match services.clipboard.take() {
             Some(backend) => Clipboard::new(backend),
-            None => Clipboard::new(EventClipboard::new(|| 0, |_| Ok(0))),
+            None => {
+                let copied = Arc::clone(&fallback_copy);
+                Clipboard::new(EventClipboard::new(
+                    || 0,
+                    move |flavors: &[craft::platform::clipboard::Flavor]| {
+                        let text = flavors.iter().enumerate().find(|(_, f)| f.mime == craft::platform::clipboard::TEXT);
+                        if let (Some((_, f)), Ok(mut slot)) = (text, copied.lock()) {
+                            *slot = Some(String::from_utf8_lossy(&f.data).into_owned());
+                        }
+                        Ok(text.map_or(0, |(i, _)| i))
+                    },
+                ))
+            }
         };
         // PLAN: the hosts (hub-w3) replace `host` with the one they build (files, settings, jobs); every frame installs it through `frame_input`.
         let host = Arc::new(Host::builder(APP_INFO).i18n(i18n::shared()).build());
@@ -153,6 +167,7 @@ impl VectorcraftApp {
             character_focus: None,
             run_count: 0,
             channel: None,
+            deferred_control: None,
             control_rotate_press: None,
             pointer_waits: Vec::new(),
             context: 0,
@@ -161,6 +176,7 @@ impl VectorcraftApp {
             frame_rate: Default::default(),
             hover_doc: None,
             clipboard_out: None,
+            fallback_copy,
             clipboard_in: None,
             clipboard_publishing: Default::default(),
             pending_url: None,
