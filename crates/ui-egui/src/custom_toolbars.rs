@@ -327,7 +327,8 @@ fn set_shown(app: &mut VectorcraftApp, name: &str, show: Option<bool>) -> Result
     let bar = find(&app.ui, name).ok_or_else(|| format!("no toolbar named `{name}`"))?;
     let (id, name) = (bar.id, bar.name.clone());
     let panel = panel_id(id);
-    let shown = panel_docking::visible(app, &panel);
+    // Shown whether or not Tab hides the panels now: showing one then ends the hide.
+    let shown = panel_docking::showing(&app.ui, &panel);
     let show = show.unwrap_or(!shown);
     if show && !shown {
         // A hidden panel comes back where it was.
@@ -769,7 +770,7 @@ mod tests {
         {
             tab(&mut app, &ctx, 3.0 + k as f64);
             assert!(!panel_docking::panels_shown(&app), "{command}: hidden by Tab");
-            app.run(command, params).unwrap();
+            app.run(command, params).unwrap_or_else(|e| panic!("{command}: {e}"));
             // The shell takes the toggle that shows the panels in its next pass (contract ch.K4).
             window_frame(&mut app, &ctx, 3.5 + k as f64, 800.0);
             assert!(panel_docking::panels_shown(&app), "{command} ends the hide");
