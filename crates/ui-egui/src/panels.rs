@@ -755,6 +755,10 @@ pub(crate) enum Live {
 /// Run `cmd` live: while dragging, preview on top of an interaction snapshot; on release, commit
 /// it as one undo step. Falls back to a plain run when no document is open.
 pub(crate) fn live_run(app: &mut VectorcraftApp, label: &str, cmd: &str, params: Value, phase: Live) {
+    // The canvas press that took the field's focus committed this gesture already (`committed_preview`).
+    if phase == Live::Released && std::mem::take(&mut app.canvas.committed_preview) {
+        return;
+    }
     if app.begin_interaction(label).is_ok() {
         // As the scrub's undo step was, the gesture's previews stay in their document when another becomes active.
         if let Some(it) = app.session.active_mut().and_then(|st| st.interaction.as_mut()) {

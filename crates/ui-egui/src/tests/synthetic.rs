@@ -19,6 +19,11 @@ pub(crate) fn control(app: &mut VectorcraftApp, ctx: &egui::Context, method: &st
 /// `events`, so test keys go through the key stage, the board and `run_fired`. The first pass of a
 /// context builds the keymap: a test that presses a key at once runs one empty frame first.
 pub(crate) fn key_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+    key_frame_output(app, ctx, events);
+}
+
+/// [`key_frame`] → the frame's output.
+pub(crate) fn key_frame_output(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
     let time = ctx.input(|i| i.time) + 0.05;
     let raw = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))),
@@ -27,7 +32,7 @@ pub(crate) fn key_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: V
         events,
         ..Default::default()
     };
-    crate::testing::app_frame(app, &ctx, raw);
+    crate::testing::app_frame(app, &ctx, raw)
 }
 
 /// A document with one selected 10 × 10 square at (10, 10) → (app, its id).

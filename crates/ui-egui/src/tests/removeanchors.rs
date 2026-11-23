@@ -51,10 +51,14 @@ pub(crate) fn shapes_text(shapes: &[Shape]) -> Vec<(String, Rect)> {
     v
 }
 
+/// The room the Control bar is drawn in: a wide window, as the bar leaves out the groups that rank last where it has no
+/// room for them.
+pub(crate) const CONTROL_ROOM: egui::Vec2 = vec2(2200.0, 900.0);
+
+/// One frame of the Control bar with the app's frame input, as the hosts give it: its command buttons show their icons.
 pub(crate) fn control_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 900.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| chrome::control_bar(app, ui));
-    out.textures_delta.clear();
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, CONTROL_ROOM)), events, ..Default::default() };
+    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| chrome::control_bar(app, ui));
     shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
 }
 
@@ -65,10 +69,11 @@ pub(crate) fn click_control(app: &mut VectorcraftApp, ctx: &egui::Context, at: P
     control_frame(app, ctx, vec![]);
 }
 
+/// One frame of the canvas, the commands its menus fired run as the hosts run them.
 fn canvas_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
     let screen = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| canvas::show(app, ui));
-    out.textures_delta.clear();
+    let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| canvas::show(app, ui));
     shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
 }
 
@@ -145,8 +150,10 @@ fn the_path_menu_and_bars_run_it_for_direct_selected_anchors() {
     // Right-click keeps the anchor selection (the object is already selected) and runs the item.
     let p = app.canvas_view().unwrap().to_screen(Point::new(100.0, 90.0));
     let texts = click_canvas(&mut app, &ctx, p, PointerButton::Secondary);
-    assert!(has(&texts, LABEL), "context menu: {texts:?}");
-    let texts = click_canvas(&mut app, &ctx, at(&texts, LABEL), PointerButton::Primary);
+    // The menu is drawn over the task bar, whose button has the same label.
+    let mut shown = texts.iter().filter(|(t, _)| t == LABEL);
+    let (Some(_), Some((_, row)), None) = (shown.next(), shown.next(), shown.next()) else { panic!("context menu: {texts:?}") };
+    let texts = click_canvas(&mut app, &ctx, row.center(), PointerButton::Primary);
     assert_eq!(anchor_count(&app, id), 3);
     assert!(!has(&texts, "Cut Path at Selected Anchor Points"), "the menu closes after the command");
     // The next anchor along is selected (#2241), so the task bar offers the command again.

@@ -326,6 +326,16 @@ pub(crate) fn off_reason(app: &VectorcraftApp, command: &CommandRef, label: &str
         .unwrap_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")))
 }
 
+/// The title a row shows in `lang`: the Settings pages read `Page…`, the other rows their label as the menus draw it.
+pub(crate) fn item_title(app: &VectorcraftApp, lang: crate::i18n::Lang, id: &str, params: &Value, label: &str) -> String {
+    if id == "edit.preferences"
+        && let Some(page) = params.get("category").and_then(Value::as_str)
+    {
+        return format!("{}…", crate::i18n::tr(lang, page));
+    }
+    shown_label(app, id, params, label)
+}
+
 /// The tree turned into the bar's nodes, with the state of every item it keeps.
 struct Build<'a> {
     app: &'a VectorcraftApp,
@@ -405,12 +415,7 @@ impl Build<'_> {
     /// The title a row shows: the Settings pages read `Page…`, the other rows their label as the
     /// menus draw it.
     fn item_title(&self, id: &str, params: &Value, label: &str) -> String {
-        if id == "edit.preferences"
-            && let Some(page) = params.get("category").and_then(Value::as_str)
-        {
-            return format!("{}…", crate::i18n::tr(self.lang, page));
-        }
-        shown_label(self.app, id, params, label)
+        item_title(self.app, self.lang, id, params, label)
     }
 
     /// The alternates (a modifier held as the row is chosen) and the font sample of a row.

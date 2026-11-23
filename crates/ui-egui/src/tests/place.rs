@@ -631,9 +631,9 @@ fn the_control_bars_file_name_relinks_the_image() {
 /// of one Control bar frame.
 fn control_named(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) -> Pos2 {
     ctx.enable_accesskit();
-    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 900.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| crate::chrome::control_bar(app, ui));
-    out.textures_delta.clear();
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, crate::tests_removeanchors::CONTROL_ROOM);
+    let raw = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| crate::chrome::control_bar(app, ui));
     out.platform_output
         .accesskit_update
         .iter()
@@ -859,15 +859,16 @@ fn holding_escape_with_the_place_cursor_loaded_discards_one_file() {
     assert_eq!(app.session.tool_options()["count"], 3);
     let selected = app.session.active().unwrap().selection.objects.clone();
     assert!(!selected.is_empty());
-    let key = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    // The host marks the presses after the first as the held key's repeats.
+    let key = |pressed, repeat| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat, modifiers: Default::default() };
     frame(&mut app, &ctx, vec![], &[], false);
     for repeat in 0..4 {
-        frame(&mut app, &ctx, vec![key(true)], &[], false);
+        frame(&mut app, &ctx, vec![key(true, repeat > 0)], &[], false);
         assert_eq!(app.session.tool_options()["count"], 2, "repeat {repeat}: one file is discarded");
         assert_eq!(app.session.active().unwrap().selection.objects, selected, "repeat {repeat}: no command ran");
     }
-    frame(&mut app, &ctx, vec![key(false)], &[], false);
-    frame(&mut app, &ctx, vec![key(true)], &[], false);
+    frame(&mut app, &ctx, vec![key(false, false)], &[], false);
+    frame(&mut app, &ctx, vec![key(true, false)], &[], false);
     assert_eq!(app.session.tool_options()["count"], 1, "a new press discards the next file");
 }
 

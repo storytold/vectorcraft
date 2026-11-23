@@ -130,6 +130,7 @@ impl VectorcraftApp {
                 carry_target: None,
                 last_drag: None,
                 escaped_press: false,
+                committed_preview: false,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
                 images_with_other_art: None,
@@ -604,6 +605,8 @@ impl VectorcraftApp {
             toast::post(&ctx, &WindowKey::main(), Toast::new(t.message).tone(tone(t.level)).timeout(Some(t.seconds as f32)));
         }
         menus::native::sync(self, &ctx);
+        // Only a field's commit in the pass of the press is the one it made.
+        self.canvas.committed_preview = false;
         self.drop_formats_after_egui_copy(&ctx);
         // A command run by a menu, panel or dialog in this pass may have queued its text copy
         // after the input. Publish it now: an idle web host may have no further frame to run it in.

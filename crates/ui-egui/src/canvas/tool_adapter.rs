@@ -259,6 +259,14 @@ impl CanvasTool for SessionTool<'_> {
             app.canvas.last_drag = None;
             return ToolAction::Claimed;
         }
+        // Text typed into a panel's field (its preview) goes to the object it edits before the press can select another.
+        if app.session.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.keep_on_switch) {
+            if let Err(e) = app.session.commit_interaction() {
+                app.ui.status = e.to_string();
+            }
+            app.sync_views();
+            app.canvas.committed_preview = true;
+        }
         let mut ev = pointer_event(PointerKind::Down, pointer, cx);
         // Brush Options' Key Color pick samples the click whatever is held: Cmd or Ctrl lends no selection tool.
         let key_pick = crate::dialogs::brush_art_options::key_color_pick_active(&app);
