@@ -88,7 +88,19 @@ fn contents_reads_paragraph_breaks_as_r_and_accepts_every_break() {
     let out = log(&mut s, "var t = app.activeDocument.textFrames[0]; t.contents = 'a\\rb\\r\\nc\\nd\\u0003e'; vc.log(t.contents);");
     assert_eq!(out, vec![json!("a\rb\rc\rd\u{3}e")]);
     assert_eq!(plain(&s, id), "a\nb\nc\nd\u{2028}e");
-    assert!(failure(&mut s, "app.activeDocument.textFrames[0].contents = 5;").contains("contents must be a string"));
+    assert!(failure(&mut s, "app.activeDocument.textFrames[0].contents = true;").contains("contents must be a string or a number"));
+}
+
+#[test]
+fn contents_takes_a_number_as_its_text() {
+    let (mut s, id) = doc_with("x");
+    let out = log(
+        &mut s,
+        "var t = app.activeDocument.textFrames[0]; t.contents = 7; vc.log(t.contents);\
+         t.textRange.characters[0].contents = 2.5; vc.log(t.contents);",
+    );
+    assert_eq!(out, vec![json!("7"), json!("2.5")]);
+    assert_eq!(plain(&s, id), "2.5");
 }
 
 #[test]
@@ -189,7 +201,10 @@ fn bad_attribute_values_are_refused_without_a_change() {
         ("r.textFont = 'Arial';", "textFont must be a TextFont"),
         ("r.paragraphAttributes.justification = 'LEFT';", "Justification value"),
         ("r.paragraphAttributes.leftIndent = 5000;", "leftIndent"),
-        ("r.length = 1;", "cannot be set yet"),
+        ("r.length = -1;", "length must be a whole number from 0 to 3"),
+        ("r.length = 1.5;", "length must be a whole number from 0 to 3"),
+        ("r.length = 4;", "length must be a whole number from 0 to 3"),
+        ("r.length = 'two';", "length must be a finite number"),
     ] {
         let e = failure(&mut s, &format!("var r = app.activeDocument.textFrames[0].textRange; {src}"));
         assert!(e.contains(want), "{src}: {e}");
@@ -246,10 +261,10 @@ fn paragraph_attributes_set_the_paragraphs_a_range_touches() {
         &mut s,
         "var p = app.activeDocument.textFrames[0].paragraphs; p[0].paragraphAttributes.justification = Justification.RIGHT;\
          p[0].paragraphAttributes.spaceAfter = 4;\
-         vc.log([p[0].justification === undefined, p[0].paragraphAttributes.justification, p[1].paragraphAttributes.justification]);\
+         vc.log([p[0].justification, p[0].paragraphAttributes.justification, p[1].paragraphAttributes.justification]);\
          vc.log([p[0].paragraphAttributes.spaceAfter, p[1].paragraphAttributes.spaceAfter]);",
     );
-    assert_eq!(out, vec![json!([true, "Justification.RIGHT", "Justification.CENTER"]), json!([4, 0])]);
+    assert_eq!(out, vec![json!(["Justification.RIGHT", "Justification.RIGHT", "Justification.CENTER"]), json!([4, 0])]);
     // The empty paragraph after a final break belongs only to an empty range at the end.
     let (mut s, id) = doc_with("a\n");
     let out = log(
@@ -429,6 +444,101 @@ fn text_fonts_list_and_assign_fonts_by_name() {
         _ => panic!("not text"),
     };
     assert_eq!(&set, &(family.clone(), style.clone()));
+}
+
+#[test]
+fn setting_a_ranges_length_moves_its_end_and_leaves_the_text() {
+    let (mut s, id) = doc_with("hello world");
+    let before = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var t = app.activeDocument.textFrames[0], r = t.textRange, w = t.words[1]; r.length = 2;\
+         vc.log([r.length, r.contents, r.start, r.end, t.textRange.length]);\
+         w.length = 3; vc.log([w.contents, w.start]); r.length = 0; vc.log([r.length, r.contents]);\
+         t.characters[0].contents = 'J'; r.length = 5; vc.log(r.contents);",
+    );
+    assert_eq!(out, vec![json!([2, "he", 0, 2, 11]), json!(["wor", 6]), json!([0, ""]), json!("Jello")]);
+    assert_eq!(plain(&s, id), "Jello world");
+    assert_eq!(undo_steps(&s), before + 1);
+}
+
+#[test]
+fn collections_of_text_add_words_characters_and_paragraphs() {
+    let cases = [
+        ("t.words.add('x')", "hello world", "hello world x", "x"),
+        ("t.words.addBefore('x')", "hello world", "x hello world", "x"),
+        ("t.words[0].words.add('x')", "hello world", "hello x world", "x"),
+        ("t.words.add('x', t.words[0], ElementPlacement.PLACEBEFORE)", "hello world", "x hello world", "x"),
+        ("t.words.add('x', t.words[1], ElementPlacement.PLACEATBEGINNING)", "hello world", "hello x world", "x"),
+        ("t.words.add('x', t, ElementPlacement.PLACEATEND)", "hello world", "hello world x", "x"),
+        ("t.words.add('x')", "hello world ", "hello world x ", "x"),
+        ("t.words.add('x')", "", "x", "x"),
+        ("t.words.add(7)", "a", "a 7", "7"),
+        ("t.characters.add('!')", "hi", "hi!", "!"),
+        ("t.characters[0].characters.add('x')", "hi", "hxi", "x"),
+        ("t.paragraphs.add('end')", "one\ntwo", "one\ntwo\nend", "end"),
+        ("t.paragraphs[0].paragraphs.add('mid')", "one\ntwo", "one\nmid\ntwo", "mid"),
+        ("t.paragraphs.addBefore('top')", "one", "top\none", "top"),
+    ];
+    for (call, text, after, added) in cases {
+        let (mut s, id) = doc_with(text);
+        let before = undo_steps(&s);
+        let out = log(&mut s, &format!("var t = app.activeDocument.textFrames[0], n = {call}; vc.log([n.typename, n.contents]);"));
+        assert_eq!(out, vec![json!(["TextRange", added])], "{call} on {text:?}");
+        assert_eq!(plain(&s, id), after, "{call} on {text:?}");
+        assert_eq!(undo_steps(&s), before + 1, "{call} on {text:?}");
+    }
+    // Empty contents add nothing; bad arguments throw before anything changes.
+    let (mut s, id) = doc_with("ab");
+    s.execute("text.create", &json!({"x": 20, "y": 200, "text": "other", "size": 12})).unwrap();
+    let before = undo_steps(&s);
+    let out = log(&mut s, "var n = app.activeDocument.textFrames[1].words.add(''); vc.log([n.length, n.start]);");
+    assert_eq!(out, vec![json!([0, 5])]);
+    for (call, want) in [
+        ("t.words.add(null)", "contents must be a string or a number"),
+        ("t.words.add('x', t.words[0], 'after')", "insertionLocation must be"),
+        ("t.words.add('x', t.words[0], ElementPlacement.INSIDE)", "insertionLocation must be"),
+        ("t.words.add('x', app.activeDocument.textFrames[0])", "same text frame"),
+        ("t.words.add('x', 5)", "relativeObject must be a TextRange or a TextFrame"),
+    ] {
+        let e = failure(&mut s, &format!("var t = app.activeDocument.textFrames[1]; {call};"));
+        assert!(e.contains(want), "{call}: {e}");
+    }
+    assert_eq!(undo_steps(&s), before);
+    assert_eq!(plain(&s, id), "ab");
+}
+
+#[test]
+fn text_fonts_find_a_bundled_face_by_its_postscript_name() {
+    let Some(face) = vectorcraft_text::FontDb::global().loaded_faces().into_iter().find(|f| f.family == "Source Sans 3") else {
+        return; // Built without the bundled fonts.
+    };
+    let ps = face.postscript_name();
+    let (mut s, _) = doc_with("abc");
+    let out = log(&mut s, &format!("var f = app.textFonts.getByName('{ps}'); vc.log([f.family, f.style, f.name]);"));
+    assert_eq!(out, vec![json!([face.family, face.style, ps])]);
+}
+
+#[test]
+fn a_text_range_sets_the_paragraph_attributes_of_the_paragraphs_it_touches() {
+    let (mut s, id) = doc_with("first\nsecond\nthird");
+    let before = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var t = app.activeDocument.textFrames[0], r = t.textRange; r.justification = Justification.CENTER;\
+         vc.log([r.justification, t.paragraphs[2].paragraphAttributes.justification]);\
+         t.characters[7].leftIndent = 9; vc.log([t.paragraphs[0].leftIndent, t.paragraphs[1].leftIndent, t.paragraphs[2].leftIndent]);",
+    );
+    assert_eq!(out, vec![json!(["Justification.CENTER", "Justification.CENTER"]), json!([0, 9, 0])]);
+    let justify: Vec<Justify> = match &s.active().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => (0..3).map(|i| t.para_at(i).justify).collect(),
+        _ => panic!("not text"),
+    };
+    assert_eq!(justify, vec![Justify::Center; 3]);
+    assert_eq!(undo_steps(&s), before + 1);
+    let e = failure(&mut s, "app.activeDocument.textFrames[0].textRange.justification = 'CENTER';");
+    assert!(e.contains("Justification value"), "{e}");
+    assert_eq!(undo_steps(&s), before + 1);
 }
 
 #[test]
