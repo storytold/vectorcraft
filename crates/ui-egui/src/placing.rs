@@ -157,7 +157,6 @@ enum Pasted {
 
 /// Files being read for Place.
 pub struct Pending {
-    pub(crate) id: u64,
     /// The file's name ("photo.tif"; the names joined with ", " for the place cursor's files).
     pub(crate) name: String,
     /// What the status bar shows ("Placing photo.tif").
@@ -203,7 +202,6 @@ pub struct Placing {
     latest_chain: HashMap<u64, u64>,
     /// The number the next chain takes.
     next_chain: u64,
-    pub next_id: u64,
     /// Reads the files one at a time in the order they were started.
     lane: Lane,
     /// Unit tests: how many reads run now, and the most that ran at once.
@@ -365,10 +363,7 @@ fn spawn_labeled(
     });
     let jobs = app.jobs();
     app.placing.lane.push(&*jobs, "vectorcraft-place", job);
-    app.placing.next_id += 1;
-    let id = app.placing.next_id;
     app.placing.pending.push(Pending {
-        id,
         name,
         label: label.clone(),
         doc,

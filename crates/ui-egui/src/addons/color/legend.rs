@@ -7,7 +7,7 @@ use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDi
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::addons::dialogs::{self, Confirm, Spec};
+use crate::addons::dialogs::{self, Spec};
 use crate::canvas::rulers::general_lengths;
 
 /// The command.
@@ -16,7 +16,7 @@ pub const COMMAND: &str = "addon.color.swatchLegend";
 pub const VALUES: [(&str, &str); 5] = [("hex", "HEX"), ("rgb", "RGB"), ("cmyk", "CMYK"), ("lab", "Lab"), ("gray", "Grayscale")];
 
 /// How the dialog's values reach the command.
-pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None, confirm: Confirm::Commit };
+pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None };
 
 /// The command's params from the dialog's fields.
 pub(crate) fn params(fields: &DialogFields) -> Value {

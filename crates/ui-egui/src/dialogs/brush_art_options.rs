@@ -155,11 +155,6 @@ pub(super) fn tile_choice(f: &DialogFields, key: &str) -> String {
     }
 }
 
-/// Sets tile `key` to `choice`: the pick that marks the tile as set.
-pub(super) fn choose_corner(f: &mut DialogFields, key: &str, choice: &str) {
-    f.set(key, choice);
-}
-
 /// The most key colours offered.
 const MAX_COLORS: usize = 16;
 

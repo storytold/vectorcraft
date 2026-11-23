@@ -8,7 +8,7 @@ use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
-use crate::addons::dialogs::{self, Confirm, Spec};
+use crate::addons::dialogs::{self, Spec};
 use crate::canvas::rulers::general_lengths;
 
 /// The command.
@@ -24,7 +24,7 @@ const REACHES: std::ops::RangeInclusive<f64> = 0.0..=10000.0;
 const REACH: f64 = 10.0;
 
 /// How the dialog's values reach the command.
-pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None, confirm: Confirm::Commit };
+pub(crate) static SPEC: Spec = Spec { command: COMMAND, params, found: None };
 
 /// The command's parameters from the dialog's fields: the radius, or with Constant Gap the gap.
 fn params(fields: &DialogFields) -> Value {

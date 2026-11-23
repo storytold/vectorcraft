@@ -155,11 +155,6 @@ pub(crate) enum Opened {
 }
 
 impl PluginDialog {
-    /// The plug-in the dialog is for.
-    pub(crate) fn plugin(&self) -> &str {
-        self.kind.plugin()
-    }
-
     /// Whether the dialog is an importer's whose Open opens a file the picker chose, which is read off the UI thread
     /// where the app can.
     #[cfg(test)]

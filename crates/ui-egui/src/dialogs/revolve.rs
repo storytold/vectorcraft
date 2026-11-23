@@ -311,9 +311,9 @@ fn bevel_heading() -> Param {
 pub(crate) type BevelChoice = (String, Value, Option<(String, Value)>);
 
 /// The entries of the Bevel Shape menu for form `fields`, and how many are built in. The built-in labels are
-/// translated; custom bevels show their names as they are. The effect's own custom bevel, the panel's [`OWN_BEVEL`]
-/// else the form's, is listed unless the file lists it by name with the same points; while another entry has its
-/// label, " (document)" is added to it.
+/// translated; custom bevels show their names as they are. The effect's own custom bevel in `fields` (the 3D and
+/// Materials panel gives the first selected effect's settings, unmarked by a mixed selection) is listed unless the
+/// file lists it by name with the same points; while another entry has its label, " (document)" is added to it.
 pub(crate) fn bevel_options(app: &VectorcraftApp, fields: &serde_json::Map<String, Value>, effect: &str) -> (Vec<BevelChoice>, usize) {
     let mut options: Vec<BevelChoice> = super::effect_params::own_choices(effect, "bevel", false)
         .unwrap_or_default()
@@ -325,13 +325,10 @@ pub(crate) fn bevel_options(app: &VectorcraftApp, fields: &serde_json::Map<Strin
         options.push((b.name.clone(), json!("custom"), Some((b.name.clone(), b.profile_json()))));
     }
     let custom = fields.get("bevel").and_then(Value::as_str) == Some("custom");
-    let own = match fields.get(OWN_BEVEL).and_then(Value::as_array).map(Vec::as_slice) {
-        Some([n, p]) => Some((n.as_str().unwrap_or_default().to_string(), p.clone())),
-        _ => fields
-            .get(BEVEL_PROFILE)
-            .filter(|p| custom && !p.is_null())
-            .map(|p| (fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default().to_string(), p.clone())),
-    };
+    let own = fields
+        .get(BEVEL_PROFILE)
+        .filter(|p| custom && !p.is_null())
+        .map(|p| (fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default().to_string(), p.clone()));
     if let Some((n, p)) = own
         && !options[builtin..].iter().any(|(_, _, c)| c.as_ref().is_some_and(|(cn, cp)| *cn == n && *cp == p))
     {
@@ -344,10 +341,6 @@ pub(crate) fn bevel_options(app: &VectorcraftApp, fields: &serde_json::Map<Strin
     }
     (options, builtin)
 }
-
-/// The form field where the 3D and Materials panel puts the first selected effect's custom bevel, `[name, points]`,
-/// so Bevel Shape lists it while a mixed selection unsets the shown bevel.
-pub(crate) const OWN_BEVEL: &str = "__ownBevel";
 
 /// The Bevel Shape menu of Extrude & Bevel and Extrude & Bevel (Classic) (`effect`): None and the built-in shapes,
 /// then the custom bevels of the bevels file, and the effect's own custom bevel when the file does not list it. Picking

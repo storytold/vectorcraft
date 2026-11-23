@@ -19,7 +19,6 @@ use crate::export_progress::Shown;
 
 /// A file being read.
 pub struct Pending {
-    id: u64,
     /// Where it is.
     pub path: String,
     /// What the status bar shows ("Opening Poster.vectorcraft").
@@ -43,7 +42,6 @@ pub struct Opening {
     /// Open documents asked for again while the active one couldn't change: their tabs come to
     /// the front once it can ([`may_switch`]), each in the file access scope it was asked in.
     pub activate: Vec<(String, ScopeHandle)>,
-    next_id: u64,
 }
 
 /// Is a long operation running that should show the busy cursor and status spinner (background
@@ -131,10 +129,8 @@ pub(crate) fn finish_answered(app: &mut VectorcraftApp, path: &str, file: ReadFi
 /// Lists the file being read for `path` and tells the status bar → `{background: true, status}`.
 fn track(app: &mut VectorcraftApp, path: &str, done: Receiver<Result<ReadFile, String>>, scope: ScopeHandle, token: CancelToken) -> Value {
     let label = format!("Opening {}", fileio::file_name(path));
-    app.opening.next_id += 1;
-    let id = app.opening.next_id;
     let started = crate::export_progress::now();
-    app.opening.pending.push(Pending { id, path: path.to_string(), label: label.clone(), done, scope, token, hidden: false, started });
+    app.opening.pending.push(Pending { path: path.to_string(), label: label.clone(), done, scope, token, hidden: false, started });
     let status = format!("{label}…");
     app.status(status.clone());
     json!({ "background": true, "status": status })

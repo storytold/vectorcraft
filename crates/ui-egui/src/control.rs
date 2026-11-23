@@ -1163,7 +1163,7 @@ const DOCKING_ACTION: &str = "action";
 /// succeeded or failed ([`sent_paths`]), except where a `path` or `files` entry of its result names the
 /// file the request wrote inside the write roots, as the request gave it. A reply with no `/`, `\` or `%` in it is not searched, since every hidden path
 /// holds a separator, written or escaped. A screenshot's reply is hidden when it is sent
-/// ([`hide_in_deferred_reply`]); a `ui.pointer` reply sent after the tool's edit holds no library id
+/// ([`Hiding::hide_error`]); a `ui.pointer` reply sent after the tool's edit holds no library id
 /// or path.
 pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest) -> Reply {
     let method = req.method.as_str();
@@ -1306,15 +1306,6 @@ fn restore_written_paths(reply: &mut Value, kept: Vec<(String, String)>) {
         if let Some(slot) = reply.pointer_mut(&at) {
             *slot = json!(path);
         }
-    }
-}
-
-/// Hides in a reply sent after its request was handled (a screenshot's) what [`handle`] hides in a
-/// reply, with `sent` as the request's params. Without a read root in force it leaves the reply as
-/// it is.
-pub(crate) fn hide_in_deferred_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value) {
-    if vectorcraft_engine::file_access::current().is_some() {
-        deferred_hiding(app).hide(reply, sent);
     }
 }
 

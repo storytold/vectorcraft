@@ -6,7 +6,6 @@
 //! dialog stays open. [`params`] lays out the options of Effect › Rasterize… with the same rows.
 
 use craft::ui::contract::Bind;
-use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::UnitKind;
 use serde_json::{Map, Value, json};
@@ -16,18 +15,12 @@ use vectorcraft_render::AntiAlias;
 use super::effect_params::{EffectCx, own_choices};
 use super::form::{fields_of, json_of};
 use super::halftone::options;
-use super::host::{HeldOptions, open_held_with};
+use super::host::open_held;
 use crate::VectorcraftApp;
 
 const CMD: &str = "document.rasterEffectsSettings";
 /// The resolution presets: (ppi, label).
 const RESOLUTIONS: [(f64, &str); 3] = [(72.0, "Screen (72 ppi)"), (150.0, "Medium (150 ppi)"), (300.0, "High (300 ppi)")];
-
-/// The open Document Raster Effects Settings dialog.
-pub(crate) struct Open {
-    /// The dialog's id on the host.
-    pub id: DialogId,
-}
 
 /// Sets `resolutionPreset` from `resolution` and `useDocumentResolution`: Use Document Raster
 /// Effects Resolution, the preset whose ppi the resolution is, or Other.
@@ -112,19 +105,15 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| {
         let mut params = json_of(&answered, &result.fields);
         resolution_of(&mut params);
-        app.run(CMD, Value::Object(params))?;
-        app.effect_dialogs.raster = None;
-        Ok(())
+        app.run(CMD, Value::Object(params)).map(|_| ())
     };
-    let cancel: Box<dyn FnOnce(&mut VectorcraftApp)> = Box::new(|app| app.effect_dialogs.raster = None);
-    let id = open_held_with(app, dialog, ok, HeldOptions { cancel: Some(cancel), ..Default::default() }).ok_or("no window")?;
-    app.effect_dialogs.raster = Some(Open { id });
+    open_held(app, dialog, ok).ok_or("no window")?;
     Ok(Value::Null)
 }
 
 #[cfg(test)]
 mod tests {
-    use craft::ui::dialog::DialogId;
+    use craft::ui::dialog::{DialogId, StackDialog};
     use craft::ui::patterns::form_dialogs::HostedParamDialog;
     use serde_json::json;
     use vectorcraft_engine::Session;
@@ -173,7 +162,7 @@ mod tests {
     fn raster_effects_settings_draw_and_ok_is_one_undo_step() {
         let mut app = app();
         crate::menus::invoke(&mut app, "document.rasterEffectsSettings", json!({}));
-        let id = app.effect_dialogs.raster.as_ref().unwrap().id;
+        let id = app.dialogs().unwrap().with(|h| h.get::<HostedParamDialog>().map(StackDialog::id)).unwrap();
         assert_eq!(text(&app, id, "colorModel").as_deref(), Some("rgb"));
         // `ui.dialog.set` names the dialog by the id `ui.inspect` lists.
         let listed = id.value().to_string();
@@ -186,7 +175,7 @@ mod tests {
         set(&mut app, Some(&listed), "resolutionPreset", json!("other"));
         set(&mut app, Some(&listed), "resolution", json!(200));
         ok(&mut app, id);
-        assert!(app.effect_dialogs.raster.is_none());
+        assert!(app.dialogs().unwrap().with(|h| h.get_by_id::<HostedParamDialog>(id).is_none()), "OK closes the dialog");
         let st = app.session.active().unwrap();
         let r = &st.doc.raster_effects;
         assert_eq!((st.doc.raster_effects_ppi, r.add_around, r.background), (200.0, 36.0, vectorcraft_doc::Background::White));

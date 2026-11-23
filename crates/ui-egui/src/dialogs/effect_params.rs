@@ -195,11 +195,6 @@ pub(crate) const PAINT_DAUB_BRUSH_TYPE_LABELS: [&str; 6] = ["Simple", "Light Rou
 /// What Drop Shadow's shadow takes its color from (`shade`), as (label, value).
 pub(crate) const SHADES: form::Choices = &[("Color", "color"), ("Darkness", "darkness")];
 
-/// Does effect `id` have Load Texture… in its dialog (Glass, Texturizer, Rough Pastels)?
-pub(super) fn loads_texture(id: &str) -> bool {
-    matches!(id, GLASS | TEXTURIZER | ROUGH_PASTELS)
-}
-
 /// Glass's Texture menu, ending with Loaded Texture once a texture is `loaded`.
 pub(super) fn glass_textures(loaded: bool) -> form::Choices {
     use vectorcraft_effects::pixel::{GLASS_TEXTURES, GLASS_TEXTURES_LOADED};
@@ -285,32 +280,6 @@ pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'
         ("adjust.levels" | "adjust.curves", "channel") => vec![("RGB", "rgb"), (tl!("Red"), "red"), (tl!("Green"), "green"), (tl!("Blue"), "blue")],
         _ => return None,
     })
-}
-
-/// The values that parameter `key` of applied effect `effect` picks from, as its dialog lists
-/// them, as (label, value): our own effects' labels in the UI language, a plug-in's choices as the
-/// plug-in names them. The Texture menu of Glass, Texturizer and Rough Pastels ends with Loaded
-/// Texture when the effect's values `params` hold a loaded texture, and the lists of
-/// [`own_choices`] are translated as their dialogs translate them (`cmyk`: the document is in
-/// CMYK). `None` for a parameter that is not one of these lists.
-pub(crate) fn shown_choices(effect: &str, key: &str, params: &Map<String, Value>, cmyk: bool) -> Option<Vec<(String, String)>> {
-    if let Some(plugin) = vectorcraft_plugins::effect::installed(effect) {
-        return plugin.manifest().param(key).and_then(|p| match &p.spec {
-            vectorcraft_plugins::ParamSpec::Choice { options, .. } => Some(options.iter().map(|o| (o.clone(), o.clone())).collect()),
-            _ => None,
-        });
-    }
-    if let Some(own) = own_choices(effect, key, cmyk) {
-        return Some(own.into_iter().map(|(label, value)| (tl!(label).to_string(), value.to_string())).collect());
-    }
-    let options = if loads_texture(effect) && key == "texture" {
-        use vectorcraft_effects::pixel::{TEXTURE_IMAGE, texture};
-        let loaded = params.get(TEXTURE_IMAGE).and_then(Value::as_str).and_then(texture).is_some();
-        if effect == GLASS { glass_textures(loaded) } else { texturizer_textures(loaded) }
-    } else {
-        choices(effect, key)?
-    };
-    Some(options.iter().map(|(label, value)| (form::choice_label(label).to_string(), value.to_string())).collect())
 }
 
 /// Where parameter `key` comes in the effect's parameter documentation `doc` (`{radius: …,

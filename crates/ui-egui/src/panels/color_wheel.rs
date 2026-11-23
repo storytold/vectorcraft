@@ -668,16 +668,6 @@ fn bind<'a>(values: Option<ModelValues>) -> Bind<'a, ModelValues> {
     }
 }
 
-/// The display sRGB bytes `rgb` shows as, 0 to 255.
-pub(crate) fn bytes(rgb: [f32; 3]) -> [u8; 3] {
-    rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
-}
-
-/// The hex text of 0 to 255 values, in the form of the Color panel's hex field (`E67828`).
-pub(crate) fn hex([r, g, b]: [u8; 3]) -> String {
-    format!("{r:02X}{g:02X}{b:02X}")
-}
-
 /// The display sRGB of `c` as simulated for protanopia, deuteranopia and tritanopia, through
 /// `cms`'s Proof Setup simulations, and for achromatopsia: the gray with `c`'s CIE L*, through the
 /// same display transform.

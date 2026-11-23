@@ -38,8 +38,6 @@ pub(crate) struct EffectDialogs {
     pub effect: Option<Open>,
     /// The Halftone dialog.
     pub halftone: Option<super::halftone::Open>,
-    /// The Document Raster Effects Settings and Rasterize dialogs.
-    pub raster: Option<super::raster_effects::Open>,
     /// The envelope dialogs.
     pub envelope: Option<super::envelope::Open>,
     /// The Effect Gallery.
@@ -498,7 +496,7 @@ pub(super) fn texture_fields(bytes: &[u8]) -> Result<[(&'static str, FieldValue)
 
 #[cfg(test)]
 mod tests {
-    use super::super::effect_params::{DROP_SHADOW, GLASS, RADIAL_BLUR, ROUGH_PASTELS, TEXTURIZER, choices, own_choices, shown_choices};
+    use super::super::effect_params::{DROP_SHADOW, GLASS, RADIAL_BLUR, ROUGH_PASTELS, TEXTURIZER, choices, own_choices};
     use super::*;
 
     fn app() -> VectorcraftApp {
@@ -627,10 +625,8 @@ mod tests {
                 assert_eq!(d.fields().text("texture"), Some("loaded"), "{effect}");
                 d.fields().text(vectorcraft_effects::pixel::TEXTURE_IMAGE).unwrap().to_string()
             });
-            let mut values = Map::new();
-            values.insert(vectorcraft_effects::pixel::TEXTURE_IMAGE.into(), json!(stored));
-            let shown = shown_choices(effect, "texture", &values, false).unwrap();
-            assert_eq!(shown.last().map(|(_, v)| v.as_str()), Some("loaded"), "{effect}");
+            // The Texture menu lists Loaded Texture while the stored image reads as a texture.
+            assert!(vectorcraft_effects::pixel::texture(&stored).is_some(), "{effect}");
             ok(&mut app);
             let p = params(&app, node);
             assert_eq!((&p["texture"], &p["textureImage"]), (&json!("loaded"), &json!(stored)), "{effect}");

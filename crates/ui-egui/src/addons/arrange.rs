@@ -11,7 +11,7 @@ use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamDialog, ParamK
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Value, json};
 
-use super::dialogs::{Confirm, Spec};
+use super::dialogs::Spec;
 use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
 use crate::dialogs::form;
@@ -67,11 +67,11 @@ pub fn menu() -> Vec<Node> {
     ]
 }
 
-static GRID_SPEC: Spec = Spec { command: GRID, params: grid_params, found: None, confirm: Confirm::Commit };
-static REPLACE_SPEC: Spec = Spec { command: REPLACE, params: replace_params, found: None, confirm: Confirm::Commit };
-static SIZE_SPEC: Spec = Spec { command: SIZE, params: size_params, found: None, confirm: Confirm::Commit };
-static OPACITY_SPEC: Spec = Spec { command: OPACITY, params: opacity_params, found: None, confirm: Confirm::Commit };
-static SORT_SPEC: Spec = Spec { command: SORT, params: sort_params, found: None, confirm: Confirm::Commit };
+static GRID_SPEC: Spec = Spec { command: GRID, params: grid_params, found: None };
+static REPLACE_SPEC: Spec = Spec { command: REPLACE, params: replace_params, found: None };
+static SIZE_SPEC: Spec = Spec { command: SIZE, params: size_params, found: None };
+static OPACITY_SPEC: Spec = Spec { command: OPACITY, params: opacity_params, found: None };
+static SORT_SPEC: Spec = Spec { command: SORT, params: sort_params, found: None };
 
 /// The dialog over `rows`, titled by the heading of `command`.
 fn dialog<'a>(command: &str, rows: Vec<Param>) -> ParamDialog<'a> {

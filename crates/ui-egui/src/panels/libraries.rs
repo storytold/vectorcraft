@@ -151,24 +151,22 @@ enum Act {
     RenameItem(ItemKind, String),
 }
 
-/// What a drag in the panel holds for the library shown: one of its items, one of its groups (by
-/// the group's header), or something to add to it.
+/// What a drag in the panel holds for the library shown: one of its items, or something to add to it. A group's header
+/// moves the group within the panel's section stack.
 #[derive(Clone, Debug, PartialEq)]
 enum Grab {
     Item(ItemKind, String),
-    Group(String),
     /// Art dragged off the canvas, or a swatch from elsewhere (a colour, also from another library,
     /// or a gradient or pattern swatch): added where it is dropped, with these `library.add` params.
     New(ItemKind, Value),
 }
 
-/// The item or group of library `library` that `drag` holds, or what it would add, if anything.
+/// The item of library `library` that `drag` holds, or what it would add, if anything.
 fn grabbed(drag: &PanelDrag, library: &str) -> Option<Grab> {
     match drag {
         PanelDrag::Paint { library: Some((l, item)), .. } if l == library => Some(Grab::Item(ItemKind::Color, item.clone())),
         PanelDrag::LibraryGraphic { library: l, item } if l == library => Some(Grab::Item(ItemKind::Graphic, item.clone())),
         PanelDrag::LibraryItem { library: l, kind, item } if l == library => Some(Grab::Item(*kind, item.clone())),
-        PanelDrag::LibraryGroup { library: l, group } if l == library => Some(Grab::Group(group.clone())),
         PanelDrag::Art { ids, .. } => {
             let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
             Some(Grab::New(ItemKind::Graphic, json!({ "kind": "graphic", "ids": ids })))
@@ -236,7 +234,7 @@ impl Membership {
         let (cmd, mut params) = match grabbed(drag, &self.library)? {
             Grab::Item(kind, item) if self.group_of(kind, &item) != group => ("library.moveItem", json!({ "kind": kind_param(kind), "item": item })),
             Grab::New(_, add) => ("library.add", add),
-            Grab::Item(..) | Grab::Group(_) => return None,
+            Grab::Item(..) => return None,
         };
         self.in_group(&mut params, group);
         Some(Act::Run(cmd, params))

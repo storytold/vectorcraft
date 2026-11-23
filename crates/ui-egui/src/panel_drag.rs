@@ -33,8 +33,6 @@ pub enum PanelDrag {
     /// A Libraries panel text style (`item`: its name in `library`), which the panel moves to where
     /// it is dropped.
     LibraryItem { library: String, kind: vectorcraft_engine::cmd::library::ItemKind, item: String },
-    /// A Libraries panel group, by its header, which the panel moves to where it is dropped.
-    LibraryGroup { library: String, group: String },
 }
 
 /// The Swatches panel rows a drag from that panel moves: the swatch, None, Registration or colour

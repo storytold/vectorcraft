@@ -7,7 +7,7 @@ use vectorcraft_engine::Session;
 use vectorcraft_text::FontDb;
 
 use crate::VectorcraftApp;
-use crate::font_menu::{apply_family, apply_preview, end_previews, family_pick, picker_settings, sample_text};
+use crate::font_menu::{PickerHold, apply_family, apply_preview, end_previews, family_picker, family_sets, hold, picker_settings, sample_text};
 
 /// The owner every test preview is made by.
 fn owner() -> egui::Id {
@@ -182,10 +182,19 @@ fn picked_id() -> egui::Id {
     egui::Id::unique("font-menu-test-pick")
 }
 
-/// A picker that only picks, as Find Font's Replace With and the Glyphs panel use it.
+/// A picker that only picks, as Composite Fonts uses it: over the app's picker settings, which it writes back.
 fn pick_only(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
-    if let Some(pick) = family_pick(app, ui, "Font", "Inter") {
-        ui.ctx().data_mut(|d| d.insert_temp(picked_id(), pick));
+    use craft::ui::contract::{Bind, Show as _};
+    let mut held = hold(app);
+    let before = held.settings.clone();
+    let out = {
+        let PickerHold { settings, filters, document, recently_added } = &mut held;
+        let sets = family_sets(document.as_deref(), recently_added);
+        family_picker("Font", Bind::given("Inter".to_owned()), Bind::bound(settings), Bind::bound(filters), &sets).show(ui)
+    };
+    held.store(app, &before);
+    if let Some(family) = out.picked {
+        ui.ctx().data_mut(|d| d.insert_temp(picked_id(), (family, out.picked_style)));
     }
 }
 

@@ -1,11 +1,11 @@
 //! The add-on dialogs' host side: each is a hosted parameter dialog keyed by its command, whose
-//! values reach that command as params. `Commit` dialogs preview on the canvas and run their
-//! command at OK as one undo step; `Options` dialogs hold their OK and answer through `tool.setOption`.
+//! values reach that command as params. Each previews on the canvas and runs its command at OK as
+//! one undo step.
 
 use std::mem;
 
 use craft::ui::dialog::{DialogResult, StackDialog};
-use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog, ParamResult};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog};
 use egui::Context;
 use serde_json::{Value, json};
 
@@ -15,14 +15,6 @@ use crate::dialogs::preview::LivePreview;
 
 #[cfg(test)]
 pub(crate) mod tests;
-
-/// What OK does for a dialog.
-pub(crate) enum Confirm {
-    /// Run the command as one undo step, keeping the live preview ([`pump`] answers it).
-    Commit,
-    /// Run `tool.setOption` with the params; a refusal keeps the dialog open.
-    Options,
-}
 
 /// Shows a preview run's answer (or its error) in the dialog.
 pub(crate) type Found = fn(&mut HostedParamDialog, Result<&Value, &str>);
@@ -35,18 +27,16 @@ pub(crate) struct Spec {
     pub params: fn(&DialogFields) -> Value,
     /// Receives the answer of each preview run (or its error), to show it in the dialog.
     pub found: Option<Found>,
-    /// What OK does.
-    pub confirm: Confirm,
 }
 
-/// The `Commit` dialog open now and the live preview it drives; one at a time, since a preview owns the document.
+/// The add-on dialog open now and the live preview it drives; one at a time, since a preview owns the document.
 #[derive(Default)]
 pub(crate) struct AddonDialogs {
     open: Option<(craft::ui::dialog::DialogId, &'static Spec)>,
     preview: LivePreview,
 }
 
-/// Closes the open `Commit` dialog without an answer and rolls its preview back.
+/// Closes the open add-on dialog without an answer and rolls its preview back.
 fn close_open(app: &mut VectorcraftApp) {
     let Some((id, _)) = app.addon_dialogs.open.take() else { return };
     if let (Some(host), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) {
@@ -68,22 +58,11 @@ pub(crate) fn open(
 ) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let dialog = HostedParamDialog::new(&ctx, spec.command, fields, build);
-    match spec.confirm {
-        Confirm::Commit => {
-            let host = app.dialogs().ok_or("no window")?;
-            close_open(app);
-            let id = dialog.id();
-            host.with(|h| h.open(dialog));
-            app.addon_dialogs.open = Some((id, spec));
-        }
-        Confirm::Options => {
-            let params = spec.params;
-            crate::dialogs::host::open_held(app, dialog, move |app, result: &ParamResult| {
-                app.run("tool.setOption", params(&result.fields)).map(|_| ())
-            })
-            .ok_or("no window")?;
-        }
-    }
+    let host = app.dialogs().ok_or("no window")?;
+    close_open(app);
+    let id = dialog.id();
+    host.with(|h| h.open(dialog));
+    app.addon_dialogs.open = Some((id, spec));
     Ok(json!({ "dialog": spec.command }))
 }
 
@@ -104,7 +83,7 @@ pub(crate) fn open_from_menu(app: &mut VectorcraftApp, id: &str) -> Option<Resul
     Some(open(app))
 }
 
-/// Once per frame: runs the preview of the open `Commit` dialog, commits or cancels it when the dialog has
+/// Once per frame: runs the preview of the open add-on dialog, commits or cancels it when the dialog has
 /// answered, then lets the dialogs that take their own answer do the same. Each takes its dialog by id, never
 /// by type: two hosted parameter dialogs would take each other's answers.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {

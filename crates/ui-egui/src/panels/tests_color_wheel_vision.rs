@@ -6,13 +6,13 @@ use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, ProofSetup, ProofTarget};
 use vectorcraft_engine::Session;
 
-use super::color_wheel::{bytes, vision_colors};
+use super::color_wheel::vision_colors;
 use super::tests_color_wheel::Panel;
 use crate::VectorcraftApp;
 
 /// `#rrggbb` of display sRGB `rgb`, as the chips report it.
-fn hex(rgb: [f32; 3]) -> String {
-    format!("#{}", super::color_wheel::hex(bytes(rgb)).to_lowercase())
+fn hex([r, g, b]: [f32; 3]) -> String {
+    craft::theme::Srgba::new(r, g, b, 1.0).to_hex()
 }
 
 const NAMES: [&str; 4] = ["Protanopia", "Deuteranopia", "Tritanopia", "Achromatopsia"];

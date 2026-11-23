@@ -215,7 +215,8 @@ fn find_fonts_opens_find_font_on_the_missing_font() {
     assert!(answer_ok(&mut app));
     assert!(is_open::<crate::find_font::FindFontDialog>(&app), "Find Font");
     let fonts = app.session.execute("text.fonts", &json!({})).unwrap();
-    let selected = host(&app, |h| h.get::<crate::find_font::FindFontDialog>().map(|d| d.selected())).unwrap();
+    let selected =
+        host(&app, |h| h.get::<crate::find_font::FindFontDialog>().and_then(|d| d.json_fields())).unwrap()["selected"].as_u64().unwrap() as usize;
     assert!(selected > 0 && fonts[selected]["family"] == "Zz Missing Family", "{selected} in {fonts}");
     // Find Font closed: no Missing Fonts dialog follows.
     let ctx = app.ui_ctx.clone().unwrap();
@@ -244,7 +245,8 @@ fn find_fonts_works_on_the_dialog_s_own_document() {
     answer_ok(&mut app);
     assert_eq!(app.session.active().unwrap().path.as_deref(), Some(&*a.to_string_lossy()));
     let fonts = app.session.execute("text.fonts", &json!({})).unwrap();
-    let selected = host(&app, |h| h.get::<crate::find_font::FindFontDialog>().map(|d| d.selected())).unwrap();
+    let selected =
+        host(&app, |h| h.get::<crate::find_font::FindFontDialog>().and_then(|d| d.json_fields())).unwrap()["selected"].as_u64().unwrap() as usize;
     assert_eq!(fonts[selected]["family"], "Alpha Missing Family", "{fonts}");
 }
 
