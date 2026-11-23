@@ -683,6 +683,8 @@ fn a_paste_chord_into_type_waits_for_the_formats() {
             frame(app, events);
         }
         app.select_tool("selection");
+        // The window draws the frame without the edit's editor, as a host does before the next click starts one.
+        frame(app, vec![]);
     };
     let t = run(&mut app, "text.create", json!({"x": 20, "y": 250, "text": "Words"}))["id"].clone();
     run(&mut app, "select.set", json!({"ids": [t]}));

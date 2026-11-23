@@ -1227,7 +1227,8 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
         }
         let before = field(&r, "rows");
         let expected = if empty_new { before[row]["from"][0].clone() } else { before[row]["to"].clone() };
-        let at = rect(&r, &format!("Color {}", row + 1)).center();
+        // The row's New chip, as production's right-click took it; `Color N` is the row's hex field.
+        let at = rect(&r, &format!("New {}", row + 1)).center();
         right_click(&mut r, at);
         assert_eq!(field(&r, "__sel"), json!([row]), "right-click selects the targeted row");
         tap(&mut r, "Pick from Swatches");

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
-use super::picks::{self, Picker, answer_dialog, answer_replace, open_dialogs, replace_asked, scripted};
+use super::picks::{self, Picker, answer_dialog, answer_replace, cancel_dialog, open_dialogs, replace_asked, scripted};
 use crate::{Services, VectorcraftApp, io};
 
 type Written = Rc<RefCell<Vec<String>>>;
@@ -76,6 +76,9 @@ fn type_index(picker: &Picker, ext: &str) -> Option<usize> {
 fn answer_top(app: &mut VectorcraftApp, fields: &[(&str, Value)], ok: bool) {
     let id = open_dialogs(app).pop().map(|d| d.id).expect("a dialog is open");
     answer_dialog(app, id, fields, ok);
+    if !ok {
+        cancel_dialog(app, id);
+    }
 }
 
 /// A field of the top dialog, as automation lists it.
@@ -83,9 +86,14 @@ fn top_field(app: &VectorcraftApp, field: &str) -> Option<Value> {
     open_dialogs(app).pop()?.fields?.get(field).cloned()
 }
 
-/// The path the top dialog holds: the options of the format being written.
+/// The path the top dialog holds: the options of the format being written. Save PDF's dialog lists its options only;
+/// the file it writes is the app's job.
 fn dialog_path(app: &VectorcraftApp) -> Option<String> {
-    top_field(app, "path")?.as_str().map(str::to_string)
+    let top = open_dialogs(app).pop()?;
+    if let Some(open) = app.save_pdf.as_ref().filter(|open| open.id == top.id) {
+        return open.job.as_ref()?.path.clone();
+    }
+    top.fields?.get("path")?.as_str().map(str::to_string)
 }
 
 /// Run `run`, which opens a save panel, and answer the panel with `path` and the file type with
