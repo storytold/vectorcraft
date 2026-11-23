@@ -449,8 +449,9 @@ const REPEAT_PRESETS: [f64; 6] = [1.0, 2.0, 3.0, 4.0, 5.0, 10.0];
 
 /// The Presets row: a menu of the preset gradients by library (theme), then the
 /// saved ones; a choice applies to the gradient behind the active proxy, keeping its placement
-/// (`gradient.presets.apply`; a solid or no paint becomes the gradient). The menu shows the preset
-/// the gradient is, if any.
+/// (`gradient.presets.apply`; a solid or no paint becomes the gradient), as the panel's other
+/// controls do: an active Appearance row stands for it only when it is a row of the proxy's kind.
+/// The menu shows the preset the gradient is, if any.
 fn presets_row(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPaint>) {
     let shown = g.and_then(|g| app.session.gradient_preset_name(&g.gradient)).unwrap_or_default();
     let enabled = crate::menus::enabled(app, "gradient.presets.apply");
@@ -458,7 +459,7 @@ fn presets_row(app: &mut VectorcraftApp, ui: &mut Ui, g: Option<&GradientPaint>)
         widgets::dim_label(ui, tl!("Presets:"));
         let chosen = ui.add_enabled_ui(enabled, |ui| widgets::combo(ui, "grad-presets", &shown, 150.0, |ui| preset_list(app, ui, &shown))).inner;
         if let Some(name) = chosen {
-            app.run("gradient.presets.apply", json!({ "name": name })).ok();
+            app.run("gradient.presets.apply", json!({ "name": name, "stroke": !app.session.fill_active })).ok();
         }
     });
 }
