@@ -2637,18 +2637,23 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
   `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
   automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
-  profile and the reason, and makes no document.
+  profile and the reason, and makes no document. Each warning from reading the profile's file (a color profile in it
+  that cannot be used, for example) goes to the Script Console as a line `addDocument: <warning>`. A `previewMode` of
+  `DocumentPreviewMode.PixelPreview` throws an error that says it is not available yet, and no document is made.
   `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
   `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
   destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
-  has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
+  lists every object in the document's layers, the objects inside groups, compound paths, blends, envelopes, repeats
+  and intertwines included, and has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either
+  collection is true for each
   entry `[i]` gives. Each page item
   (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
   Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
@@ -2656,7 +2661,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
   directly below it. An object of another document throws `Cross-document placement is not available`, and when
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
-  the undo history as they were before the call. `duplicate` on a path inside a compound path throws
+  the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
+  locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
+  object, with or without a relative object, throws `Cannot duplicate` and makes no copy. When `move` takes the last
+  path out of a compound path, the empty compound path is deleted in the same undo step. `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
   `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
   same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
@@ -2670,7 +2678,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
   for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
-  tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
+  tab as it was. A command that selects the objects it changes leaves the current layer and the highlighted Layers
+  panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
   kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
   hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
   `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
@@ -2679,7 +2688,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
   a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
-  nothing changed. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
+  with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
@@ -6419,8 +6429,9 @@ itself, and each sublayer has its own colour for the selection highlight. `docum
 report `color`, `template`, `printable`, `preview`, `dimImages` and `clip`), the `currentLayer` (where new art goes)
 and `layerRows`, the rows highlighted in the panel.
 
-- **Clicking rows** (not undo steps): `layer.setCurrent {id}` is a plain click on any row: it alone is highlighted
-  and its layer (the row itself when it is a layer or sublayer) becomes current. `layer.highlight {ids, mode?:
+- **Clicking rows** (not undo steps): `layer.setCurrent {id, keepRows?}` is a plain click on any row: it alone is
+  highlighted and its layer (the row itself when it is a layer or sublayer) becomes current; with `keepRows` true the
+  highlighted rows stay as they are. `layer.highlight {ids, mode?:
   set|add|toggle}` is Shift-click (a range) and Ctrl/Cmd-click (toggle). Selecting art makes its layer current.
   Without `ids`, the panel commands below act on the highlighted rows, else on the current layer.
 - **Selection column**: `layer.selectAll {id, add?}` selects a row's visible, unlocked art (a layer's sublayers'
@@ -9107,8 +9118,8 @@ with the defaults.
 
 The profile is read on every `file.new`, so a replayed journal or a recorded action uses the profile as it is when it
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
-When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
-folder (whether or not the file exists), the document starts with the defaults and
+When the file is a link or a folder, cannot be read, is too large or is not a native document, or the request's read
+roots leave out the folder (whether or not the file exists), the document starts with the defaults and
 `file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar, and
 a script's `app.documents.addDocument` throws it. A script's file access limits do not apply to reading the profile's
 file. The

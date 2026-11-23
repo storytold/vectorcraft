@@ -28,6 +28,7 @@
 //! - Members the help pages list that are not here yet throw an error that says so.
 
 use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -86,13 +87,15 @@ pub(super) enum Coords {
 const DOCUMENT_COORDS: &str = "CoordinateSystem.DOCUMENTCOORDINATESYSTEM";
 const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
-/// What the object model keeps for one run: its coordinate system, the last list of a document's
-/// page items, kept while that document is unchanged, whether a call's own savepoint
-/// ([`atomically`]) is open, and the settings of each `DocumentPreset` the run made.
+/// What the object model keeps for one run: its coordinate system, the lists of page items and the
+/// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
+/// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
+/// open, and the settings of each `DocumentPreset` the run made.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
-    items: RefCell<Option<ItemList>>,
+    items: RefCell<Vec<ItemList>>,
+    locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
     /// The last [`layers::ART_LISTS`] lists of art [`layers`]' collections gave, least recently
     /// used first, each kept while its document is unchanged.
@@ -138,6 +141,57 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
 
 /// A document's uid, the document as it was, and the ids of its page items then.
 type ItemList = (u64, Arc<Document>, Rc<Vec<NodeId>>);
+
+/// A document's uid, the document and its new art ([`Document::new_art`]) as they were, and for
+/// each object of a layer or sublayer asked about then, whether it was on a locked artboard.
+type LockedList = (u64, Arc<Document>, Arc<HashSet<NodeId>>, HashMap<NodeId, bool>);
+
+/// How many documents' lists [`State`] keeps at once, of each kind.
+const ITEM_LISTS: usize = 4;
+
+/// The kept list of the document `uid` as `doc` is, if there is one.
+fn kept_items(lists: &[ItemList], uid: u64, doc: &Arc<Document>) -> Option<Rc<Vec<NodeId>>> {
+    lists.iter().find(|(u, d, _)| *u == uid && Arc::ptr_eq(d, doc)).map(|(_, _, ids)| ids.clone())
+}
+
+/// Keeps `list` in place of any earlier list of the same document, dropping the least recently
+/// kept list beyond [`ITEM_LISTS`].
+fn keep_items(lists: &mut Vec<ItemList>, list: ItemList) {
+    lists.retain(|(u, _, _)| *u != list.0);
+    if lists.len() >= ITEM_LISTS {
+        lists.remove(0);
+    }
+    lists.push(list);
+}
+
+/// Whether node `id` of `st` is on a locked artboard ([`Document::on_locked_artboard`]). Each
+/// object of a layer or sublayer is measured once while the document and its new art stay as they
+/// are, so the members of a group are answered with one measurement of the group.
+fn on_locked_artboard(h: &Host, st: &DocState, id: NodeId) -> bool {
+    if !st.doc.artboards.iter().any(|a| a.locked) {
+        return false;
+    }
+    let Some(object) = st.doc.layer_object(id).map(|n| n.id) else {
+        return false;
+    };
+    let new_art = st.doc.new_art.get();
+    let mut lists = h.dom.locked.borrow_mut();
+    let at = match lists.iter().position(|(u, d, n, _)| *u == st.uid && Arc::ptr_eq(d, &st.doc) && Arc::ptr_eq(n, &new_art)) {
+        Some(at) => at,
+        None => {
+            lists.retain(|(u, ..)| *u != st.uid);
+            if lists.len() >= ITEM_LISTS {
+                lists.remove(0);
+            }
+            lists.push((st.uid, st.doc.clone(), new_art, HashMap::new()));
+            lists.len() - 1
+        }
+    };
+    match lists.get_mut(at) {
+        Some((.., held)) => *held.entry(object).or_insert_with(|| st.doc.on_locked_artboard(object)),
+        None => st.doc.on_locked_artboard(object),
+    }
+}
 
 type Answer = std::result::Result<Data, HostError>;
 
@@ -349,31 +403,30 @@ fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     }
 }
 
-/// The ids of a document's page items in paint order ([`State`] keeps the last list).
+/// The ids of a document's page items in paint order ([`State`] keeps the lists of the last
+/// documents read).
 fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
-    if let Some((uid, doc, ids)) = &*h.dom.items.borrow()
-        && *uid == st.uid
-        && Arc::ptr_eq(doc, &st.doc)
-    {
-        return ids.clone();
+    if let Some(ids) = kept_items(&h.dom.items.borrow(), st.uid, &st.doc) {
+        return ids;
     }
     fn walk(nodes: &[Arc<crate::doc::Node>], out: &mut Vec<NodeId>) {
         for n in nodes {
             match &n.kind {
                 NodeKind::Layer { children, .. } => walk(children, out),
                 NodeKind::RulerGuide { .. } => {}
-                NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+                _ => {
                     out.push(n.id);
-                    walk(children, out);
+                    if let Some(children) = n.children() {
+                        walk(children, out);
+                    }
                 }
-                _ => out.push(n.id),
             }
         }
     }
     let mut ids = Vec::new();
     walk(&st.doc.layers, &mut ids);
     let ids = Rc::new(ids);
-    *h.dom.items.borrow_mut() = Some((st.uid, st.doc.clone(), ids.clone()));
+    keep_items(&mut h.dom.items.borrow_mut(), (st.uid, st.doc.clone(), ids.clone()));
     ids
 }
 
@@ -548,6 +601,31 @@ fn done_unless_refused(r: std::result::Result<Data, HostError>) -> std::result::
     }
 }
 
+/// Makes `layer` the current layer of the active document `uid` again, with `rows` the highlighted
+/// Layers panel rows, after selecting objects made the layer of the last of them current and
+/// cleared the rows. Nothing runs when `layer` is gone. `layer.highlight` puts the rows back when
+/// they changed, and then `layer.setCurrent` with `keepRows` makes `layer` current when it is not.
+fn restore_layer(h: &Host, uid: u64, layer: Option<NodeId>, rows: &[NodeId]) -> std::result::Result<(), HostError> {
+    let Some(layer) = layer else { return Ok(()) };
+    let rows = {
+        let s = h.session.borrow();
+        let Some(st) = s.active().filter(|st| st.uid == uid) else { return Ok(()) };
+        if st.doc.node(layer).is_none() {
+            return Ok(());
+        }
+        let rows: Vec<NodeId> = rows.iter().copied().filter(|r| st.doc.node(*r).is_some()).collect();
+        (st.highlighted_rows() != rows).then(|| rows.iter().map(|r| r.0).collect::<Vec<_>>())
+    };
+    if let Some(rows) = rows {
+        command(h, "layer.highlight", &json!({"ids": rows, "mode": "set"}))?;
+    }
+    let current = h.session.borrow().active().is_some_and(|st| st.active_layer == Some(layer));
+    if !current {
+        command(h, "layer.setCurrent", &json!({"id": layer.0, "keepRows": true}))?;
+    }
+    Ok(())
+}
+
 /// Runs `f` with the document `uid` active, and makes the document that was active before active
 /// again after. With `keep_selection`, the document's selection is put back as it was when `f`'s
 /// commands changed it (commands given ids select them first), direct-selected anchors, segments,
@@ -560,10 +638,11 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, before) = {
+    let (index, active, before, layer) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-        (index, s.active_index(), s.documents()[index].selection.clone())
+        let st = &s.documents()[index];
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()))
     };
     let switch = active != Some(index);
     if switch {
@@ -578,6 +657,9 @@ fn on_doc<T>(
         };
         if let Some(doc) = doc {
             restored = restore_selection(h, &doc, &before);
+        }
+        if restored.is_ok() {
+            restored = restore_layer(h, uid, layer.0, &layer.1);
         }
     }
     // The document that was active is active again before any error is given: `f`'s error first,
@@ -819,7 +901,10 @@ impl NewDoc<'_> {
         if let Some(d) = self.preview {
             let mode = match d {
                 Data::String(s) if s == "DocumentPreviewMode.DefaultPreview" => "default",
-                Data::String(s) if s == "DocumentPreviewMode.PixelPreview" => "pixel",
+                // Pixel Preview is a setting of the app's view, which a script cannot turn on.
+                Data::String(s) if s == "DocumentPreviewMode.PixelPreview" => {
+                    return Err(HostError::Error("DocumentPreviewMode.PixelPreview is not available yet".into()));
+                }
                 Data::String(s) if s == "DocumentPreviewMode.OverprintPreview" => "overprint",
                 _ => return Err(HostError::Type("previewMode must be a DocumentPreviewMode value".into())),
             };
@@ -896,6 +981,9 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
         None | Some(Data::Null) => Vec::new(),
         Some(d) => {
             let i = preset_of(h, d).ok_or_else(|| HostError::Type("presetSettings must be a DocumentPreset".into()))?;
+            // The settings are charged as data passed to the call before they are copied.
+            let bytes = h.dom.presets.borrow()[i].iter().map(|(k, v)| k.len() as u64 + 2 + data_size(v)).sum::<u64>();
+            h.charge_call(bytes)?;
             h.dom.presets.borrow()[i].clone()
         }
     };
@@ -942,6 +1030,10 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
             let profile = e["profile"].as_str().unwrap_or_default();
             let reason = e["reason"].as_str().unwrap_or_default();
             return Err(HostError::Error(format!("the New Document profile {profile} could not be read: {reason}")));
+        }
+        // Each warning from reading the profile's file goes to the console.
+        for w in value.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+            super::each_line(&format!("addDocument: {w}"), |line, cut| h.line(super::console::Entry::Log(line), cut));
         }
         let s = h.session.borrow();
         let st = s.active().ok_or_else(|| HostError::Error(NO_ACTIVE_DOCUMENT.into()))?;
@@ -1009,8 +1101,11 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
     let l = link.clone();
     let get: HostFunction = Rc::new(move |a: Vec<Data>| {
         let h = current(&l)?;
-        h.charge_call(16)?;
-        let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        // The value handed back is charged as the setter charges it, before it is copied.
+        let i = preset_of(&h, arg(&a, 0));
+        let bytes = i.map_or(0, |i| h.dom.presets.borrow()[i].iter().find(|(k, _)| k == key).map_or(0, |(_, v)| data_size(v)));
+        h.charge_call(16 + bytes)?;
+        let i = i.ok_or_else(not_preset)?;
         let presets = h.dom.presets.borrow();
         Ok(presets[i].iter().find(|(k, _)| k == key).map_or(Data::Undefined, |(_, v)| v.clone()))
     });
@@ -1162,10 +1257,16 @@ fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId
         d => vec![d],
     };
     let mut ids: Vec<NodeId> = Vec::with_capacity(list.len());
-    for d in list {
-        let item = item_of(h, d)?;
+    // The document is read once for every object: nothing changes it while the list is checked.
+    let (d, isolation, guides_locked) = with_doc(h, doc, |s, st| (st.doc.clone(), st.isolation, s.guides_locked()));
+    let locks = d.locked_artboards();
+    for v in list {
+        let item = item_of(h, v)?;
+        // A path made into a guide is not selected while Lock Guides is on, as the selection
+        // commands leave it out.
         let ok = item.doc.uid == doc.uid
-            && with_doc(h, doc, |_, st| crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id));
+            && crate::cmd::select::is_selectable(&d, isolation, &locks, item.id)
+            && !(guides_locked && crate::is_guide_path(&d, item.id));
         if !ok {
             let name = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(typename).unwrap_or("page item"));
             return Err(HostError::Error(format!("Cannot select {name} {}", item.id.0)));
@@ -1409,7 +1510,13 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if !(0.0..=100.0).contains(&v) {
         return Err(HostError::Range("opacity must be from 0 to 100".into()));
     }
-    set_props(h, a, |n| (f64::from(n.opacity) * 100.0 - v).abs() < 1e-4, json!({"opacity": v}))
+    // A value the getter reports for the item's opacity sends the opacity it has, and
+    // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
+    // replaces the one the graph keeps for its series or kind.
+    let item = this_item(h, a)?;
+    let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| f64::from(n.opacity) * 100.0));
+    let v = now.filter(|now| (now - v).abs() < 1e-4).unwrap_or(v);
+    set_props(h, a, |_| false, json!({"opacity": v}))
 }
 
 fn item_selected(h: &Host, a: &[Data]) -> Answer {
@@ -1547,9 +1654,11 @@ fn item_set_height(h: &Host, a: &[Data]) -> Answer {
     resize(h, a, false)
 }
 
+/// `editable`: false for an object that is hidden or locked, in a hidden or locked layer or group,
+/// or on a locked artboard.
 fn item_editable(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    Ok(Data::Bool(with_doc(h, item.doc, |_, st| editable(&st.doc, item.id))))
+    Ok(Data::Bool(with_doc(h, item.doc, |_, st| editable(&st.doc, item.id) && !on_locked_artboard(h, st, item.id))))
 }
 
 /// The item's place in its parent's stacking order, from 1 at the bottom.
@@ -1658,7 +1767,8 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data, copy: bool) -> s
         if !editable(d, parent) {
             return Err(HostError::Error("the layer or group is hidden or locked".into()));
         }
-        if !editable(d, item.id) {
+        // An object on a locked artboard is not moved, as `editable` reads false for it.
+        if !editable(d, item.id) || on_locked_artboard(h, st, item.id) {
             let name = d.node(item.id).and_then(typename).unwrap_or("page item");
             return Err(HostError::Error(format!("Cannot move {name} {}", item.id.0)));
         }
@@ -1699,14 +1809,30 @@ fn place(h: &Host, doc: Doc, id: NodeId, to: &Destination) -> std::result::Resul
 }
 
 /// `move(relativeObject, insertionLocation?)`: moves the item into or beside `relativeObject`, a
-/// page item or a layer of its document (`insertionLocation` defaults to `PLACEATBEGINNING`).
+/// page item or a layer of its document (`insertionLocation` defaults to `PLACEATBEGINNING`). An
+/// object that is hidden or locked, in a hidden or locked layer or group, or on a locked artboard
+/// is refused.
 fn item_move(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     if matches!(arg(a, 1), Data::Undefined) {
         return Err(HostError::Type("move needs a relative object".into()));
     }
     let to = destination(h, item, arg(a, 1), arg(a, 2), false)?;
-    place(h, item.doc, item.id, &to)?;
+    // When the last path leaves a compound path, the compound path is deleted in the same step
+    // rather than left empty.
+    let emptied = with_doc(h, item.doc, |_, st| {
+        let parent = st.doc.parent_of(item.id).and_then(|p| st.doc.node(p))?;
+        (matches!(parent.kind, NodeKind::Compound { .. }) && parent.children().is_some_and(|c| c.len() == 1) && parent.id != to.parent)
+            .then_some(parent.id)
+    });
+    match emptied {
+        None => place(h, item.doc, item.id, &to)?,
+        Some(compound) => atomically(h, |h| {
+            place(h, item.doc, item.id, &to)?;
+            on_doc(h, item.doc.uid, true, |h| command(h, "edit.clear", &json!({"ids": [compound.0]})))?;
+            Ok(())
+        })?,
+    }
     Ok(arg(a, 0).clone())
 }
 
@@ -1729,6 +1855,13 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER.into()));
+    }
+    // `edit.duplicate` copies only what it can select.
+    let refused = with_doc(h, item.doc, |_, st| {
+        (!editable(&st.doc, item.id) || on_locked_artboard(h, st, item.id)).then(|| st.doc.node(item.id).and_then(typename).unwrap_or("page item"))
+    });
+    if let Some(name) = refused {
+        return Err(HostError::Error(format!("Cannot duplicate {name} {}", item.id.0)));
     }
     let to = match arg(a, 1) {
         Data::Undefined => {
@@ -1962,5 +2095,30 @@ mod tests {
         // An internal failure or a stop ends the run instead of being taken for a refusal.
         assert_eq!(done_unless_refused(Err(HostError::Abort("canceled".into()))), Err(HostError::Abort("canceled".into())));
         assert_eq!(done_unless_refused(Err(HostError::Range("too large".into()))), Err(HostError::Range("too large".into())));
+    }
+
+    #[test]
+    fn page_item_lists_are_kept_for_several_documents() {
+        let docs: Vec<Arc<Document>> = (0..=ITEM_LISTS).map(|_| Arc::new(Document::new(100.0, 100.0))).collect();
+        let ids = |n: u64| Rc::new(vec![NodeId(n)]);
+        let mut lists = Vec::new();
+        keep_items(&mut lists, (1, docs[0].clone(), ids(1)));
+        keep_items(&mut lists, (2, docs[1].clone(), ids(2)));
+        // Reading two documents in turn keeps both lists.
+        assert_eq!(kept_items(&lists, 1, &docs[0]), Some(ids(1)));
+        assert_eq!(kept_items(&lists, 2, &docs[1]), Some(ids(2)));
+        // A changed document has no kept list, and its new list replaces the old one.
+        let changed = Arc::new(Document::new(100.0, 100.0));
+        assert_eq!(kept_items(&lists, 1, &changed), None);
+        keep_items(&mut lists, (1, changed.clone(), ids(3)));
+        assert_eq!(lists.len(), 2);
+        assert_eq!(kept_items(&lists, 1, &changed), Some(ids(3)));
+        // Past the limit, the list kept longest ago goes.
+        for (uid, d) in (10..).zip(&docs[2..]) {
+            keep_items(&mut lists, (uid, d.clone(), ids(uid)));
+        }
+        assert_eq!(lists.len(), ITEM_LISTS);
+        assert_eq!(kept_items(&lists, 2, &docs[1]), None);
+        assert_eq!(kept_items(&lists, 1, &changed), Some(ids(3)));
     }
 }
