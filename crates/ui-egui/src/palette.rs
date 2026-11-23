@@ -2464,53 +2464,40 @@ mod tests {
     #[test]
     fn the_entries_are_built_again_only_when_the_catalog_or_the_language_changes() {
         // The process-wide parts of the catalog's generation, which tests running alongside move
-        // (fonts, plug-ins, scripts): the count is read on a run they held still through.
+        // (fonts, plug-ins, scripts), as each step began and as it ended.
         let shared = || (crate::menus::plugin_revision(), crate::scripts_menu::revision(), vectorcraft_text::FontDb::global().generation());
-        for _ in 0..20 {
-            let before = shared();
-            let (seen, english) = palette_builds_over_opens_and_a_language_change();
-            if shared() != before {
-                continue;
-            }
-            assert_ne!(seen.last().map(|(key, _)| *key), english, "the language moves the catalog's generation");
-            let builds = seen.windows(2).filter(|p| !Arc::ptr_eq(&p[0].1, &p[1].1)).count();
-            assert!(builds >= 1 && builds < seen.len() - 1, "{builds} builds over {} opens and edits", seen.len());
-            return;
-        }
-        panic!("the fonts, plug-ins or scripts kept changing");
-    }
-
-    /// The palette's build key and index after each step of the trial, and the key in English.
-    fn palette_builds_over_opens_and_a_language_change() -> (Vec<(BuildKey, Arc<SearchIndex>)>, Option<BuildKey>) {
         let mut window = Window::new();
         assert!(window.app.canvas.palette.is_none(), "nothing is built while the palette is closed");
-        let built = |w: &Window| w.app.canvas.palette.as_ref().map(|(key, b)| (*key, b.index.clone())).expect("the open palette is built");
-        let mut seen = vec![];
+        let mut seen: Vec<(BuildKey, Arc<SearchIndex>, _, _)> = vec![];
+        let mut step = |w: &mut Window, frames: Vec<Vec<egui::Event>>| {
+            let began = shared();
+            for events in frames {
+                w.frame(events);
+            }
+            let (key, b) = w.app.canvas.palette.as_ref().expect("the open palette is built");
+            seen.push((*key, b.index.clone(), began, shared()));
+        };
         window.app.ui.palette_open = true;
-        window.frame(vec![]);
-        seen.push(built(&window));
-        window.frame(vec![egui::Event::Text("group".into())]);
-        seen.push(built(&window));
-        window.frame(key(egui::Key::Enter));
-        window.frame(vec![]);
-        seen.push(built(&window));
+        step(&mut window, vec![vec![]]);
+        step(&mut window, vec![vec![egui::Event::Text("group".into())]]);
+        step(&mut window, vec![key(egui::Key::Enter), vec![]]);
         window.app.run("select.none", json!({})).unwrap();
         window.app.ui.palette_open = true;
-        window.frame(vec![]);
-        seen.push(built(&window));
-        let english = seen.last().map(|(key, _)| *key);
+        step(&mut window, vec![vec![]]);
         // The language as the app takes it: each frame's tick sets the drawing language from the preference.
         window.app.session.prefs.interface_language = "de".into();
-        window.frame(vec![]);
-        window.frame(vec![]);
-        seen.push(built(&window));
+        step(&mut window, vec![vec![], vec![]]);
         crate::i18n::set_current(Lang::EN);
-        // Another test may install a plug-in meanwhile, which moves the key too: the rule is a
-        // build exactly when the key moves.
-        for pair in seen.windows(2) {
-            let [(k0, i0), (k1, i1)] = pair else { continue };
+        for (i, pair) in seen.windows(2).enumerate() {
+            let [(k0, i0, began, _), (k1, i1, _, ended)] = pair else { continue };
+            // A build exactly when the key moves.
             assert_eq!(!Arc::ptr_eq(i0, i1), k0 != k1, "{k0:?} → {k1:?}");
+            if i + 2 == seen.len() {
+                assert_ne!(k0, k1, "the language moves the catalog's generation");
+            } else if began == ended {
+                // Typing, a pick, a close, an open and a state the catalog does not read.
+                assert_eq!(k0, k1, "step {}: nothing the catalog reads changed", i + 1);
+            }
         }
-        (seen, english)
     }
 }
