@@ -562,6 +562,8 @@ impl VectorcraftApp {
         let ctx = ui.ctx().clone();
         // A copy made by injected input is not the user's: the clipboard keeps it inside the app.
         self.clipboard.set_synthetic(WindowHost::of(&ctx).injected_pass());
+        // A modal window opened between passes (the macOS menu bar, automation) closes the popups before they draw.
+        panel_docking::close_overlays_for_modal(self, &ctx);
         // Whether this pass draws the last step of an action playing at Step by Step.
         let step_held = crate::panels::actions::playback_held(self);
         let t0 = monotonic_ms();

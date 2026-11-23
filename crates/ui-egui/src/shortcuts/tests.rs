@@ -1500,6 +1500,21 @@ fn enter_after_a_drag_repeats_its_offset() {
 
 // ---- Clipboard -----------------------------------------------------------------------------
 
+/// The text a frame copied to the system clipboard (egui's CopyText output command).
+fn copied(out: &egui::FullOutput) -> Option<String> {
+    out.platform_output.commands.iter().find_map(|c| match c {
+        egui::OutputCommand::CopyText(t) => Some(t.clone()),
+        _ => None,
+    })
+}
+
+/// [`key_frame`] with the frame's output.
+fn output_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
+    let time = ctx.input(|i| i.time) + 0.05;
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    crate::testing::app_frame(app, ctx, egui::RawInput { screen_rect, focused: true, time: Some(time), events, ..Default::default() })
+}
+
 #[test]
 fn copy_and_paste_events_use_the_system_clipboard() {
     let mut app = new_app();
@@ -1507,18 +1522,26 @@ fn copy_and_paste_events_use_the_system_clipboard() {
     app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
     let ctx = ready(&mut app);
     let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.layers[0].children().unwrap().len();
-    // Copy publishes SVG to the system clipboard.
-    key_frame(&mut app, &ctx, vec![egui::Event::Copy]);
-    let svg = app.clipboard.read_text().ok().flatten().expect("copy publishes SVG");
+    // Copy publishes SVG to the system clipboard (egui's CopyText output command): the Copy the event fired runs as
+    // the next frame begins, and that frame hands the text over.
+    let svg =
+        [vec![egui::Event::Copy], vec![]].into_iter().find_map(|events| copied(&output_frame(&mut app, &ctx, events))).expect("copy publishes SVG");
     assert!(svg.contains("<svg"));
+    // The copy is handed to egui once: no second command follows.
+    assert!(copied(&output_frame(&mut app, &ctx, vec![])).is_none());
+    // A paste event is the paste chord; its text is on the clipboard service, as the web shell offers it there.
+    let paste = |app: &mut VectorcraftApp, text: &str| {
+        app.clipboard.offer_paste(vec![craft::platform::clipboard::Flavor::text(text)]);
+        key_frame(app, &ctx, vec![egui::Event::Paste(text.into())]);
+    };
     // Pasting our own SVG back uses the internal clipboard; foreign SVG replaces it.
-    key_frame(&mut app, &ctx, vec![egui::Event::Paste(svg)]);
+    paste(&mut app, &svg);
     assert_eq!(count(&app), 2);
     let foreign = r##"<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5"/><circle cx="20" cy="5" r="5"/><circle cx="35" cy="5" r="5"/></svg>"##;
-    key_frame(&mut app, &ctx, vec![egui::Event::Paste(foreign.into())]);
+    paste(&mut app, foreign);
     assert_eq!(count(&app), 5);
     // Plain text is not art: nothing is pasted from it (the internal clipboard is reused).
-    key_frame(&mut app, &ctx, vec![egui::Event::Paste("hello".into())]);
+    paste(&mut app, "hello");
     assert_eq!(count(&app), 8);
 }
 
@@ -1571,7 +1594,9 @@ fn a_live_effect_plugin_installed_later_takes_a_shortcut_of_its_own() {
     install(r#"{"wiggle":{"type":"bool"}}"#);
     assert_eq!(listed(&mut app, effect), vec![(key.to_string(), json!(chord))]);
     frame(&mut app, f6());
-    assert_eq!(open_effect(&app).as_deref(), Some(effect), "{:?}", dialog_kind(&app));
+    // The effect is applied already: its dialog first asks whether to edit it or add another.
+    let asked = app.effect_dialogs.effect.as_ref().map(|o| o.cx.id.clone());
+    assert!(app.any_dialog_open() && asked.as_deref() == Some(effect), "{asked:?}: {:?}", dialog_kind(&app));
     assert_eq!(item_shortcut(&app, "effect.dialog", json!({ "effect": effect })).as_deref(), Some(chord));
     vectorcraft_plugins::registry::remove(plugin);
 }
