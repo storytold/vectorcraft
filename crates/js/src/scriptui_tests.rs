@@ -578,3 +578,72 @@ fn a_text_getter_that_changes_a_list_while_remove_looks_it_up_makes_remove_throw
         .unwrap();
     assert_eq!(v, JsValue::String("remove: the list changed while the item was looked up|2|c".into()));
 }
+
+#[test]
+fn a_control_a_listener_removes_while_its_click_runs_no_longer_reaches_its_containers() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var g = w.add('group'); var b = g.add('button', undefined, 'Go'); var heard = []; \
+             b.addEventListener('click', function () { g.remove(b); }); \
+             g.addEventListener('click', function () { heard.push('g'); }); w.addEventListener('click', function () { heard.push('w'); }); \
+             b.notify('onClick'); [heard.length, b.parent, b.window].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("0||".into()));
+}
+
+#[test]
+fn a_listener_removed_by_an_earlier_one_in_the_same_event_does_not_run() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); var ran = []; function second() { ran.push(2); } \
+             b.addEventListener('click', function () { ran.push(1); b.removeEventListener('click', second); }); \
+             b.addEventListener('click', second); b.notify('onClick'); ran.join(',')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("1".into()));
+}
+
+#[test]
+fn a_script_cannot_put_its_own_listener_list_on_a_control() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); var a = []; a.length = 4000000000; \
+             var m; try { Object.defineProperty(b, '__vcListeners', {value: a}); m = 'defined'; } catch (e) { m = e.name; } \
+             b.notify('onClick'); m",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("TypeError".into()));
+}
+
+#[test]
+fn an_object_made_to_look_like_an_element_reads_a_long_list_as_empty() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); var a = []; a.length = 4000000000; \
+             var f = {__vcKind: 'button', __vcListeners: a, __vcKids: a}; b.notify.call(f, 'onClick'); \
+             b.findElement.call(f, 'x') === null",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::Bool(true));
+}
+
+#[test]
+fn remove_refuses_an_object_made_to_look_like_a_container_of_a_real_control() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var g = w.add('group'); var b = g.add('button'); var l = g.add('listbox', undefined, ['a']); \
+             var f = {__vcKind: 'group', __vcWindow: w, __vcParent: w, __vcKids: [b]}; \
+             var fl = {__vcKind: 'listbox', __vcWindow: w, __vcParent: w, __vcItems: l.items}; var m = []; \
+             try { w.remove.call(f, 0); m.push('removed'); } catch (e) { m.push(e.name); } \
+             try { l.removeAll.call(fl); m.push('removed'); } catch (e) { m.push(e.name); } \
+             [m.join(','), b.parent === g, b.window === w].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("TypeError,TypeError|true|true".into()));
+}

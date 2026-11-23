@@ -462,10 +462,11 @@ fn a_typed_text_stays_with_its_field_after_a_handler_adds_a_control_before_it_an
     );
     assert!(until_window(&mut app));
     frame(&mut app, Vec::new());
+    let ok = app.session.script_window().unwrap().nodes[4].id;
     give(&mut app, json!({"event": "click", "control": "Grow"})).unwrap();
     let d = app.ui.dialog.as_mut().unwrap();
     d.fields.insert("text2".into(), json!("typed"));
-    d.fields.insert("queued".into(), json!([{"event": "click", "control": 4, "value": null, "place": [3]}]));
+    d.fields.insert("queued".into(), json!([{"event": "click", "control": 4, "value": null, "id": ok}]));
     frame(&mut app, Vec::new());
     for _ in 0..10_000 {
         if app.ui.dialog.as_ref().is_some_and(|d| d.kind == dialogs::script_run::GROWTH_KIND) {
@@ -482,6 +483,61 @@ fn a_typed_text_stays_with_its_field_after_a_handler_adds_a_control_before_it_an
     frame(&mut app, Vec::new());
     assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
     assert_eq!(log(&app), json!([[1, "typed"]]));
+}
+
+#[test]
+fn queued_clicks_reach_their_buttons_after_a_handler_removes_a_control_before_them() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var g = w.add('group'); var x = g.add('button', undefined, 'x'); var y = g.add('button', undefined, 'y'); \
+         var z = g.add('button', undefined, 'z'); var hit = []; x.onClick = function () { hit.push('x'); g.remove(x); }; \
+         y.onClick = function () { hit.push('y'); }; z.onClick = function () { hit.push('z'); }; vc.log([w.show(), hit]);",
+    );
+    assert!(until_window(&mut app));
+    let w = app.session.script_window().unwrap();
+    let (x, y) = (w.nodes[2].id, w.nodes[3].id);
+    give(&mut app, json!({"event": "click", "control": "x"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert(
+        "queued".into(),
+        json!([{"event": "click", "control": 2, "value": null, "id": x}, {"event": "click", "control": 3, "value": null, "id": y}]),
+    );
+    assert!(until_window(&mut app), "the script runs x's handler and waits again");
+    assert_eq!(app.session.script_window().unwrap().nodes[2].text, "y", "the handler removed x");
+    frame(&mut app, Vec::new());
+    assert!(until_window(&mut app), "the script runs y's handler and waits again");
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("queued"), "nothing is left queued");
+    give(&mut app, json!({"event": "close"})).unwrap();
+    assert!(!until_window(&mut app));
+    assert_eq!(log(&app), json!([[0, ["x", "y"]]]), "the click on the removed x is dropped and the click on y reaches y");
+}
+
+#[test]
+fn a_queued_list_change_is_dropped_after_a_handler_removes_an_item() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var rm = w.add('button', undefined, 'Remove'); var l = w.add('listbox', undefined, ['a', 'b', 'c']); \
+         rm.onClick = function () { l.remove(0); }; vc.log([w.show(), l.selection === null]);",
+    );
+    assert!(until_window(&mut app));
+    let w = app.session.script_window().unwrap();
+    let list = w.nodes[2].id;
+    give(&mut app, json!({"event": "click", "control": "Remove"})).unwrap();
+    app.ui
+        .dialog
+        .as_mut()
+        .unwrap()
+        .fields
+        .insert("queued".into(), json!([{"event": "change", "control": 2, "value": 1, "id": list, "items": ["a", "b", "c"]}]));
+    assert!(until_window(&mut app), "the script runs the handler and waits again");
+    frame(&mut app, Vec::new());
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert!(!d.fields.contains_key("queued") && !d.fields.contains_key("event"), "the change is dropped");
+    assert_eq!(app.session.script_window().unwrap().nodes[2].selection, None);
+    give(&mut app, json!({"event": "close"})).unwrap();
+    assert!(!until_window(&mut app));
+    assert_eq!(log(&app), json!([[0, true]]));
 }
 
 #[test]

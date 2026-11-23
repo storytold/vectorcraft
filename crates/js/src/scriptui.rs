@@ -14,7 +14,9 @@
 //! `properties.items`. A list's `add("item", text)` adds an item, `find(text)` finds one and
 //! `remove(what)` removes one; its `selection` is an item or `null`, and takes an item, an index or
 //! `null`. A container's `remove(what)` removes a control, which then has no `parent` and no longer
-//! belongs to the dialog: `add` and `remove` on it, or on a control it holds, throw an `Error`.
+//! belongs to the dialog: its `window`, and that of each control it holds, is `null`, and `add`,
+//! `remove` and `removeAll` on them throw an `Error`. Each element has an id, which the description
+//! gives, that no other element of the run has.
 //! Each element starts with `preferredSize`, `size`, `minimumSize` and `maximumSize` objects whose
 //! `width` and `height` are -1, which leaves the size to the layout. Setting a radio button's
 //! `value` to true sets the other radio buttons next to it in its container to false, as a click
@@ -25,7 +27,9 @@
 //! or control takes at most [`MAX_LISTENERS`] of them. A handler gets an event object, in the
 //! capture phase on the containers above the control, then on the control after its `onClick`,
 //! `onChange` or `onChanging`, then in the bubbling phase on the containers again, until one calls
-//! `stopPropagation()`. Events are not cancelable, and `preventDefault()` does nothing.
+//! `stopPropagation()`. A handler removed before its turn does not run, and a container that no
+//! longer holds the control when its turn comes does not get the event. Events are not cancelable,
+//! and `preventDefault()` does nothing.
 //! `notify(event)` runs the same handlers, and `notify("onClick")` turns a check box over and turns
 //! a radio button on first; it does not close the dialog. `Window.alert`, `Window.confirm` and
 //! `Window.prompt` are the global functions of those names, when the host defines them.
@@ -92,6 +96,15 @@ const LIST: &str = "__vcList";
 const VALUE: &str = "__vcValue";
 const LISTENERS: &str = "__vcListeners";
 const STOPPED: &str = "__vcStopped";
+const ID: &str = "__vcId";
+
+/// The longest array an element keeps in a slot: a list's items, a container's controls, its
+/// listeners (three values each), and the elements of a description.
+const LIST_CAP: u32 = {
+    let most = if MAX_ITEMS > MAX_CONTROLS + 1 { MAX_ITEMS } else { MAX_CONTROLS + 1 };
+    let most = if most > 3 * MAX_LISTENERS { most } else { 3 * MAX_LISTENERS };
+    most as u32
+};
 
 /// The size properties every element starts with, as objects with `width` and `height`.
 const SIZES: [&str; 4] = ["preferredSize", "size", "minimumSize", "maximumSize"];
@@ -131,6 +144,10 @@ pub(crate) struct Classes {
     showing: Option<ObjId>,
     /// The event objects whose listeners are running, innermost last.
     dispatching: Vec<ObjId>,
+    /// The containers above the targets of the running events.
+    above: Vec<ObjId>,
+    /// The id the next element gets: a number no other element of the run has.
+    next_id: f64,
 }
 
 impl Classes {
@@ -150,6 +167,7 @@ impl Classes {
         ];
         all.extend(self.showing);
         all.extend(self.dispatching.iter().copied());
+        all.extend(self.above.iter().copied());
         all
     }
 }
@@ -160,6 +178,7 @@ pub(crate) fn end_run(i: &mut Interp) {
     if let Some(c) = i.script_ui.as_mut() {
         c.showing = None;
         c.dispatching.clear();
+        c.above.clear();
     }
 }
 
@@ -232,15 +251,38 @@ fn window_of(i: &mut Interp, o: ObjId, what: &str) -> JsResult<ObjId> {
     }
 }
 
+/// [`window_of`] for an element whose controls or items are to be removed, checked to be in that
+/// dialog: each container from it up to the dialog holds the one below. An object a script made to
+/// look like an element is a `TypeError` naming `what`.
+fn window_in(i: &mut Interp, o: ObjId, what: &str) -> JsResult<ObjId> {
+    let win = window_of(i, o, what)?;
+    let mut at = o;
+    for _ in 0..=MAX_DEPTH {
+        if at == win {
+            break;
+        }
+        let Some(p) = object_slot(i, at, PARENT)? else { break };
+        if !kids_of(i, p)?.iter().any(|k| same(k, &Value::Object(at))) {
+            break;
+        }
+        at = p;
+    }
+    if at == win && object_slot(i, win, WINDOW)? == Some(win) {
+        return Ok(win);
+    }
+    Err(i.type_error(&format!("{what}: this is not a ScriptUI window or control")))
+}
+
 /// Are `a` and `b` the same object?
 fn same(a: &Value, b: &Value) -> bool {
     matches!((a.as_object(), b.as_object()), (Some(x), Some(y)) if x == y)
 }
 
-/// The values of an array made by [`list`].
+/// The values of an array made by [`list`]. An array longer than any such array ([`LIST_CAP`]),
+/// which only an object a script made to look like an element holds, reads as empty.
 fn list_values(i: &Interp, a: ObjId) -> JsResult<Vec<Value>> {
     let length = match &i.object(a)?.class {
-        Class::Array { length, .. } => *length,
+        Class::Array { length, .. } if *length <= LIST_CAP => *length,
         _ => return Ok(Vec::new()),
     };
     (0..length)
@@ -311,6 +353,16 @@ fn new_element(
     set_slot(i, o, PARENT, parent.clone())?;
     set_slot(i, o, WINDOW, Value::Object(window))?;
     set_slot(i, o, DEPTH, Value::Number(depth as f64))?;
+    let id = match i.script_ui.as_mut() {
+        Some(c) => {
+            c.next_id += 1.0;
+            c.next_id
+        }
+        None => 0.0,
+    };
+    set_slot(i, o, ID, Value::Number(id))?;
+    let listeners = list(i, &[], false)?;
+    set_slot(i, o, LISTENERS, Value::Object(listeners))?;
     set_open(i, o, "type", Value::str(kind))?;
     set_open(i, o, "parent", parent)?;
     set_open(i, o, "window", Value::Object(window))?;
@@ -650,8 +702,8 @@ fn item_to_string(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult
 /// `list.removeAll()`.
 fn remove_all(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let o = list_of(i, &this, "removeAll")?;
+    let win = window_in(i, o, "removeAll")?;
     let n = items_of(i, o)?.len() as f64;
-    let win = window_of(i, o, "removeAll")?;
     let count = number_slot(i, win, ITEM_COUNT)?;
     set_slot(i, win, ITEM_COUNT, Value::Number((count - n).max(0.0)))?;
     let kept = list(i, &[], false)?;
@@ -822,17 +874,28 @@ fn event_stop(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Val
     Ok(Value::Undefined)
 }
 
-/// Runs the listeners for `ty` on `at` (only those for `capture` unless it is `None`), with `event`.
+/// Runs the listeners for `ty` on `at` (only those for `capture` unless it is `None`), with `event`,
+/// in the order they were added. A listener that an earlier one removed does not run.
 fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, event: ObjId, phase: f64) -> JsResult<bool> {
-    let wanted: Vec<Value> =
-        listeners_of(i, at)?.into_iter().filter(|(t, _, c)| is_type(t, ty) && capture.is_none_or(|want| *c == want)).map(|(_, f, _)| f).collect();
-    if wanted.is_empty() {
+    let wanted = |i: &Interp| -> JsResult<Vec<(Value, bool)>> {
+        Ok(listeners_of(i, at)?
+            .into_iter()
+            .filter(|(t, _, c)| is_type(t, ty) && capture.is_none_or(|want| *c == want))
+            .map(|(_, f, c)| (f, c))
+            .collect())
+    };
+    let first = wanted(i)?;
+    if first.is_empty() {
         return Ok(false);
     }
-    i.rooted(&wanted.clone(), |i| {
+    let functions: Vec<Value> = first.iter().map(|(f, _)| f.clone()).collect();
+    i.rooted(&functions, |i| {
         set_open(i, event, "currentTarget", Value::Object(at))?;
         set_open(i, event, "eventPhase", Value::Number(phase))?;
-        for f in &wanted {
+        for (f, c) in &first {
+            if !wanted(i)?.iter().any(|(g, d)| same(g, f) && d == c) {
+                continue;
+            }
             i.call(f, &Value::Object(at), &[Value::Object(event)])?;
         }
         Ok(true)
@@ -843,8 +906,35 @@ fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, eve
 /// capture, its `callback`, its own listeners, then the listeners of the containers that do not
 /// capture, until one stops it. → whether the event was handled: the element had a callback or a
 /// listener for it, or a capturing listener above it stopped it. Listeners of the containers that
-/// do not capture do not count.
+/// do not capture do not count. A container that a listener took the element out of before its
+/// turn does not hear the event.
 fn dispatch(i: &mut Interp, target: ObjId, ty: &str, callback: &str) -> JsResult<bool> {
+    let above = containers_above(i, target)?;
+    let proto = classes(i)?.event_proto;
+    i.reserve_heap(OBJECT_BYTES.saturating_add(PROP_BYTES.saturating_mul(10)))?;
+    let event = i.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
+    // The event and the containers stay kept from collection while the listeners run.
+    let kept = match i.script_ui.as_mut() {
+        Some(c) => {
+            c.dispatching.push(event);
+            let mark = c.above.len();
+            c.above.extend(above.iter().copied());
+            mark
+        }
+        None => 0,
+    };
+    let r = run_event(i, event, target, &above, ty, callback);
+    if let Some(c) = i.script_ui.as_mut() {
+        if let Some(n) = c.dispatching.iter().rposition(|e| *e == event) {
+            c.dispatching.remove(n);
+        }
+        c.above.truncate(kept);
+    }
+    r
+}
+
+/// The containers that hold `target`, innermost first.
+fn containers_above(i: &mut Interp, target: ObjId) -> JsResult<Vec<ObjId>> {
     let mut above = Vec::new();
     let mut at = object_slot(i, target, PARENT)?;
     while let Some(p) = at {
@@ -852,19 +942,7 @@ fn dispatch(i: &mut Interp, target: ObjId, ty: &str, callback: &str) -> JsResult
         above.push(p);
         at = object_slot(i, p, PARENT)?;
     }
-    let proto = classes(i)?.event_proto;
-    i.reserve_heap(OBJECT_BYTES.saturating_add(PROP_BYTES.saturating_mul(10)))?;
-    let event = i.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
-    if let Some(c) = i.script_ui.as_mut() {
-        c.dispatching.push(event);
-    }
-    let r = run_event(i, event, target, &above, ty, callback);
-    if let Some(c) = i.script_ui.as_mut()
-        && let Some(n) = c.dispatching.iter().rposition(|e| *e == event)
-    {
-        c.dispatching.remove(n);
-    }
-    r
+    Ok(above)
 }
 
 /// The phases of [`dispatch`] for the event object `event`.
@@ -878,6 +956,9 @@ fn run_event(i: &mut Interp, event: ObjId, target: ObjId, above: &[ObjId], ty: &
         set_open(i, event, "detail", Value::Number(if ty == "click" { 1.0 } else { 0.0 }))?;
         let stopped = |i: &Interp| -> JsResult<bool> { Ok(slot(i, event, STOPPED)?.truthy()) };
         for p in above.iter().rev() {
+            if !containers_above(i, target)?.contains(p) {
+                continue;
+            }
             run_listeners(i, *p, ty, Some(true), event, 1.0)?;
             if stopped(i)? {
                 return Ok(true);
@@ -887,6 +968,9 @@ fn run_event(i: &mut Interp, event: ObjId, target: ObjId, above: &[ObjId], ty: &
         let heard = run_listeners(i, target, ty, None, event, 2.0)?;
         if bubbles && !stopped(i)? {
             for p in above {
+                if !containers_above(i, target)?.contains(p) {
+                    continue;
+                }
                 run_listeners(i, *p, ty, Some(false), event, 3.0)?;
                 if stopped(i)? {
                     break;
@@ -965,6 +1049,19 @@ fn find(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value>
     Ok(at.and_then(|n| items.get(n).cloned()).unwrap_or(Value::Null))
 }
 
+/// The controls `o` holds whose container is `o`.
+fn own_kids(i: &Interp, o: ObjId) -> JsResult<Vec<Value>> {
+    let mut own = Vec::new();
+    for k in kids_of(i, o)? {
+        if let Some(c) = k.as_object()
+            && object_slot(i, c, PARENT)? == Some(o)
+        {
+            own.push(k);
+        }
+    }
+    Ok(own)
+}
+
 /// The controls in `c` and in the containers it holds, `c` included, and their list items.
 fn subtree_counts(i: &mut Interp, c: &Value) -> JsResult<(f64, f64)> {
     let (mut controls, mut items) = (0.0, 0.0);
@@ -974,7 +1071,7 @@ fn subtree_counts(i: &mut Interp, c: &Value) -> JsResult<(f64, f64)> {
         let Some(o) = v.as_object() else { continue };
         controls += 1.0;
         items += items_of(i, o)?.len() as f64;
-        stack.extend(kids_of(i, o)?);
+        stack.extend(own_kids(i, o)?);
     }
     Ok((controls, items))
 }
@@ -984,7 +1081,7 @@ fn subtree_counts(i: &mut Interp, c: &Value) -> JsResult<(f64, f64)> {
 fn remove(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let (o, kind) = element(i, &this, "remove")?;
     let what = arg(args, 0);
-    window_of(i, o, "remove")?;
+    window_in(i, o, "remove")?;
     if kind == "dropdownlist" || kind == "listbox" {
         let before = slot(i, o, ITEMS)?;
         let (mut items, at) = i.rooted(std::slice::from_ref(&before), |i| index_named(i, &what, |i| items_of(i, o)))?;
@@ -992,7 +1089,7 @@ fn remove(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Valu
         if !same(&slot(i, o, ITEMS)?, &before) {
             return Err(error(i, "remove: the list changed while the item was looked up"));
         }
-        let win = window_of(i, o, "remove")?;
+        let win = window_in(i, o, "remove")?;
         let Some(at) = at else { return Ok(Value::Undefined) };
         items.remove(at);
         i.rooted(&items.clone(), |i| {
@@ -1019,8 +1116,11 @@ fn remove(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Valu
     if !same(&slot(i, o, KIDS)?, &before) {
         return Err(error(i, "remove: the container's controls changed while the control was looked up"));
     }
-    let win = window_of(i, o, "remove")?;
+    let win = window_in(i, o, "remove")?;
     let Some(at) = at else { return Ok(Value::Undefined) };
+    if !matches!(kids.get(at).and_then(Value::as_object), Some(c) if object_slot(i, c, PARENT)? == Some(o)) {
+        return Err(i.type_error("remove: this is not a ScriptUI window or control"));
+    }
     let gone = kids.remove(at);
     i.rooted(std::slice::from_ref(&gone), |i| {
         i.rooted(&kids.clone(), |i| {
@@ -1040,19 +1140,20 @@ fn remove(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Valu
 }
 
 /// Takes the control `c`, removed from its container, out of the dialog: it has no container,
-/// and neither it nor the controls it holds belong to the dialog any longer.
+/// and neither it nor the controls it holds belong to the dialog any longer, so their `window` is
+/// `null`.
 fn detach(i: &mut Interp, c: &Value) -> JsResult<()> {
     let Some(root) = c.as_object() else { return Ok(()) };
-    set_slot(i, root, PARENT, Value::Null)?;
-    set_open(i, root, "parent", Value::Null)?;
     let mut stack = vec![c.clone()];
     while let Some(v) = stack.pop() {
         i.use_fuel()?;
         let Some(o) = v.as_object() else { continue };
+        stack.extend(own_kids(i, o)?);
         set_slot(i, o, WINDOW, Value::Null)?;
-        stack.extend(kids_of(i, o)?);
+        set_open(i, o, "window", Value::Null)?;
     }
-    Ok(())
+    set_slot(i, root, PARENT, Value::Null)?;
+    set_open(i, root, "parent", Value::Null)
 }
 
 fn control_show(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
@@ -1439,6 +1540,7 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         let text = text_of(i, &text_v, "a control's text")?;
         let mut d: Vec<(String, Data)> = vec![
             ("kind".into(), Data::String(kind.clone())),
+            ("id".into(), Data::Number(number_slot(i, o, ID)?)),
             ("parent".into(), Data::Number(*parent)),
             ("name".into(), Data::String(name.clone())),
             ("text".into(), Data::String(text.clone())),
@@ -1580,6 +1682,8 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
             radio_set,
             showing: None,
             dispatching: Vec::new(),
+            above: Vec::new(),
+            next_id: 0.0,
         });
         let window = native(i, "Window", window_ctor, 4, NativeKind::Plain, true)?;
         constructor(i, "Window", window, window_proto)?;

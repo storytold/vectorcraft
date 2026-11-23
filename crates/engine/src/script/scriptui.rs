@@ -121,6 +121,9 @@ pub struct UiRect {
 #[derive(Clone, Debug, PartialEq)]
 pub struct UiNode {
     pub kind: UiKind,
+    /// A number no other element of the run has, which stays with the element while the script
+    /// adds and removes controls; its index in the description when the description gives none.
+    pub id: u64,
     /// The index of its container; the dialog's own is 0.
     pub parent: usize,
     pub name: String,
@@ -493,6 +496,7 @@ pub fn parse(d: &Data) -> Result<ScriptUiDialog, HostError> {
         let margins = numbers::<4>(field(f, "margins"))?.map_or([0.0; 4], |m| m.map(|v| extent(v).max(0.0)));
         nodes.push(UiNode {
             kind,
+            id: number(field(f, "id")).filter(|n| *n >= 0.0 && n.fract() == 0.0 && *n < 9.0e15).map_or(i as u64, |n| n as u64),
             parent,
             name: text(field(f, "name"), "a control's name")?,
             text: text(field(f, "text"), "a control's text")?,

@@ -131,50 +131,46 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
         }
         return DialogAction::None;
     }
-    let next = queue.remove(0);
-    if !queue.is_empty() {
-        d.fields.insert(QUEUE_KEY.into(), Value::Array(queue));
-    }
-    if let Value::Object(mut fields) = next {
-        // The control the event was given to, found again in the dialog as the handlers that ran
-        // since left it.
-        let at = fields.remove(PLACE_KEY).and_then(|p| serde_json::from_value::<Vec<usize>>(p).ok()).and_then(|p| control_at(&w, &p));
-        if let Some(i) = at {
-            fields.insert("control".into(), json!(i));
+    // An event whose control or list items a handler removed since it was given is dropped.
+    while !queue.is_empty() {
+        let next = queue.remove(0);
+        let Some(fields) = for_dialog(&w, next) else { continue };
+        if !queue.is_empty() {
+            d.fields.insert(QUEUE_KEY.into(), Value::Array(queue));
         }
         d.fields.extend(fields);
+        return DialogAction::Confirm;
     }
-    DialogAction::Confirm
+    DialogAction::None
 }
 
-/// The field of a queued event that holds where its control sits in the dialog ([`place_of`]).
-const PLACE_KEY: &str = "place";
+/// The field of a queued event that holds its control's id ([`UiNode::id`]).
+const ID_KEY: &str = "id";
 
-/// Where control `i` sits in the dialog `w`: its position among its container's controls, after
-/// its container's own position, and so on up to the dialog. `add` puts a new control after the
-/// others in its container, so a handler that adds controls leaves the place of every other one
-/// as it was, while its index in the dialog's list of elements can move.
-fn place_of(w: &ScriptUiDialog, mut i: usize) -> Vec<usize> {
-    let mut place = Vec::new();
-    while i > 0 {
-        let Some(n) = w.nodes.get(i) else { return Vec::new() };
-        place.push(w.nodes.iter().take(i).skip(1).filter(|m| m.parent == n.parent).count());
-        if n.parent >= i {
-            return Vec::new();
-        }
-        i = n.parent;
+/// The field of a queued list change that holds the list's items as the person saw them.
+const ITEMS_KEY: &str = "items";
+
+/// The queued event `next` as fields for the dialog `w`, with `control` the index its control has
+/// in `w` now, which moves when a handler adds or removes controls before it. `None` when `w` no
+/// longer has the control, or for a list's change, when the list's items are no longer those the
+/// person chose from.
+fn for_dialog(w: &ScriptUiDialog, next: Value) -> Option<serde_json::Map<String, Value>> {
+    let Value::Object(mut fields) = next else { return None };
+    let items = fields.remove(ITEMS_KEY);
+    let Some(id) = fields.remove(ID_KEY) else { return Some(fields) };
+    let i = id.as_u64().and_then(|id| index_of(w, id))?;
+    if let Some(items) = items
+        && serde_json::from_value::<Vec<String>>(items).ok().as_ref() != Some(&w.nodes[i].items)
+    {
+        return None;
     }
-    place.reverse();
-    place
+    fields.insert("control".into(), json!(i));
+    Some(fields)
 }
 
-/// The index of the control at `place` ([`place_of`]) in the dialog `w`, if it has one.
-fn control_at(w: &ScriptUiDialog, place: &[usize]) -> Option<usize> {
-    let mut at = 0;
-    for &k in place {
-        at = w.nodes.iter().enumerate().skip(1).filter(|(_, n)| n.parent == at).nth(k)?.0;
-    }
-    (at > 0).then_some(at)
+/// The index of the control whose id ([`UiNode::id`]) is `id` in the dialog `w`, if it has one.
+fn index_of(w: &ScriptUiDialog, id: u64) -> Option<usize> {
+    w.nodes.iter().position(|n| n.id == id).filter(|i| *i > 0)
 }
 
 /// The field that holds the events the person gave in one frame that the script has not had yet;
@@ -240,14 +236,13 @@ fn draft_key(i: usize) -> String {
     format!("text{i}")
 }
 
-/// The field that holds, for each text typed in an edit field, where the field sat ([`place_of`])
-/// in the dialog the text was typed in.
+/// The field that holds, for each text typed in an edit field, the field's id ([`UiNode::id`]).
 const DRAFT_PLACES_KEY: &str = "draftPlaces";
 
-/// Records where the field of each typed text sits in the dialog `w`, for [`move_drafts`].
+/// Records the id of the field of each typed text in the dialog `w`, for [`move_drafts`].
 fn note_draft_places(w: &ScriptUiDialog, d: &mut Dialog) {
     let places: serde_json::Map<String, Value> =
-        (1..w.nodes.len()).map(|i| (i, draft_key(i))).filter(|(_, k)| d.fields.contains_key(k)).map(|(i, k)| (k, json!(place_of(w, i)))).collect();
+        (1..w.nodes.len()).map(|i| (i, draft_key(i))).filter(|(_, k)| d.fields.contains_key(k)).map(|(i, k)| (k, json!(w.nodes[i].id))).collect();
     if places.is_empty() {
         d.fields.remove(DRAFT_PLACES_KEY);
     } else {
@@ -256,14 +251,14 @@ fn note_draft_places(w: &ScriptUiDialog, d: &mut Dialog) {
 }
 
 /// Puts each typed text that [`note_draft_places`] recorded under the index its field has in the
-/// dialog `w`, which moves when a handler adds controls before the field. A text whose field the
-/// dialog no longer has is dropped.
+/// dialog `w`, which moves when a handler adds or removes controls before the field. A text whose
+/// field the dialog no longer has is dropped.
 fn move_drafts(w: &ScriptUiDialog, d: &mut Dialog) {
     let Some(Value::Object(places)) = d.fields.remove(DRAFT_PLACES_KEY) else { return };
     let mut moved = Vec::new();
-    for (key, place) in places {
+    for (key, id) in places {
         let Some(text) = d.fields.remove(&key) else { continue };
-        let at = serde_json::from_value::<Vec<usize>>(place).ok().and_then(|p| control_at(w, &p));
+        let at = id.as_u64().and_then(|id| index_of(w, id));
         if let Some(i) = at.filter(|i| w.nodes.get(*i).is_some_and(|n| n.kind == UiKind::EditText)) {
             moved.push((draft_key(i), text));
         }
@@ -439,7 +434,8 @@ fn edit(ui: &mut egui::Ui, d: &mut Dialog, rect: egui::Rect, (i, n, prompt): (us
 }
 
 /// `event` in the dialog `w` as the dialog's `event`, `control` and `value` fields, and for a
-/// click or a change, the control's place ([`PLACE_KEY`]).
+/// click or a change, the control's id ([`ID_KEY`]), and for a list's change, its items
+/// ([`ITEMS_KEY`]).
 fn event_fields(w: &ScriptUiDialog, event: &UiEvent) -> Value {
     let (name, control, value) = match event {
         UiEvent::Click(i) => ("click", Some(*i), Value::Null),
@@ -449,8 +445,11 @@ fn event_fields(w: &ScriptUiDialog, event: &UiEvent) -> Value {
         UiEvent::Close => ("close", None, Value::Null),
     };
     let mut fields = json!({"event": name, "control": control, "value": value});
-    if let Some(i) = control {
-        fields[PLACE_KEY] = json!(place_of(w, i));
+    if let Some(n) = control.and_then(|i| w.nodes.get(i)) {
+        fields[ID_KEY] = json!(n.id);
+        if matches!(event, UiEvent::Change(_, UiValue::Index(_))) {
+            fields[ITEMS_KEY] = json!(n.items);
+        }
     }
     fields
 }

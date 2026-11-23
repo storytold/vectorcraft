@@ -2909,9 +2909,9 @@ controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and s
   `listbox`, `slider` and `progressbar`. After `bounds`, a text control takes its text and `properties` (`name`,
   and `multiline` and `readonly` for `edittext`), a list takes an array of item texts, a `slider` takes its value,
   minimum and maximum (0 and 100 when left out), and a `progressbar` its value and maximum. A `group` takes
-  `properties` right after `bounds`, or after an empty third argument, and a list may take `properties` right
-  after `bounds` in place of its items, with the item texts in `properties.items`; a list given items both ways
-  throws a `TypeError`. The `alignment` in `properties`,
+  `properties` right after `bounds`, or fourth when the third argument is not an object, and a list may take
+  `properties` right after `bounds` in place of its items, with the item texts in `properties.items`; a list given
+  items both ways throws a `TypeError`. The `alignment` in `properties`,
   and a container's `orientation`, `alignChildren`, `spacing` and `margins` there, are the control's first values
   (VectorCraft's own rule). A `listbox` with `multiselect` and the other control types (`tabbedpanel`, `tab`,
   `scrollbar`, `image`, `iconbutton`, `treeview` and the rest) throw that they are not available yet, and an
@@ -2927,8 +2927,9 @@ controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and s
   `orientation` (`row`, `column` or `stack`; a group starts as a row and the dialog and a panel as a column),
   `alignChildren`, `spacing` (10 to start), `margins` (15 to start, 0 for a group), `findElement(name)` and
   `remove(what)`, which removes the control given by its index, the control itself or its text. Removing an item
-  or a control that is not there does nothing. A removed control has no `parent` and its handlers no longer reach
-  the containers it was in; `add` and `remove` on it, or on a control it holds, throw an `Error`. When a `text`
+  or a control that is not there does nothing. A removed control has no `parent`, it and the controls it holds have
+  no `window`, and its events no longer reach the containers it was in, also when a handler removes it while its
+  event runs; `add`, `remove` and `removeAll` on it, or on a control it holds, throw an `Error`. When a `text`
   getter changes the list or container while `remove(text)` looks for a match, `remove` throws an `Error` and
   removes nothing. The dialog has `defaultElement`, `cancelElement`, `close([result])`
   and `hide()`. `center()`, `layout.layout()` and `layout.resize()` do nothing.
@@ -2941,8 +2942,8 @@ controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and s
   `click` listeners. `notify` does not close the dialog, even for the default or cancel button. `notify()` gives a
   click for a button, a check box and a radio button, and a change for the others.
 - `addEventListener(type, handler[, capture])` registers a function for `click`, `change`, `changing` or `show`,
-  and `removeEventListener` with the same arguments removes it; a function registered twice for the same type and
-  phase runs once. `show` can be registered only on the dialog, and on a control it throws an `Error`. A window or
+  and `removeEventListener` with the same arguments removes it, so that it does not run even when the event it was
+  waiting for is already running; a function registered twice for the same type and phase runs once. `show` can be registered only on the dialog, and on a control it throws an `Error`. A window or
   control takes at most 256 handlers, past which `addEventListener` throws a `RangeError` (VectorCraft's own
   limit). A handler gets an event with `type`, `target`, `currentTarget`, `eventPhase`, `bubbles`, `cancelable`
   (always false), `detail` (1 for a click), `stopPropagation()` and `preventDefault()`, which does nothing. The
