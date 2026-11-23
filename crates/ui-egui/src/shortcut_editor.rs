@@ -13,6 +13,7 @@ use craft::keymap::{
     AssignError, Binding, CommandDef, CommandKind, ConflictKind, ForeignSet, ImportOptions, Keymap, Overrides, Policy, PressKind, Profiles, Trigger,
 };
 use craft::menu::shortcuts::{Area, DialogState, Format, HoldSetting, JSON_FORMAT, Options, Outcome, ShortcutsDialog, summary};
+use craft::ui::contract::CommandSet as _;
 use craft::ui::runtime::commands;
 use serde_json::{Value, json};
 
@@ -20,6 +21,7 @@ use crate::file_asks::{self, Owner};
 use crate::keymap::{command_of, entry_key, stored, stored_key};
 use crate::menus::Node;
 use crate::shortcut_sheet::PageSize;
+use crate::type_editing::TypeEditorCommand;
 use crate::{VectorcraftApp, menus};
 
 pub const PRESETS: &[&str] = &["VectorCraft Defaults", "Classic Defaults"];
@@ -1294,6 +1296,16 @@ fn set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         let k = entry_key(&h.command);
         if !removed.contains(&k) {
             removed.push(k);
+        }
+    }
+    // The type editor's own commands (Commit on Cmd+Enter) give up a chord the user binds, as production's editor let
+    // any bound command run instead.
+    for b in keymap.bindings(&command).into_iter().filter(|b| b.trigger.press == PressKind::Single) {
+        for editor in keymap.holders(&b.trigger.chord).into_iter().filter(|h| TypeEditorCommand::from_ref(h).is_some()) {
+            let k = entry_key(&editor);
+            if keymap.remove(&editor, &b) && !removed.contains(&k) {
+                removed.push(k);
+            }
         }
     }
     // An entry listed only with a shortcut loses its hold shortcut with its last shortcut.
