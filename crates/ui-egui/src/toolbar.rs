@@ -35,6 +35,7 @@ use vectorcraft_tools::{Mods, TOOL_GROUPS, ToolInfo, ToolKey, tool_info};
 
 use crate::VectorcraftApp;
 use crate::paint_preview::well_paint;
+use crate::panels::learn::locate::{self, Home};
 use crate::state::{CustomToolbar, UiState};
 
 /// The Tools panel's key in the dock layout.
@@ -396,7 +397,19 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     let own_bar = !matches!(owner, Owner::Strip(..));
     let opens = opens(app, &owner);
     let scope = rail_scope(app, &owner);
+    // A Learn link's tool on this rail wears the mark; the pass that shows the rail scrolls its slot into view and opens
+    // its flyout, once.
+    let home = Home::Rail(&owner);
+    let located = locate::wanted(&app.ui, &home);
+    let holds = |tool: &str| model.slots.iter().any(|slot| slot.tools.iter().any(|t| t.id == tool));
+    let reveal = matches!(at, GroupAt::Show(_)).then(|| locate::take_reveal(&mut app.ui, &home, holds)).flatten();
     let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).theme(scope).tips(&cards);
+    if let Some(tool) = &located {
+        rail = rail.mark(tool);
+    }
+    if let Some(tool) = &reveal {
+        rail = rail.reveal(tool);
+    }
     if app.session.prefs.tool_group_labels {
         rail = rail.captions();
     }

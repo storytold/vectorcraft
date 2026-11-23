@@ -1,9 +1,11 @@
 //! Helpers for the number, blend and kerning fields the panels build from framework components.
 
-use craft::behavior::{NumberCodec, Reader};
-use craft::ui::contract::Entry;
+use craft::behavior::NumberCodec;
+use craft::ui::contract::{Bind, Entry};
 use craft::ui::patterns::blend_keys::{BlendKeyEntry, BlendShortcut, blend_entries as framework_blend_entries};
-use craft::ui::runtime::env::{Label, LengthUnits, UnitKind, Units};
+use craft::ui::runtime::env::{Env, Label, LengthUnits, UnitKind, Units};
+use craft::ui::text::NumberField;
+use egui::Ui;
 use vectorcraft_color::BlendMode;
 
 /// Every blend mode with its Shift+Alt letter, in the order of the menu.
@@ -53,23 +55,16 @@ pub fn bare_points(lengths: LengthUnits, on: bool) -> LengthUnits {
     if on && lengths.shown == UnitKind::Picas { lengths.bare_in(UnitKind::Points) } else { lengths }
 }
 
-/// A reader for lengths shown in `lengths.shown`, with [`bare_points`].
-pub fn length_reader(units: &Units, lengths: LengthUnits, on: bool) -> Reader {
-    units.length_reader(bare_points(lengths, on))
+/// The codec of a size field: a length field's reader at the shown unit's places, and a lone `50%` read as that share
+/// of the size the edit began on.
+pub fn size_codec(units: &Units, lengths: LengthUnits) -> NumberCodec {
+    NumberCodec::new(units.length_reader(lengths), *lengths.shown.decimals().end()).share_of_start()
 }
 
-/// A percentage typed alone (`50%`, `150 %`, `100/3%`) as that share of `value`; `None` for any
-/// other text. A decimal comma is read after the `%` is dropped, so `12,5%` is 12.5% and `1,000%`
-/// is refused as thousands rather than read as 1%.
-fn share_of(text: &str, value: f64) -> Option<f64> {
-    let percent = vectorcraft_doc::parse_number(&vectorcraft_doc::decimal_point(text.trim().strip_suffix('%')?))?;
-    Some(value * percent / 100.0)
-}
-
-/// The codec of a length field: [`length_reader`], at most `decimals` places, and a lone `50%` read
-/// as that share of `shown` (the field's current value, in the shown unit).
-pub fn size_codec(units: &Units, lengths: LengthUnits, decimals: usize, shown: Option<f64>, bare_points: bool) -> NumberCodec {
-    NumberCodec::new(length_reader(units, lengths, bare_points), decimals).or_parse(move |text| shown.and_then(|v| share_of(text, v)))
+/// A length field over a size (a width, height, radius or handle length) of `value`, in `lengths.stored`, read with
+/// [`size_codec`].
+pub fn size_field(ui: &Ui, label: impl Into<Label>, value: Option<f64>, lengths: LengthUnits) -> NumberField<'static> {
+    NumberField::length(label, Bind::given(value), lengths).codec(size_codec(&Env::of(ui).units(), lengths))
 }
 
 /// `v` moved `n` steps of `size` (down when negative): the first step goes to the next multiple of

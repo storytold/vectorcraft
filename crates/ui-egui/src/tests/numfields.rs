@@ -41,7 +41,7 @@ fn typed(start: f64, text: &str, lengths: LengthUnits, codec: impl Fn(&Units) ->
 /// `typed` in a field that stores points and shows `shown`, reading with the size codec.
 fn typed_in_size(shown: UnitKind, text: &str) -> Option<f64> {
     let lengths = LengthUnits::new(UnitKind::Points, shown, PPI);
-    typed(PPI, text, lengths, move |units| fields::size_codec(units, lengths, 2, None, false))
+    typed(PPI, text, lengths, move |units| fields::size_codec(units, lengths))
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn bare_numbers_in_picas_fields_are_points_when_the_preference_says_so() {
         let flag = app.session.prefs.numbers_without_units_are_points;
         assert_eq!(flag, on, "the preference reads back");
         let lengths = LengthUnits::new(UnitKind::Points, shown, PPI);
-        typed(PPI, text, lengths, move |units| NumberCodec::new(fields::length_reader(units, lengths, flag), 2)).expect(text)
+        typed(PPI, text, lengths, move |units| NumberCodec::new(units.length_reader(fields::bare_points(lengths, flag)), 2)).expect(text)
     };
     let (picas, mm) = (UnitKind::Picas, UnitKind::Millimetres);
     let mm_pt = |n: f64| n / 25.4 * PPI;

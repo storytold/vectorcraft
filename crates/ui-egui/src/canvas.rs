@@ -43,8 +43,6 @@ mod widgets;
 
 pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
 pub use fill::Fill;
-#[cfg(test)]
-pub(crate) use grid::ruler_label;
 use home::home;
 pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};

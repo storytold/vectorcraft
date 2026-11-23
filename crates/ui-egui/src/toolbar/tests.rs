@@ -306,6 +306,23 @@ fn the_paint_and_drawing_mode_buttons_fit_the_toolbar_width() {
     assert_eq!(app.session.draw_mode, vectorcraft_engine::DrawMode::Behind);
 }
 
+/// A Learn link's tool in a collapsed group of the Tools panel opens that group's flyout with the tool in it, and
+/// chooses nothing: the rail reveals the located tool.
+#[test]
+fn a_located_tool_in_a_collapsed_group_opens_its_flyout_on_the_tools_panel() {
+    let mut app = app_with(400, 400);
+    let ctx = reader();
+    let menus = |nodes: &[Node]| nodes.iter().filter(|n| n.role() == Role::Menu).count();
+    let row = tool_info("smooth").map(button_name).unwrap_or_default();
+    let nodes = settled(&mut app, &ctx, 0.0, 900.0);
+    assert_eq!(menus(&nodes), 0, "no flyout before the link");
+    assert_eq!(app.run("learn.locateTool", json!({"tool": "smooth"})).unwrap()["location"], "flyout");
+    let nodes = settled(&mut app, &ctx, 1.0, 900.0);
+    assert!(menus(&nodes) > 0, "the located tool's group opens its flyout");
+    assert!(nodes.iter().any(|n| n.label() == Some(row.as_str())), "the flyout lists {row}");
+    assert_eq!(app.session.tool_id(), "selection", "the link chooses no tool");
+}
+
 /// How many columns of tool buttons `rects` make.
 fn columns(rects: &[egui::Rect]) -> usize {
     let mut lefts: Vec<i32> = rects.iter().map(|r| r.left().round() as i32).collect();

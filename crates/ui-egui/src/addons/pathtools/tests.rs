@@ -6,6 +6,7 @@ use vectorcraft_tools::addons::parametric_shape::ShapeKind;
 use super::{ID, KIND, readout};
 use crate::VectorcraftApp;
 use crate::addons::dialogs::tests as host;
+use crate::tests::panel_harness::Panel;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -258,4 +259,44 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     host::frame(&mut app);
     assert_eq!((steps(&app), count(&app)), (n, nodes));
     assert!(app.ui.status.contains("The point lies inside the path"), "{}", app.ui.status);
+}
+
+/// A percentage typed alone into a size field (the Corner Tool's radius, a shape's W and Corner Radius, a handle's
+/// Length) is that share of the size the field shows, in a unit other than the stored points too.
+#[test]
+fn a_lone_percentage_in_a_size_field_is_that_share_of_the_size() {
+    let mut app = app();
+    app.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    app.run("tool.setOption", json!({"tool": "cornerTool", "values": {"radius": 12}})).unwrap();
+    app.run("tool.setOption", json!({"tool": "parametricShape", "values": {"radius": 10}})).unwrap();
+    let r = app.run("path.create", json!({"anchors": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 110}], "closed": false})).unwrap();
+    let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
+    app.session
+        .select(|_, sel| {
+            sel.set([id]);
+            sel.anchors.insert(id, [(0, 1)].into_iter().collect());
+        })
+        .unwrap();
+    app.run("addon.pathtools.smooth", json!({})).unwrap();
+    let shape = super::shape::target(&app).1;
+    let length = readout(&app).anchor.unwrap().lengths[0];
+    let halved = |before: f64, after: f64| (after - before / 2.0).abs() < 1e-6;
+
+    // The three panels, each in its own id scope, as their docked panels are.
+    let mut panel = Panel::new(app, |app, ui| {
+        ui.push_id("corner", |ui| super::corner::section(app, ui));
+        ui.push_id("shape", |ui| super::shape::show(app, ui));
+        ui.push_id("inspector", |ui| super::show(app, ui));
+    });
+    for field in ["Radius", "W", "Corner Radius", "Length"] {
+        panel.type_into(field, "50%");
+    }
+    let app = panel.app();
+    let radius = app.session.tool_options_of("cornerTool")["radius"].as_f64().unwrap();
+    assert!(halved(12.0, radius), "the Corner Tool's radius is {radius}");
+    let typed = super::shape::target(&app).1;
+    assert!(halved(shape.width, typed.width), "W went from {} to {}", shape.width, typed.width);
+    assert!(halved(shape.radius, typed.radius), "Corner Radius went from {} to {}", shape.radius, typed.radius);
+    let typed = readout(&app).anchor.unwrap().lengths[0];
+    assert!(halved(length, typed), "the handle's Length went from {length} to {typed}");
 }

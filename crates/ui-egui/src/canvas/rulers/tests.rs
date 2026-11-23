@@ -2,6 +2,7 @@
 
 use craft::behavior::{Axis, GesturePhase};
 use craft::ui::canvas::GuideDrag;
+use craft::ui::runtime::env::Env;
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_geom::Point;
@@ -230,4 +231,32 @@ fn double_clicking_a_ruler_adds_a_guide_at_that_position() {
     assert_eq!(guides(&app), [(true, 150.0)]);
     assert!(app.ui.view.guides, "the new guide shows");
     assert_eq!(undo_len(&app), undo + 1);
+}
+
+/// The rulers write each labelled tick's signed position with the decimals its step needs and no trailing zeros, as
+/// production did: an inch ruler's binary steps keep their exact value (1/16 is `0.0625`, not `0.06`, #2827), a
+/// sixteenth-inch ruler labels the inch `1`, and a hair left of the zero point is `0`.
+#[test]
+fn ruler_labels_carry_the_sign_and_the_steps_decimals() {
+    let mut app = app();
+    app.run("document.setUnits", json!({"units": "Inches"})).unwrap();
+    let (x, _, _) = scales(&app);
+    let ctx = crate::testing::ui_context();
+    let mut units = None;
+    ctx.run_ui(Default::default(), |ui| units = Some(Env::of(ui).units())).textures_delta.clear();
+    let units = units.unwrap();
+    for (value, step, want) in [
+        (100.0000001, 100.0, "100"),
+        (0.30000000004, 0.1, "0.3"),
+        (1.25, 0.05, "1.25"),
+        (-0.0000001, 0.5, "0"),
+        (-2.5, 0.5, "-2.5"),
+        (0.0625, 0.0625, "0.0625"),
+        (0.125, 0.125, "0.125"),
+        (0.75, 0.25, "0.75"),
+        (1.0, 0.0625, "1"),
+        (1.1875, 0.0625, "1.1875"),
+    ] {
+        assert_eq!(x.tick_label(&units, value, step), want, "the tick at {value} of a {step} step");
+    }
 }

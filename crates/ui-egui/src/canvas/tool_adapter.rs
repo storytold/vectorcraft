@@ -513,13 +513,14 @@ impl CanvasTool for SessionTool<'_> {
     }
 }
 
-/// Runs the tool host on `tool` with the app's momentary set, which the app keeps across passes.
+/// Runs the tool host on `tool` with the app's momentary set, which the app keeps across passes. A finger, once a pen
+/// has been seen, only navigates (palm rejection).
 fn host_run(app: &mut VectorcraftApp, ui: &Ui, pass: &ToolPass, tool: &mut dyn CanvasTool) -> ToolHostResponse {
     let options = crate::app::view::navigation(&app.session.prefs);
     let mut momentary = app.canvas.momentary.take().unwrap_or_else(|| Momentary::new(options).shift(MomentaryShift::RotateView));
     momentary.set_options(options);
     momentary.hand_selected(app.session.tool_id() == "hand");
-    let response = ToolHost::new().momentary(&mut momentary).run(ui, pass, tool);
+    let response = ToolHost::new().momentary(&mut momentary).navigates(crate::touch::finger_navigates_only()).run(ui, pass, tool);
     app.canvas.momentary = Some(momentary);
     response
 }
@@ -609,7 +610,7 @@ fn host_run_session(tool: &mut SessionTool<'_>, ui: &Ui, pass: &ToolPass) -> Too
     momentary.set_options(options);
     momentary.hand_selected(app.session.tool_id() == "hand");
     drop(app);
-    let response = ToolHost::new().momentary(&mut momentary).run(ui, pass, tool);
+    let response = ToolHost::new().momentary(&mut momentary).navigates(crate::touch::finger_navigates_only()).run(ui, pass, tool);
     tool.app().canvas.momentary = Some(momentary);
     response
 }

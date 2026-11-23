@@ -16,9 +16,9 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::addons::parametric_shape::{self as tool, MAX_COUNT, MAX_SIZE, MIN_COUNT, MIN_SIZE, ParametricShape, ShapeKind, apply, read};
 
 use super::{row, run, typed};
-use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
 use crate::panels::empty_state;
+use crate::{VectorcraftApp, fields};
 
 /// The panel's id (`window.panel {panel: "parametricShape"}`).
 pub const ID: &str = "parametricShape";
@@ -108,7 +108,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     for (label, key, v) in [("W", "width", s.width), ("H", "height", s.height)] {
-        let size = |ui: &mut Ui| typed(NumberField::length(tl!(label), Bind::given(Some(v)), lengths).range(MIN_SIZE..=MAX_SIZE).show(ui).value());
+        let size = |ui: &mut Ui| typed(fields::size_field(ui, tl!(label), Some(v), lengths).range(MIN_SIZE..=MAX_SIZE).show(ui).value());
         if let Some(v) = row(ui, label, key, size) {
             change = Some(json!({ key: v }));
         }
@@ -133,7 +133,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if s.kind.rounds() {
         let radius = |ui: &mut Ui| {
-            typed(NumberField::length(tl!("Corner Radius"), Bind::given(Some(s.radius)), lengths).range(0.0..=MAX_SIZE).show(ui).value())
+            typed(fields::size_field(ui, tl!("Corner Radius"), Some(s.radius), lengths).range(0.0..=MAX_SIZE).show(ui).value())
         };
         if let Some(v) = row(ui, "Corner Radius", "parametric-shape-radius", radius) {
             change = Some(json!({ "radius": v }));

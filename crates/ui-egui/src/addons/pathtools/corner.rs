@@ -6,7 +6,6 @@ use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, Sizing, clicked};
 use craft::ui::display::Text;
 use craft::ui::pickers::Select;
-use craft::ui::text::NumberField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::LiveCorners;
@@ -14,9 +13,9 @@ use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_tools::addons::corner_tool::{ID, MAX_RADIUS, RADIUS};
 
 use super::{row, run, typed};
-use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
 use crate::dialogs::corners::kind_label;
+use crate::{VectorcraftApp, fields};
 
 /// The menu's command: the tool, with the panel its values are in.
 pub const COMMAND: &str = "addon.pathtools.cornerTool";
@@ -55,7 +54,7 @@ pub(super) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     Text::new(crate::i18n::fmt(tl!("Corners selected: {count}"), &[("count", &count.to_string())])).show(ui);
     let mut set: Option<Value> = None;
     let radius_field = |ui: &mut Ui| {
-        let field = NumberField::length(tl!("Radius"), Bind::given(Some(radius)), lengths).range(0.0..=MAX_RADIUS);
+        let field = fields::size_field(ui, tl!("Radius"), Some(radius), lengths).range(0.0..=MAX_RADIUS);
         typed(field.show(ui).value())
     };
     if let Some(v) = row(ui, "Radius", "corner-tool-radius", radius_field) {

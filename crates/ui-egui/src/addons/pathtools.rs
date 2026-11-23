@@ -31,11 +31,11 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::addons::tangent_circle as tangent_circle_tool;
 use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor, trim};
 
-use crate::VectorcraftApp;
 use crate::canvas::rulers::general_lengths;
 use crate::dialogs::host::open_held;
 use crate::menus::{Sep, c, cp};
 use crate::panels::empty_state;
+use crate::{VectorcraftApp, fields};
 
 /// The Anchor Inspector panel's id (`window.panel {panel: "anchorInspector"}`).
 pub const ID: &str = "anchorInspector";
@@ -202,9 +202,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         None => Text::new(tl!("Direct-select anchor points to edit them.")).show(ui),
     };
     let enabled = anchor.is_some();
-    let length = |ui: &mut Ui, salt: &'static str, caption: &'static str, v: Option<f64>| {
-        typed(NumberField::length(tl!(caption), Bind::given(v), lengths).id_salt(salt).enabled(enabled).show(ui).value())
-    };
+    let length = |ui: &mut Ui, salt: &'static str, field: NumberField<'static>| typed(field.id_salt(salt).enabled(enabled).show(ui).value());
     let angle = |ui: &mut Ui, salt: &'static str, v: Option<f64>| {
         let field = NumberField::new(tl!("Angle"), Bind::given(v)).unit_kind(UnitKind::Degrees).fixed_decimals(1);
         typed(field.id_salt(salt).enabled(enabled).show(ui).value())
@@ -212,14 +210,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let _ = Grid::new(&COLUMNS).show(ui, |ui, _| {
         for (label, key, v, o) in [("X", "x", anchor.map(|a| a.x), origin.x), ("Y", "y", anchor.map(|a| a.y), origin.y)] {
             Text::new(tl!(label)).show(ui);
-            if let Some(v) = length(ui, key, label, v) {
+            if let Some(v) = length(ui, key, NumberField::length(tl!(label), Bind::given(v), lengths)) {
                 set = Some(json!({ key: v + o }));
             }
         }
         for (label, side, i) in [("In", "in", 0), ("Out", "out", 1)] {
             Text::new(tl!(label)).show(ui);
-            let len = anchor.map(|a| a.lengths[i]);
-            if let Some(v) = length(ui, if i == 0 { "in-length" } else { "out-length" }, "Length", len) {
+            // A handle's length is a size: `50%` is half of it.
+            let len = fields::size_field(ui, tl!("Length"), anchor.map(|a| a.lengths[i]), lengths);
+            if let Some(v) = length(ui, if i == 0 { "in-length" } else { "out-length" }, len) {
                 set = Some(json!({ format!("{side}Length"): v }));
             }
             Text::new("∠").show(ui);

@@ -1,7 +1,7 @@
 //! The rulers of a canvas body: what they read (units, zero point) and the document edits their
 //! gestures make (guides dragged out of a strip, the zero point dragged out of the corner).
 
-use craft::behavior::{Axis, EditEvent, GesturePhase, Mixed, RulerUnits, Ticks};
+use craft::behavior::{Axis, EditEvent, GesturePhase, Mixed, RulerUnits, TickLabels, Ticks};
 use craft::ui::canvas::{CanvasRulers, GuideDrag, RulerText, Rulers, RulersOutput};
 use craft::ui::contract::Bind;
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
@@ -81,9 +81,9 @@ pub(crate) fn stroke_lengths(app: &VectorcraftApp) -> LengthUnits {
     lengths(app.session.stroke_unit())
 }
 
-/// One axis counting `unit`, `per_doc` of its units to a document point.
+/// One axis counting `unit`, `per_doc` of its units to a document point, labelled with the signed position.
 fn axis(unit: Unit, per_doc: f64) -> RulerText {
-    RulerText::new(RulerUnits::new(per_doc, Ticks::decimal(unit == Unit::Pixels)), unit_kind(unit))
+    RulerText::new(RulerUnits::new(per_doc, Ticks::decimal(unit == Unit::Pixels)).with_labels(TickLabels::Signed), unit_kind(unit))
 }
 
 /// Both axes in the General unit, from the ruler origin.

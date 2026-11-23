@@ -159,20 +159,3 @@ fn the_preferences_dialog_shows_the_documents_units() {
     assert_eq!(app.session.active().unwrap().doc.units, Unit::Inches);
     assert_eq!(app.session.prefs.units_general, "inches");
 }
-
-#[test]
-fn ruler_labels_have_the_steps_decimals() {
-    use crate::canvas::ruler_label;
-    assert_eq!(ruler_label(100.0000001, 100.0), "100");
-    assert_eq!(ruler_label(0.30000000004, 0.1), "0.3");
-    assert_eq!(ruler_label(1.25, 0.05), "1.25");
-    assert_eq!(ruler_label(-0.0000001, 0.5), "0");
-    assert_eq!(ruler_label(-2.5, 0.5), "-2.5");
-    // An inch ruler's binary steps keep their exact value: rounding the step's magnitude wrote
-    // 1/16 as "0.06" and 1/8 as "0.13" (#2827).
-    assert_eq!(ruler_label(0.0625, 0.0625), "0.0625");
-    assert_eq!(ruler_label(0.125, 0.125), "0.125");
-    assert_eq!(ruler_label(0.75, 0.25), "0.75");
-    assert_eq!(ruler_label(1.0, 0.0625), "1");
-    assert_eq!(ruler_label(1.1875, 0.0625), "1.1875");
-}

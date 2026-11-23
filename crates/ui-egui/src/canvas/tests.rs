@@ -258,6 +258,38 @@ fn two_finger_tap_in_touch_switches_selection_and_drawing_modes() {
     assert_eq!(count(&app), before - 1, "Essentials: undone");
 }
 
+/// Palm rejection: once a pen has been seen, a finger's drag on the canvas pans the view with any tool and draws
+/// nothing; the pen still draws.
+#[test]
+fn a_finger_after_a_pen_pans_and_draws_nothing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("rectangle");
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let drag = |app: &mut VectorcraftApp, a: Pos2, b: Pos2| {
+        for ev in [egui::Event::PointerMoved(a), button(a, true), egui::Event::PointerMoved(a.lerp(b, 0.5)), egui::Event::PointerMoved(b), button(b, false)] {
+            frame(app, &ctx, vec![ev]);
+        }
+        frame(app, &ctx, vec![]);
+    };
+    let c = app.canvas_view().unwrap().rect.center();
+    let origin = |app: &VectorcraftApp| app.canvas_view().unwrap().to_screen(Point::ZERO);
+    crate::touch::set_source(crate::touch::Source::Pen);
+    crate::touch::set_source(crate::touch::Source::Finger);
+    let before = origin(&app);
+    drag(&mut app, c, c + vec2(60.0, 40.0));
+    assert_eq!(count(&app), 0, "the finger drew nothing");
+    assert!(origin(&app) != before, "the finger panned the view");
+    crate::touch::set_source(crate::touch::Source::Pen);
+    drag(&mut app, c, c + vec2(60.0, 40.0));
+    assert_eq!(count(&app), 1, "the pen draws");
+    crate::touch::set_pen_seen(false);
+    crate::touch::set_source(crate::touch::Source::Mouse);
+}
+
 /// Switch Selection and Drawing Modes from the command: Pencil when no drawing tool was chosen yet,
 /// a view tool is left for Selection without becoming the drawing tool, and every selection tool
 /// switches to drawing mode.
