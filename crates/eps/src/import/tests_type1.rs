@@ -204,6 +204,14 @@ fn a_named_font_in_a_carried_family_and_style_keeps_the_fallback_font() {
     assert_eq!((t[1].runs[0].style.font_family.as_str(), t[1].runs[0].style.font_style.as_str()), ("Test One", "Regular"));
     assert!(t[0].file_fonts.is_some());
     assert!(t[1].file_fonts.is_none(), "the named font's type isn't drawn in the carried font");
+    // The warning says so for each: one drawn as the file draws it, one in the fallback font.
+    assert_eq!(
+        r.warnings,
+        [
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): Test One",
+            "fonts that aren't available show in the fallback font until they are: Test One",
+        ]
+    );
 }
 
 /// A character the file draws with a different glyph from the one the kept font already has for

@@ -322,40 +322,29 @@ fn read_checked(bytes: &[u8], editing_data: bool, trust: bool, names: NameEncodi
 /// The families of the type in `d` (its layers and its symbols) that aren't available, each once
 /// in the order the type comes, at most [`MAX_MISSING_FONTS`] a list: the document's, whether its
 /// type came from the page or from an editing copy, and none for type only measured or outlined.
-/// The first list holds those drawn in fonts the file carries (bound to the document's type), the
-/// second those in the fallback font; a family whose styles differ in that is in both.
+/// The first list holds those of type drawn in fonts the file carries (bound to that type), the
+/// second those of type in the fallback font; a family both happen to is in both.
 fn missing_fonts(d: &Document) -> (Vec<String>, Vec<String>) {
     let db = vectorcraft_text::FontDb::global();
-    let mut bound: HashSet<(String, String)> = HashSet::new();
-    let mut find_bound = |n: &Node| {
-        if let NodeKind::Text(t) = &n.kind {
-            for font in t.file_fonts_in_use() {
-                if t.file_fonts.as_ref().and_then(|fonts| fonts.face(&font.key)).is_some() {
-                    bound.insert((font.family.clone(), font.style.clone()));
-                }
-            }
-        }
-    };
-    d.walk(&mut find_bound);
-    for s in &d.symbols {
-        s.art.walk(&mut find_bound);
-    }
-    let mut checked: HashSet<(String, String)> = HashSet::new();
     let (mut carried, mut missing): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
     let mut add = |n: &Node| {
         let NodeKind::Text(t) = &n.kind else { return };
+        // The families and styles this type is drawn in from fonts the file carries.
+        let bound: Vec<(&str, &str)> = t
+            .file_fonts_in_use()
+            .iter()
+            .filter(|font| t.file_fonts.as_ref().and_then(|fonts| fonts.face(&font.key)).is_some())
+            .map(|font| (font.family.as_str(), font.style.as_str()))
+            .collect();
         for run in &t.runs {
-            let key = (run.style.font_family.clone(), run.style.font_style.clone());
-            if key.0.is_empty() || checked.contains(&key) {
+            let (family, style) = (run.style.font_family.as_str(), run.style.font_style.as_str());
+            if family.is_empty() {
                 continue;
             }
-            if db.find_family(&key.0).is_none() {
-                let list = if bound.contains(&key) { &mut carried } else { &mut missing };
-                if list.len() < MAX_MISSING_FONTS && !list.contains(&key.0) {
-                    list.push(key.0.clone());
-                }
+            let list = if bound.contains(&(family, style)) { &mut carried } else { &mut missing };
+            if list.len() < MAX_MISSING_FONTS && !list.iter().any(|f| f == family) && db.find_family(family).is_none() {
+                list.push(family.to_string());
             }
-            checked.insert(key);
         }
     };
     d.walk(&mut add);
