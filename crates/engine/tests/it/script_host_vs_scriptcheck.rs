@@ -57,7 +57,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "File.prototype.",
         "absoluteURI alias changePath close constructor created creator displayName encoding encoding= eof error error= \
-         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= modified name openDlg parent path read \
+         exists fsName fullName getRelativeURI hidden length lineFeed lineFeed= localizedName modified name openDlg parent path read \
          readch readln readonly relativeURI resolve saveDlg seek tell toString type",
     ),
     (
@@ -68,7 +68,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Folder.prototype.",
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
-         getRelativeURI modified name parent path relativeURI resolve selectDlg toString",
+         getRelativeURI localizedName modified name parent path relativeURI resolve selectDlg toString",
     ),
 ];
 
