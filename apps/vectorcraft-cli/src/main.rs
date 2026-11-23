@@ -238,18 +238,22 @@ fn main() -> ExitCode {
 /// A headless session that remembers what the user keeps between runs: the PDF presets saved, the
 /// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541), the custom dictionary's words (#4936) and the Color Settings (#6335), in the folders
 /// and files next to the preferences that the desktop app uses too, and lists the scripts of the Scripts folder there
-/// (`script.listInstalled`), keeps File Info's metadata templates there and starts new documents from the New Document profiles there. `VECTORCRAFT_NO_PREFS` and
+/// (`script.listInstalled`), keeps each script's `Folder.userData` in the Script Data folder there, keeps File Info's
+/// metadata templates there and starts new documents from the New Document profiles there. `VECTORCRAFT_NO_PREFS` and
 /// `VECTORCRAFT_CONFIG_DIR` apply as they do there.
 fn with_stores(mut h: Headless) -> Headless {
     prefs_dir::attach_scripts_dir(&mut h.session);
+    prefs_dir::attach_script_data(&mut h.session);
     prefs_dir::attach_metadata_templates_dir(&mut h.session);
     prefs_dir::attach_new_doc_profiles(&mut h.session);
+    prefs_dir::attach_proof_setups(&mut h.session);
     prefs_dir::attach_profile_store(&mut h.session);
     prefs_dir::attach_color_settings(&mut h.session);
     prefs_dir::attach_plugin_store(&mut h.session);
     prefs_dir::attach_pdf_preset_store(&mut h.session);
     prefs_dir::attach_custom_dictionary(&mut h.session);
     prefs_dir::attach_arrowheads(&mut h.session);
+    prefs_dir::attach_bevels(&mut h.session);
     h
 }
 

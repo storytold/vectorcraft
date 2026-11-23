@@ -11,7 +11,7 @@
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::objects_on_path::CENTER;
 
-use super::{DialogSpec, run_and_close};
+use super::{DialogSpec, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -40,9 +40,10 @@ pub fn open(app: &mut VectorcraftApp) -> Value {
 }
 
 /// Reset: the center and 0.
-fn reset(_: &VectorcraftApp, d: &mut Dialog) {
+fn reset(_: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     d.fields.insert("pivot".into(), json!(CENTER));
     d.fields.insert("rotate".into(), json!(0.0));
+    Ok(())
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -61,8 +62,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(8.0);
     let r = widgets::flat_button(ui, tl!("Reset"), 64.0);
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset")));
-    if r.clicked() {
-        reset(app, d);
+    if r.clicked()
+        && let Err(e) = reset(app, d)
+    {
+        app.status(e);
     }
     false
 }
@@ -70,7 +73,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// Save: set the tool's Pivot and Rotate.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let values: Map<String, Value> = ["pivot", "rotate"].iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
-    run_and_close(app, "tool.setOption", json!({ "tool": TOOL, "values": values }))
+    set_tool_options_and_close(app, json!({ "tool": TOOL, "values": values }))
 }
 
 #[cfg(test)]

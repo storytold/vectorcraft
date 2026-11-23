@@ -277,6 +277,18 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
+    /// A gradient mesh's `X#` entry `vals`. In a symbol's art, corners are in the space an image's
+    /// matrix is in there; a mesh there in a file that doesn't say where the canvas is is unread.
+    pub(super) fn mesh_entry(&mut self, vals: &[V]) {
+        let to_doc = self.image_space();
+        if let Some((m, _)) = self.mesh.as_mut() {
+            match to_doc {
+                Some(to_doc) => m.entry(vals, to_doc),
+                None => m.unread = true,
+            }
+        }
+    }
+
     /// `/End X!`: the gradient mesh read, as one object.
     pub(super) fn end_mesh(&mut self) -> Result<(), String> {
         let Some((m, hidden)) = self.mesh.take() else { return Ok(()) };
@@ -351,11 +363,15 @@ impl<'a> Reader<'a> {
     pub(super) fn set_instance(&mut self, i: &Instance) {
         let mut to_doc = self.space();
         // In a pattern's definition a gradient's `Xm` and `Bm` are written y down about the canvas point of art space's
-        // origin, as the file's PDF part draws them; in a symbol's, as the instances in its art are.
+        // origin, as the file's PDF part draws them; in a symbol's, as the instances in its art are, an envelope's
+        // contents' included (which `space` moves alone).
         if (self.pattern.is_some() || self.symbol.is_some())
             && i.has_matrix()
             && let Some(t) = self.template
         {
+            if self.pattern.is_none() && !self.envelope_blocks.is_empty() {
+                to_doc = Affine::IDENTITY;
+            }
             let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
             to_doc *= Affine::new([1.0, 0.0, 0.0, -1.0, CANVAS_CENTRE - cx, CANVAS_CENTRE + cy]);
         }
@@ -551,15 +567,20 @@ impl<'a> Reader<'a> {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], a]);
             }
         }
-        let Some(img) = image::RgbaImage::from_raw(w as u32, h as u32, rgba) else {
+        let Ok(img) = craft_image_codecs::Image::from_raw(
+            w as u32,
+            h as u32,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            rgba,
+        ) else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
-        let mut png = vec![];
-        if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+        let Ok(png) = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
-        }
+        };
         self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32), None)
     }
 
@@ -584,12 +605,13 @@ impl<'a> Reader<'a> {
                 gray.push(v);
             }
         }
-        let mut png = vec![];
-        let written = image::GrayImage::from_raw(w, h, gray).map(|img| img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png));
-        if !matches!(written, Some(Ok(()))) {
+        let written = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray)
+            .ok()
+            .and_then(|img| craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok());
+        let Some(png) = written else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
-        }
+        };
         self.add_raster(ImageBlob::new("image/png", png), alpha, m, (w, h), Some(paint))
     }
 
@@ -640,7 +662,7 @@ impl<'a> Reader<'a> {
         };
         // The placeholder is all the document has of the file: what a missing link shows.
         let bytes = Arc::new(png);
-        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() };
         let key = linked_key(&blob, &path);
         self.doc.images.entry(key.clone()).or_insert(blob);
         self.warn(LINKED_PLACEHOLDERS);
@@ -677,15 +699,16 @@ impl<'a> Reader<'a> {
         let blob = if cmyk {
             Inks::new(ow, oh, pixels).and_then(|i| ImageBlob::cmyk_tiff(&i))
         } else {
-            use image::ImageEncoder as _;
-            let colour = match (s.channels, inline && opacity.is_some()) {
-                (1, false) => image::ExtendedColorType::L8,
-                (1, true) => image::ExtendedColorType::La8,
-                (_, false) => image::ExtendedColorType::Rgb8,
-                (_, true) => image::ExtendedColorType::Rgba8,
+            let layout = match (s.channels, inline && opacity.is_some()) {
+                (1, false) => craft_image_codecs::ChannelLayout::Gray,
+                (1, true) => craft_image_codecs::ChannelLayout::GrayA,
+                (_, false) => craft_image_codecs::ChannelLayout::Rgb,
+                (_, true) => craft_image_codecs::ChannelLayout::Rgba,
             };
-            let mut png = vec![];
-            image::codecs::png::PngEncoder::new(&mut png).write_image(&pixels, ow, oh, colour).ok().map(|()| ImageBlob::new("image/png", png))
+            craft_image_codecs::Image::from_raw(ow, oh, layout, craft_image_codecs::SampleType::U8, pixels)
+                .ok()
+                .and_then(|img| craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok())
+                .map(|png| ImageBlob::new("image/png", png))
         };
         // One that can't be encoded is left to the page's art, as one past the hard limits.
         let Some(blob) = blob else {
@@ -773,8 +796,10 @@ impl<'a> Reader<'a> {
         if alpha.iter().all(|v| *v == 255) {
             return None;
         }
-        let mut png = Vec::new();
-        image::GrayImage::from_raw(w, h, alpha.to_vec())?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+        let raw =
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, alpha.to_vec())
+                .ok()?;
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
@@ -880,7 +905,7 @@ impl<'a> Reader<'a> {
         }
         // The preview is all the document has of the file: what a missing link shows.
         let bytes = Arc::new(png);
-        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() };
         let key = linked_key(&blob, &path);
         let fresh = !self.doc.images.contains_key(&key);
         self.doc.images.entry(key.clone()).or_insert(blob);
@@ -1031,8 +1056,9 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
             rgba.extend_from_slice(&[straight(r), straight(g), straight(b), a]);
         }
     }
-    let mut png = vec![];
-    image::RgbaImage::from_raw(width, height, rgba)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    let raw =
+        craft_image_codecs::Image::from_raw(width, height, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
     Some((png, width, height))
 }
 

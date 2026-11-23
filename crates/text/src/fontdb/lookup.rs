@@ -10,10 +10,13 @@ use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
 use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
-use super::{
-    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, DrawSettings, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX,
-    Ordering, Size,
-};
+use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
+
+fn has_file_fonts(n: &vectorcraft_doc::Node) -> bool {
+    matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if t.file_fonts.is_some())
+        || n.extras().mask.as_ref().is_some_and(|mask| has_file_fonts(&mask.art))
+        || n.children().is_some_and(|children| children.iter().any(|child| has_file_fonts(child)))
+}
 
 /// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
 const MAX_POSTSCRIPT_FACES: usize = 16;
@@ -153,7 +156,9 @@ impl FontDb {
     /// neither, as [`FontTraits`] tells), then the others, each group nearest first by
     /// [`FontLikeness::distance`](super::FontLikeness::distance) of their
     /// [`family_traits`](Self::family_traits), a family of another kind ([`FontTraits::class`])
-    /// counting 2 further. Families equally far keep their order in `families`. Reads no font
+    /// counting 2 further. A family that shares none of those numbers with `family` comes after
+    /// every family that shares one in its group. Families equally far keep their order in
+    /// `families`. Reads no font
     /// file, as `family_traits` does not.
     pub fn similar_families(&self, family: &str, families: &[String]) -> Vec<String> {
         let base = self.family_traits(family);
@@ -363,12 +368,23 @@ impl FontDb {
     /// instanced face ([`Self::instance`]) included.
     pub fn face_by_id(&self, id: u32) -> Option<Arc<FontFace>> {
         let loaded = self.read_faces().iter().find(|f| f.id == id).cloned();
-        loaded.or_else(|| self.instance_by_id(id))
+        loaded.or_else(|| self.instance_by_id(id)).or_else(|| self.read_file_faces().by_id.get(&id).and_then(std::sync::Weak::upgrade))
+    }
+
+    /// The faces loaded so far (the bundled fonts and the installed ones type has used), in load
+    /// order. Installed fonts that nothing has asked for yet are not among them.
+    pub fn loaded_faces(&self) -> Vec<Arc<FontFace>> {
+        self.read_faces().clone()
     }
 
     /// The face of character style `st`: [`Self::face_version`] of its font, instanced at its
     /// Variable Font settings ([`Self::instance`]).
     pub fn style_face(&self, st: &vectorcraft_doc::CharStyle) -> Option<Arc<FontFace>> {
+        if let Some(id) = st.file_font_id
+            && let Some(face) = self.read_file_faces().by_id.get(&id).and_then(std::sync::Weak::upgrade)
+        {
+            return Some(face);
+        }
         let face = self.face_version(&st.font_family, &st.font_style, st.font_version.as_deref())?;
         Some(self.instance(&face, &st.font_axes))
     }
@@ -652,19 +668,24 @@ impl FontDb {
         if let Some(p) = self.outlines.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
             return p.clone();
         }
-        let mut pen = FlipPen(BezPath::new());
-        if let Some(f) = face.skrifa()
-            && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
-        {
-            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
-        }
-        let p = Arc::new(pen.0);
+        let p = Arc::new(self.outline_uncached(face, gid));
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= OUTLINE_CACHE_MAX {
             cache.clear();
         }
         cache.insert(key, p.clone());
         p
+    }
+
+    /// [`Self::outline`] without the cache: for reading many glyphs once (Retype's index), which
+    /// would otherwise push out the outlines the canvas keeps there.
+    pub fn outline_uncached(&self, face: &FontFace, gid: u32) -> BezPath {
+        let mut pen = FlipPen(BezPath::new());
+        if let Ok(font) = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations()) {
+            // As before, keep the prefix emitted before a malformed glyph reports an error.
+            let _ = font.draw_to(gid, &mut pen);
+        }
+        pen.0
     }
 
     /// Glyph `gid`'s colour bitmap (`sbix`, `CBDT`) in `face`, cached per (face, glyph).
@@ -718,5 +739,293 @@ impl FontDb {
         let key = (face.id, gid, if used { coloured } else { None });
         self.colours.lock().unwrap_or_else(std::sync::PoisonError::into_inner).keep(key, content.clone());
         content
+    }
+
+    /// Admit a font resource, sharing its bytes. Its blob and returned face own the admission.
+    /// Invalid fonts and the live-face cap return `None`; document keys are never identities.
+    pub fn keep_file_font(&self, blob: &vectorcraft_doc::ImageBlob) -> Option<Arc<FontFace>> {
+        self.keep_file_font_up_to(blob, super::MAX_FILE_FACES)
+    }
+
+    fn keep_file_font_up_to(&self, blob: &vectorcraft_doc::ImageBlob, limit: usize) -> Option<Arc<FontFace>> {
+        // Drop this short-lived resource lock before touching registry locks.
+        let cached = {
+            let mut owner = blob.file_font.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if blob.mime != vectorcraft_doc::FILE_FONT_MIME {
+                *owner = None;
+                return None;
+            }
+            if owner.as_ref().is_some_and(|face| !std::ptr::eq(face.bytes(), blob.bytes.as_slice()) && face.bytes() != blob.bytes.as_slice()) {
+                *owner = None;
+            }
+            owner.clone()
+        };
+        if let Some(cached) = cached
+            && let Some(face) = self.read_file_faces().by_id.get(&cached.id()).and_then(std::sync::Weak::upgrade)
+            && std::ptr::eq::<dyn vectorcraft_doc::FileFontFace>(face.as_ref(), cached.as_ref())
+        {
+            return Some(face);
+        }
+        let face = self.admit_file_font(blob, limit)?;
+        // No registry lock is held here; only resource owners, never weak bindings, keep slots.
+        *blob.file_font.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(face.clone());
+        Some(face)
+    }
+
+    fn admit_file_font(&self, blob: &vectorcraft_doc::ImageBlob, limit: usize) -> Option<Arc<FontFace>> {
+        let allocation = Arc::as_ptr(&blob.bytes) as usize;
+        if let Some(face) = self.read_file_faces().by_blob.get(&allocation).and_then(std::sync::Weak::upgrade) {
+            return Some(face);
+        }
+        let key = blob.content_key();
+        let mut faces = self.file_faces.write().unwrap_or_else(|e| e.into_inner());
+        if let Some(face) = faces
+            .by_key
+            .get(&key)
+            .and_then(|bucket| bucket.iter().filter_map(std::sync::Weak::upgrade).find(|face| face.data() == blob.bytes.as_slice()))
+        {
+            return Some(face);
+        }
+        // Reap on admission, including dead hash buckets, so closed documents recover allowance.
+        faces.by_id.retain(|_, face| face.strong_count() != 0);
+        faces.by_blob.retain(|_, face| face.strong_count() != 0);
+        faces.by_key.retain(|_, bucket| {
+            bucket.retain(|face| face.strong_count() != 0);
+            !bucket.is_empty()
+        });
+        if faces.by_id.len() >= limit {
+            return None;
+        }
+        let (i, spec) = super::scan::enumerate_faces(&blob.bytes).into_iter().next()?;
+        let face = Arc::new(super::build::make_face(super::face::FontBytes::Owned(blob.bytes.clone()), i, spec, None)?);
+        faces.by_id.insert(face.id, Arc::downgrade(&face));
+        faces.by_blob.insert(allocation, Arc::downgrade(&face));
+        faces.by_key.entry(key).or_default().push(Arc::downgrade(&face));
+        self.generation.fetch_add(1, super::Ordering::Relaxed);
+        Some(face)
+    }
+
+    /// Bind only references whose owning document actually carries the bytes. A serialized
+    /// reference without its blob cannot borrow a font another document loaded.
+    /// Keep owned fallbacks bound even while an installed exact face wins, in case it is removed.
+    /// The return value says whether every active reference was admitted.
+    pub fn bind_file_fonts<'a>(&self, t: &mut vectorcraft_doc::TextObject, image: impl Fn(&str) -> Option<&'a vectorcraft_doc::ImageBlob>) -> bool {
+        let mut resources: Vec<(String, Arc<dyn vectorcraft_doc::FileFontFace>)> = vec![];
+        let mut complete = true;
+        for font in t.file_fonts_in_use() {
+            if !t.runs.iter().any(|r| r.style.font_family == font.family && r.style.font_style == font.style)
+                || resources.iter().any(|(key, _)| *key == font.key)
+            {
+                continue;
+            }
+            let face = image(&font.key).and_then(|blob| self.keep_file_font(blob));
+            if let Some(face) = face {
+                resources.push((font.key.clone(), face));
+            } else {
+                complete = false;
+            }
+        }
+        if let Some(fonts) = t.file_fonts.as_mut()
+            && fonts.bind(resources)
+        {
+            t.cached_bounds = None;
+            t.cached_baselines.clear();
+            self.generation.fetch_add(1, super::Ordering::Relaxed);
+        }
+        complete
+    }
+
+    /// Bind text throughout a resource tree, including opacity masks, reporting rejected fonts.
+    pub fn bind_node_file_fonts<'a>(
+        &self,
+        n: &mut vectorcraft_doc::Node,
+        image: &impl Fn(&str) -> Option<&'a vectorcraft_doc::ImageBlob>,
+    ) -> Vec<String> {
+        fn visit<'a>(
+            db: &FontDb,
+            n: &mut vectorcraft_doc::Node,
+            image: &impl Fn(&str) -> Option<&'a vectorcraft_doc::ImageBlob>,
+            warnings: &mut Vec<String>,
+        ) {
+            if let vectorcraft_doc::NodeKind::Text(t) = &mut n.kind
+                && !db.bind_file_fonts(t, image)
+            {
+                for font in t.file_fonts_in_use() {
+                    if t.runs.iter().any(|r| r.style.font_family == font.family && r.style.font_style == font.style)
+                        && t.file_fonts.as_ref().is_none_or(|fonts| fonts.face(&font.key).is_none())
+                        && db.resolve(&font.family, &font.style).is_none_or(|(_, m)| m != super::traits::FontMatch::Exact)
+                    {
+                        let note = format!(
+                            "the file font {} {} could not be used (missing, invalid or live-font limit reached); its text uses a substitute",
+                            font.family, font.style
+                        );
+                        if !warnings.contains(&note) {
+                            warnings.push(note);
+                        }
+                    }
+                }
+            }
+            if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+                && has_file_fonts(&mask.art)
+            {
+                visit(db, Arc::make_mut(&mut mask.art), image, warnings);
+            }
+            for child in n.children_mut().into_iter().flatten().filter(|n| has_file_fonts(n)) {
+                visit(db, Arc::make_mut(child), image, warnings);
+            }
+        }
+        let mut warnings = vec![];
+        visit(self, n, image, &mut warnings);
+        warnings
+    }
+
+    /// Establish document ownership before layout; unrelated blobs never enter the font cache.
+    pub fn bind_document_file_fonts(&self, doc: &mut vectorcraft_doc::Document) -> Vec<String> {
+        let vectorcraft_doc::Document { layers, symbols, graph_designs, patterns, pattern_edit, images, .. } = doc;
+        let trees = layers.iter_mut().chain(symbols.iter_mut().map(|s| &mut s.art)).chain(graph_designs.iter_mut().map(|g| &mut g.art));
+        let patterns = patterns.iter_mut().chain(pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()));
+        let mut warnings = vec![];
+        for root in trees.chain(patterns.flat_map(|p| &mut p.art)).filter(|n| has_file_fonts(n)) {
+            for note in self.bind_node_file_fonts(Arc::make_mut(root), &|key| images.get(key)) {
+                if !warnings.contains(&note) {
+                    warnings.push(note);
+                }
+            }
+        }
+        warnings
+    }
+
+    /// Is `id` a live file-font resource?
+    pub fn is_file_font(&self, id: u32) -> bool {
+        self.read_file_faces().by_id.get(&id).is_some_and(|face| face.strong_count() != 0)
+    }
+
+    pub(super) fn read_file_faces(&self) -> std::sync::RwLockReadGuard<'_, super::FileFaces> {
+        self.file_faces.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// For each run of `t`, the font a file carried that draws it ([`vectorcraft_doc::FileFonts`]):
+    /// while its text is the file's, the font the run names isn't available as named (missing, or
+    /// another style of its family stands in) and the font kept for that family and style is
+    /// bound to its owning blob. `None` for runs drawn in their named font or substitute;
+    /// empty when none is drawn in such a font.
+    pub fn file_faces(&self, t: &vectorcraft_doc::TextObject) -> Vec<Option<Arc<FontFace>>> {
+        if t.file_fonts.is_none() {
+            return vec![];
+        }
+        let fonts = t.file_fonts_in_use();
+        if fonts.is_empty() {
+            return vec![];
+        }
+        // Each family and style's answer once: a line has a run per character it spaces apart.
+        let mut known: Vec<(&str, &str, Option<Arc<FontFace>>)> = vec![];
+        let mut out = Vec::with_capacity(t.runs.len());
+        for r in &t.runs {
+            let (family, style) = (r.style.font_family.as_str(), r.style.font_style.as_str());
+            let face = match known.iter().find(|(f, s, _)| *f == family && *s == style) {
+                Some((.., face)) => face.clone(),
+                None => {
+                    let face = fonts
+                        .iter()
+                        .find(|f| f.family == family && f.style == style)
+                        .filter(|_| self.resolve(family, style).is_none_or(|(_, m)| m != super::traits::FontMatch::Exact))
+                        .and_then(|f| t.file_fonts.as_ref()?.face(&f.key))
+                        .and_then(|face| self.read_file_faces().by_id.get(&face.id()).and_then(std::sync::Weak::upgrade));
+                    known.push((family, style, face.clone()));
+                    face
+                }
+            };
+            out.push(face);
+        }
+        if out.iter().all(Option::is_none) { vec![] } else { out }
+    }
+}
+
+#[cfg(test)]
+#[path = "file_fonts_tests.rs"]
+mod file_fonts_tests;
+#[cfg(test)]
+mod shared_outline_tests {
+    use super::super::glyph_pen::FlipPen;
+    use super::*;
+    use skrifa::instance::Size;
+    use skrifa::outline::DrawSettings;
+    use skrifa::{GlyphId, MetadataProvider};
+
+    #[test]
+    fn shared_outlines_match_original_pen_for_variable_instances() {
+        let db = FontDb::with_font_dirs(vec![]);
+        let Some(bytes) = crate::test_fonts::variable_font() else { return };
+        assert!(db.add_font(bytes) > 0);
+        let face = db.face(crate::test_fonts::VARIABLE_FAMILY, "Bold").expect("named instance is registered");
+        let f = face.skrifa().expect("font parses");
+        for ch in ['A', 'V', ' ', 'a'] {
+            let Some(glyph) = f.charmap().map(ch) else { continue };
+            let mut old = FlipPen(BezPath::new());
+            if let Some(outline) = f.outline_glyphs().get(GlyphId::new(glyph.to_u32())) {
+                // Match the prior production behavior, including a partial path on error.
+                let _ = outline.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut old);
+            }
+            assert_eq!(*db.outline(&face, glyph.to_u32()), old.0, "glyph {ch}");
+        }
+    }
+
+    // Generated CFF keeps the differential tests independent of installed fonts.
+    fn cff_font(program: &[u8]) -> Vec<u8> {
+        let mut cff = vec![1, 0, 4, 4, 0, 1, 1, 1, 2, b'X', 0, 1, 1, 1, 7, 29, 0, 0, 0, 25, 17, 0, 0, 0, 0];
+        cff.extend_from_slice(&[0, 1, 4]);
+        cff.extend_from_slice(&1u32.to_be_bytes());
+        cff.extend_from_slice(&((program.len() as u32) + 1).to_be_bytes());
+        cff.extend_from_slice(program);
+        let mut builder = write_fonts::FontBuilder::new();
+        let mut head = vec![0; 54];
+        head[18..20].copy_from_slice(&1000u16.to_be_bytes());
+        let mut hhea = vec![0; 36];
+        hhea[34..36].copy_from_slice(&1u16.to_be_bytes());
+        for (tag, data) in [(b"head", head), (b"hhea", hhea), (b"hmtx", vec![0, 100, 0, 0]), (b"maxp", vec![0, 0, 0x50, 0, 0, 1]), (b"CFF ", cff)] {
+            builder.add_raw(write_fonts::types::Tag::new(tag), data);
+        }
+        builder.build()
+    }
+
+    #[test]
+    fn malformed_cff_prefix_matches_original_pen() {
+        let bytes = cff_font(&[139, 139, 21, 239, 139, 5, 10, 14]);
+        let gid = 0;
+        let f = skrifa::FontRef::new(&bytes).unwrap();
+        let mut old = FlipPen(BezPath::new());
+        let result = f
+            .outline_glyphs()
+            .get(GlyphId::new(gid))
+            .unwrap()
+            .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old);
+        assert!(result.is_err());
+        assert!(!old.0.elements().is_empty());
+        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
+        let mut streamed = FlipPen(BezPath::new());
+        assert!(shared.draw_to(gid, &mut streamed).is_err());
+        assert_eq!(streamed.0, old.0);
+    }
+
+    #[test]
+    fn large_valid_outline_matches_original_pen() {
+        let mut program = vec![139, 139, 21];
+        for _ in 0..100_001 {
+            program.extend_from_slice(&[140, 6]);
+        }
+        program.push(14);
+        let bytes = cff_font(&program);
+        let f = skrifa::FontRef::new(&bytes).unwrap();
+        let mut old = FlipPen(BezPath::new());
+        f.outline_glyphs()
+            .get(GlyphId::new(0))
+            .unwrap()
+            .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old)
+            .unwrap();
+        assert!(old.0.elements().len() > 100_000);
+        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
+        let mut streamed = FlipPen(BezPath::new());
+        shared.draw_to(0, &mut streamed).unwrap();
+        assert_eq!(streamed.0, old.0);
     }
 }

@@ -19,8 +19,13 @@ pub struct CraftFont {
 pub struct WebFont {
     pub family: &'static str,
     pub style: &'static str,
-    /// Fetched before the app starts (a fallback the first frame needs), else in the background.
+    /// Fetched before the app starts (a fallback the first frame needs).
     pub startup: bool,
+    /// Fetched only when the interface needs a character of one of [`WebFont::scripts`] (see
+    /// [`demand_fonts`]). With neither this nor `startup`, fetched in the background.
+    pub demand: bool,
+    /// ISO 15924 scripts the face is for (its craft-fonts manifest row), e.g. `"Hang"`.
+    pub scripts: &'static [&'static str],
     /// Site-relative URL, `fonts/<first 16 hex digits of the SHA-256>/<file name>`.
     pub url: &'static str,
     /// Subresource Integrity value, `sha256-<base64>`; the browser rejects other bytes.
@@ -106,9 +111,64 @@ pub fn japanese_ui_fonts(bold: bool) -> Vec<&'static CraftFont> {
     v
 }
 
+/// The script of `c` that a `demand` web face is fetched for: `"Hang"` for Hangul (jamo,
+/// compatibility jamo, syllables and the halfwidth forms) and `"Deva"` for Devanagari (with its
+/// extended blocks and the Vedic extensions). `None` for every other character.
+pub fn demand_script(c: char) -> Option<&'static str> {
+    match c as u32 {
+        0x1100..=0x11FF | 0x3130..=0x318F | 0xA960..=0xA97F | 0xAC00..=0xD7FF | 0xFFA0..=0xFFDC => Some("Hang"),
+        0x0900..=0x097F | 0x1CD0..=0x1CFF | 0xA8E0..=0xA8FF | 0x11B00..=0x11B5F => Some("Deva"),
+        _ => None,
+    }
+}
+
+/// The indexes in `fonts` of the `demand` faces for the scripts of `chars` (by
+/// [`demand_script`]), each once, in `fonts` order.
+pub fn demand_fonts(fonts: &[WebFont], chars: impl IntoIterator<Item = char>) -> Vec<usize> {
+    let mut scripts: Vec<&str> = Vec::new();
+    for s in chars.into_iter().filter_map(demand_script) {
+        if !scripts.contains(&s) {
+            scripts.push(s);
+        }
+    }
+    fonts.iter().enumerate().filter(|(_, f)| f.demand && f.scripts.iter().any(|s| scripts.contains(s))).map(|(i, _)| i).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn web_font(family: &'static str, startup: bool, demand: bool, scripts: &'static [&'static str]) -> WebFont {
+        WebFont { family, style: "Regular", startup, demand, scripts, url: "", integrity: "" }
+    }
+
+    #[test]
+    fn demand_scripts_of_hangul_and_devanagari() {
+        for c in ['한', '국', 'ㄱ', 'ᄀ', 'ﾡ'] {
+            assert_eq!(demand_script(c), Some("Hang"), "{c}");
+        }
+        for c in ['ह', 'ि', '्', '़', '।', '\u{A8F2}'] {
+            assert_eq!(demand_script(c), Some("Deva"), "{c}");
+        }
+        for c in ['A', 'é', 'ا', 'ก', 'ა', '日', 'ロ', '中'] {
+            assert_eq!(demand_script(c), None, "{c}");
+        }
+    }
+
+    #[test]
+    fn demand_fonts_follow_the_scripts_painted() {
+        let fonts = [
+            web_font("Arabic", true, false, &["Arab"]),
+            web_font("Picked", false, false, &["Hang"]),
+            web_font("Korean", false, true, &["Hang", "Kore"]),
+            web_font("Devanagari", false, true, &["Deva"]),
+        ];
+        assert_eq!(demand_fonts(&fonts, "한국어".chars()), [2], "Korean fetches only the Korean face");
+        assert_eq!(demand_fonts(&fonts, "हिन्दी".chars()), [3], "Hindi fetches only the Devanagari face");
+        assert_eq!(demand_fonts(&fonts, "हिन्दी 한국어 Layer".chars()), [2, 3], "each once, in list order");
+        assert!(demand_fonts(&fonts, "English العربية 日本語".chars()).is_empty(), "other scripts fetch nothing");
+        assert!(demand_fonts(&[], "한국어".chars()).is_empty(), "built without craft-fonts: nothing to fetch");
+    }
 
     #[test]
     fn document_fonts_keep_script_priority_and_include_every_face_once() {
@@ -157,7 +217,9 @@ mod tests {
             .collect();
         assert_eq!(WEB_FONTS.len(), listed.len());
         for (l, w) in listed.iter().zip(WEB_FONTS) {
-            assert_eq!((l.family, l.style, l.startup), (w.family, w.style, w.startup));
+            assert_eq!((l.family, l.style, l.startup, l.demand), (w.family, w.style, w.startup, w.demand));
+            let face = CRAFT_FONTS.iter().find(|f| f.family == w.family && f.style == w.style);
+            assert_eq!(face.map(|f| f.scripts), Some(w.scripts), "{} {}: the manifest's scripts", w.family, w.style);
             let (dir, name) = w.url.strip_prefix("fonts/").and_then(|r| r.split_once('/')).unwrap();
             assert!(dir.len() == 16 && dir.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)), "{}", w.url);
             assert!(name.ends_with(".ttf") || name.ends_with(".otf"), "{}", w.url);
@@ -169,5 +231,11 @@ mod tests {
         let expected: Vec<_> =
             ["Noto Sans Arabic", "Noto Sans Thai", "Noto Sans Georgian"].into_iter().filter(|n| CRAFT_FONTS.iter().any(|f| f.family == *n)).collect();
         assert_eq!(startup, expected);
+        // Korean and Devanagari faces are fetched only on demand, never at startup or in the
+        // background queue every session runs.
+        let demand: Vec<_> = WEB_FONTS.iter().filter(|w| w.demand).map(|w| w.family).collect();
+        let expected: Vec<_> = ["NanumGothic", "Noto Sans Devanagari"].into_iter().filter(|n| CRAFT_FONTS.iter().any(|f| f.family == *n)).collect();
+        assert_eq!(demand, expected);
+        assert!(WEB_FONTS.iter().all(|w| !(w.startup && w.demand)));
     }
 }

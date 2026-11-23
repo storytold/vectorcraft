@@ -53,7 +53,8 @@ impl Session {
                     let mut symbol_synced =
                         if st.doc.symbol_edit.is_some() { cmd::symboledit::sync(&before, Arc::make_mut(&mut st.doc)) } else { Ok(()) };
                     // Inline graphics in text follow their symbols.
-                    cmd::inline::refresh(&before, Arc::make_mut(&mut st.doc));
+                    let measured = cmd::inline::refresh(st.inline_resolved.as_ref(), &before, Arc::make_mut(&mut st.doc));
+                    let mut resolved = measured.map(|m| (st.doc.clone(), m));
                     // The document the passes below start from, for the symbol to follow what they
                     // change on its editing layer.
                     let synced = st.doc.symbol_edit.is_some().then(|| st.doc.clone());
@@ -86,7 +87,10 @@ impl Session {
                         let new = art(&st.doc);
                         if symbol_synced.is_ok() && !matches!((&old, &new), (Some(a), Some(b)) if Arc::ptr_eq(a, b)) {
                             let resynced = st.doc.clone();
-                            cmd::inline::refresh(synced, Arc::make_mut(&mut st.doc));
+                            let last = resolved.as_ref().or(st.inline_resolved.as_ref());
+                            if let Some(m) = cmd::inline::refresh(last, synced, Arc::make_mut(&mut st.doc)) {
+                                resolved = Some((st.doc.clone(), m));
+                            }
                             if !st.doc.text_threads.is_empty() {
                                 cmd::threads::reflow(&resynced, Arc::make_mut(&mut st.doc));
                             }
@@ -100,6 +104,7 @@ impl Session {
                     if !st.doc.variables.bindings.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_variable_bindings();
                     }
+                    st.inline_resolved = resolved;
                     if let Err(e) = symbol_synced {
                         Err(e)
                     } else if st.doc.too_deep(Some(&before)) {
@@ -255,6 +260,21 @@ impl Session {
         (r, settled)
     }
 
+    /// [`Session::begin_interaction`] for a dialog or a panel that starts a preview → the warnings
+    /// of the preview that keeping typing in progress applied, for its status bar.
+    pub fn begin_interaction_warned(&mut self, label: &str) -> Result<Vec<String>> {
+        let (r, settled) = self.collect_settled_warnings(|s| s.begin_interaction(label));
+        r.map(|()| settled)
+    }
+
+    /// Keep typing in progress as one undo step, applying the preview Real-time Drawing off left
+    /// unapplied, and end the Type tool's typing session → the applied preview's warnings. Nothing
+    /// changes when no typing is in progress.
+    pub fn keep_typing(&mut self) -> Result<Vec<String>> {
+        let (r, settled) = self.collect_settled_warnings(|s| if cmd::typing_in_progress(s) { cmd::settle_interaction(s) } else { Ok(()) });
+        r.map(|()| settled)
+    }
+
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
         if self.script_running() {
             return Err(EngineError::Busy);
@@ -301,6 +321,9 @@ impl Session {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
+        // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
+        // each preview starts from the colors the interaction began with.
+        let bucket = self.bucket_paints();
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
             let st = self.doc_mut()?;
@@ -314,8 +337,10 @@ impl Session {
             st.doc = it.doc.clone();
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
-            let restore_paint =
-                cmd == "command.batch" || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some();
+            let restore_paint = bucket
+                || cmd == "command.batch"
+                || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch")
+                || it.color_mode_paints.is_some();
             let paint = it.paint.clone();
             it.preview_paint = None;
             it.color_mode_paints = None;
@@ -408,11 +433,12 @@ impl Session {
             let m = cmd::matrix_param(&preview.1, "matrix");
             if let Some(m) = m {
                 // The options are the last preview's params with the values it noted, without the
-                // matrix and the ids.
+                // matrix, the ids and `drawBehind` (Transform Again puts its copies above).
                 let mut options = preview.1.clone();
                 if let Some(o) = options.as_object_mut() {
                     o.remove("matrix");
                     o.remove("ids");
+                    o.remove("drawBehind");
                 }
                 st.last_transform = Some(LastTransform::Matrix(m, options));
                 st.last_perspective = None;
@@ -422,8 +448,10 @@ impl Session {
             // selected): Transform Again moves the selected anchors and the objects selected whole
             // by the same distance. A drag that ends where it began leaves the last transform.
             let mut options = serde_json::json!({ "copy": false });
-            if let Some(patterns) = preview.1.get("patterns") {
-                options["patterns"] = patterns.clone();
+            for key in ["patterns", "interpolate"] {
+                if let Some(v) = preview.1.get(key) {
+                    options[key] = v.clone();
+                }
             }
             st.last_transform = Some(LastTransform::Matrix(vectorcraft_geom::Affine::translate(moved), options));
             st.last_perspective = None;
@@ -436,6 +464,7 @@ impl Session {
             st.last_perspective = perspective_again;
         }
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
+        self.note_shape_drawn(&preview.0, &preview.1);
         self.journal.push(preview);
         self.journal_in_undo_groups(doc, &grouped, journal);
         if self.depth == 0 {
@@ -455,10 +484,13 @@ impl Session {
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         self.pending_paint = None;
+        // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
+        // cancel puts back as well.
+        let bucket = self.bucket_paints();
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
-            .filter(|it| it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
+            .filter(|it| bucket || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
             .map(|it| it.paint.clone())
         {
             self.paint = paint;

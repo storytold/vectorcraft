@@ -64,6 +64,105 @@ fn desired_spacing_and_scaling_apply_to_every_line() {
     assert!((at(&scaled, 2).advance - space).abs() < 1e-6, "word spaces aren't scaled");
 }
 
+/// Type on a straight open path `len` long, from the origin along x.
+fn on_path(text: &str, len: f64, j: JustificationOptions) -> TextObject {
+    let mut t = point(text, j);
+    let mut line = kurbo::BezPath::new();
+    line.move_to((0.0, 0.0));
+    line.line_to((len, 0.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    t
+}
+
+/// Desired values apply to type on a path as to point and area type: word spaces are that share of
+/// the font's space, letters are followed by that share of a space, and glyphs are drawn that wide,
+/// and the glyphs after a wider gap start further along the path.
+#[test]
+fn type_on_a_path_takes_desired_spacing_and_scaling() {
+    let plain = layout(db(), &on_path("ab cd", 1000.0, JustificationOptions::default()));
+    assert!(plain.on_path && !plain.overflow);
+    let space = at(&plain, 2).advance;
+    let a = at(&plain, 0).advance;
+    assert!(space > 0.0 && a > 0.0);
+
+    let words =
+        layout(db(), &on_path("ab cd", 1000.0, JustificationOptions { word_spacing: [0.0, 200.0, 300.0], ..JustificationOptions::default() }));
+    assert!((at(&words, 2).advance - 2.0 * space).abs() < 1e-6, "a word space at 200%");
+    assert!((at(&words, 1).origin.x - at(&plain, 1).origin.x).abs() < 1e-6, "the glyphs before it stay");
+    assert!((at(&words, 3).origin.x - at(&plain, 3).origin.x - space).abs() < 1e-6, "the glyphs after it start a space later");
+
+    let letters =
+        layout(db(), &on_path("ab cd", 1000.0, JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() }));
+    assert!((at(&letters, 0).advance - (a + 0.5 * space)).abs() < 1e-6, "half a space after a");
+    assert!((at(&letters, 1).advance - at(&plain, 1).advance).abs() < 1e-6, "no letter spacing before a word space");
+    assert!((at(&letters, 4).advance - at(&plain, 4).advance).abs() < 1e-6, "nor after the last letter");
+
+    let scaled =
+        layout(db(), &on_path("ab cd", 1000.0, JustificationOptions { glyph_scaling: [50.0, 150.0, 200.0], ..JustificationOptions::default() }));
+    assert!((at(&scaled, 0).advance - 1.5 * a).abs() < 1e-6, "advance at 150%");
+    assert!((width(at(&scaled, 0)) - 1.5 * width(at(&plain, 0))).abs() < 1e-6, "outline at 150%");
+    assert!((at(&scaled, 0).scale - 1.5).abs() < 1e-9 && at(&scaled, 2).scale == 1.0, "the glyph records its scaling");
+    assert!((at(&scaled, 2).advance - space).abs() < 1e-6, "word spaces aren't scaled");
+}
+
+/// A right-aligned line on a path is aligned by its length at the Desired values, and a line that
+/// fits at 100% word spacing runs past the end of a path it no longer fits.
+#[test]
+fn type_on_a_path_is_aligned_and_fitted_at_desired_spacing() {
+    let plain = layout(db(), &on_path("ab cd", 1000.0, JustificationOptions::default()));
+    let space = at(&plain, 2).advance;
+    let end = |l: &TextLayout| at(l, 4).origin.x + at(l, 4).advance;
+    let wide = JustificationOptions { word_spacing: [0.0, 300.0, 300.0], ..JustificationOptions::default() };
+    let mut t = on_path("ab cd", 1000.0, wide.clone());
+    t.para.justify = Justify::Right;
+    let right = layout(db(), &t);
+    assert!((end(&right) - 1000.0).abs() < 1e-6, "the line ends at the path's end: {}", end(&right));
+    let mut t = on_path("ab cd", 1000.0, JustificationOptions::default());
+    t.para.justify = Justify::Right;
+    let right_plain = layout(db(), &t);
+    assert!((at(&right_plain, 0).origin.x - at(&right, 0).origin.x - 2.0 * space).abs() < 1e-6, "it starts two spaces earlier");
+
+    let len = end(&plain) + 0.5 * space;
+    assert!(!layout(db(), &on_path("ab cd", len, JustificationOptions::default())).overflow);
+    let over = layout(db(), &on_path("ab cd", len, wide));
+    assert!(over.overflow, "the wider word space no longer fits");
+}
+
+/// Vertical type on a path takes Desired word spacing but is not glyph scaled, as in area type;
+/// a list marker before the text keeps its width.
+#[test]
+fn vertical_type_and_list_markers_on_a_path_are_not_glyph_scaled() {
+    let scaling = JustificationOptions { glyph_scaling: [50.0, 150.0, 200.0], ..JustificationOptions::default() };
+    let vertical = |j: JustificationOptions| {
+        let mut t = on_path("ab cd", 1000.0, j);
+        t.vertical = true;
+        layout(db(), &t)
+    };
+    let plain = vertical(JustificationOptions::default());
+    let scaled = vertical(scaling.clone());
+    assert!((at(&scaled, 0).advance - at(&plain, 0).advance).abs() < 1e-6, "vertical glyphs keep their advance");
+    assert!((width(at(&scaled, 0)) - width(at(&plain, 0))).abs() < 1e-6, "and their outline");
+    let words = vertical(JustificationOptions { word_spacing: [0.0, 200.0, 300.0], ..JustificationOptions::default() });
+    assert!((at(&words, 2).advance - 2.0 * at(&plain, 2).advance).abs() < 1e-6, "a vertical word space at 200%");
+
+    use vectorcraft_doc::text::{Bullet, ParaList};
+    let listed = |j: JustificationOptions| {
+        let mut t = on_path("ab cd", 1000.0, j);
+        t.para.list = Some(ParaList::bulleted(Bullet::Dot));
+        layout(db(), &t)
+    };
+    let (plain, scaled) = (listed(JustificationOptions::default()), listed(scaling));
+    let marker = |l: &TextLayout| -> Vec<f64> {
+        let m = l.markers.first().expect("a list marker");
+        l.glyphs.get(m.glyphs.clone()).unwrap_or_default().iter().map(|g| g.advance * g.scale).collect()
+    };
+    assert!(!marker(&plain).is_empty());
+    assert_eq!(marker(&scaled), marker(&plain), "the marker keeps its width");
+    // The marker's glyphs have the paragraph's first byte too, with no length.
+    let first = |l: &TextLayout| l.glyphs.iter().find(|g| g.byte == 0 && g.len > 0).map_or(0.0, |g| g.advance);
+    assert!(first(&plain) > 0.0 && (first(&scaled) - 1.5 * first(&plain)).abs() < 1e-6, "the text after it is scaled");
+}
+
 /// The line's text from a layout, one string per line.
 fn lines(l: &TextLayout, text: &str) -> Vec<String> {
     l.lines.iter().map(|li| text.get(li.start..li.end).unwrap_or_default().trim_end().to_string()).collect()

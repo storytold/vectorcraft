@@ -104,12 +104,14 @@ fn one_group<'a>(doc: &'a Document, selection: &Selection, zoom: f64) -> Option<
         return None;
     }
     let [group] = selection.objects.as_slice() else { return None };
-    if !doc.editable()(*group) {
-        return None;
-    }
     let n = doc.node(*group)?;
     let rec = n.extras().objects_on_path.as_deref()?;
     let children = n.children()?;
+    // After the group is known: on a locked artboard it measures the art of the layer object that
+    // holds `group`.
+    if !doc.editable()(*group) {
+        return None;
+    }
     let (path, measured) = attachable(children.iter().find(|c| c.id == rec.path)?)?;
     Some(Group { id: *group, rec, children: children.as_slice(), path, measured: Arc::new(measured) })
 }
@@ -948,6 +950,9 @@ pub struct ObjectsOnPathTool {
     member: Option<MemberDrag>,
     /// Where the pointer is while no button is down, for the Select/Move widget it is over.
     pointer: Option<Point>,
+    /// Where the pointer was at the last press or drag: a widget drag released anywhere else is
+    /// dragged there before it ends.
+    held_at: Option<Point>,
     /// The reference point of each object attached next (0-8, row by row from the top left).
     pivot: u8,
     /// The angle of each object attached next, in degrees counter-clockwise from upright on the path.
@@ -956,7 +961,18 @@ pub struct ObjectsOnPathTool {
 
 impl Default for ObjectsOnPathTool {
     fn default() -> Self {
-        Self { hover: None, press: None, rotating: None, spacing: None, moving: None, member: None, pointer: None, pivot: CENTER, rotate: 0.0 }
+        Self {
+            hover: None,
+            press: None,
+            rotating: None,
+            spacing: None,
+            moving: None,
+            member: None,
+            pointer: None,
+            held_at: None,
+            pivot: CENTER,
+            rotate: 0.0,
+        }
     }
 }
 
@@ -967,31 +983,51 @@ impl Tool for ObjectsOnPathTool {
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let p = ev.pos;
+        let released_away = ev.kind == PointerKind::Up && self.held_at != Some(p);
+        if matches!(ev.kind, PointerKind::Down | PointerKind::Drag) {
+            self.held_at = Some(p);
+        }
         if let Some(d) = &mut self.rotating {
             return match ev.kind {
                 PointerKind::Drag => d.drag(cx, p, ev.mods.shift),
-                PointerKind::Up => self.rotating.take().map(RotateAllDrag::finish).unwrap_or_default(),
+                PointerKind::Up => {
+                    let mut out = if released_away { d.drag(cx, p, ev.mods.shift) } else { vec![] };
+                    out.extend(self.rotating.take().map(RotateAllDrag::finish).unwrap_or_default());
+                    out
+                }
                 _ => vec![],
             };
         }
         if let Some(d) = &mut self.spacing {
             return match ev.kind {
                 PointerKind::Drag => d.drag(cx, p, ev.mods.alt),
-                PointerKind::Up => self.spacing.take().map(SpaceDrag::finish).unwrap_or_default(),
+                PointerKind::Up => {
+                    let mut out = if released_away { d.drag(cx, p, ev.mods.alt) } else { vec![] };
+                    out.extend(self.spacing.take().map(SpaceDrag::finish).unwrap_or_default());
+                    out
+                }
                 _ => vec![],
             };
         }
         if let Some(d) = &mut self.moving {
             return match ev.kind {
                 PointerKind::Drag => d.drag(cx, p),
-                PointerKind::Up => self.moving.take().map(MoveAllDrag::finish).unwrap_or_default(),
+                PointerKind::Up => {
+                    let mut out = if released_away { d.drag(cx, p) } else { vec![] };
+                    out.extend(self.moving.take().map(MoveAllDrag::finish).unwrap_or_default());
+                    out
+                }
                 _ => vec![],
             };
         }
         if let Some(d) = &mut self.member {
             return match ev.kind {
                 PointerKind::Drag => d.drag(cx, p),
-                PointerKind::Up => self.member.take().map(MemberDrag::finish).unwrap_or_default(),
+                PointerKind::Up => {
+                    let mut out = if released_away { d.drag(cx, p) } else { vec![] };
+                    out.extend(self.member.take().map(MemberDrag::finish).unwrap_or_default());
+                    out
+                }
                 _ => vec![],
             };
         }
@@ -1084,6 +1120,11 @@ impl Tool for ObjectsOnPathTool {
         vec![]
     }
 
+    /// Switching tools while the button is down cancels the click or the drag, as Escape does.
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.key(cx, ToolKey::Escape, Mods::default())
+    }
+
     fn options(&self) -> Value {
         json!({ "pivot": self.pivot, "rotate": self.rotate })
     }
@@ -1103,6 +1144,15 @@ impl Tool for ObjectsOnPathTool {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "pivot" => c::whole(key, value, 0, 8),
+            "rotate" => c::number(key, value, -360.0, 360.0),
+            _ => Err(c::unknown(key)),
         }
     }
 
@@ -1499,7 +1549,7 @@ mod tests {
             assert!(matches!(a.last(), Some(Action::Preview(_, p)) if p["spacing"] == "auto" && p["start"] == 0.0), "{id}: {a:?}");
             assert_eq!(spaced(&t.pointer(&c, &ev(PointerKind::Drag, at.x - 900.0, at.y))), Some((0.0, 0.0)), "{id}");
             assert_eq!(spaced(&t.pointer(&c, &alt(PointerKind::Drag, at.x - 900.0, at.y))), Some((0.0, 200.0)), "{id}");
-            assert_eq!(t.pointer(&c, &ev(PointerKind::Up, at.x, at.y)), vec![Action::Commit], "{id}");
+            assert_eq!(t.pointer(&c, &alt(PointerKind::Up, at.x - 900.0, at.y)), vec![Action::Commit], "{id}");
             assert!(!t.busy(), "{id}");
             // A click on the widget that does not move changes nothing.
             assert!(t.pointer(&c, &ev(PointerKind::Down, at.x, at.y)).is_empty());
@@ -1721,7 +1771,7 @@ mod tests {
             assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, at.x + 900.0, at.y))), Some((300.0, None)), "{id}");
             assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, at.x + 880.0, at.y))), Some((280.0, None)), "{id}");
             assert_eq!(moved(&t.pointer(&c, &ev(PointerKind::Drag, at.x - 900.0, at.y))), Some((0.0, None)), "{id}");
-            assert_eq!(t.pointer(&c, &ev(PointerKind::Up, at.x, at.y)), vec![Action::Commit], "{id}");
+            assert_eq!(t.pointer(&c, &ev(PointerKind::Up, at.x - 900.0, at.y)), vec![Action::Commit], "{id}");
             assert!(!t.busy(), "{id}");
             // A click on the widget that does not move changes nothing.
             assert!(t.pointer(&c, &ev(PointerKind::Down, at.x, at.y)).is_empty());
@@ -1995,6 +2045,85 @@ mod tests {
             assert!(!t.busy() && !t.transforming(), "{}", t.id());
             assert!(t.pointer(&c, &ev(PointerKind::Drag, 0.0, 300.0)).is_empty(), "{}", t.id());
             assert!(t.pointer(&c, &ev(PointerKind::Up, 0.0, 300.0)).is_empty(), "{}: the release keeps nothing", t.id());
+        }
+    }
+
+    /// The release is read where it happens: a release away from the last drag event drags the
+    /// widget there before the drag ends, with the Selection tool and the Objects on Path tool.
+    #[test]
+    fn the_release_position_sets_each_widget() {
+        let new_tools = || -> [Box<dyn Tool>; 2] { [Box::new(crate::select::SelectionTool::default()), Box::new(ObjectsOnPathTool::default())] };
+        let paint = paint();
+        let (d, _, sel) = group_doc(0.0);
+        let c = cx(&d, &sel, &paint);
+        for mut t in new_tools() {
+            let (at, q, r) = (around(0.0), around(60.0), around(90.0));
+            t.pointer(&c, &ev(PointerKind::Down, at.x, at.y));
+            t.pointer(&c, &ev(PointerKind::Drag, q.x, q.y));
+            let a = t.pointer(&c, &ev(PointerKind::Up, r.x, r.y));
+            let (last, shown) = a.split_last().unwrap();
+            assert_eq!(last, &Action::Commit, "{}", t.id());
+            assert!(previewed(shown).is_some_and(|deg| (deg - 90.0).abs() < 1e-9), "{}: Rotate All {a:?}", t.id());
+        }
+        let at = SpaceWidget::of(&d, &sel, 1.0).unwrap().at;
+        for mut t in new_tools() {
+            t.pointer(&c, &ev(PointerKind::Down, at.x, at.y));
+            t.pointer(&c, &ev(PointerKind::Drag, at.x - 100.0, at.y));
+            let a = t.pointer(&c, &ev(PointerKind::Up, at.x - 50.0, at.y));
+            let (last, shown) = a.split_last().unwrap();
+            assert_eq!(last, &Action::Commit, "{}", t.id());
+            assert_eq!(spaced(shown), Some((350.0, 0.0)), "{}: Space {a:?}", t.id());
+        }
+        let (d, _, sel) = spaced_doc(Some(100.0), 50.0);
+        let c = cx(&d, &sel, &paint);
+        let at = MoveAllWidget::of(&d, &sel, 1.0).unwrap().at;
+        for mut t in new_tools() {
+            t.pointer(&c, &ev(PointerKind::Down, at.x, at.y));
+            t.pointer(&c, &ev(PointerKind::Drag, at.x + 80.0, at.y));
+            let a = t.pointer(&c, &ev(PointerKind::Up, at.x + 90.0, at.y));
+            let (last, shown) = a.split_last().unwrap();
+            assert_eq!(last, &Action::Commit, "{}", t.id());
+            assert_eq!(moved(shown), Some((140.0, None)), "{}: Move All {a:?}", t.id());
+        }
+        let (d, _, sel, ids) = three_doc();
+        let c = cx(&d, &sel, &paint);
+        for mut t in new_tools() {
+            t.pointer(&c, &ev(PointerKind::Down, 200.0, 300.0));
+            t.pointer(&c, &ev(PointerKind::Drag, 280.0, 310.0));
+            let a = t.pointer(&c, &ev(PointerKind::Up, 330.0, 300.0));
+            assert_eq!(previewed_target(&a), Some(ids[2].0), "{}: Select/Move {a:?}", t.id());
+            assert_eq!(a[1..], [Action::Commit, choose(ids[1])], "{}", t.id());
+        }
+    }
+
+    /// Switching tools during a widget drag cancels it, as Escape does, with the Selection tool and
+    /// the Objects on Path tool; after a press that has not moved there is nothing to put back.
+    #[test]
+    fn a_tool_switch_cancels_a_widget_drag() {
+        let new_tools = || -> [Box<dyn Tool>; 2] { [Box::new(crate::select::SelectionTool::default()), Box::new(ObjectsOnPathTool::default())] };
+        let paint = paint();
+        let (d, _, sel) = group_doc(0.0);
+        let (md, _, msel) = spaced_doc(Some(100.0), 50.0);
+        let (od, _, osel, _) = three_doc();
+        let space = SpaceWidget::of(&d, &sel, 1.0).unwrap().at;
+        let move_all = MoveAllWidget::of(&md, &msel, 1.0).unwrap().at;
+        let presses = [
+            (cx(&d, &sel, &paint), around(0.0), around(60.0)),
+            (cx(&d, &sel, &paint), space, space - Vec2::new(100.0, 0.0)),
+            (cx(&md, &msel, &paint), move_all, move_all + Vec2::new(80.0, 0.0)),
+            (cx(&od, &osel, &paint), Point::new(200.0, 300.0), Point::new(330.0, 300.0)),
+        ];
+        for (c, at, q) in &presses {
+            for mut t in new_tools() {
+                t.pointer(c, &ev(PointerKind::Down, at.x, at.y));
+                assert!(!t.pointer(c, &ev(PointerKind::Drag, q.x, q.y)).is_empty(), "{}", t.id());
+                assert_eq!(t.deactivate(c), vec![Action::Cancel], "{} at {at:?}", t.id());
+                assert!(!t.busy() && !t.transforming(), "{}", t.id());
+                assert!(t.pointer(c, &ev(PointerKind::Up, q.x, q.y)).is_empty(), "{}: the release keeps nothing", t.id());
+                t.pointer(c, &ev(PointerKind::Down, at.x, at.y));
+                assert!(t.deactivate(c).is_empty(), "{}", t.id());
+                assert!(!t.busy(), "{}", t.id());
+            }
         }
     }
 

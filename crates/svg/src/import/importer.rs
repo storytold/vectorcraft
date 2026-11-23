@@ -7,6 +7,7 @@ use super::{
     StrokeLayer, Vec2, fnv1a, fx, shapes, text, vector_effect,
 };
 use crate::SvgError;
+use craft_svg::tree::usvg;
 use kurbo::BezPath;
 use vectorcraft_color::GradientSpread;
 
@@ -206,9 +207,11 @@ impl Importer {
             None => {
                 let base = self.name_of(&sym).to_string();
                 let names = &self.symbol_names;
-                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains(n));
-                self.symbol_names.insert(name.clone());
-                let reuse = Reuse::of(&self.doc, &art);
+                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains_key(n));
+                let doc = &self.doc;
+                let find = |n: &str| names.get(n).and_then(|&i| doc.symbols.get(i)).filter(|s| s.name == n);
+                let reuse = Reuse::of(doc, &find, &art);
+                self.symbol_names.insert(name.clone(), self.doc.symbols.len());
                 let made = SymbolMade { name: name.clone(), art: without_ids(&art), reuse };
                 self.doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
                 self.symbols.insert(sym, made);
@@ -777,12 +780,9 @@ impl Importer {
             usvg::ImageKind::WEBP(d) => (d, "image/webp"),
             usvg::ImageKind::SVG(tree) => return self.svg_image(tree, acc),
         };
+        let source = bytes;
         let size = i.size();
-        let (pw, ph) = image::ImageReader::new(std::io::Cursor::new(&bytes[..]))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
+        let (pw, ph) = vectorcraft_doc::header_size(bytes).unwrap_or((size.width().round().max(1.0) as u32, size.height().round().max(1.0) as u32));
         // A turned CMYK image is stored as the CMYK TIFF of its inks, the size of the PNG usvg got.
         let cmyk = self.files.stored(i.kind());
         let (bytes, mime) = match &cmyk {
@@ -793,12 +793,9 @@ impl Importer {
         let linked = self.files.linked(i.kind());
         let missing = linked.is_some_and(|l| l.missing);
         let link = linked.map(|l| l.link.clone());
-        let key = match &link {
-            Some(l) => linked_key(bytes, &l.path),
-            None => format!("img-{:016x}", fnv1a(bytes)),
-        };
+        let key = self.image_key(source, bytes, link.as_ref().map(|l| l.path.as_str()));
         self.doc.images.entry(key.clone()).or_insert_with(|| {
-            let blob = ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: missing.then(|| bytes.clone()) };
+            let blob = ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: missing.then(|| bytes.clone()), file_font: Default::default() };
             if link.is_some() && !missing { blob.with_proxy() } else { blob }
         });
         let xf = acc * Affine::scale_non_uniform(size.width() as f64 / pw as f64, size.height() as f64 / ph as f64);
@@ -812,6 +809,29 @@ impl Importer {
         }
 
         Some(node)
+    }
+
+    /// The image key of the raster image usvg got as `source`, stored as `bytes` (the CMYK TIFF
+    /// that replaces a turned CMYK image, else `source`), linked to `path` when it is linked. The
+    /// bytes are hashed for the first image that shows `source`; the images after it that show
+    /// the same bytes get the key kept for it.
+    fn image_key(&mut self, source: &Arc<Vec<u8>>, bytes: &[u8], path: Option<&str>) -> String {
+        let at = Arc::as_ptr(source) as usize;
+        #[cfg(test)]
+        let kept = !tests::UNKEPT.get();
+        #[cfg(not(test))]
+        let kept = true;
+        if kept && let Some((_, key)) = self.image_keys.get(&at) {
+            return key.clone();
+        }
+        #[cfg(test)]
+        tests::IMAGE_HASHES.set(tests::IMAGE_HASHES.get() + 1);
+        let key = match path {
+            Some(path) => linked_key(bytes, path),
+            None => format!("img-{:016x}", fnv1a(bytes)),
+        };
+        self.image_keys.insert(at, (source.clone(), key.clone()));
+        key
     }
 
     /// An SVG shown as an image (a data URL or a linked file) → its art, `acc` mapping its size.
@@ -865,12 +885,13 @@ mod tests {
             hidden: HashSet::new(),
             uses: HashMap::new(),
             symbols: HashMap::new(),
-            symbol_names: HashSet::new(),
+            symbol_names: HashMap::new(),
             symbol_suffixes: HashMap::new(),
             pattern_suffixes: HashMap::new(),
             blends: HashMap::new(),
             filter_sources: HashMap::new(),
             files: Files::default(),
+            image_keys: HashMap::new(),
             non_scaling: HashSet::new(),
             data: HashMap::new(),
             events: HashMap::new(),
@@ -891,5 +912,243 @@ mod tests {
         assert!(res.is_none());
         assert!(matches!(im.error, Some(SvgError::TooManyImages(crate::MAX_NESTED_SVG_IMAGES))));
         assert_eq!(im.error.unwrap().to_string(), "the SVG expands to more than 256 nested SVG images");
+    }
+
+    thread_local! {
+        /// How many times this thread's imports hashed an image's bytes for its key.
+        pub(super) static IMAGE_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// When set, this thread's imports hash the bytes of every image for its key, without
+        /// the keys kept for earlier images.
+        pub(super) static UNKEPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    /// `svg` imported on this thread with `opts`, with image keys kept or not, and how many times
+    /// image bytes were hashed for keys.
+    fn import_counting(svg: &str, opts: &crate::ImportOptions, kept: bool) -> (Document, Vec<String>, usize) {
+        UNKEPT.set(!kept);
+        IMAGE_HASHES.set(0);
+        let imported = crate::import::import(svg, opts, crate::MAX_NODES);
+        UNKEPT.set(false);
+        let (doc, warnings) = imported.unwrap();
+        (doc, warnings, IMAGE_HASHES.get())
+    }
+
+    /// The image objects of `doc` in paint order.
+    fn image_objects(doc: &Document) -> Vec<ImageObject> {
+        let mut out = vec![];
+        doc.walk(|n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((**im).clone());
+            }
+        });
+        out
+    }
+
+    fn svg_of(body: &str) -> String {
+        format!(r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200">{body}</svg>"#)
+    }
+
+    /// A `w` × `h` PNG of pixels made from `seed`.
+    fn png(w: u32, h: u32, seed: u32) -> Vec<u8> {
+        let mut state = seed.wrapping_mul(2_654_435_761).wrapping_add(1);
+        let img = image::RgbaImage::from_fn(w, h, |_, _| {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let [r, g, b, _] = state.to_le_bytes();
+            image::Rgba([r, g, b, 255])
+        });
+        let mut out = vec![];
+        img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+        out
+    }
+
+    fn data_url(mime: &str, bytes: &[u8]) -> String {
+        format!("data:{mime};base64,{}", crate::base64_encode(bytes))
+    }
+
+    /// A little-endian, uncompressed 1 × 1 CMYK TIFF of the inks `cmyk`.
+    fn cmyk_tiff(cmyk: [u8; 4]) -> Vec<u8> {
+        let entry = |tag: u16, kind: u16, count: u32, value: u32| {
+            [&tag.to_le_bytes()[..], &kind.to_le_bytes(), &count.to_le_bytes(), &value.to_le_bytes()].concat()
+        };
+        let entries = 11u16;
+        let bits_at = 8 + 2 + u32::from(entries) * 12 + 4;
+        let data_at = bits_at + 8;
+        let mut out = [b"II".as_slice(), &[0x2a, 0], &8u32.to_le_bytes(), &entries.to_le_bytes()].concat();
+        for e in [
+            entry(256, 4, 1, 1),
+            entry(257, 4, 1, 1),
+            entry(258, 3, 4, bits_at),
+            entry(259, 3, 1, 1),
+            entry(262, 3, 1, 5),
+            entry(273, 4, 1, data_at),
+            entry(274, 3, 1, 1),
+            entry(277, 3, 1, 4),
+            entry(278, 4, 1, 1),
+            entry(279, 4, 1, 4),
+            entry(284, 3, 1, 1),
+        ] {
+            out.extend(e);
+        }
+        out.extend(0u32.to_le_bytes());
+        for _ in 0..4 {
+            out.extend(8u16.to_le_bytes());
+        }
+        assert_eq!(out.len(), data_at as usize);
+        out.extend(cmyk);
+        out
+    }
+
+    /// `svg` imported with `opts` hashes image bytes `hashes` times for keys, and once for each
+    /// image without kept keys; both imports give the same document and warnings.
+    fn same_as_hashing_every_image(svg: &str, opts: &crate::ImportOptions, hashes: usize) -> (Document, Vec<String>) {
+        let (doc, warnings, n) = import_counting(svg, opts, true);
+        let (every, every_warnings, every_n) = import_counting(svg, opts, false);
+        assert_eq!(every_n, image_objects(&every).len(), "without kept keys, each image is hashed");
+        assert_eq!(n, hashes, "image bytes hashed for keys");
+        assert_eq!(warnings, every_warnings);
+        assert_eq!(image_objects(&doc), image_objects(&every), "the same image objects");
+        assert_eq!(doc.images, every.images, "the same stored images");
+        assert!(doc == every, "the same document");
+        (doc, warnings)
+    }
+
+    /// Every `<use>` of one image, and every `<image>` with the same data URL, shows bytes usvg
+    /// got once: they are hashed once, and every image has the key of the image's bytes.
+    #[test]
+    fn an_image_shown_many_times_is_hashed_once() {
+        let png = png(3, 2, 1);
+        let href = data_url("image/png", &png);
+        let uses: String = (0..6).map(|i| format!(r##"<use href="#p" x="{}"/>"##, i * 10)).collect();
+        let inline: String = (0..6).map(|i| format!(r#"<image href="{href}" x="{}" width="3" height="2"/>"#, i * 10)).collect();
+        for body in [format!(r#"<defs><image id="p" href="{href}" width="3" height="2"/></defs>{uses}"#), inline] {
+            let (doc, warnings) = same_as_hashing_every_image(&svg_of(&body), &crate::ImportOptions::default(), 1);
+            assert!(warnings.is_empty(), "{warnings:?}");
+            let objects = image_objects(&doc);
+            assert_eq!(objects.len(), 6);
+            let key = format!("img-{:016x}", fnv1a(&png));
+            assert!(objects.iter().all(|o| o.key == key && o.link.is_none() && (o.width, o.height) == (3, 2)), "{objects:?}");
+            assert_eq!(doc.images.keys().collect::<Vec<_>>(), [&key]);
+            assert_eq!((doc.images[&key].mime.as_str(), &**doc.images[&key].bytes, doc.images[&key].proxy.is_none()), ("image/png", &png[..], true));
+        }
+    }
+
+    /// One image is hashed once; two images of different bytes twice, with keys of their own; two
+    /// data URLs written differently that hold the same bytes are hashed once each, and share the
+    /// key and the stored image of those bytes.
+    #[test]
+    fn each_buffer_of_image_bytes_is_hashed_once() {
+        let (a, b) = (png(2, 2, 1), png(2, 2, 2));
+        let image = |href: &str| format!(r#"<image href="{href}" width="2" height="2"/>"#);
+        let opts = crate::ImportOptions::default();
+        let (doc, _) = same_as_hashing_every_image(&svg_of(&image(&data_url("image/png", &a))), &opts, 1);
+        assert_eq!(image_objects(&doc)[0].key, format!("img-{:016x}", fnv1a(&a)));
+        let two = [image(&data_url("image/png", &a)), image(&data_url("image/png", &b)), image(&data_url("image/png", &a))].concat();
+        let (doc, _) = same_as_hashing_every_image(&svg_of(&two), &opts, 2);
+        let keys: Vec<String> = image_objects(&doc).into_iter().map(|o| o.key).collect();
+        assert_eq!(keys, [format!("img-{:016x}", fnv1a(&a)), format!("img-{:016x}", fnv1a(&b)), format!("img-{:016x}", fnv1a(&a))]);
+        assert_eq!(doc.images.len(), 2);
+        let spelled = [image(&data_url("image/png", &a)), image(&data_url("image/png;x=y", &a))].concat();
+        let (doc, _) = same_as_hashing_every_image(&svg_of(&spelled), &opts, 2);
+        let keys: Vec<String> = image_objects(&doc).into_iter().map(|o| o.key).collect();
+        assert_eq!(keys, [format!("img-{:016x}", fnv1a(&a)), format!("img-{:016x}", fnv1a(&a))]);
+        assert_eq!(doc.images.len(), 1);
+    }
+
+    /// Every image of one linked file, or of one missing file, is hashed once: the file is read
+    /// once, and every image has the key of its bytes and its path, with its link.
+    #[test]
+    fn a_linked_or_missing_file_shown_many_times_is_hashed_once() {
+        let png = png(4, 2, 3);
+        let reads = std::sync::atomic::AtomicUsize::new(0);
+        let read = |path: &str| {
+            reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            path.ends_with("a.png").then(|| (png.clone(), vectorcraft_doc::LinkInfo::new(path)))
+        };
+        let opts = crate::ImportOptions { folder: Some("/f"), read: Some(&read) };
+        for (name, missing) in [("a.png", false), ("gone.png", true)] {
+            let body: String = (0..5).map(|i| format!(r#"<image href="{name}" x="{}" width="4" height="2"/>"#, i * 10)).collect();
+            reads.store(0, std::sync::atomic::Ordering::Relaxed);
+            let (doc, warnings) = same_as_hashing_every_image(&svg_of(&body), &opts, 1);
+            assert_eq!(reads.load(std::sync::atomic::Ordering::Relaxed), 2, "{name}: one read for each of the two imports");
+            assert_eq!(warnings.iter().any(|w| w.contains(name)), missing, "{name}: {warnings:?}");
+            let objects = image_objects(&doc);
+            assert_eq!(objects.len(), 5);
+            let path = objects[0].link.as_ref().expect("linked").path.clone();
+            assert!(path.ends_with(name), "{path}");
+            let stored = doc.images[&objects[0].key].clone();
+            assert_eq!(objects[0].key, linked_key(&stored.bytes, &path), "{name}");
+            assert!(objects.iter().all(|o| o.key == objects[0].key && o.link.as_ref().is_some_and(|l| l.path == path)), "{name}");
+            assert_eq!(doc.images.len(), 1);
+            assert_eq!(*stored.bytes == png, !missing, "{name}: the file's bytes, or a placeholder");
+            assert_eq!(stored.is_proxy(), missing, "{name}");
+        }
+    }
+
+    /// A CMYK TIFF shown many times is stored as a CMYK TIFF and hashed once, its key that of the
+    /// stored TIFF.
+    #[test]
+    fn a_cmyk_image_shown_many_times_is_hashed_once() {
+        let tif = cmyk_tiff([255, 0, 0, 0]);
+        let href = data_url("image/tiff", &tif);
+        let uses: String = (0..4).map(|i| format!(r##"<use href="#p" x="{}"/>"##, i * 10)).collect();
+        let body = format!(r#"<defs><image id="p" href="{href}" width="10" height="10"/></defs>{uses}"#);
+        let (doc, _) = same_as_hashing_every_image(&svg_of(&body), &crate::ImportOptions::default(), 1);
+        let objects = image_objects(&doc);
+        assert_eq!(objects.len(), 4);
+        let blob = &doc.images[&objects[0].key];
+        assert_eq!(blob.mime, "image/tiff");
+        assert!(blob.cmyk().is_some(), "stored with its inks");
+        assert_eq!(objects[0].key, format!("img-{:016x}", fnv1a(&blob.bytes)));
+        assert!(objects.iter().all(|o| o.key == objects[0].key));
+    }
+
+    /// This thread's CPU time in seconds where the system reports it, else the time since a first
+    /// call.
+    fn cpu_seconds() -> f64 {
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        let schedstat = std::fs::read_to_string("/proc/thread-self/schedstat").ok();
+        match schedstat.as_deref().and_then(|s| s.split_whitespace().next()?.parse::<f64>().ok()) {
+            Some(ns) => ns / 1e9,
+            None => START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64(),
+        }
+    }
+
+    /// The import's time for one PNG data URL shown by many `<use>` elements, hashing every image
+    /// and keeping keys alternating in one process: `cargo test --release -p vectorcraft-svg --lib
+    /// importer::tests::image_key_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "timing, run by hand"]
+    fn image_key_timing() {
+        for (side, uses) in [(512, 100), (1024, 500)] {
+            let png = png(side, side, 7);
+            let refs: String = (0..uses).map(|i| format!(r##"<use href="#p" transform="translate({} {})"/>"##, i % 20, i / 20)).collect();
+            let svg = svg_of(&format!(r#"<defs><image id="p" href="{}" width="10" height="10"/></defs>{refs}"#, data_url("image/png", &png)));
+            let run = |kept: bool| {
+                let t = cpu_seconds();
+                let (doc, _, _) = import_counting(&svg, &crate::ImportOptions::default(), kept);
+                let spent = cpu_seconds() - t;
+                assert_eq!(image_objects(&doc).len(), uses);
+                spent
+            };
+            run(false);
+            run(true);
+            let (mut every, mut kept) = (vec![], vec![]);
+            for round in 0..7 {
+                if round % 2 == 0 {
+                    every.push(run(false));
+                    kept.push(run(true));
+                } else {
+                    kept.push(run(true));
+                    every.push(run(false));
+                }
+            }
+            let median = |v: &mut Vec<f64>| {
+                v.sort_by(f64::total_cmp);
+                v[v.len() / 2]
+            };
+            let ms = |v: &[f64]| v.iter().map(|s| format!("{:.1}", s * 1e3)).collect::<Vec<_>>().join(" ");
+            println!("{uses} uses of a {} byte PNG: every image {} ms, kept {} ms", png.len(), ms(&every), ms(&kept));
+            println!("{uses} uses: median every image {:.1} ms, kept {:.1} ms", median(&mut every) * 1e3, median(&mut kept) * 1e3);
+        }
     }
 }

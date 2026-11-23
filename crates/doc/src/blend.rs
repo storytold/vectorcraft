@@ -6,7 +6,7 @@
 //!   tool clicked.
 //! - **Paint**: colours, gradients (stops resampled to a common set when their counts differ),
 //!   opacity, stroke weight, dashes, miter limit, width profiles and the pen pressure, tilt,
-//!   bearing and rotation that brushes read interpolate; what can't
+//!   bearing, rotation and wheel that brushes read interpolate; what can't
 //!   (caps, joins, brushes, fonts, symbols, text content) switches halfway.
 //! - **Groups** pair their children in stacking order; the children one group has more of grow
 //!   out of the other group's centre. Compound paths stay compound paths.
@@ -429,8 +429,8 @@ fn lerp_angle(x: Option<&AngleProfile>, y: Option<&AngleProfile>, t: f64) -> Opt
 }
 
 /// Interpolate a stroke's paint, weight, opacity, miter limit, dashes, arrowhead scale, width
-/// profile and the pen pressure, tilt, bearing and rotation its brush reads into `o` (a copy of
-/// the nearer stroke, so caps, joins, alignment, arrowheads and brushes switch halfway).
+/// profile and the pen pressure, tilt, bearing, rotation and wheel its brush reads into `o` (a
+/// copy of the nearer stroke, so caps, joins, alignment, arrowheads and brushes switch halfway).
 fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     let tf = t as f32;
     o.paint = lerp_paint(&x.paint, &y.paint, tf);
@@ -444,6 +444,7 @@ fn lerp_stroke(o: &mut StrokeLayer, x: &StrokeLayer, y: &StrokeLayer, t: f64) {
     o.tilt = lerp_pressure(x.tilt.as_ref(), y.tilt.as_ref(), t);
     o.bearing = lerp_angle(x.bearing.as_ref(), y.bearing.as_ref(), t);
     o.rotation = lerp_angle(x.rotation.as_ref(), y.rotation.as_ref(), t);
+    o.wheel = lerp_pressure(x.wheel.as_ref(), y.wheel.as_ref(), t);
 }
 
 /// Interpolate appearance stacks: item by item when their structure matches, else the top fill
@@ -755,9 +756,9 @@ fn reorient_dash(d: &mut Dash, o: Orient, lens: &[f64]) {
 }
 
 /// A key's stroke read along its subpaths turned as `o` says (`lens`: their lengths): its width
-/// profile (whose sides swap when reversed), pen pressure, tilt, bearing and rotation, its dashes,
-/// a gradient along the path or across it (whose sides swap when reversed). Its arrowheads stay as
-/// they are.
+/// profile (whose sides swap when reversed), pen pressure, tilt, bearing, rotation and wheel, its
+/// dashes, a gradient along the path or across it (whose sides swap when reversed). Its arrowheads
+/// stay as they are.
 fn reorient_stroke(s: &mut StrokeLayer, o: Orient, lens: &[f64]) {
     if o.is_identity() {
         return;
@@ -805,7 +806,7 @@ fn reorient_stroke(s: &mut StrokeLayer, o: Orient, lens: &[f64]) {
         let out = reoriented(&pts, o, |f| p.at(f), |v| v, |(l, r)| (r, l));
         p.points = out.into_iter().map(|(t, (l, r))| (t, l, r)).collect();
     }
-    for p in [&mut s.pressure, &mut s.tilt].into_iter().flatten() {
+    for p in [&mut s.pressure, &mut s.tilt, &mut s.wheel].into_iter().flatten() {
         let out = reoriented(&p.points, o, |f| p.at(f), same, same);
         p.points = out;
     }
@@ -842,8 +843,8 @@ fn reorient_strokes(n: &mut Node, o: Orient) {
 
 /// Turn the strokes of path or compound path `n` for Reverse Path Direction, before its subpaths
 /// flagged in `reversed` are reversed with [`SubPath::reverse`] (a closed one then starts at its
-/// last anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing and
-/// rotation then run the new way, so the stroke draws as it did. A compound path's subpaths are
+/// last anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing,
+/// rotation and wheel then run the new way, so the stroke draws as it did. A compound path's subpaths are
 /// its members' subpaths in order. A stroke reads one profile along every subpath, so it turns
 /// only when all of them turn alike. Arrowheads stay at the path's start and end.
 pub fn reverse_stroke_records(n: &mut Node, reversed: &[bool]) {
@@ -1154,6 +1155,23 @@ impl Lerp {
                     (NodeKind::Image(o), NodeKind::Image(x), NodeKind::Image(y)) => o.xf = lerp_affine(x.xf, y.xf, t),
                     (NodeKind::PlacedDocument(o), NodeKind::PlacedDocument(x), NodeKind::PlacedDocument(y)) => o.xf = lerp_affine(x.xf, y.xf, t),
                     _ => {}
+                }
+                // Between distorted images, each step's corners lie between the keys' corners. A
+                // step whose corners would fold keeps the nearer key's.
+                if (a.is_distorted_image() || b.is_distorted_image())
+                    && let (Some(qa), Some(qb)) = (a.image_corners(), b.image_corners())
+                {
+                    let near = if t < 0.5 { qa } else { qb };
+                    if n.set_image_corners([0, 1, 2, 3].map(|i| qa[i].lerp(qb[i], t))).is_err() && n.set_image_corners(near).is_err() {
+                        // Corners from a transform that collapses the image fail the check too: the
+                        // step is then placed as the nearer key is.
+                        if let (NodeKind::Image(o), NodeKind::Image(k)) = (&mut n.kind, &base.kind) {
+                            o.xf = k.xf;
+                        }
+                        if n.extras().image_quad != base.extras().image_quad {
+                            n.extras_mut().image_quad = base.extras().image_quad.clone();
+                        }
+                    }
                 }
                 n.extras_mut().mask = None;
                 n
@@ -2174,6 +2192,70 @@ pub fn blend_steps(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<usize> {
     StepCount::default().blend(keys, spec, Rail::new(keys, spec).as_ref()).0
 }
 
+/// Does each pair of `keys` blended with `spec` ask for the same number of steps
+/// ([`blend_step_count`]) when each coordinate it counts from moves by up to `length` points and,
+/// for Smooth Color, the difference between keys of different colors by up to `color` (0 to 1)?
+/// False when a count sits that close to where it changes, and for Smooth Color by distance when
+/// the keys are at most `4 × length` wide or high. Specified Steps always asks for the same number.
+pub fn blend_steps_settled(keys: &[Arc<Node>], spec: &BlendSpec, length: f64, color: f64) -> bool {
+    let rail = Rail::new(keys, spec);
+    keys.windows(2).enumerate().all(|(i, w)| {
+        let [a, b] = w else { return true };
+        match spec.spacing {
+            BlendSpacing::Steps(_) => true,
+            // The count is `len / d` rounded, which grows with `len`.
+            BlendSpacing::Distance(d) => {
+                let len = rail.as_ref().map_or_else(|| center_of(a).distance(center_of(b)), |r| r.len(i));
+                let count = |len: f64| blend_step_count(a, b, BlendSpacing::Distance(d), len);
+                count(len - length) == count(len + length)
+            }
+            BlendSpacing::SmoothColor => smooth_color_settled(a, b, length, color),
+        }
+    })
+}
+
+/// [`blend_steps_settled`] for one pair of Smooth Color keys. Each count [`blend_step_count`]
+/// takes grows with what it counts from (the color difference, the keys' reach, the distance
+/// between their edges in key sizes), so the pair is settled when the least and the most of
+/// these ask for the same count.
+fn smooth_color_settled(a: &Node, b: &Node, length: f64, color: f64) -> bool {
+    let bounds = a.visual_bounds().zip(b.visual_bounds());
+    let by_level = |d: f64| level_steps(d.max(0.0)) as usize;
+    match (color_distance(a, b), bounds) {
+        // Colors that differ, but by too little to count, or by little more: moving them may cross
+        // where they stop counting as the same. (The same colors stay the same.)
+        (Some(d), _) if d > 0.0 && d * 255.0 <= 1e-3 + color * 255.0 => false,
+        (Some(d), Some((ba, bb))) if d * 255.0 > 1e-3 => {
+            let (ca, cb) = (ba.center(), bb.center());
+            let reach =
+                [(ca.x - cb.x).abs(), (ca.y - cb.y).abs(), ba.width(), ba.height(), bb.width(), bb.height()].into_iter().fold(0.0f64, f64::max);
+            // The centers and sizes move by up to twice `length`.
+            let by_density = |r: f64| (8.0 * r.max(0.0) + 0.5).floor().clamp(1.0, 254.0) as usize;
+            let least = by_level(d - color).min(by_density(reach - 2.0 * length));
+            let most = by_level(d + color).min(by_density(reach + 2.0 * length));
+            reach.is_finite() && least == most
+        }
+        (Some(d), None) if d * 255.0 > 1e-3 => by_level(d - color) == by_level(d + color),
+        (_, Some((ba, bb))) => {
+            let (w, h) = ((ba.width() + bb.width()) / 2.0, (ba.height() + bb.height()) / 2.0);
+            if w <= 4.0 * length || h <= 4.0 * length {
+                return false;
+            }
+            let dx = (ba.x0 - bb.x0).abs().max((ba.x1 - bb.x1).abs());
+            let dy = (ba.y0 - bb.y0).abs().max((ba.y1 - bb.y1).abs());
+            // Each edge moves by up to `length`: the distances between them by up to twice that,
+            // and the mean sizes too.
+            let q = |dx: f64, dy: f64, w: f64, h: f64| (dx.max(0.0) / w).max(dy.max(0.0) / h);
+            let count = |q: f64| ((q + 0.5).floor() - 1.0).clamp(1.0, 1000.0) as usize;
+            let m = 2.0 * length;
+            let least = q(dx - m, dy - m, w + m, h + m);
+            let most = q(dx + m, dy + m, w - m, h - m);
+            least.is_finite() && most.is_finite() && count(least) == count(most)
+        }
+        (_, None) => true,
+    }
+}
+
 /// Evaluate a blend: the keys and generated steps in paint order. The steps keep to
 /// [`MAX_BLEND_STEPS`] in all ([`blend_steps`]).
 pub fn blend_expand(keys: &[Arc<Node>], spec: &BlendSpec) -> Vec<Node> {
@@ -2230,6 +2312,54 @@ mod tests {
         let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 10.0, 0.0)], false));
         let m = PathPair::new(&line(0.0), &line(100.0), (None, Some(1))).at(0.5);
         assert_eq!(m.subpaths[0].anchors[0].p, Point::new(55.0, 0.0));
+    }
+
+    /// A step between two distorted images has its corners between the keys' corners.
+    #[test]
+    fn steps_between_distorted_images_have_corners_between_theirs() {
+        let image = |q: [(f64, f64); 4]| {
+            let im = crate::ImageObject {
+                key: "k".into(),
+                width: 10,
+                height: 10,
+                xf: Affine::IDENTITY,
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            let mut n = Node::new(NodeId(1), NodeKind::Image(Box::new(im)));
+            n.set_image_corners(q.map(|(x, y)| Point::new(x, y))).unwrap();
+            n
+        };
+        let a = image([(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        let b = image([(200.0, 0.0), (300.0, 0.0), (280.0, 100.0), (220.0, 100.0)]);
+        let mid = Lerp::new(&a, &b, (None, None)).at(0.5);
+        let want = [(120.0, 0.0), (180.0, 0.0), (190.0, 100.0), (110.0, 100.0)];
+        let got = mid.image_corners().unwrap();
+        for (g, (x, y)) in got.iter().zip(want) {
+            assert!(g.distance(Point::new(x, y)) < 1e-9, "{got:?}");
+        }
+        // Toward a key flipped left to right, the middle step's corners would meet: each step
+        // there keeps the nearer key's corners, whether that key is distorted or not.
+        let flipped = image([(60.0, 0.0), (40.0, 0.0), (0.0, 100.0), (100.0, 100.0)]);
+        let mirror = image([(100.0, 0.0), (0.0, 0.0), (0.0, 100.0), (100.0, 100.0)]);
+        assert!(!mirror.is_distorted_image());
+        for (b, t) in [(&flipped, 0.5), (&mirror, 0.5), (&mirror, 0.45)] {
+            let got = Lerp::new(&a, b, (None, None)).at(t).image_corners().unwrap();
+            let near = (if t < 0.5 { &a } else { b }).image_corners().unwrap();
+            assert!(got.iter().zip(near).all(|(g, w)| g.distance(w) < 1e-9), "{t}: {got:?} against {near:?}");
+        }
+        // Toward an image whose transform has no height, neither the step's corners nor the
+        // nearer key's pass the check: the step is placed as that key is.
+        let mut flat = image([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+        let collapsed = Affine::new([-3.0, 0.0, 0.0, 0.0, 100.0, 0.0]);
+        if let NodeKind::Image(im) = &mut flat.kind {
+            im.xf = collapsed;
+        }
+        let step = Lerp::new(&a, &flat, (None, None)).at(0.5);
+        let NodeKind::Image(im) = &step.kind else { panic!("an image") };
+        assert_eq!(im.xf, collapsed);
+        assert!(!step.is_distorted_image() && step.extras().image_quad.is_none());
     }
 
     fn key(x: f64) -> Arc<Node> {
@@ -2951,6 +3081,48 @@ mod tests {
     }
 
     #[test]
+    fn a_stylus_wheel_recording_turns_with_the_gradient_and_dashes_of_its_stroke() {
+        let keyed = |path: PathData, edit: &dyn Fn(&mut StrokeLayer)| {
+            let mut ap = Appearance::default();
+            ap.set_stroke(Paint::solid(Color::BLACK));
+            if let Some(s) = ap.stroke_mut() {
+                edit(s);
+            }
+            Node::path(NodeId(1), path, ap)
+        };
+        let stroke = |n: &Node| n.appearance.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+        let wheel = |s: &StrokeLayer, f: f64| s.wheel.as_ref().map_or(PressureProfile::MID, |p| p.at(f));
+        let light = |s: &StrokeLayer, u: f32| match &s.paint {
+            Paint::Gradient(g) => g.gradient.sample(u).0.to_rgb().iter().sum::<f32>(),
+            p => panic!("a gradient: {p:?}"),
+        };
+        let recorded = |s: &mut StrokeLayer| {
+            s.wheel = Some(PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] });
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+            s.gradient_mode = StrokeGradientMode::Along;
+            s.dash = Some(Dash { pattern: vec![1.0, 2.0, 3.0, 1.5], offset: 0.75, align_corners: false });
+        };
+        // An open key clicked at its last anchor: the wheel runs the other way with the gradient
+        // along it, and the dashes are read from its end.
+        let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 13.0, 0.0)], false));
+        let key = keyed(line(100.0), &recorded);
+        let s = stroke(&Lerp::new(&keyed(line(0.0), &|_| {}), &key, (None, Some(1))).at(1.0));
+        assert!((wheel(&s, 0.0) - 1.0).abs() < 1e-9 && wheel(&s, 1.0).abs() < 1e-9, "{:?}", s.wheel);
+        assert!(light(&s, 0.0) < 0.01 && light(&s, 1.0) > 2.99, "{:?}", s.paint);
+        assert_ne!(s.dash, stroke(&key).dash, "the dashes turn too");
+        // A closed key started half way round starts its wheel recording there, stepping where its
+        // own start was, as its gradient does.
+        let square = |x: f64| shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0));
+        let key = keyed(square(100.0), &recorded);
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &key, (Some(0), Some(2))).at(1.0));
+        assert!((wheel(&s, 0.25) - 0.75).abs() < 1e-9 && (wheel(&s, 0.75) - 0.25).abs() < 1e-9, "{:?}", s.wheel);
+        assert!((light(&s, 0.25) - 0.75).abs() < 0.02 && (light(&s, 0.75) - 2.25).abs() < 0.02, "{:?}", s.paint);
+        // Half way through, a key without a recording counts as the wheel half way.
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &key, (Some(0), Some(2))).at(0.5));
+        assert!((wheel(&s, 0.25) - 0.625).abs() < 1e-9, "{:?}", s.wheel);
+    }
+
+    #[test]
     fn stroke_gradients_and_dashes_turn_with_a_key_path_started_elsewhere() {
         let keyed = |path: PathData, edit: &dyn Fn(&mut StrokeLayer)| {
             let mut ap = Appearance::default();
@@ -3534,5 +3706,47 @@ mod tests {
         let outer = blend_of(inner(0.0), inner(500.0), BlendSpacing::Steps(200));
         let (keys, spec) = blend_parts(&outer).unwrap();
         assert_eq!(blend_steps(keys, spec), vec![99]);
+    }
+
+    /// A count is settled when moving the lengths by 0.01 pt and the colors by 0.001 can't change
+    /// it: Specified Steps always; Specified Distance unless the spine's length is a half step from
+    /// where its count changes; Smooth Color unless the colors differ by too little to count, the
+    /// color difference or the keys' reach sits where its count changes, or keys of the same color
+    /// are at most four times 0.01 pt wide.
+    #[test]
+    fn steps_settle_unless_rounding_can_change_their_count() {
+        let (length, color) = (0.01, 0.001);
+        let settled = |a: Node, b: Node, spacing: BlendSpacing| {
+            let spec = BlendSpec { spacing, ..Default::default() };
+            blend_steps_settled(&[Arc::new(a), Arc::new(b)], &spec, length, color)
+        };
+        let filled = |x: f64, size: f64, c: Color| smooth_key((x, 0.0), (size, size), Paint::solid(c), Paint::None, 0.0);
+        let gray = |x: f64| filled(x, 10.0, Color::rgb(0.5, 0.5, 0.5));
+
+        // The keys' centers are 100 pt apart: 100 / 25 is 4, and 100 / (100 / 3.5) is 3.5.
+        assert!(settled(gray(0.0), gray(100.0), BlendSpacing::Steps(3)));
+        assert!(settled(gray(0.0), gray(100.0), BlendSpacing::Distance(25.0)));
+        assert!(!settled(gray(0.0), gray(100.0), BlendSpacing::Distance(100.0 / 3.5)));
+
+        // Smooth Color between colors that differ: by a 2,000th of a step, by 51 steps of 255
+        // (settled) and by 51.5 (where the count changes).
+        let red = |x: f64, r: f32| filled(x, 10.0, Color::rgb(r, 0.0, 0.0));
+        assert!(!settled(red(0.0, 0.0), red(100.0, 0.0005), BlendSpacing::SmoothColor));
+        assert!(settled(red(0.0, 0.0), red(100.0, 51.0 / 255.0), BlendSpacing::SmoothColor));
+        assert!(!settled(red(0.0, 0.0), red(100.0, 51.5 / 255.0), BlendSpacing::SmoothColor));
+        // Black to white is counted by the keys' reach, eight steps a point: 10 pt is settled,
+        // 10.0625 pt (80.5 steps) is not.
+        let near = |size: f64| settled(filled(0.0, size, Color::BLACK), filled(5.0, size, Color::WHITE), BlendSpacing::SmoothColor);
+        assert!(near(10.0));
+        assert!(!near(10.0625));
+        // Keys without bounds are counted by their colors alone.
+        let bare = |r: f32| Node::path(NodeId(1), PathData::default(), Appearance::basic(Paint::solid(Color::rgb(r, 0.0, 0.0)), Paint::None, 0.0));
+        assert!(settled(bare(0.0), bare(51.0 / 255.0), BlendSpacing::SmoothColor));
+        assert!(!settled(bare(0.0), bare(51.5 / 255.0), BlendSpacing::SmoothColor));
+        // Keys of the same color are counted by distance in key sizes; keys 0.04 pt wide or less
+        // are never settled.
+        assert!(settled(gray(0.0), gray(100.0), BlendSpacing::SmoothColor));
+        assert!(!settled(filled(0.0, 0.04, Color::rgb(0.5, 0.5, 0.5)), filled(100.0, 0.04, Color::rgb(0.5, 0.5, 0.5)), BlendSpacing::SmoothColor));
+        assert!(settled(filled(0.0, 0.05, Color::rgb(0.5, 0.5, 0.5)), filled(100.0, 0.05, Color::rgb(0.5, 0.5, 0.5)), BlendSpacing::SmoothColor));
     }
 }

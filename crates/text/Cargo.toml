@@ -9,6 +9,8 @@ description = "VectorCraft text: font database, shaping, layout, glyph outlines"
 workspace = true
 
 [dependencies]
+# The shared font catalog from craft-libs main (it has the outline, bidi and caret helpers used here).
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "205042e406b630cda653990649264a78fea6296b", default-features = false }
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
 kurbo = { workspace = true }
@@ -28,12 +30,22 @@ icu_segmenter = "2.3"
 # Grapheme clusters (a Thai consonant with its vowel and tone marks, an accented letter, an emoji
 # sequence) for caret movement; MIT OR Apache-2.0, already in the build.
 unicode-segmentation = "1.13"
+# Hyphenation patterns and rules for German, Polish, Portuguese, Italian, Bulgarian, Turkish and
+# Russian; MIT OR Apache-2.0, already in the build through the engine's spell checking.
+craft-proof = { workspace = true }
+# Composes a decomposed Cyrillic word (`и` + U+0306 is `й`) before its script check; MIT OR
+# Apache-2.0, already in the build through craft-proof.
+unicode-normalization = "0.1.26"
 # Draws COLR colour glyphs whose paints documents have no form for (sweep gradients, compositing
 # modes) into images: the canvas's renderer, already in the build.
 vello_cpu = { workspace = true }
-# Builds a small variable font for tests (`test_fonts`; no font file is committed). MIT OR
-# Apache-2.0, already in the build through subsetter.
-write-fonts = { version = "0.48", optional = true }
+# Builds the fonts files carried for their type (`file_font`: a PDF's embedded fonts, from the
+# glyphs it drew) and a small variable font for tests (`test_fonts`; no font file is committed).
+# MIT OR Apache-2.0, already in the build through subsetter.
+write-fonts = "0.48"
+
+[dev-dependencies]
+serde_json = { workspace = true }
 
 [features]
 default = ["bundled-fonts"]
@@ -44,10 +56,7 @@ default = ["bundled-fonts"]
 # vectorcraft-ui-egui and vectorcraft-mcp by default through the engine.
 bundled-fonts = []
 # `vectorcraft_text::test_fonts` for other crates' tests (dev-dependencies only).
-test-fonts = ["dep:write-fonts"]
-
-[dev-dependencies]
-write-fonts = "0.48"
+test-fonts = []
 
 # Fonts registered with Windows outside its font folders ("install as shortcut", installers);
 # MIT OR Apache-2.0, a safe wrapper of the registry API from the windows-rs project.

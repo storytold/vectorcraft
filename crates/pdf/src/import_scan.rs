@@ -280,6 +280,10 @@ pub(crate) struct Scan {
     /// Something overprints with overprint mode 0, where a `DeviceCMYK` colour's zero components
     /// knock out; the document's overprint is the nonzero one (mode 1).
     pub zero_mode: bool,
+    /// The images the page draws (image XObjects by object, inline images as `None`), each with
+    /// whether it is drawn where a `/DefaultCMYK` is in scope, which replaces DeviceCMYK there
+    /// (ISO 32000-2 §8.6.5.6). An image drawn both ways is `true`.
+    pub cmyk_defaults: HashMap<Option<ObjectIdentifier>, bool>,
     /// The colorant names of the Separation and DeviceN spaces the page sets (`cs`, `CS`), and of
     /// those of the shading patterns it sets (`scn`, `SCN`) and of the shadings it draws (`sh`),
     /// each once (none when the page uses more than [`MAX_INKS`] inks or changes ink more than
@@ -663,51 +667,21 @@ impl Walker<'_, '_> {
                         self.out.type3_cache_map.insert(hash, (f_key, to_unicode));
                     }
                 }
-                let is_colour = if is_type3 {
-                    let mut colour = false;
-                    let mut seen_streams = HashSet::new();
-                    let mut decoded_bytes = 0usize;
-                    const MAX_CHARPROC_BYTES: usize = 16 << 20;
-                    if let Some(char_procs) = f.get::<Dict<'_>>(b"CharProcs") {
-                        for key in char_procs.keys() {
-                            if let Some(stream) = char_procs.get::<Stream<'_>>(key.as_ref()) {
-                                if !seen_streams.insert(stream.cache_key()) {
-                                    continue;
-                                }
-                                if decoded_bytes >= MAX_CHARPROC_BYTES {
-                                    colour = true;
-                                    break;
-                                }
-                                if let Ok(data) = stream.decoded_within(MAX_CHARPROC_BYTES.saturating_sub(decoded_bytes)) {
-                                    decoded_bytes = decoded_bytes.saturating_add(data.len());
-                                    let mut iter = TypedIter::new(data.as_ref());
-                                    while let Some(op) = iter.next() {
-                                        match op {
-                                            TypedInstruction::ColorGlyph(_) => {
-                                                colour = true;
-                                                break;
-                                            }
-                                            TypedInstruction::ShapeGlyph(_) => break,
-                                            _ => {}
-                                        }
-                                    }
-                                    if colour {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    colour
-                } else {
-                    false
-                };
+                // A font is noted once for the document, so its glyph procedures are read only the
+                // first time any page or form lists it.
                 self.fonts.entry(f_key).or_insert_with(|| {
                     let embedded = embeds_glyphs(&f);
+                    let is_colour = is_type3 && sets_glyph_colors(&f);
                     FontNote { name, embedded, vertical: vertical_metrics(&f, embedded), is_type3, to_unicode, is_colour }
                 });
             }
         }
+    }
+
+    /// An image drawn with `res` in scope, as the interpreter looks up its `/DefaultCMYK`.
+    fn drawn_image(&mut self, id: Option<ObjectIdentifier>, res: &Resources<'_>) {
+        let default = res.get_color_space(&Name::new_unescaped(b"DefaultCMYK")).is_some();
+        *self.out.cmyk_defaults.entry(id).or_default() |= default;
     }
 
     fn walk(&mut self, data: &[u8], res: &Resources<'_>, depth: u32) {
@@ -874,12 +848,17 @@ impl Walker<'_, '_> {
                 | TypedInstruction::ShowTexts(_)
                 | TypedInstruction::NextLineAndShowText(_)
                 | TypedInstruction::ShowTextWithParameters(_) => self.shown(),
+                TypedInstruction::InlineImage(_) => self.drawn_image(None, res),
                 TypedInstruction::XObject(x) => {
                     if !self.is_visible() {
                         continue;
                     }
                     let Some(s) = res.get_x_object(x.0) else { continue };
                     let d = s.dict();
+                    if d.get::<Name<'_>>(b"Subtype").as_deref() == Some(b"Image") {
+                        self.drawn_image(d.obj_id(), res);
+                        continue;
+                    }
                     if d.get::<Name<'_>>(b"Subtype").as_deref() != Some(b"Form") || d.get::<[f32; 4]>(b"BBox").is_none() {
                         continue;
                     }
@@ -1106,6 +1085,48 @@ fn font_name(f: &Dict<'_>) -> Option<String> {
     let cmap = f.get::<Name<'_>>(b"Encoding").map(|n| String::from_utf8_lossy(n.as_ref()).into_owned());
     let stripped = cmap.and_then(|c| base.strip_suffix(c.as_str())?.strip_suffix('-').filter(|b| !b.is_empty()).map(str::to_string));
     Some(stripped.unwrap_or(base))
+}
+
+/// The most bytes of a Type 3 font's glyph procedures decoded to look for colored glyphs.
+const MAX_CHARPROC_BYTES: usize = 16 << 20;
+
+// The glyph procedures decoded by `sets_glyph_colors` on this thread.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_CHARPROC_DECODES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether Type 3 font `f` has a glyph procedure that sets its own color (`d0`, ISO 32000-1
+/// §9.6.5): its procedures are read until one starts with `d0`, each up to its `d0` or `d1`. Past
+/// [`MAX_CHARPROC_BYTES`] of them the font is taken to have one.
+fn sets_glyph_colors(f: &Dict<'_>) -> bool {
+    let Some(char_procs) = f.get::<Dict<'_>>(b"CharProcs") else { return false };
+    let mut seen_streams = HashSet::new();
+    let mut decoded_bytes = 0usize;
+    for key in char_procs.keys() {
+        if let Some(stream) = char_procs.get::<Stream<'_>>(key.as_ref()) {
+            if !seen_streams.insert(stream.cache_key()) {
+                continue;
+            }
+            if decoded_bytes >= MAX_CHARPROC_BYTES {
+                return true;
+            }
+            #[cfg(test)]
+            TEST_CHARPROC_DECODES.with(|n| n.set(n.get() + 1));
+            if let Ok(data) = stream.decoded_within(MAX_CHARPROC_BYTES.saturating_sub(decoded_bytes)) {
+                decoded_bytes = decoded_bytes.saturating_add(data.len());
+                let mut iter = TypedIter::new(data.as_ref());
+                while let Some(op) = iter.next() {
+                    match op {
+                        TypedInstruction::ColorGlyph(_) => return true,
+                        TypedInstruction::ShapeGlyph(_) => break,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Whether font `f` carries its own glyphs: a font program in its descriptor (a composite font's in

@@ -33,12 +33,12 @@ const STRIP_BUTTON: egui::Vec2 = vec2(32.0, PITCH);
 
 /// The Basic toolbar: (category, slots); each slot is a flyout group (first = default).
 pub const BASIC: &[(&str, &[&[&str]])] = &[
-    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "magicWand"]]),
+    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "enclosingLasso", "magicWand"]]),
     (
         "Shapes",
         &[
-            &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "spiral", "rectangularGrid", "polarGrid", "flare"],
-            &["ellipse"],
+            &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "threePointArc", "spiral", "rectangularGrid", "polarGrid", "flare"],
+            &["ellipse", "circle", "curvatureCircle"],
             &["polygon"],
             &["shaper"],
         ],
@@ -47,9 +47,9 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         "Draw",
         &[
             &["pencil", "smooth", "pathEraser", "join"],
-            &["eraser", "scissors", "knife", "mirrorCut", "lineCut", "rectCut"],
+            &["eraser", "scissors", "knife", "trimAtCrossings", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
-            &["pen", "addAnchor", "deleteAnchor", "anchorPoint"],
+            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen"],
             &["curvature"],
         ],
     ),
@@ -58,7 +58,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         &[
             &["width", "warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"],
             &["rotate", "reflect", "scale", "shear", "reshape", "freeTransform", "puppetWarp"],
-            &["shapeBuilder", "livePaintBucket", "livePaintSelection", "blend"],
+            &["shapeBuilder", "livePaintBucket", "fillArea", "livePaintSelection", "blend"],
             &["dimension"],
         ],
     ),
@@ -112,8 +112,22 @@ pub(crate) fn docked_rect_id() -> egui::Id {
     egui::Id::unique("toolbar-docked-rect")
 }
 
-fn panel_width(ui: &crate::state::UiState) -> f32 {
-    if ui.toolbar_double { 80.0 } else { WIDTH }
+/// Geometry of the main Tools panel only; flyouts and custom toolbars keep their own metrics.
+struct ToolsMetrics {
+    cell: egui::Vec2,
+    well: egui::Vec2,
+    panel_width: f32,
+}
+
+fn main_metrics(ui: &crate::state::UiState) -> ToolsMetrics {
+    let (cell, well) = if ui.toolbar_compact { (vec2(30.0, 25.0), vec2(26.0, 23.0)) } else { (vec2(36.0, PITCH - 1.0), vec2(30.0, 27.5)) };
+    let panel_width = match (ui.toolbar_compact, ui.toolbar_double) {
+        (false, false) => WIDTH,
+        (false, true) => 80.0,
+        (true, false) => 44.0,
+        (true, true) => 76.0,
+    };
+    ToolsMetrics { cell, well, panel_width }
 }
 
 /// Space reserved inside the protected canvas panel for a visible Tools panel docked beside the
@@ -121,27 +135,26 @@ fn panel_width(ui: &crate::state::UiState) -> f32 {
 /// none while Tools docks at the window's left edge.
 pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
     if (ui.tools_beside_canvas || ui.toolbar_right) && ui.toolbar && ui.screen_mode < 3 && ui.toolbar_pos.is_none() {
-        panel_width(ui) + 6.0
+        main_metrics(ui).panel_width + 6.0
     } else {
         0.0
     }
 }
 
-/// With `UiState::tools_beside_canvas` on, the canvas-edge redocking target, registered even
-/// while Tools floats, and the docked panel, which follows the canvas's left edge as dock columns
-/// resize, collapse or hide. With it off, `app.rs` draws Tools before the docking layout.
+/// The canvas-edge redocking targets, registered even while Tools floats, whichever way
+/// `UiState::tools_beside_canvas` is (a drop on the left one turns it on), and, with it on, the
+/// docked panel, which follows the canvas's left edge as dock columns resize, collapse or hide.
+/// With it off, `app.rs` draws Tools before the docking layout.
 ///
-/// The canvas's right edge, left of the panels, is a redocking target too, and Tools docked there
-/// (`UiState::toolbar_right`) is drawn at it whichever way the setting is.
+/// Tools docked on the canvas's right edge, left of the panels (`UiState::toolbar_right`), is
+/// drawn there whichever way the setting is.
 pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !app.ui.toolbar || app.ui.screen_mode >= 3 {
         return;
     }
     let canvas = ui.available_rect_before_wrap();
     crate::tools_float::set_right_dock_zone(ui.ctx(), canvas, WIDTH);
-    if app.ui.tools_beside_canvas {
-        crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
-    }
+    crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
     if app.ui.toolbar_pos.is_none() && (app.ui.tools_beside_canvas || app.ui.toolbar_right) {
         show(app, ui);
     }
@@ -158,9 +171,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The user's choice alone: a window too short for the tools scrolls them.
     let cols = if app.ui.toolbar_double { 2 } else { 1 };
-    // Two 36 pt buttons with 2 pt either side inside the border and separator line (at 76 they
-    // overran the right border).
-    let w = panel_width(&app.ui);
+    // Regular: two 36 pt cells need 80 pt to fit the frame. Compact: 30 pt cells fit in 76 pt,
+    // leaving room for the unchanged 66 pt drawing-mode footer and the frame.
+    let w = main_metrics(&app.ui).panel_width;
     match app.ui.toolbar_pos {
         None => {
             // The card's outer gap faces the edge it docks at.
@@ -220,6 +233,7 @@ pub fn show_custom(app: &mut VectorcraftApp, ctx: &egui::Context) {
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egui::Pos2>) {
     let t = Tokens::get(ui.ctx());
     let all = slots(app);
+    let metrics = main_metrics(&app.ui);
     let bounds = ui.max_rect();
     let editing = app.ui.tools_drawer && app.ui.drawer_toolbar.is_none();
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -293,13 +307,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                 // Centred on the panel's inside (`bounds`: within its border and, docked, the
                 // separator line egui reserves on its right), not on `WIDTH`, which sat them 2½ pt
                 // right of centre docked; nor on this row, which the scroll area starts ½ pt in.
-                ui.add_space((bounds.center().x - cols as f32 * 18.0 - ui.cursor().min.x).max(0.0));
+                ui.add_space((bounds.center().x - cols as f32 * (metrics.cell.x / 2.0) - ui.cursor().min.x).max(0.0));
                 for &k in &row {
                     let slot = &all[k].1;
                     let Some(shown) = tool_info(shown_tool(app, slot)).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
-                    let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
-                    let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
+                    let (rect, resp) = ui.allocate_exact_size(metrics.cell, Sense::click_and_drag());
+                    crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(None, slot.iter().map(|s| s.to_string()).collect()));
+                    let well = egui::Rect::from_center_size(rect.center(), metrics.well);
                     if is_active {
                         ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
                     } else if resp.hovered() {
@@ -352,7 +367,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                         app.select_tool(shown.id);
                     }
                     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(shown)));
-                    resp.on_hover_text(tip(shown));
+                    card::hover(resp, shown, card::Side::Beside, Some(tip(shown)));
                 }
             });
             i += row.len();
@@ -423,7 +438,7 @@ pub(crate) fn flyout_press(ui: &Ui, resp: &egui::Response, rect: egui::Rect) -> 
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
 /// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser, Shape Builder and Objects
 /// on Path tools' are their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
-/// ([`crate::dialogs::shapes::open_options`]). The Type on a Path and Vertical Type on a Path
+/// ([`crate::dialogs::shapes::open_options`]) and the Circle tool's ([`crate::dialogs::circle_options::open`]). The Type on a Path and Vertical Type on a Path
 /// tools' are Type on a Path Options for the selected type on a path.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
@@ -454,13 +469,20 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
             crate::dialogs::perspective_options::open(app);
             Ok(json!({ "dialog": crate::dialogs::perspective_options::KIND }))
         }
-        "shapeBuilder" => Ok(crate::dialogs::shape_builder_options::open(app)),
+        // Fill Area uses the Shape Builder's Gap Detection and open-filled-path options.
+        "shapeBuilder" | "fillArea" => Ok(crate::dialogs::shape_builder_options::open(app)),
         // The Objects on Path tool: the Pivot and Rotate of the objects it attaches next.
         "objectsOnPath" => Ok(crate::dialogs::objects_on_path_options::open(app)),
         // The Line Segment, Arc and grid tools: their Tool Options, the options of their next
         // drag and click.
         _ if crate::dialogs::shapes::OPTION_TOOLS.contains(&tool) => crate::dialogs::shapes::open_options(app, tool),
-        // The Flare tool: its options, which draw the next flare (OK draws none).
+        // The Circle tool: what it shows while a circle is drawn, where its anchors go and how
+        // the third point is placed.
+        vectorcraft_tools::circle::ID => Ok(crate::dialogs::circle_options::open(app)),
+        // The Three-Point Arc tool: whether the third point gives a direction.
+        vectorcraft_tools::three_point_arc::ID => Ok(crate::dialogs::three_point_arc_options::open(app)),
+        // The Flare tool: its options, which draw the next flare (OK draws none); with flares
+        // selected, the first one's settings, and OK draws the selected flares again.
         "flare" => Ok(crate::dialogs::flare_options::open(app, None)),
         // A double click on the Print Tiling tool puts the pages back where the placement puts them.
         "printTiling" => app.run("print.tiling.set", json!({ "reset": true })),
@@ -836,7 +858,7 @@ fn flyout_body(
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     ui.horizontal(|ui| {
         let rows = if floating {
-            ui.horizontal(|ui| tool_strip(ui, t, active, tools, locate))
+            ui.horizontal(|ui| tool_strip(ui, t, active, tools, toolbar, locate))
         } else {
             // A group taller than the window scrolls its rows (inside the frame's 1 pt border). The
             // rows' height is given, since the row this sits in starts one widget tall.
@@ -922,6 +944,9 @@ fn tool_rows(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Op
             ui.painter().galley(pos2(r.right() - ROW_END - sc.size().x, r.center().y - sc.size().y / 2.0), sc, color);
         }
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), is_active, tip(tool)));
+        // A row already shows the name and shortcut: its card adds the rest, and without one it has
+        // no tool tip.
+        let resp = card::hover(resp, tool, card::Side::Row, None);
         if resp.clicked() {
             chosen = Some(tool.id);
         }
@@ -976,11 +1001,19 @@ fn grab_id(toolbar: Option<&str>, key: &str) -> egui::Id {
 
 /// One icon button per tool, the active one lit, with its name and shortcut on hover. Returns the
 /// tool clicked and the button of `locate`.
-fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Option<&str>) -> (Option<&'static str>, Option<egui::Rect>) {
+fn tool_strip(
+    ui: &mut Ui,
+    t: &Tokens,
+    active: &str,
+    tools: &[String],
+    toolbar: Option<&str>,
+    locate: Option<&str>,
+) -> (Option<&'static str>, Option<egui::Rect>) {
     let mut chosen = None;
     let mut located = None;
     for tool in tools.iter().filter_map(|id| tool_info(id)) {
         let (r, resp) = ui.allocate_exact_size(STRIP_BUTTON, Sense::click());
+        crate::palette::note_spot(ui, r, || crate::palette::SpotAt::Strip(toolbar.map(str::to_string), tool.id.to_string()));
         let well = r.shrink(1.0);
         if active == tool.id {
             ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
@@ -990,7 +1023,7 @@ fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: O
         let ir = egui::Rect::from_center_size(r.center(), vec2(18.0, 18.0));
         icons::paint(ui, icons::tool_icon(tool.icon), ir, if active == tool.id { t.text_strong } else { t.icon });
         resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), active == tool.id, tip(tool)));
-        if resp.on_hover_text(tip(tool)).clicked() {
+        if card::hover(resp, tool, card::Side::Below, Some(tip(tool))).clicked() {
             chosen = Some(tool.id);
         }
         if locate == Some(tool.id) {
@@ -1212,7 +1245,7 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
         ui.label(text);
         let unit = app.session.general_unit();
         if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
-            app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();
+            app.run("tool.setOption", json!({ "key": "expand", "value": v.clamp(0.0, 1000.0) })).ok();
         }
     }
     let show = opts["showMesh"].as_bool().unwrap_or(true);
@@ -1227,5 +1260,6 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     fit.separator(ui);
 }
 
+pub(crate) mod card;
 #[cfg(test)]
 pub(crate) mod tests;

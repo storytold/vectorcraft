@@ -153,6 +153,7 @@ fn scatter_options_show_each_value_with_its_mode_and_ok_applies_them() {
         "Random",
         "Rotation relative to:",
         "Page",
+        "Hue Jitter:",
         "Colorization",
         "Method:",
         "Tints",
@@ -163,10 +164,11 @@ fn scatter_options_show_each_value_with_its_mode_and_ok_applies_them() {
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.f64("sizeMin", 0.0), d.f64("sizeMax", 0.0), d.str("sizeMode")), (60.0, 140.0, "random".into()));
     assert_eq!((d.str("rotationRelativeTo"), d.str("colorization")), ("page".into(), "tints".into()));
-    // Values are kept within their ranges (rotation here); Fixed takes the first value.
+    assert_eq!(d.f64("hueJitter", -1.0), 0.0);
+    // Values are kept within their ranges (rotation and hue jitter here); Fixed takes the first value.
     set(
         &mut app,
-        json!({"sizeMode": "fixed", "sizeMin": 5000, "spacingMode": "pressure", "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift"}),
+        json!({"sizeMode": "fixed", "sizeMin": 5000, "spacingMode": "pressure", "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift", "hueJitter": 400}),
     );
     assert!(shown(&mut app).contains("Hue Shift"));
     super::super::confirm(&mut app).unwrap();
@@ -177,12 +179,14 @@ fn scatter_options_show_each_value_with_its_mode_and_ok_applies_them() {
         (&json!([5000.0, 140.0]), &json!(-180.0), &json!(["fixed", "pressure", "random", "random"]))
     );
     assert_eq!((&def["rotation_relative_to_path"], &def["colorization"]["method"]), (&json!(true), &json!("hueShift")));
+    assert_eq!(def["hue_jitter"], json!(180.0));
     assert!(def["colorization"]["key"].is_object(), "the art's colour as the key: {def}");
     assert!(drawn_height(&app, id) > before, "the stroke redraws with the bigger confetti");
     // Opened again, it shows what was set.
     app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.str("sizeMode"), d.str("spacingMode"), d.str("colorization")), ("fixed".into(), "pressure".into(), "hueShift".into()));
+    assert_eq!(d.f64("hueJitter", 0.0), 180.0);
 }
 
 #[test]
@@ -202,6 +206,27 @@ fn brush_key_color_eyedropper_updates_the_open_dialog() {
     let key = app.ui.dialog.as_ref().unwrap().fields.get("keyColor").cloned().unwrap();
     assert_eq!(vectorcraft_engine::cmd::color_value(&key).unwrap().to_hex(), "#336699");
     assert_eq!(app.session.tool_id(), back);
+}
+
+/// #8024: the first Escape ends the Key Color pick and returns to the tool that armed it, leaving
+/// Brush Options open with its Key Color; a new press then cancels the dialog.
+#[test]
+fn escape_ends_the_key_color_pick_and_leaves_brush_options_open() {
+    let (mut app, ctx) = (app(), ctx());
+    app.select_tool("paintbrush");
+    app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+    set(&mut app, json!({"colorization": "hueShift"}));
+    let before = app.ui.dialog.as_ref().and_then(|d| d.fields.get("keyColor").cloned());
+    app.select_tool("eyedropper");
+    app.session.set_tool_option("brushKeyColor", &json!(true));
+    app.session.set_tool_option("stop", &json!("paintbrush"));
+    frame(&ctx, &mut app, vec![], "");
+    escape(&ctx, &mut app);
+    assert!(app.ui.dialog.is_some(), "Brush Options stays open");
+    assert_eq!(app.ui.dialog.as_ref().and_then(|d| d.fields.get("keyColor").cloned()), before, "the Key Color stays");
+    assert_eq!(app.session.tool_id(), "paintbrush");
+    escape(&ctx, &mut app);
+    assert!(app.ui.dialog.is_none(), "a new press cancels Brush Options");
 }
 
 #[test]
@@ -861,4 +886,161 @@ fn art_width_and_pattern_scale_have_sliders() {
     app.run("ui.brushOptions", json!({"name": "Diamonds"})).unwrap();
     let shown = tree(|ui| super::super::show(&mut app, ui.ctx()));
     assert_eq!(slider_value(&shown, "Scale:"), (Some(100.0), Some(1.0), Some(10000.0), Some("100%".into())));
+}
+
+/// A level line, selected, painted with brush `brush`.
+fn brushed_line(app: &mut VectorcraftApp, y: f64, brush: &str) -> u64 {
+    let id = app.run("shape.line", json!({"x1": 20, "y1": y, "x2": 220, "y2": y})).unwrap()["id"].as_u64().unwrap();
+    app.run("brush.apply", json!({"name": brush, "ids": [id]})).unwrap();
+    id
+}
+
+/// The own brush settings of the first stroke of path `id`.
+fn own_options(app: &VectorcraftApp, id: u64) -> Value {
+    let st = app.session.active().unwrap().doc.node(NodeId(id)).and_then(|n| n.appearance.stroke().cloned()).unwrap();
+    Value::Object(st.brush_options)
+}
+
+fn select(app: &mut VectorcraftApp, ids: &[u64]) {
+    app.run("select.set", json!({ "ids": ids })).unwrap();
+}
+
+#[test]
+fn options_of_selected_object_set_one_paths_art_brush_settings() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Arrow");
+    let b = brushed_line(&mut app, 100.0, "Arrow");
+    select(&mut app, &[a]);
+    assert!(object_available(&app));
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    let text = shown(&mut app);
+    for label in ["Options of Selected Object", "Width:", "Flip Along", "Flip Across", "Overlap", "Colorization", "OK"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    for label in ["Name:", "Brush Scale Options", "Direction:"] {
+        assert!(!text.contains(label), "{label} in {text}");
+    }
+    set(&mut app, json!({"width": 50}));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(own_options(&app, a), json!({"width": 50.0}));
+    assert_eq!(own_options(&app, b), json!({}));
+    assert_eq!(app.run("brush.get", json!({"name": "Arrow"})).unwrap()["width"], json!(100.0), "the brush keeps its width");
+    // Opened again, it shows the path's own width, and OK without a change changes nothing.
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("width", 0.0), 50.0);
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"width": 50.0}));
+}
+
+#[test]
+fn options_of_selected_object_change_only_the_values_edited_on_each_path() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Confetti");
+    let b = brushed_line(&mut app, 100.0, "Confetti");
+    app.run("brush.objectOptions", json!({"ids": [a], "params": {"size": [50, 80]}})).unwrap();
+    app.run("brush.objectOptions", json!({"ids": [b], "params": {"size": [60, 120]}})).unwrap();
+    select(&mut app, &[a, b]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    // The dialog shows the first path's values; only the smallest size is edited.
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("sizeMax", 0.0), 80.0);
+    set(&mut app, json!({"sizeMin": 40}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a)["size"], json!([40.0, 80.0]));
+    assert_eq!(own_options(&app, b)["size"], json!([40.0, 120.0]), "the second path keeps its own largest size");
+}
+
+/// The modes the first stroke of path `id` draws its brush `brush` with.
+fn drawn_modes(app: &VectorcraftApp, id: u64, brush: &str) -> Vec<Variation> {
+    let lib = vectorcraft_brush::library(&app.session.active().unwrap().doc);
+    let b = lib.iter().find(|b| b.name == brush).unwrap();
+    let own = own_options(app, id);
+    match b.with_stroke_options(own.as_object().unwrap()).unwrap().kind {
+        BrushKind::Calligraphic(c) => c.modes().to_vec(),
+        BrushKind::Scatter(s) => s.modes().to_vec(),
+        _ => vec![],
+    }
+}
+
+#[test]
+fn options_of_selected_object_keep_the_modes_they_show_when_a_value_changes() {
+    let mut app = app();
+    // Confetti's size varies at random from 60% to 140%; a size of 60% to 60% leaves the mode the
+    // dialog shows.
+    let s = brushed_line(&mut app, 50.0, "Confetti");
+    select(&mut app, &[s]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("sizeMode"), "random");
+    set(&mut app, json!({"sizeMax": 60}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, s)["size"], json!([60.0, 60.0]));
+    assert_eq!(drawn_modes(&app, s, "Confetti")[0], Variation::Random);
+    // 6 pt. Flat's angle is Fixed; a variation set without a mode keeps it Fixed.
+    let c = brushed_line(&mut app, 100.0, "6 pt. Flat");
+    select(&mut app, &[c]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().str("angleMode"), "fixed");
+    set(&mut app, json!({"angleVariation": 30}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(drawn_modes(&app, c, "6 pt. Flat")[0], Variation::Fixed);
+}
+
+#[test]
+fn options_of_selected_object_show_what_a_path_can_set_for_each_type() {
+    let mut app = app();
+    // Calligraphic: OK without a change leaves the path on the brush's settings.
+    let c = brushed_line(&mut app, 40.0, "6 pt. Flat");
+    select(&mut app, &[c]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    let text = shown(&mut app);
+    for label in ["Angle:", "Roundness:", "Size:"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, c), json!({}));
+    // Pattern: scale, spacing, flips and fit, not the tiles.
+    let p = brushed_line(&mut app, 80.0, "Diamonds");
+    select(&mut app, &[p]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    let text = shown(&mut app);
+    for label in ["Scale:", "Spacing:", "Fit", "Flip Along"] {
+        assert!(text.contains(label), "{label} in {text}");
+    }
+    assert!(!text.contains("Side Tile"), "{text}");
+    set(&mut app, json!({"scale": 200}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, p), json!({"scale": 200.0}));
+    // Bristle brushes, nothing selected and two brush types are refused.
+    let r = brushed_line(&mut app, 120.0, "Bristle Round");
+    select(&mut app, &[r]);
+    assert!(!object_available(&app));
+    assert!(app.run("ui.brushObjectOptions", json!({})).is_err());
+    select(&mut app, &[c, p]);
+    assert!(!object_available(&app), "the menu item is off for two brush types");
+    assert!(app.run("ui.brushObjectOptions", json!({})).is_err());
+    assert!(app.ui.dialog.is_none());
+    select(&mut app, &[p, r]);
+    assert!(!object_available(&app), "the menu item is off for a pattern and a bristle brush");
+    app.run("select.none", json!({})).unwrap();
+    assert!(!object_available(&app));
+}
+
+#[test]
+fn options_of_selected_object_change_nothing_after_another_document_became_active() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Arrow");
+    select(&mut app, &[a]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"width": 50}));
+    // A second document with a brushed path of the same id becomes the active one.
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = brushed_line(&mut app, 50.0, "Arrow");
+    assert_eq!(other, a);
+    // OK closes the dialog as Cancel does.
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(own_options(&app, other), json!({}), "the second document's path keeps the brush's settings");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_eq!(own_options(&app, a), json!({}), "the first document's path keeps the brush's settings");
 }

@@ -4,6 +4,8 @@
 //! be edited, selected or not. What it removes is worked out by
 //! [`vectorcraft_tools::addons::trim::plan`], which the tool also uses to show it beforehand.
 
+use std::collections::HashSet;
+
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{Point, Rect};
@@ -33,7 +35,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
         "Trim at Crossings",
         [],
         None,
-        "{at: [x, y], tolerance?: pt 0..100 (3; how near `at` a path counts as under it)} or {rect: [x, y, width, height]} or {points: [[x, y]…] (2 to 100000 points)} remove stretches of paths, a stretch running between two neighboring places where the path is crossed by another path or by itself, or from such a place to an open end: `at` removes the stretch of the nearest path at that point, `rect` every stretch the rectangle touches, `points` every stretch the line through the points crosses. Give exactly one of the three. Every path that can be edited takes part, selected or not, compound path members included; hidden and locked paths, guides and clipping paths (compound ones' members included) are neither trimmed nor counted as crossing; in isolation mode only paths inside the isolated object are trimmed. A path that ends on another marks a place on the other; paths that lie along each other don't cross. A closed path that loses a stretch becomes open, an open path that loses a middle stretch becomes two paths with its appearance in its place in the stacking order, and a path nothing crosses is removed whole; a live shape becomes a plain path. One undo step, none when nothing is removed → {ids (the paths left of those trimmed), removed (stretches)}",
+        "{at: [x, y], tolerance?: pt 0..100 (3; how near `at` a path counts as under it)} or {rect: [x, y, width, height]} or {points: [[x, y]…] (2 to 100000 points)} remove stretches of paths, a stretch running between two neighboring places where the path is crossed by another path or by itself, or from such a place to an open end: `at` removes the stretch of the nearest path at that point, `rect` every stretch the rectangle touches, `points` every stretch the line through the points crosses. Give exactly one of the three. Every path that can be edited takes part, selected or not, compound path members included; hidden and locked paths, guides and clipping paths (compound ones' members included) are neither trimmed nor counted as crossing; in isolation mode only paths inside the isolated object are trimmed. A path that ends on another, or within 0.001 pt of it, marks a place on the other; paths that lie along each other don't cross. A closed path that loses a stretch becomes open, an open path that loses a middle stretch becomes two paths with its appearance in its place in the stacking order, and a path nothing crosses is removed whole; a live shape becomes a plain path. One undo step, none when nothing is removed → {ids (the paths left of those trimmed), removed (stretches)}",
         has_doc,
         trim
     )]
@@ -100,20 +102,21 @@ fn trim(s: &mut Session, p: &Value) -> Result<Value> {
         compounds.dedup();
         let mut beside = Beside::replacing(d, &trimmed);
         let mut all = vec![];
+        // The selection is read through a set and changed once at the end, so a trim of many
+        // paths does not go through the selected objects once per path and per piece.
+        let mut selected_ids: HashSet<NodeId> = sel.objects.iter().copied().collect();
+        let mut joining: Vec<NodeId> = vec![];
+        let mut gone: Vec<NodeId> = vec![];
         for (id, pieces) in plan {
-            let selected = sel.contains(id);
+            let selected = selected_ids.contains(&id);
             sel.anchors.remove(&id);
             sel.segments.remove(&id);
             let made = replace_with_pieces(d, &mut beside, id, pieces)?;
             // The pieces of a selected path are selected; what was not selected stays so.
             if made.is_empty() {
-                sel.remove(id);
+                gone.push(id);
             } else if selected {
-                for n in &made {
-                    if !sel.contains(*n) {
-                        sel.add(*n);
-                    }
-                }
+                joining.extend(made.iter().copied().filter(|n| selected_ids.insert(*n)));
             }
             all.extend(made);
         }
@@ -121,8 +124,14 @@ fn trim(s: &mut Session, p: &Value) -> Result<Value> {
         for c in compounds {
             if d.node(c).is_some_and(|n| n.children().is_some_and(|ch| ch.is_empty())) {
                 d.remove(c)?;
-                sel.remove(c);
+                gone.push(c);
             }
+        }
+        sel.remove_all(gone);
+        if let Some((first, rest)) = joining.split_first() {
+            // `add` clears what any change to the object selection clears; the rest are new ids.
+            sel.add(*first);
+            sel.objects.extend_from_slice(rest);
         }
         Ok(all)
     })?;

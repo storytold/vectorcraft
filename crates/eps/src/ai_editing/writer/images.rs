@@ -1,6 +1,9 @@
 //! Images: embedded ones as a raster with its samples, linked ones as a placed file with a preview
 //! (see [`crate::ai_editing`] for the form).
 
+#[cfg(test)]
+use std::cell::Cell;
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
 
@@ -29,6 +32,87 @@ pub(super) const SAMPLES_LINE: &str = "XI\u{1}";
 
 /// An image's pixels as the data holds them, and whether it had 16 bits a channel ([`Samples::of`]).
 pub(super) type Read = Arc<(Samples, bool)>;
+
+/// The most bytes of samples a save keeps read ([`SampleCache`]): color and alpha together.
+const KEPT_SAMPLE_BYTES: usize = 256 << 20;
+/// The most images whose samples a save keeps read ([`SampleCache`]), those that can't be read
+/// included.
+const KEPT_IMAGES: usize = 256;
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Samples::of`] has read an image on this thread.
+    pub(in crate::ai_editing) static SAMPLE_READS: Cell<usize> = const { Cell::new(0) };
+    /// Whether [`Writer::samples`] keeps only the image read last on this thread, to compare its
+    /// file with the one [`SampleCache`] gives.
+    pub(in crate::ai_editing) static LAST_SAMPLES_ONLY: Cell<bool> = const { Cell::new(false) };
+    /// The bytes of samples and the images [`SampleCache`] keeps at most on this thread.
+    pub(in crate::ai_editing) static SAMPLE_LIMITS: Cell<(usize, usize)> = const { Cell::new((KEPT_SAMPLE_BYTES, KEPT_IMAGES)) };
+    /// The most bytes of samples and images a [`SampleCache`] kept on this thread, and whether one
+    /// held an image beside them.
+    pub(in crate::ai_editing) static SAMPLES_KEPT: Cell<(usize, usize, bool)> = const { Cell::new((0, 0, false)) };
+}
+
+/// The bytes of samples and the images [`SampleCache`] keeps at most.
+#[cfg(not(test))]
+const fn sample_limits() -> (usize, usize) {
+    (KEPT_SAMPLE_BYTES, KEPT_IMAGES)
+}
+
+#[cfg(test)]
+fn sample_limits() -> (usize, usize) {
+    SAMPLE_LIMITS.with(Cell::get)
+}
+
+/// The images read during a save and their pixels ([`Samples::of`], `None` when they can't be
+/// read), so that an image placed again is read once: up to [`KEPT_IMAGES`] images and
+/// [`KEPT_SAMPLE_BYTES`] of samples, and beside them the image read last that they have no room
+/// for. An image is known by the address of its data and its MIME type; each entry keeps the
+/// image, so no other data takes that address while the entry is kept.
+#[derive(Default)]
+pub(super) struct SampleCache {
+    /// By the address of the image's data, each image with that data and its pixels.
+    kept: HashMap<usize, Vec<(ImageBlob, Option<Read>)>>,
+    /// How many images `kept` holds.
+    images: usize,
+    /// The bytes of samples `kept` holds.
+    bytes: usize,
+    /// The image read last that `kept` had no room for, and its pixels.
+    last: Option<(ImageBlob, Option<Read>)>,
+}
+
+/// Whether `a` is the image `b`: the same data and MIME type.
+fn same_image(a: &ImageBlob, b: &ImageBlob) -> bool {
+    Arc::ptr_eq(&a.bytes, &b.bytes) && a.mime == b.mime
+}
+
+impl SampleCache {
+    /// The pixels kept for `blob`, when it was read.
+    fn get(&self, blob: &ImageBlob) -> Option<Option<Read>> {
+        let kept = self.kept.get(&(Arc::as_ptr(&blob.bytes) as usize)).and_then(|v| v.iter().find(|(b, _)| same_image(b, blob)));
+        kept.or(self.last.as_ref().filter(|(b, _)| same_image(b, blob))).map(|(_, read)| read.clone())
+    }
+
+    /// Keep `read`, the pixels of `blob`: with the others while both limits allow, else beside them
+    /// in place of the image read last.
+    fn keep(&mut self, blob: &ImageBlob, read: Option<Read>) {
+        let size = read.as_deref().map_or(0, |(s, _)| s.color.len().saturating_add(s.alpha.as_ref().map_or(0, Vec::len)));
+        let (most_bytes, most_images) = sample_limits();
+        match self.bytes.checked_add(size).filter(|b| *b <= most_bytes) {
+            Some(bytes) if self.images < most_images => {
+                self.bytes = bytes;
+                self.images += 1;
+                self.kept.entry(Arc::as_ptr(&blob.bytes) as usize).or_default().push((blob.clone(), read));
+            }
+            _ => self.last = Some((blob.clone(), read)),
+        }
+        #[cfg(test)]
+        SAMPLES_KEPT.with(|k| {
+            let (b, n, last) = k.get();
+            k.set((b.max(self.bytes), n.max(self.images), last || self.last.is_some()));
+        });
+    }
+}
 
 /// A copy of an image written as the part of it that its regions show ([`Writer::image`]).
 pub(super) struct Windowed {
@@ -61,6 +145,8 @@ impl Samples {
     /// or RGB samples, with an alpha channel when they need one. `None` when they can't be decoded or are more than
     /// [`MAX_PIXELS`]; the flag is set when the image had 16 bits a channel.
     fn of(blob: &ImageBlob) -> Option<(Samples, bool)> {
+        #[cfg(test)]
+        SAMPLE_READS.with(|n| n.set(n.get() + 1));
         // The header's size is checked before the inks are decoded.
         if blob.is_cmyk()
             && blob.header_size().is_some_and(|(w, h)| u64::from(w) * u64::from(h) <= MAX_PIXELS)
@@ -301,17 +387,26 @@ impl Writer<'_> {
         );
     }
 
-    /// The pixels of `blob` ([`Samples::of`]), read once for images that follow one another with
-    /// the same data.
+    /// The pixels of `blob` ([`Samples::of`]), read once in a save for each image the
+    /// [`SampleCache`] has room for.
     fn samples(&mut self, blob: &ImageBlob) -> Option<Read> {
-        if let Some((last, read)) = &self.last_samples
-            && Arc::ptr_eq(&last.bytes, &blob.bytes)
-            && last.mime == blob.mime
-        {
-            return read.clone();
+        #[cfg(test)]
+        if LAST_SAMPLES_ONLY.with(Cell::get) {
+            if let Some((last, read)) = &self.read_samples.last
+                && Arc::ptr_eq(&last.bytes, &blob.bytes)
+                && last.mime == blob.mime
+            {
+                return read.clone();
+            }
+            let read = Samples::of(blob).map(Arc::new);
+            self.read_samples.last = Some((blob.clone(), read.clone()));
+            return read;
+        }
+        if let Some(read) = self.read_samples.get(blob) {
+            return read;
         }
         let read = Samples::of(blob).map(Arc::new);
-        self.last_samples = Some((blob.clone(), read.clone()));
+        self.read_samples.keep(blob, read.clone());
         read
     }
 

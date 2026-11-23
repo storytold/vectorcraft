@@ -456,7 +456,26 @@ fn control_render_matches_a_png_export_on_white() {
     std::fs::write(base.join("in/edges.svg"), svg).unwrap();
     let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/edges.svg"))}));
     assert_eq!(r["ok"], true, "{r}");
-    let pixels = |v: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let pixels = |v: &Value| {
+        craft_image_codecs::decode(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap())
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+    };
     let r = request(&mut app, &tx, "app.export", json!({"format": "png", "background": "white"}));
     let export = pixels(&r["result"]["dataBase64"]);
     let r = request(&mut app, &tx, "ui.render", json!({}));
@@ -485,7 +504,26 @@ fn control_render_draws_the_trace_view_with_trace_views() {
     app.run("select.all", json!({})).unwrap();
     app.run("imageTrace.make", json!({"params": {"ignoreWhite": true}})).unwrap();
     app.run("imageTrace.setView", json!({"view": "sourceImage"})).unwrap();
-    let pixels = |v: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let pixels = |v: &Value| {
+        craft_image_codecs::decode(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap())
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+    };
     let view = pixels(&request(&mut app, &tx, "ui.render", json!({"traceViews": true}))["result"]["pngBase64"]);
     let result = pixels(&request(&mut app, &tx, "ui.render", json!({}))["result"]["pngBase64"]);
     let (beside, middle) = (view.get_pixel(10, 10).0, view.get_pixel(50, 50).0);
@@ -631,6 +669,30 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let write_only = AutomationRoots::new(&[], &[&base.join("out")]).unwrap();
     let listed = vectorcraft_engine::file_access::confine(write_only.as_ref(), || crate::control::inspect(&app, &ctx));
     assert_eq!((&listed["opening"], &listed["ui"]["recent_files"]), (&json!([]), &json!([])), "{listed}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out the file of a saved proof setup that an open Insert Menu Item dialog
+/// picked when it is outside the read root, and shows one inside it.
+#[test]
+fn ui_inspect_leaves_out_an_insert_menu_item_path_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-insert-menu-item");
+    let load = crate::dialogs::proof_setup::LOAD;
+    let (inside, outside) = (s(base.join("in/Press.vcproof")), s(base.join("outside/Press.vcproof")));
+    let dialog = |path: &str| {
+        let fields = json!({"find": "", "command": load, "params": {"path": path}, "note": ""});
+        Some(crate::state::Dialog::new(crate::dialogs::action_insert_menu_item::KIND, fields))
+    };
+    app.ui.dialog = dialog(&outside);
+    let ctx = egui::Context::default();
+    assert_eq!(crate::control::inspect(&app, &ctx)["ui"]["dialog"]["fields"]["params"]["path"], outside, "the person sees it");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let fields = &r["result"]["ui"]["dialog"]["fields"];
+    assert_eq!((fields["command"].as_str(), fields["params"].get("path")), (Some(load), None), "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.fields["params"]["path"].clone()), Some(json!(outside)), "the UI state is not changed");
+    app.ui.dialog = dialog(&inside);
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["dialog"]["fields"]["params"]["path"], inside, "{r}");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -1232,22 +1294,26 @@ fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-/// `ui.inspect`'s `scriptReport` names a file the person's script wrote outside the read root, and
-/// the included file a failed run stopped in (also in its error line), by its file name; the person
-/// sees the paths.
+/// `ui.inspect`'s `scriptReport` names a file the person's script wrote outside the read root (in
+/// the folder the person allowed it), and the included file a failed run stopped in (also in its
+/// error line), by its file name; the person sees the paths.
 #[test]
 fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
     let (mut app, tx, base) = confined("inspect-script-report");
     let (kept, hidden) = (s(base.join("in/kept.svg")), s(base.join("outside/hidden.svg")));
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     let source = format!(
-        "vc.run('document.export', {{path: {kept}, format: 'svg'}}); vc.run('document.export', {{path: {hidden}, format: 'svg'}});",
+        "Folder.selectDialog('Folder'); vc.run('document.export', {{path: {kept}, format: 'svg'}}); vc.run('document.export', {{path: {hidden}, format: 'svg'}});",
         kept = json!(kept),
         hidden = json!(hidden)
     );
     let finish = |app: &mut VectorcraftApp, params: Value| {
         app.session.execute("script.run", &params).unwrap();
         for _ in 0..10_000 {
+            if app.session.script_picker().is_some() {
+                let paths = vec![s(base.clone())];
+                assert!(app.session.script_pick(vectorcraft_engine::script::files::PickAnswer::Allow { paths, always: false }));
+            }
             if app.session.script_pump().is_some() {
                 break;
             }
@@ -1268,7 +1334,9 @@ fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
     std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
     finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
     let person = crate::control::inspect(&app, &ctx);
-    assert_eq!(person["scriptReport"]["file"], json!(s(base.join("outside/bad.jsxinc"))), "{person}");
+    // The report names the file by its real path (on macOS the temp folder is reached through a link).
+    let bad = std::fs::canonicalize(base.join("outside/bad.jsxinc")).unwrap();
+    assert_eq!(person["scriptReport"]["file"], json!(s(bad)), "{person}");
     let r = request(&mut app, &tx, "ui.inspect", json!({}));
     assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");
     assert!(r["result"]["scriptReport"]["console"].to_string().contains("bad.jsxinc:2:"), "{r}");

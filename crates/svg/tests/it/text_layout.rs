@@ -2,6 +2,7 @@
 //! its leading, baseline shift, scaling and kerning, and a renderer with the same font draws the
 //! export where the canvas draws the text.
 
+use craft_svg::tree::usvg;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
@@ -670,6 +671,37 @@ fn justification_spacing_and_glyph_scaling_are_drawn_in_place() {
     }
 }
 
+/// Type on a path with Justification…'s Desired word or letter spacing or glyph scaling is outlined
+/// with a warning, since a `<textPath>` places its characters one after the other at their own
+/// advances. With the default Desired values it stays a `<textPath>`.
+#[test]
+fn justification_spacing_on_a_path_is_outlined() {
+    use vectorcraft_doc::JustificationOptions;
+    let doc = |j: JustificationOptions| {
+        let mut t = TextObject::point(Point::ZERO, "HO HO", style(12.0));
+        t.para.justification = j;
+        let mut line = BezPath::new();
+        line.move_to((20.0, 100.0));
+        line.line_to((280.0, 100.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        vectorcraft_svg::export_full(&d, &ExportOptions::default(), None)
+    };
+    let out = doc(JustificationOptions::default());
+    assert!(out.svg.contains("<textPath") && out.warnings.is_empty(), "{:?}", out.warnings);
+    for j in [
+        JustificationOptions { word_spacing: [0.0, 200.0, 300.0], ..JustificationOptions::default() },
+        JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() },
+        JustificationOptions { glyph_scaling: [50.0, 150.0, 200.0], ..JustificationOptions::default() },
+    ] {
+        let out = doc(j);
+        assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Justification")), "{:?}", out.warnings);
+    }
+}
+
 /// Justified and Mojikumi lines whose characters a reader draws where the layout does are written
 /// as before: a segment per style run, and per word on a justified line.
 #[test]
@@ -834,7 +866,7 @@ fn viewer_outlines(svg: &str) -> Vec<BezPath> {
                     let m = Affine::new([m.sx as f64, m.ky as f64, m.kx as f64, m.sy as f64, m.tx as f64, m.ty as f64]);
                     let mut bp = BezPath::new();
                     for s in p.data().segments() {
-                        use usvg::tiny_skia_path::PathSegment as S;
+                        use craft_svg::tree::usvg::tiny_skia_path::PathSegment as S;
                         let pt = |q: usvg::tiny_skia_path::Point| m * Point::new(q.x as f64, q.y as f64);
                         match s {
                             S::MoveTo(a) => bp.move_to(pt(a)),

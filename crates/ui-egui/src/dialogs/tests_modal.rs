@@ -678,6 +678,14 @@ fn simplify_dialog_preview_counts_and_cancel_restore_the_original() {
     let texts = frame(&ctx, &mut app, vec![]);
     let preview = texts.iter().find(|(t, _)| t == "Preview").map(|(_, r)| *r).expect("a Preview checkbox");
     assert!(texts.iter().any(|(t, _)| t == "Anchor Points: 20 → 2"), "the reduction is visible: {texts:?}");
+    // In French the label ends in a no-break space and a colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let french = frame(&ctx, &mut app, vec![]);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let want = format!("{}\u{a0}: 20 → 2", crate::i18n::tr(fr, "Anchor Points"));
+    assert!(french.iter().any(|(t, _)| *t == want), "{want:?} in {french:?}");
+    frame(&ctx, &mut app, vec![]);
     assert!(app.session.in_interaction());
     assert!(app.session.doc().unwrap().selection.anchors.is_empty());
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len);

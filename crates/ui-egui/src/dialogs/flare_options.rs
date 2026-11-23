@@ -5,18 +5,22 @@
 //! grid shows). While Alt (Option on macOS) is held, Cancel reads Reset, which puts every option
 //! back to the tool's default and leaves the dialog open (`ui.dialogReset`). A click-opened
 //! dialog previews its settings live; Reset refreshes that preview and Cancel rolls it back.
+//! Opened from the toolbar with flares selected, it shows the first one's settings, and OK draws
+//! the selected flares again with the settings changed in the dialog (`shape.editFlare`); the tool
+//! keeps its options.
 //!
 //! Fields: the options (`vectorcraft_tools::extra::FLARE_OPTIONS`): `diameter` and `pathLength`
 //! (points), `opacity`, `brightness`, `growth`, `fuzziness`, `longest`, `rayFuzziness` and
-//! `largest` (%), `rays` and `rings` (counts), `direction` (degrees); `raysOn` and `ringsOn`; and
-//! `x`, `y` where a click opened it, with `preview` on initially for that click.
+//! `largest` (%), `rays` and `rings` (counts), `direction` (degrees); `raysOn` and `ringsOn`;
+//! `x`, `y` where a click opened it, with `preview` on initially for that click; and `flares`
+//! (ids) with `shown` (the settings the dialog opened with) for the selected flares.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
 use vectorcraft_tools::extra::{FLARE_OPTIONS, flare_params};
 
 use super::document_setup::check;
-use super::{DialogResult, DialogSpec, form, run_and_close};
+use super::{DialogResult, DialogSpec, form, run_and_close, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -38,7 +42,8 @@ const LABEL_W: f32 = 78.0;
 const FIELD_W: f32 = 90.0;
 
 /// Open the Flare Tool Options with the tool's values; `at`: where a click opened them, to draw a
-/// flare there on OK.
+/// flare there on OK. Opened without a click while flares are selected, they show the first one's
+/// settings, to change the selected flares on OK.
 pub fn open(app: &mut VectorcraftApp, at: Option<Point>) -> Value {
     let mut fields = match app.session.tool_options_of("flare") {
         Value::Object(o) => o,
@@ -48,9 +53,77 @@ pub fn open(app: &mut VectorcraftApp, at: Option<Point>) -> Value {
         fields.insert("preview".into(), json!(true));
         fields.insert("x".into(), json!(p.x));
         fields.insert("y".into(), json!(p.y));
+    } else if let Some((ids, settings)) = selected_flares(app) {
+        // A flare without rays or rings shows that checkbox off, with the tool's count.
+        for (key, on) in [("rays", "raysOn"), ("rings", "ringsOn")] {
+            let n = settings.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+            fields.insert(on.into(), json!(n > 0.0));
+            if n > 0.0 {
+                fields.insert(key.into(), json!(n));
+            }
+        }
+        for (key, ..) in FLARE_OPTIONS.iter().filter(|(k, ..)| !matches!(*k, "rays" | "rings")) {
+            if let Some(v) = settings.get(*key) {
+                fields.insert(key.to_string(), v.clone());
+            }
+        }
+        fields.insert("shown".into(), Value::Object(shown(&fields)));
+        fields.insert("flares".into(), json!(ids));
     }
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     json!({ "dialog": KIND })
+}
+
+/// The selected flares that can be edited (ids) and the first one's settings as the dialog shows
+/// them: its rings' path length and direction from its center to its end point, where the flare is
+/// drawn now.
+fn selected_flares(app: &VectorcraftApp) -> Option<(Vec<u64>, Map<String, Value>)> {
+    let st = app.session.doc().ok()?;
+    let flares: Vec<_> = st
+        .selection
+        .objects
+        .iter()
+        .filter(|id| st.doc.is_editable(**id))
+        .filter_map(|id| vectorcraft_engine::flare_settings(&st.doc, *id).map(|spec| (id.0, spec)))
+        .collect();
+    let (_, first) = flares.first()?;
+    let Value::Object(mut settings) = first.params.clone() else { return None };
+    let d = first.end()? - first.center()?;
+    settings.insert("pathLength".into(), json!(d.hypot()));
+    // Counter-clockwise from 3 o'clock, 0° to 360°, as `shape.flare` takes it.
+    settings.insert("direction".into(), json!((-d.y).atan2(d.x).to_degrees().rem_euclid(360.0)));
+    Some((flares.iter().map(|(id, _)| *id).collect(), settings))
+}
+
+/// The settings `fields` give a flare: each option, with a count of 0 when its checkbox is off.
+fn shown(fields: &Map<String, Value>) -> Map<String, Value> {
+    let get = |key: &str, default: f64| fields.get(key).and_then(Value::as_f64).unwrap_or(default);
+    let on = |key: &str| fields.get(key).and_then(Value::as_bool) != Some(false);
+    FLARE_OPTIONS
+        .iter()
+        .map(|&(key, default, ..)| {
+            let v = match key {
+                "rays" if !on("raysOn") => 0.0,
+                "rings" if !on("ringsOn") => 0.0,
+                "rays" | "rings" => get(key, default).round(),
+                _ => get(key, default),
+            };
+            (key.to_string(), json!(v))
+        })
+        .collect()
+}
+
+/// `shape.editFlare`'s params for the selected flares: the settings changed since the dialog opened.
+fn edit_params(d: &Dialog) -> Option<Value> {
+    let ids = d.fields.get("flares")?.clone();
+    let start = d.fields.get("shown").and_then(Value::as_object).cloned().unwrap_or_default();
+    let mut params = json!({ "ids": ids });
+    for (key, v) in shown(&d.fields) {
+        if start.get(&key) != Some(&v) {
+            params[key.as_str()] = if matches!(key.as_str(), "rays" | "rings") { json!(v.as_f64().unwrap_or(0.0) as u64) } else { v };
+        }
+    }
+    Some(params)
 }
 
 /// A row for option `key`, kept within its range: a distance in `unit`, else a number.
@@ -119,8 +192,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// A click-created flare previews at that original click; toolbar options draw no artwork.
+/// A click-created flare previews at that original click, and the selected flares preview with the
+/// settings changed; toolbar options draw no artwork.
 fn preview_command(app: &VectorcraftApp, d: &Dialog) -> Option<(String, Value)> {
+    if let Some(params) = edit_params(d) {
+        return Some(("shape.editFlare".into(), params));
+    }
     let at = Point::new(d.fields.get("x")?.as_f64().filter(|v| v.is_finite())?, d.fields.get("y")?.as_f64().filter(|v| v.is_finite())?);
     // Use the same clamping and whole-count conversion as accepted tool settings.
     let mut tool = vectorcraft_tools::create("flare");
@@ -136,14 +213,23 @@ fn preview_command(app: &VectorcraftApp, d: &Dialog) -> Option<(String, Value)> 
 
 /// Reset (Cancel with Alt or Option held): every option goes back to the Flare tool's default
 /// (`FLARE_OPTIONS`, with Rays and Rings on). The dialog keeps a click's `x` and `y`, so OK still draws there.
-fn reset(_: &VectorcraftApp, d: &mut Dialog) {
+fn reset(_: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     if let Value::Object(defaults) = vectorcraft_tools::create("flare").options() {
         d.fields.extend(defaults);
     }
+    Ok(())
 }
 
-/// OK: set the tool's options; opened by a click, draw a flare there with them.
+/// OK: set the tool's options; opened by a click, draw a flare there with them. Opened for the
+/// selected flares, draw them again with the settings changed, leaving the tool's options.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
+    if let Some(params) = edit_params(d) {
+        return if d.fields.contains_key(form::PREVIEWED) {
+            form::commit_preview(app, "shape.editFlare", params)
+        } else {
+            run_and_close(app, "shape.editFlare", params)
+        };
+    }
     let command = preview_command(app, d);
     if command.is_none() && (d.fields.contains_key("x") || d.fields.contains_key("y") || d.fields.contains_key(form::PREVIEWED)) {
         return Err("Flare click coordinates must be finite numbers".into());
@@ -154,12 +240,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         values.insert(key.into(), json!(d.bool(key)));
     }
     if let Some((cmd, params)) = command {
+        // Options the tool would refuse leave the dialog open, before the flare is accepted.
+        vectorcraft_tools::option_check::check_values(vectorcraft_tools::create("flare").as_ref(), &values)?;
         // Accept the preview once; option persistence follows successful artwork creation.
         let result = form::commit_preview(app, &cmd, params)?;
         app.run("tool.setOption", json!({ "tool": "flare", "values": values }))?;
         Ok(result)
     } else {
-        run_and_close(app, "tool.setOption", json!({ "tool": "flare", "values": values }))
+        set_tool_options_and_close(app, json!({ "tool": "flare", "values": values }))
     }
 }
 
@@ -311,10 +399,46 @@ mod tests {
         super::super::confirm(&mut app).unwrap();
         let parts = flare_parts(&app);
         assert_eq!(parts.iter().filter(|p| *p == "Ring").count(), 3, "{parts:?}");
-        // Out-of-range values are kept within the option's range.
-        app.run("tool.setOption", json!({"tool": "flare", "values": {"opacity": 900, "diameter": -4}})).unwrap();
-        let o = app.session.tool_options_of("flare");
-        assert_eq!((o["opacity"].as_f64(), o["diameter"].as_f64()), (Some(100.0), Some(0.0)));
+        // An out-of-range value is an error, and no option changes.
+        let before = app.session.tool_options_of("flare");
+        let e = app.run("tool.setOption", json!({"tool": "flare", "values": {"opacity": 50, "diameter": -4}})).unwrap_err();
+        assert_eq!(e, "tool `flare`: `diameter` must be a number from 0 to 1000");
+        assert_eq!(app.session.tool_options_of("flare"), before);
+    }
+
+    /// With a flare selected, the toolbar's Flare Tool Options show its settings, and OK draws it
+    /// again with the settings changed, as one undo step, leaving the tool's options.
+    #[test]
+    fn with_a_flare_selected_the_options_show_its_settings_and_ok_draws_it_again() {
+        let mut app = app();
+        let flare = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 0, "rings": 4, "x2": 200, "y2": 0, "largest": 80, "seed": 5});
+        app.run("shape.flare", flare).unwrap();
+        app.run("object.move", json!({"dx": 30, "dy": 0})).unwrap();
+        let options = app.session.tool_options_of("flare");
+        app.run("tool.options", json!({"tool": "flare"})).unwrap();
+        painted(&mut app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        let shown = (d.f64("diameter", 0.0), d.bool("raysOn"), d.f64("rays", 0.0), d.f64("rings", 0.0), d.f64("largest", 0.0));
+        assert_eq!(shown, (60.0, false, 15.0, 4.0, 80.0));
+        assert!((d.f64("pathLength", 0.0) - 200.0).abs() < 1e-9 && (d.f64("direction", 0.0) - 90.0).abs() < 1e-9);
+        d.fields.insert("rings".into(), json!(7));
+        d.fields.insert("raysOn".into(), json!(true));
+        let depth = app.session.doc().unwrap().history.undo.len();
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), depth + 1);
+        let parts = flare_parts(&app);
+        assert_eq!((parts.iter().filter(|p| *p == "Ring").count(), parts.iter().any(|p| p == "Rays")), (7, true), "{parts:?}");
+        // Still where it was moved to.
+        let doc = &app.session.doc().unwrap().doc;
+        let id = app.session.doc().unwrap().selection.objects[0];
+        assert!(vectorcraft_engine::flare_settings(doc, id).unwrap().center().unwrap().distance(Point::new(230.0, 200.0)) < 1e-9);
+        assert_eq!(app.session.tool_options_of("flare"), options);
+        // With nothing selected, the dialog shows the tool's options again.
+        app.run("select.none", json!({})).unwrap();
+        app.run("tool.options", json!({"tool": "flare"})).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.f64("diameter", 0.0), d.fields.contains_key("flares")), (100.0, false));
     }
 
     #[test]

@@ -1,9 +1,10 @@
 use vectorcraft_pathops::addons::pathtools as pt;
+use vectorcraft_pathops::start_nearest;
 
-use super::common::{dist_to_polyline, ids_json, path_mut, path_of, points_param, poly_bounds, subpath_len, target_paths};
+use super::common::{dist_to_polyline, ids_json, path_mut, path_of, points_param, poly_bounds, ranged, subpath_len, target_paths};
 use super::{
-    Anchor, BezPath, CubicBez, NodeId, ParamCurve, ParamCurveNearest, PathData, Point, Rect, Result, Session, SimplifyOptions, SubPath, Value, json,
-    number_or, po,
+    Anchor, BezPath, CubicBez, NodeId, ParamCurve, ParamCurveNearest, PathData, Point, Rect, Result, Session, SimplifyOptions, SubPath, Value, bad,
+    json, number_or, po,
 };
 
 // ---------- Smooth ----------
@@ -323,84 +324,6 @@ fn refit_run(anchors: &[Anchor], tol: f64, sigma: f64, free: [bool; 2]) -> Vec<A
     out.into_vec()
 }
 
-/// Distance (points) from an anchor within which a smoothed closed path starts at that anchor
-/// instead of at a new one split in beside it.
-const START_SNAP: f64 = 1e-3;
-
-/// Distance (points) within which two points of a smoothed closed path count as equally near its
-/// old start.
-const START_TIE: f64 = 1e-6;
-
-/// Where `p` lies along the closed `orig` from its first anchor: the segment index and parameter of
-/// the point of `orig` nearest `p`, the first such point in its order. Sorts after every finite place
-/// when there is none.
-fn place_along(orig: &SubPath, p: Point) -> (usize, f64) {
-    let mut best: Option<(f64, usize, f64)> = None;
-    for j in 0..orig.anchors.len() {
-        let hit = orig.segment(j).nearest(p, 1e-9);
-        if hit.distance_sq.is_finite() && hit.t.is_finite() && best.is_none_or(|(d, ..)| hit.distance_sq < d) {
-            best = Some((hit.distance_sq, j, hit.t));
-        }
-    }
-    best.map_or((usize::MAX, f64::INFINITY), |(_, j, t)| (j, t))
-}
-
-/// The closed `sp` started at the point on it nearest `start`: at the anchor there, or at a new
-/// anchor split into the segment there, which leaves the outline as it is. Of points equally near
-/// `start`, the one earliest along `orig` (the path before smoothing) from its first anchor is used,
-/// then the first in `sp`'s order. An open `sp`, or one with no segment or no finite nearest point,
-/// is returned as it is.
-fn start_nearest(mut sp: SubPath, start: Point, orig: &SubPath) -> SubPath {
-    let n = sp.anchors.len();
-    if !sp.closed || n < 2 {
-        return sp;
-    }
-    // (distance, place along `orig` once a tie needs it, segment of `sp`, parameter)
-    type Best = (f64, Option<(usize, f64)>, usize, f64);
-    let mut best: Option<Best> = None;
-    for i in 0..n {
-        let c = sp.segment(i);
-        let hit = c.nearest(start, 1e-9);
-        if !hit.distance_sq.is_finite() || !hit.t.is_finite() {
-            continue;
-        }
-        let d = hit.distance_sq.sqrt();
-        match &mut best {
-            None => best = Some((d, None, i, hit.t)),
-            Some((bd, bplace, bi, bt)) if (d - *bd).abs() <= START_TIE => {
-                let held = *bplace.get_or_insert_with(|| place_along(orig, sp.segment(*bi).eval(*bt)));
-                let place = place_along(orig, c.eval(hit.t));
-                if place.0 < held.0 || (place.0 == held.0 && place.1 < held.1) {
-                    best = Some((d, Some(place), i, hit.t));
-                }
-            }
-            Some((bd, ..)) if d < *bd => best = Some((d, None, i, hit.t)),
-            Some(_) => {}
-        }
-    }
-    let Some((_, _, i, t)) = best else { return sp };
-    let c = sp.segment(i);
-    let at = c.eval(t);
-    let first = if at.distance(c.p0) <= START_SNAP {
-        i
-    } else if at.distance(c.p3) <= START_SNAP {
-        (i + 1) % n
-    } else {
-        let mid = if sp.segment_is_line(i) {
-            Anchor::corner(at)
-        } else {
-            let (l, r) = (c.subsegment(0.0..t), c.subsegment(t..1.0));
-            sp.anchors[i].h_out = l.p1;
-            sp.anchors[(i + 1) % n].h_in = r.p2;
-            Anchor::with_handles(at, l.p2, r.p1)
-        };
-        sp.anchors.insert(i + 1, mid);
-        i + 1
-    };
-    sp.anchors.rotate_left(first);
-    sp
-}
-
 /// Pieces of curve that one Smooth drag measures against the drag while it searches the segments
 /// under it ([`reach_samples`]), shared equally by the curved segments that come within its reach,
 /// each of which gets at least one: enough to search 300,000 pt of curve within the default reach
@@ -645,14 +568,28 @@ fn smooth_subpath(sp: &SubPath, pts: &[Point], radius: f64, share: usize, tol: f
     (!same_anchors(&res, &anchors)).then(|| SubPath::new(res, false))
 }
 
-/// The segment `c`, which ends in the drag's reach (`near`) and starts outside it, split where it
-/// enters the reach: the part outside, then the part in reach. `None` when no more than a sliver
-/// is outside.
-fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez, CubicBez)> {
+/// How much of a segment that ends in the drag's reach is in reach ([`split_at_reach`]).
+enum Reach {
+    /// All of it, or all but a sliver.
+    Whole,
+    /// No more than a sliver at its end.
+    End,
+    /// The part outside the reach, then the part in reach.
+    Split(CubicBez, CubicBez),
+}
+
+/// Share of the tool's reach that the part of a segment in reach must be longer than for
+/// [`split_at_reach`] to split the segment. VectorCraft's own value.
+const REACH_SLIVER: f64 = 1.0 / 64.0;
+
+/// The segment `c`, which ends in the drag's reach (`near`, `radius` points) and starts outside it,
+/// split where it enters the reach. No more than 2% of its parameter range outside the reach is a
+/// sliver, and so is a part in reach no longer than [`REACH_SLIVER`] of the reach.
+fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool, radius: f64) -> Reach {
     const STEPS: u32 = 32;
     let step = 1.0 / f64::from(STEPS);
     // Back from the end in reach to the first sample outside, then halving to the crossing.
-    let outside = (1..=STEPS).map(|i| 1.0 - f64::from(i) * step).find(|t| !near(c.eval(*t)))?;
+    let Some(outside) = (1..=STEPS).map(|i| 1.0 - f64::from(i) * step).find(|t| !near(c.eval(*t))) else { return Reach::Whole };
     let (mut lo, mut hi) = (outside, outside + step);
     for _ in 0..20 {
         let mid = (lo + hi) / 2.0;
@@ -668,7 +605,11 @@ fn split_at_reach(c: CubicBez, near: &dyn Fn(Point) -> bool) -> Option<(CubicBez
         let s = c.subsegment(range);
         if straight { CubicBez::new(s.p0, s.p0, s.p3, s.p3) } else { s }
     };
-    (hi > 0.02).then(|| (part(0.0..hi), part(hi..1.0)))
+    if hi <= 0.02 {
+        return Reach::Whole;
+    }
+    let (far, reach) = (part(0.0..hi), part(hi..1.0));
+    if polygon_len(reach) <= REACH_SLIVER * radius { Reach::End } else { Reach::Split(far, reach) }
 }
 
 /// `anchors` with each run of `marked` ones smoothed by a Gaussian of spread `sigma` and refitted
@@ -695,25 +636,33 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
     }
     let mut out = anchors.to_vec();
     for (a, b) in runs.into_iter().rev() {
-        let lo = a.saturating_sub(1);
-        let hi = (b + 1).min(n - 1);
+        let (mut lo, mut hi) = (a.saturating_sub(1), (b + 1).min(n - 1));
+        // How much of the segments leading out of the run is in reach. A segment that is in reach
+        // only at the run's anchor stays out of the piece, so the piece ends at that anchor rather
+        // than in a sliver of a segment, which would leave the refit no direction to end along.
+        let after = if hi > b { split_at_reach(CubicBez::new(out[hi].p, out[hi].h_in, out[b].h_out, out[b].p), near, radius) } else { Reach::Whole };
+        let before = if lo < a { split_at_reach(CubicBez::new(out[lo].p, out[lo].h_out, out[a].h_in, out[a].p), near, radius) } else { Reach::Whole };
+        if matches!(after, Reach::End) {
+            hi = b;
+        }
+        if matches!(before, Reach::End) {
+            lo = a;
+        }
         if hi == lo {
             continue;
         }
         let mut piece = out[lo..=hi].to_vec();
         // The anchors outside the reach, kept with the part of their segment that is outside.
         let (mut head, mut tail) = (None, None);
-        if hi > b
+        if let Reach::Split(far, reach) = after
             && let [.., inner, outer] = piece.as_mut_slice()
-            && let Some((far, reach)) = split_at_reach(CubicBez::new(outer.p, outer.h_in, inner.h_out, inner.p), near)
         {
             inner.h_out = reach.p2;
             tail = Some(Anchor { h_in: far.p1, ..*outer });
             *outer = Anchor::with_handles(far.p3, reach.p1, far.p2);
         }
-        if lo < a
+        if let Reach::Split(far, reach) = before
             && let [outer, inner, ..] = piece.as_mut_slice()
-            && let Some((far, reach)) = split_at_reach(CubicBez::new(outer.p, outer.h_out, inner.h_in, inner.p), near)
         {
             inner.h_in = reach.p2;
             head = Some(Anchor { h_out: far.p1, ..*outer });
@@ -733,8 +682,12 @@ fn smooth_open(anchors: &[Anchor], marked: &[bool], near: &dyn Fn(Point) -> bool
 pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.smoothRegion";
     let pts = points_param(p, "points", C)?;
-    let radius = number_or(p, "radius", 12.0, C)?.max(0.0);
-    let tol = number_or(p, "fidelity", 2.5, C)?.clamp(vectorcraft_tools::draw2::SMOOTH_MIN_TOLERANCE, vectorcraft_tools::draw2::SMOOTH_MAX_TOLERANCE);
+    let radius = ranged(p, "radius", 12.0, vectorcraft_tools::draw2::REACH_RANGE, C)?;
+    let tol = number_or(p, "fidelity", 2.5, C)?;
+    let (lo, hi) = (vectorcraft_tools::draw2::SMOOTH_MIN_TOLERANCE, vectorcraft_tools::draw2::SMOOTH_MAX_TOLERANCE);
+    if !(lo..=hi).contains(&tol) {
+        return Err(bad(C, format!("`fidelity` must be from {lo} to {hi} pt")));
+    }
     let sigma = radius * SMOOTH_SPREAD;
     let st = s.doc()?;
     let mut plan = vec![];
@@ -882,7 +835,7 @@ fn trim_join(d: &vectorcraft_doc::Document, ids: &[NodeId], pts: &[Point], tol: 
 pub(super) fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.joinScrub";
     let pts = points_param(p, "points", C)?;
-    let tol = number_or(p, "tolerance", 12.0, C)?.max(0.0);
+    let tol = ranged(p, "tolerance", 12.0, vectorcraft_tools::draw2::REACH_RANGE, C)?;
     let st = s.doc()?;
     let targets = target_paths(&st.doc, &st.selection, poly_bounds(&pts, tol));
     // Paths that cross with their ends scrubbed are trimmed there and joined (#5844).
@@ -1009,6 +962,8 @@ pub(super) fn join_scrub(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+    use vectorcraft_pathops::START_SNAP;
+
     use super::*;
 
     /// A closed ring of four smooth anchors round (100, 100) with radius 50.

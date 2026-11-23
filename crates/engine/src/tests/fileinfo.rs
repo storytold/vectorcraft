@@ -499,7 +499,26 @@ fn png_exports_carry_text_chunks() {
     assert_eq!(get("Keywords"), Some("fair, Poster, print"));
     assert_eq!(get("Copyright"), Some("(c) 2026 Ada"));
     assert!(get("Creation Time").is_some_and(|t| t.ends_with('Z')));
-    assert!(image::load_from_memory(&png).is_ok(), "still a valid PNG");
+    assert!(
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .is_ok(),
+        "still a valid PNG"
+    );
 }
 
 #[test]

@@ -6,7 +6,7 @@
 use egui::{Align2, FontId, Id, Pos2, Sense, Stroke, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
-use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
+use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, REVOLVE, ROTATION_PRESETS};
 
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -37,12 +37,19 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let id = d.str("__effect");
             let defaults = vectorcraft_effects::default_params(&id).unwrap_or(json!({}));
-            // Reset all resets the shape, view and light; the mapped graphics and the render
-            // settings stay.
+            // Reset all resets the shape, view and light; the mapped graphics, Map Art with its
+            // options and the render settings stay.
             let defaults = match defaults {
                 Value::Object(mut m) => {
-                    m.remove(vectorcraft_effects::GRAPHICS);
-                    m.remove(vectorcraft_effects::RENDER);
+                    for key in [
+                        vectorcraft_effects::GRAPHICS,
+                        vectorcraft_effects::RENDER,
+                        vectorcraft_effects::MAP_ART,
+                        vectorcraft_effects::MAP_SHADE,
+                        vectorcraft_effects::MAP_INVISIBLE,
+                    ] {
+                        m.remove(key);
+                    }
                     Value::Object(m)
                 }
                 other => other,
@@ -175,6 +182,11 @@ pub(super) fn c3(s: &'static str) -> &'static str {
 /// first two, the light gizmo on Lighting.
 fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &str) {
     let classic = vectorcraft_effects::is_classic_three_d(id);
+    // Map Art takes the place of the tabs until its Done.
+    if classic && super::three_d_classic::map_art_open(d) {
+        super::three_d_classic::map_art_controls(app, ui, d);
+        return;
+    }
     let object = id == EXTRUDE || id == INFLATE || id == CLASSIC_EXTRUDE || id == CLASSIC_REVOLVE;
     let mut tabs = vec![];
     if object {
@@ -221,11 +233,11 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
     } else if object && d.str("__tab") != "rotation" {
         let unit = app.session.general_unit();
         if id == CLASSIC_EXTRUDE {
-            super::three_d_classic::object_controls(ui, d, unit);
+            super::three_d_classic::object_controls(app, ui, d, unit);
         } else if id == CLASSIC_REVOLVE {
             super::three_d_classic::revolve_controls(ui, d, unit);
         } else if id == EXTRUDE {
-            extrude_controls(ui, d, unit);
+            extrude_controls(app, ui, d, unit);
         } else {
             heading(ui, tl!("Object"));
             number(ui, d, "depth", tl!("Depth"), (0.0, 2000.0), "", 1, Some(unit));
@@ -240,8 +252,108 @@ fn solid_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, id: &
     }
 }
 
+/// A Bevel Shape menu entry: (shown label, value, the custom bevel's name and points).
+pub(crate) type BevelChoice = (String, Value, Option<(String, Value)>);
+
+/// The entries of [`bevel_choice`]'s menu for form `fields`, and how many are built in. The
+/// built-in labels are translated; custom bevels show their names as they are. The effect's own
+/// custom bevel, the panel's [`OWN_BEVEL`] else the form's, is listed unless the file lists it by
+/// name with the same points; while another entry has its label, " (document)" is added to it.
+pub(crate) fn bevel_options(app: &VectorcraftApp, fields: &serde_json::Map<String, Value>, effect: &str) -> (Vec<BevelChoice>, usize) {
+    let mut options: Vec<BevelChoice> = super::effect::own_choices(effect, "bevel", false)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(label, value)| (tl!(label).to_string(), json!(value), None))
+        .collect();
+    let builtin = options.len();
+    for b in app.session.bevels.bevels() {
+        options.push((b.name.clone(), json!("custom"), Some((b.name.clone(), b.profile_json()))));
+    }
+    let custom = fields.get("bevel").and_then(Value::as_str) == Some("custom");
+    let own = match fields.get(OWN_BEVEL).and_then(Value::as_array).map(Vec::as_slice) {
+        Some([n, p]) => Some((n.as_str().unwrap_or_default().to_string(), p.clone())),
+        _ => fields
+            .get(BEVEL_PROFILE)
+            .filter(|p| custom && !p.is_null())
+            .map(|p| (fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default().to_string(), p.clone())),
+    };
+    if let Some((n, p)) = own
+        && !options[builtin..].iter().any(|(_, _, c)| c.as_ref().is_some_and(|(cn, cp)| *cn == n && *cp == p))
+    {
+        let mut shown = if n.is_empty() { tl!("Custom").to_string() } else { n.clone() };
+        // Each pass makes the label longer, so this ends once no entry has it.
+        while options.iter().any(|(l, _, _)| *l == shown) {
+            shown = crate::i18n::fmt(tl!("{name} (document)"), &[("name", &shown)]);
+        }
+        options.push((shown, json!("custom"), Some((n, p))));
+    }
+    (options, builtin)
+}
+
+/// The form field where the 3D and Materials panel puts the first selected effect's custom bevel,
+/// `[name, points]`, so Bevel Shape lists it while a mixed selection unsets the shown bevel.
+pub(crate) const OWN_BEVEL: &str = "__ownBevel";
+
+/// The Bevel Shape menu of Extrude & Bevel and Extrude & Bevel (Classic) (`effect`): None and the
+/// built-in shapes, then the custom bevels of the bevels file, and the effect's own custom bevel
+/// when the file does not list it (a document from elsewhere carries its points). Picking a
+/// custom bevel stores its name and a copy of its points. In the 3D and Materials panel, Edit
+/// Bevels… opens the bevels file (`__editBevels`, which the panel runs).
+pub(super) fn bevel_choice(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, effect: &str) {
+    const KEY: &str = "bevel";
+    let (options, builtin) = bevel_options(app, &d.fields, effect);
+    let name = d.fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default().to_string();
+    let points = d.fields.get(BEVEL_PROFILE).filter(|v| !v.is_null()).cloned();
+    let custom = d.fields.get(KEY).and_then(Value::as_str) == Some("custom");
+    let is = |c: &Option<(String, Value)>| c.as_ref().is_some_and(|(n, p)| *n == name && Some(p) == points.as_ref());
+    let default = vectorcraft_effects::default_params(effect).and_then(|p| p.get(KEY).cloned()).unwrap_or(Value::Null);
+    let mixed = d.fields.get(KEY).is_some_and(Value::is_null);
+    let value = d.fields.get(KEY).filter(|v| !v.is_null()).cloned().unwrap_or_else(|| default.clone());
+    let current = if custom {
+        options[builtin..].iter().position(|(_, _, c)| is(c)).map(|i| i + builtin)
+    } else {
+        options[..builtin].iter().position(|(_, v, _)| *v == value)
+    };
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        label(ui, tl!("Bevel Shape"));
+        let labels: Vec<&str> = options.iter().map(|(l, _, _)| l.as_str()).collect();
+        let shown = current.and_then(|i| labels.get(i)).copied().unwrap_or("");
+        let width = VALUE_W + rail_width(ui) + 6.0;
+        // Marked by index, not label: a custom bevel's name can match another entry's label.
+        let picked = widgets::combo(ui, ("three-d-choice", KEY), shown, width, |ui| {
+            let mut chosen = None;
+            for (i, l) in labels.iter().enumerate() {
+                if ui.add(egui::Button::selectable(current == Some(i), *l)).clicked() {
+                    chosen = Some(i);
+                }
+            }
+            chosen
+        });
+        if let Some(k) = picked
+            && let Some((_, v, c)) = options.get(k)
+        {
+            d.fields.insert(KEY.into(), v.clone());
+            if let Some((n, p)) = c {
+                d.fields.insert(BEVEL_NAME.into(), json!(n));
+                d.fields.insert(BEVEL_PROFILE.into(), p.clone());
+            }
+        }
+        let default_label = options.iter().find(|(_, v, _)| *v == default).map_or("", |(l, _, _)| l.as_str());
+        if reset_dot(ui, KEY, mixed || value != default, default_label) {
+            d.fields.insert(KEY.into(), default.clone());
+        }
+    });
+    if d.bool("__panel") {
+        let enabled = app.session.bevels.path().is_some();
+        if ui.add_enabled(enabled, egui::Button::new(tl!("Edit Bevels…"))).clicked() {
+            d.fields.insert("__editBevels".into(), json!(true));
+        }
+    }
+}
+
 /// Extrude & Bevel's depth, twist, taper, cap and bevel.
-fn extrude_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
+fn extrude_controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     heading(ui, tl!("Object"));
     number(ui, d, "depth", tl!("Depth"), (0.0, 2000.0), "", 1, Some(unit));
     number(ui, d, "twist", tl!("Twist"), (0.0, 360.0), "°", 1, None);
@@ -249,9 +361,7 @@ fn extrude_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
     ui.add_space(10.0);
     bevel_heading(ui, d);
-    let shapes: Vec<(Value, &str)> =
-        super::effect::own_choices(EXTRUDE, "bevel", false).unwrap_or_default().into_iter().map(|(label, value)| (json!(value), label)).collect();
-    choice(ui, d, "bevel", tl!("Bevel Shape"), &shapes);
+    bevel_choice(app, ui, d, EXTRUDE);
     ui.add_enabled_ui(d.str("bevel") != "none", |ui| {
         number(ui, d, "bevelWidth", tl!("Width"), (0.0, 1000.0), "", 1, Some(unit));
         number(ui, d, "bevelHeight", tl!("Height"), (0.0, 1000.0), "", 1, Some(unit));
@@ -733,7 +843,7 @@ pub(super) fn reset_dot(ui: &mut egui::Ui, key: &str, changed: bool, default: &s
         ui.painter().rect_filled(r, 3.0, Tokens::get(ui.ctx()).hover);
     }
     dot(ui, r.center(), changed);
-    response.on_hover_text(format!("{}: {default}", tl!("Reset to default"))).clicked()
+    response.on_hover_text(format!("{} {default}", crate::i18n::colon(tl!("Reset to default")))).clicked()
 }
 
 #[cfg(test)]

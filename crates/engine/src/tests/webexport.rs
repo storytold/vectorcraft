@@ -64,7 +64,24 @@ fn one(s: &mut Session, p: Value) -> Vec<u8> {
 }
 
 fn pixels(file: &[u8]) -> image::RgbaImage {
-    image::load_from_memory(file).unwrap().to_rgba8()
+    craft_image_codecs::decode(file)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 fn distinct(img: &image::RgbaImage) -> usize {
@@ -436,6 +453,327 @@ fn colour_table_lock_web_shift_snap_and_sort() {
     assert!(lossy < plain, "{lossy} vs {plain}");
 }
 
+/// Delete Color: the deleted colors leave the table and the file, their pixels take the nearest
+/// color left, and the edit stays with the settings until another reduction is chosen.
+#[test]
+fn colour_table_delete_maps_pixels_to_the_nearest_color_left() {
+    // 40×10: red, a near red and blue, and 10 px with nothing (transparent).
+    let mut s = session(40.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut s, [10.0, 0.0, 10.0, 10.0], "#ee1100");
+    rect(&mut s, [20.0, 0.0, 10.0, 10.0], "#0000ff");
+    let preview = |s: &mut Session, p: Value| run(s, "document.exportForWeb.preview", p);
+    let sources = |v: &Value| -> Vec<String> {
+        let mut out: Vec<String> =
+            v["colors"].as_array().unwrap().iter().filter(|c| c["transparent"] == false).map(|c| c["source"].as_str().unwrap().to_string()).collect();
+        out.sort();
+        out
+    };
+    let base = preview(&mut s, json!({"dither": "none"}));
+    assert_eq!(base["colors"].as_array().unwrap().len(), 4, "{base}");
+    for format in ["gif", "png8"] {
+        let p = json!({"format": format, "dither": "none", "colorTable": {"deleted": ["#EE1100"]}});
+        let v = preview(&mut s, p.clone());
+        assert_eq!(v["colors"].as_array().unwrap().len(), 3, "{format}: {v}");
+        assert!(v["colors"].as_array().unwrap().iter().any(|c| c["transparent"] == true), "{format}: the transparent entry stays");
+        assert_eq!(sources(&v), ["#0000ff", "#ff0000"], "{format}");
+        let file = one(&mut s, p);
+        assert_eq!(v["bytes"].as_u64(), Some(file.len() as u64), "{format}: the preview is the file");
+        let img = pixels(&file);
+        assert_eq!(img.get_pixel(15, 5).0, [255, 0, 0, 255], "{format}: the nearest color left");
+        assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(25, 5).0, img.get_pixel(35, 5).0[3]), ([255, 0, 0, 255], [0, 0, 255, 255], 0));
+        assert_eq!(distinct(&img), 3, "{format}");
+    }
+    // A color the table does not hold is no edit; sorting does not bring a deleted one back.
+    assert_eq!(sources(&preview(&mut s, json!({"dither": "none", "colorTable": {"deleted": ["#123456"]}}))).len(), 3);
+    let sorted = preview(&mut s, json!({"dither": "none", "colorTable": {"deleted": ["#ee1100"], "sort": "luminance"}}));
+    assert_eq!(sources(&sorted), ["#0000ff", "#ff0000"]);
+    // A fixed palette: colors it lacks are not made again, and deletions come out of it.
+    let fixed = preview(&mut s, json!({"dither": "none", "colorTable": {"customPalette": ["#0000ff", "#ff0000"]}}));
+    assert_eq!(sources(&fixed), ["#0000ff", "#ff0000"]);
+    let fixed = preview(&mut s, json!({"dither": "none", "colorTable": {"customPalette": ["#0000ff", "#ff0000"], "deleted": ["#ff0000"]}}));
+    assert_eq!(sources(&fixed), ["#0000ff"]);
+    // At most `colors` entries of a fixed palette, the transparent one included.
+    let two = preview(&mut s, json!({"dither": "none", "colors": 2, "colorTable": {"customPalette": ["#0000ff", "#ff0000"]}}));
+    assert_eq!(sources(&two), ["#0000ff"]);
+    // Deleting every opaque color is refused: the pixels need a color.
+    // Colors mapped to transparent do not count as left.
+    for table in [
+        json!({"deleted": ["#ff0000", "#ee1100", "#0000ff"]}),
+        json!({"customPalette": ["#ff0000"], "deleted": ["#ff0000"]}),
+        json!({"deleted": ["#0000ff", "#ee1100"], "transparent": ["#ff0000"]}),
+        json!({"customPalette": ["#ff0000", "#0000ff"], "deleted": ["#0000ff"], "transparent": ["#ff0000"]}),
+    ] {
+        let p = json!({"colorTable": table});
+        let e = s.execute("document.exportForWeb.preview", &p).err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(e.contains(cmd::webexport::KEEP_ONE), "{p}: {e}");
+        assert!(s.execute("document.exportForWeb", &p).is_err(), "{p}");
+    }
+    for bad in [
+        json!({"colorTable": {"deleted": ["nope"]}}),
+        json!({"colorTable": {"customPalette": ["#ff000080"]}}),
+        json!({"colorTable": {"deleted": vec!["#ff0000"; 257]}}),
+    ] {
+        assert!(s.execute("document.exportForWeb", &bad).is_err(), "{bad}");
+        assert!(s.execute("webExport.settings", &bad).is_err(), "{bad}");
+    }
+    // A deleted color leaves the other lists; JPEG and PNG-24 have no table to edit.
+    let table = json!({
+        "deleted": ["#ee1100"], "customPalette": ["#ff0000", "#ee1100", "#0000ff"], "locked": ["#EE1100", "#0000ff"],
+        "transparent": ["#ee1100"], "webShift": ["#ee1100"],
+    });
+    let r = run(&mut s, "webExport.settings", json!({ "colorTable": table }));
+    let t = r["settings"]["colorTable"].clone();
+    assert_eq!((&t["locked"], &t["transparent"], &t["webShift"]), (&json!(["#0000ff"]), &json!([]), &json!([])));
+    assert_eq!(t["deleted"], json!(["#ee1100"]));
+    for format in ["jpg", "png24"] {
+        assert!(preview(&mut s, json!({"format": format, "colorTable": t.clone()})).get("colors").is_none(), "{format}");
+    }
+    // The remembered edit survives other keys and a format change, and goes with another reduction.
+    let r = run(&mut s, "webExport.settings", json!({"colors": 64, "format": "png8"}));
+    assert_eq!(r["settings"]["colorTable"]["deleted"], json!(["#ee1100"]));
+    let r = run(&mut s, "webExport.settings", json!({"reduction": "adaptive"}));
+    assert_eq!((&r["settings"]["colorTable"]["deleted"], &r["settings"]["colorTable"]["customPalette"]), (&json!([]), &json!([])));
+    // A saved preset keeps the edit.
+    run(&mut s, "webExport.presets.save", json!({"name": "No near red", "dither": "none", "colorTable": {"deleted": ["#ee1100"]}}));
+    assert_eq!(sources(&preview(&mut s, json!({"preset": "No near red"}))), ["#0000ff", "#ff0000"]);
+}
+
+/// The colors of a fixed palette mapped to transparent take one slot of Colors together with the
+/// transparent pixels, so the opaque colors after them still fit: their pixels stay opaque, and the
+/// pixels of the colors mapped to transparent become transparent.
+#[test]
+fn colour_table_fixed_palette_keeps_an_opaque_color() {
+    // 40×10: red, a near red and blue, and 10 px with nothing (transparent).
+    let mut s = session(40.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut s, [10.0, 0.0, 10.0, 10.0], "#ee1100");
+    rect(&mut s, [20.0, 0.0, 10.0, 10.0], "#0000ff");
+    for table in [
+        json!({"customPalette": ["#ff0000", "#ee1100", "#0000ff"], "deleted": ["#ee1100"], "transparent": ["#ff0000"]}),
+        json!({"customPalette": ["#ff0000", "#0000ff"], "transparent": ["#ff0000"]}),
+    ] {
+        let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": table});
+        let v = run(&mut s, "document.exportForWeb.preview", p.clone());
+        let opaque: Vec<&Value> = v["colors"].as_array().unwrap().iter().filter(|c| c["transparent"] == false).map(|c| &c["source"]).collect();
+        assert_eq!((opaque, v["colors"].as_array().unwrap().len()), (vec![&json!("#0000ff")], 2), "{p}");
+        let img = pixels(&one(&mut s, p.clone()));
+        let alpha = |x: u32| img.get_pixel(x, 5).0[3];
+        assert_eq!((alpha(5), alpha(15), img.get_pixel(25, 5).0, alpha(35)), (0, 0, [0, 0, 255, 255], 0), "{p}");
+    }
+    // A color mapped to transparent that no pixel takes leaves its slot to an opaque color.
+    let mut u = session(20.0, 10.0);
+    rect(&mut u, [0.0, 0.0, 10.0, 10.0], "#0000ff");
+    rect(&mut u, [10.0, 0.0, 10.0, 10.0], "#00ff00");
+    let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": {"customPalette": ["#0000ff", "#00ff00", "#ff0000"], "transparent": ["#ff0000"]}});
+    let img = pixels(&one(&mut u, p));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(15, 5).0), ([0, 0, 255, 255], [0, 255, 0, 255]));
+    // At 256 colors a color mapped to transparent after 255 opaque ones still keeps an entry.
+    let full: Vec<String> =
+        std::iter::once("#0000ff".to_string()).chain((1..255).map(|i| format!("#00{i:02x}00"))).chain(["#ff0000".to_string()]).collect();
+    let p = json!({"format": "png8", "dither": "none", "colors": 256, "colorTable": {"customPalette": full, "transparent": ["#ff0000"]}});
+    let img = pixels(&one(&mut s, p));
+    assert_eq!((img.get_pixel(5, 5).0[3], img.get_pixel(25, 5).0, img.get_pixel(35, 5).0[3]), (0, [0, 0, 255, 255], 0));
+    // With one opaque color and 255 mapped to transparent, the last of those does not fit, and its
+    // pixels still become transparent rather than taking the opaque color nearest them.
+    let mut d = session(30.0, 10.0);
+    rect(&mut d, [0.0, 0.0, 10.0, 10.0], "#0000ff");
+    rect(&mut d, [10.0, 0.0, 10.0, 10.0], "#0000ee");
+    let clear: Vec<String> = (1..255).map(|i| format!("#00{i:02x}00")).chain(["#0000ee".to_string()]).collect();
+    let palette: Vec<String> = std::iter::once("#0000ff".to_string()).chain(clear.iter().cloned()).collect();
+    let p = json!({"format": "png8", "dither": "none", "colors": 256, "colorTable": {"customPalette": palette, "transparent": clear}});
+    let v = run(&mut d, "document.exportForWeb.preview", p.clone());
+    assert_eq!(v["mappedToTransparent"], json!(["#0000ee"]), "the color that did not fit is listed: {v}");
+    let img = pixels(&one(&mut d, p));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(15, 5).0[3], img.get_pixel(25, 5).0[3]), ([0, 0, 255, 255], 0, 0));
+    // Without transparent pixels the colors mapped to transparent still take one slot together.
+    let mut t = session(30.0, 10.0);
+    rect(&mut t, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut t, [10.0, 0.0, 10.0, 10.0], "#ee1100");
+    rect(&mut t, [20.0, 0.0, 10.0, 10.0], "#0000ff");
+    let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": {
+        "customPalette": ["#ff0000", "#ee1100", "#0000ff", "#00ff00"], "transparent": ["#ff0000", "#ee1100"],
+    }});
+    let v = run(&mut t, "document.exportForWeb.preview", p.clone());
+    assert_eq!(v["colors"].as_array().unwrap().len(), 2, "{v}");
+    let img = pixels(&one(&mut t, p));
+    assert_eq!((img.get_pixel(5, 5).0[3], img.get_pixel(15, 5).0[3], img.get_pixel(25, 5).0), (0, 0, [0, 0, 255, 255]));
+}
+
+/// With transparent pixels, the colors of a fixed palette mapped to transparent share the
+/// transparent pixels' slot, so at 256 colors all 255 opaque colors keep their entries.
+#[test]
+fn colour_table_fixed_palette_with_transparent_pixels_keeps_255_opaque_colors() {
+    // A 16×16 grid of 2×2 squares in 255 colors, the last cell left empty (transparent).
+    let mut s = session(32.0, 32.0);
+    let color = |i: usize| format!("#{:02x}{:02x}80", i, 255 - i);
+    for i in 0..255 {
+        rect(&mut s, [(i % 16) as f64 * 2.0, (i / 16) as f64 * 2.0, 2.0, 2.0], &color(i));
+    }
+    let palette: Vec<String> = (0..255).map(color).chain(["#000000".to_string()]).collect();
+    for table in [json!({"customPalette": palette, "transparent": ["#000000"]}), json!({"customPalette": palette[..255], "transparent": []})] {
+        let p = json!({"format": "png8", "dither": "none", "colors": 256, "colorTable": table});
+        let img = pixels(&one(&mut s, p.clone()));
+        let opaque: std::collections::HashSet<[u8; 4]> = img.pixels().map(|p| p.0).filter(|p| p[3] == 255).collect();
+        assert_eq!(opaque.len(), 255, "{p}");
+        assert_eq!((img.get_pixel(29, 31).0, img.get_pixel(31, 31).0[3]), ([254, 1, 128, 255], 0), "{p}");
+    }
+}
+
+/// When Colors leaves a fixed palette fewer slots than it has colors, its locked and shifted colors
+/// keep their slots first (shifted ones before locked ones), so a shifted color still shows its new
+/// color.
+#[test]
+fn colour_table_fixed_palette_keeps_locked_and_shifted_colors_first() {
+    let mut s = session(30.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut s, [10.0, 0.0, 10.0, 10.0], "#00ff00");
+    rect(&mut s, [20.0, 0.0, 10.0, 10.0], "#0000ff");
+    let palette = json!(["#ff0000", "#00ff00", "#0000ff"]);
+    let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": {"customPalette": palette, "shifted": {"#0000ff": "#ff8800"}}});
+    let img = pixels(&one(&mut s, p));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(25, 5).0), ([255, 0, 0, 255], [255, 136, 0, 255]));
+    // A shifted color keeps its slot before the locked ones.
+    let table = json!({"customPalette": palette, "locked": ["#ff0000", "#00ff00"], "shifted": {"#0000ff": "#ff8800"}});
+    let img = pixels(&one(&mut s, json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": table})));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(25, 5).0), ([255, 0, 0, 255], [255, 136, 0, 255]));
+    let p = json!({"format": "png8", "dither": "none", "colors": 2, "colorTable": {"customPalette": palette, "locked": ["#0000ff"]}});
+    let v = run(&mut s, "document.exportForWeb.preview", p);
+    let sources: Vec<&Value> = v["colors"].as_array().unwrap().iter().map(|c| &c["source"]).collect();
+    assert_eq!(sources, vec![&json!("#ff0000"), &json!("#0000ff")], "the palette keeps its order: {v}");
+}
+
+/// A color shifted by hand (`colorTable.shifted`) is written as the color picked wherever it is in
+/// the image, the other colors stay, the table shows it as shifted and locked, and the preview is
+/// the file.
+#[test]
+fn colour_table_shift_writes_the_picked_color_wherever_the_source_is() {
+    let mut s = session(30.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#ff0000");
+    rect(&mut s, [10.0, 0.0, 10.0, 10.0], "#0000ff");
+    rect(&mut s, [20.0, 0.0, 10.0, 10.0], "#00ff00");
+    let preview = |s: &mut Session, p: Value| run(s, "document.exportForWeb.preview", p);
+    let entry = |v: &Value, source: &str| v["colors"].as_array().unwrap().iter().find(|c| c["source"] == source).cloned().unwrap_or(Value::Null);
+    for format in ["gif", "png8"] {
+        let p = json!({"format": format, "dither": "none", "colorTable": {"shifted": {"#0000FF": "#FF8800"}}});
+        let v = preview(&mut s, p.clone());
+        let c = entry(&v, "#0000ff");
+        assert_eq!(
+            (c["color"].as_str(), c["shifted"].as_bool(), c["locked"].as_bool(), c["webShifted"].as_bool()),
+            (Some("#ff8800"), Some(true), Some(true), Some(false)),
+            "{format}: {v}"
+        );
+        assert_eq!((entry(&v, "#ff0000")["shifted"].as_bool(), entry(&v, "#ff0000")["color"].as_str()), (Some(false), Some("#ff0000")));
+        let file = one(&mut s, p);
+        assert_eq!(v["bytes"].as_u64(), Some(file.len() as u64), "{format}: the preview is the file");
+        let img = pixels(&file);
+        assert_eq!(
+            (img.get_pixel(5, 5).0, img.get_pixel(12, 2).0, img.get_pixel(18, 8).0, img.get_pixel(25, 5).0),
+            ([255, 0, 0, 255], [255, 136, 0, 255], [255, 136, 0, 255], [0, 255, 0, 255]),
+            "{format}"
+        );
+        assert_eq!(distinct(&img), 3, "{format}");
+    }
+    // A shifted color is kept when the colors are reduced, as a locked one is.
+    let two = preview(&mut s, json!({"colors": 2, "dither": "none", "colorTable": {"shifted": {"#00ff00": "#123456"}}}));
+    assert_eq!(entry(&two, "#00ff00")["color"], "#123456", "{two}");
+    // With one slot to keep, the shifted color takes it before a locked one.
+    let p = json!({"colors": 2, "dither": "none", "colorTable": {"locked": ["#ff0000"], "shifted": {"#0000ff": "#123456"}}});
+    let first = preview(&mut s, p);
+    assert_eq!(entry(&first, "#0000ff")["color"], "#123456", "{first}");
+    // A source the table does not hold shifts nothing, and the shift stays with the settings.
+    let base = preview(&mut s, json!({"dither": "none"}));
+    let absent = preview(&mut s, json!({"dither": "none", "colorTable": {"shifted": {"#123456": "#000000"}}}));
+    assert_eq!(absent["colors"], base["colors"]);
+    // Two colors may be shifted to one color and keep their own sources.
+    let same = preview(&mut s, json!({"dither": "none", "colorTable": {"shifted": {"#ff0000": "#123456", "#0000ff": "#123456"}}}));
+    assert_eq!((entry(&same, "#ff0000")["color"].as_str(), entry(&same, "#0000ff")["color"].as_str()), (Some("#123456"), Some("#123456")));
+    assert_eq!(entry(&same, "#00ff00")["shifted"], false);
+    // A shift by hand wins over web shift, web snap and a lock; transparency wins over it.
+    let p =
+        json!({"dither": "none", "webSnap": 100, "colorTable": {"shifted": {"#0000ff": "#fe0101"}, "webShift": ["#0000ff"], "locked": ["#0000ff"]}});
+    let c = entry(&preview(&mut s, p), "#0000ff");
+    assert_eq!((c["color"].as_str(), c["webShifted"].as_bool(), c["locked"].as_bool()), (Some("#fe0101"), Some(false), Some(true)));
+    let clear = json!({"dither": "none", "colorTable": {"shifted": {"#0000ff": "#fe0101"}, "transparent": ["#0000ff"]}});
+    let v = preview(&mut s, clear.clone());
+    assert!(v["colors"].as_array().unwrap().iter().all(|c| c["shifted"] == false), "{v}");
+    assert_eq!(pixels(&one(&mut s, clear)).get_pixel(15, 5).0[3], 0);
+    // The settings keep the shifts in lowercase, drop a color shifted to itself, a deleted one and
+    // the web shift of a color shifted by hand.
+    let table = json!({"shifted": {"#0000FF": "#FE0101", "#FF0000": "#ff0000", "#00ff00": "#000000"}, "webShift": ["#0000ff", "#00ff00"], "deleted": ["#00ff00"]});
+    let r = run(&mut s, "webExport.settings", json!({ "colorTable": table }));
+    let t = &r["settings"]["colorTable"];
+    assert_eq!((&t["shifted"], &t["webShift"]), (&json!({"#0000ff": "#fe0101"}), &json!([])));
+    // Another reduction keeps the shifts; a saved preset keeps them.
+    let r = run(&mut s, "webExport.settings", json!({"reduction": "adaptive"}));
+    assert_eq!(r["settings"]["colorTable"]["shifted"], json!({"#0000ff": "#fe0101"}));
+    run(&mut s, "webExport.presets.save", json!({"name": "Blue to red", "dither": "none", "colorTable": {"shifted": {"#0000ff": "#fe0101"}}}));
+    assert_eq!(entry(&preview(&mut s, json!({"preset": "Blue to red"})), "#0000ff")["color"], "#fe0101");
+    // Bad shifts are refused and change nothing.
+    let many: serde_json::Map<String, Value> = (0..257).map(|i| (format!("#{i:06x}"), json!("#000000"))).collect();
+    for bad in [
+        json!({"nope": "#000000"}),
+        json!({"#ff0000": "nope"}),
+        json!({"#ff0000": "#ff000080"}),
+        json!({"#ff000080": "#000000"}),
+        json!({"#ff0000": "#000000", "#FF0000": "#ffffff"}),
+        json!({"#f00": "#000000", "#ff0000": "#ffffff"}),
+        Value::Object(many),
+    ] {
+        let p = json!({"colorTable": {"shifted": bad}});
+        assert!(s.execute("document.exportForWeb", &p).is_err(), "{p}");
+        assert!(s.execute("document.exportForWeb.preview", &p).is_err(), "{p}");
+        assert!(s.execute("webExport.settings", &p).is_err(), "{p}");
+    }
+    assert_eq!(run(&mut s, "webExport.settings", json!({}))["settings"]["colorTable"]["shifted"], json!({"#0000ff": "#fe0101"}));
+    // Settings saved before shifts existed still read.
+    let old: cmd::webexport::WebSettings = serde_json::from_value(json!({"colorTable": {"locked": ["#ff0000"]}})).unwrap();
+    assert!(old.color_table.shifted.is_empty());
+}
+
+/// Lossy GIF compression leaves the pixels of a color shifted by hand alone, so a color shifted near
+/// another one does not take in that color's pixels.
+#[test]
+fn lossy_does_not_spread_a_shifted_color_into_another() {
+    let mut s = session(30.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#0000ff");
+    rect(&mut s, [10.0, 0.0, 20.0, 10.0], "#c80000");
+    let p = json!({"format": "gif", "dither": "none", "lossy": 100, "colorTable": {"shifted": {"#0000ff": "#be0000"}}});
+    let img = pixels(&one(&mut s, p));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(20, 5).0, img.get_pixel(29, 5).0), ([190, 0, 0, 255], [200, 0, 0, 255], [200, 0, 0, 255]));
+}
+
+/// Lossy GIF compression moves no pixel into or out of a color shifted by hand: the colors next to
+/// a shifted one keep their own pixels, and the shifted color keeps all of its pixels.
+#[test]
+fn lossy_moves_no_pixel_into_or_out_of_a_shifted_color() {
+    let mut s = session(30.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#1414e6");
+    rect(&mut s, [10.0, 0.0, 20.0, 10.0], "#0000ff");
+    rect(&mut s, [20.0, 0.0, 30.0, 10.0], "#1414e6");
+    let p = json!({"format": "gif", "dither": "none", "lossy": 100, "colorTable": {"shifted": {"#0000ff": "#ff0000"}}});
+    let img = pixels(&one(&mut s, p));
+    let near_blue = [20, 20, 230, 255];
+    for x in 0..30 {
+        let want = if (10..20).contains(&x) { [255, 0, 0, 255] } else { near_blue };
+        assert_eq!(img.get_pixel(x, 5).0, want, "x = {x}");
+    }
+}
+
+/// Lossy GIF compression compares the pixels with the colors web snap writes, so a pixel does not
+/// take a color that snaps far from it.
+#[test]
+fn lossy_compares_pixels_with_the_snapped_colors() {
+    let mut s = session(20.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#1a1a1a");
+    rect(&mut s, [10.0, 0.0, 20.0, 10.0], "#000000");
+    let img = pixels(&one(&mut s, json!({"format": "gif", "dither": "none", "webSnap": 100, "lossy": 50})));
+    for x in 0..20 {
+        let want = if x < 10 { [51, 51, 51, 255] } else { [0, 0, 0, 255] };
+        assert_eq!(img.get_pixel(x, 5).0, want, "x = {x}");
+    }
+}
+
 #[test]
 fn presets_and_remembered_settings() {
     let mut s = two_colours();
@@ -505,4 +843,216 @@ fn setting_keys_are_their_json_values() {
         )
         .unwrap();
     assert_eq!(serde_json::from_value::<cmd::webexport::WebSettings>(custom.to_json()).unwrap(), custom);
+}
+
+fn optimize_to(s: &mut Session, p: Value) -> Value {
+    run(s, "webExport.optimizeToFileSize", p)
+}
+
+/// The size of the file the settings `p` write (the whole image, or slice `slice`).
+fn written(s: &mut Session, p: &Value) -> usize {
+    run(s, "document.exportForWeb.preview", p.clone())["bytes"].as_u64().unwrap() as usize
+}
+
+/// 20×20: 400 one-point squares of different colors (more than a palette holds).
+fn photo_like() -> Session {
+    let mut s = session(20.0, 20.0);
+    for i in 0..400 {
+        let (x, y) = ((i % 20) as f64, (i / 20) as f64);
+        rect(&mut s, [x, y, 1.0, 1.0], &format!("#{:02x}{:02x}{:02x}", (i % 20) * 12, (i / 20) * 12, (i * 7) % 256));
+    }
+    s
+}
+
+#[test]
+fn optimize_to_file_size_takes_the_highest_jpeg_quality_that_fits() {
+    let mut s = many_colours();
+    let start = json!({"format": "jpg", "quality": 90});
+    let full = written(&mut s, &start);
+    let k = (full * 3 / 4) as f64 / 1024.0;
+    let r = optimize_to(&mut s, merge(&start, json!({"desiredK": k})));
+    let target = r["targetBytes"].as_u64().unwrap() as usize;
+    assert_eq!(target, (k * 1024.0).floor() as usize);
+    assert_eq!((r["achieved"].as_bool(), r["format"].as_str(), r["images"].as_u64()), (Some(true), Some("jpg"), Some(1)), "{r}");
+    let q = r["settings"]["quality"].as_u64().unwrap();
+    assert!(q < 90, "{r}");
+    let bytes = r["bytes"].as_u64().unwrap() as usize;
+    assert!(bytes <= target, "{r}");
+    // The size is the size of the file Save writes with the settings.
+    assert_eq!(written(&mut s, &r["settings"]), bytes);
+    assert_eq!(one(&mut s, r["settings"].clone()).len(), bytes);
+    // One quality step up is over the size.
+    assert!(written(&mut s, &merge(&r["settings"], json!({"quality": q + 1}))) > target);
+    assert!(r["trials"].as_u64().unwrap() as usize <= cmd::webexport::OPTIMIZE_TRIALS);
+    // The other settings stay.
+    assert_eq!(r["settings"]["matte"], json!("white"));
+    assert_eq!(r["settings"]["metadata"], json!("copyright"));
+}
+
+#[test]
+fn optimize_to_file_size_lowers_palette_colors() {
+    let mut s = many_colours();
+    for format in ["gif", "png8"] {
+        let start = json!({"format": format, "dither": "none", "colors": 128});
+        let full = written(&mut s, &start);
+        let r = optimize_to(&mut s, merge(&start, json!({"desiredK": (full * 3 / 4) as f64 / 1024.0})));
+        let target = r["targetBytes"].as_u64().unwrap() as usize;
+        assert_eq!((r["achieved"].as_bool(), r["format"].as_str()), (Some(true), Some(format)), "{r}");
+        let colors = r["settings"]["colors"].as_u64().unwrap();
+        assert!(colors < 64, "{format}: {r}");
+        assert_eq!((r["settings"]["lossy"].as_u64(), r["settings"]["dither"].as_str()), (Some(0), Some("none")), "{format}: {r}");
+        let bytes = r["bytes"].as_u64().unwrap() as usize;
+        assert!(bytes <= target && written(&mut s, &r["settings"]) == bytes, "{format}: {r}");
+        assert!(written(&mut s, &merge(&r["settings"], json!({"colors": colors + 1}))) > target, "{format}: {r}");
+    }
+}
+
+#[test]
+fn optimize_to_file_size_auto_selects_gif_or_jpeg_by_content() {
+    // Flat, opaque art: GIF, from a JPEG start.
+    let mut flat = two_colours();
+    let r = optimize_to(&mut flat, json!({"format": "jpg", "desiredK": 100, "startWith": "auto"}));
+    assert_eq!((r["format"].as_str(), r["achieved"].as_bool()), (Some("gif"), Some(true)), "{r}");
+    // More colors than a palette holds: JPEG, from a GIF start.
+    let mut photo = photo_like();
+    let r = optimize_to(&mut photo, json!({"format": "gif", "desiredK": 100, "startWith": "auto"}));
+    assert_eq!((r["format"].as_str(), r["achieved"].as_bool()), (Some("jpg"), Some(true)), "{r}");
+    // Transparent pixels: GIF, which keeps them.
+    let mut clear = session(40.0, 30.0);
+    rect(&mut clear, [0.0, 0.0, 10.0, 10.0], "#000000");
+    for (k, transparency, format) in [(100.0, true, "gif"), (100.0, false, "gif"), (0.01, true, "gif")] {
+        let r = optimize_to(&mut clear, json!({"format": "jpg", "desiredK": k, "startWith": "auto", "transparency": transparency}));
+        assert_eq!(r["format"].as_str(), Some(format), "{k} {transparency}: {r}");
+    }
+    // The current format stays without auto.
+    let r = optimize_to(&mut photo, json!({"format": "png8", "desiredK": 100}));
+    assert_eq!(r["format"].as_str(), Some("png8"));
+}
+
+#[test]
+fn optimize_to_file_size_auto_counts_the_colors_blended_over_the_matte() {
+    // Three colors at 100 opacities: without transparency, 300 colors once blended over the matte.
+    let mut s = session(20.0, 15.0);
+    for i in 0..300 {
+        let (x, y) = ((i % 20) as f64, (i / 20) as f64);
+        let id = rect(&mut s, [x, y, 1.0, 1.0], ["#000000", "#ff0000", "#0000ff"][i % 3]);
+        run(&mut s, "transparency.set", json!({"ids": [id], "opacity": i / 3 + 1}));
+    }
+    let r = optimize_to(&mut s, json!({"format": "gif", "desiredK": 100, "startWith": "auto", "transparency": false, "antiAlias": "none"}));
+    assert_eq!((r["format"].as_str(), r["achieved"].as_bool()), (Some("jpg"), Some(true)), "{r}");
+    // With transparency the pixels stay transparent: GIF.
+    let r = optimize_to(&mut s, json!({"format": "jpg", "desiredK": 100, "startWith": "auto", "antiAlias": "none"}));
+    assert_eq!(r["format"].as_str(), Some("gif"), "{r}");
+}
+
+#[test]
+fn optimize_to_file_size_says_when_no_setting_fits() {
+    let mut s = many_colours();
+    for format in ["jpg", "gif", "png8"] {
+        let start = json!({"format": format});
+        let r = optimize_to(&mut s, merge(&start, json!({"desiredK": 0.01})));
+        assert_eq!((r["targetBytes"].as_u64(), r["achieved"].as_bool(), r["format"].as_str()), (Some(10), Some(false), Some(format)), "{r}");
+        let bytes = r["bytes"].as_u64().unwrap() as usize;
+        assert!(bytes > 10 && bytes <= written(&mut s, &start), "{format}: the smallest setting tried: {r}");
+        assert_eq!(written(&mut s, &r["settings"]), bytes);
+        assert!(r["trials"].as_u64().unwrap() as usize <= cmd::webexport::OPTIMIZE_TRIALS);
+    }
+    // GIF tries lossy when 2 colors are over.
+    let r = optimize_to(&mut s, json!({"format": "gif", "desiredK": 0.01}));
+    assert_eq!(r["settings"]["lossy"], json!(100), "{r}");
+    // PNG-24 has nothing to lower.
+    let r = optimize_to(&mut s, json!({"format": "png24", "desiredK": 0.01}));
+    assert_eq!((r["achieved"].as_bool(), r["trials"].as_u64()), (Some(false), Some(1)), "{r}");
+    assert_eq!(r["settings"], s.web_settings(&json!({"format": "png24"})).unwrap().to_json());
+    // Settings that fit stay as they are.
+    let p = json!({"format": "jpg", "quality": 80, "desiredK": 1000});
+    let r = optimize_to(&mut s, p.clone());
+    assert_eq!((r["achieved"].as_bool(), r["trials"].as_u64()), (Some(true), Some(1)), "{r}");
+    assert_eq!(r["settings"], s.web_settings(&p).unwrap().to_json());
+}
+
+#[test]
+fn optimize_to_file_size_refuses_bad_params_and_changes_nothing() {
+    let mut s = many_colours();
+    run(&mut s, "webExport.settings", json!({"format": "jpg", "quality": 77}));
+    let remembered = s.last_web_settings();
+    for p in [
+        json!({}),
+        json!({"desiredK": 0}),
+        json!({"desiredK": -5}),
+        json!({"desiredK": "10"}),
+        json!({"desiredK": null}),
+        json!({"desiredK": 2_000_000}),
+        json!({"desiredK": 10, "startWith": "gif"}),
+        json!({"desiredK": 10, "startWith": 1}),
+        json!({"desiredK": 10, "use": "all"}),
+        json!({"desiredK": 10, "slice": 0}),
+        json!({"desiredK": 10, "slice": "1"}),
+        json!({"desiredK": 10, "slice": 1, "use": "eachSlice"}),
+        json!({"desiredK": 10, "slice": 99}),
+        json!({"desiredK": 10, "percent": 0}),
+    ] {
+        assert!(s.execute("webExport.optimizeToFileSize", &p).is_err(), "{p}");
+    }
+    optimize_to(&mut s, json!({"desiredK": 0.5, "format": "jpg"}));
+    assert_eq!(s.last_web_settings(), remembered, "the search changes no remembered setting");
+}
+
+#[test]
+fn optimize_to_file_size_measures_the_slices_as_use_says() {
+    let mut s = session(300.0, 200.0);
+    rect(&mut s, [0.0, 0.0, 300.0, 200.0], "#336699");
+    for i in 0..40 {
+        rect(&mut s, [f64::from(i) * 7.0, f64::from(i) * 4.0, 30.0, 20.0], &format!("#{:02x}{:02x}40", i * 6, 255 - i * 6));
+    }
+    let a = rect(&mut s, [20.0, 20.0, 100.0, 60.0], "#ff8800");
+    run(&mut s, "object.slice.make", json!({"ids": [a]}));
+    let layout = run(&mut s, "slice.list", json!({}))["slices"].as_array().unwrap().clone();
+    let start = json!({"format": "jpg", "quality": 95});
+    let sizes = |s: &mut Session, p: &Value| files(&run(s, "document.exportForWeb", p.clone())).iter().map(|(_, b)| b.len()).collect::<Vec<_>>();
+    let all = sizes(&mut s, &start);
+    assert_eq!(all.len(), layout.len());
+    let total: usize = all.iter().sum();
+    let r = optimize_to(&mut s, merge(&start, json!({"desiredK": (total * 3 / 4) as f64 / 1024.0})));
+    assert_eq!((r["achieved"].as_bool(), r["images"].as_u64()), (Some(true), Some(layout.len() as u64)), "{r}");
+    let after = sizes(&mut s, &r["settings"]);
+    assert_eq!(after.iter().sum::<usize>(), r["bytes"].as_u64().unwrap() as usize, "the slice files together");
+    let largest = *all.iter().max().unwrap();
+    let r = optimize_to(&mut s, merge(&start, json!({"desiredK": (largest * 3 / 4) as f64 / 1024.0, "use": "eachSlice"})));
+    let after = sizes(&mut s, &r["settings"]);
+    assert_eq!(*after.iter().max().unwrap(), r["bytes"].as_u64().unwrap() as usize, "the largest slice file");
+    assert!(r["achieved"].as_bool().unwrap() && after.iter().all(|n| *n <= r["targetBytes"].as_u64().unwrap() as usize), "{r}");
+    let n = layout[0]["number"].as_u64().unwrap();
+    let one_slice = written(&mut s, &merge(&start, json!({"slice": n})));
+    let r = optimize_to(&mut s, merge(&start, json!({"desiredK": (one_slice / 2) as f64 / 1024.0, "slice": n})));
+    assert_eq!(r["images"].as_u64(), Some(1));
+    assert_eq!(written(&mut s, &merge(&r["settings"], json!({"slice": n}))), r["bytes"].as_u64().unwrap() as usize, "{r}");
+}
+
+#[test]
+fn optimize_to_file_size_finds_a_fit_when_a_lower_setting_gives_a_larger_file() {
+    use cmd::webexport::{OPTIMIZE_SAMPLES, WebSettings, highest_within, set_quality};
+    // Sizes that do not fall with the quality: 1 to 20 give 900 bytes, 21 to 70 give 400 to 449,
+    // and 71 and up give over 1000.
+    let size_of = |q: u8| match q {
+        ..=20 => 900,
+        21..=70 => 400 + usize::from(q - 21),
+        _ => 1000 + usize::from(q),
+    };
+    let start = WebSettings { quality: 90, ..WebSettings::default() };
+    let mut measured = Vec::new();
+    let mut smallest = None;
+    let mut size = |s: &WebSettings| {
+        measured.push(s.quality);
+        Ok(Some(size_of(s.quality)))
+    };
+    let found = highest_within(&mut size, &start, (1, 90), set_quality, 500, &mut smallest).unwrap();
+    let (settings, bytes) = found.expect("a quality within 500 bytes");
+    assert_eq!((settings.quality, bytes), (70, 449), "measured {measured:?}");
+    assert!(measured.len() <= usize::from(OPTIMIZE_SAMPLES) + 7, "measured {measured:?}");
+    // Nothing fits: the smallest size measured is kept.
+    let mut smallest = None;
+    let mut size = |s: &WebSettings| Ok(Some(size_of(s.quality)));
+    assert!(highest_within(&mut size, &start, (1, 90), set_quality, 100, &mut smallest).unwrap().is_none());
+    assert_eq!(smallest.map(|(s, n)| (s.quality, n)), Some((36, 415)));
 }

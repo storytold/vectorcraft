@@ -70,7 +70,7 @@ fn sheet(p: &PrintPage, job: &PrintJob) -> Result<(String, Vec<Page>), String> {
     }
     let opts = |region: Rect| EpsOptions { level: job.level, region, ..EpsOptions::default() };
     let art_opts = opts(r);
-    let art = Scene::new(p.doc, &art_opts).run();
+    let art = Scene::new(p.doc, &art_opts).on_plate(p.ink.is_some()).run();
     // The marks' area: the drawing space the page shows (within the tile).
     let paper = Rect::new(0.0, 0.0, w, h);
     let shown = if p.view.determinant().abs() > 1e-12 { p.view.inverse().transform_rect_bbox(paper) } else { paper };

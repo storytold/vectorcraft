@@ -7,12 +7,15 @@
 //! blurred with a fixed amount subtracted from its colors by `feComponentTransfer` (Darkness), and what
 //! our export writes, so export → import keeps the effects.
 
+use craft_svg::tree::usvg;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use craft_svg::tree::usvg::filter::{
+    ColorInterpolation, ColorMatrixKind, CompositeOperator, Filter, Input, Kind, MorphologyOperator, TransferFunction,
+};
+use craft_svg::tree::usvg::roxmltree;
 use serde_json::json;
-use usvg::filter::{ColorInterpolation, ColorMatrixKind, CompositeOperator, Filter, Input, Kind, MorphologyOperator, TransferFunction};
-use usvg::roxmltree;
 use vectorcraft_color::Color;
 use vectorcraft_doc::Effect;
 use vectorcraft_geom::{Affine, Vec2};

@@ -138,6 +138,12 @@ pub(super) fn labs(colors: &[[f64; 3]]) -> Vec<[f64; 3]> {
 /// The most colours Full Tone (and Automatic on continuous-tone images) makes.
 pub const FULL_TONE_MAX: usize = 256;
 
+/// The fewest colors Palette › Full Tone splits into, before merging, at Color detail `detail`
+/// (0–1): one per step of Color detail, 85 at 85. Automatic does not use it.
+pub(super) fn full_tone_least(detail: f64) -> usize {
+    (detail.clamp(0.0, 1.0) * 100.0).round() as usize
+}
+
 /// A histogram bin in use: its index, mean colour and pixel count.
 pub(super) type Used = (usize, [f64; 3], f64);
 
@@ -152,11 +158,14 @@ pub(super) fn color_palette(used: &[Used], params: &TraceParams) -> Vec<[f64; 3]
     // Full Tone: split until no colour box is wider than 96 (few colours) … 8 (many) levels per
     // channel, which is one histogram bin.
     let full_tone = || refine(used, centers(&median_cut(used, FULL_TONE_MAX, 96.0 - 88.0 * detail)));
+    // Palette › Full Tone also splits into at least one color per step of Color detail, where the
+    // picture has that many (see [`full_tone_least`]).
+    let full_tone_palette = || refine(used, centers(&median_cut_least(used, FULL_TONE_MAX, 96.0 - 88.0 * detail, full_tone_least(detail))));
     // A Limited palette of 9 to 16 colors keeps a nearly flat dark ground in one color (see [`kmeans_rgb`]).
     let limited = || kmeans_rgb(used, k, if FEW_COLORS.contains(&k) { LEAST_APART } else { 0.0 });
     match params.palette {
         Palette::Limited => limited(),
-        Palette::FullTone => full_tone(),
+        Palette::FullTone => full_tone_palette(),
         Palette::Automatic => match flat_colors(used, detail) {
             Some(n) => flat_palette(used, n),
             None => full_tone(),
@@ -285,7 +294,7 @@ const GRAY: f64 = 3.0;
 /// (see [`median_cut_apart`]). A large, nearly flat dark ground then keeps one color, and the
 /// color it would have taken goes to another cut.
 fn kmeans_rgb(used: &[Used], k: usize, apart: f64) -> Vec<[f64; 3]> {
-    refine(used, centers(&median_cut_apart(used, k, 0.0, apart)))
+    refine(used, centers(&median_cut_apart(used, k, 0.0, apart, 0)))
 }
 
 /// Divisive clustering in the manner of median cut, but each box is cut where that leaves its two
@@ -295,21 +304,34 @@ fn kmeans_rgb(used: &[Used], k: usize, apart: f64) -> Vec<[f64; 3]> {
 /// and leaves two smaller colours in one box. Boxes are cut while there are fewer than `k` and
 /// some box spans more than `spread` levels of a channel.
 pub(super) fn median_cut(used: &[Used], k: usize, spread: f64) -> Vec<ColorBox> {
-    median_cut_apart(used, k, spread, 0.0)
+    median_cut_apart(used, k, spread, 0.0, 0)
 }
 
-/// [`median_cut`], except when both sides of a cut have a dark gray mean color (see [`DARK`] and
-/// [`GRAY`]) and the two means lie `d` (Oklab × 100) apart with `d` < `apart`: then the cut's gain
-/// is scaled by (`d` / `apart`)². With `apart` 0 it is [`median_cut`].
-fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64) -> Vec<ColorBox> {
+/// [`median_cut`], then, while there are fewer than `least` boxes, cutting the boxes no wider than
+/// `spread` too, the one whose cut gains most first.
+fn median_cut_least(used: &[Used], k: usize, spread: f64, least: usize) -> Vec<ColorBox> {
+    median_cut_apart(used, k, spread, 0.0, least)
+}
+
+/// [`median_cut`] with at least `least` boxes where the bins allow (see [`median_cut_least`]),
+/// except when both sides of a cut have a dark gray mean color (see [`DARK`] and [`GRAY`]) and the
+/// two means lie `d` (Oklab × 100) apart with `d` < `apart`: then the cut's gain is scaled by
+/// (`d` / `apart`)². With `apart` 0 and `least` 0 it is [`median_cut`].
+fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64, least: usize) -> Vec<ColorBox> {
     if used.is_empty() {
         return vec![ColorBox { mean: [255.0; 3], weight: 0.0, peak: 0.0 }];
     }
-    /// A box's bins and its best cut: (gain, bins sorted along the cut's channel, bins on the first side).
+    /// A box's bins, its widest span over the channels, and its best cut: (gain, bins sorted along
+    /// the cut's channel, bins on the first side).
     struct Cut {
         bins: Vec<usize>,
+        widest: f64,
         best: Option<(f64, Vec<usize>, usize)>,
     }
+    // Boxes no wider than `spread` are cut only while there are fewer than `least` boxes. A box made
+    // when there are already `least` boxes or more is never cut unless it is wider, so its cut is
+    // not planned.
+    let narrowest = |boxes_after: usize| if boxes_after < least { 0.0 } else { spread.max(0.0) };
     // How much of a cut's gain counts when its sides' mean colors are `a` and `b`: all of it when
     // they look different or either is not a dark gray, less as two dark grays look more alike.
     let dark_gray = |c: [f64; 3]| c[0] < DARK && c[1].hypot(c[2]) < GRAY;
@@ -320,7 +342,8 @@ fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64) -> Vec<Col
         }
         ((0..3).map(|q| (a[q] - b[q]).powi(2)).sum::<f64>() / (apart * apart)).min(1.0)
     };
-    let plan = |bins: Vec<usize>| {
+    let plan = |bins: Vec<usize>, boxes_after: usize| {
+        let narrowest = narrowest(boxes_after);
         let mut best: Option<(f64, Vec<usize>, usize)> = None;
         let widest = (0..3)
             .map(|ch| {
@@ -328,7 +351,7 @@ fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64) -> Vec<Col
                 v.clone().fold(f64::NEG_INFINITY, f64::max) - v.fold(f64::INFINITY, f64::min)
             })
             .fold(0.0, f64::max);
-        if bins.len() >= 2 && widest > spread.max(0.0) {
+        if bins.len() >= 2 && widest > narrowest {
             for ch in 0..3 {
                 let mut sorted = bins.clone();
                 sorted.sort_by(|x, y| used[*x].1[ch].total_cmp(&used[*y].1[ch]));
@@ -366,18 +389,26 @@ fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64) -> Vec<Col
                 }
             }
         }
-        Cut { bins, best }
+        Cut { bins, widest, best }
     };
-    let mut boxes = vec![plan((0..used.len()).collect())];
+    let mut boxes = vec![plan((0..used.len()).collect(), 1)];
     while boxes.len() < k {
         let gain = |c: &Cut| c.best.as_ref().map_or(f64::NEG_INFINITY, |b| b.0);
-        let Some(bi) = (0..boxes.len()).filter(|&i| boxes[i].best.is_some()).max_by(|&a, &b| gain(&boxes[a]).total_cmp(&gain(&boxes[b]))) else {
+        // The boxes wider than `spread` first; when none is left and there are fewer than `least`,
+        // any box with a cut.
+        let most = |wide: bool| {
+            (0..boxes.len())
+                .filter(|&i| boxes[i].best.is_some() && (!wide || boxes[i].widest > spread.max(0.0)))
+                .max_by(|&a, &b| gain(&boxes[a]).total_cmp(&gain(&boxes[b])))
+        };
+        let Some(bi) = most(true).or_else(|| if boxes.len() < least { most(false) } else { None }) else {
             break;
         };
         let Some((_, mut sorted, at)) = boxes.swap_remove(bi).best else { break };
         let tail = sorted.split_off(at);
-        boxes.push(plan(sorted));
-        boxes.push(plan(tail));
+        let after = boxes.len() + 2;
+        boxes.push(plan(sorted, after));
+        boxes.push(plan(tail, after));
     }
     boxes
         .iter()
@@ -467,12 +498,40 @@ mod tests {
             assert_eq!(palette(Palette::DocumentLibrary, colors), plain(colors as usize), "{colors} colors");
         }
         let detail = (TraceParams::default().color_detail / 100.0).clamp(0.0, 1.0);
-        assert_eq!(palette(Palette::FullTone, 16), refine(&used, centers(&median_cut(&used, FULL_TONE_MAX, 96.0 - 88.0 * detail))));
+        // Full Tone's median cut makes at least one color per step of Color detail.
+        let full_tone = refine(&used, centers(&median_cut_least(&used, FULL_TONE_MAX, 96.0 - 88.0 * detail, full_tone_least(detail))));
+        assert_eq!(palette(Palette::FullTone, 16), full_tone);
         let automatic = match flat_colors(&used, detail) {
             Some(n) => plain(n),
             None => refine(&used, centers(&median_cut(&used, FULL_TONE_MAX, 96.0 - 88.0 * detail))),
         };
         assert_eq!(palette(Palette::Automatic, 16), automatic);
+    }
+
+    #[test]
+    fn full_tone_makes_one_color_per_step_of_color_detail() {
+        // 256 grays, 1,200 pixels each: the width limit alone gives fewer colors than Color detail.
+        let ramp = bins((0..256).map(|g| ([f64::from(g); 3], 1200.0)));
+        let colors = |used: &[Used], color_detail: f64| {
+            color_palette(used, &TraceParams { palette: Palette::FullTone, color_detail, ..TraceParams::default() }).len()
+        };
+        assert!(median_cut(&ramp, FULL_TONE_MAX, 96.0 - 88.0 * 0.85).len() < 85);
+        assert_eq!(colors(&ramp, 85.0), 85);
+        assert_eq!(colors(&ramp, 40.0), 40);
+        // A picture of three colors keeps three.
+        let three = bins([([0.0; 3], 100.0), ([128.0; 3], 100.0), ([255.0; 3], 100.0)]);
+        assert_eq!(colors(&three, 85.0), 3);
+        // A large, finely shaded area does not take the count from a small pair of reds 40 levels
+        // apart, wider than one color may be at Color detail 85: the pair keeps two colors.
+        let shaded = bins((0..128).map(|g| ([f64::from(g); 3], 10_000.0)).chain([([200.0, 0.0, 0.0], 1.0), ([240.0, 0.0, 0.0], 1.0)]));
+        let reds = color_palette(&shaded, &TraceParams { palette: Palette::FullTone, color_detail: 85.0, ..TraceParams::default() });
+        assert!(reds.len() >= 85, "{} colors", reds.len());
+        for red in [200.0, 240.0] {
+            assert!(reds.iter().any(|c| (c[0] - red).abs() < 1.0 && c[1] < 1.0), "no color for red {red}: {reds:?}");
+        }
+        // Automatic's continuous-tone colors are not raised to the count.
+        let automatic = color_palette(&ramp, &TraceParams { palette: Palette::Automatic, color_detail: 85.0, ..TraceParams::default() });
+        assert!(automatic.len() < 85, "{} colors with Automatic", automatic.len());
     }
 
     /// `colors`, each with `n` pixels, as histogram bins.

@@ -203,6 +203,14 @@ impl Tool for ExtendPathTool {
             self.mode = Mode(m);
         }
     }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        if key != "mode" {
+            return Err(crate::option_check::unknown(key));
+        }
+        let ids: Vec<&str> = ExtendMode::ALL.iter().map(|m| m.id()).collect();
+        crate::option_check::one_of(key, v, &ids)
+    }
 }
 
 #[cfg(test)]

@@ -253,6 +253,128 @@ fn a_change_reaches_each_selected_3d_effect_and_no_other_effect() {
     assert_eq!(fx(c)[0].params, c_shadow);
 }
 
+/// A custom bevel picked in the panel sends its name and points with `bevel`, to the effects that
+/// take a bevel only, and another custom bevel replaces them.
+#[test]
+fn a_custom_bevel_sends_its_name_and_points() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.inflate", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    let pick = |name: &str, points: Value| {
+        Map::from_iter([
+            ("bevel".to_string(), json!("custom")),
+            (vectorcraft_effects::BEVEL_NAME.to_string(), json!(name)),
+            (vectorcraft_effects::BEVEL_PROFILE.to_string(), points),
+        ])
+    };
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    send(&mut app, &ctx, pick("Notch", notch.clone()), false);
+    let fx = |app: &VectorcraftApp, id: u64| {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone()
+    };
+    let p = fx(&app, a);
+    assert_eq!(
+        (&p["bevel"], &p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]),
+        (&json!("custom"), &json!("Notch"), &notch)
+    );
+    assert!(fx(&app, b).get(vectorcraft_effects::BEVEL_PROFILE).is_none());
+    let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
+    send(&mut app, &ctx, pick("Steps", steps.clone()), false);
+    let p = fx(&app, a);
+    assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Steps"), &steps));
+}
+
+/// With one Extrude & Bevel on a custom bevel and one without, picking that custom bevel sends its
+/// name and points too, though the form already held them, so both effects take it.
+#[test]
+fn a_custom_bevel_picked_for_a_mixed_selection_reaches_every_effect() {
+    let mut app = app();
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    let custom = json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
+    super::mark_mixed(&app, &mut fields);
+    assert_eq!((&fields["bevel"], &fields[vectorcraft_effects::BEVEL_NAME]), (&Value::Null, &json!("Notch")));
+    let before = Value::Object(fields.clone());
+    fields.insert("bevel".into(), json!("custom"));
+    let changed = changed_settings(&before, &Value::Object(fields));
+    assert_eq!(Value::Object(changed.clone()), json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch}));
+    send(&mut app, &egui::Context::default(), changed, false);
+    let st = app.session.active().unwrap();
+    for id in [a, b] {
+        let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
+        assert_eq!((&p["bevel"], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("custom"), &notch), "{id}");
+    }
+}
+
+/// Two custom bevels the bevels file does not list: the mixed selection unsets the shown points,
+/// and Bevel Shape still lists the first effect's own bevel, which then reaches both effects.
+#[test]
+fn a_mixed_selection_still_lists_the_first_effects_own_custom_bevel() {
+    use crate::dialogs::revolve::{OWN_BEVEL, bevel_options};
+    let mut app = app();
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
+    let custom = |name: &str, points: &Value| json!({"bevel": "custom", "bevelName": name, "bevelProfile": points});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom("Notch", &notch)})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom("Steps", &steps)})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
+    let own = super::own_bevel(&fields).unwrap();
+    super::mark_mixed(&app, &mut fields);
+    assert_eq!(fields[vectorcraft_effects::BEVEL_PROFILE], Value::Null);
+    fields.insert(OWN_BEVEL.into(), own);
+    let (options, builtin) = bevel_options(&app, &fields, "threeD.extrude");
+    assert_eq!(options.len(), builtin + 1);
+    let (label, value, picked) = options[builtin].clone();
+    assert_eq!((label.as_str(), value), ("Notch", json!("custom")));
+    let (name, points) = picked.unwrap();
+    assert_eq!(points, notch);
+    // Picking it sends the whole bevel to both effects.
+    fields.remove(OWN_BEVEL);
+    let before = Value::Object(fields.clone());
+    fields.insert(vectorcraft_effects::BEVEL_NAME.into(), json!(name));
+    fields.insert(vectorcraft_effects::BEVEL_PROFILE.into(), points);
+    send(&mut app, &egui::Context::default(), changed_settings(&before, &Value::Object(fields)), false);
+    let st = app.session.active().unwrap();
+    for id in [a, b] {
+        let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
+        assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Notch"), &notch), "{id}");
+    }
+}
+
+/// An effect's own custom bevel named like a bevel of the bevels file with other points is listed
+/// under its own label, so Bevel Shape does not show two entries of one name.
+#[test]
+fn an_own_custom_bevel_named_like_a_file_bevel_gets_its_own_label() {
+    use crate::dialogs::revolve::bevel_options;
+    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-bevels-own-label-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = app();
+    app.session.attach_bevels_file(dir.join(vectorcraft_engine::cmd::bevels::FILE_NAME).to_string_lossy().to_string());
+    app.run("threeD.bevels.edit", json!({})).unwrap();
+    let file = app.session.bevels.get("Example Bevel").unwrap().profile_json();
+    let other = json!([[0.0, 0.0], [0.5, 0.5], [1.0, 1.0]]);
+    assert_ne!(file, other);
+    let fields = json!({"bevel": "custom", "bevelName": "Example Bevel", "bevelProfile": other}).as_object().cloned().unwrap();
+    let (options, builtin) = bevel_options(&app, &fields, "threeD.extrude");
+    let _ = std::fs::remove_dir_all(&dir);
+    let labels: Vec<&str> = options[builtin..].iter().map(|(l, _, _)| l.as_str()).collect();
+    assert_eq!(labels, ["Example Bevel", "Example Bevel (document)"]);
+    assert_eq!(options[builtin + 1].2, Some(("Example Bevel".to_string(), other)));
+}
+
 #[test]
 fn the_panel_finds_a_3d_effect_on_a_fill() {
     let mut app = app();
@@ -523,12 +645,16 @@ fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
     let nodes = controls(&mut app, &ctx);
     named(&nodes, "Remove Graphic");
     named(&nodes, "Scale");
-    // Inflate takes no graphics.
+    // Inflate keeps the graphic and lists it with its face and settings.
     set_type(&mut app, "inflate").unwrap();
+    assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
+    let nodes = controls(&mut app, &ctx);
+    named(&nodes, "Remove Graphic");
+    named(&nodes, "Scale");
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
     out.textures_delta.clear();
     let text = crate::tests_labels::shapes_text(&out);
-    assert!(text.contains("Graphics map onto the Plane, Extrude and Revolve object types"), "{text}");
+    assert!(text.contains("Face") && !text.contains("Graphics map onto"), "{text}");
 }
 
 #[test]
@@ -620,6 +746,8 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
         let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
         n.appearance.effects[0].visible = false;
         n.appearance.effects.push(vectorcraft_effects::new_effect("threeD.extrude", &json!({})).unwrap());
+        // An edit moves the revision, as a command's does.
+        st.revision += 1;
     }
     let mut shown = true;
     ctx.run_ui(egui::RawInput::default(), |ui| {
@@ -633,6 +761,35 @@ fn a_graphics_handle_drags_it_over_its_face_in_one_undo_step() {
     crate::panels::set_pstate(&ctx, super::UI_STATE, Map::from_iter([("__tab".to_string(), json!("rotation"))]));
     frame(&mut app, vec![egui::Event::PointerMoved(target)]);
     assert!(!frame(&mut app, vec![button(target, true)]));
+}
+
+/// The frame the graphics' handles are placed on is built once for each revision of the document,
+/// and not at all for an object without graphics.
+#[test]
+fn the_graphics_frame_is_built_once_for_each_revision() {
+    type Cached = (super::FrameKey, Option<std::sync::Arc<vectorcraft_effects::GraphicFrame>>);
+    let (mut app, ctx) = materials_app();
+    let cached = |ctx: &egui::Context| ctx.data(|m| m.get_temp::<Cached>(super::frame_cache_id())).and_then(|(_, frame)| frame);
+    let handles = |app: &VectorcraftApp| {
+        let mut shown = false;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+            shown = super::graphic_handles(app, ui.ctx()).is_some();
+        })
+        .textures_delta
+        .clear();
+        shown
+    };
+    assert!(!handles(&app));
+    assert!(cached(&ctx).is_none(), "no graphics, no frame");
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    assert!(handles(&app));
+    let first = cached(&ctx).unwrap();
+    assert!(handles(&app));
+    assert!(std::sync::Arc::ptr_eq(&first, &cached(&ctx).unwrap()), "the same revision reuses the frame");
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    assert!(handles(&app));
+    assert!(!std::sync::Arc::ptr_eq(&first, &cached(&ctx).unwrap()), "an edit builds it again");
 }
 
 /// One frame of the artboard's graphic handles over an 800 × 600 canvas with `events`: whether the
@@ -1257,6 +1414,180 @@ fn export_3d_object_leaves_out_a_group_with_a_3d_fill() {
     super::export_3d_object(&mut app, &egui::Context::default()).unwrap();
     let list = assets(&mut app);
     assert_eq!(list.iter().map(|a| a["nodes"].clone()).collect::<Vec<_>>(), [json!([a])]);
+}
+
+/// Whether Export 3D Object is available as the panel reads it ([`super::can_export_3d_shown`]),
+/// checked against the state worked out from scratch ([`super::can_export_3d`]); with a document
+/// open, the panel keeps it for the document's uid and revision.
+fn exportable(app: &mut VectorcraftApp, why: &str) -> bool {
+    let fresh = super::can_export_3d(app);
+    assert_eq!(super::can_export_3d_shown(app), fresh, "{why}");
+    if let Some(key) = app.session.active().map(|st| (st.uid, st.revision)) {
+        assert_eq!(app.canvas.three_d_exportable, Some((key, fresh)), "{why}");
+    }
+    fresh
+}
+
+/// The Export 3D Object state the panel keeps for a revision equals the state worked out from
+/// scratch: with no document and no selection, for plain paths, with a 3D object selected first or
+/// last, for a path of a compound path whose compound path has the effect, after the effect is
+/// hidden, Undo and Redo, in another document and back, and for a group whose 3D effect moves onto
+/// its fill.
+#[test]
+fn export_3d_object_state_kept_for_a_revision_equals_a_fresh_one() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    assert!(!exportable(&mut app, "no document"));
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    assert!(!exportable(&mut app, "no selection"));
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (p, q) = (rect(&mut app, 10.0), rect(&mut app, 40.0));
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths"));
+    let solid = rect(&mut app, 70.0);
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [solid, p, q]})).unwrap();
+    assert!(exportable(&mut app, "a 3D object first"));
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths again"));
+    app.run("select.set", json!({"ids": [p, q, solid]})).unwrap();
+    assert!(exportable(&mut app, "a 3D object last"));
+    let (a, b) = (rect(&mut app, 100.0), rect(&mut app, 110.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0].0;
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    let member = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(compound)).unwrap().children().unwrap()[0].id.0;
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    assert!(!exportable(&mut app, "plain paths before the compound path's member"));
+    app.run("select.set", json!({"ids": [p, member]})).unwrap();
+    assert!(exportable(&mut app, "a path of a 3D compound path"));
+    // An edit that leaves the selection as it is.
+    app.run("effect.setParams", json!({"ids": [compound], "index": 0, "item": null, "visible": false})).unwrap();
+    assert!(!exportable(&mut app, "the compound path's 3D effect hidden"));
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(exportable(&mut app, "Undo"));
+    app.run("edit.redo", json!({})).unwrap();
+    assert!(!exportable(&mut app, "Redo"));
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(exportable(&mut app, "Undo again"));
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    assert!(!exportable(&mut app, "a new document"));
+    app.session.set_active(0);
+    assert!(exportable(&mut app, "back to the first document"));
+    // A group's own 3D effect exports; the same effect on its fill does not.
+    app.run("select.set", json!({"ids": [p, q]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    app.run("appearance.addFill", json!({})).unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude"})).unwrap();
+    assert!(exportable(&mut app, "a group with its own 3D effect"));
+    app.session
+        .edit("fill", |d, _| {
+            let n = d.node_mut(vectorcraft_doc::NodeId(group)).unwrap();
+            let fx = n.appearance.effects.remove(0);
+            n.appearance.items[0].effects_mut().push(fx);
+            Ok(())
+        })
+        .unwrap();
+    assert!(!exportable(&mut app, "a group with a 3D effect on its fill"));
+}
+
+/// A frame of the panel works out the Export 3D Object state once and keeps it for the document's
+/// revision: later frames read it, and a new revision works it out again.
+#[test]
+fn export_3d_object_state_is_worked_out_once_per_revision() {
+    let key = |app: &VectorcraftApp| app.session.active().map(|st| (st.uid, st.revision)).unwrap();
+    let mut app = app();
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), false)));
+    // A wrong answer planted for this revision is what the panel reads: nothing works it out again.
+    app.canvas.three_d_exportable = Some((key(&app), true));
+    assert!(super::can_export_3d_shown(&mut app));
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), true)));
+    app.run("select.none", json!({})).unwrap();
+    painted_text(&mut app, show);
+    assert_eq!(app.canvas.three_d_exportable, Some((key(&app), false)));
+}
+
+/// The thread's CPU time in nanoseconds, where Linux gives it.
+fn thread_cpu_ns() -> Option<u128> {
+    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+}
+
+/// Time the Export 3D Object state with 200,000 selected paths: worked out from scratch on every
+/// frame ([`super::can_export_3d`]), by [`super::can_export_3d_shown`] on the first frame of a
+/// revision, and by [`super::can_export_3d_shown`] on later frames of the same revision. The first
+/// case selects plain paths alone; the second adds a path of a compound path with Extrude & Bevel,
+/// selected last. The sides alternate, and the median time per frame of 7 runs is printed.
+/// Run with `cargo test --release -p vectorcraft-ui-egui --lib export_3d_object_state_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; performance depends on machine load"]
+fn export_3d_object_state_timing() {
+    const PATHS: usize = 200_000;
+    const MEASURES: u32 = 20;
+    const KEPT: u32 = 1_000_000;
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.run("file.new", json!({"width": 2000, "height": 2000})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let rect = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).cloned().unwrap();
+    app.session
+        .edit("Fill", |d, _| {
+            let layer = d.layers[0].id;
+            for _ in 0..PATHS - 1 {
+                let mut n = rect.clone();
+                n.id = d.alloc_id();
+                d.insert(Some(layer), usize::MAX, n)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    app.run("select.all", json!({})).unwrap();
+    let plain: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+    let a = app.run("shape.rectangle", json!({"x": 0, "y": 1000, "width": 30, "height": 30})).unwrap()["id"].clone();
+    let b = app.run("shape.rectangle", json!({"x": 5, "y": 1005, "width": 10, "height": 10})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0];
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    let member = app.session.active().unwrap().doc.node(compound).unwrap().children().unwrap()[0].id.0;
+    let mut last = plain.clone();
+    last.push(member);
+    let median = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+    for (name, ids, expected) in [("plain paths", plain, false), ("plain paths, then a path of a 3D compound path", last, true)] {
+        app.run("select.set", json!({"ids": &ids})).unwrap();
+        let selected: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
+        assert_eq!(selected.len(), ids.len(), "{name}");
+        assert_eq!(selected.last(), ids.last(), "{name}");
+        assert_eq!(super::can_export_3d(&app), expected, "{name}");
+        let mut time = |frames: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> bool| {
+            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+            for _ in 0..frames {
+                assert_eq!(f(&mut app), expected);
+            }
+            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+            ns as f64 / f64::from(frames) / 1000.0
+        };
+        let (mut full, mut first, mut kept) = (vec![], vec![], vec![]);
+        for _ in 0..7 {
+            full.push(time(MEASURES, &mut |app| super::can_export_3d(app)));
+            first.push(time(MEASURES, &mut |app| {
+                app.canvas.three_d_exportable = None;
+                super::can_export_3d_shown(app)
+            }));
+            kept.push(time(KEPT, &mut super::can_export_3d_shown));
+        }
+        eprintln!("{name}: {} objects selected, available: {expected}; {clock} per frame, median of 7 runs", selected.len());
+        eprintln!("every frame worked out ({MEASURES} frames a run): {:>12.3} us  {full:.3?}", median(&mut full));
+        eprintln!("first frame of a revision ({MEASURES} a run):     {:>12.3} us  {first:.3?}", median(&mut first));
+        eprintln!("later frames ({KEPT} frames a run):            {:>12.4} us  {kept:.4?}", median(&mut kept));
+    }
 }
 
 #[test]

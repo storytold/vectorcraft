@@ -51,6 +51,80 @@ fn op_of(id: &str) -> Option<PathfinderOp> {
     PATHFINDER_EFFECTS.iter().find(|e| e.0 == id).map(|e| e.2)
 }
 
+/// Does effect `id` keep Pathfinder Options of its own ([`PathfinderEffectOptions`]): one of
+/// [`PATHFINDER_EFFECTS`] (Trap has options of its own)?
+pub fn takes_pathfinder_options(id: &str) -> bool {
+    op_of(id).is_some()
+}
+
+/// The parameters holding a Pathfinder effect's Pathfinder Options.
+pub const PATHFINDER_OPTION_KEYS: [&str; 3] = ["precision", "removeRedundantPoints", "removeUnpainted"];
+
+/// The range of a Pathfinder effect's `precision` (pt), the Pathfinder panel's range.
+pub const PATHFINDER_EFFECT_PRECISION: std::ops::RangeInclusive<f64> = 0.001..=10.0;
+
+/// The documentation of [`PATHFINDER_OPTION_KEYS`], as a literal for `concat!`.
+macro_rules! options_doc {
+    () => {
+        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing; results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, a compound shape's area going by the shape's own fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
+    };
+}
+
+/// The documentation of [`PATHFINDER_OPTION_KEYS`], shared by the Pathfinder effects' parameters.
+pub const PATHFINDER_OPTIONS_DOC: &str = options_doc!();
+
+/// The parameters of a Pathfinder effect other than Soft Mix.
+pub const PATHFINDER_PARAMS_DOC: &str = concat!("{", options_doc!(), "} (groups and layers: live Pathfinder over the members)");
+
+/// The parameters of Effect › Pathfinder › Soft Mix.
+pub const SOFT_MIX_PARAMS_DOC: &str = concat!(
+    "{mixingRate?: 1..100 % (50), ",
+    options_doc!(),
+    "} blend overlapping fills in CMYK bottom to top (groups and layers: live Pathfinder over the members)"
+);
+
+/// The Pathfinder Options a Pathfinder effect evaluates with, read from its parameters. An effect
+/// without them (saved before effects kept their own) evaluates as it did then: the default
+/// precision, with no points or pieces removed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PathfinderEffectOptions {
+    /// Refit tolerance of the results, in points ([`PATHFINDER_EFFECT_PRECISION`]).
+    pub precision: f64,
+    /// Drop anchors that don't change a result's shape.
+    pub remove_redundant_points: bool,
+    /// Divide and Outline leave out the pieces of members with no visible fill.
+    pub remove_unpainted: bool,
+}
+
+impl Default for PathfinderEffectOptions {
+    fn default() -> Self {
+        PathfinderEffectOptions { precision: po::DEFAULT_PRECISION, remove_redundant_points: false, remove_unpainted: false }
+    }
+}
+
+impl PathfinderEffectOptions {
+    /// The options in `p`: a missing or non-numeric value takes its default and a precision out of
+    /// range its nearest bound, so a live effect always evaluates.
+    pub fn from_params(p: &Value) -> Self {
+        let d = PathfinderEffectOptions::default();
+        let (lo, hi) = (*PATHFINDER_EFFECT_PRECISION.start(), *PATHFINDER_EFFECT_PRECISION.end());
+        PathfinderEffectOptions {
+            precision: crate::util::num(p, "precision", d.precision).clamp(lo, hi),
+            remove_redundant_points: crate::util::flag(p, "removeRedundantPoints", d.remove_redundant_points),
+            remove_unpainted: crate::util::flag(p, "removeUnpainted", d.remove_unpainted),
+        }
+    }
+
+    /// These options as the parameters [`PATHFINDER_OPTION_KEYS`] name.
+    pub fn to_params(self) -> Value {
+        serde_json::json!({
+            "precision": self.precision,
+            "removeRedundantPoints": self.remove_redundant_points,
+            "removeUnpainted": self.remove_unpainted,
+        })
+    }
+}
+
 /// Does `n` (a group or layer) carry a visible Pathfinder effect, or is it a compound shape?
 pub fn has_pathfinder(n: &Node) -> bool {
     n.is_compound_shape()
@@ -110,13 +184,15 @@ fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &S
             // Every path of the outline art, at any depth, is drawn inside the object's opacity
             // and blend mode. A symbol's art comes with the live objects and the instances of
             // other symbols inside it given as their art, and the type inside it outlined, so the
-            // art has nothing left for `hook` to give.
+            // art has nothing left for `hook` to give. Its fills and strokes carry the geometry
+            // effects of the instance's active fill and stroke, as the canvas draws them.
             if let Some(h) = hook
                 && let Some(art) = h(n)
             {
                 let art = match &n.kind {
                     NodeKind::SymbolInstance { symbol, .. } if nodes.charge(&art) => {
-                        let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
+                        let mut art = instance_art(doc, &art, h, nodes, symbol);
+                        crate::reshape::add_instance_row_effects(doc, n, &mut art);
                         crate::reshape::outline_nested_text(doc, &mut art, false);
                         transparency_into_members(&mut art);
                         art
@@ -132,6 +208,19 @@ fn leaves(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nodes: &S
             }
         }
     }
+}
+
+/// `art`, the art `hook` gave an instance of the symbol named `symbol`, with the live objects and
+/// the instances of other symbols inside it given as their art
+/// ([`crate::reshape::symbol_art_with`]). The art of each of those instances carries the geometry
+/// effects of its own active fill and stroke ([`crate::reshape::add_instance_row_effects`]).
+fn instance_art(doc: Option<&Document>, art: &Node, hook: OutlineHook, nodes: &SymbolNodes, symbol: &str) -> Node {
+    let drawn = |m: &Node| {
+        let mut a = hook(m)?;
+        crate::reshape::add_instance_row_effects(doc, m, &mut a);
+        Some(a)
+    };
+    crate::reshape::symbol_art_with(art, &drawn, nodes, symbol)
 }
 
 /// `l`, a path drawn inside `n`: its opacity multiplied by `n`'s, and `n`'s blend mode when it is
@@ -221,13 +310,15 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
             }
         },
         // A symbol instance with a warp: its symbol's art placed by the instance, with the type
-        // inside it outlined, reshaped as one piece, as the renderer draws it.
+        // inside it outlined, reshaped as one piece, as the renderer draws it. The fills and strokes
+        // of the art then carry the geometry effects of the instance's active fill and stroke.
         NodeKind::SymbolInstance { symbol, .. } if !fx.is_empty() => {
             let h = hook?;
             let art = h(n).filter(|art| nodes.charge(art))?;
-            let mut art = crate::reshape::symbol_art_with(&art, h, nodes, symbol);
+            let mut art = instance_art(doc, &art, h, nodes, symbol);
             crate::reshape::outline_nested_text(doc, &mut art, false);
             members_as_drawn(doc, &mut art);
+            crate::reshape::add_instance_row_effects(doc, n, &mut art);
             let carry = crate::reshape::reshape_leaves_carrying(&mut art, &fx, &n.appearance.effects, doc);
             // The art's own fills and strokes follow the effects as its members do.
             if carry.moves(&art.appearance) {
@@ -486,6 +577,24 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         out.extend(source.iter().skip(art).cloned());
         return Some(out);
     }
+    // When the group has a visible fill of its own, that fill paints its members' geometry, a
+    // compound shape's area included ([`evaluate_container`]), so Remove Unpainted Artwork keeps
+    // every Divide piece. Outline's open segments still go by their source's fill.
+    let own_fill = has_visible_fill(group);
+    // A compound shape's area has no paint of its own: the shape's own appearance paints it. The
+    // shape's top painting fill is the area's fill for Remove Unpainted Artwork and for Outline's
+    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice. The shape's
+    // strokes stay out: the shape's own appearance already strokes the result.
+    let area_style = group.is_compound_shape().then(|| {
+        let items = top_painting_fill(&group.appearance).cloned().into_iter().collect();
+        Node::path(group.id, PathData::default(), Appearance { items, ..Default::default() })
+    });
+    let style_of = |s: &Node| -> Option<Node> {
+        let a = area_style.as_ref().filter(|_| s.id == group.id && s.appearance.items.is_empty())?;
+        let mut a = a.clone();
+        (a.opacity, a.blend) = (s.opacity, s.blend);
+        Some(a)
+    };
     let mut stack: Vec<Arc<Node>> = if group.is_compound_shape() {
         // The group's own appearance paints the area ([`evaluate_container`]), so the art has none.
         match compound_shape_area(doc, group, hook) {
@@ -518,6 +627,7 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
             continue;
         }
         let Some(op) = op_of(&e.id) else { continue };
+        let options = PathfinderEffectOptions::from_params(&e.params);
         let shape_mode =
             matches!(op, PathfinderOp::Unite | PathfinderOp::MinusFront | PathfinderOp::Intersect | PathfinderOp::Exclude | PathfinderOp::MinusBack);
         let nodes = SymbolNodes::default();
@@ -535,13 +645,19 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
         // (style source, shape) per stack entry; keys index `sources`.
         let mut sources: Vec<Node> = vec![];
         let mut shapes: Vec<po::Shape> = vec![];
+        // Keys of the group operands whose art has no area left at the precision.
+        let mut collapsed: Vec<u64> = vec![];
         for mut lv in all {
             if shape_mode && lv.len() > 1 {
                 let parts: Vec<(PathData, FillRule)> = lv.iter().filter_map(geometry).collect();
                 let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
                 let key = sources.len() as u64;
                 if let Some(top) = lv.pop() {
-                    shapes.push(po::Shape::new(po::unite_all(&refs), FillRule::NonZero, key));
+                    let united = po::unite_all_with(&refs, options.precision);
+                    if united.is_empty() && !parts.is_empty() {
+                        collapsed.push(key);
+                    }
+                    shapes.push(po::Shape::new(united, FillRule::NonZero, key));
                     sources.push(top);
                 }
             } else {
@@ -553,28 +669,56 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                 }
             }
         }
+        // An operand with no area still takes part: Intersect, and Minus Front or Minus Back when
+        // it is the shape the others are cut from, then leave nothing.
+        let is_collapsed = |s: &po::Shape| collapsed.contains(&s.key);
+        let nothing_left = match op {
+            PathfinderOp::Intersect => shapes.iter().any(is_collapsed),
+            PathfinderOp::MinusFront => shapes.first().is_some_and(is_collapsed),
+            PathfinderOp::MinusBack => shapes.last().is_some_and(is_collapsed),
+            _ => false,
+        };
+        if nothing_left {
+            return Some(vec![]);
+        }
         shapes.retain(|s| !s.path.is_empty() && s.path.subpaths.iter().all(|sp| sp.anchors.iter().all(|a| a.p.x.is_finite() && a.p.y.is_finite())));
         if shapes.is_empty() {
             return Some(vec![]);
         }
+        // Remove Redundant Points: each result loses the anchors that don't change its shape.
+        let tidy = |path: PathData| if options.remove_redundant_points { po::remove_redundant_points(&path, options.precision) } else { path };
         stack = if op == PathfinderOp::SoftMix {
             let rate = mixing_rate(&e.params);
-            po::regions(&shapes)
+            po::regions_with(&shapes, options.precision)
                 .into_iter()
                 .filter(|r| !r.path.is_empty())
-                .map(|r| Arc::new(soft_mix_face(r.path, &r.sources, rate, &shapes, &sources)))
+                .map(|r| Arc::new(soft_mix_face(tidy(r.path), &r.sources, rate, &shapes, &sources)))
                 .collect()
         } else if op == PathfinderOp::HardMix {
-            po::regions(&shapes)
+            po::regions_with(&shapes, options.precision)
                 .into_iter()
                 .filter(|r| !r.path.is_empty())
-                .map(|r| Arc::new(hard_mix_face(r.path, &r.sources, &shapes, &sources)))
+                .map(|r| Arc::new(hard_mix_face(tidy(r.path), &r.sources, &shapes, &sources)))
                 .collect()
         } else {
-            po::pathfinder(op, &shapes)
+            // Divide and Outline Will Remove Unpainted Artwork: the pieces of members with no
+            // visible fill go.
+            let unpainted = options.remove_unpainted
+                && match op {
+                    PathfinderOp::Divide => !own_fill,
+                    PathfinderOp::Outline => true,
+                    _ => false,
+                };
+            let fill_sources: Vec<Option<Node>> = sources.iter().map(style_of).collect();
+            let fill_source = |k: u64| fill_sources[k as usize].as_ref().unwrap_or(&sources[k as usize]);
+            po::pathfinder_with(op, &shapes, options.precision)
                 .into_iter()
-                .filter(|r| !r.path.is_empty())
-                .map(|r| Arc::new(styled(&sources[r.key as usize], r.path, op == PathfinderOp::Outline)))
+                .filter(|r| !r.path.is_empty() && !(unpainted && !has_visible_fill(fill_source(r.key))))
+                .map(|r| {
+                    let outline = op == PathfinderOp::Outline;
+                    let src = if outline { fill_source(r.key) } else { &sources[r.key as usize] };
+                    Arc::new(styled(src, tidy(r.path), outline))
+                })
                 .collect()
         };
     }
@@ -659,6 +803,11 @@ pub fn paints(item: &AppearanceItem) -> bool {
         }
 }
 
+/// Has `n` a visible fill that paints, as the Pathfinder panel's Remove Unpainted Artwork counts it?
+fn has_visible_fill(n: &Node) -> bool {
+    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !f.paint.is_none()))
+}
+
 /// Do the own fills or strokes of `n`, a group or layer, paint anything?
 pub(crate) fn has_own_paint(n: &Node) -> bool {
     is_container(n) && n.appearance.items.iter().any(paints)
@@ -703,6 +852,11 @@ pub fn member_shapes(doc: Option<&Document>, n: &Node) -> Vec<(PathData, FillRul
         }
     }
     fn members(doc: Option<&Document>, n: &Node, out: &mut Vec<(PathData, FillRule)>) {
+        // A clip group whose clipping type's strokes paint around it is outlined as that clip
+        // group: the strokes outside the clip add nothing.
+        if let Some(inner) = crate::reshape::painted_clip_inner(n) {
+            return members(doc, inner, out);
+        }
         // A clip group shows its members only inside its clipping path: its outline is that
         // region, not the clipped members' own shapes, which may reach far outside it (#7289).
         if n.clips() {
@@ -824,16 +978,16 @@ fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl 
     take_held_guides(n, held, out, false, false);
 }
 
-/// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
-/// reshaping all its members as one piece (the whole art's bounds as their reference box) after
-/// the members' own geometry and Pathfinder effects ([`members_as_drawn`]), and its
-/// own fills and strokes turned into art painting the members' geometry ([`member_shapes`]) below
-/// the members (after a clipping path) or above them, as its contents slot says. Its
-/// transparency, opacity mask and raster effects stay. `None` when it has none of these. Live
-/// objects among the members are evaluated with the symbols of `doc` (see [`member_shapes`]), and
-/// a Pathfinder operation or compound shape takes the symbol instances among its members as their
-/// symbols' art from `doc`.
-pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
+struct PreparedContainer {
+    m: Node,
+    guides: Vec<Arc<Node>>,
+    paint: bool,
+    carry: crate::Carry,
+}
+
+/// The existing container pass up to its own rows becoming art. Keep its carried appearance for
+/// rendering, and retain the same Carry for freezing only missing stored placements separately.
+fn prepare_container(doc: Option<&Document>, n: &Node) -> Option<PreparedContainer> {
     if !is_container(n) {
         return None;
     }
@@ -844,6 +998,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
+    let mut carry = crate::Carry::default();
     // Its ruler guides take no part: they go back above the evaluated art at the end. With effects
     // that replace or copy the art, so do its guides among the art and those in its sublayers and
     // groups, which would otherwise go with that art: they stay on `n`, in order, hidden and
@@ -870,7 +1025,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
             let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
             members_as_drawn(doc, &mut m);
         }
-        let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
+        carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
         // The group's own fills and strokes paint the members as a whole: their gradients follow
         // the effects as the members' do.
         if paint && carry.moves(&m.appearance) {
@@ -879,15 +1034,40 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
+    Some(PreparedContainer { m, guides, paint, carry })
+}
+
+/// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
+/// reshaping all its members as one piece (the whole art's bounds as their reference box) after
+/// the members' own geometry and Pathfinder effects ([`members_as_drawn`]), and its
+/// own fills and strokes turned into art painting the members' geometry ([`member_shapes`]) below
+/// the members (after a clipping path) or above them, as its contents slot says. Its
+/// transparency, opacity mask and raster effects stay. `None` when it has none of these. Live
+/// objects among the members are evaluated with the symbols of `doc` (see [`member_shapes`]), and
+/// a Pathfinder operation or compound shape takes the symbol instances among its members as their
+/// symbols' art from `doc`. A Transform effect that makes copies with raster effects listed before
+/// it gives each copy those raster effects ([`copied_container`]).
+pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
+    if !is_container(n) {
+        return None;
+    }
+    if let Some(t) = crate::reshape::copied_container_raster_at(n) {
+        return Some(copied_container(doc, n, t));
+    }
+    let PreparedContainer { mut m, guides, paint, .. } = prepare_container(doc, n)?;
     if paint {
-        let shapes = member_shapes(doc, &m);
-        let bounds = m.geometric_bounds();
+        // A clip group whose clipping type paints strokes is now a group of a clip group and those
+        // strokes ([`crate::reshape::paint_type_clip`]): its own fills and strokes paint inside
+        // that clip group. Such groups among the members are measured as their clip groups.
+        let wrapped = n.clips() && crate::reshape::painted_clip_inner(&m).is_some();
+        let (shapes, bounds) = (member_shapes(doc, &m), crate::reshape::clip_bounds(&m));
         let art =
             |items: &[AppearanceItem]| -> Vec<Arc<Node>> { items.iter().filter_map(|i| item_art(n.id, i, &shapes, bounds)).map(Arc::new).collect() };
         let (below, above) = m.appearance.split_contents();
         let (below, above) = (art(below), art(above));
-        let at = usize::from(m.clips());
-        if let Some(ch) = m.children_mut() {
+        let at = usize::from(wrapped || m.clips());
+        let target = if wrapped { m.children_mut().and_then(|ch| ch.first_mut()).map(Arc::make_mut) } else { Some(&mut m) };
+        if let Some(ch) = target.and_then(Node::children_mut) {
             let at = at.min(ch.len());
             ch.splice(at..at, below);
             ch.extend(above);
@@ -899,6 +1079,99 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         ch.extend(guides);
     }
     Some(m)
+}
+
+/// The exact pre-copy source shared by rendering and stored gradient placement.
+fn copied_container_source(doc: Option<&Document>, n: &Node, t: usize) -> (Node, Vec<Arc<Node>>, Node) {
+    let mut m = n.clone();
+    let mut guides = vec![];
+    take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
+    let mut source = m.clone();
+    source.appearance.effects = n.appearance.effects.get(..t).unwrap_or_default().to_vec();
+    // With no geometry effect before the Transform effect, `evaluate_container` leaves the members'
+    // own effects live (it only paints the group's own fills and strokes): the members are drawn
+    // first, so their effects apply before the copies are made.
+    if crate::reshape::geometry_effects(&source).is_empty() {
+        source = crate::reshape::outlined_members(doc, &source);
+        // The members' raster effects follow the group's own Transform effects as well.
+        let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
+        members_as_drawn(doc, &mut source);
+    }
+    (m, guides, source)
+}
+
+/// `n`, a group or layer whose own effects split at `t` ([`crate::reshape::copied_container_raster_at`]),
+/// as plain art: the effects before the Transform effect at `t` evaluated on its members as one
+/// piece ([`evaluate_container`]), with the raster effects among them, and that piece copied by the
+/// Transform effect, each copy a group of its own carrying those raster effects moved, turned,
+/// reflected and scaled with it ([`crate::reshape::copied_container_art`]). The art keeps the kind,
+/// transparency and opacity mask of `n` and the raster effects from `t` on, which paint once around
+/// all the copies; a clip group's or clipping layer's copies each clip, and the art itself does not.
+/// Its ruler guides, those in its sublayers and groups included, go once above the copies, hidden
+/// and locked as their containers were.
+fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
+    let (mut m, guides, source) = copied_container_source(doc, n, t);
+    let mut piece = evaluate_container(doc, &source).unwrap_or_else(|| {
+        let mut p = source.clone();
+        p.appearance.effects = crate::raster::without_geometry(&p.appearance.effects);
+        p
+    });
+    // The piece is one copy: the transparency, opacity mask and guides stay on the art.
+    piece.name = None;
+    piece.visible = true;
+    piece.locked = false;
+    (piece.opacity, piece.blend, piece.isolate) = (1.0, Default::default(), false);
+    piece.extras_mut().mask = None;
+    // The copies are made about the piece's bounds, measured first: a layer leaves its hidden
+    // members out of them, and a group does not.
+    let bounds = piece.geometric_bounds();
+    // A layer's copies are groups in it.
+    if let NodeKind::Layer { children, clip, .. } = &mut piece.kind {
+        piece.kind = NodeKind::Group { children: std::mem::take(children), clip: *clip };
+    }
+    let (art, effects) = crate::reshape::copied_container_art(doc, n, t, piece, bounds);
+    let copies = art.children().cloned().unwrap_or_default();
+    if let NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } = &mut m.kind {
+        *children = copies;
+        *clip = false;
+    }
+    m.appearance.items.clear();
+    m.appearance.contents_index = None;
+    m.appearance.effects = effects;
+    if let Some(ch) = m.children_mut() {
+        ch.extend(guides);
+    }
+    m
+}
+
+/// Freeze representable fitted own paints to the box the container pass gives them, retaining
+/// every live effect and already explicit placement. Hidden-only containers the pass does not
+/// evaluate stay unchanged; this does not add a different fallback to `evaluate_container`.
+pub fn pinned_container_appearance(doc: &Document, n: &Node) -> Option<Appearance> {
+    if !n.appearance.has_unplaced_gradient() {
+        return None;
+    }
+    if let Some(t) = crate::reshape::copied_container_raster_at(n) {
+        let (_, _, source) = copied_container_source(Some(doc), n, t);
+        let pinned = pinned_container_appearance(doc, &source)?;
+        let mut out = (*n.appearance).clone();
+        out.items = pinned.items;
+        return Some(out);
+    }
+    let PreparedContainer { m, carry, .. } = prepare_container(Some(doc), n)?;
+    let bounds = m.geometric_bounds()?;
+    let mut out = (*n.appearance).clone();
+    let mut changed = false;
+    for (item, original) in out.items.iter_mut().zip(&n.appearance.items) {
+        if paints(original)
+            && matches!(original.paint(), Paint::Gradient(g) if !g.is_placed())
+            && let Some(pinned) = crate::pinned_gradient_item(original, bounds, &[&carry])
+        {
+            *item = pinned;
+            changed = true;
+        }
+    }
+    changed.then_some(out)
 }
 
 /// Replace each visible member of `n` with geometry or Pathfinder effects of its own, at every

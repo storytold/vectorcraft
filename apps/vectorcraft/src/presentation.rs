@@ -6,9 +6,17 @@
 //! frames the swap chain may queue, 1 to 3. Unset, the app keeps its own surface settings. A flag
 //! overrides its variable; a value that isn't one of these stops the app with a message, as
 //! `--control` does. A launch that sets either one runs as its own app, as with `--new-instance`.
-//! The surface the app asks for is logged at start-up.
+//! Preferences › Performance › Low-Latency Drawing (`lowLatencyDrawing`, off by default, read at
+//! start-up) asks for `novsync` when neither the flag nor the variable sets the mode. Whenever the
+//! surface presents without vsync, frames start at most 240 times a second. The surface the app
+//! asks for is logged at start-up, with where its present mode came from.
 
 use std::ffi::OsString;
+use std::time::Duration;
+
+/// The most frames a second the window draws while it presents without vsync.
+#[cfg(feature = "wgpu")]
+pub const UNSYNCED_FRAME_CAP: u32 = 240;
 
 /// A present mode the command line or the environment can ask for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,6 +62,7 @@ fn flag_value(flag: &str, arg: &str, args: &mut impl Iterator<Item = String>) ->
 
 impl Overrides {
     /// Whether a flag or a variable set the present mode or the frame latency.
+    #[cfg_attr(target_os = "macos", allow(dead_code))] // its one caller, in `main`, is not built on macOS
     pub fn is_set(&self) -> bool {
         *self != Self::default()
     }
@@ -95,25 +104,44 @@ impl Overrides {
         Ok(Self { mode, latency })
     }
 
-    /// `surface` with the overrides applied.
+    /// `surface` with the overrides applied. With Low-Latency Drawing on (`low_latency_drawing`) and
+    /// no present mode override, the mode is `novsync`.
     #[cfg(feature = "wgpu")]
-    pub fn apply(&self, surface: eframe::egui_wgpu::SurfaceConfig) -> eframe::egui_wgpu::SurfaceConfig {
+    pub fn apply(&self, surface: eframe::egui_wgpu::SurfaceConfig, low_latency_drawing: bool) -> eframe::egui_wgpu::SurfaceConfig {
         use eframe::wgpu::PresentMode;
         let present_mode = match self.mode {
             Some(Mode::Fifo) => PresentMode::Fifo,
             Some(Mode::AutoVsync) => PresentMode::AutoVsync,
             Some(Mode::NoVsync) => PresentMode::AutoNoVsync,
+            None if low_latency_drawing => PresentMode::AutoNoVsync,
             None => surface.present_mode,
         };
         eframe::egui_wgpu::SurfaceConfig { present_mode, desired_maximum_frame_latency: self.latency.or(surface.desired_maximum_frame_latency) }
     }
 }
 
-/// The present mode and frame latency `surface` asks for, for the start-up log:
-/// "autovsync, frame latency 1", with "(override)"
-/// after a value a flag or variable set.
+/// The shortest time between the starts of two frames on `surface`: `None` with vsync, where the
+/// display paces the frames, and 1/[`UNSYNCED_FRAME_CAP`] of a second without it.
 #[cfg(feature = "wgpu")]
-pub fn describe(surface: &eframe::egui_wgpu::SurfaceConfig, overrides: &Overrides) -> String {
+pub fn min_frame_interval(surface: &eframe::egui_wgpu::SurfaceConfig) -> Option<Duration> {
+    use eframe::wgpu::PresentMode;
+    match surface.present_mode {
+        PresentMode::AutoNoVsync | PresentMode::Immediate | PresentMode::Mailbox => Some(Duration::from_secs(1) / UNSYNCED_FRAME_CAP),
+        PresentMode::AutoVsync | PresentMode::Fifo | PresentMode::FifoRelaxed => None,
+    }
+}
+
+/// How long a frame waits before it starts, `since_last` after the previous frame started, so that
+/// frames start at least `min` apart. `None`: no wait (no cap, the first frame, or `min` has passed).
+pub fn frame_wait(min: Option<Duration>, since_last: Option<Duration>) -> Option<Duration> {
+    min?.checked_sub(since_last?).filter(|wait| !wait.is_zero())
+}
+
+/// The present mode and frame latency `surface` asks for, for the start-up log:
+/// "autovsync, frame latency 1", with "(override)" after a value a flag or variable set, and
+/// "(preference)" after a present mode Low-Latency Drawing set.
+#[cfg(feature = "wgpu")]
+pub fn describe(surface: &eframe::egui_wgpu::SurfaceConfig, overrides: &Overrides, low_latency_drawing: bool) -> String {
     use eframe::wgpu::PresentMode;
     let mode = match surface.present_mode {
         PresentMode::AutoVsync => "autovsync",
@@ -125,7 +153,8 @@ pub fn describe(surface: &eframe::egui_wgpu::SurfaceConfig, overrides: &Override
     };
     let latency = surface.desired_maximum_frame_latency.map_or("default".to_string(), |n| n.to_string());
     let tag = |set: bool| if set { " (override)" } else { "" };
-    format!("{mode}{}, frame latency {latency}{}", tag(overrides.mode.is_some()), tag(overrides.latency.is_some()))
+    let mode_tag = if overrides.mode.is_none() && low_latency_drawing { " (preference)" } else { tag(overrides.mode.is_some()) };
+    format!("{mode}{mode_tag}, frame latency {latency}{}", tag(overrides.latency.is_some()))
 }
 
 #[cfg(test)]
@@ -223,20 +252,99 @@ mod tests {
         use eframe::wgpu::PresentMode;
         let app = SurfaceConfig::LOW_LATENCY;
         // No override: the surface the app asks for is unchanged.
-        assert_eq!(Overrides::default().apply(app), app);
+        assert_eq!(Overrides::default().apply(app, false), app);
         let latency = Overrides { mode: None, latency: Some(2) };
-        let s = latency.apply(app);
+        let s = latency.apply(app, false);
         assert_eq!((s.present_mode, s.desired_maximum_frame_latency), (PresentMode::AutoVsync, Some(2)));
-        assert_eq!(describe(&s, &latency), "autovsync, frame latency 2 (override)");
+        assert_eq!(describe(&s, &latency, false), "autovsync, frame latency 2 (override)");
         let fifo = Overrides { mode: Some(Mode::Fifo), latency: None };
-        let s = fifo.apply(app);
+        let s = fifo.apply(app, false);
         assert_eq!((s.present_mode, s.desired_maximum_frame_latency), (PresentMode::Fifo, app.desired_maximum_frame_latency));
         // Never a mode the driver may lack: no vsync lets wgpu fall back by support.
         let novsync = Overrides { mode: Some(Mode::NoVsync), latency: Some(3) };
-        let s = novsync.apply(app);
+        let s = novsync.apply(app, false);
         assert_eq!((s.present_mode, s.desired_maximum_frame_latency), (PresentMode::AutoNoVsync, Some(3)));
-        assert_eq!(describe(&s, &novsync), "novsync (override), frame latency 3 (override)");
+        assert_eq!(describe(&s, &novsync, false), "novsync (override), frame latency 3 (override)");
         let unset = SurfaceConfig { present_mode: PresentMode::Fifo, desired_maximum_frame_latency: None };
-        assert_eq!(describe(&unset, &Overrides::default()), "fifo, frame latency default");
+        assert_eq!(describe(&unset, &Overrides::default(), false), "fifo, frame latency default");
+    }
+
+    /// Low-Latency Drawing alone asks for no vsync, through wgpu's fallback by support and never an
+    /// explicit Immediate or Mailbox; off, the app's surface is exactly its own.
+    #[cfg(feature = "wgpu")]
+    #[test]
+    fn low_latency_drawing_alone_presents_without_vsync_and_off_keeps_the_app_surface() {
+        use eframe::egui_wgpu::SurfaceConfig;
+        use eframe::wgpu::PresentMode;
+        let app = SurfaceConfig::LOW_LATENCY;
+        let none = Overrides::default();
+        assert_eq!(none.apply(app, false), app);
+        let s = none.apply(app, true);
+        assert_eq!(s.present_mode, PresentMode::AutoNoVsync);
+        assert_eq!(s.desired_maximum_frame_latency, app.desired_maximum_frame_latency);
+        let frames = app.desired_maximum_frame_latency.map_or("default".to_string(), |n| n.to_string());
+        assert_eq!(describe(&s, &none, true), format!("novsync (preference), frame latency {frames}"));
+        // A latency override still applies with the preference's mode.
+        let latency = Overrides { mode: None, latency: Some(2) };
+        let s = latency.apply(app, true);
+        assert_eq!((s.present_mode, s.desired_maximum_frame_latency), (PresentMode::AutoNoVsync, Some(2)));
+        assert_eq!(describe(&s, &latency, true), "novsync (preference), frame latency 2 (override)");
+    }
+
+    /// The flag and the variable each set the present mode over Low-Latency Drawing.
+    #[cfg(feature = "wgpu")]
+    #[test]
+    fn the_flag_and_the_variable_win_over_low_latency_drawing() {
+        use eframe::egui_wgpu::SurfaceConfig;
+        use eframe::wgpu::PresentMode;
+        let app = SurfaceConfig::LOW_LATENCY;
+        let flag = parse(&["--present-mode", "fifo"]).unwrap();
+        let s = flag.apply(app, true);
+        assert_eq!(s.present_mode, PresentMode::Fifo);
+        assert!(describe(&s, &flag, true).starts_with("fifo (override),"), "{}", describe(&s, &flag, true));
+        let var = Overrides::default().with_env(Some("autovsync".into()), None).unwrap();
+        let s = var.apply(app, true);
+        assert_eq!(s.present_mode, PresentMode::AutoVsync);
+        assert!(describe(&s, &var, true).starts_with("autovsync (override),"), "{}", describe(&s, &var, true));
+        // The flag wins over the variable, and both over the preference.
+        let both = parse(&["--present-mode=fifo"]).unwrap().with_env(Some("novsync".into()), None).unwrap();
+        assert_eq!(both.apply(app, true).present_mode, PresentMode::Fifo);
+    }
+
+    /// Frames start at most 240 times a second without vsync, from the preference or an override,
+    /// and the display paces them with vsync.
+    #[cfg(feature = "wgpu")]
+    #[test]
+    fn the_frame_cap_applies_only_without_vsync_at_240_frames_a_second() {
+        use eframe::egui_wgpu::SurfaceConfig;
+        use eframe::wgpu::PresentMode;
+        let app = SurfaceConfig::LOW_LATENCY;
+        let cap = Duration::from_secs(1) / 240;
+        assert_eq!(cap.as_nanos(), 4_166_666);
+        assert_eq!(min_frame_interval(&Overrides::default().apply(app, true)), Some(cap));
+        assert_eq!(min_frame_interval(&Overrides { mode: Some(Mode::NoVsync), latency: None }.apply(app, false)), Some(cap));
+        assert_eq!(min_frame_interval(&Overrides::default().apply(app, false)), None);
+        assert_eq!(min_frame_interval(&Overrides { mode: Some(Mode::Fifo), latency: None }.apply(app, true)), None);
+        for (mode, capped) in [
+            (PresentMode::Immediate, true),
+            (PresentMode::Mailbox, true),
+            (PresentMode::AutoNoVsync, true),
+            (PresentMode::Fifo, false),
+            (PresentMode::FifoRelaxed, false),
+            (PresentMode::AutoVsync, false),
+        ] {
+            let s = SurfaceConfig { present_mode: mode, desired_maximum_frame_latency: Some(1) };
+            assert_eq!(min_frame_interval(&s).is_some(), capped, "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn a_frame_waits_out_the_rest_of_the_minimum_interval() {
+        let min = Some(Duration::from_millis(4));
+        assert_eq!(frame_wait(min, Some(Duration::from_millis(1))), Some(Duration::from_millis(3)));
+        assert_eq!(frame_wait(min, Some(Duration::from_millis(4))), None);
+        assert_eq!(frame_wait(min, Some(Duration::from_millis(9))), None);
+        assert_eq!(frame_wait(min, None), None, "the first frame starts at once");
+        assert_eq!(frame_wait(None, Some(Duration::ZERO)), None, "no cap with vsync");
     }
 }

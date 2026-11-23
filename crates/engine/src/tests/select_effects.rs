@@ -168,9 +168,41 @@ fn a_click_on_the_drop_shadow_of_a_symbols_art_does_not_select_the_instance() {
 fn a_click_on_the_drop_shadow_of_an_image_outside_its_frame_does_not_select_it() {
     let mut s = session();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(&mut s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [65, 65]}));
     let im = NodeId(r["ids"][0].as_u64().unwrap());
     // The frame lies from x 50 to 80 and the shadow from 90 to 120.
@@ -361,10 +393,10 @@ fn a_group_selection_marquee_leaves_out_a_drop_shadow() {
     run(&mut s, "select.none", json!({}));
     let sel = marquee(&mut s, "groupSelection", (85.0, 40.0), (95.0, 60.0));
     assert!(sel.objects.is_empty() && sel.anchors.is_empty(), "{sel:?}");
-    // Over the shadow and B's upper left corner: that anchor of B.
+    // Over the shadow and B's upper left corner: B whole, and not A (#8047).
     let sel = marquee(&mut s, "groupSelection", (90.0, 5.0), (105.0, 30.0));
     assert_eq!(sel.objects, [b]);
-    assert_eq!(picked_points(&s, b), [Point::new(100.0, 20.0)]);
+    assert!(sel.partial(b).is_none(), "{sel:?}");
     // With E, a marquee around B that crosses A's shadow selects B whole, and not A.
     run(&mut s, "select.none", json!({}));
     let v = ViewInfo::default();

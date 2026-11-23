@@ -7,6 +7,8 @@
 //! hatches, type text entities or glyph outlines, and placed images image entities linked to PNG
 //! or JPEG files the caller writes next to the drawing. Coordinates are y-up, in drawing units: `scale` units per
 //! `unit` of the art, with the origin at the bottom-left corner of [`DxfOptions::region`].
+//! [`export_drawings`] writes one such drawing for each of several regions, applying the live
+//! effects once for all of them.
 //!
 //! What DXF can't hold (blending modes, opacity masks, raster effects, gradients, patterns,
 //! clipping) is approximated or left out, and each such loss comes back as a warning.
@@ -436,18 +438,43 @@ pub const SCALE_RANGE: std::ops::RangeInclusive<f64> = 1e-6..=1e6;
 /// Write `doc` as a DXF drawing with `opts`. Live geometry effects are applied first; template
 /// layers, guides and hidden objects are left out.
 pub fn export(doc: &Document, opts: &DxfOptions) -> Result<DxfOutput, String> {
+    Ok(export_drawings(doc, opts, &[(opts.region, opts.crop)])?.pop().unwrap_or_default())
+}
+
+/// Write `doc` as one DXF drawing for each `(region, crop)` of `drawings`, in order, each as
+/// [`export`] writes it with `opts` and that region and crop. Live geometry effects are applied
+/// once for all the drawings.
+pub fn export_drawings(doc: &Document, opts: &DxfOptions, drawings: &[(Rect, bool)]) -> Result<Vec<DxfOutput>, String> {
+    export_drawings_with(doc, opts, drawings, bake_for_drawings)
+}
+
+/// `doc` with its live geometry effects applied and its symbols' art placed, or `None` when
+/// nothing changes.
+fn bake_for_drawings(doc: &Document) -> Option<Document> {
+    // Symbols' art is placed without clipping, as the scene places it.
+    let layers = vectorcraft_effects::WrittenLayers { hidden: true, non_printing: true, hidden_objects: false };
+    vectorcraft_effects::bake_document_placing_symbols(doc, false, layers)
+}
+
+/// [`export_drawings`] with `bake` applying the live effects.
+fn export_drawings_with(
+    doc: &Document,
+    opts: &DxfOptions,
+    drawings: &[(Rect, bool)],
+    bake: impl Fn(&Document) -> Option<Document>,
+) -> Result<Vec<DxfOutput>, String> {
     if !(opts.scale.is_finite() && SCALE_RANGE.contains(&opts.scale)) {
         return Err(format!("scale must be a number from {} to {}, not {}", SCALE_RANGE.start(), SCALE_RANGE.end(), opts.scale));
     }
-    let r = opts.region;
-    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) {
+    if drawings.iter().any(|(r, _)| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite())) {
         return Err("the export region is not finite".into());
     }
-    // Symbols' art is placed without clipping, as the scene places it.
-    let layers = vectorcraft_effects::WrittenLayers { hidden: true, non_printing: true, hidden_objects: false };
-    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, false, layers);
+    if drawings.is_empty() {
+        return Ok(vec![]);
+    }
+    let baked = bake(doc);
     let doc = baked.as_ref().unwrap_or(doc);
-    Ok(scene::Scene::new(doc, opts).run())
+    Ok(drawings.iter().map(|&(region, crop)| scene::Scene::new(doc, &DxfOptions { region, crop, ..opts.clone() }).run()).collect())
 }
 
 #[cfg(test)]

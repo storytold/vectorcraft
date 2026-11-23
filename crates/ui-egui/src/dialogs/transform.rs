@@ -220,6 +220,7 @@ fn command(app: &VectorcraftApp, d: &Dialog) -> (&'static str, Value) {
         // The axis by name, or the angle it is at.
         "reflect" if d.str("axis") == "angle" => ("object.reflect", json!({"axis": d.f64("angle", 90.0)})),
         "reflect" => ("object.reflect", json!({"axis": d.fields.get("axis").cloned().unwrap_or(json!("vertical"))})),
+        "shear" if d.str("axis") == "angle" => ("object.shear", json!({"angle": d.f64("angle", 0.0), "axis": d.f64("axisAngle", 0.0)})),
         _ => ("object.shear", json!({"angle": d.f64("angle", 0.0), "axis": d.str("axis")})),
     };
     params["copy"] = json!(d.bool("copy"));
@@ -374,6 +375,54 @@ mod tests {
             // Across the 45° axis the rectangle's sides swap; without Transform Objects it stays.
             let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
             assert_eq!((b.width().round(), b.height().round()), size);
+        }
+    }
+
+    /// Shear's axis is Horizontal, Vertical or an angle: the Axis Angle field takes input only with
+    /// the Angle axis and keeps its value with the others, and OK sends that angle as the axis,
+    /// apart from the Shear Angle.
+    #[test]
+    fn shear_takes_an_axis_angle() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap();
+        crate::menus::invoke(&mut app, "object.shear", json!({}));
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                crate::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(5);
+        let dimmed =
+            |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.get_by_role_and_label(Role::TextInput, "Axis Angle").accesskit_node().is_disabled();
+        assert!(dimmed(&h), "Horizontal leaves the Axis Angle off");
+        // Along an axis at 90° the left and right sides slide, 45° moving the right one by the width;
+        // at 0° the top and bottom slide by the height. Each case is undone before the next.
+        for (axis, axis_angle, sent, size) in
+            [("angle", 90, json!(90.0), (60.0, 80.0)), ("angle", 0, json!(0.0), (80.0, 20.0)), ("vertical", 30, json!("vertical"), (60.0, 80.0))]
+        {
+            let d = h.state_mut().ui.dialog.as_mut().unwrap();
+            d.fields.extend([("axis".to_string(), json!(axis)), ("axisAngle".to_string(), json!(axis_angle)), ("angle".to_string(), json!(45))]);
+            h.run_steps(2);
+            assert_eq!(dimmed(&h), axis != "angle", "{axis}");
+            assert_eq!(h.state().ui.dialog.as_ref().unwrap().fields["axisAngle"], json!(axis_angle), "the field keeps its value");
+            crate::dialogs::confirm(h.state_mut()).unwrap();
+            let app = h.state();
+            let (cmd, p) = app.session.journal.last().unwrap();
+            assert_eq!((cmd.as_str(), &p["axis"], &p["angle"]), ("object.shear", &sent, &json!(45.0)), "{axis} {axis_angle}");
+            let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+            assert_eq!((b.width().round(), b.height().round()), size, "{axis} {axis_angle}");
+            h.state_mut().run("edit.undo", json!({})).unwrap();
+            crate::menus::invoke(h.state_mut(), "object.shear", json!({}));
+            h.run_steps(2);
         }
     }
 

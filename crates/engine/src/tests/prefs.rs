@@ -109,6 +109,23 @@ fn grid_prefs_apply_to_open_documents() {
     assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
 }
 
+/// The grid preferences are not an undo step in the documents they apply to, so undo and redo
+/// leave the grid as the preferences set it.
+#[test]
+fn undo_and_redo_keep_the_grid_prefs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 18, "gridSubdivisions": 3}})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (18.0, 3));
+}
+
 /// Guides & Grid › Gridline every and Subdivisions (#394): set with no document open, as the
 /// desktop app restores them at launch, they give `file.new`'s document their grid.
 #[test]
@@ -445,6 +462,69 @@ fn gpu_preference_defaults_to_automatic_and_validates() {
     s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "highPerformance"})).unwrap();
     s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
     assert_eq!(s.prefs.gpu_preference, "automatic");
+}
+
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: Normal by default, Large by value or
+/// label, kept through a save and load, and reset with its category. Setting another value is an
+/// error that changes nothing; a saved value that is missing, unknown or of another type reads as
+/// Normal and leaves the other saved preferences as they are.
+#[test]
+fn plugin_instruction_budget_defaults_to_normal_and_validates() {
+    let mut s = Session::new();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("normal"));
+    set_pref(&mut s, "pluginInstructionBudget", json!("Large"));
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "pluginInstructionBudget"})).unwrap(), json!("large"));
+    for bad in [json!("unlimited"), json!(""), json!(5), json!(null), json!(true), json!(["large"])] {
+        assert!(s.execute("prefs.set", &json!({"key": "pluginInstructionBudget", "value": bad})).is_err(), "{bad}");
+        assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Large, "{bad}");
+    }
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert_eq!(back.plugin_instruction_budget, PluginBudget::Large);
+    let other_values = [json!("unlimited"), json!(5), json!(null), json!(["large"]), json!({"large": true}), json!("LARGE")];
+    let saved_files = other_values.map(|v| json!({"keyboardIncrement": 4, "pluginInstructionBudget": v}));
+    for saved in std::iter::once(json!({"keyboardIncrement": 4})).chain(saved_files) {
+        let read: Prefs = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!((read.plugin_instruction_budget, read.keyboard_increment), (PluginBudget::Normal, 4.0), "{saved}");
+    }
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "pluginInstructionBudget").unwrap().clone();
+    assert_eq!((row["category"].as_str(), row["section"].as_str()), (Some("Plug-ins & Scratch Disks"), Some("Plug-ins")));
+    assert_eq!((&row["options"], &row["value"]), (&json!(["normal", "large"]), &json!("large")));
+    s.execute("prefs.reset", &json!({"category": "Plug-ins & Scratch Disks"})).unwrap();
+    assert_eq!(s.prefs.plugin_instruction_budget, PluginBudget::Normal);
+}
+
+/// Performance › Low-Latency Drawing (#6013): off by default and for preference files written
+/// before it, a boolean only, kept through a save/load round trip, listed under Performance and
+/// reset with it.
+#[test]
+fn low_latency_drawing_defaults_off_and_takes_only_a_boolean() {
+    let mut s = Session::new();
+    assert!(!s.prefs.low_latency_drawing);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "lowLatencyDrawing"})).unwrap(), json!(false));
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": true})).unwrap();
+    assert!(s.prefs.low_latency_drawing);
+    for bad in [json!(1), json!(null), json!("on"), json!("yes"), json!([true])] {
+        assert!(s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": bad})).is_err(), "{bad}");
+        assert!(s.prefs.low_latency_drawing);
+    }
+    // Booleans may be given as "true" and "false", as for every boolean preference.
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "false"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
+    s.execute("prefs.set", &json!({"key": "lowLatencyDrawing", "value": "true"})).unwrap();
+    assert_eq!(s.prefs.to_json()["lowLatencyDrawing"], json!(true));
+    let back: Prefs = serde_json::from_value(s.prefs.to_json()).unwrap();
+    assert!(back.low_latency_drawing);
+    let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
+    assert!(!old.low_latency_drawing);
+    let l = s.execute("prefs.list", &json!({})).unwrap();
+    let row = l.as_array().unwrap().iter().find(|e| e["key"] == "lowLatencyDrawing").unwrap().clone();
+    assert_eq!(row["category"], "Performance");
+    assert_eq!(row["label"], "Low-Latency Drawing");
+    s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
+    assert!(!s.prefs.low_latency_drawing);
 }
 
 /// Performance › Linux Display Server (#1151): automatic by default, X11 by value or label, and
@@ -2606,6 +2686,35 @@ fn settling_typing_for_a_tool_shows_its_preview_warning() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
 }
 
+/// Typing kept as its own step when a dialog or a panel begins its preview, or when the font menus
+/// end the typing session, returns its applied preview's warning for the status bar. A preview
+/// without a warning returns none, and with no typing in progress nothing is kept and no step is
+/// added.
+#[test]
+fn settling_typing_for_a_dialog_returns_its_preview_warning() {
+    let warned = |w: &[String]| w.iter().any(|m| m.contains("type"));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let before = steps(&s);
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "the typing is a step of its own");
+    assert_eq!(s.doc().unwrap().interaction.as_ref().map(|it| it.label.as_str()), Some("Offset Path"));
+
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let w = s.keep_typing().unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert!(!s.in_interaction());
+    assert_eq!(steps(&s), before + 1);
+    let w = s.keep_typing().unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "nothing in progress adds no step");
+
+    let mut s = deferred_bloat("Typing", false, "selection");
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(w.is_empty(), "{w:?}");
+}
+
 /// File Handling › Use Low Resolution Proxy for Linked EPS (#394): off by default; toggling it does
 /// not replace full-resolution pixels already in the document.
 #[test]
@@ -2868,6 +2977,26 @@ fn snap_to_glyph_options_read_set_and_reset() {
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), set);
     s.execute("prefs.reset", &json!({})).unwrap();
     assert_eq!(s.execute("view.snapToGlyph.options", &json!({})).unwrap(), all);
+}
+
+/// File Handling › Use fonts embedded in imported PDFs (`pdfImportEmbeddedFonts`, on by default)
+/// reaches Open and Place as the `embeddedFonts` choice, unless a call gives its own (#4568).
+#[test]
+fn the_embedded_fonts_preference_reaches_the_import_options() {
+    use crate::cmd::fileio::LoadOptions;
+    let mut s = Session::new();
+    assert!(s.prefs.pdf_import_embedded_fonts, "on by default");
+    let on = s.prefs.with_pdf_font_choice(&json!({}));
+    assert!(LoadOptions::from_params("x", &on).unwrap().embedded_fonts);
+    s.execute("prefs.set", &json!({"key": "pdfImportEmbeddedFonts", "value": false})).unwrap();
+    let off = s.prefs.with_pdf_font_choice(&json!({"page": 2}));
+    assert_eq!(off["page"], 2, "the call's own params stay");
+    assert!(!LoadOptions::from_params("x", &off).unwrap().embedded_fonts);
+    assert!(!LoadOptions::from_params("x", &s.prefs.with_pdf_font_choice(&Value::Null)).unwrap().embedded_fonts);
+    // A call that says so wins over the preference.
+    let own = s.prefs.with_pdf_font_choice(&json!({"embeddedFonts": true}));
+    assert!(LoadOptions::from_params("x", &own).unwrap().embedded_fonts);
+    assert!(LoadOptions::from_params("x", &json!({"embeddedFonts": "yes"})).is_err());
 }
 
 /// Pixel Snapping Options: `view.snapToPixel.options` reads and sets While Drawing, While Moving

@@ -945,6 +945,16 @@ fn presets_have_their_paths_corners_and_noise() {
 }
 
 #[test]
+fn high_fidelity_photo_traces_in_full_tone() {
+    // As many colors as the tones need, split until no color spans more than about 21 levels, as
+    // abutting shapes.
+    let p = preset("High Fidelity Photo").unwrap();
+    assert_eq!((p.palette, p.color_detail, p.method), (Palette::FullTone, 85.0, Method::Abutting));
+    // Low Fidelity Photo keeps its 20 colors.
+    assert_eq!(preset("Low Fidelity Photo").unwrap().palette, Palette::Limited);
+}
+
+#[test]
 fn params_json_roundtrip_and_partial() {
     let p = preset("6 Colors").unwrap();
     let v = serde_json::to_value(&p).unwrap();
@@ -1213,12 +1223,14 @@ fn full_tone_follows_the_tones_the_image_has() {
 }
 
 #[test]
-fn automatic_traces_flat_art_with_its_colours_and_photos_in_full_tone() {
+fn automatic_traces_flat_art_with_its_colours_and_photos_in_continuous_tone() {
     let flat = palette(&flat_quads(), Palette::Automatic, 2, 50.0);
     assert_eq!(flat.len(), 4, "the four flat colours, whatever `colors` says: {flat:?}");
     assert!(flat.iter().any(|c| c[0] > 200 && c[1] < 60 && c[2] < 60), "red is one of them: {flat:?}");
     let tone = palette(&gradient(), Palette::Automatic, 2, 50.0);
-    assert_eq!(tone.len(), palette(&gradient(), Palette::FullTone, 2, 50.0).len(), "continuous tone: as Full Tone");
+    // Continuous tone: as many colors as the tones need, without Full Tone's least count.
+    let full = palette(&gradient(), Palette::FullTone, 2, 50.0);
+    assert!(tone.len() > 4 && tone.len() <= full.len(), "{} colors, {} in Full Tone", tone.len(), full.len());
 }
 
 #[test]
@@ -1713,6 +1725,56 @@ fn jitter(x: u32, y: u32, salt: u32) -> f64 {
     f64::from(v & 0xFFFF) / 32768.0 - 1.0
 }
 
+#[test]
+fn full_tone_keeps_more_of_a_noisy_ramps_tones() {
+    // Gray to green with grain: Full Tone's neighboring tones are close in RGB and mixed along
+    // their borders, and still look different.
+    let img = Raster::from_fn(256, 96, |x, y| {
+        let v = |k: u32, base: f64, slope: f64| (base + slope * f64::from(x) + 8.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
+        [v(0, 100.0, 0.0), v(1, 40.0, 0.7), v(2, 100.0, 0.0), 255]
+    });
+    let params = TraceParams { mode: Mode::Color, palette: Palette::FullTone, color_detail: 85.0, ..TraceParams::default() };
+    // Median cut gives at least 85 (one per step of Color detail). Merging the ones that look alike
+    // leaves 6 (one per 30 or so levels of the ramp); merging close RGB colors would leave 4.
+    let n = quantize(&img, &params).palette.len();
+    assert!(n >= 6, "{n} tones");
+    // Automatic traces continuous tone without Full Tone's least count and keeps merging close RGB colors.
+    let automatic = quantize(&img, &TraceParams { palette: Palette::Automatic, ..params }).palette.len();
+    assert!(automatic < n, "{automatic} tones with Automatic, {n} with Full Tone");
+}
+
+#[test]
+fn full_tone_traces_a_noisy_dark_ground_like_a_light_one() {
+    // A gray ground with up to 8 levels of grain a channel. The same grain lies farther apart in
+    // Oklab in a dark gray than in a light one; the dark ground still takes about as many colors
+    // and shapes as the light one (32 and 53 against 31 and 52 when measured).
+    let ground = |gray: f64| {
+        let img = Raster::from_fn(192, 128, |x, y| {
+            let c = |k: u32| (gray + 8.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
+            [c(0), c(1), c(2), 255]
+        });
+        trace(&img, &preset("High Fidelity Photo").unwrap())
+    };
+    let (dark, light) = (ground(28.0), ground(200.0));
+    assert!(dark.palette.len() <= light.palette.len() + 2, "{} colors dark, {} light", dark.palette.len(), light.palette.len());
+    assert!(dark.paths.len() <= light.paths.len() + 6, "{} shapes dark, {} light", dark.paths.len(), light.paths.len());
+}
+
+#[test]
+fn full_tone_merges_a_flat_colors_compression_blocks() {
+    // Three flat colors stored in 8 × 8 blocks, each block off by up to 8 levels a channel, with a
+    // little grain: the blocks of one color look alike and are mixed in patches, so each flat
+    // color traces as one shape in Full Tone too, not as squares of near colors.
+    let bases = [[200.0, 150.0, 120.0], [70.0, 120.0, 190.0], [40.0, 90.0, 40.0]];
+    let img = Raster::from_fn(192, 128, |x, y| {
+        let base: [f64; 3] = bases[(x / 64) as usize];
+        let c = |k: u32| (base[k as usize] + 8.0 * jitter(x / 8, y / 8, k) + 1.5 * jitter(x, y, k + 7)).round().clamp(0.0, 255.0) as u8;
+        [c(0), c(1), c(2), 255]
+    });
+    let res = trace(&img, &preset("High Fidelity Photo").unwrap());
+    assert_eq!((res.palette.len(), res.paths.len()), (3, 3), "{:?}", res.palette);
+}
+
 /// Three flat colours (a navy field, a yellow disc, a green bar) drawn anti-aliased, with `noise`
 /// levels of noise per channel.
 fn three_colour_art(noise: f64) -> Raster {
@@ -2013,7 +2075,7 @@ fn a_nearly_flat_dark_ground_keeps_one_color() {
 
 #[test]
 fn a_noisy_gradient_keeps_its_tones_without_specks() {
-    // Tones 0–255 across with noise larger than High Fidelity Photo's 64 steps are apart.
+    // Tones 0–255 across with up to 5 levels of noise a channel.
     let img = Raster::from_fn(256, 96, |x, y| {
         let c = |k: u32| (f64::from(x) + 5.0 * jitter(x, y, k)).round().clamp(0.0, 255.0) as u8;
         [c(0), c(1), c(2), 255]

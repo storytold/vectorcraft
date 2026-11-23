@@ -78,6 +78,10 @@ struct State {
     transform: Option<Arc<DisplayTransform>>,
     /// The bytes last reported, so a reading of the same profile builds nothing.
     reported: Option<(Option<String>, Vec<u8>)>,
+    /// The desktop app reads the display's profile ([`DisplayProfile::attach_reader`]).
+    reader: bool,
+    /// Refresh Monitor Profile asked for a reading that hasn't started yet.
+    requested: bool,
 }
 
 impl Default for State {
@@ -90,6 +94,8 @@ impl Default for State {
             reason: Some("this build doesn't read display profiles".into()),
             transform: None,
             reported: None,
+            reader: false,
+            requested: false,
         }
     }
 }
@@ -114,6 +120,42 @@ impl DisplayProfile {
             s.kind = Kind::Pending;
             s.reason = Some("the display profile hasn't been read yet".into());
         }
+    }
+
+    /// The desktop app reads the display's profile, so [`Self::request_read`] can ask it to.
+    pub fn attach_reader(&self) {
+        self.write().reader = true;
+    }
+
+    /// Whether something reads the display's profile ([`Self::attach_reader`]).
+    pub(crate) fn has_reader(&self) -> bool {
+        self.read().reader
+    }
+
+    /// Edit › Refresh Monitor Profile: asks the desktop app to read the display's profile again on
+    /// its next frame, without waiting for its intervals; while a reading runs, the request waits
+    /// for it to end. Refused while `enabled` (the preference) is off, and when nothing reads the
+    /// profile. Nothing is queued when it is refused.
+    pub fn request_read(&self, enabled: bool) -> Result<(), String> {
+        if !enabled {
+            return Err("turn on Use Monitor Profile for Canvas first".into());
+        }
+        let mut s = self.write();
+        if !s.reader {
+            return Err("this build doesn't read display profiles".into());
+        }
+        s.requested = true;
+        Ok(())
+    }
+
+    /// Whether [`Self::request_read`] asked for a reading that hasn't started.
+    pub fn read_requested(&self) -> bool {
+        self.read().requested
+    }
+
+    /// Takes the request [`Self::request_read`] made: whether there was one.
+    pub fn take_request(&self) -> bool {
+        self.read_requested() && std::mem::take(&mut self.write().requested)
     }
 
     /// Takes `reading` in. A profile is checked, and its conversion built, on the calling thread;
@@ -170,8 +212,9 @@ impl DisplayProfile {
 
     /// The status `ui.inspect` reports as `displayProfile`: the display, what was found
     /// (`profile`, `srgbProfile`, `system`, `none`, `pending` or `unsupported`), the profile's
-    /// description and where it was read from, whether the canvas is converted, why not, and
-    /// whether the system converts the window.
+    /// description and where it was read from, whether the canvas is converted, why not, whether
+    /// the system converts the window, and whether a reading [`Self::request_read`] asked for
+    /// hasn't started.
     pub fn status(&self, enabled: bool) -> Value {
         let s = self.read();
         json!({
@@ -183,6 +226,7 @@ impl DisplayProfile {
             "applied": enabled && s.transform.is_some(),
             "reason": s.reason,
             "osManaged": s.kind == Kind::System,
+            "readRequested": s.requested,
         })
     }
 
@@ -533,6 +577,22 @@ pub(crate) mod tests {
         // The profile back: a new key, so frames drawn before are drawn again.
         d.report(reading(Found::Profile { icc: p3(), from: "colord".into() }));
         assert!(d.key(true) > key);
+    }
+
+    #[test]
+    fn a_reading_is_requested_only_with_the_preference_on_and_a_reader() {
+        let d = DisplayProfile::default();
+        assert_eq!(d.request_read(true).unwrap_err(), "this build doesn't read display profiles");
+        d.attach_reader();
+        assert_eq!(d.request_read(false).unwrap_err(), "turn on Use Monitor Profile for Canvas first");
+        assert!(!d.read_requested() && !d.take_request(), "a refused request is not queued");
+        d.request_read(true).unwrap();
+        d.request_read(true).unwrap();
+        assert_eq!(d.status(true)["readRequested"].as_bool(), Some(true));
+        // Two requests before the reading starts make one reading.
+        assert!(d.take_request());
+        assert!(!d.take_request());
+        assert_eq!(d.status(true)["readRequested"].as_bool(), Some(false));
     }
 
     #[test]

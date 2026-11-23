@@ -93,7 +93,7 @@ pub(crate) fn quantize_keeping(img: &Raster, params: &TraceParams) -> (Quantized
                 let g = l.round().clamp(0.0, 255.0) as u8;
                 [g, g, g]
             });
-            let q = merge_mixed(compact(labels, palette.collect()), img.width as usize, img.height as usize, &[]);
+            let q = merge_mixed(compact(labels, palette.collect()), img.width as usize, img.height as usize, &[], Alike::Rgb);
             (if settles_wide(params) { settled_wide(q, img, &own, true) } else { settled(q, img, &own) }, vec![])
         }
         // Logo mode traces without quantising; asked directly, it quantises like Color.
@@ -175,12 +175,14 @@ pub(crate) fn quantize_keeping(img: &Raster, params: &TraceParams) -> (Quantized
                     img.rgba.as_chunks::<4>().0.iter().map(|p| if p[3] < 128 { TRANSPARENT } else { lut[hk.key(p[0], p[1], p[2])] }).collect();
                 let palette = centers.iter().map(|c| [c[0].round() as u8, c[1].round() as u8, c[2].round() as u8]).collect();
                 let q = compact(labels, palette);
-                // A swatch library's colours are used as they are.
+                // A swatch library's colours are used as they are. Full Tone's colors merge only when
+                // they look alike (see `Alike`).
                 if library {
                     return (q, false);
                 }
+                let alike = if params.palette == Palette::FullTone { Alike::Seen } else { Alike::Rgb };
                 let before = q.palette.len();
-                let q = merge_mixed(q, img.width as usize, img.height as usize, &rare);
+                let q = merge_mixed(q, img.width as usize, img.height as usize, &rare, alike);
                 let merged = q.palette.len() < before;
                 (q, merged)
             };
@@ -309,16 +311,38 @@ pub(crate) fn tests_oklab(c: [u8; 3]) -> [f64; 3] {
     oklab(c.map(f64::from))
 }
 
+/// Which colors [`merge_mixed`] takes for one color that noise split.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Alike {
+    /// Close in RGB: under 30 levels apart and thoroughly mixed, or under 12 and mixed in patches.
+    /// Used for Grayscale and for every Color palette but Full Tone (Automatic included).
+    Rgb,
+    /// Close to the eye: under [`FULL_TONE_ALIKE`] apart in Oklab and thoroughly mixed, or under
+    /// [`FULL_TONE_PATCHES`] and mixed in patches (compression blocks). Full Tone's neighboring tones
+    /// of a smooth photo are about as close in RGB as noise makes one color, and mixed along their
+    /// soft border, so the RGB test would take most of them for one color.
+    Seen,
+}
+
+/// How far apart (Oklab × 100) two thoroughly mixed Full Tone colors may lie and still be merged
+/// as one color that noise split: a little more than the least difference one sees (see [`oklab`]).
+const FULL_TONE_ALIKE: f64 = 5.0;
+
+/// How far apart (Oklab × 100) two Full Tone colors mixed in patches may lie and still be merged:
+/// the blocks of one flat color that compression shifted by a few levels each.
+const FULL_TONE_PATCHES: f64 = 1.5;
+
 /// `q` with the colours that noise made of one colour merged, largest mix first.
 ///
 /// Asked for more colours than a picture has, k-means splits a flat colour along its noise, and
-/// the two halves would trace as specks of one all over the other. Such halves are close (under 30
-/// levels apart: noise is about as strong in a dark colour as in a light one, so the distance is
-/// taken in RGB) and thoroughly mixed: the pixels of the lesser one have, on average, more than
-/// half a neighbour of the other each; or they are closer still (under 12 levels) and mixed in
-/// patches (compression blocks). The bands of a gradient are close too, but each keeps to itself
-/// and they stay apart. The colours in `keep` merge with none.
-fn merge_mixed(q: Quantized, w: usize, h: usize, keep: &[[u8; 3]]) -> Quantized {
+/// the two halves would trace as specks of one all over the other. Such halves are close and
+/// thoroughly mixed: the pixels of the lesser one have, on average, more than half a neighbour of
+/// the other each; or they are closer still and mixed in patches (compression blocks). The bands
+/// of a gradient are close too, but each keeps to itself and they stay apart. The colours in
+/// `keep` merge with none. Close is under 30 RGB levels apart for thoroughly mixed colours and
+/// under 12 for patches with [`Alike::Rgb`], and in Oklab under [`FULL_TONE_ALIKE`] and
+/// [`FULL_TONE_PATCHES`] with [`Alike::Seen`].
+fn merge_mixed(q: Quantized, w: usize, h: usize, keep: &[[u8; 3]], alike: Alike) -> Quantized {
     let k = q.palette.len();
     // A rare colour kept on purpose (see `rare_colours`) is distinct by choice: it merges with none.
     let kept: Vec<bool> = q.palette.iter().map(|c| keep.contains(c)).collect();
@@ -340,6 +364,13 @@ fn merge_mixed(q: Quantized, w: usize, h: usize, keep: &[[u8; 3]]) -> Quantized 
         }
     }
     let mut color: Vec<[f64; 3]> = q.palette.iter().map(|c| c.map(f64::from)).collect();
+    // Each colour in Oklab, for `Alike::Seen`, worked out once and again only for a colour that
+    // takes in another.
+    let mut lab: Vec<[f64; 3]> = if alike == Alike::Seen { color.iter().map(|&c| oklab(c)).collect() } else { vec![] };
+    let seen_apart = |lab: &[[f64; 3]], a: usize, b: usize| match (lab.get(a), lab.get(b)) {
+        (Some(la), Some(lb)) => (0..3).map(|c| (la[c] - lb[c]).powi(2)).sum::<f64>().sqrt(),
+        _ => f64::INFINITY,
+    };
     // Which colour each has merged into (itself when none).
     let mut into: Vec<usize> = (0..k).collect();
     loop {
@@ -350,14 +381,30 @@ fn merge_mixed(q: Quantized, w: usize, h: usize, keep: &[[u8; 3]]) -> Quantized 
                     continue;
                 }
                 let mixed = touch[a * k + b] / count[a].min(count[b]);
-                let apart = (0..3).map(|c| (color[a][c] - color[b][c]).powi(2)).sum::<f64>().sqrt();
-                if (mixed > 0.5 && apart < 30.0 || mixed > 0.15 && apart < 12.0) && best.is_none_or(|x| mixed > x.0) {
+                // Two colours this little mixed merge under neither test.
+                if mixed <= 0.15 {
+                    continue;
+                }
+                let merges = match alike {
+                    Alike::Rgb => {
+                        let apart = (0..3).map(|c| (color[a][c] - color[b][c]).powi(2)).sum::<f64>().sqrt();
+                        mixed > 0.5 && apart < 30.0 || apart < 12.0
+                    }
+                    Alike::Seen => {
+                        let apart = seen_apart(&lab, a, b);
+                        mixed > 0.5 && apart < FULL_TONE_ALIKE || apart < FULL_TONE_PATCHES
+                    }
+                };
+                if merges && best.is_none_or(|x| mixed > x.0) {
                     best = Some((mixed, a, b));
                 }
             }
         }
         let Some((_, a, b)) = best else { break };
         color[a] = [0, 1, 2].map(|c| (color[a][c] * count[a] + color[b][c] * count[b]) / (count[a] + count[b]));
+        if let Some(l) = lab.get_mut(a) {
+            *l = oklab(color[a]);
+        }
         count[a] += count[b];
         count[b] = 0.0;
         into[b] = a;
@@ -408,6 +455,33 @@ mod tests {
         assert_eq!(own[0].len(), all);
         assert!(own[0].iter().any(|&o| !o), "the edges have blend pixels");
         assert!(own.iter().all(|o| *o == own[0]));
+    }
+
+    #[test]
+    fn full_tone_merges_only_mixed_colors_that_look_alike() {
+        // Two colors in a checkerboard: every pixel has four neighbors of the other color.
+        let mixed =
+            |a: [u8; 3], b: [u8; 3]| Quantized { labels: (0..16 * 16).map(|i| ((i % 16 + i / 16) % 2) as u16).collect(), palette: vec![a, b] };
+        let colors = |q: Quantized, alike: Alike| merge_mixed(q, 16, 16, &[], alike).palette.len();
+        // Gray and a greener gray, 22 levels apart (about 6.4 in Oklab): one color in RGB, two that look different.
+        let (gray, green) = ([128, 128, 128], [128, 150, 128]);
+        assert_eq!(colors(mixed(gray, green), Alike::Rgb), 1);
+        assert_eq!(colors(mixed(gray, green), Alike::Seen), 2);
+        // Two grays 3 levels apart (about 1 in Oklab): one color either way.
+        assert_eq!(colors(mixed(gray, [131; 3]), Alike::Rgb), 1);
+        assert_eq!(colors(mixed(gray, [131; 3]), Alike::Seen), 1);
+        // Side by side, not mixed: two colors either way.
+        let halves = Quantized { labels: (0..16 * 16).map(|i| u16::from(i % 16 >= 8)).collect(), palette: vec![[128; 3], [131; 3]] };
+        assert_eq!(colors(halves.clone(), Alike::Rgb), 2);
+        assert_eq!(colors(halves, Alike::Seen), 2);
+        // In 8 × 8 blocks, mixed in patches: grays 3 levels apart merge either way; grays 6 levels
+        // apart (about 10 in RGB, more than 1.5 in Oklab) merge only in RGB.
+        let blocks =
+            |b: [u8; 3]| Quantized { labels: (0..16 * 16).map(|i| ((i % 16 / 8 + i / 16 / 8) % 2) as u16).collect(), palette: vec![gray, b] };
+        assert_eq!(colors(blocks([131; 3]), Alike::Rgb), 1);
+        assert_eq!(colors(blocks([131; 3]), Alike::Seen), 1);
+        assert_eq!(colors(blocks([134; 3]), Alike::Rgb), 1);
+        assert_eq!(colors(blocks([134; 3]), Alike::Seen), 2);
     }
 
     #[test]

@@ -87,7 +87,8 @@ fn images(d: &Document) -> Vec<(Node, image::RgbaImage)> {
         .into_iter()
         .filter_map(|n| match &n.kind {
             NodeKind::Image(im) => {
-                let png = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+                let decoded = craft_image_codecs::decode(&d.images[&im.key].bytes).unwrap();
+                let png = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
                 Some((n.clone(), png))
             }
             _ => None,
@@ -146,7 +147,7 @@ fn a_bare_picture_and_a_version_1_picture_open() {
     v1.extend([0xA0, 0x00, 0x05, 0x50]);
     v1.extend(rect(20, 20, 30, 30));
     v1.push(0xFF);
-    assert!(!crate::is_pict(&v1));
+    assert!(crate::is_pict(&v1));
     let p = import_pict(&v1).unwrap();
     assert!(p.warnings.is_empty(), "{:?}", p.warnings);
     assert_eq!(p.document.artboards[0].rect.size(), (60.0, 40.0).into());
@@ -230,22 +231,28 @@ fn patterns_fill_with_their_average_color() {
     assert_eq!(fill_rgb(&v[0]), Some([128, 128, 128]));
     // eraseRect with an RGB background pattern.
     assert_eq!(fill_rgb(&v[1]), Some([0, 255, 0]));
-    assert!(p.warnings.iter().any(|w| w.contains("average of their colors")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("their average color")), "{:?}", p.warnings);
 }
 
 #[test]
 fn text_comes_in_as_point_type_in_the_named_font() {
-    let name = [be(&[9, 300]), vec![6], b"Geneva".to_vec()].concat();
+    let name = [be(&[9, 300]), vec![6], b"Gen\x8Eva".to_vec()].concat();
     let bytes = v2(
         [0, 0, 100, 200],
-        &[(0x2C, name), (0x03, be(&[300])), (0x0D, be(&[18])), (0x04, vec![1]), (0x28, [be(&[50, 10]), vec![4], b"Caf\x8E".to_vec()].concat())],
+        &[
+            (0x2C, name),
+            (0x03, be(&[300])),
+            (0x0D, be(&[18])),
+            (0x04, vec![1]),
+            (0x28, [be(&[50, 10]), vec![8], b"Caf\x8E\xCA\xDB\xDE\xF0".to_vec()].concat()),
+        ],
     );
     let p = import_pict(&bytes).unwrap();
     let texts: Vec<_> = all(&p.document).into_iter().filter(|n| matches!(n.kind, NodeKind::Text(_))).collect();
     let NodeKind::Text(t) = &texts[0].kind else { panic!("text") };
-    assert_eq!(t.plain_text(), "Café");
+    assert_eq!(t.plain_text(), "Café\u{a0}€ﬁ\u{f8ff}");
     let st = &t.runs[0].style;
-    assert_eq!((st.font_family.as_str(), st.font_style.as_str(), st.size), ("Geneva", "Bold", 18.0));
+    assert_eq!((st.font_family.as_str(), st.font_style.as_str(), st.size), ("Genéva", "Bold", 18.0));
     // The text location is the baseline's start.
     assert_eq!(t.xf.translation(), Point::new(10.0, 50.0).to_vec2());
 }
@@ -374,10 +381,15 @@ fn quicktime(ctype: &[u8; 4], matrix: [f64; 6], w: i16, h: i16, data: &[u8]) -> 
 }
 
 fn red_jpeg() -> Vec<u8> {
-    let img = image::RgbImage::from_pixel(4, 2, image::Rgb([255, 0, 0]));
-    let mut out = std::io::Cursor::new(vec![]);
-    img.write_to(&mut out, image::ImageFormat::Jpeg).unwrap();
-    out.into_inner()
+    let img = craft_image_codecs::Image::from_raw(
+        4,
+        2,
+        craft_image_codecs::ChannelLayout::Rgb,
+        craft_image_codecs::SampleType::U8,
+        [255u8, 0, 0].repeat(8),
+    )
+    .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Jpeg, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 #[test]
@@ -395,7 +407,7 @@ fn quicktime_jpeg_images_are_placed_by_their_matrix() {
     let [r, g, b, _] = px.get_pixel(1, 1).0;
     assert!(r > 240 && g < 16 && b < 16, "{r} {g} {b}");
     assert!(near(n.geometric_bounds().unwrap(), Rect::new(10.0, 5.0, 18.0, 9.0), 1e-9));
-    assert!(p.warnings.iter().any(|w| w.contains("other than JPEG")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("couldn't be read was left out")), "{:?}", p.warnings);
 }
 
 /// An image whose matrix flattens it is left out, and adds nothing to the document's images.
@@ -445,7 +457,7 @@ fn a_picture_that_never_ends_stops_at_the_opcode_limit() {
     b.resize(b.len() + 2 * ((1 << 22) + 1), 0);
     let p = import_pict(&b).unwrap();
     assert_eq!(paths(&p.document).len(), 1);
-    assert!(p.warnings.iter().any(|w| w.contains("more opcodes")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("limit on what one file may hold")), "{:?}", p.warnings);
 }
 
 /// Regions share one budget of inversion points per picture: past it, a region is left out.
@@ -458,7 +470,7 @@ fn regions_past_the_picture_budget_are_left_out() {
     let body = [rect(0, 0, 1, 16_000), be(&words)].concat();
     let region = [be(&[(body.len() + 2) as i16]), body].concat();
     let p = import_pict(&v2([0, 0, 300, 300], &[(0x81, region.clone()), (0x81, region.clone()), (0x81, region)])).unwrap();
-    assert!(p.warnings.iter().any(|w| w.contains("regions larger")), "{:?}", p.warnings);
+    assert!(p.warnings.iter().any(|w| w.contains("skipped")), "{:?}", p.warnings);
     let v = paths(&p.document);
     assert_eq!(v.len(), 2);
     let NodeKind::Path { path, .. } = &v[0].kind else { panic!("a path") };

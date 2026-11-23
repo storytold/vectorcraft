@@ -1,5 +1,6 @@
 //! Separations Preview panel: process plates C/M/Y/K plus spot plates with eye toggles (one visible
-//! plate renders as greyscale ink coverage; Alt-click an eye to show only that plate), and the
+//! plate renders as grayscale ink coverage; Alt-click an eye to show only that plate, and Alt-click
+//! the eye of the plate shown alone to show every plate), and the
 //! colour-management controls behind Edit → Color Settings… / Assign Profile… and View → Proof
 //! Setup (working spaces, color management policies, intent, black-point compensation, proof
 //! target, gamut check).
@@ -59,11 +60,11 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let vis = visible(&p.name);
                 let mut clicked = false;
                 ui.add_enabled_ui(on, |ui| {
-                    clicked = widgets::toggle_icon(ui, "eye", vis, 18.0, tl!("Show/hide plate (Alt-click: only this plate)"));
+                    clicked =
+                        widgets::toggle_icon(ui, "eye", vis, 18.0, tl!("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)"));
                 });
                 if clicked && on {
-                    let key = if alt { "only" } else { "toggle" };
-                    run(app, "view.separationsPreview", json!({ key: p.name }));
+                    run(app, "view.separationsPreview", eye_click(&p.name, alt));
                 }
                 let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
                 let q = |x: f32| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -73,6 +74,12 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         }
     });
+}
+
+/// The `view.separationsPreview` params for a click on plate `name`'s eye: with Alt, that plate
+/// alone, or every plate when it already shows alone; without, the plate shown or hidden.
+fn eye_click(name: &str, alt: bool) -> Value {
+    if alt { json!({"soloToggle": name}) } else { json!({"toggle": name}) }
 }
 
 /// A dropdown of the `kind` profiles after `extra` (a built-in entry, shown in the UI language);
@@ -102,8 +109,8 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, the RGB
-/// and CMYK color management policies, Load Profile… and Gamut Check, and the profile the active
-/// document is assigned.
+/// and CMYK color management policies, the Ask boxes of Profile Mismatches and Missing Profiles,
+/// Load Profile… and Gamut Check, and the profile the active document is assigned.
 fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::working_settings();
     widgets::section_header(ui, tl!("Color Settings"));
@@ -141,6 +148,22 @@ fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
                 && let Some(p) = choices.get(i)
             {
                 run(app, "edit.colorSettings", json!({ key: p.id() }));
+            }
+        });
+    }
+    // Profile Mismatches and Missing Profiles: what opening and pasting ask about.
+    let asks: [(&str, &str, &str, bool); 3] = [
+        ("askMismatchOpen", tl!("Profile Mismatches:"), tl!("Ask When Opening"), st.ask_mismatch_open),
+        ("askMismatchPaste", "", tl!("Ask When Pasting"), st.ask_mismatch_paste),
+        ("askMissingOpen", tl!("Missing Profiles:"), tl!("Ask When Opening"), st.ask_missing_open),
+    ];
+    for (key, heading, label, on) in asks {
+        if !heading.is_empty() {
+            ui.label(heading);
+        }
+        ui.push_id(key, |ui| {
+            if widgets::check(ui, label, on, true) {
+                run(app, "edit.colorSettings", json!({ key: !on }));
             }
         });
     }
@@ -343,6 +366,16 @@ mod tests {
         assert_eq!(menu, panel);
         assert!(panel.iter().any(|(id, _)| id == "tritanopia"));
         assert!(panel.iter().all(|(id, _)| cms::ProofTarget::parse(id).is_some_and(|t| t.id() == *id)));
+    }
+
+    /// An Alt-click on a plate's eye sends `soloToggle`, which `view.separationsPreview` takes, and
+    /// a plain click sends `toggle`.
+    #[test]
+    fn an_alt_click_on_a_plates_eye_sends_solo_toggle() {
+        assert_eq!(eye_click("Cyan", true), json!({"soloToggle": "Cyan"}));
+        assert_eq!(eye_click("Brand Orange", false), json!({"toggle": "Brand Orange"}));
+        let spec = vectorcraft_engine::cmd::command_specs().iter().find(|c| c.id == "view.separationsPreview");
+        assert!(spec.is_some_and(|c| c.params.contains("soloToggle?:")));
     }
 
     /// Assign Profile's three choices: no profile, the working space assigned as the profile, or

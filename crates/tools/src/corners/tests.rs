@@ -406,6 +406,28 @@ fn widgets_off_or_elsewhere_keep_the_tools_behaviour() {
     assert_eq!(a[0], Action::Begin("Move".into()));
 }
 
+/// With Show Shape Widgets off, a live rectangle's widgets hide from the Selection tool and the
+/// shape tools, and a drag from one moves the object; Direct Selection still shows and drags them
+/// while Show Corner Widget is on.
+#[test]
+fn hidden_shape_widgets_leave_direct_selections_corners() {
+    let (d, id) = live_rect(0.0, Affine::translate((100.0, 100.0)));
+    let s = selected(id);
+    let p = paint();
+    let c = ToolContext { shape_widgets: false, ..cx(&d, &s, &p) };
+    let at = Point::new(110.0, 110.0);
+    assert!(CornerWidgets::for_tool(&c, false).is_none());
+    assert!(!over_widget(&c, at, false) && double_click(&c, at, false).is_none());
+    assert!(CornerWidgets::for_tool(&c, true).is_some_and(|w| w.visible().count() == 4));
+    assert!(over_widget(&c, at, true));
+    let mut t = crate::create("selection");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 110.0))[0], Action::Begin("Move".into()));
+    // Show Corner Widget off hides Direct Selection's too.
+    let off = ToolContext { corner_widgets: false, ..c };
+    assert!(CornerWidgets::for_tool(&off, true).is_none());
+}
+
 /// #511: Direct Selection shows a widget in each of a star's ten corners (the Selection tool
 /// none: a star isn't a live shape); dragging a tip's inward rounds them all as one step.
 #[test]

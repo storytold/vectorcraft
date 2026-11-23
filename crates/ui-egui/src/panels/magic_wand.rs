@@ -4,6 +4,7 @@
 
 use egui::Ui;
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::wand::color_tolerance_max;
 
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
@@ -47,12 +48,18 @@ fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &str, flag: &str
     });
 }
 
+/// The largest color tolerance in the active document: 100 in a CMYK document, else 255.
+fn color_max(app: &VectorcraftApp) -> f64 {
+    color_tolerance_max(app.session.active().map(|d| d.doc.color_mode).unwrap_or_default())
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(app);
-    row(app, ui, &o, tl!("Fill Color"), "fillColor", Some(("fillTolerance", Tol::Plain(""), 255.0)));
+    let cmax = color_max(app);
+    row(app, ui, &o, tl!("Fill Color"), "fillColor", Some(("fillTolerance", Tol::Plain(""), cmax)));
     if !pstate::<bool>(ui.ctx(), "wand-hide-stroke") {
         widgets::divider(ui);
-        row(app, ui, &o, tl!("Stroke Color"), "strokeColor", Some(("strokeTolerance", Tol::Plain(""), 255.0)));
+        row(app, ui, &o, tl!("Stroke Color"), "strokeColor", Some(("strokeTolerance", Tol::Plain(""), cmax)));
         row(app, ui, &o, tl!("Stroke Weight"), "strokeWeight", Some(("weightTolerance", Tol::Weight, 1000.0)));
     }
     if !pstate::<bool>(ui.ctx(), "wand-hide-transparency") {
@@ -92,5 +99,17 @@ mod tests {
             });
             out.textures_delta.clear();
         }
+    }
+
+    #[test]
+    fn color_tolerance_fields_go_to_100_in_a_cmyk_document() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert_eq!(color_max(&app), 255.0);
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        assert_eq!(color_max(&app), 255.0);
+        app.session.execute("magicWand.set", &json!({"fillTolerance": 200})).unwrap();
+        app.session.execute("file.new", &json!({"width": 100, "height": 100, "colorMode": "cmyk"})).unwrap();
+        assert_eq!(color_max(&app), 100.0);
+        assert_eq!(options(&mut app)["fillTolerance"], 100.0);
     }
 }

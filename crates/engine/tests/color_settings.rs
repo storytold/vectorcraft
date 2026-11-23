@@ -6,9 +6,9 @@
 use std::sync::{Mutex, MutexGuard};
 
 use serde_json::json;
-use vectorcraft_color::cms;
+use vectorcraft_color::{Color, cms};
 use vectorcraft_engine::Session;
-use vectorcraft_engine::cmd::colormgmt::{PROFILES_KEY, doc_profiles};
+use vectorcraft_engine::cmd::colormgmt::{PROFILES_KEY, ProfileChoice, ProfileIssue, doc_profiles};
 use vectorcraft_engine::store::MAX_PRESET_FILE;
 use vectorcraft_geom::Affine;
 use vectorcraft_render::{RenderOptions, Renderer};
@@ -18,6 +18,22 @@ use vectorcraft_testkit::fixtures::{exec, id_of, rect, select, session};
 fn settings() -> MutexGuard<'static, ()> {
     static SETTINGS: Mutex<()> = Mutex::new(());
     SETTINGS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The working Color Settings as a test found them, put back when it ends (a failing one too)
+/// before the next test takes its turn.
+struct Restored(cms::ColorSettings, #[allow(dead_code)] MutexGuard<'static, ()>);
+
+impl Drop for Restored {
+    fn drop(&mut self) {
+        let _ = cms::set_active(&self.0);
+    }
+}
+
+/// [`settings`], with the working Color Settings put back afterwards.
+fn restored_settings() -> Restored {
+    let g = settings();
+    Restored(cms::working_settings(), g)
 }
 
 #[test]
@@ -558,7 +574,41 @@ fn the_eyedropper_takes_an_image_pixel_into_the_working_rgb_space() {
     let mut s = session();
     let img = image::RgbaImage::from_raw(1, 1, vec![83, 170, 223, 255]).unwrap();
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, _| {
         d.images.insert("px".into(), ImageBlob::png(png));
         let l = d.layers[0].id;
@@ -653,7 +703,24 @@ fn freeform_rgb_points_mix_in_the_working_rgb_space() {
     let canvas = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixel(50, 50);
     let svg = vectorcraft_svg::export_full(&d, &vectorcraft_svg::ExportOptions::default(), None).svg;
     let data = svg.split("data:image/png;base64,").nth(1).unwrap().split('"').next().unwrap();
-    let png = image::load_from_memory(&vectorcraft_testkit::format::base64_decode(data).unwrap()).unwrap().to_rgba8();
+    let png = craft_image_codecs::decode(&vectorcraft_testkit::format::base64_decode(data).unwrap())
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     let written = png.get_pixel(png.width() / 2, png.height() / 2).0;
     let want = Color::rgb(0.5, 0.15, 0.5).to_rgba8(1.0);
     let display = f.field(spread_scale(box_)).sample(Point::new(50.5, 50.5)).0.map(|v| (v * 255.0).round() as u8);
@@ -872,6 +939,114 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
     }
 }
 
+/// View › Proof Setup › Customize's Preserve CMYK Numbers proofs each color from its own inks:
+/// with Device CMYK as the working space, C50 M50 Y50 and K50 show as the same gray, and on
+/// VectorCraft Generic CMYK they print, and so proof, as different grays; a pattern's tile art
+/// proofs the same way. Without it the proof starts from the drawn pixels, which are the same.
+#[test]
+fn preserve_cmyk_numbers_proofs_each_color_from_its_inks() {
+    let _g = restored_settings();
+    let mut s = session();
+    s.execute("edit.colorSettings", &json!({"cmyk": cms::DEVICE_CMYK})).unwrap();
+    let k50 = json!({"c": 0, "m": 0, "y": 0, "k": 50});
+    let cmy = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [cmy.0], "color": {"c": 50, "m": 50, "y": 50, "k": 0}}));
+    let k = rect(&mut s, 100.0, 0.0, 100.0, 100.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [k.0], "color": k50}));
+    // A pattern whose tile is all K50, filling a band below the squares.
+    let tile = rect(&mut s, 300.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [tile.0], "color": k50}));
+    exec(&mut s, "object.pattern.make", json!({"ids": [tile.0], "name": "K50 Tile", "edit": false}));
+    let band = rect(&mut s, 0.0, 130.0, 200.0, 40.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [band.0], "swatch": "K50 Tile"}));
+    let proof = |preserve_numbers| vectorcraft_render::proof::ProofSetup {
+        target: vectorcraft_render::proof::ProofTarget::Cmyk(cms::GENERIC_CMYK.into()),
+        preserve_numbers,
+        ..Default::default()
+    };
+    let doc = s.doc().unwrap().doc.clone();
+    let pixel = |px: &[u8], x: usize, y: usize| [px[(y * 200 + x) * 4], px[(y * 200 + x) * 4 + 1], px[(y * 200 + x) * 4 + 2]];
+    // The pixels at the centers of the two squares and in the patterned band.
+    let shown = |proof: Option<vectorcraft_render::proof::ProofSetup>| {
+        let opts = RenderOptions { proof, background: Some([255, 255, 255, 255]), ..Default::default() };
+        let px = Renderer::new().render(&doc, 200, 200, Affine::IDENTITY, &opts).pixels;
+        (pixel(&px, 50, 50), pixel(&px, 150, 50), pixel(&px, 55, 155))
+    };
+    let (a, b, _) = shown(None);
+    let (pa, pb, _) = shown(Some(proof(false)));
+    let (ca, cb, cp) = shown(Some(proof(true)));
+    let want = |c: Color| cms::active().proof_color(&c, &proof(true)).map(|v| (v * 255.0).round() as i32);
+    let cmy_want = want(Color::cmyk(0.5, 0.5, 0.5, 0.0));
+    let k_want = want(Color::cmyk(0.0, 0.0, 0.0, 0.5));
+    // With Simulate Paper Color the art sits on the device's paper, not on white.
+    let paper = vectorcraft_render::proof::ProofSetup { simulate_paper: true, ..proof(true) };
+    let tint = cms::active().proof_srgb([1.0; 3], &paper).map(|v| (v * 255.0).round() as i32);
+    let opts = RenderOptions { proof: Some(paper), background: Some([255, 255, 255, 255]), ..Default::default() };
+    let bare = pixel(&Renderer::new().render(&doc, 200, 200, Affine::IDENTITY, &opts).pixels, 50, 115);
+    assert_eq!(a, b, "the two builds show as one gray in Device CMYK");
+    assert_eq!(pa, pb, "proofed from the pixels, they stay one gray");
+    assert!(ca != cb, "proofed from their inks, they print differently: {ca:?} vs {cb:?}");
+    let near = |got: [u8; 3], want: [i32; 3]| got.iter().zip(want).all(|(g, w)| (i32::from(*g) - w).abs() <= 2);
+    assert!(near(ca, cmy_want) && near(cb, k_want), "{ca:?} {cmy_want:?}, {cb:?} {k_want:?}");
+    assert!(near(cp, k_want), "the pattern's tile proofs from its inks: {cp:?} vs {k_want:?}");
+    assert!(tint != [255; 3] && near(bare, tint), "the bare page shows the paper: {bare:?} vs {tint:?}");
+}
+
+/// With Preserve CMYK Numbers, an image in an opacity mask keeps its pixels as they are, so the
+/// mask covers the same in a pattern's tile as outside one.
+#[test]
+fn preserve_cmyk_numbers_leaves_mask_images_in_pattern_tiles_as_they_are() {
+    let _g = restored_settings();
+    let mut s = session();
+    // A K100 square masked by a blue image, the same at (0, 0) and as a pattern's tile.
+    let masked = |s: &mut Session, x: f64| {
+        let obj = rect(s, x, 0.0, 20.0, 20.0);
+        exec(s, "paint.setFill", json!({"ids": [obj.0], "color": {"c": 0, "m": 0, "y": 0, "k": 100}}));
+        let blue = rect(s, x, 0.0, 20.0, 20.0);
+        exec(s, "paint.setFill", json!({"ids": [blue.0], "color": "#0000ff"}));
+        select(s, &[blue]);
+        exec(s, "object.rasterize", json!({"ppi": 72}));
+        let image = s.doc().unwrap().selection.objects[0];
+        select(s, &[obj, image]);
+        exec(s, "transparency.makeOpacityMask", json!({"clip": true}));
+        obj
+    };
+    masked(&mut s, 0.0);
+    let tile = masked(&mut s, 300.0);
+    exec(&mut s, "object.pattern.make", json!({"ids": [tile.0], "name": "Masked Tile", "edit": false}));
+    let band = rect(&mut s, 0.0, 100.0, 200.0, 40.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [band.0], "swatch": "Masked Tile"}));
+    // An unmasked K100 square, for the color the masked one covers the page with.
+    let solid = rect(&mut s, 100.0, 0.0, 20.0, 20.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [solid.0], "color": {"c": 0, "m": 0, "y": 0, "k": 100}}));
+    let proof = vectorcraft_render::proof::ProofSetup {
+        target: vectorcraft_render::proof::ProofTarget::Cmyk(cms::GENERIC_CMYK.into()),
+        preserve_numbers: true,
+        ..Default::default()
+    };
+    let doc = s.doc().unwrap().doc.clone();
+    let pixel = |px: &[u8], x: usize, y: usize| [px[(y * 200 + x) * 4], px[(y * 200 + x) * 4 + 1], px[(y * 200 + x) * 4 + 2]];
+    // The masked square, the middle of a tile (the tiles start at the art's left and top edges,
+    // every 20 points), the unmasked square and the bare page.
+    let shown = |proof: Option<vectorcraft_render::proof::ProofSetup>| {
+        let opts = RenderOptions { proof, background: Some([255, 255, 255, 255]), ..Default::default() };
+        let px = Renderer::new().render(&doc, 200, 200, Affine::IDENTITY, &opts).pixels;
+        (pixel(&px, 10, 10), pixel(&px, 50, 130), pixel(&px, 110, 10), pixel(&px, 190, 60))
+    };
+    let (plain, plain_tile, plain_k, plain_page) = shown(None);
+    let (proofed, proofed_tile, proofed_k, proofed_page) = shown(Some(proof));
+    let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(a, b)| (i32::from(*a) - i32::from(b)).abs() <= 2);
+    assert!(plain != [255; 3] && near(plain, plain_tile), "the tile shows the masked square: {plain:?} vs {plain_tile:?}");
+    assert!(near(proofed, proofed_tile), "the tile's mask covers as the square's does: {proofed:?} vs {proofed_tile:?}");
+    // The proof changes the ink's color but not how much of the page the mask lets it cover.
+    let channel = |v: [u8; 3], i: usize| f32::from(v[i]);
+    let cover = (0..3).map(|i| (channel(plain_page, i) - channel(plain, i)) / (channel(plain_page, i) - channel(plain_k, i))).sum::<f32>() / 3.0;
+    assert!(cover > 0.02 && cover < 0.98, "the mask covers part of the square: {cover}");
+    let want: [u8; 3] =
+        std::array::from_fn(|i| (channel(proofed_page, i) + cover * (channel(proofed_k, i) - channel(proofed_page, i))).round() as u8);
+    assert!(near(proofed, want), "the proofed square keeps the mask's coverage: {proofed:?} vs {want:?}");
+}
+
 /// Edit › Color Settings' color management policies decide what opening a document tagged with
 /// profiles other than the working spaces does with them: Preserve Embedded Profiles keeps them,
 /// Off and Preserve Numbers take them off and keep the color numbers, and Convert to Working Space
@@ -1030,4 +1205,616 @@ fn color_management_policies_are_checked_and_kept() {
     let mut next = Session::new();
     next.attach_color_settings(file);
     assert_eq!(cms::active_settings(), cms::ColorSettings::default());
+}
+
+/// The Ask boxes of Edit › Color Settings are checked, come back in the reply and are kept in
+/// `Color Settings.json`.
+#[test]
+fn ask_boxes_are_checked_and_kept() {
+    let _g = settings();
+    let dir = fresh_dir("ask-kept");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    let file = dir.join("Color Settings.json");
+    let mut s = session();
+    s.attach_color_settings(file.clone());
+    let r = exec(&mut s, "edit.colorSettings", json!({}));
+    assert_eq!(
+        (r["askMismatchOpen"].as_bool(), r["askMismatchPaste"].as_bool(), r["askMissingOpen"].as_bool()),
+        (Some(false), Some(false), Some(false))
+    );
+    for bad in [json!({"askMismatchOpen": "yes"}), json!({"askMismatchPaste": 1}), json!({"askMissingOpen": []})] {
+        assert!(s.execute("edit.colorSettings", &bad).is_err(), "{bad}");
+    }
+    assert!(!file.exists(), "a refused change keeps nothing");
+    let r = exec(&mut s, "edit.colorSettings", json!({"askMismatchOpen": true, "askMissingOpen": true}));
+    assert_eq!(
+        (r["askMismatchOpen"].as_bool(), r["askMismatchPaste"].as_bool(), r["askMissingOpen"].as_bool()),
+        (Some(true), Some(false), Some(true))
+    );
+    let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert!(saved.ask_mismatch_open && !saved.ask_mismatch_paste && saved.ask_missing_open);
+}
+
+/// Two saved documents with a blue rectangle (`blue`, filled `blue0`): `tagged`, assigned Wide
+/// Gamut RGB, and `plain`, untagged. The files go when it drops, and the Color Settings go back to
+/// the defaults.
+struct ProfileFiles {
+    _reset: ColorSettingsReset,
+    _dir: vectorcraft_testkit::TempDir,
+    tagged: std::path::PathBuf,
+    plain: std::path::PathBuf,
+    blue: vectorcraft_doc::NodeId,
+    blue0: vectorcraft_color::Color,
+}
+
+#[allow(clippy::unwrap_used, reason = "a test helper: a file that can't be written fails the test")]
+fn profile_files(tag: &str) -> ProfileFiles {
+    let dir = fresh_dir(tag);
+    let reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let (tagged, plain) = (dir.join("tagged.vectorcraft"), dir.join("plain.vectorcraft"));
+    let mut s = session();
+    let blue = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [blue.0], "color": "#3366cc"}));
+    exec(&mut s, "file.saveAs", json!({"path": plain.to_str().unwrap()}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    exec(&mut s, "file.saveAs", json!({"path": tagged.to_str().unwrap()}));
+    let blue0 = fill_of(&s, blue);
+    ProfileFiles { _reset: reset, _dir: dir, tagged, plain, blue, blue0 }
+}
+
+/// The fill color of object `id` in the active document.
+#[allow(clippy::unwrap_used, reason = "a test helper: a missing object or fill fails the test")]
+fn fill_of(s: &Session, id: vectorcraft_doc::NodeId) -> vectorcraft_color::Color {
+    s.doc().unwrap().doc.node(id).and_then(|n| n.appearance.fill()).and_then(|f| f.paint.color()).unwrap()
+}
+
+/// `document.open` of `path` with the params `extra` in a new session → the reply, and the session.
+#[allow(clippy::unwrap_used, reason = "a test helper: params that are not an object fail the test")]
+fn open_with(path: &std::path::Path, extra: serde_json::Value) -> (Result<serde_json::Value, String>, Session) {
+    let mut s = session();
+    let mut p = json!({"path": path.to_str().unwrap()});
+    for (k, v) in extra.as_object().unwrap() {
+        p[k] = v.clone();
+    }
+    let r = s.execute("document.open", &p).map_err(|e| e.to_string());
+    (r, s)
+}
+
+/// `document.open`'s `profileChoice` answers what Color Settings' Profile Mismatches box asks: for
+/// a document tagged with another profile than the working space of its color mode it keeps the
+/// profile, converts the colors or discards the profile in place of the policy. A missing choice
+/// for it is not used.
+#[test]
+fn profile_choice_answers_a_mismatch() {
+    let _g = settings();
+    let ProfileFiles { tagged, blue, blue0, .. } = &profile_files("profile-mismatch");
+    let (tagged, blue, blue0) = (tagged.as_path(), *blue, *blue0);
+    let fill = |s: &Session| fill_of(s, blue);
+    let open = open_with;
+    let mut s = session();
+
+    // Each choice in place of the policy (Preserve Embedded Profiles).
+    let (r, kept) = open(tagged, json!({"profileChoice": "useEmbedded"}));
+    let r = r.unwrap();
+    assert_eq!(r["profileChoice"], json!({"issue": "mismatch", "model": "rgb", "choice": "useEmbedded"}));
+    assert_eq!((doc_profiles(&kept.doc().unwrap().doc).0, fill(&kept)), (Some(cms::WIDE_GAMUT_RGB.into()), blue0));
+    let (r, discarded) = open(tagged, json!({"profileChoice": "discard"}));
+    let r = r.unwrap();
+    assert_eq!((doc_profiles(&discarded.doc().unwrap().doc).0, fill(&discarded)), (None, blue0), "the numbers stay");
+    assert!(discarded.doc().unwrap().is_dirty());
+    assert!(r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("as chosen when it was opened")), "{r}");
+    let (r, converted) = open(tagged, json!({"profileChoice": "convert"}));
+    assert_eq!(r.unwrap()["profileChoice"]["choice"], "convert");
+    let source = cms::for_document(Some(cms::WIDE_GAMUT_RGB), None);
+    let blue1 = fill(&converted);
+    assert_eq!(doc_profiles(&converted.doc().unwrap().doc).0, None);
+    assert!(blue1 != blue0 && cms::delta_e2000(source.lab(&blue0), cms::working().lab(&blue1)) < 1.0, "{blue0:?} → {blue1:?}");
+    // Under policy Off, Use Embedded keeps the profile.
+    exec(&mut s, "edit.colorSettings", json!({"rgbPolicy": "off"}));
+    let (_, kept) = open(tagged, json!({"profileChoice": "useEmbedded"}));
+    assert_eq!(doc_profiles(&kept.doc().unwrap().doc).0, Some(cms::WIDE_GAMUT_RGB.into()));
+    // A missing choice for a mismatched document is not used: the policy applies.
+    let (r, off) = open(tagged, json!({"profileChoice": "leave"}));
+    assert!(r.unwrap().get("profileChoice").is_none());
+    assert_eq!(doc_profiles(&off.doc().unwrap().doc).0, None);
+}
+
+/// `document.open`'s `profileChoice` answers what the Missing Profiles box asks: an untagged
+/// document is left, assigned the working space or assigned a profile, its numbers kept. A
+/// mismatch choice for it is not used, and wrong choices are refused.
+#[test]
+fn profile_choice_answers_a_missing_profile() {
+    let _g = settings();
+    let ProfileFiles { tagged, plain, blue, blue0, .. } = &profile_files("profile-missing");
+    let (tagged, plain, blue, blue0) = (tagged.as_path(), plain.as_path(), *blue, *blue0);
+    let fill = |s: &Session| fill_of(s, blue);
+    let open = open_with;
+    let (r, left) = open(plain, json!({"profileChoice": "leave"}));
+    assert_eq!(r.unwrap()["profileChoice"], json!({"issue": "missing", "model": "rgb", "choice": "leave"}));
+    assert_eq!(doc_profiles(&left.doc().unwrap().doc).0, None);
+    assert!(!left.doc().unwrap().is_dirty());
+    let (_, working) = open(plain, json!({"profileChoice": "assignWorking"}));
+    assert_eq!(doc_profiles(&working.doc().unwrap().doc).0.as_deref(), Some(cms::canonical_name(cms::SRGB)));
+    assert!(working.doc().unwrap().is_dirty());
+    let (_, p3) = open(plain, json!({"profileChoice": "assign", "assignProfile": cms::DISPLAY_P3}));
+    assert_eq!((doc_profiles(&p3.doc().unwrap().doc).0, fill(&p3)), (Some(cms::DISPLAY_P3.into()), blue0), "assigning keeps the numbers");
+    // A mismatch choice for an untagged document is not used.
+    let (r, plain_kept) = open(plain, json!({"profileChoice": "convert"}));
+    assert!(r.unwrap().get("profileChoice").is_none());
+    assert_eq!(doc_profiles(&plain_kept.doc().unwrap().doc).0, None);
+
+    for bad in [
+        json!({"profileChoice": "bogus"}),
+        json!({"profileChoice": "assign"}),
+        json!({"profileChoice": "discard", "assignProfile": cms::DISPLAY_P3}),
+        json!({"assignProfile": cms::DISPLAY_P3}),
+        json!({"profileChoice": 3}),
+    ] {
+        assert!(open(tagged, bad.clone()).0.is_err(), "{bad}");
+    }
+    let (r, none) = open(plain, json!({"profileChoice": "assign", "assignProfile": cms::DEVICE_CMYK}));
+    assert!(r.unwrap_err().contains("unknown rgb profile"), "a CMYK profile can't tag an RGB document");
+    assert_eq!(none.documents().len(), 1, "nothing opened");
+}
+
+/// The app's half of the open prompts: a file read with asking stops at the question when its box
+/// is on (never without asking), and opens as answered, or as the policy says when it opens
+/// unanswered. A refused answer leaves it waiting.
+#[test]
+fn a_read_waits_for_the_profile_answer() {
+    let _g = settings();
+    let ProfileFiles { tagged, plain, blue, blue0, .. } = &profile_files("profile-wait");
+    let (blue, blue0) = (*blue, *blue0);
+    let fill = |s: &Session| fill_of(s, blue);
+    let mut s = session();
+    let source = cms::for_document(Some(cms::WIDE_GAMUT_RGB), None);
+    let blue1 = source.convert_into(&cms::working(), &blue0, cms::working().settings().intent);
+    let bytes = std::fs::read(tagged).unwrap();
+    let name = tagged.to_str().unwrap();
+    let read =
+        |ask: bool| vectorcraft_engine::cmd::fileio::read_for_open_asking(name, &bytes, Some(name.into()), &json!({}), false, false, ask).unwrap();
+    assert!(read(true).question().is_none(), "the box is off");
+    exec(&mut s, "edit.colorSettings", json!({"askMismatchOpen": true, "rgbPolicy": "convert"}));
+    assert!(read(false).question().is_none(), "document.open never asks");
+    let mut waiting = read(true);
+    let q = waiting.question().unwrap();
+    assert_eq!((q.issue, q.profile.as_deref(), q.default.id()), (ProfileIssue::Mismatch, Some(cms::WIDE_GAMUT_RGB), "convert"));
+    assert_eq!(waiting.name(), "tagged.vectorcraft");
+    waiting.answer(ProfileChoice::Discard).unwrap();
+    assert!(waiting.question().is_none(), "answered");
+    let mut opened = session();
+    let r = vectorcraft_engine::cmd::fileio::open_read(&mut opened, waiting).unwrap();
+    assert_eq!(r["profileChoice"]["choice"], "discard");
+    assert_eq!((doc_profiles(&opened.doc().unwrap().doc).0, fill(&opened)), (None, blue0));
+    // Unanswered, it opens as the policy (Convert to Working Space) says.
+    let mut opened = session();
+    vectorcraft_engine::cmd::fileio::open_read(&mut opened, read(true)).unwrap();
+    assert_eq!((doc_profiles(&opened.doc().unwrap().doc).0, fill(&opened)), (None, blue1));
+    // A missing answer to a mismatch is not used: the policy decides.
+    let mut waiting = read(true);
+    waiting.answer(ProfileChoice::Leave).unwrap();
+    let mut opened = session();
+    let r = vectorcraft_engine::cmd::fileio::open_read(&mut opened, waiting).unwrap();
+    assert!(r.get("profileChoice").is_none());
+    assert_eq!(fill(&opened), blue1);
+    // Missing Profiles: Ask When Opening, starting on assigning the working space under Convert.
+    exec(&mut s, "edit.colorSettings", json!({"askMismatchOpen": false, "askMissingOpen": true}));
+    assert!(read(true).question().is_none(), "the mismatch box is off now");
+    let plain_bytes = std::fs::read(plain).unwrap();
+    let mut waiting =
+        vectorcraft_engine::cmd::fileio::read_for_open_asking("plain.vectorcraft", &plain_bytes, None, &json!({}), false, false, true).unwrap();
+    let q = waiting.question().unwrap();
+    assert_eq!((q.issue, q.profile.as_deref(), q.default.id()), (ProfileIssue::Missing, None, "assignWorking"));
+    assert!(waiting.answer(ProfileChoice::Assign(cms::DEVICE_CMYK.into())).is_err(), "not an RGB profile");
+    assert!(waiting.question().is_some(), "still waiting after a refused answer");
+    waiting.answer(ProfileChoice::Assign(cms::DISPLAY_P3.into())).unwrap();
+    let mut opened = session();
+    vectorcraft_engine::cmd::fileio::open_read(&mut opened, waiting).unwrap();
+    assert_eq!(doc_profiles(&opened.doc().unwrap().doc).0, Some(cms::DISPLAY_P3.into()));
+}
+
+/// An answer is taken only while the question it answers stands: once Color Settings change the
+/// working space so that the question goes away or names another working space, the answer is
+/// refused and the file keeps waiting. Asked again, it takes the answer to the question it asks now.
+#[test]
+fn a_profile_answer_waits_for_the_question_it_answers() {
+    let _g = settings();
+    let ProfileFiles { tagged, blue, blue0, .. } = &profile_files("profile-changed");
+    let (blue, blue0) = (*blue, *blue0);
+    let mut s = session();
+    exec(&mut s, "edit.colorSettings", json!({"askMismatchOpen": true}));
+    let bytes = std::fs::read(tagged).unwrap();
+    let name = tagged.to_str().unwrap();
+    let mut waiting = vectorcraft_engine::cmd::fileio::read_for_open_asking(name, &bytes, Some(name.into()), &json!({}), false, false, true).unwrap();
+    assert_eq!(waiting.question().unwrap().working, cms::canonical_name(cms::SRGB));
+    // The working space becomes the file's profile: the question is gone.
+    exec(&mut s, "edit.colorSettings", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    assert!(waiting.answer(ProfileChoice::Discard).is_err(), "the question it answers is gone");
+    // Another working space: the question names it.
+    exec(&mut s, "edit.colorSettings", json!({"rgb": cms::DISPLAY_P3}));
+    let err = waiting.answer(ProfileChoice::Discard).unwrap_err().to_string();
+    assert!(err.contains("the profile question changed since it was asked"), "{err}");
+    assert_eq!(waiting.ask().unwrap().working, cms::canonical_name(cms::DISPLAY_P3));
+    waiting.answer(ProfileChoice::Discard).unwrap();
+    let mut opened = session();
+    let r = vectorcraft_engine::cmd::fileio::open_read(&mut opened, waiting).unwrap();
+    assert_eq!(r["profileChoice"]["choice"], "discard");
+    assert_eq!((doc_profiles(&opened.doc().unwrap().doc).0, fill_of(&opened, blue)), (None, blue0));
+}
+
+/// Swatch conflicts are checked against the colors as the paste brings them: a global swatch whose
+/// name and color match the destination's conflicts once the paste converts it, and pasting back
+/// into its own document with conversion compares its swatches too.
+#[test]
+fn swatch_conflicts_follow_the_profile_conversion() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    exec(&mut s, "swatch.new", json!({"name": "Brand", "color": "#3366cc", "global": true}));
+    let r = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [r.0], "swatch": "Brand"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    select(&mut s, &[r]);
+    exec(&mut s, "edit.copy", json!({}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    exec(&mut s, "swatch.new", json!({"name": "Brand", "color": "#3366cc", "global": true}));
+    let conflicts = |s: &mut Session, p: serde_json::Value| exec(s, "clipboard.conflicts", p)["swatches"].as_array().unwrap().len();
+    assert_eq!(conflicts(&mut s, json!({})), 0, "the numbers are kept: the same color");
+    assert_eq!(conflicts(&mut s, json!({"profileMismatch": "convert"})), 1, "converted, it differs");
+    assert!(s.execute("clipboard.conflicts", &json!({"profileMismatch": "keep"})).is_err());
+    // Back in the first document, under another working space, a converting paste compares too.
+    exec(&mut s, "document.activate", json!({"index": 0}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": null}));
+    assert_eq!(conflicts(&mut s, json!({})), 0);
+    assert_eq!(conflicts(&mut s, json!({"profileMismatch": "convert"})), 1);
+}
+
+/// A paste is a mismatch only for the models the copied colors use: CMYK art from a document with
+/// other RGB and CMYK profiles is a CMYK mismatch alone, and so is an artboard copied without art
+/// whose background is CMYK.
+#[test]
+fn a_paste_mismatches_only_the_models_its_colors_use() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let ink = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [ink.0], "color": {"c": 20, "m": 40, "y": 60, "k": 10}}));
+    exec(&mut s, "paint.setStroke", json!({"ids": [ink.0], "none": true}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB, "cmyk": cms::DEVICE_CMYK}));
+    select(&mut s, &[ink]);
+    exec(&mut s, "edit.copy", json!({}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let models = |s: &mut Session| -> Vec<String> {
+        let r = exec(s, "clipboard.profileMismatch", json!({}));
+        r["mismatches"].as_array().unwrap().iter().map(|m| m["model"].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(models(&mut s), ["cmyk"]);
+    exec(&mut s, "document.activate", json!({"index": 0}));
+    exec(&mut s, "artboard.setProps", json!({"index": 0, "color": {"c": 0, "m": 100, "y": 0, "k": 0}}));
+    exec(&mut s, "artboard.copy", json!({"index": 0}));
+    exec(&mut s, "document.activate", json!({"index": 1}));
+    assert_eq!(models(&mut s), ["cmyk"]);
+}
+
+/// An artboard copied without art from a document with another profile is a mismatch through its
+/// background color, which converts with a paste that converts.
+#[test]
+fn a_pasted_artboard_background_converts() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    exec(&mut s, "artboard.setProps", json!({"index": 0, "color": "#3366cc"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    exec(&mut s, "artboard.copy", json!({"index": 0}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    assert_eq!(exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"][0]["model"], "rgb");
+    let r = exec(&mut s, "edit.paste", json!({"profileMismatch": "convert"}));
+    let i = r["artboards"][0].as_u64().unwrap() as usize;
+    let paper = s.doc().unwrap().doc.artboards[i].color.unwrap();
+    let blue0 = vectorcraft_color::Color::from_hex("#3366cc").unwrap();
+    let source = cms::for_document(Some(cms::WIDE_GAMUT_RGB), None);
+    assert!(paper != blue0 && cms::delta_e2000(source.lab(&blue0), cms::working().lab(&paper)) < 1.0, "{blue0:?} → {paper:?}");
+}
+
+/// Paste compares the profiles the copied colors showed through with the destination's: a model
+/// whose profile differs and whose colors the objects use is a mismatch (clipboard.profileMismatch).
+/// Its colors keep their numbers or convert, as `profileMismatch` says, else as the policy says;
+/// the reply lists what was done.
+#[test]
+fn paste_keeps_or_converts_colors_from_another_profile() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let blue = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [blue.0], "color": "#3366cc"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB, "cmyk": cms::DEVICE_CMYK}));
+    select(&mut s, &[blue]);
+    exec(&mut s, "edit.copy", json!({}));
+    let blue0 = vectorcraft_color::Color::from_hex("#3366cc").unwrap();
+    // Back in the same document: nothing to compare.
+    assert_eq!(exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"], json!([]));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let r = exec(&mut s, "clipboard.profileMismatch", json!({}));
+    // Only RGB: the objects use no CMYK color.
+    let srgb = cms::canonical_name(cms::SRGB);
+    assert_eq!(
+        r["mismatches"],
+        json!([{"model": "rgb", "clipboard": cms::WIDE_GAMUT_RGB, "document": srgb, "default": "preserveNumbers", "convertible": true}])
+    );
+    let pasted = |s: &mut Session, p: serde_json::Value| {
+        let r = exec(s, "edit.paste", p);
+        let id = vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap());
+        let c = s.doc().unwrap().doc.node(id).and_then(|n| n.appearance.fill()).and_then(|f| f.paint.color()).unwrap();
+        (r, c)
+    };
+    let (r, kept) = pasted(&mut s, json!({}));
+    assert_eq!(kept, blue0, "the policy (Preserve Embedded Profiles) keeps the numbers");
+    assert_eq!(r["profileMismatch"][0]["choice"], "preserveNumbers");
+    let (r, moved) = pasted(&mut s, json!({"profileMismatch": "convert"}));
+    assert_eq!(r["profileMismatch"][0]["choice"], "convert");
+    let source = cms::for_document(Some(cms::WIDE_GAMUT_RGB), None);
+    assert!(moved != blue0 && cms::delta_e2000(source.lab(&blue0), cms::working().lab(&moved)) < 1.0, "{blue0:?} → {moved:?}");
+    exec(&mut s, "edit.colorSettings", json!({"rgbPolicy": "convert"}));
+    assert_eq!(exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"][0]["default"], "convert");
+    let (_, by_policy) = pasted(&mut s, json!({}));
+    assert_eq!(by_policy, moved, "Convert to Working Space converts");
+    let (_, numbers) = pasted(&mut s, json!({"profileMismatch": "preserveNumbers"}));
+    assert_eq!(numbers, blue0);
+    for bad in [json!({"profileMismatch": "keep"}), json!({"profileMismatch": true})] {
+        assert!(s.execute("edit.paste", &bad).is_err(), "{bad}");
+    }
+    // A drag from the first document follows the policy too.
+    let source = s.documents()[0].uid;
+    let r = exec(&mut s, "edit.dropSelection", json!({"sourceDocument": source, "ids": [blue.0], "grab": [5, 5], "at": [50, 50]}));
+    let dropped = vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap());
+    let c = s.doc().unwrap().doc.node(dropped).and_then(|n| n.appearance.fill()).and_then(|f| f.paint.color()).unwrap();
+    assert_eq!(c, moved, "dropped colors convert under Convert to Working Space");
+    // A destination assigned the source's profile has nothing to compare.
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    assert_eq!(exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"], json!([]));
+    let (r, same) = pasted(&mut s, json!({}));
+    assert!(r.get("profileMismatch").is_none());
+    assert_eq!(same, blue0);
+}
+
+/// A drag between documents is a paste for Profile Mismatches: clipboard.profileMismatch with
+/// `sourceDocument` and `ids` lists what the drop brings, edit.dropSelection takes `profileMismatch`
+/// and reports what it did, and a wrong choice drops nothing.
+#[test]
+fn a_drop_takes_the_profile_mismatch_choice() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let blue = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [blue.0], "color": "#3366cc"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    let source = s.documents()[0].uid;
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let blue0 = vectorcraft_color::Color::from_hex("#3366cc").unwrap();
+    assert_eq!(exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"], json!([]), "the clipboard is empty");
+    let dragged = json!({"sourceDocument": source, "ids": [blue.0]});
+    let srgb = cms::canonical_name(cms::SRGB);
+    assert_eq!(
+        exec(&mut s, "clipboard.profileMismatch", dragged.clone())["mismatches"],
+        json!([{"model": "rgb", "clipboard": cms::WIDE_GAMUT_RGB, "document": srgb, "default": "preserveNumbers", "convertible": true}])
+    );
+    for bad in [json!({"sourceDocument": source}), json!({"ids": [blue.0]}), json!({"sourceDocument": 999_999, "ids": [blue.0]})] {
+        assert!(s.execute("clipboard.profileMismatch", &bad).is_err(), "{bad}");
+    }
+    let dropped = |s: &mut Session, choice: Option<&str>| {
+        let mut p = json!({"sourceDocument": source, "ids": [blue.0], "grab": [5, 5], "at": [50, 50]});
+        if let Some(c) = choice {
+            p["profileMismatch"] = json!(c);
+        }
+        let r = exec(s, "edit.dropSelection", p);
+        let id = vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap());
+        (r, s.doc().unwrap().doc.node(id).and_then(|n| n.appearance.fill()).and_then(|f| f.paint.color()).unwrap())
+    };
+    let (r, kept) = dropped(&mut s, None);
+    assert_eq!((kept, &r["profileMismatch"][0]["choice"]), (blue0, &json!("preserveNumbers")), "the policy keeps the numbers");
+    let (r, moved) = dropped(&mut s, Some("convert"));
+    assert_eq!(r["profileMismatch"][0]["choice"], "convert");
+    let from = cms::for_document(Some(cms::WIDE_GAMUT_RGB), None);
+    assert!(moved != blue0 && cms::delta_e2000(from.lab(&blue0), cms::working().lab(&moved)) < 1.0, "{blue0:?} → {moved:?}");
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let before = objects(&s);
+    let bad = json!({"sourceDocument": source, "ids": [blue.0], "grab": [5, 5], "at": [50, 50], "profileMismatch": "keep"});
+    assert!(s.execute("edit.dropSelection", &bad).is_err());
+    assert_eq!(objects(&s), before, "a refused choice drops nothing");
+}
+
+/// `assignProfile` beside another choice than `assign` is refused with a message that says it goes
+/// with `assign` only.
+#[test]
+fn assign_profile_goes_with_assign_only() {
+    let _g = settings();
+    let ProfileFiles { tagged, .. } = &profile_files("profile-assign-only");
+    let err = open_with(tagged, json!({"profileChoice": "discard", "assignProfile": cms::DISPLAY_P3})).0.unwrap_err();
+    assert!(err.contains("`assignProfile` goes with `profileChoice`: \"assign\" only"), "{err}");
+}
+
+/// `profileMismatch: {rgb?, cmyk?}` gives each model its own choice, and a model left out follows
+/// its policy; a key other than rgb and cmyk, or a value other than the two choices, is refused and
+/// pastes nothing.
+#[test]
+fn paste_takes_a_choice_for_each_model() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let both = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [both.0], "color": "#3366cc"}));
+    exec(&mut s, "paint.setStroke", json!({"ids": [both.0], "color": {"c": 20, "m": 40, "y": 60, "k": 10}}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB, "cmyk": cms::DEVICE_CMYK}));
+    let stroke_of = |s: &Session, id: vectorcraft_doc::NodeId| {
+        s.doc().unwrap().doc.node(id).and_then(|n| n.appearance.stroke()).and_then(|f| f.paint.color()).unwrap()
+    };
+    let ink0 = stroke_of(&s, both);
+    select(&mut s, &[both]);
+    exec(&mut s, "edit.copy", json!({}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    exec(&mut s, "edit.colorSettings", json!({"cmykPolicy": "convert"}));
+    let blue0 = vectorcraft_color::Color::from_hex("#3366cc").unwrap();
+    let pasted = |s: &mut Session, choice: serde_json::Value| {
+        let r = exec(s, "edit.paste", json!({ "profileMismatch": choice }));
+        let id = vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap());
+        let fill = s.doc().unwrap().doc.node(id).and_then(|n| n.appearance.fill()).and_then(|f| f.paint.color()).unwrap();
+        let picked = |model: &str| r["profileMismatch"].as_array().unwrap().iter().find(|m| m["model"] == model).map(|m| m["choice"].clone());
+        (fill, stroke_of(s, id), picked("rgb"), picked("cmyk"))
+    };
+    // The CMYK policy (Convert to Working Space) converts the stroke from Device CMYK into the
+    // working CMYK space, as a paste that leaves both models to their policies does.
+    let (_, ink, rgb_policy, cmyk_policy) = pasted(&mut s, serde_json::Value::Null);
+    assert_eq!((rgb_policy, &cmyk_policy), (Some(json!("preserveNumbers")), &Some(json!("convert"))));
+    let device = cms::for_document(None, Some(cms::DEVICE_CMYK));
+    assert!(ink != ink0 && cms::delta_e2000(device.lab(&ink0), cms::working().lab(&ink)) < 2.0, "{ink0:?} → {ink:?}");
+    let converted_ink = ink;
+    let (fill, ink, rgb, cmyk) = pasted(&mut s, json!({"rgb": "convert"}));
+    assert_eq!((rgb, &cmyk, ink), (Some(json!("convert")), &cmyk_policy, converted_ink), "CMYK follows its policy");
+    let source = cms::for_document(Some(cms::WIDE_GAMUT_RGB), None);
+    assert!(fill != blue0 && cms::delta_e2000(source.lab(&blue0), cms::working().lab(&fill)) < 1.0, "{blue0:?} → {fill:?}");
+    let (fill, ink, rgb, cmyk) = pasted(&mut s, json!({"cmyk": "preserveNumbers"}));
+    assert_eq!((fill, ink, rgb, cmyk), (blue0, ink0, Some(json!("preserveNumbers")), Some(json!("preserveNumbers"))), "the inks keep their values");
+    let objects = |s: &Session| s.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len());
+    let before = objects(&s);
+    for bad in [json!({"lab": "convert"}), json!({"rgb": "keep"}), json!({"rgb": 1}), json!([]), json!(true)] {
+        assert!(s.execute("edit.paste", &json!({ "profileMismatch": bad })).is_err(), "{bad}");
+        assert!(s.execute("clipboard.conflicts", &json!({ "profileMismatch": bad })).is_err(), "{bad}");
+    }
+    assert_eq!(objects(&s), before, "a refused choice pastes nothing");
+}
+
+/// The fill color of the first object a paste reply `r` names, in the active document.
+#[allow(clippy::unwrap_used, reason = "a test helper: a reply without objects fails the test")]
+fn pasted_fill(s: &Session, r: &serde_json::Value) -> vectorcraft_color::Color {
+    fill_of(s, vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap()))
+}
+
+/// A document assigned a profile that was removed since draws through the working space, and its
+/// copied colors come from the working space too: pasted into a document with another profile, they
+/// convert from it as `profileMismatch` says.
+#[test]
+fn a_removed_assigned_profile_pastes_as_the_working_space() {
+    const NAME: &str = "Removed Wide RGB";
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: Some(NAME), paths: vec![] };
+    cms::register_icc(&cms::icc_bytes(cms::WIDE_GAMUT_RGB).unwrap(), Some(NAME.into())).unwrap();
+    let mut s = session();
+    let blue = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [blue.0], "color": "#3366cc"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": NAME}));
+    exec(&mut s, "color.removeProfile", json!({"name": NAME}));
+    select(&mut s, &[blue]);
+    exec(&mut s, "edit.copy", json!({}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::DISPLAY_P3}));
+    let m = exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"][0].clone();
+    assert_eq!((&m["clipboard"], &m["convertible"]), (&json!(cms::canonical_name(cms::SRGB)), &json!(true)), "{m}");
+    let r = exec(&mut s, "edit.paste", json!({"profileMismatch": "convert"}));
+    assert_eq!(r["profileMismatch"][0]["choice"], "convert");
+    let (blue0, moved) = (vectorcraft_color::Color::from_hex("#3366cc").unwrap(), pasted_fill(&s, &r));
+    let p3 = cms::for_document(Some(cms::DISPLAY_P3), None);
+    assert!(moved != blue0 && cms::delta_e2000(cms::working().lab(&blue0), p3.lab(&moved)) < 1.0, "{blue0:?} → {moved:?}");
+}
+
+/// Colors copied from a document whose profile was removed after the copy can't convert: the
+/// mismatch says so (convertible false, and default preserveNumbers under a converting policy), and
+/// a paste that asks to convert keeps their numbers.
+#[test]
+fn colors_from_a_profile_removed_after_the_copy_keep_their_numbers() {
+    const NAME: &str = "Copied Wide RGB";
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: Some(NAME), paths: vec![] };
+    cms::register_icc(&cms::icc_bytes(cms::WIDE_GAMUT_RGB).unwrap(), Some(NAME.into())).unwrap();
+    let mut s = session();
+    let blue = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [blue.0], "color": "#3366cc"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": NAME}));
+    select(&mut s, &[blue]);
+    exec(&mut s, "edit.copy", json!({}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    exec(&mut s, "edit.colorSettings", json!({"rgbPolicy": "convert"}));
+    let m = exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"][0].clone();
+    assert_eq!((&m["default"], &m["convertible"]), (&json!("convert"), &json!(true)), "both profiles are here: {m}");
+    exec(&mut s, "color.removeProfile", json!({"name": NAME}));
+    let m = exec(&mut s, "clipboard.profileMismatch", json!({}))["mismatches"][0].clone();
+    assert_eq!((&m["clipboard"], &m["default"], &m["convertible"]), (&json!(NAME), &json!("preserveNumbers"), &json!(false)), "{m}");
+    let r = exec(&mut s, "edit.paste", json!({"profileMismatch": "convert"}));
+    assert_eq!(r["profileMismatch"][0]["choice"], "preserveNumbers");
+    assert_eq!(pasted_fill(&s, &r), vectorcraft_color::Color::from_hex("#3366cc").unwrap());
+}
+
+/// Paste on All Artboards leaves copied artboards behind, so their backgrounds raise no mismatch for
+/// it: clipboard.profileMismatch with allArtboards lists none, and the paste reports none. A plain
+/// paste, which brings the artboard, still lists the background's model.
+#[test]
+fn paste_on_all_artboards_leaves_artboard_backgrounds_out() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let ink = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [ink.0], "color": {"c": 20, "m": 40, "y": 60, "k": 10}}));
+    exec(&mut s, "paint.setStroke", json!({"ids": [ink.0], "none": true}));
+    exec(&mut s, "artboard.setProps", json!({"index": 0, "color": "#3366cc"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    exec(&mut s, "artboard.copy", json!({"index": 0}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let models = |s: &mut Session, p: serde_json::Value| exec(s, "clipboard.profileMismatch", p)["mismatches"].as_array().unwrap().len();
+    assert_eq!(models(&mut s, json!({})), 1, "a plain paste brings the RGB background");
+    assert_eq!(models(&mut s, json!({"allArtboards": true})), 0);
+    assert!(s.execute("clipboard.profileMismatch", &json!({"allArtboards": "yes"})).is_err());
+    let r = exec(&mut s, "edit.pasteOnAllArtboards", json!({"profileMismatch": "convert"}));
+    assert!(r.get("profileMismatch").is_none(), "{r}");
+}
+
+/// A converting paste back into the document the objects came from (its profile changed since the
+/// copy) still takes its image blobs as the document's own: an image whose blob under its key
+/// changed since keeps that key, and so shows the document's blob.
+#[test]
+fn a_converting_paste_into_its_own_document_keeps_its_image_keys() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let blue = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [blue.0], "color": "#3366cc"}));
+    let blob = |b: u8| vectorcraft_doc::ImageBlob::png(vec![b; 8]);
+    let image = s
+        .edit("Place", |d, _| {
+            d.images.insert("pic".into(), blob(1));
+            let id = d.alloc_id();
+            let im = vectorcraft_doc::ImageObject {
+                key: "pic".into(),
+                width: 4,
+                height: 4,
+                xf: Affine::translate((20.0, 0.0)),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            };
+            d.insert(d.default_layer(), 0, vectorcraft_doc::Node::new(id, vectorcraft_doc::NodeKind::Image(Box::new(im))))?;
+            Ok(id)
+        })
+        .unwrap();
+    select(&mut s, &[blue, image]);
+    exec(&mut s, "edit.copy", json!({}));
+    s.edit("Replace Image", |d, _| {
+        d.images.insert("pic".into(), blob(2));
+        Ok(())
+    })
+    .unwrap();
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    let r = exec(&mut s, "edit.paste", json!({"profileMismatch": "convert"}));
+    assert_eq!(r["profileMismatch"][0]["choice"], "convert");
+    let doc = &s.doc().unwrap().doc;
+    let keys: Vec<String> = r["ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|id| match &doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap()))?.kind {
+            vectorcraft_doc::NodeKind::Image(im) => Some(im.key.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(keys, ["pic"]);
+    assert_eq!(doc.images.len(), 1, "no copy of the old blob");
 }

@@ -81,6 +81,11 @@ pub fn start() {
         return;
     };
     detect_language();
+    // The face for a Korean or Hindi browser language (or `?lang=`) starts loading now, beside the
+    // startup fonts, without holding up the start. Text in those scripts painted later (a saved
+    // interface language, another one chosen, a layer or file name) has its face fetched then.
+    vectorcraft_ui_egui::on_missing_glyphs(crate::fonts::want_chars);
+    crate::fonts::want_chars(&i18n::system_lang().name().chars().collect::<Vec<_>>());
     wasm_bindgen_futures::spawn_local(async move {
         // Before the first frame, which looks for copies a crash left behind.
         let locks = WebLocks::start(RECOVERY_PREFIX).await;

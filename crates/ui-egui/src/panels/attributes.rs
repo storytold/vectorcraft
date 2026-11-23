@@ -1,13 +1,15 @@
 //! Attributes panel: Overprint Fill / Overprint Stroke, Show / Don't Show Center, Reverse Path
 //! Direction Off / On, the fill rule (non-zero winding or even-odd), Image Map, URL (with the
-//! recent URLs and a Browser button) and the note. The menu hides the options and shows the note.
+//! recent URLs and a Browser button) and the note. The menu hides the options and shows the note,
+//! and its Panel Options… sets how many recent URLs the URL menu lists ([`PanelOptions`]).
 //! Everything reads `attributes.info` ([`vectorcraft_engine::Session::attributes_info`]) and acts
 //! through `attributes.set`, `path.reverse` and `path.setFillRule`.
 
 use egui::Ui;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_doc::{ImageMap, NodeId, NodeKind};
-use vectorcraft_engine::cmd::AttributesInfo;
+use vectorcraft_engine::cmd::{AttributesInfo, RECENT_URLS};
 use vectorcraft_geom::FillRule;
 
 use super::{pstate, selection_len, set_pstate};
@@ -19,6 +21,63 @@ const HIDE_OPTIONS: &str = "attr-hide-options";
 /// Panel state: the note field is hidden.
 const HIDE_NOTE: &str = "attr-hide-note";
 const LABEL_W: f32 = 70.0;
+
+/// How many recent URLs the URL menu lists by default (VectorCraft's own value).
+pub const DEFAULT_RECENT_URLS: u8 = 10;
+
+/// Attributes panel options (≡ › Panel Options…), kept with the UI state.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PanelOptions {
+    /// How many of the recent URLs the URL menu lists, 1 to [`RECENT_URLS`]. A saved value that is
+    /// not a whole number in that range reads as [`DEFAULT_RECENT_URLS`].
+    #[serde(deserialize_with = "saved_count")]
+    pub recent_urls: u8,
+}
+
+impl Default for PanelOptions {
+    fn default() -> Self {
+        Self { recent_urls: DEFAULT_RECENT_URLS }
+    }
+}
+
+impl PanelOptions {
+    /// How many recent URLs the URL menu lists: [`Self::recent_urls`], or the default when it is
+    /// out of range.
+    pub fn shown(&self) -> usize {
+        Some(usize::from(self.recent_urls)).filter(|n| (1..=RECENT_URLS).contains(n)).unwrap_or(usize::from(DEFAULT_RECENT_URLS))
+    }
+}
+
+/// A saved count of recent URLs: a whole number from 1 to [`RECENT_URLS`], anything else the default.
+fn saved_count<'de, D: Deserializer<'de>>(d: D) -> Result<u8, D::Error> {
+    let v = Value::deserialize(d)?;
+    Ok(count(&v).unwrap_or(DEFAULT_RECENT_URLS))
+}
+
+/// `v` as a count of recent URLs, when it is a whole number from 1 to [`RECENT_URLS`].
+fn count(v: &Value) -> Option<u8> {
+    let n = v.as_f64().filter(|n| n.fract() == 0.0 && (1.0..=RECENT_URLS as f64).contains(n))?;
+    u8::try_from(n as u64).ok()
+}
+
+/// `ui.attributesPanelOptions {count?}`: without `count`, open Panel Options on the panel's
+/// options; otherwise set how many recent URLs the URL menu lists and answer the options. A count
+/// that is not a whole number from 1 to 30 is an error, and nothing changes.
+pub fn set_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let Some(c) = p.get("count") else {
+        return crate::dialogs::attributes_panel_options::open(app);
+    };
+    let n = count(c).ok_or("`count` must be a whole number from 1 to 30")?;
+    app.ui.attributes_panel.recent_urls = n;
+    Ok(json!({ "count": n }))
+}
+
+/// The recent URLs the URL menu lists, newest first: as many as Panel Options sets.
+fn menu_urls(app: &VectorcraftApp) -> &[String] {
+    let urls = &app.session.recent_urls;
+    &urls[..urls.len().min(app.ui.attributes_panel.shown())]
+}
 
 /// The panel's values and whether the targets hold paths (direction and fill rule apply),
 /// recomputed only when the document or the selection changes.
@@ -133,13 +192,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The recent URLs button: a menu of the URLs given lately; picking one sets it.
+/// The recent URLs button: a menu of the URLs given lately ([`menu_urls`]); picking one sets it.
 fn recent_urls(app: &mut VectorcraftApp, ui: &mut Ui) {
     let resp = widgets::icon_button_enabled(ui, "chevron-down", tl!("Recent URLs"), false, !app.session.recent_urls.is_empty(), 20.0);
     let mut chosen = None;
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(220.0);
-        for u in &app.session.recent_urls {
+        for u in menu_urls(app) {
             if widgets::menu_item_name(ui, u, true, false) {
                 chosen = Some(u.clone());
             }
@@ -150,12 +209,15 @@ fn recent_urls(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-pub fn menu(_app: &mut VectorcraftApp, ui: &mut Ui) {
+pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     for (key, hide, show) in [(HIDE_OPTIONS, tl!("Hide Options"), tl!("Show Options")), (HIDE_NOTE, tl!("Hide Note"), tl!("Show Note"))] {
         let hidden: bool = pstate(ui.ctx(), key);
         if menu_item(ui, if hidden { show } else { hide }, true, false) {
             set_pstate(ui.ctx(), key, !hidden);
         }
+    }
+    if menu_item(ui, tl!("Panel Options…"), true, false) {
+        app.run("ui.attributesPanelOptions", json!({})).ok();
     }
 }
 
@@ -256,5 +318,40 @@ mod tests {
         assert!(opened.borrow().is_empty());
         open_url(&mut app, &json!({"url": "https://example.com/b"})).unwrap();
         assert_eq!(*opened.borrow(), ["https://example.com/b"]);
+    }
+
+    /// The URL menu lists the newest 10 recent URLs by default, and `ui.attributesPanelOptions`
+    /// sets how many it lists, from 1 to 30, kept with the UI state. A lower count hides the older
+    /// URLs without forgetting them, and a count that is not a whole number from 1 to 30 is an
+    /// error that changes nothing.
+    #[test]
+    fn panel_options_set_how_many_recent_urls_the_menu_lists() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}));
+        for i in 0..32 {
+            run(&mut app, "attributes.set", json!({"url": format!("https://example.com/{i}")}));
+        }
+        assert!(frame(&mut app).iter().any(|t| t == "   Panel Options…"));
+        assert_eq!((menu_urls(&app).len(), menu_urls(&app)[0].as_str()), (10, "https://example.com/31"));
+        assert_eq!(app.run("ui.attributesPanelOptions", json!({"count": 1})).unwrap(), json!({"count": 1}));
+        assert_eq!(menu_urls(&app), ["https://example.com/31"]);
+        app.run("ui.attributesPanelOptions", json!({"count": 30.0})).unwrap();
+        assert_eq!((menu_urls(&app).len(), menu_urls(&app)[29].as_str()), (30, "https://example.com/2"));
+        for bad in [json!(0), json!(31), json!(2.5), json!(-1), json!("5"), Value::Null] {
+            assert!(app.run("ui.attributesPanelOptions", json!({"count": bad})).is_err(), "{bad}");
+        }
+        assert_eq!(app.ui.attributes_panel.recent_urls, 30, "a refused count changes nothing");
+        assert_eq!(app.session.recent_urls.len(), 30);
+        // Kept with the UI state; UI state saved without it, or with a count out of range, lists 10.
+        let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+        assert_eq!(back.attributes_panel.recent_urls, 30);
+        let old: crate::UiState = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(old.attributes_panel, PanelOptions::default());
+        for saved in [json!(0), json!(99), json!(1000), json!(4.5), json!("12"), Value::Null] {
+            let s: crate::UiState = serde_json::from_value(json!({"attributes_panel": {"recentUrls": saved}})).unwrap();
+            assert_eq!(s.attributes_panel.shown(), 10, "{saved}");
+        }
+        assert_eq!(PanelOptions { recent_urls: 200 }.shown(), 10);
     }
 }

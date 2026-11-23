@@ -149,11 +149,14 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, options: bool, 
     // The W/H link sits between W and H, but is made after H so Tab goes from W straight to H and
     // finds the link after it, as in the object Control bar.
     let mut link_room = None;
+    let mut labels = Vec::with_capacity(4);
     for (k, lbl, v) in [("x", "X:", rp.x - origin.x), ("y", "Y:", rp.y - origin.y), ("width", "W:", r.width()), ("height", "H:", r.height())] {
         if k == "height" {
             link_room = Some(super::transform::constrain_link_room(ui));
         }
-        widgets::field_label(ui, egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim));
+        // A click on the label opens the Transform panel, as the Transform link does; a drag scrubs.
+        let text = egui::RichText::new(tl!(lbl)).size(12.0).color(t.text).underline();
+        labels.push(widgets::field_panel_label(ui, text).on_hover_text(tl!("Transform options")));
         let set = if matches!(k, "width" | "height") {
             widgets::size_field(ui, ("cb-ab", k), Some(v), units, 80.0)
         } else {
@@ -172,6 +175,10 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, options: bool, 
     if let Some(room) = link_room {
         let id = ui.scope_id().with("cb-ab-constrain-link");
         super::transform::constrain_link_at(app, ui, ui.interact(room, id, egui::Sense::click()));
+    }
+    // After the fields, which each take the label before them as their own.
+    for label in &labels {
+        super::transform::popover(app, label);
     }
     true
 }

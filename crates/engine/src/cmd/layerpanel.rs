@@ -132,7 +132,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Locate Object",
             ["Window", "Layers"],
             None,
-            "{id?} (default: the last selected object) highlight the object's row; the Layers panel opens the layers around it and scrolls to it → {id, ancestry: [layer…, id]}",
+            "{id?, layersOnly?} (default: the frontmost selected object in the stacking order) highlight the object's row; the Layers panel opens the layers around it, and scrolls to its row when the row is in the list, also when the row was already highlighted (Show Layers Only, a search, the filter, or editing an opacity mask on another layer can leave the row out) → {id, ancestry: [layer…, id]}. layersOnly (default false; the panel sends true while Show Layers Only is on, as Locate Layer) highlights the innermost layer or sublayer holding the object instead, or a layer id itself → {id: layer, objectId, ancestry: [layer…]}",
             has_doc,
             locate
         ),
@@ -435,10 +435,20 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn locate(s: &mut Session, p: &Value) -> Result<Value> {
     let id = object_param(p, "id", "layer.locate")?;
+    let layers_only = switch_or(p, "layersOnly", false, "layer.locate")?;
     let st = s.doc_mut()?;
-    let id = id.or_else(|| st.selection.objects.last().copied()).ok_or_else(|| bad("layer.locate", "nothing selected"))?;
-    let ancestry = st.doc.ancestry(id).ok_or(EngineError::NoNode(id))?;
-    st.layer_rows = vec![id];
+    // With no id, the frontmost selected object in the stacking order, whatever order it was selected in.
+    let id = id.or_else(|| st.selection.in_paint_order(&st.doc).last().copied()).ok_or_else(|| bad("layer.locate", "nothing selected"))?;
+    let mut ancestry = st.doc.ancestry(id).ok_or(EngineError::NoNode(id))?;
+    if layers_only {
+        // Locate Layer: the innermost layer or sublayer holding the object (a layer locates itself).
+        let at = ancestry.iter().rposition(|a| st.doc.node(*a).is_some_and(Node::is_layer)).ok_or(EngineError::NoNode(id))?;
+        ancestry.truncate(at + 1);
+    }
+    let row = ancestry.last().copied().ok_or(EngineError::NoNode(id))?;
+    st.layer_rows = vec![row];
+    st.locate_reveal = Some(row);
     st.revision += 1;
-    Ok(json!({ "id": id.0, "ancestry": ancestry.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    let ancestry: Vec<u64> = ancestry.iter().map(|i| i.0).collect();
+    Ok(if layers_only { json!({ "id": row.0, "objectId": id.0, "ancestry": ancestry }) } else { json!({ "id": id.0, "ancestry": ancestry }) })
 }

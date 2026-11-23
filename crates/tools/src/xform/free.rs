@@ -237,7 +237,15 @@ impl FreeTransformTool {
                 self.measure = cx.transform_tools_guides.then(|| (p, cx.size_label(nr.width(), nr.height())));
                 bx.conjugate(a)
             }
-            Op::Shear(h) => bx.conjugate(shear_for_side(bx.rect, h, local, m.alt)),
+            Op::Shear(h) => {
+                let a = shear_for_side(bx.rect, h, local, m.alt);
+                // The shear's slope, read from the matrix the preview applies, labeled with the
+                // angle the Shear tool shows for the same slant.
+                let [_, vertical, horizontal, ..] = a.as_coeffs();
+                let k = if matches!(h, Handle::Top | Handle::Bottom) { horizontal } else { vertical };
+                self.measure = cx.transform_tools_guides.then(|| (p, format!("{:.1}°", 0.0 - k.atan().to_degrees())));
+                bx.conjugate(a)
+            }
             Op::Rotate => {
                 let (a, deg) = rotate_for_drag(bx.center(), d.start, p, shift);
                 self.measure = cx.transform_tools_guides.then(|| (p, format!("{:.1}°", -deg)));
@@ -376,6 +384,15 @@ impl Tool for FreeTransformTool {
             }
             "constrain" => self.constrain = value.as_bool().unwrap_or(false),
             _ => {}
+        }
+    }
+
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "mode" => c::one_of(key, value, &["free", "perspective", "distort", "freeDistort"]),
+            "constrain" => c::boolean(key, value),
+            _ => Err(c::unknown(key)),
         }
     }
 
@@ -722,5 +739,64 @@ mod tests {
         t.pointer(&cx(false), &ev(PointerKind::Down, 200.0, 200.0));
         t.pointer(&cx(false), &ev(PointerKind::Drag, 220.0, 230.0));
         assert!(t.overlays(&cx(false)).iter().all(|o| !matches!(o, Overlay::Measure { .. })));
+    }
+
+    /// The label a drag shows next to the pointer, and where.
+    fn shown_measure(t: &FreeTransformTool, cx: &ToolContext) -> Option<(Point, String)> {
+        t.overlays(cx).into_iter().find_map(|o| if let Overlay::Measure { p, text } = o { Some((p, text)) } else { None })
+    }
+
+    /// With Smart Guides' Transform Tools on, a Cmd side-handle shear shows its angle next to the
+    /// pointer, with the Shear tool's sign: the top side moved right and the right side moved down
+    /// by 20 pt on the 100 pt square slant 11.3° either way. Alt shears about the center.
+    #[test]
+    fn shear_drag_shows_its_angle_with_transform_tools_guides() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = |on: bool| ToolContext { transform_tools_guides: on, ..cx(&d, &s, &p) };
+        let cmd = Mods { cmd: true, ..Default::default() };
+        let shear = |c: &ToolContext, from: (f64, f64), to: (f64, f64), m: Mods| {
+            let mut t = FreeTransformTool::default();
+            t.pointer(c, &ev(PointerKind::Down, from.0, from.1).with_mods(m));
+            let a = t.pointer(c, &ev(PointerKind::Drag, to.0, to.1).with_mods(m));
+            assert_eq!(a[0], Action::Begin("Shear".into()));
+            let shown = shown_measure(&t, c);
+            assert_eq!(t.pointer(c, &ev(PointerKind::Up, to.0, to.1).with_mods(m)), vec![Action::Commit]);
+            assert_eq!(shown_measure(&t, c), None, "the label goes with the drag");
+            shown
+        };
+        let on = cx(true);
+        let off = Vec2::new(on.tol(12.0), on.tol(12.0));
+        assert_eq!(shear(&on, (150.0, 100.0), (170.0, 100.0), cmd), Some((Point::new(170.0, 100.0) + off, "11.3°".into())));
+        assert_eq!(shear(&on, (200.0, 150.0), (200.0, 170.0), cmd), Some((Point::new(200.0, 170.0) + off, "-11.3°".into())));
+        // About the center the lever is half as long: atan(20 / 50).
+        let alt = Mods { alt: true, ..cmd };
+        assert_eq!(shear(&on, (150.0, 100.0), (170.0, 100.0), alt).map(|m| m.1), Some("21.8°".into()));
+        // A drag straight away from the side, at right angles to it, shears nothing.
+        assert_eq!(shear(&on, (150.0, 100.0), (150.0, 90.0), cmd).map(|m| m.1), Some("0.0°".into()));
+        assert_eq!(shear(&cx(false), (150.0, 100.0), (170.0, 100.0), cmd), None);
+    }
+
+    /// A handle drag that turns into a shear, and back into a scale, labels only what it does now.
+    #[test]
+    fn a_handle_drag_that_changes_operation_relabels_it() {
+        let (d, id) = doc_with_rect();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let cx = ToolContext { transform_tools_guides: true, ..cx(&d, &s, &p) };
+        let cmd = Mods { cmd: true, ..Default::default() };
+        let mut t = FreeTransformTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 150.0, 100.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 90.0));
+        let size = cx.size_label(100.0, 110.0);
+        assert_eq!(shown_measure(&t, &cx).map(|m| m.1), Some(size.clone()));
+        let a = t.pointer(&cx, &ev(PointerKind::Drag, 170.0, 100.0).with_mods(cmd));
+        assert_eq!(a[..2], [Action::Cancel, Action::Begin("Shear".into())]);
+        assert_eq!(shown_measure(&t, &cx).map(|m| m.1), Some("11.3°".into()));
+        t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 90.0));
+        assert_eq!(shown_measure(&t, &cx).map(|m| m.1), Some(size));
     }
 }

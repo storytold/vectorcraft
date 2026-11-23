@@ -28,7 +28,8 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Vec2};
 use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
 use crate::reshape::{
-    as_art, clipping_text_outline, dressed, geometry_effects, glyph_outlines, outline_nested_text, paint_type_clip, reshape_leaves,
+    as_art, clip_region_path, clipping_text_outline, dressed, geometry_effects, glyph_outlines, knockout_inside, outline_nested_text,
+    paint_type_clip, reshape_leaves,
 };
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
@@ -502,13 +503,7 @@ fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
     {
         return None;
     }
-    let (bp, rule) = crate::clip_outline(first)?;
-    let mut clip = Node::path(first.id, PathData::from_bezpath(&bp), Appearance::default());
-    if let NodeKind::Path { rule: r, clipping, .. } = &mut clip.kind {
-        (*r, *clipping) = (rule, true);
-    }
-    clip.name = first.name.clone();
-    clip.visible = first.visible;
+    let clip = clip_region_path(first)?;
     let paint = first.clip_paint();
     // The type's fills and strokes as art: baked with the type's id, as the renderer draws them,
     // then given ids of their own.
@@ -532,7 +527,8 @@ fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
         return Some(m);
     };
     // `n` keeps its id, name and transparency, and holds the clip group and the strokes over it.
-    let inner = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
+    let mut inner = Node::new(d.alloc_id(), NodeKind::Group { children: members, clip: true });
+    knockout_inside(&mut m, &mut inner);
     match &mut m.kind {
         NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } => {
             *children = vec![Arc::new(inner), stroke];
@@ -720,7 +716,9 @@ fn moved_type_group(n: &Node) -> Option<Node> {
 /// Type in a clipping path, other type that [`moved_type`] doesn't copy, and type inside live
 /// objects or inside groups with Pathfinder or geometry effects or fills and strokes that paint, is
 /// outlined as [`evaluate_container`] outlines it, and the other members become what it makes of
-/// them. `None` when no type stays type.
+/// them. `None` when no type stays type, and for a group or layer whose copies each carry the raster
+/// effects listed before their Transform effect ([`crate::outer_effects`]), which is baked as the
+/// canvas draws it ([`evaluate_container`]).
 fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     fn keep(d: &Document, n: &mut Node, moves: &[serde_json::Value], clipping: bool, kept: &mut bool) {
         if !clipping {
@@ -756,7 +754,11 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
             }
         }
     }
-    if !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || has_pathfinder(n) || has_own_paint(n) {
+    if !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
+        || has_pathfinder(n)
+        || has_own_paint(n)
+        || crate::reshape::copied_container_raster_at(n).is_some()
+    {
         return None;
     }
     let fx = geometry_effects(n);

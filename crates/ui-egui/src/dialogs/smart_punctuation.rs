@@ -98,7 +98,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
         let lines: Vec<String> = options()
             .into_iter()
             .filter(|(key, ..)| d.bool(key))
-            .map(|(_, count, label)| format!("{label}: {}", r["replaced"][count].as_u64().unwrap_or(0)))
+            .map(|(_, count, label)| format!("{} {}", crate::i18n::colon(label), r["replaced"][count].as_u64().unwrap_or(0)))
             .collect();
         super::confirm::tell(app, tl!("Smart Punctuation"), &lines.join("\n"));
     }

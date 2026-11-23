@@ -80,19 +80,22 @@ fn finish(app: &mut VectorcraftApp) {
 
 const DRAW: &str = "vc.run('shape.rectangle', {x:0,y:0,width:10,height:10}); vc.run('shape.rectangle', {x:20,y:0,width:10,height:10});";
 
+/// The items File › Scripts always ends with.
+const FIXED: &str = "Check Script…, Other Script…";
+
 #[test]
 fn the_folders_scripts_are_listed_above_check_script_and_other_script() {
     let dir = folder("listed");
     let app = app(&dir);
-    assert_eq!(shape(&scripts()), "Check Script…, Other Script…", "before the first listing");
+    assert_eq!(shape(&scripts()), FIXED, "before the first read");
     read(&app);
-    assert_eq!(shape(&scripts()), "Check Script…, Other Script…", "an empty folder");
+    assert_eq!(shape(&scripts()), FIXED, "an empty folder");
     let draw = write(&dir, "Draw Two.jsx", DRAW);
     write(&dir, "Export/All Artboards.js", "");
     write(&dir, "notes.txt", "");
     read(&app);
     let items = scripts();
-    assert_eq!(shape(&items), "Draw Two, Export/[All Artboards], -, Check Script…, Other Script…");
+    assert_eq!(shape(&items), format!("Draw Two, Export/[All Artboards], -, {FIXED}"));
     assert!(matches!(&items[0], Item::Cmd(_, scripts_menu::COMMAND, p) if *p == json!({ "path": draw })), "{:?}", items[0]);
     // A script added to the folder is listed by the next read, with no restart.
     write(&dir, "Added.js", "");
@@ -201,7 +204,7 @@ fn a_script_that_left_the_folder_is_not_run_and_the_folder_is_read_again() {
     assert_eq!(e, "the script is no longer in the Scripts folder");
     assert!(!app.session.script_running());
     scripts_menu::wait();
-    assert_eq!(shape(&scripts()), "kept, -, Check Script…, Other Script…");
+    assert_eq!(shape(&scripts()), format!("kept, -, {FIXED}"));
     // A file outside the folder is not one of its scripts, and a call needs a path.
     let outside = dir.join("outside.js");
     std::fs::write(&outside, DRAW).unwrap();
@@ -246,12 +249,12 @@ fn the_menu_notes_a_listing_that_stopped_and_a_folder_it_cannot_read() {
     read(&app);
     let items = scripts();
     assert_eq!(items.len(), vectorcraft_engine::script::folder::MAX_SCRIPTS + 4);
-    assert_eq!(shape(&items[items.len() - 4..]), format!("({}), -, Check Script…, Other Script…", scripts_menu::TRUNCATED));
+    assert_eq!(shape(&items[items.len() - 4..]), format!("({}), -, {FIXED}", scripts_menu::TRUNCATED));
     // A file where the folder should be.
     std::fs::remove_dir_all(dir.join("Scripts")).unwrap();
     std::fs::write(dir.join("Scripts"), "").unwrap();
     read(&app);
-    assert_eq!(shape(&scripts()), format!("({}), -, Check Script…, Other Script…", scripts_menu::UNREADABLE));
+    assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::UNREADABLE));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -284,7 +287,7 @@ fn names_past_the_session_limit_are_left_out_with_the_note() {
     let app = app(&dir);
     write(&dir, "Kept.js", "");
     read(&app);
-    assert_eq!(shape(&scripts()), "Kept, -, Check Script…, Other Script…");
+    assert_eq!(shape(&scripts()), format!("Kept, -, {FIXED}"));
     // Names other listings showed fill what one session keeps.
     for n in 0..scripts_menu::MAX_NAMES {
         if scripts_menu::intern(&format!("renamed {n}")).is_none() {
@@ -294,7 +297,7 @@ fn names_past_the_session_limit_are_left_out_with_the_note() {
     write(&dir, "New.js", "");
     write(&dir, "Folder/Inside.js", "");
     read(&app);
-    assert_eq!(shape(&scripts()), format!("Kept, ({}), -, Check Script…, Other Script…", scripts_menu::TRUNCATED));
+    assert_eq!(shape(&scripts()), format!("Kept, ({}), -, {FIXED}", scripts_menu::TRUNCATED));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -305,7 +308,8 @@ fn the_macos_menu_bar_lists_the_same_scripts_and_follows_a_new_listing() {
     let path = write(&dir, "Export/All Artboards.js", "");
     let before = scripts_menu::revision();
     read(&app);
-    assert_eq!(scripts_menu::revision(), before + 1);
+    // The loading note showed, then the listing took its place.
+    assert_eq!(scripts_menu::revision(), before + 2);
     let bar = native_menu::from_tree(&app, &menus::menu_tree());
     let file = bar.menus.iter().find(|m| m.title == "File").unwrap();
     let scripts = file.children.iter().find_map(|n| match n {
@@ -321,10 +325,10 @@ fn the_macos_menu_bar_lists_the_same_scripts_and_follows_a_new_listing() {
     assert!(script.enabled && script.shortcut.is_none());
     // A read that finds the same scripts changes nothing the menu bar would rebuild for.
     read(&app);
-    assert_eq!(scripts_menu::revision(), before + 1);
+    assert_eq!(scripts_menu::revision(), before + 2);
     write(&dir, "More.jsx", "");
     read(&app);
-    assert_eq!(scripts_menu::revision(), before + 2);
+    assert_eq!(scripts_menu::revision(), before + 3);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -424,9 +428,132 @@ fn a_read_asked_for_during_another_runs_when_that_one_ends() {
 fn an_app_without_a_scripts_folder_keeps_the_two_fixed_items() {
     let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
     read(&app);
-    assert_eq!(shape(&scripts()), "Check Script…, Other Script…");
+    assert_eq!(shape(&scripts()), FIXED, "no loading note: there is no folder to read");
     let e = menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": "draw.js" })).unwrap().unwrap_err();
     assert_eq!(e, "the script is no longer in the Scripts folder");
     assert_eq!(menus::UI_COMMANDS.iter().filter(|c| c.0 == scripts_menu::COMMAND).count(), 1);
     let _: Value = app.run("script.listInstalled", json!({})).unwrap();
+}
+
+/// File › Scripts in the macOS menu bar as text, as [`shape`] gives the in-window menu.
+fn native_shape(app: &VectorcraftApp) -> String {
+    fn one(nodes: &[Node]) -> String {
+        let node = |n: &Node| match n {
+            Node::Item(it) if it.command.is_none() => format!("({})", it.label),
+            Node::Item(it) => it.label.clone(),
+            Node::Header(label) => format!("({label})"),
+            Node::Submenu { label, children } => format!("{label}/[{}]", one(children)),
+            Node::Separator => "-".to_string(),
+            Node::Standard(s) => format!("{s:?}"),
+        };
+        nodes.iter().map(node).collect::<Vec<_>>().join(", ")
+    }
+    let bar = native_menu::from_tree(app, &menus::menu_tree());
+    let file = bar.menus.iter().find(|m| m.title == "File").unwrap();
+    let scripts = file.children.iter().find_map(|n| match n {
+        Node::Submenu { label, children } if label == "Scripts" => Some(children),
+        _ => None,
+    });
+    one(scripts.unwrap())
+}
+
+#[test]
+fn the_first_read_shows_a_loading_note_until_its_listing_comes() {
+    let dir = folder("loading");
+    let app = app(&dir);
+    write(&dir, "first.js", "");
+    let before = scripts_menu::revision();
+    scripts_menu::refresh(&app, None);
+    scripts_menu::end_untaken();
+    let loading = format!("({}), -, {FIXED}", scripts_menu::LOADING);
+    assert_eq!(shape(&scripts()), loading);
+    assert_eq!(native_shape(&app), loading, "the macOS menu bar shows the same note");
+    assert_eq!(scripts_menu::revision(), before + 1, "the macOS menu bar rebuilds for the note");
+    scripts_menu::wait();
+    assert_eq!(shape(&scripts()), format!("first, -, {FIXED}"));
+    assert_eq!(native_shape(&app), format!("first, -, {FIXED}"));
+    assert_eq!(scripts_menu::revision(), before + 2);
+    // A later read keeps the listing, with no note, while it is under way.
+    write(&dir, "second.js", "");
+    scripts_menu::refresh(&app, None);
+    scripts_menu::end_untaken();
+    assert_eq!(shape(&scripts()), format!("first, -, {FIXED}"));
+    assert_eq!(scripts_menu::revision(), before + 2);
+    scripts_menu::wait();
+    assert_eq!(shape(&scripts()), format!("first, second, -, {FIXED}"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn an_empty_or_unreadable_first_listing_takes_the_place_of_the_loading_note() {
+    let dir = folder("loading-empty");
+    let app = app(&dir);
+    let before = scripts_menu::revision();
+    read(&app);
+    assert_eq!(shape(&scripts()), FIXED);
+    assert_eq!(scripts_menu::revision(), before + 2, "the note went, though the listing is the empty one it started from");
+    let _ = std::fs::remove_dir_all(dir);
+    // A thread of its own has a menu that has not listed yet.
+    let dir = folder("loading-unreadable");
+    std::fs::remove_dir_all(dir.join("Scripts")).unwrap();
+    std::fs::write(dir.join("Scripts"), "").unwrap();
+    let there = dir.clone();
+    std::thread::spawn(move || {
+        let app = self::app(&there);
+        read(&app);
+        assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::UNREADABLE));
+    })
+    .join()
+    .unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_slow_first_read_says_so_until_its_listing_comes() {
+    let dir = folder("slow");
+    let app = app(&dir);
+    write(&dir, "first.js", "");
+    scripts_menu::refresh(&app, None);
+    scripts_menu::end_untaken();
+    let started = scripts_menu::first_read_started().unwrap();
+    let before = scripts_menu::revision();
+    scripts_menu::check_slow(started + scripts_menu::SLOW_SECS / 2.0);
+    assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::LOADING));
+    assert_eq!(scripts_menu::revision(), before);
+    // Past the threshold rather than at it: `(started + SLOW_SECS) - started` can round below
+    // SLOW_SECS, which made this test fail for some start times.
+    scripts_menu::check_slow(started + 1.5 * scripts_menu::SLOW_SECS);
+    assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::SLOW));
+    assert_eq!(native_shape(&app), format!("({}), -, {FIXED}", scripts_menu::SLOW));
+    assert_eq!(scripts_menu::revision(), before + 1);
+    // Asking again while it reads starts no second read.
+    scripts_menu::refresh(&app, None);
+    scripts_menu::check_slow(started + 10.0 * scripts_menu::SLOW_SECS);
+    assert_eq!(scripts_menu::revision(), before + 1);
+    scripts_menu::wait();
+    assert_eq!(shape(&scripts()), format!("first, -, {FIXED}"));
+    assert_eq!(scripts_menu::first_read_started(), None);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_first_read_that_ends_without_a_listing_says_the_folder_cannot_be_read_and_the_next_read_tries_again() {
+    let dir = folder("lost");
+    let app = app(&dir);
+    write(&dir, "first.js", "");
+    scripts_menu::refresh(&app, None);
+    scripts_menu::end_untaken();
+    scripts_menu::lose_read();
+    let before = scripts_menu::revision();
+    scripts_menu::wait();
+    assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::UNREADABLE), "no loading note left behind");
+    assert_eq!(native_shape(&app), format!("({}), -, {FIXED}", scripts_menu::UNREADABLE));
+    assert_eq!(scripts_menu::revision(), before + 1);
+    assert_eq!(scripts_menu::first_read_started(), None);
+    scripts_menu::refresh(&app, None);
+    scripts_menu::end_untaken();
+    assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::LOADING));
+    scripts_menu::wait();
+    assert_eq!(shape(&scripts()), format!("first, -, {FIXED}"));
+    let _ = std::fs::remove_dir_all(dir);
 }

@@ -213,6 +213,7 @@
 	Add Anchor Point	एंकर पॉइंट जोड़ें
 	Add Anchor Point Tool	ऐड एंकर पॉइंट टूल
 	Add Anchor Points	एंकर पॉइंट जोड़ें
+	Add Around	ऑब्जेक्ट के चारों ओर जोड़ें
 	Add Anchors	एंकर जोड़ें
 	Add Anchors…	एंकर जोड़ें…
 	Add as Effect	इफ़ेक्ट के रूप में जोड़ें
@@ -254,9 +255,14 @@
 	Add to Symbols	सिंबल्स में जोड़ें
 	Add to the Current Shortcuts	वर्तमान शॉर्टकट में जोड़ें
 	Add Used Colors	उपयोग किए रंग जोड़ें
+	Add Selected Colors	सिलेक्टेड रंग जोड़ें
 	Additional Fonts Folder	अतिरिक्त फ़ॉन्ट फ़ोल्डर
 	Additional Plug-ins Folder	अतिरिक्त प्लग-इन फ़ोल्डर
+	Plug-in Instruction Budget	प्लग-इन निर्देश बजट
 	Adjust Adjoining Width Points	सटे हुए चौड़ाई पॉइंट समायोजित करें
+	Incoming	आने वाली ओर
+	Outgoing	जाने वाली ओर
+	Single Width Only	केवल एक चौड़ाई
 	Adjust Color Balance…	कलर बैलेंस समायोजित करें…
 	Adjust Colors	रंग समायोजित करें
 	Adjust Options:	समायोजन ऑप्शन्स:
@@ -343,6 +349,7 @@
 	Angular	कोणीय
 	Angular Guides	कोणीय गाइड्स
 	Animated Zoom	एनिमेटेड ज़ूम
+	Anti Alias	एंटी-एलियासिंग
 	Anti-alias	एंटी-एलियास
 	Anti-Alias	एंटी-एलियास
 	Anti-alias Rasters	रास्टर एंटी-एलियास करें
@@ -391,6 +398,10 @@ antiAlias	Sharp	शार्प
 	Arc Lower…	निचला आर्क…
 	Arc Segment Tool Options	आर्क सेगमेंट टूल ऑप्शन्स
 	Arc Tool	आर्क टूल
+	Three-Point Arc Tool	थ्री-पॉइंट आर्क टूल
+	Three-Point Arc	थ्री-पॉइंट आर्क
+	Arc too large	आर्क बहुत बड़ा है
+	Third Point Sets Direction	तीसरा पॉइंट दिशा तय करता है
 	Arc Upper…	ऊपरी आर्क…
 	Arc…	आर्क…
 	Arch…	मेहराब…
@@ -452,6 +463,12 @@ antiAlias	Sharp	शार्प
 	Bus Lines	बस रेखाएँ
 	Terminal Nodes	टर्मिनल नोड
 
+# Original arrow art brushes.
+	Arrows	तीर ब्रश
+	Solid Arrow	ठोस तीर
+	Open Arrow	खुला तीर
+	Chevron Arrow	शेवरॉन तीर
+
 	Notched Ribbon	नोकदार रिबन
 	Double Line	दोहरी लाइन
 	Wave	लहर
@@ -468,6 +485,256 @@ antiAlias	Sharp	शार्प
 	Stars	तारे
 	Triangles	त्रिभुज
 	Sparkles	चमक
+	Warm Gray	वार्म ग्रे
+	Cool Gray	कूल ग्रे
+	Neutrals	न्यूट्रल रंग
+	Ivory	हाथीदाँत
+	Linen	लिनन
+	Oat	जई
+	Greige	ग्रेज
+	Stone	पत्थर
+	Taupe	टोप
+	Slate	स्लेट
+	Clay	मिट्टी
+	Terracotta	टेराकोटा
+	Ochre	गेरू
+	Umber	अम्बर मिट्टी
+	Sand	रेत
+	Olive	जैतूनी
+	Moss	काई
+	Rosy	गुलाबी आभा
+	Neutral	न्यूट्रल
+	Golden	सुनहरा
+	Pastel	पेस्टल
+	Pastel Red	पेस्टल लाल
+	Pastel Orange	पेस्टल नारंगी
+	Pastel Amber	पेस्टल एम्बर
+	Pastel Yellow	पेस्टल पीला
+	Pastel Lime	पेस्टल लाइम
+	Pastel Green	पेस्टल हरा
+	Pastel Teal	पेस्टल टील
+	Pastel Cyan	पेस्टल सियान
+	Pastel Azure	पेस्टल आसमानी
+	Pastel Blue	पेस्टल नीला
+	Pastel Violet	पेस्टल बैंगनी
+	Pastel Magenta	पेस्टल मैजेंटा
+	Soft Red	सॉफ़्ट लाल
+	Soft Orange	सॉफ़्ट नारंगी
+	Soft Amber	सॉफ़्ट एम्बर
+	Soft Yellow	सॉफ़्ट पीला
+	Soft Lime	सॉफ़्ट लाइम
+	Soft Green	सॉफ़्ट हरा
+	Soft Teal	सॉफ़्ट टील
+	Soft Cyan	सॉफ़्ट सियान
+	Soft Azure	सॉफ़्ट आसमानी
+	Soft Blue	सॉफ़्ट नीला
+	Soft Violet	सॉफ़्ट बैंगनी
+	Soft Magenta	सॉफ़्ट मैजेंटा
+	Vivid Red	चटक लाल
+	Vivid Orange	चटक नारंगी
+	Vivid Amber	चटक एम्बर
+	Vivid Yellow	चटक पीला
+	Vivid Lime	चटक लाइम
+	Vivid Green	चटक हरा
+	Vivid Teal	चटक टील
+	Vivid Cyan	चटक सियान
+	Vivid Azure	चटक आसमानी
+	Vivid Blue	चटक नीला
+	Vivid Violet	चटक बैंगनी
+	Vivid Magenta	चटक मैजेंटा
+	Deep	गहरे
+	Deep Red	गहरा लाल
+	Deep Orange	गहरा नारंगी
+	Deep Amber	गहरा एम्बर
+	Deep Yellow	गहरा पीला
+	Deep Lime	गहरा लाइम
+	Deep Green	गहरा हरा
+	Deep Teal	गहरा टील
+	Deep Cyan	गहरा सियान
+	Deep Azure	गहरा आसमानी
+	Deep Blue	गहरा नीला
+	Deep Violet	गहरा बैंगनी
+	Deep Magenta	गहरा मैजेंटा
+	Gold	सोना
+	Silver	चाँदी
+	Bronze	काँसा
+	Copper	ताँबा
+	Brass	पीतल
+	Rose Gold	रोज़ गोल्ड
+	Gunmetal	गनमेटल
+	Platinum	प्लैटिनम
+	Pewter	प्यूटर
+	Ember	अंगारा
+	Lagoon	लैगून
+	Dusk	साँझ
+	Clay to Teal	मिट्टी से टील
+	Plum to Olive	आलूबुखारा से जैतूनी
+	Complementary Coral	कोरल, पूरक
+	Split Complementary Coral	कोरल, विभाजित पूरक
+	Analogous Coral	कोरल, अनुरूप
+	Triad Coral	कोरल, त्रिक
+	Tetrad Coral	कोरल, चतुष्क
+	Pentagram Coral	कोरल, पेंटाग्राम
+	Complementary Teal	टील, पूरक
+	Split Complementary Teal	टील, विभाजित पूरक
+	Analogous Teal	टील, अनुरूप
+	Triad Teal	टील, त्रिक
+	Tetrad Teal	टील, चतुष्क
+	Pentagram Teal	टील, पेंटाग्राम
+	Soft Spectrum	सॉफ़्ट स्पेक्ट्रम
+	Red to Amber	लाल से एम्बर
+	Orange to Yellow	नारंगी से पीला
+	Amber to Lime	एम्बर से लाइम
+	Yellow to Green	पीला से हरा
+	Lime to Teal	लाइम से टील
+	Green to Cyan	हरा से सियान
+	Teal to Azure	टील से आसमानी
+	Cyan to Blue	सियान से नीला
+	Azure to Violet	आसमानी से बैंगनी
+	Blue to Magenta	नीला से मैजेंटा
+	Violet to Red	बैंगनी से लाल
+	Magenta to Orange	मैजेंटा से नारंगी
+	Dawn	भोर
+	Noon	दोपहर
+	Sunset	सूर्यास्त
+	Night	रात
+	Overcast	बादल
+	White to Black	सफ़ेद से काला
+	Light Grays	हल्के ग्रे
+	Dark Grays	गहरे ग्रे
+	Warm Grays	वार्म ग्रे रंग
+	Cool Grays	कूल ग्रे रंग
+	Fade to Transparent	पारदर्शी तक फ़ेड
+	White Fade	सफ़ेद फ़ेड
+	Vignette	विनेट
+	Mist	धुंध
+	Petal	पंखुड़ी
+	Fern	फ़र्न
+	Smoke	धुआँ
+	Honey	शहद
+	Seafoam	समुद्री झाग
+	Lavender	लैवेंडर
+	Driftwood	बहती लकड़ी
+	Ink Wash	स्याही वॉश
+	Tide	ज्वार
+	Bloom	खिलना
+	Dew	ओस
+	Pollen	पराग
+	Lichen	लाइकेन
+	Prism Veil	प्रिज़्म परदा
+	Opal Ribbon	ओपल रिबन
+	Pearl Flash	मोती चमक
+	Aurora Foil	ऑरोरा फ़ॉइल
+	Iris Sheen	आइरिस आभा
+	Frost Spectrum	पाला स्पेक्ट्रम
+	Silver Tide	चाँदी ज्वार
+	Rose Quartz Gleam	रोज़ क्वार्ट्ज़ दमक
+	Moonstone Shift	चंद्रमणि झिलमिल
+	Violet Edge	बैंगनी किनारा
+	Mint Halo	पुदीना हलो
+	Amber Corona	एम्बर कोरोना
+	Polar Glint	ध्रुवीय झलक
+	Pastel Orbit	पेस्टल कक्षा
+	Coral and Navy	कोरल व नेवी
+	Plum and Lime	आलूबुखारा व लाइम
+	Teal and Gold	टील व सोना
+	Indigo and Peach	इंडिगो व आड़ू
+	Forest and Rose	जंगल व गुलाब
+	Red Glow	लाल ग्लो
+	Orange Glow	नारंगी ग्लो
+	Amber Glow	एम्बर ग्लो
+	Yellow Glow	पीला ग्लो
+	Lime Glow	लाइम ग्लो
+	Green Glow	हरा ग्लो
+	Teal Glow	टील ग्लो
+	Cyan Glow	सियान ग्लो
+	Azure Glow	आसमानी ग्लो
+	Blue Glow	नीला ग्लो
+	Violet Glow	बैंगनी ग्लो
+	Magenta Glow	मैजेंटा ग्लो
+	Polka Dots	पोल्का डॉट्स
+	Vertical Stripes	खड़ी धारियाँ
+	Horizontal Stripes	आड़ी धारियाँ
+	Diagonal Stripes	तिरछी धारियाँ
+	Checkerboard	चेकरबोर्ड
+	Diamonds	डायमंड
+	Crosses	क्रॉस
+	Coarse Grit	मोटा दाना
+	Stipple	बिंदुकारी
+	Scratches	खरोंचें
+	Sparse Flecks	विरल छींटे
+	Dense Flecks	घने छींटे
+	Sine Bands	साइन पट्टियाँ
+	Ripple Lines	लहर रेखाएँ
+	Interference Rings	व्यतिकरण छल्ले
+	Offset Rings	खिसके छल्ले
+	Warped Checks	मुड़े चेक
+	Pinched Stripes	सिकुड़ी धारियाँ
+	Chevron Pulse	शेवरॉन स्पंदन
+	Radiating Lenses	विकिरित लेंस
+	Soft Shadow	सॉफ़्ट छाया
+	Hard Shadow	कड़ी छाया
+	Lifted Card	उठा कार्ड
+	Neon Tube	नियॉन ट्यूब
+	Inner Light	भीतरी रोशनी
+	Feathered	फ़ेदर किया
+	Haze	कुहासा
+	Double Rule	दोहरी रेखा
+	Triple Rule	तिहरी रेखा
+	Dashed Border	डैश बॉर्डर
+	Dotted Border	डॉट बॉर्डर
+	Offset Keyline	खिसकी कीलाइन
+	Inset Keyline	भीतरी कीलाइन
+	Outside Stroke	बाहरी स्ट्रोक
+	Pointer	पॉइंटर
+	Highlighter	हाइलाइटर
+	Sketchy Line	स्केच रेखा
+	Scribble Fill	स्क्रिबल फ़िल
+	Wobble	डगमग
+	Zig Zag Edge	ज़िगज़ैग किनारा
+	Wavy Edge	लहरदार किनारा
+	Puffy	फूला
+	Starburst	तारा विस्फोट
+	Glossy	चमकदार
+	Brushed Metal	ब्रश्ड मेटल
+	Spotlight	स्पॉटलाइट
+	Sunset Band	सूर्यास्त पट्टी
+	Sea Glass	समुद्री काँच
+	Pearl	मोती
+	Chrome Rim	क्रोम किनारा
+	Glow Orb	ग्लो गोला
+	Pill Badge	पिल बैज
+	Round Badge	गोल बैज
+	Flag Wave	लहराता झंडा
+	Bulge	उभार
+	Twisted	ऐंठा
+	Echo	प्रतिध्वनि
+	Spiral Copies	सर्पिल कॉपियाँ
+	Multiply Tint	मल्टिप्लाई टिंट
+	Darken Veil	डार्कन परदा
+	Ghosted	धुंधला
+	Two Tone	दो टोन
+	Overlay Glaze	ओवरले ग्लेज़
+	Screen Light	स्क्रीन रोशनी
+	Soft Light Wash	सॉफ़्ट लाइट वॉश
+	Cyan Neon	सियान नियॉन
+	Magenta Laser	मैजेंटा लेज़र
+	Amber Tube	एम्बर ट्यूब
+	Electric Lime	इलेक्ट्रिक लाइम
+	Pulse Violet	पल्स वायलेट
+	Cobalt Phosphor	कोबाल्ट फ़ॉस्फ़र
+	Burst	विस्फोट
+	Rounded Square	गोल कोनों वाला वर्ग
+	Sun	सूरज
+	Moon	चाँद
+	Cloud	बादल
+	Rain	बारिश
+	Thunder	गरज
+	Snow	बर्फ़
+	Play	चलाएँ
+	Pause	ठहराएँ
+	Skip Next	अगला
+	Shuffle	क्रमहीन
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -532,6 +799,7 @@ antiAlias	Sharp	शार्प
 	Average…	औसत…
 	Away from the Line	लाइन से दूर
 	Axis	अक्ष
+	Axis Angle	अक्ष कोण
 	Axis side	अक्ष की तरफ़
 	Axis:	अक्ष:
 	B4	B4
@@ -548,6 +816,7 @@ antiAlias	Sharp	शार्प
 	Bar	बार
 	Bar Graph Tool	बार ग्राफ़ टूल
 	Barbed	कंटीले
+arrowhead	Feather	पंख
 	Bas Relief	बास रिलीफ़
 	Bas Relief…	बास रिलीफ़…
 	Base Along:	आधार के साथ:
@@ -569,6 +838,8 @@ antiAlias	Sharp	शार्प
 	Checkpoint	चेकपॉइंट
 	Inventory Icons	इन्वेंटरी आइकन
 	Skill Icons	कौशल आइकन
+	Weather Icons	मौसम आइकन
+	Media Controls	मीडिया नियंत्रण
 	Attack	आक्रमण
 	Defend	रक्षा
 	Heal	उपचार
@@ -583,6 +854,7 @@ antiAlias	Sharp	शार्प
 	Batch Trace Folder	फ़ोल्डर बैच ट्रेस करें
 	Batch…	बैच…
 	Bearing	दिशा
+	Stylus Wheel	स्टाइलस व्हील
 	Before Last:	अंत के पहले:
 	Begin Recording	रिकॉर्डिंग शुरू करें
 	Begin Undo Group	पूर्ववत समूह शुरू करें
@@ -692,6 +964,12 @@ antiAlias	Sharp	शार्प
 	Brush Library	ब्रश लाइब्रेरी
 	Brush Options	ब्रश ऑप्शन्स
 	Brush Options…	ब्रश ऑप्शन्स…
+	Options of Selected Object…	सिलेक्टेड ऑब्जेक्ट के ऑप्शन्स…
+	Options of Selected Object	सिलेक्टेड ऑब्जेक्ट के ऑप्शन्स
+@msg	no path painted with a brush is selected	ब्रश से पेंट किया गया कोई पाथ नहीं चुना गया
+@msg	the selected paths are painted with brushes of different types	चुने गए पाथ अलग-अलग प्रकार के ब्रश से पेंट किए गए हैं
+@msg	give `params` or `reset`, not both	`params` या `reset` दें, दोनों नहीं
+@msg	a bristle brush has no options of its own on a path	ब्रिसल ब्रश के किसी पाथ पर अपने ऑप्शन्स नहीं होते
 	Brush Scale Options	ब्रश स्केल ऑप्शन्स
 	Brush Size	ब्रश साइज़
 	Brush Strokes	ब्रश स्ट्रोक्स
@@ -793,6 +1071,11 @@ antiAlias	Sharp	शार्प
 	Character Direction	कैरेक्टर दिशा
 	Character options	कैरेक्टर ऑप्शन्स
 	Character Rotation	कैरेक्टर रोटेशन
+	Chinese Big 5	चीनी Big 5
+	Cyrillic	सिरिलिक
+	Greek	ग्रीक
+	Baltic	बाल्टिक
+	Central European	मध्य यूरोपीय
 	Character Set:	कैरेक्टर सेट:
 	Character Style	कैरेक्टर स्टाइल
 	Character Style Options	कैरेक्टर स्टाइल ऑप्शन्स
@@ -820,6 +1103,15 @@ antiAlias	Sharp	शार्प
 	Chrome	क्रोम
 	Chrome…	क्रोम…
 	Circle	वृत्त
+	Circle Tool	वृत्त टूल
+	Curvature Circle Tool	वक्रता वृत्त टूल
+	Cusp	नुकीला बिंदु
+	Straight segment	सीधा सेगमेंट
+	Circle too large	वृत्त बहुत बड़ा है
+	Show Radii	त्रिज्याएँ दिखाएँ
+	Show Diameter	व्यास दिखाएँ
+	Anchors at Standard Positions	मानक स्थानों पर एंकर पॉइंट्स
+	Third Point by Dragging	खींचकर तीसरा बिंदु
 	Circle (open)	सर्किल (ओपन)
 	Circle:	वृत्त:
 	Classic	क्लासिक
@@ -898,6 +1190,25 @@ antiAlias	Sharp	शार्प
 	Preserve Embedded Profiles	एम्बेड की गई प्रोफ़ाइल बनाए रखें
 	Convert to Working Space	वर्किंग स्पेस में बदलें
 	Preserve Numbers	संख्याएँ बनाए रखें
+	Profile Mismatches:	प्रोफ़ाइल बेमेल:
+	Ask When Opening	खोलते समय पूछें
+	Ask When Pasting	पेस्ट करते समय पूछें
+	Missing Profiles:	अनुपलब्ध प्रोफ़ाइल:
+	Embedded Profile Mismatch	एम्बेड की गई प्रोफ़ाइल बेमेल
+	Missing Profile	प्रोफ़ाइल अनुपलब्ध
+	Paste Profile Mismatch	पेस्ट करते समय प्रोफ़ाइल बेमेल
+	“{name}” is not tagged with a {model} profile.	"{name}" में कोई {model} प्रोफ़ाइल नहीं है।
+	“{name}” is tagged with the {model} profile “{profile}”, which is not the {model} working space “{working}”.	"{name}" में {model} प्रोफ़ाइल "{profile}" है, जो {model} वर्किंग स्पेस "{working}" नहीं है।
+	Use the embedded profile	एम्बेड की गई प्रोफ़ाइल का उपयोग करें
+	Convert the colors to the working space	रंगों को वर्किंग स्पेस में बदलें
+	Discard the embedded profile	एम्बेड की गई प्रोफ़ाइल हटाएं
+	Leave as is	जैसा है वैसा रहने दें
+	Assign the working space	वर्किंग स्पेस असाइन करें
+	Assign profile:	प्रोफ़ाइल असाइन करें:
+	Preserve the color numbers	रंगों की संख्याएँ बनाए रखें
+	Convert to keep the colors' appearance	रंगों का रूप बनाए रखने के लिए बदलें
+@msg	`{path}` goes with `{key}`: "assign" only	`{path}` केवल `{key}`: "assign" के साथ उपयोग होता है
+	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	पेस्ट किए गए रंग ऐसे दस्तावेज़ से आए हैं जिसकी {model} प्रोफ़ाइल "{from}" है; इस दस्तावेज़ की "{to}" है।
 	Coarse Dots	मोटे बिंदु
 	Coincidence:	संयोग:
 	Collapse Panel Group	पैनल समूह संक्षिप्त करें
@@ -916,6 +1227,11 @@ antiAlias	Sharp	शार्प
 	Color blindness – Deuteranopia-type	कलर ब्लाइंडनेस – ड्यूटेरानोपिया प्रकार
 	Color blindness – Protanopia-type	रंग अंधापन - प्रोटानोपिया प्रकार
 	Color blindness – Tritanopia-type	कलर ब्लाइंडनेस – ट्राइटेनोपिया प्रकार
+	Show Color Vision Preview	कलर विज़न प्रीव्यू दिखाएँ
+	Protanopia	प्रोटानोपिया
+	Deuteranopia	ड्यूटेरानोपिया
+	Tritanopia	ट्राइटेनोपिया
+	Achromatopsia	एक्रोमैटोप्सिया
 	Color Burn	कलर बर्न
 	Color conversion:	रंग रूपांतरण:
 	Color Dodge	कलर डॉज
@@ -936,6 +1252,7 @@ antiAlias	Sharp	शार्प
 	Color Mixer (Shift-click the chip)	कलर मिक्सर (रंग चिप पर Shift-क्लिक करें)
 	Color Mode	रंग मोड
 	Color Mode:	रंग मोड:
+	Color Model	रंग मॉडल
 	Color Model:	रंग मॉडल:
 	Color Models	रंग मॉडल
 	Color Panel Options	रंग पैनल ऑप्शन्स
@@ -958,6 +1275,19 @@ antiAlias	Sharp	शार्प
 	Saturation and brightness	सैचुरेशन और ब्राइटनेस
 	Color field	कलर फ़ील्ड
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	व्हील व्यू
+	Box View	बॉक्स व्यू
+	Show Out-of-Gamut Colors	गैमट से बाहर के रंग दिखाएँ
+	Box Channel	बॉक्स चैनल
+	Color box	कलर बॉक्स
+	Color Wheel Options	कलर व्हील ऑप्शन्स
+	Show Document Colors	डॉक्यूमेंट के रंग दिखाएँ
+	Document Colors	डॉक्यूमेंट के रंग
+	Selection Colors	चयन के रंग
+@plural	Used {n} time|Used {n} times	{n} बार उपयोग किया गया|{n} बार उपयोग किया गया
+	Show Harmony	सद्भाव दिखाएँ
+	Harmony Rule	सद्भाव नियम
+	Harmony color	सद्भाव रंग
 	Color Type:	रंग का प्रकार:
 	Color wheel	कलर व्हील
 	Color:	रंग:
@@ -973,6 +1303,7 @@ antiAlias	Sharp	शार्प
 	Column Type:	स्तंभ प्रकार:
 	Column Width:	कॉलम चौड़ाई:
 	Column…	स्तंभ…
+	Columns	कॉलम
 	Columns:	कॉलम:
 	Combine Point Text	पॉइंट टेक्स्ट को मिलाएं
 	Combine Slices	संयोजन स्लाइस
@@ -1016,9 +1347,11 @@ antiAlias	Sharp	शार्प
 	Connect Selected End Points	सिलेक्टेड एंड पॉइंट्स कनेक्ट करें
 	Consider Open Filled Paths as Closed	बंद के रूप में ओपन भरा पाथ पर विचार करें
 	Consolidate All Windows	सभी विंडो एक साथ लाएँ
+	Constant Gap	स्थिर गैप
 	Constrain	सीमित करें
 	Constrain Angle	कंस्ट्रेन एंगल
 	Constrain Width and Height Proportions	चौड़ाई और ऊंचाई का अनुपात बनाए रखें
+	Copy Width to Height	चौड़ाई को ऊंचाई में कॉपी करें
 	Construction Guides	निर्माण गाइड
 	Conté Crayon	कॉन्टे क्रेयॉन
 	Conté Crayon…	कॉन्टे क्रेयॉन…
@@ -1033,6 +1366,8 @@ antiAlias	Sharp	शार्प
 	Control	नियंत्रण
 	Convert	कन्वर्ट करें
 	Convert All Spot Colors to Process	सभी स्पॉट कलर्स को प्रोसेस में कनवर्ट करें
+	Convert {name} to process	{name} को प्रोसेस में कनवर्ट करें
+	Keep {name} as spot	{name} को स्पॉट के रूप में रखें
 	Convert All Strokes to Outlines	सभी स्ट्रोक को आउटलाइन में कनवर्ट करें
 	Convert All Text to Outlines	सभी टेक्स्ट को आउटलाइन में कनवर्ट करें
 	Convert Anchor Point	एंकर पॉइंट कनवर्ट करें
@@ -1083,6 +1418,7 @@ antiAlias	Sharp	शार्प
 	Copy Selected Style	सिलेक्टेड स्टाइल को कॉपी करें
 	Copy to User Defined	उपयोगकर्ता परिभाषित करने के लिए कॉपी करें
 	Copy Width Point	कॉपी चौड़ाई पॉइंट
+	Copy with Units	इकाइयों के साथ कॉपी करें
 	Copyright	कॉपीराइट
 	Copyright and Contact Info	कॉपीराइट और संपर्क जानकारी
 	Copyright Info URL:	कॉपीराइट जानकारी URL:
@@ -1133,6 +1469,9 @@ antiAlias	Sharp	शार्प
 	Create From:	से बनाएँ:
 	Create Gradient Mesh	ग्रेडिएंट मेश बनाएँ
 	Create Gradient Mesh…	ग्रेडिएंट मेश बनाएँ…
+	Flat	समतल
+	To Center	केंद्र की ओर
+	To Edge	किनारे की ओर
 	Create Graph	ग्राफ़ बनाएँ
 	Create New {kind} Style	नई {kind} स्टाइल बनाएँ
 	Create New Action	नया एक्शन बनाएँ
@@ -1145,6 +1484,15 @@ antiAlias	Sharp	शार्प
 	Create New Swatch…	नया स्वॉच बनाएँ…
 	Create Object Mosaic	ऑब्जेक्ट मोज़ेक बनाएँ
 	Create Object Mosaic…	ऑब्जेक्ट मोज़ेक बनाएँ…
+	Current Size:	वर्तमान साइज़:
+	New Size:	नया साइज़:
+	Tile Spacing:	टाइल स्पेसिंग:
+	Number of Tiles:	टाइलों की संख्या:
+	Constrain Ratio:	अनुपात सीमित करें:
+	Result:	परिणाम:
+	Resize Using Percentages	प्रतिशत से साइज़ बदलें
+	Delete Raster	रास्टर इमेज हटाएँ
+	Use Ratio	अनुपात इस्तेमाल करें
 	Create Outlines	आउटलाइन बनाएँ
 	Create Path	पाथ बनाएँ
 	Create PDF layers from layers and sublayers	लेयर्स और सबलेयरों से PDF लेयरें बनाएं
@@ -1283,6 +1631,9 @@ antiAlias	Sharp	शार्प
 	Delete Artboard	आर्टबोर्ड हटाएँ
 	Delete Artboards	आर्टबोर्ड्स हटाएँ
 	Delete Brush	ब्रश हटाएँ
+	Delete Color	रंग हटाएँ
+	Restore Generated Table	जनरेट की गई तालिका पुनर्स्थापित करें
+	Unshift All Colors	सभी रंग अनशिफ़्ट करें
 	Delete Character Style	कैरेक्टर स्टाइल हटाएँ
 	Delete Data Set	डेटा सेट हटाएँ
 	Delete Data Sets	डेटा सेट्स हटाएँ
@@ -1298,6 +1649,10 @@ antiAlias	Sharp	शार्प
 	Delete Guide	गाइड हटाएँ
 	Delete Guides	गाइड्स हटाएँ
 	Delete Image Trace Preset	डिलीट इमेज ट्रेस प्रीसेट
+	Tracing Presets…	ट्रेसिंग प्रीसेट…
+	Import Image Trace Presets	आयात इमेज ट्रेस प्रीसेट्स
+	Export Image Trace Presets	निर्यात इमेज ट्रेस प्रीसेट्स
+	Replace the saved presets that have these names?	इन नामों वाले सेव किए गए प्रीसेट बदलें?
 	Delete Instances	इंस्टेंस हटाएँ
 	Delete Layer	लेयर हटाएँ
 	Delete Library	लाइब्रेरी हटाएँ
@@ -1330,6 +1685,7 @@ antiAlias	Sharp	शार्प
 	Delete the graphic style “{name}”?	ग्राफिक स्टाइल "{name}" को हटा दें?
 	Delete the library “{name}”?	लाइब्रेरी "{name}" को हटा दें?
 	Delete the selected action sets and their actions?	सिलेक्टेड कार्रवाई सेट और उनके कार्यों को हटा दें?
+	Delete all action sets and their actions?	सभी कार्रवाई सेट और उनके कार्यों को हटा दें?
 	Delete the selected brushes?	सिलेक्टेड ब्रश को हटा दें?
 	Delete the selected symbol?	सिलेक्टेड सिंबल हटाएँ?
 	Delete the selected symbols?	सिलेक्टेड सिंबल्स हटाएँ?
@@ -1389,6 +1745,7 @@ antiAlias	Sharp	शार्प
 	Direction:	दिशा:
 	Directives	निर्देश
 	Disable Auto Add/Delete	ऑटो जोड़ना/हटाना अक्षम करें
+	Interpolate Control Points When Moving Anchors	एंकर पॉइंट खिसकाते समय निर्देशन हैंडल इंटरपोलेट करें
 	Disable Opacity Mask	ओपेसिटी मास्क अक्षम करें
 	Discard	डिस्कर्ड
 	Discard Empty Type	खाली टाइप हटाएँ
@@ -1558,6 +1915,8 @@ antiAlias	Sharp	शार्प
 	Duplicate Anchors	एंकर की प्रति बनाएँ
 	Duplicate and Offset 10 pt	डुप्लिकेट और ऑफ़सेट 10 pt
 	Duplicate Artboard	आर्टबोर्ड की प्रति बनाएँ
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	इस ओर आर्टबोर्ड जोड़ने के लिए क्लिक करें; इस आर्टबोर्ड की उसके आर्टवर्क सहित प्रति बनाने के लिए Alt-क्लिक करें
+	Click to add an artboard on this side	इस ओर आर्टबोर्ड जोड़ने के लिए क्लिक करें
 	Duplicate Artboards	आर्टबोर्ड्स की प्रति बनाएँ
 	Duplicate Brush	डुप्लिकेट ब्रश
 	Duplicate Character Style	कैरेक्टर स्टाइल की प्रति बनाएँ
@@ -1578,10 +1937,25 @@ antiAlias	Sharp	शार्प
 	Duplication	डुप्लीकेशन
 	Dutch	डच
 	DWG (use DXF)	DWG (DXF का उपयोग करें)
+	PSD Import Options	PSD आयात ऑप्शन्स
+	Place PSD	PSD प्लेस करें
+	Convert Layers to Objects	लेयर्स को ऑब्जेक्ट में बदलें
+	Import Hidden Layers	छिपी लेयर्स आयात करें
+	Flatten Layers to a Single Image	लेयर्स को एक इमेज में फ़्लैट करें
+	Import Slices	स्लाइस आयात करें
 	DXF Import Options	DXF आयात ऑप्शन्स
 	DXF Info	DXF जानकारी
 	DXF Options	DXF ऑप्शन्स
 	DXF Options Dialog	DXF ऑप्शन्स डायलॉग
+	HP-GL Options	HP-GL ऑप्शन्स
+	HP-GL Options Dialog	HP-GL ऑप्शन्स डायलॉग
+	Curve Tolerance:	कर्व टॉलरेंस:
+	Origin:	ओरिजिन:
+	Pens:	पेन:
+	One Pen per Color	हर रंग के लिए एक पेन
+	Pen Table	पेन टेबल
+	Draw the Nearest Path Next	अगला सबसे नज़दीकी पाथ ड्रॉ करें
+	Draw Inner Paths First	पहले अंदर के पाथ ड्रॉ करें
 	Dynamic Symbol	डायनामिक सिंबल
 	e.g. 1-3, 5	उदाहरण के लिए 1-3, 5
 	Each Design Represents:	प्रत्येक डिजाइन का प्रतिनिधित्व करता है:
@@ -1690,6 +2064,7 @@ antiAlias	Sharp	शार्प
 	Enable text access for screen readers	स्क्रीन रीडर के लिए टेक्स्ट एक्सेस सक्षम करें
 	Enable Touch Gestures	टच जेस्चर ऑन करें
 	Switch Selection and Drawing Modes	चयन और ड्रॉइंग मोड के बीच बदलें
+	Select Last Selection Tool	पिछला सिलेक्शन टूल चुनें
 	Enable Touch Workspace	टच वर्कस्पेस सक्षम करें
 	Enclosing Lasso	लासो संलग्न करना
 	Enclosing Lasso Tool	लासो टूल संलग्न करना
@@ -1858,6 +2233,15 @@ antiAlias	Sharp	शार्प
 	Shading Color	शेडिंग रंग
 	Black Overprint	काला ओवरप्रिंट
 	Draw Hidden Faces	छिपे हुए फलक बनाएँ
+	Map Art…	आर्टवर्क मैप करें…
+	Map Art	आर्टवर्क मैप करें
+	First Surface	पहली सतह
+	Previous Surface	पिछली सतह
+	Next Surface	अगली सतह
+	Last Surface	अंतिम सतह
+	Scale to Fit	फ़िट होने तक स्केल करें
+	Shade Artwork	आर्टवर्क पर छाया दें
+	Invisible Geometry	अदृश्य ज्यामिति
 	Eyedropper	आईड्रॉपर
 	Eyedropper Applies:	आईड्रॉपपर लागू होता है:
 	Eyedropper Options	आईड्रॉपर ऑप्शन्स
@@ -1892,6 +2276,8 @@ antiAlias	Sharp	शार्प
 	Files	फ़ाइलें
 	Files of a PDF standard can't be password-protected.	एक PDF मानक की फ़ाइलें पासवर्ड की रक्षा नहीं की जा सकती है।
 	Files of this standard tag their colours with ICC profiles.	इस मानक की फ़ाइलें ICC प्रोफ़ाइल के साथ उनके रंगों को टैग करती हैं।
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	इस मानक की फ़ाइलें ICC प्रोफ़ाइल के साथ उनके रंगों को टैग करती हैं, आउटपुट इंटेंट प्रोफ़ाइल के CMYK रंगों को छोड़कर, जो DeviceCMYK के रूप में लिखे जाते हैं।
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“प्रोफ़ाइल शामिल नहीं है” और CMYK आउटपुट इंटेंट के साथ, हर CMYK रंग DeviceCMYK के रूप में लिखा जाता है, जब तक कि उसे किसी अन्य प्रोफ़ाइल के CMYK गंतव्य में रूपांतरित न किया जाए।
 	Fill	फ़िल
 	Fill (X), double-click for the Color Picker	फ़िल (X), कलर पिकर के लिए डबल-क्लिक करें
 	Fill & Stroke	भरें और स्ट्रोक करें
@@ -1921,9 +2307,36 @@ antiAlias	Sharp	शार्प
 	Filters	फिल्टर
 	Find	खोजें
 	Find and Replace…	खोजें और बदलें…
+	Find and Replace	खोजें और बदलें
+	Find:	खोजें:
+	Replace With:	इससे रिप्लेस करें:
+	Replace & Find	रिप्लेस करें और खोजें
+	Replace All	सभी रिप्लेस करें
+	Match Case	केस मिलाएँ
+	Find Whole Word	पूरा शब्द खोजें
+	Search Backwards	पीछे की ओर खोजें
+	Check Hidden Layers	छिपी हुई लेयर्स जाँचें
+	Check Locked Layers	लॉक की गई लेयर्स जाँचें
+@msg	No matches found	कोई मिलान नहीं मिला
+@msg	Matches replaced: {n}	रिप्लेस किए गए मिलान: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ऑब्जेक्ट {_3} के बाइट {_1}..{_2} पर `find` का कोई मिलान नहीं है
 	Find Font	फ़ॉन्ट खोजें
 	Find Font Files	फ़ॉन्ट फ़ाइल का पता लगाएं
 	Find Font…	फ़ॉन्ट खोजें…
+	Retype	फिर से टाइप करें
+	Find Matching Fonts	मिलते-जुलते फ़ॉन्ट खोजें
+	Find more font matches	और मिलते-जुलते फ़ॉन्ट खोजें
+	Type your text to preview	प्रीव्यू के लिए अपना टेक्स्ट टाइप करें
+	Select outlined text, then Find Matching Fonts.	आउटलाइन किया गया टेक्स्ट चुनें, फिर मिलते-जुलते फ़ॉन्ट खोजें।
+	No font matches the selected shapes.	कोई फ़ॉन्ट चुने गए आकारों से मेल नहीं खाता।
+	Shapes past the first 2,048, or more than 16 groups deep, were not compared.	पहले 2,048 के बाद के, या 16 से अधिक समूहों की गहराई वाले आकारों की तुलना नहीं की गई।
+	Reset Retype Panel	फिर से टाइप करें पैनल रीसेट करें
+	List Matching Fonts	मिलते-जुलते फ़ॉन्ट की सूची
+	Retype Preview	फिर से टाइप करें पैनल का प्रीव्यू
+@msg	`count` must be a whole number from 1 to 96	`count` 1 से 96 तक पूरी संख्या होना चाहिए
+@msg	`size` must be small, medium or large	`size` को small, medium या large होना चाहिए
+@msg	`text` must be a string of at most 100 characters	`text` अधिकतम 100 वर्णों की स्ट्रिंग होनी चाहिए
+@msg	Retype: select outlined text (paths or compound paths)	फिर से टाइप करें: आउटलाइन किया गया टेक्स्ट चुनें (पाथ या कंपाउंड पाथ)
 	Find Fonts	फाइंड फ़ॉन्ट
 	Find Fonts in Folder…	फ़ोल्डर में फ़ॉन्ट खोजें…
 	Find in Folder…	फ़ोल्डर में खोजें…
@@ -1964,6 +2377,7 @@ antiAlias	Sharp	शार्प
 	Fixed	निश्चित
 	Flag…	झंडा…
 	Flare	फ्लेयर
+	Edit Flare	फ्लेयर संपादित करें
 	Flare Tool	फ्लेयर टूल
 	Flare Tool Options	फ़्लेयर टूल ऑप्शन्स
 	Flat Angle	फ्लैट कोण
@@ -2007,6 +2421,10 @@ antiAlias	Sharp	शार्प
 	Font List	फ़ॉन्ट सूची
 	Show Similar Fonts	समान फ़ॉन्ट दिखाएँ
 	Clear Similar Fonts	समान फ़ॉन्ट साफ़ करें
+	Fonts used in this document	इस डॉक्यूमेंट में उपयोग किए गए फ़ॉन्ट
+	This document uses no available fonts	यह डॉक्यूमेंट कोई उपलब्ध फ़ॉन्ट उपयोग नहीं करता
+	Recently Added	हाल में जोड़े गए
+	Fonts added in the last 30 days	पिछले 30 दिनों में जोड़े गए फ़ॉन्ट
 	Font Preview Size	फ़ॉन्ट प्रीव्यू साइज़
 	Font Size	फ़ॉन्ट साइज़
 	Font Size:	फ़ॉन्ट साइज़:
@@ -2047,8 +2465,10 @@ antiAlias	Sharp	शार्प
 	Fresco…	फ़्रेस्को…
 	from the format's public description	फ़ॉर्मैट के सार्वजनिक विवरण से
 	from your earlier imports	अपने पहले आयात से
+	From Selection	सिलेक्शन से
 	From:	से:
 	Front	सामने
+	Side	बगल
 	Frosted	फ़्रॉस्टेड
 	Full Document	पूरा डॉक्यूमेंट
 	Full Justify	फुल जस्टिफ़ाई
@@ -2058,6 +2478,10 @@ antiAlias	Sharp	शार्प
 	Full Width	पूर्ण चौड़ाई
 	Fully Inside	पूरी तरह से अंदर
 	Fully Outside	पूरी तरह बाहर
+	Choose Align To at playback	प्लेबैक के समय संरेखण लक्ष्य चुनें
+	Align steps use the key object, key anchor or key guide when one is set.	मुख्य ऑब्जेक्ट, मुख्य एंकर पॉइंट या मुख्य गाइड सेट होने पर संरेखण चरण उसका उपयोग करते हैं।
+	With one whole object selected and no key, they use the artboard.	एक पूरा ऑब्जेक्ट चुना हो और कोई मुख्य न हो, तो वे आर्टबोर्ड का उपयोग करते हैं।
+	Otherwise they use the selection.	अन्यथा वे सिलेक्शन का उपयोग करते हैं।
 	Function Key:	फ़ंक्शन की:
 	Fuzziness:	फ़ज़ीनेस:
 	Gamma	गामा
@@ -2288,6 +2712,8 @@ antiAlias	Sharp	शार्प
 	Hide Bounding Box	बाउंडिंग बॉक्स छिपाएँ
 	Hide Code	कोड छुपाएं
 	Hide Corner Widget	हिडन कॉर्नर विजेट
+	Hide Shape Widgets	शेप विजेट छिपाएँ
+	Show Shape Widgets	शेप विजेट दिखाएँ
 	Hide Corner Widget for angles greater than	से अधिक कोणों के लिए छुपा कॉर्नर विजेट
 	Hide Edges	हाइड एज
 	Hide Extension Lines	एक्सटेंशन लाइन छिपाएँ
@@ -2328,6 +2754,8 @@ antiAlias	Sharp	शार्प
 	Highlight anchors on mouse over	माउस ओवर पर हाइलाइट एंकर
 	Highlight Area	हाइलाइट क्षेत्र
 	Highlight Font Name	हाइलाइट फ़ॉन्ट नाम
+	Highlight Font Size	हाइलाइट फ़ॉन्ट साइज़
+	Other…	अन्य…
 	Highlight Kerning	हाइलाइट कर्निंग
 	Highlight Rows	हाइलाइट पंक्तियाँ
 	Highlight Substituted Fonts	हाईलाइट सबस्टिट्यूटेड फ़ॉन्ट
@@ -2508,6 +2936,7 @@ antiAlias	Sharp	शार्प
 	Isolate Blending	ब्लेंडिंग अलग करें
 	Isolate Group	अलग समूह
 	Isolate Selected Group	सिलेक्टेड समूह अलग करें
+	Isolate Selected Path	सिलेक्टेड पाथ अलग करें
 	Isolate Selected Object	सिलेक्टेड ऑब्जेक्ट को अलग करें
 	Isometric Bottom	आइसोमेट्रिक बॉटम
 	Isometric Left	आइसोमेट्रिक लेफ्ट
@@ -2552,6 +2981,7 @@ antiAlias	Sharp	शार्प
 	Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required.	ग्राफ़िक्स, रंग और टेक्स्ट स्टाइल्स यहाँ रखें ताकि किसी भी डॉक्यूमेंट में उपयोग कर सकें। लाइब्रेरीज़ इसी कंप्यूटर पर रहती हैं — अकाउंट की ज़रूरत नहीं है।
 	Keep Handles	हैंडल रखें
 	Keep Original	मूल रखें
+	Keep Originals	मूल रखें
 	Keep Plain Text	प्लेन टेक्स्ट रखें
 	Keep selected	सिलेक्ट करें
 	Keep Shared Points Together	साझा पॉइंट्स एक साथ रखें
@@ -2571,10 +3001,24 @@ antiAlias	Sharp	शार्प
 	Keywords:	कीवर्ड:
 	Kind	प्रकार
 	Kinsoku Set	किनसोकू सेट
+	Kinsoku Shori Settings…	किनसोकू शोरी सेटिंग्स…
+	Kinsoku Shori Settings	किनसोकू शोरी सेटिंग्स
+	Kinsoku Sets	किनसोकू सेट सूची
+	Kinsoku Set Base	किनसोकू सेट का आधार
+	Based on:	इस पर आधारित:
+	Cannot Start Line	पंक्ति शुरू नहीं कर सकते
+	Cannot End Line	पंक्ति समाप्त नहीं कर सकते
+	Hanging Punctuation	लटकते विराम चिह्न
+	Inseparable Characters	अविभाज्य वर्ण
 	Kite	पतंग
 	Knife	चाकू
 	Knockout Group	नॉकआउट समूह
 	Lab	Lab
+	OKLCH Sliders	OKLCH स्लाइडर्स
+	HSL Sliders	HSL स्लाइडर्स
+	Chroma	क्रोमा
+	The largest chroma sRGB holds at this lightness and hue	इस लाइटनेस और ह्यू पर sRGB में आने वाला सबसे अधिक क्रोमा
+	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
 	Lab Spot Colors	लैब स्पॉट रंग
 	Lab Spot Colors:	लैब स्पॉट रंग:
 	Lab Values	लैब मूल्य
@@ -2693,6 +3137,7 @@ antiAlias	Sharp	शार्प
 	Limit:	सीमा:
 	Limited	लिमिटेड
 	Line	लाइन
+	Line Arrow	लाइन तीर
 	line {line}	लाइन {line}
 	Line {line}	लाइन {line}
 	Line {line}: {name}: {status}	लाइन {line}: {name}: {status}
@@ -2733,6 +3178,7 @@ antiAlias	Sharp	शार्प
 	Linked Files	लिंक्ड फ़ाइलें
 	Links	लिंक
 	Linux Display Server	Linux डिस्प्ले सर्वर
+	Low-Latency Drawing	कम विलंब वाली ड्राइंग
 	Liquify	लिक्विफ़ाई
 	List Data Sets	सूची डेटा सेट
 	List Folder	सूची फ़ोल्डर
@@ -2749,6 +3195,8 @@ antiAlias	Sharp	शार्प
 	Live curve fitting	लाइव वक्र फिटिंग
 	Live Paint	लाइव पेंट
 	Live Paint Bucket	लाइव पेंट बकेट
+	Fill Area	क्षेत्र भरें
+	Fill Area Tool	क्षेत्र भरें टूल
 	Live Paint Bucket (Stroke)	लाइव पेंट बाल्टी (स्ट्रोक)
 	Live Paint Info	लाइव पेंट जानकारी
 	Live Paint Selection Tool	लाइव पेंट सिलेक्शन टूल
@@ -2756,6 +3204,12 @@ antiAlias	Sharp	शार्प
 	Live Shape	लाइव आकार
 	Live Shape Properties	लाइव शेप प्रॉपर्टीज़
 	Load Actions…	एक्शन्स लोड करें…
+	Replace Actions…	एक्शन्स रिप्लेस करें…
+	Clear Actions	एक्शन्स क्लियर करें
+	Reset Actions	एक्शन्स रीसेट करें
+	Replace the current actions with the default set?	मौजूदा एक्शन्स को डिफ़ॉल्ट सेट से बदलें?
+	Append adds the default set after the current sets instead.	जोड़ें इसके बजाय डिफ़ॉल्ट सेट को मौजूदा सेट के बाद जोड़ता है।
+	Append	जोड़ें
 	Load Color Profile…	लोड कलर प्रोफ़ाइल…
 	Load EPS into Clipboard	ईपीएस को क्लिपबोर्ड में लोड करें
 	Load Image into Clipboard	क्लिपबोर्ड में इमेज लोड करें
@@ -2772,6 +3226,7 @@ antiAlias	Sharp	शार्प
 	Loads native code	मूल कोड लोड करता है
 	Local Libraries	स्थानीय लाइब्रेरी
 	Locate Library…	लाइब्रेरी…
+	Locate Layer	लेयर का पता लगाएं
 	Locate Object	ऑब्जेक्ट का पता लगाएं
 	Locate Selected Objects	सिलेक्टेड ऑब्जेक्ट्स का पता लगाएँ
 	Location	स्थान
@@ -2796,7 +3251,8 @@ antiAlias	Sharp	शार्प
 	Long Lines	लंबी रेखाएँ
 	Long Strokes	लंबे स्ट्रोक
 	Longest:	सबसे लंबे:
-	Lossless (lossy WebP isn't available yet)	लॉसलेस (लॉसी WebP अभी उपलब्ध नहीं है)
+	Lossless	लॉसलेस
+	Lossy	लॉसी
 	Lossy:	हानि:
 	Low	निम्न
 	Low Fidelity Photo	लो फिडेलिटी फोटो
@@ -3032,6 +3488,9 @@ antiAlias	Sharp	शार्प
 	Navigate	नेविगेट करें
 	Navigator	नेविगेटर
 	Navigator Panel Options	नेविगेटर पैनल ऑप्शन्स
+	Attributes Panel Options	एट्रिब्यूट्स पैनल ऑप्शन्स
+	Number of Recent URLs:	हाल के URL की संख्या:
+@msg	`count` must be a whole number from 1 to 30	`count` 1 से 30 तक पूरी संख्या होना चाहिए
 	Nearly Closed Paths	लगभग बंद पाथ
 	Nearly Coincident Anchors	लगभग Coincident एंकर
 	Needless Clipping Groups	अनावश्यक क्लिपिंग समूह
@@ -3414,6 +3873,11 @@ antiAlias	Sharp	शार्प
 	Overprint	ओवरप्रिंट
 	Overprint and Transparency Flattener	ओवरप्रिंट और ट्रांसपेरेंसी फ़्लैटनर
 	Overprint and Transparency Flattener Options	ओवरप्रिंट और ट्रांसपेरेंसी फ़्लैटनर ऑप्शन्स
+	Custom…	कस्टम…
+	Custom Transparency Flattener Options	कस्टम ट्रांसपेरेंसी फ़्लैटनर ऑप्शन्स
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF प्रीसेट फ़्लैटनर प्रीसेट रखता है, लेकिन कस्टम… सेटिंग्स नहीं।
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 फ़ाइलें रास्टराइज़ किए गए क्षेत्रों को उनके क्षेत्रों तक क्लिप करती हैं, और ओवरप्रिंट तय करता है कि ओवरप्रिंट रखे जाएँ या नहीं।
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS में अल्फा पारदर्शिता नहीं होती, और ओवरप्रिंट तय करता है कि ओवरप्रिंट रखे जाएँ या नहीं।
 	Overprint Black	ओवरप्रिंट ब्लैक
 	Overprint Black…	ओवरप्रिंट ब्लैक…
 	Overprint Fill	फ़िल ओवरप्रिंट करें
@@ -3482,6 +3946,11 @@ antiAlias	Sharp	शार्प
 	Path Eraser	पाथ इरेज़र
 	Path Eraser Tool	पाथ इरेज़र टूल
 	Path Length	पाथ की लंबाई
+	Grid Size	ग्रिड साइज़
+	Grid Colors	ग्रिड रंग
+	Flattener Preset	फ़्लैटनर प्रीसेट
+	X	X
+	Y	Y
 	Path Only	केवल पाथ
 	Path Precision Tools	पाथ परिशुद्धता टूल
 	Path:	पाथ:
@@ -3501,6 +3970,9 @@ antiAlias	Sharp	शार्प
 	embedding for preview and print	पूर्वावलोकन और प्रिंट के लिए एम्बेडिंग
 	embedding allowed	एम्बेडिंग की अनुमति है
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	अज्ञात प्रकार
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} उपयोग|{n} उपयोग
 	substituted: shown in {family} {style} ({detail})	प्रतिस्थापित: {family} {style} में दिखाया गया ({detail})
 	missing: shown in {family} {style}	अनुपलब्ध: {family} {style} में दिखाया गया
 	missing	अनुपलब्ध
@@ -3545,6 +4017,15 @@ antiAlias	Sharp	शार्प
 	PDF/X-4:2010	PDF/X-4:2010
 	Pen	पेन
 	Pen Tool	पेन टूल
+	Quick Pen Tool	क्विक पेन टूल
+	Quick Pen	क्विक पेन
+	Quick Pen Toolbar	क्विक पेन टूलबार
+	Continuous Arc	सतत आर्क
+	Sharp Corner Arc	तीखे कोने वाला आर्क
+	Flip Arc	आर्क पलटें
+	Hide Toolbar	टूलबार छिपाएँ
+	Pin Toolbar Position	टूलबार स्थिति पिन करें
+	Reset Toolbar Position	टूलबार स्थिति रीसेट करें
 	Pencil	पेंसिल
 	Pencil Tool	पेंसिल टूल
 	Pentagram	पेंटाग्राम
@@ -3681,6 +4162,10 @@ antiAlias	Sharp	शार्प
 	Polish	पोलिश
 	Polygon	बहुभुज
 	Polygon Properties:	बहुभुज प्रॉपर्टीज़:
+	Line Properties:	रेखा प्रॉपर्टीज़:
+	Line Length:	रेखा की लंबाई:
+	Line Angle:	रेखा का कोण:
+	Constrain Pie Angle	पाई एंगल बनाए रखें
 	Polygon Tool	पॉलीगोन टूल
 	Polygonal Lasso	बहुभुज लैस्सो
 	Polygonal Lasso Tool	बहुभुज लैस्सो टूल
@@ -3714,6 +4199,11 @@ antiAlias	Sharp	शार्प
 	Preserve Appearance	उपस्थिति संरक्षित करें
 	Preserve Appearance and Overprints	उपस्थिति और ओवरप्रिंट को संरक्षित करें
 	Preserve CMYK Numbers	CMYK नंबर संरक्षित करें
+	Preserve RGB Numbers	RGB नंबर संरक्षित करें
+	Device to Simulate:	सिम्युलेट करने के लिए डिवाइस:
+	Simulate Paper Color	पेपर का रंग सिम्युलेट करें
+	Simulate Black Ink	काली स्याही सिम्युलेट करें
+	Load…	लोड करें…
 	Preserve editing capabilities	संपादन क्षमताओं को संरक्षित करना
 	Preserve Editing Capabilities	संपादन क्षमताओं को संरक्षित करना
 	Preserve Lightness	प्रकाश संरक्षण
@@ -3745,6 +4235,18 @@ antiAlias	Sharp	शार्प
 	Preview (1 inch on the page)	प्रीव्यू (1 इंच पृष्ठ पर)
 	Preview All Layers	सभी लेयर्स का प्रीव्यू करें
 	Preview in Browser	ब्राउज़र में प्रीव्यू
+	Optimize to File Size…	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें…
+	Optimize to File Size	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें
+	Desired File Size:	वांछित फ़ाइल आकार:
+	Start With:	शुरुआत:
+	Use:	उपयोग:
+	Current Settings	वर्तमान सेटिंग्स
+	Auto Select GIF/JPEG	GIF/JPEG स्वचालित रूप से चुनें
+	Total of All Slices	सभी स्लाइस का कुल
+	Each Slice	प्रत्येक स्लाइस
+	Current Slice	वर्तमान स्लाइस
+	{size}, within {target}	{size}, {target} के भीतर
+	No setting tried fits in {target}; the smallest is {size}	आज़माई गई कोई भी सेटिंग {target} में नहीं समाती; सबसे छोटा {size} है
 	Preview in Browser needs the desktop app (the web downloads files instead)	ब्राउज़र में प्रीव्यू डेस्कटॉप ऐप (वेब डाउनलोड फ़ाइलों के बजाय) की जरूरत है
 	Preview Mode	प्रीव्यू मोड
 	Preview the document as it is now	डॉक्यूमेंट का प्रीव्यू करें क्योंकि यह अब है
@@ -3865,6 +4367,7 @@ antiAlias	Sharp	शार्प
 	Rating:	रेटिंग:
 	Ratio	अनुपात
 	Rays	रे
+	Reach:	पहुँच:
 	Read Action Set File	एक्शन सेट फ़ाइल पढ़ें
 	Read Shortcut Set File	शॉर्टकट सेट फ़ाइल पढ़ें
 	Reads or sets environment variables	एनवायरनमेंट वेरिएबल्स पढ़ता है या सेट करता है
@@ -3873,6 +4376,9 @@ antiAlias	Sharp	शार्प
 	Real World:	रियल वर्ल्ड:
 	Real-time Drawing and Editing	रियल टाइम ड्राइंग और संपादन
 	Use Monitor Profile for Canvas	कैनवास के लिए मॉनिटर प्रोफ़ाइल का उपयोग करें
+	Refresh Monitor Profile	मॉनिटर प्रोफ़ाइल रिफ्रेश करें
+@msg	turn on Use Monitor Profile for Canvas first	पहले "कैनवास के लिए मॉनिटर प्रोफ़ाइल का उपयोग करें" चालू करें
+@msg	this build doesn't read display profiles	यह बिल्ड डिस्प्ले प्रोफ़ाइल नहीं पढ़ता
 	The canvas is drawn in sRGB.	कैनवास sRGB में बनाया जाता है।
 	Canvas display profile:	कैनवास की डिस्प्ले प्रोफ़ाइल:
 	The system matches the window to the display's colors.	सिस्टम विंडो को डिस्प्ले के रंगों से मिलाता है।
@@ -4024,6 +4530,7 @@ antiAlias	Sharp	शार्प
 	Remove Strokes	स्ट्रोक हटाएँ
 	Place Brush Art	ब्रश आर्टवर्क रखें
 	Replace Brush Art	ब्रश आर्टवर्क बदलें
+	Replace Pattern Art	पैटर्न आर्टवर्क बदलें
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	स्ट्रोक्स इस ब्रश का उपयोग कर रहे हैं। नया आर्टवर्क उन स्ट्रोक्स पर लागू करें, या उन्हें जैसा है वैसा छोड़कर नए आर्टवर्क वाले ब्रश की एक कॉपी जोड़ें?
 	Apply to Strokes	स्ट्रोक्स पर लागू करें
 	Leave Strokes	स्ट्रोक्स जैसे हैं वैसे छोड़ें
@@ -4095,7 +4602,11 @@ antiAlias	Sharp	शार्प
 	Reset all Revolve settings to their defaults.	सभी रिवॉल्व सेटिंग्स डिफ़ॉल्ट पर रीसेट करें।
 	Reset Automation	स्वचालन रीसेट करें
 	Reset Bar Position	बार स्थिति रीसेट करें
+	Bar Actions	बार क्रियाएँ
+	Reset Bar Actions	बार क्रियाएँ रीसेट करें
 	Reset Bounding Box	बाउंडिंग बॉक्स रीसेट करें
+	Rotate Bounding Box	बाउंडिंग बॉक्स घुमाएँ
+	Rotate Bounding Box…	बाउंडिंग बॉक्स घुमाएँ…
 	Reset Envelope Mesh	एन्वेलप मेश रीसेट करें
 	Reset Envelope Shape	एन्वेलप शेप रीसेट करें
 	Reset Essentials	एसेंशियल्स रीसेट करें
@@ -4121,6 +4632,11 @@ antiAlias	Sharp	शार्प
 	Edit Arrowheads	एरोहेड्स संपादित करें
 	Edit Arrowheads…	एरोहेड्स संपादित करें…
 	Reload Arrowheads	एरोहेड्स फिर से लोड करें
+	Bevels	बेवल्स
+	Edit Bevels	बेवल्स संपादित करें
+	Edit Bevels…	बेवल्स संपादित करें…
+	{name} (document)	{name} (दस्तावेज़)
+	Reload Bevels	बेवल्स फिर से लोड करें
 	Reset Rotate View	व्यू घुमाएँ रीसेट करें
 	Reset Ruler Origin	रूलर ओरिजिन रीसेट करें
 	Reset Symbol Instance	सिंबल इंस्टेंस रीसेट करें
@@ -4128,6 +4644,9 @@ antiAlias	Sharp	शार्प
 	Reset Text Transform and Scale	टेक्स्ट ट्रांसफॉर्म और स्केल को रीसेट करें
 	Reset the rows to the artwork's colors	आर्टवर्क के रंग के लिए पंक्तियों को रीसेट करें
 	Color Theme Picker	रंग थीम पिकर
+	Undo Changes	परिवर्तन पूर्ववत करें
+	Redo Changes	परिवर्तन फिर से करें
+@msg	Recolor Artwork is not open	Recolor Artwork खुला नहीं है
 	Click or drag across the art to pick its colors; Shift adds more	आर्टवर्क के रंग लेने के लिए उस पर क्लिक करें या खींचें; Shift और जोड़ता है
 	Prominent Colors	प्रमुख रंग
 	Save All Colors	सभी रंग सेव करें
@@ -4161,16 +4680,184 @@ antiAlias	Sharp	शार्प
 	Resize panels	पैनलों का साइज़ बदलें
 	Resize Slice	स्लाइस का आकार
 	Resize Type Area	टाइप एरिया का आकार बदलें
+	Resolution	रिज़ॉल्यूशन
 	Resolution:	रिज़ॉल्यूशन:
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
 	Restore every preference to its default (applied on OK)	प्रत्येक वरीयता को उसके डिफ़ॉल्ट में पुनर्स्थापित करें ( OK पर लागू)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	कैनवास पर सिलेक्शन या टूल के लिए कमांड बार दिखाता है; ड्रैग करते समय और प्रस्तुति मोड में यह छिप जाता है।
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	एरो कुंजी सिलेक्शन को कितनी दूर खिसकाती है; Shift के साथ यह दस गुना दूर खिसकाती है।
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	उन अक्षों का कोण जिनके साथ एरो कुंजियाँ खिसकाती हैं और जिन पर Shift ड्रॉइंग और खिसकाने को रोकता है।
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	वह कोने की त्रिज्या जिससे गोल आयत टूल ड्रॉ करता है; ड्रॉ करते समय त्रिज्या बदलने से यह मान भी बदल जाता है।
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	जब कोई स्थिति नहीं दी जाती, जैसे स्क्रिप्ट से, तब पेस्ट कॉपी को दाईं ओर और नीचे कितना खिसकाता है; ऐप में पेस्ट करने पर कॉपी व्यू के बीच में रखी जाती है।
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	पेन टूल को चुने गए पाथ पर क्लिक किए गए एंकर पॉइंट को हटाने से, या उसके सेगमेंट पर क्लिक की गई जगह नया पॉइंट जोड़ने से रोकता है।
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	ड्रॉइंग टूल अपने आइकन की जगह क्रॉसहेयर पॉइंटर दिखाते हैं; Caps Lock चालू रहने पर भी यही होता है।
+	Shows a tip when the pointer rests on a button or field that has one.	जब पॉइंटर टिप वाले किसी बटन या फ़ील्ड पर रुकता है, तब टिप दिखाता है।
+	Shows a warning before a script you choose runs.	आपकी चुनी गई स्क्रिप्ट चलने से पहले चेतावनी दिखाता है।
+	Smooths the edges of artwork on the canvas.	कैनवास पर आर्टवर्क के किनारों को चिकना करता है।
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	सिलेक्ट › समान › फ़िल रंग, स्ट्रोक रंग और फ़िल व स्ट्रोक केवल ग्लोबल या स्पॉट स्वॉच के उसी टिंट से मेल खाते हैं, उसके किसी भी टिंट से नहीं।
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	कोई डॉक्यूमेंट खुला न होने पर होम स्क्रीन दिखाता है; बंद होने पर विंडो तब तक खाली रहती है जब तक आप होम पर क्लिक नहीं करते।
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	साइज़, स्थिति और संरेखण के लिए ऑब्जेक्ट को उनके स्ट्रोक और आकार बदलने वाले इफ़ेक्ट के साथ मापता है; छाया, ग्लो और ब्लर नहीं मापे जाते।
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% ज़ूम पर डॉक्यूमेंट का एक इंच 72 की जगह 96 स्क्रीन पॉइंट लेता है।
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	सिलेक्शन टूल से किसी ग्रुप, पाथ या इमेज पर डबल-क्लिक करने से वह आइसोलेशन मोड में खुलता है।
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	पैटर्न वाले फ़िल और स्ट्रोक आर्टवर्क के साथ रूपांतरित होते हैं, जब तक कोई रूपांतरण या रूपांतरण पैनल का मेनू कुछ और न चुने।
+	Live corner radii scale with the art, unless the scale chooses otherwise.	लाइव कोनों की त्रिज्याएँ आर्टवर्क के साथ स्केल होती हैं, जब तक स्केलिंग कुछ और न चुने।
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	स्ट्रोक की मोटाई, डैश और इफ़ेक्ट की दूरियाँ आर्टवर्क के साथ स्केल होती हैं, जब तक स्केलिंग कुछ और न चुने।
+	The mouse wheel zooms the canvas instead of scrolling it.	माउस व्हील कैनवास को स्क्रॉल करने की जगह ज़ूम करता है।
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl दबाकर माउस व्हील घुमाने से कैनवास बगल की ओर स्क्रॉल होता है।
+	Dragging sideways on a numeric field's label changes the field's value.	किसी संख्या वाले फ़ील्ड के लेबल पर बगल की ओर ड्रैग करने से फ़ील्ड का मान बदलता है।
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	ट्रैकपैड पर दो उंगलियों से घुमाने का जेस्चर कैनवास के व्यू को घुमाता है।
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	किसी कुंजी को दबाए रखने पर कीबोर्ड शॉर्टकट में उसके होल्ड कॉलम का टूल या कमांड चलता है; जल्दी दबाने पर उसका सामान्य शॉर्टकट चलता है।
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	किसी कुंजी को कितने सेकंड दबाए रखना होगा, ताकि उसके सामान्य शॉर्टकट के बजाय उसका होल्ड शॉर्टकट चले।
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	जब आप एंकर पॉइंट हिलाते हैं, तो एक हिले हुए सिरे वाला हर वक्र अपने सिरों के सापेक्ष अपना आकार बनाए रखता है।
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	किसी टूल की शॉर्टकट कुंजी दबाए रखने पर वह टूल छोड़ने तक चुना रहता है, फिर पिछला टूल दोबारा चुना जाता है।
+	Shows the bounding box while you move the selection or draw a shape.	सिलेक्शन खिसकाते या आकार ड्रॉ करते समय बाउंडिंग बॉक्स दिखाता है।
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ट्रिम मार्क्स बनाएं रोमन की जगह जापानी शैली के निशान ड्रॉ करता है।
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	नया आर्टवर्क सिलेक्शन का केवल फ़िल और स्ट्रोक लेता है; बंद होने पर वह चुने गए ऑब्जेक्ट का पूरा रूप लेता है।
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	रूपांतरण पैनल, प्रॉपर्टीज़ पैनल या नियंत्रण बार में चौड़ाई या ऊँचाई बदलने से दूसरी भी अनुपात में बदलती है।
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	लाइव आयत की प्रॉपर्टीज़ चारों कोनों के लिए कोने की त्रिज्या का एक ही फ़ील्ड दिखाती हैं; बंद होने पर हर कोने का अपना फ़ील्ड होता है।
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	रूपांतरण पैनल में किए गए बदलाव क्या रूपांतरित करते हैं: ऑब्जेक्ट, उसकी पैटर्न टाइलें या दोनों; डिफ़ॉल्ट ट्रांसफॉर्म पैटर्न टाइलें का पालन करता है।
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	एक सिंबल इंस्टेंस चुना होने पर रूपांतरण पैनल सिंबल के रजिस्ट्रेशन पॉइंट को संदर्भ पॉइंट के रूप में इस्तेमाल करता है।
+	Drawing a rectangle, ellipse, polygon, star or line opens the Transform panel if it is closed.	आयत, दीर्घवृत्त, बहुभुज, तारा या रेखा ड्रॉ करने पर रूपांतरण पैनल बंद हो तो खुल जाता है।
+	Darkens the canvas outside the artboards while the Artboard tool is active.	आर्टबोर्ड टूल सक्रिय रहने पर आर्टबोर्ड के बाहर का कैनवास गहरा करता है।
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	आर्टबोर्ड के बाहर का क्षेत्र धुंधला करें चालू होने पर आर्टबोर्ड टूल से ड्रैग करते समय आर्टबोर्ड के बाहर का क्षेत्र गहरा बना रहता है।
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	किसी क्लिक से ऑब्जेक्ट, एंकर पॉइंट या हैंडल चुनने के लिए पॉइंटर को उससे कितने पिक्सेल पास होना चाहिए।
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	सिलेक्शन टूल का बॉक्स छुए गए ऑब्जेक्ट चुनता है या केवल पूरी तरह अंदर वाले; खींचने की दिशा दाईं ओर खींचने पर अंदर वाले चुनती है। खींचते समय E नियम उलट देता है।
+	A click selects a filled object only on its path, not inside its fill.	क्लिक भरे हुए ऑब्जेक्ट को केवल उसके पाथ पर चुनता है, भराव के अंदर नहीं।
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	पॉइंट पर स्नैप करें द्वारा स्नैप होने के लिए किसी बिंदु को एंकर पॉइंट या रूलर गाइड से कितने पिक्सेल पास आना चाहिए; स्मार्ट गाइड्स चालू होने पर उनकी स्नैपिंग सहिष्णुता लागू होती है।
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	सिलेक्शन टूल के साथ, Cmd/Ctrl-क्लिक पॉइंटर पर चुने गए ऑब्जेक्ट के नीचे वाला ऑब्जेक्ट चुनता है; हर अगला क्लिक एक ऑब्जेक्ट और नीचे जाता है।
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	ज़ूम इन और ज़ूम आउट चयन के केंद्र को व्यू के बीच में लाते हैं।
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	आर्टबोर्ड के अंदर का लॉक और छिपा आर्टवर्क बाकी आर्टवर्क की तरह आर्टबोर्ड के साथ खिसकता, स्केल होता और कॉपी होता है।
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	कैनवास पर एंकर पॉइंट और दिशा हैंडल के सिरों का आकार; बड़े एंकर पॉइंट अधिक दूर से भी पकड़े जा सकते हैं।
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	दिशा हैंडल के सिरों को भरे बिंदु, खोखले बिंदु या बड़े भरे बिंदु के रूप में बनाता है।
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	डायरेक्ट सिलेक्शन टूल के साथ, पॉइंटर के नीचे वाला एंकर पॉइंट हाइलाइट होता है।
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	एक से अधिक एंकर पॉइंट चुने होने पर दिशा हैंडल दिखाता है; बंद होने पर वे केवल एक एंकर पॉइंट चुने होने पर दिखते हैं।
+	Corner widgets hide on corners whose angle is greater than this many degrees.	जिन कोनों का कोण इतने डिग्री से अधिक है, उन पर कॉर्नर विजेट छिप जाते हैं।
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	क्लिक करने से पहले पेन टूल अंतिम एंकर पॉइंट से पॉइंटर तक अगले सेगमेंट का पूर्वावलोकन दिखाता है।
+	The Curvature tool previews the curve to the pointer before you place the next point.	अगला बिंदु रखने से पहले वक्रता टूल पॉइंटर तक वक्र का पूर्वावलोकन दिखाता है।
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	पिक्सेल को छोड़कर बिल्ट-इन साइज़ वाले नए डॉक्यूमेंट और कोई इकाई दर्ज न करने वाली खोली गई फ़ाइलों की इकाई; इसे यहाँ चुनकर ठीक है पर क्लिक करने से यह सक्रिय डॉक्यूमेंट की इकाई भी बन जाती है।
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	स्ट्रोक की मोटाई, डैश और गैप इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	टाइप साइज़, लीडिंग और बेसलाइन शिफ़्ट इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
 	The unit for East Asian type measurements, which no field uses yet.	पूर्वी एशियाई टाइप के माप की इकाई, जिसका अभी कोई फ़ील्ड उपयोग नहीं करता।
 	When on, a number typed without a unit into a field in picas is read in points.	चालू होने पर, पाइका वाले फ़ील्ड में बिना इकाई के टाइप की गई संख्या पॉइंट्स में पढ़ी जाती है।
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID चुनने पर ऑब्जेक्ट के नाम लेयर्स, वेरिएबल्स और लेयर ऑप्शन्स में XML ID के रूप में दिखते हैं।
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	टाइप साइज़ और लीडिंग का स्टेप: Cmd/Ctrl+Shift+. और Cmd/Ctrl+Shift+, साइज़ को एक स्टेप बदलते हैं, और Alt के साथ पाँच स्टेप; क्षैतिज टाइप में Alt के साथ ऊपर या नीचे का एरो लीडिंग को एक स्टेप बदलता है, और Cmd/Ctrl के साथ पाँच स्टेप।
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	ट्रैकिंग और कर्निंग का स्टेप, em के हज़ारवें हिस्सों में: क्षैतिज टाइप में Alt के साथ बायाँ या दायाँ एरो कैरेट पर कर्निंग या चुने हुए टेक्स्ट की ट्रैकिंग को एक स्टेप बदलता है, और Cmd/Ctrl के साथ पाँच स्टेप।
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	बेसलाइन शिफ़्ट का स्टेप: क्षैतिज टाइप में Alt और Shift के साथ ऊपर या नीचे का एरो बेसलाइन को एक स्टेप खिसकाते हैं, और Cmd/Ctrl के साथ पाँच स्टेप।
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	कैरेक्टर, पैराग्राफ़, OpenType और ग्लिफ़्स पैनल में जापानी और दूसरे पूर्वी एशियाई टाइप के ऑप्शन्स, और कंपोज़िट फ़ॉन्ट कमांड दिखाता है।
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	कैरेक्टर और पैराग्राफ़ पैनल में अरबी, हिब्रू और भारतीय टाइप के ऑप्शन्स दिखाता है, जैसे पैराग्राफ़ की दिशा, कशीदे और अंक।
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	सिलेक्शन टूल टाइप को सिर्फ़ उसकी बेसलाइन, एरिया टाइप के फ़्रेम या उसके पाथ पर चुनते हैं, उसके बॉक्स के अंदर कहीं भी नहीं।
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	फ़ॉन्ट मेनू हर फ़ॉन्ट को उसके अंग्रेज़ी नाम से दिखाते हैं; बंद होने पर, जिस फ़ॉन्ट का अपनी भाषा में भी नाम है, वह वही नाम दिखाता है।
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	नया एरिया टाइप ऑटो साइज़ चालू होकर शुरू होता है, इसलिए क्षैतिज टाइप का आयताकार फ़्रेम अपने टेक्स्ट के हिसाब से ऊँचाई में बढ़ता या घटता है।
+	Font lists and the Type › Font menu show a sample of each font beside its name.	फ़ॉन्ट सूचियाँ और फ़ॉन्ट मेनू हर फ़ॉन्ट के नाम के पास उसका नमूना दिखाते हैं।
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	फ़ॉन्ट नमूने इंटरफ़ेस की चमक चाहे जो हो, सफ़ेद पर गहरे टाइप में बनाए जाते हैं; यह तभी लागू होता है जब मेनू में फ़ॉन्ट प्रीव्यू चालू हों।
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	फ़ॉन्ट फ़ील्ड की सूचियों में, जैसे कैरेक्टर पैनल वाली में, हर पंक्ति कितनी ऊँची है, और इसलिए हर नमूना कितना बड़ा है।
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	हाल के फ़ॉन्ट्स और फ़ॉन्ट सूचियाँ आख़िरी बार इस्तेमाल किए गए कितने फ़ॉन्ट दिखाती हैं, 1 से 15 तक, सबसे नया पहले।
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	जब आप टेक्स्ट का फ़ॉन्ट या फ़ॉन्ट स्टाइल बदलते हैं, तो जिन कैरेक्टर का ग्लिफ़ नए फ़ॉन्ट में नहीं है, वे अपना पुराना फ़ॉन्ट रखते हैं।
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	कैनवस पर गुलाबी हाइलाइट उन ग्लिफ़्स को दिखाता है जिन्हें OpenType फ़ीचर्स ने बदला है, जैसे लिगेचर; यह प्रिंट या एक्सपोर्ट नहीं होता।
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	टाइप टूल से एक कैरेक्टर चुनने पर कैनवस पर उसके पास चुनने के लिए उसके वैकल्पिक ग्लिफ़्स की एक पंक्ति दिखती है।
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	कैनवस पर गुलाबी हाइलाइट उस टेक्स्ट को दिखाता है जो अपना फ़ॉन्ट न होने के कारण किसी दूसरे फ़ॉन्ट में बना है; यह प्रिंट या एक्सपोर्ट नहीं होता।
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	टाइप टूल से बना नया टाइप चुने हुए प्लेसहोल्डर टेक्स्ट से शुरू होता है, जिसे टाइप करने पर आपका टेक्स्ट बदल देता है।
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	पैराग्राफ़ की शुरुआत में 1. या * जैसा सूची चिह्न और फिर स्पेस टाइप करने से पैराग्राफ़ सूची बन जाता है।
+	Fonts in this folder show in the font menus and can be used without being installed.	इस फ़ोल्डर के फ़ॉन्ट फ़ॉन्ट मेनू में दिखते हैं और इंस्टॉल किए बिना इस्तेमाल किए जा सकते हैं।
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	टाइप पर ग्राफ़िक स्टाइल लगाने से, जहाँ स्टाइल में फ़िल या स्ट्रोक है वहाँ कैरेक्टर का अपना फ़िल या स्ट्रोक हट जाता है, ताकि स्टाइल का पेंट दिखे।
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	अलाइन और डिस्ट्रिब्यूट पॉइंट टाइप को उसके em बॉक्स के बजाय उसके ग्लिफ़्स की स्याही से मापते हैं।
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	अलाइन और डिस्ट्रिब्यूट एरिया टाइप को उसके फ़्रेम के बजाय उसके ग्लिफ़्स की स्याही से मापते हैं।
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	बाउंडिंग बॉक्स और ट्रांसफ़ॉर्म पैनल पॉइंट टाइप को उसके em बॉक्स के बजाय उसके ग्लिफ़्स की स्याही से मापते हैं।
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	ग्रिड छिपी होने पर भी ड्रॉ करना, खिसकाना और स्केल करना ग्रिड के उप-विभाजनों पर स्नैप करता है; इसके चालू रहने तक पिक्सेल के लिए स्नैप लागू नहीं होता।
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	उन गाइड्स का रंग जो चयनित नहीं हैं; गाइड लेबल वाला आर्टबोर्ड अपनी गाइड्स लेबल के रंग में बनाता है।
+	Draws guides as solid lines or as dots, including the guides already in the document.	दस्तावेज़ में पहले से मौजूद गाइड्स सहित, गाइड्स को ठोस रेखाओं या बिंदुओं के रूप में बनाता है।
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	इसके चालू होने पर VectorCraft शुरू होते समय गाइड्स लॉक रहती हैं; यह विकल्प बदलने से वे तुरंत लॉक या अनलॉक होती हैं, और व्यू › गाइड्स › गाइड्स लॉक करें अब भी लॉक बदलता है।
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	इसके चालू होने पर रूलर से खींचना शुरू करते समय Cmd/Ctrl दबाए रखने से केवल सक्रिय आर्टबोर्ड पर गाइड बनती है, या आर्टबोर्ड टूल के साथ पूरे कैनवस की गाइड बनती है।
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	ग्रिड का रंग; मुख्य ग्रिडलाइनों के बीच की रेखाएँ उसके हल्के शेड में बनती हैं।
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	ग्रिड को रेखाओं के रूप में, या हर उप-विभाजन पर मुख्य ग्रिडलाइनों के साथ बिंदुओं के रूप में बनाता है।
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	हर खुले दस्तावेज़ और नए दस्तावेज़ों में मुख्य ग्रिडलाइनों के बीच की दूरी; VectorCraft दस्तावेज़ उसी ग्रिड के साथ खुलता है जिसके साथ वह सेव किया गया था।
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	हर मुख्य ग्रिड वर्ग कितने भागों में बँटता है; ज़ूम से उनकी रेखाएँ छिपने पर भी ग्रिड पर स्नैप करें इन भागों पर स्नैप करता है।
+	Draws the grid behind the artwork; off, the grid is drawn over it.	ग्रिड को आर्टवर्क के पीछे बनाता है; बंद होने पर ग्रिड उसके ऊपर बनती है।
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	पिक्सेल प्रीव्यू में 600% या अधिक ज़ूम पर, सक्रिय व्यू आर्टवर्क के ऊपर दस्तावेज़ के हर पिक्सेल के किनारे पर रेखा दिखाता है।
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	पैटर्न संपादित करते समय दिखने वाले टाइल एज और डैश वाली स्वॉच सीमाओं का रंग।
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	ड्रॉ करने, खिसकाने और ट्रांसफ़ॉर्म करने को पास के आर्ट पर स्नैप करता है और गाइड्स व लेबल दिखाता है; पिक्सेल प्रीव्यू इन्हें बंद करता है, और ग्रिड पर स्नैप करें इनकी जगह ग्रिड पर स्नैप करता है।
+	The color of Smart Guide lines and labels.	स्मार्ट गाइड्स की रेखाओं और लेबल का रंग।
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	उस किनारे या केंद्र के साथ रेखा दिखाता है जिससे आर्ट संरेखित होता है; बंद होने पर आर्ट रेखा के बिना भी संरेखित होता है, और ग्लिफ़ पर स्नैप करें लागू नहीं होता।
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	सिलेक्शन टूल के साथ, जब आप ड्रैग नहीं कर रहे हों, पॉइंटर के नीचे के असिलेक्टेड ऑब्जेक्ट की रूपरेखा उसकी लेयर के रंग में दिखाता है।
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	आर्ट को स्केल करते, घुमाते, शियर करते या परावर्तित करते समय पॉइंटर के पास आकार या कोण दिखाता है।
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	ड्रॉ करते समय पॉइंट उन रेखाओं पर स्नैप होते हैं जो चुने गए कोणों पर उस पॉइंट से गुज़रती हैं जहाँ से सेगमेंट या आकृति शुरू होती है।
+	The set of angles the construction guides follow while Construction Guides is on.	निर्माण गाइड चालू होने पर निर्माण गाइड जिन कोणों का पालन करते हैं, उनका समूह।
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	बताता है कि पॉइंट किस पर स्नैप होता है, जैसे एंकर, पाथ या संरेखण; बंद होने पर पॉइंट नामों के बिना उसी तरह स्नैप होते हैं।
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	ड्रॉ करते या खिसकाते समय पॉइंटर के पास दूरियाँ, कोण और आर्ट कितना खिसका यह दिखाता है।
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	खिसकाए गए या आकार बदले गए आर्ट को पास के ऑब्जेक्ट्स के बीच जितने ही अंतर पर स्नैप करता है और बराबर अंतर चिह्नित करता है।
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	कुछ सिलेक्ट होने पर, किसी दूसरे ऑब्जेक्ट या आर्टबोर्ड के ऊपर Alt/Option दबाए रखने से उसके और सिलेक्शन के बीच की दूरियाँ दिखती हैं।
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	ड्रैग जहाँ से शुरू हुआ था, वहाँ से स्नैपिंग सहिष्णुता के भीतर वापस ड्रैग किया गया सिलेक्शन ठीक उसी जगह लौट जाता है; कॉपी नहीं लौटती।
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	स्मार्ट गाइड्स के स्नैप करने के लिए पॉइंटर या ड्रैग किया गया पॉइंट स्क्रीन पर आर्ट के कितने पास आना चाहिए; यह दूरी हर ज़ूम पर समान रहती है।
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	लाइन सेगमेंट के सिरे को, या केंद्र से ड्रॉ किए गए वृत्त को, इस तरह स्नैप करता है कि वह पास के वक्र को छुए।
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	लाइन सेगमेंट के सिरे को इस तरह स्नैप करता है कि वह पास के सीधे सेगमेंट से समकोण पर मिले।
+	Edit type set in fonts that aren't available?	जो फ़ॉन्ट उपलब्ध नहीं हैं, उनमें सेट टेक्स्ट एडिट करें?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	कैनवास पर हर स्लाइस का नंबर उसके ऊपरी बाएँ कोने में एक बॉक्स में दिखाता है; बंद होने पर भी स्लाइस की आउटलाइन दिखती रहती हैं।
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	यूज़र और ऑब्जेक्ट स्लाइस की आउटलाइन और उनके नंबर बॉक्स का रंग; ऑटो स्लाइस इसकी हल्की छाया इस्तेमाल करते हैं।
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची के शब्द पर हाइफ़न केवल उसमें टाइप किए गए हाइफ़न पर लगता है, या कोई न हो तो कभी नहीं, उसकी भाषा या केस चाहे जो हो।
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	डेस्कटॉप संस्करण में, इस फ़ोल्डर के .wasm प्लग-इन शुरू होने पर और ठीक है से नया फ़ोल्डर सेट होने पर लोड होते हैं, सुरक्षित मोड को छोड़कर; अनुमतियाँ माँगने वाला प्लग-इन आपके उन्हें देने के बाद ही लोड होता है। वेब संस्करण कोई लोड नहीं करता।
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	बड़ा फ़िल्टर या कमांड प्लग-इन के हर रन को उसी समय सीमा के साथ कम से कम 25 करोड़ निर्देश देता है; सामान्य प्लग-इन का अपना बजट रखता है। लाइव इफ़ेक्ट, एक्सपोर्टर और इंपोर्टर अपना बजट रखते हैं।
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	जब तक डॉक्यूमेंट सेटअप की भाषा अंग्रेज़ी: USA है, नए टेक्स्ट को यह भाषा मिलती है; डॉक्यूमेंट में पहले से मौजूद टेक्स्ट अपनी भाषा रखता है।
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची का शब्द केवल उसमें टाइप किए गए हाइफ़न पर टूटता है, या कोई न हो तो कहीं नहीं, उसकी भाषा या केस चाहे जो हो।
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	डेस्कटॉप संस्करण में, इस फ़ोल्डर के .wasm प्लग-इन शुरू होने पर और यहाँ नया फ़ोल्डर देकर ठीक है पर क्लिक करने पर लोड होते हैं, सुरक्षित मोड को छोड़कर; वेब संस्करण उन्हें लोड नहीं करता।
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	सामान्य हर प्लग-इन की अपनी सीमाएँ रखता है; बड़ा के साथ, प्लग-इन फ़िल्टर या कमांड अपने इनपुट के निर्देशों के अलावा कम से कम 250 मिलियन निर्देश चला सकता है। समय सीमा वही रहती है।
+	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	प्लग-इन के ऑब्जेक्ट फ़िल्टर का हर रन कितने निर्देश इस्तेमाल कर सकता है; बड़ा सामान्य से अधिक की अनुमति देता है, 60 सेकंड की उसी सीमा के साथ। भारी फ़िल्टर अपना बजट रखते हैं।
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	पहला स्क्रैच डिस्क विकल्प: Startup, None या फ़ोल्डर पाथ; VectorCraft इसे सहेजता है, पर अभी स्क्रैच डिस्क का उपयोग नहीं करता।
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	दूसरा स्क्रैच डिस्क विकल्प: Startup, None या फ़ोल्डर पाथ; VectorCraft इसे सहेजता है, पर अभी स्क्रैच डिस्क का उपयोग नहीं करता।
+	How light or dark the interface is.	इंटरफ़ेस कितना हल्का या गहरा है।
+	The set of colors the interface is drawn in.	रंगों का वह सेट जिसमें इंटरफ़ेस बनाया जाता है।
+	The color of controls that are on, chosen or focused; the menu is dimmed while the Color Scheme has an accent of its own.	चालू, चुने गए या फ़ोकस वाले कंट्रोल का रंग; जब तक रंग योजना का अपना एक्सेंट रंग हो, मेनू धुंधला रहता है।
+	The color of the canvas around the artboards; Match User Interface Brightness takes it from Brightness. Outline view always shows it white.	आर्टबोर्ड्स के आसपास के कैनवास का रंग; उपयोगकर्ता इंटरफ़ेस चमक मैच इसे ब्राइटनेस से लेता है। रूपरेखा व्यू इसे हमेशा सफ़ेद दिखाता है।
+	A panel opened from its icon closes when you press Esc or click outside it; off, it stays open until you click an icon.	अपने आइकन से खोला गया पैनल Esc दबाने या उसके बाहर क्लिक करने पर बंद हो जाता है; बंद होने पर, यह तब तक खुला रहता है जब तक आप किसी आइकन पर क्लिक न करें।
+	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	टूलबार में हर टूल ग्रुप का नाम उसके टूल्स के ऊपर दिखाता है; बंद होने पर, ग्रुप बिना किसी अंतर के एक के बाद एक आते हैं।
+	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	अब से आप जो डॉक्यूमेंट ओपन करते या बनाते हैं, वे टैब के रूप में खुलते हैं; बंद होने पर, हर एक फ़्लोटिंग विंडो में खुलता है। पहले से खुले डॉक्यूमेंट जहाँ हैं वहीं रहते हैं।
+	Makes the document tabs taller and their names larger.	डॉक्यूमेंट टैब को ऊँचा और उनके नाम बड़े बनाता है।
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	अगली शुरुआत से, जहाँ VectorCraft अन्यथा अपना टाइटल बार बनाता, वहाँ सिस्टम विंडो का टाइटल बार बनाता है; Linux और BSD पर VECTORCRAFT_TITLEBAR वेरिएबल को प्राथमिकता मिलती है।
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	अगली शुरुआत से, VectorCraft विंडो का टाइटल बार वहाँ भी बनाता है जहाँ डेस्कटॉप उसे बनाता, जब तक सिस्टम टाइटल बार चालू न हो या VECTORCRAFT_TITLEBAR वेरिएबल उसे न चुने।
+	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	इंटरफ़ेस को बड़ा या छोटा करता है; उसी ज़ूम पर कैनवास का आर्टवर्क अपना आकार बनाए रखता है।
+	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	VectorCraft जो टूल पॉइंटर बनाता है, वे यूआई स्केलिंग के साथ बड़े और छोटे होते हैं; बंद होने पर, वे अपना आकार बनाए रखते हैं।
+	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	इंटरफ़ेस की भाषा; स्वचालित सिस्टम की भाषा इस्तेमाल करता है। आप कोई भाषा चुनते ही डायलॉग उस भाषा में बदल जाता है।
+	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	एनिमेटेड ज़ूम केवल तभी काम करता है जब यह चालू हो; बंद होने पर, एनिमेटेड ज़ूम धुंधला हो जाता है और ज़ूम एनिमेट नहीं होता।
+	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	व्हील से ज़ूम सहजता से सरकता है, और ज़ूम टूल बगल में खींचने या दबाए रखने पर ज़ूम करता है; बंद होने पर, ज़ूम टूल उस क्षेत्र पर ज़ूम करता है जिस पर आप खींचते हैं।
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	अगली शुरुआत से, डेस्कटॉप संस्करण इस प्रकार के ग्राफ़िक्स प्रोसेसर के ज़रिए कैनवास दिखाता है; आर्टवर्क हमेशा CPU पर बनता है। स्वचालित Windows और macOS पर इंटीग्रेटेड प्रोसेसर को प्राथमिकता देता है। वेब संस्करण इसका उपयोग नहीं करता।
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	अगली शुरुआत से, जहाँ ग्राफ़िक्स ड्राइवर अनुमति देता है, विंडो डिस्प्ले के रीफ़्रेश की प्रतीक्षा किए बिना हर फ़्रेम दिखाती है, अधिकतम 240 फ़्रेम प्रति सेकंड।
+	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	अगली शुरुआत से, डेस्कटॉप संस्करण इस प्रकार के ग्राफ़िक्स प्रोसेसर से बनाता है; स्वचालित उस प्रोसेसर को प्राथमिकता देता है जो डिस्प्ले चलाता है। वेब संस्करण इसका उपयोग नहीं करता।
+	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	अगली शुरुआत से, विंडो डिस्प्ले रीफ़्रेश का इंतज़ार किए बिना फ़्रेम दिखाती है, एक सेकंड में अधिकतम 240; बंद होने पर गति डिस्प्ले तय करता है। शुरुआत पर सेट किया गया प्रेज़ेंट मोड प्राथमिकता रखता है।
+	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	हर दस्तावेज़ अधिकतम जितने पूर्ववत चरण रखता है; कम संख्या ठीक है पर क्लिक करने पर सबसे पुराने चरण हटा देती है। ज़्यादा मेमोरी लेने पर चरण पहले भी हट सकते हैं।
+	Shows the artwork changing while you drag; off, outlines follow the drag and the artwork changes when you release. A ruler guide always moves as you drag.	खींचते समय आर्टवर्क को बदलते हुए दिखाता है; बंद होने पर, रूपरेखाएँ खींचने के साथ चलती हैं और छोड़ने पर आर्टवर्क बदलता है। रूलर गाइड खींचते समय हमेशा चलती है।
+	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	कितने वर्कर थ्रेड आर्टवर्क बनाते हैं; -1 उन कोर से एक कम उपयोग करता है जिन्हें VectorCraft उपयोग कर सकता है, अधिकतम 8, और 0 एक भी नहीं। वेब संस्करण कभी कोई उपयोग नहीं करता।
+	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	अगली शुरुआत से Wayland डेस्कटॉप पर, X11 (XWayland) विंडो को XWayland के ज़रिए खोलता है; अन्य विकल्प ऐसा केवल तब करते हैं जब पेन जुड़ा हो।
+	From the next start, the desktop version shows frames without waiting for the display's refresh, at most 240 a second; off, the display paces them.	अगली शुरुआत से, डेस्कटॉप संस्करण डिस्प्ले के रिफ़्रेश की प्रतीक्षा किए बिना फ़्रेम दिखाता है, प्रति सेकंड अधिकतम 240; बंद होने पर, डिस्प्ले उनकी गति तय करता है।
+	The larger budget raises each object filter run's base instructions fivefold and keeps the same allowance per input byte; heavy filters, live effects, exporters and importers keep their own limits.	बड़ा बजट ऑब्जेक्ट फ़िल्टर के हर रन के मूल निर्देश पाँच गुना करता है और इनपुट के हर बाइट पर वही अतिरिक्त भत्ता रखता है; भारी फ़िल्टर, लाइव इफ़ेक्ट, एक्सपोर्टर और इम्पोर्टर अपनी सीमाएँ रखते हैं।
+	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	जहाँ सिस्टम पहले से ऐसा नहीं करता, वहाँ कैनवास के आर्टवर्क और आर्टबोर्ड्स को डिस्प्ले की रंग प्रोफ़ाइल में बदलता है; बंद होने पर, कैनवास sRGB में बनता है।
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	डेस्कटॉप संस्करण में, फ़ाइल में सेव बैकग्राउंड में लिखा जाता है जबकि आप एडिट करते रहते हैं; बंद होने पर, आप उसके लिखे जाने तक प्रतीक्षा करते हैं।
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	डेस्कटॉप संस्करण में, 3D एक्सपोर्ट को छोड़कर फ़ाइलों में एक्सपोर्ट व पैकेज बैकग्राउंड में लिखे जाते हैं जबकि आप एडिट करते रहते हैं; बंद होने पर, आप उनकी प्रतीक्षा करते हैं।
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	हर कुछ मिनट में, पिछली कॉपी के बाद से बिना सेव बदलावों वाले हर डॉक्यूमेंट की रिकवरी कॉपी रखता है; बंद होने पर, कोई समय-आधारित कॉपी नहीं बनती।
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	जब तक रिकवरी डेटा अपने-आप सेव करें चालू है, रिकवरी कॉपियों के बीच कितने मिनट बीतते हैं।
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	डेस्कटॉप संस्करण में, वह फ़ोल्डर जिसमें रिकवरी कॉपियाँ रखी जाती हैं; VectorCraft के अपने फ़ोल्डर के लिए इसे खाली छोड़ें। वेब संस्करण उन्हें ब्राउज़र में रखता है।
+	No timed recovery copies are made of documents with more than 20,000 objects.	20,000 से अधिक ऑब्जेक्ट वाले डॉक्यूमेंट की कोई समय-आधारित रिकवरी कॉपी नहीं बनती।
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	रीसेंट फ़ाइल्स मेनू व होम स्क्रीन अधिकतम इतनी हाल की फ़ाइलें दिखाते हैं; 0 कोई नहीं दिखाता, फिर भी VectorCraft 30 तक याद रखता है।
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	डॉक्यूमेंट खुलने पर, अपना सेव किया प्रीव्यू दिखाने वाली लिंक की गई EPS इमेज EPS फ़ाइल को फिर से पढ़ने के बजाय वही प्रीव्यू रखती है; बदली हुई फ़ाइलें फिर भी अद्यतन लिंक के अनुसार चलती हैं।
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	पिक्सेल प्रीव्यू में, इमेज स्मूद बनाई जाती हैं; बंद होने पर, उनके पिक्सेल के किनारे तीखे दिखते हैं। पिक्सेल प्रीव्यू के बाहर, इमेज हमेशा स्मूद होती हैं।
+	PDF Text	PDF टेक्स्ट
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	आप जो PDF खोलते या एम्बेड करते हैं, उसका टेक्स्ट संपादन योग्य टेक्स्ट के रूप में आता है, या रूपरेखा के रूप में, जो उसके फ़ॉन्ट के बिना वाले कंप्यूटर पर भी वैसी ही दिखती है।
+	Linked pages show the file's own text.	लिंक किए गए पृष्ठ फ़ाइल का अपना टेक्स्ट दिखाते हैं।
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	जब कोई लिंक की गई फ़ाइल बदलती है, अपने-आप उसे फिर से पढ़ता है, बदलाव होने पर पूछें पहले आपसे पूछता है, व मैन्युअल उसे वैसे ही छोड़कर स्टेटस बार में एक नोट दिखाता है।
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	डेस्कटॉप संस्करण में, वह फ़ोल्डर जिसमें टेम्पलेट से नया… व टेम्पलेट के रूप में सेव करें… शुरू होते हैं; अपने डॉक्यूमेंट फ़ोल्डर में VectorCraft Templates के लिए इसे खाली छोड़ें।
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	मूल एडिट करें लिंक की गई फ़ाइल को उसके प्रकार के लिए सिस्टम के डिफ़ॉल्ट ऐप में खोलता है; बंद होने पर, लिंक की गई रास्टर इमेज PhotoCraft इंस्टॉल होने पर उसमें खुलती है।
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraft के पुराने संस्करण से सेव की गई फ़ाइल अपने नाम के बाद [Converted] के साथ खुलती है, व सेव पूछता है कि उसे कहाँ सेव करें; बंद होने पर, सेव फ़ाइल को बदल देता है।
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	जब तक कोई सेव कुछ और न कहे, VectorCraft फ़ाइलें व टेम्पलेट्स कंप्रेस करके सेव होते हैं, इसलिए छोटे होते हैं; कंप्रेस फ़ाइलें न खोल पाने वाले संस्करणों के लिए सेव बिना कंप्रेस रहते हैं।
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	कॉपी करें और काटें दूसरे ऐप्स को आर्ट का SVG कोड भी देते हैं; डेस्कटॉप पर, आर्ट में 1 MiB से अधिक इमेज एम्बेड होने पर कोड टेक्स्ट के रूप में कॉपी नहीं होता।
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows पर कॉपी करें और काटें दूसरे ऐप्स को आर्ट का PDF भी देते हैं; दूसरे प्लेटफ़ॉर्म अभी PDF कॉपी नहीं करते।
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft यह विकल्प सेव करता है, लेकिन कॉपी करें और काटें अभी विरासत वेक्टर क्लिपबोर्ड फ़ॉर्मेट का उपयोग नहीं करते।
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	विरासत वेक्टर क्लिपबोर्ड के लिए “संरक्षित पाथ” (पाथ संरक्षित रखें) या “उपस्थिति और ओवरप्रिंट को संरक्षित करें”; VectorCraft विकल्प सेव करता है, पर अभी उसका उपयोग नहीं करता।
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	स्वरूपण रखना, VectorCraft के टेक्स्ट ऑब्जेक्ट से कॉपी किया टेक्स्ट टेक्स्ट ऑब्जेक्ट में पेस्ट करने पर उसकी शैलियाँ रखता है; प्लेन टेक्स्ट रखें उसे पेस्ट की जगह की शैली देता है।
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	सभी ब्लैक्स को रिच ब्लैक के रूप में प्रदर्शित करें, कैनवास पर शुद्ध CMYK ब्लैक (केवल 100% काली स्याही) को RGB ब्लैक के रूप में दिखाता है; सभी ब्लैक्स को सटीक रूप से प्रदर्शित करें उसे कार्य CMYK स्पेस के ज़रिए बदलता है।
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	सभी ब्लैक्स को रिच ब्लैक के रूप में आउटपुट करें, RGB और ग्रेस्केल रास्टर एक्सपोर्ट और बिटमैप के रूप में प्रिंट करें में शुद्ध CMYK ब्लैक को RGB ब्लैक के रूप में बनाता है; यह वेक्टर एक्सपोर्ट, CMYK JPEG, TIFF और PSD या अन्य प्रिंटिंग को नहीं बदलता।
+	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	टच स्क्रीन पर टच वर्कस्पेस पर बदलता है; यह विकल्प बंद करने या टच स्क्रीन न मिलने पर पिछले वर्कस्पेस पर लौट आता है।
+	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	कैनवास पर दो उँगलियों का टैप पूर्ववत करता है, या टच वर्कस्पेस में सिलेक्शन और ड्रॉइंग टूल के बीच बदलता है, और तीन उँगलियों का टैप फिर से करता है; प्रस्तुति मोड में दोनों काम नहीं करते।
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	जब तक डॉक्यूमेंट सेटअप की भाषा अंग्रेज़ी: USA है और [सामान्य कैरेक्टर स्टाइल] कोई भाषा सेट नहीं करती, नए टेक्स्ट को यह भाषा मिलती है; डॉक्यूमेंट में पहले से मौजूद टेक्स्ट अपनी भाषा रखता है।
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	जिन पैराग्राफ़ में हाइफ़नेशन चालू है, उनमें सूची का शब्द केवल उसमें टाइप किए गए हाइफ़न पर टूटता है, या कोई न हो तो कहीं नहीं, उसका केस चाहे जो हो; कोरियाई शब्दों में हाइफ़न नहीं लगता, और भारतीय भाषाओं के शब्द किसी अक्षर-समूह के भीतर नहीं टूटते।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट
@@ -4236,6 +4923,7 @@ antiAlias	Sharp	शार्प
 	Rotate…	घुमाव…
 	Rotation	घुमाव
 	Rotation relative to:	इसके सापेक्ष:
+	Hue Jitter:	रंगत में भिन्नता:
 	Rotation X	रोटेशन X
 	Rotation Y	रोटेशन वाई
 	Rotation Z	रोटेशन Z
@@ -4256,8 +4944,10 @@ antiAlias	Sharp	शार्प
 	Rounded Rectangle	गोल आयत
 	Rounded Rectangle Tool	राउंडेड रेक्टेंगल टूल
 	Rounded Rectangle…	गोल आयत…
+	Roundness	राउंडनेस
 	Roundness:	राउंडनेस:
 	Row Size:	पंक्ति का आकार:
+	Rows	पंक्तियाँ
 	Rows:	पंक्तियाँ:
 	Ruby	रूबी
 	Ruby…	रूबी…
@@ -4327,6 +5017,7 @@ antiAlias	Sharp	शार्प
 	Save Preset	प्रीसेट सेव करें
 	Save Document Preset	डॉक्यूमेंट प्रीसेट सेव करें
 	Save Preset…	प्रीसेट सेव करें…
+	Save Summary…	सारांश सेव करें…
 	Save Print Preset	सेव करें प्रिंट प्रीसेट
 	Save Recovery Data	रिकवरी डेटा सेव करें
 	Save Save for Web Preset	सेव फॉर वेब प्रीसेट
@@ -4462,10 +5153,23 @@ antiAlias	Sharp	शार्प
 	Search	खोजें
 	Search All	सभी खोजें
 	Search artboards	खोज आर्टबोर्ड
-	Search commands and tools	खोज आदेश और टूल
-	Search commands and tools…	आदेश और टूल खोजें…
+	Search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें
+	Search commands, tools, panels and effects…	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें…
+	No commands match	कोई आदेश मेल नहीं खाता
+	{pos} of {total}: {name}	{total} में से {pos}: {name}
+	No menu item	कोई मेनू आइटम नहीं
+	Toolbar	टूलबार
+	{toolbar}, in the {tool} group	{toolbar}, {tool} समूह में
+	In the menu bar: {path}	मेनू बार में: {path}
+	In the {group} group: press and hold to open it	{group} समूह में: खोलने के लिए दबाकर रखें
+	{home}, not shown now	{home}, अभी नहीं दिखाया गया
+@plural	{n} result|{n} results	{n} परिणाम|{n} परिणाम
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
+	Type to search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजने के लिए टाइप करें
+	Clear Recent Commands	हाल के आदेश साफ़ करें
+	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
 	Search images	इमेज खोजना
@@ -4593,6 +5297,7 @@ antiAlias	Sharp	शार्प
 	Set Slice Rectangle	सेट स्लाइस आयत
 	Set Tab Stops	टैब स्टॉप्स सेट करें
 	Set Text	टेक्स्ट सेट करें
+	Set the current fill or stroke to the selected color	वर्तमान फ़िल या स्ट्रोक को सिलेक्टेड रंग में सेट करें
 	Set the selected color to the current color	सिलेक्टेड रंग को वर्तमान रंग में सेट करें
 	Set Zoom	ज़ूम सेट करें
 	Set:	सेट:
@@ -4686,10 +5391,17 @@ antiAlias	Sharp	शार्प
 	Show Center	केंद्र दिखाएँ
 	Show Center Mark	शो सेंटर मार्क
 	Show Code	कोड दिखाएं
+	Show in Browser	ब्राउज़र में दिखाएँ
 	Show color bars	रंग सलाखों दिखाएँ
+	Show brightness and hue on wheel	व्हील पर ब्राइटनेस और ह्यू दिखाएँ
+	Show saturation and hue on wheel	व्हील पर सैचुरेशन और ह्यू दिखाएँ
 	Add Color Tool	रंग जोड़ें टूल
 	Remove Color Tool	रंग हटाएँ टूल
 	Remove Color	रंग हटाएँ
+	Set As Base Color	आधार रंग के रूप में सेट करें
+	Select Shade	शेड चुनें
+	Add New Color	नया रंग जोड़ें
+	Set Current Color As Base Color	वर्तमान रंग को आधार रंग के रूप में सेट करें
 	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ
@@ -4722,6 +5434,7 @@ antiAlias	Sharp	शार्प
 	Show Modified	संशोधित दिखाएँ
 	Show Note	नोट दिखाएं
 	Show Options	ऑप्शन्स दिखाएँ
+	Show on Shape Creation	शेप बनाते समय दिखाएँ
 	Show Recent Colors	हाल के रंग दिखाएँ
 	Toggle RGB Percent	RGB प्रतिशत में बदलें
 	Show Original Path	मूल पाथ दिखाएं
@@ -4757,6 +5470,7 @@ antiAlias	Sharp	शार्प
 	Show Tile Edge	टाइल एज
 	Show Tints/Shades	शो टिंट्स / शेड्स
 	Show Tool Group Labels	टूल ग्रुप लेबल दिखाएं
+	Show Tool Cards	टूल कार्ड दिखाएँ
 	Show Tool Tips	टूल युक्तियाँ दिखाएँ
 	Show Toolbar	शो टूलबार
 	Show Transparency Grid	पारदर्शिता ग्रिड दिखाएँ
@@ -4765,7 +5479,7 @@ antiAlias	Sharp	शार्प
 	Show Vivid/Muted	चमकीले/मंद दिखाएँ
 	Show Warm/Cool	शो वार्म / कूल
 	Show:	दिखाएँ:
-	Show/hide plate (Alt-click: only this plate)	प्लेट दिखाएँ/छिपाएँ (Alt-क्लिक: केवल यही प्लेट)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	प्लेट दिखाएँ/छिपाएँ (Alt-क्लिक: केवल यही प्लेट; फिर से Alt-क्लिक: सभी प्लेटें)
 	Shown with the optimised preview.	आशावादी प्रीव्यू के साथ दिखाया गया है।
 	Shrink Text to Fit	टेक्स्ट को फिट करने के लिए सिकोड़ें
 	Side 1:	साइड 1:
@@ -4860,6 +5574,8 @@ antiAlias	Sharp	शार्प
 	Smooth	स्मूथ
 	Smooth Anchors	चिकना एंकर
 	Smooth Anchors…	चिकना एंकर…
+	Smooth Bridge	स्मूद ब्रिज
+	Smooth Bridge…	स्मूद ब्रिज…
 	Smooth Color	चिकना रंग
 	Smooth Tool	चिकना टूल
 	Smooth…	चिकना करें…
@@ -4905,6 +5621,8 @@ antiAlias	Sharp	शार्प
 	Source code on GitHub	GitHub पर स्रोत कोड
 	Source Folder:	स्रोत फ़ोल्डर:
 	Source Image	स्रोत इमेज
+	Split View	विभाजित दृश्य
+	Divider	विभाजक
 	Source Sans 3	Source Sans 3
 	Space After Paragraph	पैराग्राफ़ के बाद स्पेस
 	Space Before Paragraph	पैराग्राफ़ से पहले स्पेस
@@ -5115,6 +5833,17 @@ antiAlias	Sharp	शार्प
 	Symbol Screener Tool	सिंबल स्क्रीनर टूल
 	Symbol Scruncher	सिंबल स्क्रंचर
 	Symbol Scruncher Tool	सिंबल स्क्रंचर टूल
+	Tool:	टूल:
+	Symbol Set Density	सिंबल सेट डेंसिटी
+	Symbol Sprayer Options	सिंबल स्प्रेयर विकल्प
+	Scrunch:	स्क्रंच:
+	Spin:	स्पिन:
+	Screen:	स्क्रीन:
+	Stain:	स्टेन:
+	Symbol Sizer Options	सिंबल साइज़र विकल्प
+	Proportional Resizing	आनुपातिक रीसाइज़िंग
+	Resizing Affects Density	रीसाइज़िंग से डेंसिटी बदलती है
+	Show Brush Size and Intensity	ब्रश का साइज़ और तीव्रता दिखाएँ
 	Symbol Set Density:	सिंबल सेट डेंसिटी:
 	Symbol Shifter	सिंबल शिफ्टर
 	Symbol Shifter Tool	सिंबल शिफ़्टर टूल
@@ -5158,6 +5887,8 @@ antiAlias	Sharp	शार्प
 	Tail:	पूंछ:
 	Tamil	तमिल
 	Tangent Circle	स्पर्शी वृत्त
+	Tangent Circle Tool	स्पर्शी वृत्त टूल
+	No tangent circle here	यहाँ कोई स्पर्शी वृत्त नहीं है
 	Tangent Circle…	स्पर्शी वृत्त…
 	Taper	टेपर
 	Target	लक्ष्य
@@ -5175,7 +5906,7 @@ antiAlias	Sharp	शार्प
 	Composite Fonts	कंपोज़िट फ़ॉन्ट
 	Export Composite Fonts	कंपोज़िट फ़ॉन्ट एक्सपोर्ट करें
 	Import Composite Fonts	कंपोज़िट फ़ॉन्ट इम्पोर्ट करें
-@msg	each font must be {name, parts}	हर फ़ॉन्ट {name, parts} होना चाहिए
+@msg	each font must be {{name, parts}}	हर फ़ॉन्ट {{name, parts}} होना चाहिए
 @msg	unknown key `{k}`; a font takes name and parts	अज्ञात कुंजी `{k}`; फ़ॉन्ट name और parts लेता है
 @msg	each font needs a name	हर फ़ॉन्ट का एक नाम होना चाहिए
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` कंपोज़िट फ़ॉन्ट का नाम नहीं हो सकता (1 से {COMPOSITE_NAME_MAX} अक्षर, कोई नियंत्रण अक्षर नहीं)
@@ -5188,7 +5919,10 @@ antiAlias	Sharp	शार्प
 @msg	two composite fonts are named `{_1}`	दो कंपोज़िट फ़ॉन्ट का नाम `{_1}` है
 @msg	`{_1}` is the name of an installed font	`{_1}` एक इंस्टॉल किए गए फ़ॉन्ट का नाम है
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} `{font}` में सेट है, जो एक कंपोज़िट फ़ॉन्ट है
-@msg	give fonts: [{name, parts}…]	fonts दें: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	fonts दें: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` को "document", {{artboards: [index, …]}} या {{layers: [id, …]}} होना चाहिए
+@msg	numbers out of order in {{}} quantifier	{{}} क्वांटिफ़ायर में संख्याएँ क्रम में नहीं हैं
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	पेंट फ्रीफॉर्म ग्रेडिएंट नहीं है (paint.editGradient {{kind: "freeform"}} से एक लागू करें)
 @msg	path is empty	path खाली है
 @msg	fonts must be a list of composite fonts	fonts कंपोज़िट फ़ॉन्ट की सूची होनी चाहिए
 @msg	names must be strings	names स्ट्रिंग होने चाहिए
@@ -5309,6 +6043,13 @@ antiAlias	Sharp	शार्प
 	TIFF (8-bit Color)	TIFF (8-बिट रंग)
 	TIFF (Black & White)	TIFF (ब्लैक एंड व्हाइट)
 	Tile	टाइल
+	Tile All Vertically	सभी को लंबवत टाइल करें
+	Tile All Horizontally	सभी को क्षैतिज टाइल करें
+	2-Up Layout	2 का लेआउट
+	3-Up Layout	3 का लेआउट
+	4-Up Layout	4 का लेआउट
+	6-Up Layout	6 का लेआउट
+	Arrange Documents	दस्तावेज़ व्यवस्थित करें
 	tile {number}	टाइल {number}
 	Tile Edge Color	टाइल एज रंग
 	Tile Edge Color…	टाइल एज रंग…
@@ -5483,6 +6224,8 @@ antiAlias	Sharp	शार्प
 	Unembedded to {}	एम्बेड हटाकर {} में रखा गया
 	Ungroup	समूह तोड़ें
 	Ungroup Color Group	रंग समूह का ग्रूपिंग हटाएँ
+	Color Group Options	रंग समूह ऑप्शन्स
+	Color Group Options…	रंग समूह ऑप्शन्स…
 	Unicode	यूनिकोड
 	Unicode (UTF-16)	यूनिकोड (UTF-16)
 	Unicode (UTF-8)	यूनिकोड (UTF-8)
@@ -5491,6 +6234,8 @@ antiAlias	Sharp	शार्प
 	Unique	अनोखा
 	Unite	मिलाएँ
 	Unite and Simplify	एकजुट और सरलीकरण
+	Unit Converter	इकाई कनवर्टर
+	Unit Converter Panel	इकाई कनवर्टर पैनल
 	Units	इकाइयाँ
 	Units & Scale	इकाइयों और स्केल
 	Units:	इकाइयाँ:
@@ -5510,6 +6255,7 @@ antiAlias	Sharp	शार्प
 	Unlock Variables	वेरिएबल्स अनलॉक करें
 	Unnamed Objects	नामरहित ऑब्जेक्टएं
 	Unpainted Objects	अनपेक्षित ऑब्जेक्टएं
+	Empty Text Paths	खाली टेक्स्ट पाथ
 	Unprintable margin:	अनप्रिंटेबल मार्जिन:
 	Unselected Artwork	अनसिलेक्टेड आर्टवर्क
 	Unsharp Mask	अनशार्प मास्क
@@ -5527,6 +6273,11 @@ antiAlias	Sharp	शार्प
 	Update Modified Links	अद्यतन संशोधित लिंक
 	Update Selection	अद्यतन सिलेक्शन
 	UPPERCASE	अपरकैस
+	Sanskrit	संस्कृत
+	Nepali	नेपाली
+	Assamese	असमिया
+	Konkani	कोंकणी
+	Sindhi	सिंधी
 	Urdu	उर्दू
 	URL:	यूआरएल:
 	Use 	उपयोग 
@@ -5608,6 +6359,8 @@ antiAlias	Sharp	शार्प
 	Variable Options	वेरिएबल ऑप्शन्स
 	Variable Options…	वेरिएबल ऑप्शन्स…
 	Variable Width Profile	वेरिएबल चौड़ाई प्रोफ़ाइल
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	स्ट्रोक का ब्रश अपना आकार बनाए रखता है, इसलिए चौड़ाई प्रोफ़ाइल उसे नहीं बदलती। प्रोफ़ाइल का उपयोग करने के लिए ब्रश निकालें।
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	स्ट्रोक का ब्रश अपना आकार बनाए रखता है, इसलिए चौड़ाई प्रोफ़ाइल उसे नहीं बदलती। प्रोफ़ाइल का उपयोग करने के लिए ब्रश निकालें।
 	Variables	वेरिएबल्स
 	Variation	वैरिएशन
 	Variation:	भिन्नता:
@@ -5665,7 +6418,7 @@ antiAlias	Sharp	शार्प
 	Video Thumbnail 1280×720	वीडियो थंबनेल 1280 × 720
 	View	व्यू
 	View {n}	{n}
-	View Artboard Only	केवल आर्टबोर्ड देखें
+	View Artboard Contents Only	केवल आर्टबोर्ड की सामग्री देखें
 	View Opacity Mask	ओपेसिटी मास्क देखें
 	View PDF after saving	सेव करने के बाद PDF देखें
 	View:	व्यू:
@@ -5675,7 +6428,7 @@ antiAlias	Sharp	शार्प
 	Visibility	दृश्यता
 	Visible & Printable Layers	दृश्यमान और प्रिंट करने योग्य लेयरें
 	Visible Layers	दृश्यमान लेयरें
-	Vivid	विद
+	Vivid	चटक
 	Volume	आयतन
 	W:	W:
 	Warm	गर्म
@@ -5738,6 +6491,7 @@ antiAlias	Sharp	शार्प
 	Write Layers	लेयर लिखें
 	Writes, moves or deletes files	फ़ाइलों को राइट्स, मूव या डिलीट करता है
 	x Height	x ऊँचाई
+	Em Box Height	एम बॉक्स ऊँचाई
 	X Position	X स्थिति
 	x-height	x-ऊँचाई
 	x-Height	x-ऊँचाई
@@ -6048,10 +6802,12 @@ antiAlias	Sharp	शार्प
 @msg	{label}: lost track of a shape's style	{label}: एक आकार की स्टाइल का ट्रैक खो गया
 @msg	{label}: select paths	{label}: चुनें पाथ
 @msg	{label}: select paths, compound paths, groups or text	{label}: चुनें पाथ, यौगिक पाथ, समूह या टेक्स्ट
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, परिणाम के आकार को नहीं बदलता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} ने खाली परिणाम का उत्पादन किया: कोई रेखा या अन्य खुला पाथ कोई क्षेत्र नहीं घेरता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	{label}…	{label}...
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} बनाया गया है और इसे हटाया नहीं जा सकता है।
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} को {lo}-{hi}{unit} ({v}) होना चाहिए।
+@msg	{name} must be {range} (got {v})	{name} को {range} होना चाहिए ({v} मिला)
 @msg	{name}: {e}	{name}: {e}
 @msg	{name}: CRC mismatch	{name}: CRC mismatch
 @msg	{name}: CRC or size mismatch	{name}: CRC या आकार मेल नहीं खाता
@@ -6070,6 +6826,8 @@ antiAlias	Sharp	शार्प
 @msg	{std} files embed their fonts, and the file would have one that isn't	{std} फ़ाइलें अपने फ़ॉन्ट एम्बेड करती हैं, और इस फ़ाइल में एक ऐसा फ़ॉन्ट होता जो एम्बेड नहीं है
 @msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	यह डॉक्यूमेंट {target} से पढ़ा गया था और पढ़ते समय कुछ चीज़ें छूट गईं ({what}): उसी फ़ाइल पर लिखने से वे स्थायी रूप से खो जाएँगी। दूसरी फ़ाइल लिखें या फिर भी बदलने के लिए acknowledgeLoss: true दें
 @msg	{tool} isn't in a toolbar group of several tools	{tool} कई टूल्स के टूलबार समूह में नहीं है
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	प्रस्तुति मोड टूलबार्स छिपाता है: उन्हें दिखाने के लिए स्क्रीन मोड बदलें
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ने टूलबार्स छिपा दिए हैं: उन्हें दिखाने के लिए Tab दबाएँ
 @msg	{ty} brushes need selected art (or params.{k})	{ty} ब्रश के लिए सिलेक्टेड आर्टवर्क (या params.{k}) चाहिए
 @msg	{v} is not an asset id	{v} एक परिसंपत्ति आईडी नहीं है
 @msg	{what} can't be intertwined	{what} अंतर नहीं किया जा सकता है
@@ -6099,6 +6857,8 @@ antiAlias	Sharp	शार्प
 @msg	`{id}` is no writable format (see document.formats)	`{id}` लिखने योग्य फ़ॉर्मैट नहीं है (document.formats देखें)
 @msg	`{id}` is not a colour adjustment	`{id}` एक रंग समायोजन नहीं है
 @msg	`{id}` isn't a loaded library	`{id}` एक लोड लाइब्रेरी नहीं है
+@msg	`{file}` has no swatches of its own	`{file}` में अपने कोई स्वॉचेस नहीं हैं
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` में पैटर्न स्वॉचेस हैं, जिन्हें .vcswatches फ़ाइल नहीं रख सकती
 @msg	`{k}.family` is required	`{k}.family` की आवश्यकता है
 @msg	`{k}` is a number 0..1	`{k}` एक नंबर 0..1 है।
 @msg	`{k}` is true or false	`{k}` true या false है
@@ -6346,6 +7106,10 @@ antiAlias	Sharp	शार्प
 @msg	`mode` must be "handles", "straight" or "smooth"	`mode` को "handles", "straight" या "smooth" होना चाहिए
 @msg	`mode` must be "straight", "bezier" or "arc"	`mode` को "straight", "bezier" या "arc" होना चाहिए
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` को grayscale, rgb, hsb, cmyk या websafe होना चाहिए
+@msg	`view` must be wheel or box	`view` को wheel या box होना चाहिए
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` को hue, saturation, brightness, red, green या blue होना चाहिए
+@msg	`sliders` must be none, oklch or hsl	`sliders` none, oklch या hsl होना चाहिए
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH के लिए वर्किंग RGB स्पेस sRGB होना चाहिए
 @msg	`mode` must be one of {_1}	`mode` को {_1} में से एक होना चाहिए
 @msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" या "lineEndHalf" होना चाहिए।
 @msg	`name` is empty	`name` खाली है
@@ -6432,6 +7196,8 @@ antiAlias	Sharp	शार्प
 @msg	`version`, `description` or `author` is too long	`version`, `description` या `author` बहुत लंबा है
 @msg	`warnings` must be a list of strings	`warnings` स्ट्रिंग की एक सूची होना चाहिए
 @msg	`with` moves points, not a handle	`with` पॉइंट मूव करता है, हैंडल नहीं
+@msg	`link` and `independent` cannot both be true	`link` और `independent` दोनों true नहीं हो सकते
+@msg	`link` places a handle: give `handle`	`link` एक हैंडल रखता है: `handle` दें
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` में अधिकतम 10000 स्पाइन पॉइंट इंडेक्स की लिस्ट होनी चाहिए
 @msg	a {_1} series can't go in a {_2} graph	एक {_1} श्रृंखला एक {_2} ग्राफ में नहीं जा सकती
 @msg	a {width}×{height} screenshot's byte count overflows	{width}×{height} स्क्रीनशॉट की बाइट संख्या सीमा से बाहर है
@@ -6466,6 +7232,7 @@ antiAlias	Sharp	शार्प
 @msg	a graph has at most {_1} series, so it transposes with at most that many categories	एक ग्राफ में सबसे {_1} श्रृंखला है, इसलिए यह उस कई श्रेणियों के साथ ट्रांसपोजित होता है।
 @msg	a graph's records don't end where they should: its art was read as it is	एक ग्राफ का रिकॉर्ड अंत नहीं है जहां उन्हें होना चाहिए: इसकी कला को पढ़ा गया क्योंकि यह है
 @msg	a graphic style named `{to}` already exists	`{to}` नामक एक ग्राफिक स्टाइल पहले से मौजूद है
+@msg	a swatch or color group named `{name}` already exists	`{name}` नामक एक स्वॉच या रंग समूह पहले से मौजूद है
 @msg	a group crosses a multi-layer mask	एक समूह एक बहुलेयर मास्क पार करता है
 @msg	a key object sits on that point	एक प्रमुख ऑब्जेक्ट उस बिंदु पर बैठती है
 @msg	a layer can't be merged into its own sublayer	एक लेयर को अपने खुद के सबलेयर में विलय नहीं किया जा सकता है
@@ -6582,7 +7349,6 @@ antiAlias	Sharp	शार्प
 @msg	anchor `{key}` must be a number	एंकर `{key}` को एक नंबर होना चाहिए
 @msg	anchor `smooth` must be true or false	एंकर का `smooth` true या false होना चाहिए
 @msg	anchor must name a registered panel	anchor किसी पंजीकृत पैनल का नाम होना चाहिए
-@msg	angle and roundness must be finite	कोण और गोलाई परिमित होना चाहिए
 @msg	angles must be a list as long as pins (degrees or null)	angles पिन जितनी लंबी सूची होनी चाहिए (डिग्री या null)
 @msg	Angles require two straight segments	कोणों को दो सीधे खंडों की आवश्यकता होती है
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art या type
@@ -6625,6 +7391,9 @@ antiAlias	Sharp	शार्प
 @msg	automation path rejected: outside the read root {root}: {path}	स्वचालन पाथ खारिज: पढ़ने की जड़ के बाहर {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	स्वचालन पाथ खारिज: पढ़ने की जड़ों के बाहर {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	एक लिंक की गई जावास्क्रिप्ट फ़ाइल पढ़ने की जड़ों के बाहर है
+@msg	a linked image file is outside the read roots	एक लिंक की गई छवि फ़ाइल पढ़ने की जड़ों के बाहर है
+@msg	a linked file's export folder is outside the read roots	एक लिंक की गई फ़ाइल का निर्यात फ़ोल्डर पढ़ने की जड़ों के बाहर है
+@msg	a linked file's editing data can't be read to check it against the read roots	एक लिंक की गई फ़ाइल का संपादन डेटा पढ़ने की जड़ों से जाँचने के लिए पढ़ा नहीं जा सकता
 @msg	the library's file is outside the read roots	लाइब्रेरी की फ़ाइल पढ़ने की जड़ों के बाहर है
 @msg	{file} names more than one linked JavaScript file	{file} एक से अधिक लिंक की गई जावास्क्रिप्ट फ़ाइलों से मेल खाता है
 @msg	automation path rejected: outside the write root {root}: {path}	स्वचालन पाथ खारिज: लिखने की जड़ के बाहर {root}: {path}
@@ -6672,6 +7441,7 @@ antiAlias	Sharp	शार्प
 @msg	bad trailer size	बुरा ट्रेलर आकार
 @msg	balance must be between 0 and 100	balance 0 से 100 के बीच होना चाहिए
 @msg	batch step {_1} (`{id}`) failed: {e}	बैच चरण {_1} (`{id}`) विफल: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	कार्रवाई चरण {_1} (`{id}`) विफल: {reason}
 @msg	Batch: {count} processed	बैच: {count} संसाधित
 @msg	Batch: {count} processed, {failed} failed	बैच: {count} संसाधित, {failed} विफल
 @msg	batches cannot nest	बैच घोंसला नहीं कर सकते
@@ -6746,11 +7516,19 @@ antiAlias	Sharp	शार्प
 @msg	color.profile: no RGB or CMYK profile is called “{profile}”	color.profile: "{profile}" नाम की कोई RGB या CMYK प्रोफ़ाइल नहीं है
 @msg	colorMode must be rgb or cmyk, not `{m}`	colorMode को rgb या cmyk होना चाहिए, `{m}` नहीं
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel को {own} (डॉक्यूमेंट का मोड), grayscale या bitmap होना चाहिए
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: रंग तालिका में कम से कम एक रंग रहना चाहिए
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` वही रंग बताता है जो कोई दूसरी कुंजी भी बताती है
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" जैसा रंग नहीं है
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: अधिकतम {MAX_TABLE} रंग
 @msg	colour groups can't go into colour groups	रंग समूह रंग समूहों में नहीं जा सकते हैं
 @msg	colour, mode and spot apply to solid-colour swatches only	रंग, मोड और स्पॉट केवल ठोस रंग वाले स्वॉच पर लागू होते हैं
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	कॉलम {column}: `{cell}` ग्राफ़ डेटा फ़ाइल का `%` कॉलम है, जिसे पढ़ा नहीं जाता
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	लाइन {line}, कॉलम {column}: `{var}` के लिए ग्राफ़ डेटा फ़ाइल `{path}` एक सापेक्ष पाथ है: `base` या एक पूर्ण पाथ दें
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	लाइन {line}, कॉलम {column}: `{var}` के लिए ग्राफ़ डेटा फ़ाइल पढ़ी नहीं जा सकती: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	लाइन {line}, कॉलम {column}: `{var}` के लिए ग्राफ़ डेटा फ़ाइल `{path}` का पालन नहीं किया गया है: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	लाइन {line}, कॉलम {column}: `{var}` के लिए ग्राफ़ डेटा फ़ाइल `{path}` {MAX_GRAPH_DATA_FILE} बाइट्स से बड़ी है
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	लाइन {line}, कॉलम {column}: `{var}` के लिए ग्राफ़ डेटा फ़ाइल `{path}` से मिलने वाला ग्राफ़ मूल्य {MAX_GRAPH_CSV} बाइट्स से अधिक है
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	लाइन {line}, कॉलम {column}: ग्राफ़ डेटा फ़ाइलों में कुल मिलाकर {MAX_GRAPH_FILES_TOTAL} बाइट्स से अधिक हैं
+@msg	`base` is empty	`base` खाली है
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	कॉलम {column}: `{cell}` में `{name}` नाम का {_1} वेरिएबल है
 @msg	column {column}: `{cell}` names no variable	कॉलम {column}: `{cell}` किसी वेरिएबल का नाम नहीं है
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	कॉलम {column}: वेरिएबल का नाम {MAX_NAME} कैरेक्टर से लंबा है
@@ -6770,6 +7548,7 @@ antiAlias	Sharp	शार्प
 @msg	compressed (RLE) bitmaps can't be read yet	संकुचित (RLE) bitmaps अभी तक पढ़ा नहीं जा सकता है
 @msg	connect end must be "start" or "end"	कनेक्ट अंत "start" या "end" होना चाहिए
 @msg	connect needs a path other than the one extended	connect के लिए बढ़ाए गए पाथ के अलावा कोई दूसरा पाथ चाहिए
+@msg	connect needs extend	connect के लिए extend चाहिए
 @msg	connect needs id	connect के लिए id चाहिए
 @msg	connect path has no open end	कनेक्ट पाथ का कोई खुला अंत नहीं है
 @msg	Contour: select paths or shapes	कंटूर: पाथ या आकृतियों सिलेक्ट करें
@@ -6783,6 +7562,13 @@ antiAlias	Sharp	शार्प
 	Show External Script Warning	बाहरी स्क्रिप्ट की चेतावनी दिखाएँ
 	A Script Is Running	एक स्क्रिप्ट चल रही है
 	Script Alert	स्क्रिप्ट सूचना
+	Script File Access	स्क्रिप्ट की फ़ाइल पहुँच
+	The script asks to read a file you choose.	स्क्रिप्ट आपकी चुनी हुई फ़ाइल पढ़ने की अनुमति माँगती है।
+	The script asks to read and write a file you choose.	स्क्रिप्ट आपकी चुनी हुई फ़ाइल पढ़ने और लिखने की अनुमति माँगती है।
+	The script asks to read and write a folder you choose, with everything in it.	स्क्रिप्ट आपका चुना हुआ फ़ोल्डर और उसकी सारी सामग्री पढ़ने और लिखने की अनुमति माँगती है।
+	Allow Once	एक बार अनुमति दें
+	Always Allow This Script	इस स्क्रिप्ट को हमेशा अनुमति दें
+	Deny	अस्वीकार करें
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
 	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
 	Stop the script and undo what it did? Then quit again.	स्क्रिप्ट रोककर उसके बदलाव पूर्ववत करें? फिर दोबारा बाहर निकलें।
@@ -6799,6 +7585,8 @@ antiAlias	Sharp	शार्प
 @msg	the script is no longer in the Scripts folder	स्क्रिप्ट अब Scripts फ़ोल्डर में नहीं है
 	Some scripts were not listed	कुछ स्क्रिप्ट सूचीबद्ध नहीं की गईं
 	The Scripts folder cannot be read	Scripts फ़ोल्डर पढ़ा नहीं जा सकता
+	Loading scripts…	स्क्रिप्ट लोड हो रही हैं…
+	The Scripts folder is still being read	Scripts फ़ोल्डर अभी भी पढ़ा जा रहा है
 @msg	the script's run is no longer available	स्क्रिप्ट का रन अब उपलब्ध नहीं है
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	एक विफल कमांड ने पूर्ववत चरण बदल दिए जिन्हें वापस नहीं रखा जा सका, इसलिए स्क्रिप्ट रोक दी गई
 @msg	a recovery copy could not be written, so the script was not run	रिकवरी प्रति नहीं लिखी जा सकी, इसलिए स्क्रिप्ट नहीं चलाई गई
@@ -6811,8 +7599,6 @@ antiAlias	Sharp	शार्प
 @msg	Script file could not be read	स्क्रिप्ट फ़ाइल पढ़ी नहीं जा सकी
 @msg	Script folder has more than 2,048 entries	स्क्रिप्ट फ़ोल्डर में 2,048 से अधिक प्रविष्टियाँ हैं
 @msg	Script file open mode must be r, w, e or a	स्क्रिप्ट फ़ाइल खोलने का मोड r, w, e या a होना चाहिए
-@msg	Script file writing is not available	स्क्रिप्ट फ़ाइल लिखना उपलब्ध नहीं है
-@msg	Script file dialogs are not available	स्क्रिप्ट फ़ाइल संवाद उपलब्ध नहीं हैं
 @msg	Script files cannot be opened in another application	स्क्रिप्ट फ़ाइलें किसी अन्य ऐप्लिकेशन में नहीं खोली जा सकतीं
 @msg	Script file access is unavailable on the web	वेब पर स्क्रिप्ट फ़ाइल पहुँच उपलब्ध नहीं है
 @msg	Script has 256 files open	स्क्रिप्ट ने 256 फ़ाइलें खोल रखी हैं
@@ -6952,8 +7738,37 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	यह prompt का उत्तर है, इसलिए इसका `value` स्ट्रिंग या null होना चाहिए
 @msg	must have `kind` alert, confirm or prompt	`kind` alert, confirm या prompt होना चाहिए
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` केवल ऐसे रन के लिए है जिसमें पूछने के लिए कोई नहीं है: ऐप में, व्यक्ति हर डायलॉग का उत्तर देता है
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 1 से {_1} तक की पूर्ण संख्या होनी चाहिए
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 64 से अधिक स्तर गहराई तक नेस्ट किया गया है
+@msg	`args` must be an object	`args` एक ऑब्जेक्ट होना चाहिए
+@msg	`args` is larger than 1 MiB	`args` 1 MiB से बड़ा है
+@msg	`path` is empty	`path` खाली है
+@msg	`installed` takes a `path`, not a `source`	`installed` एक `path` लेता है, `source` नहीं
+@msg	`path` must name a .js or .jsx file	`path` में किसी .js या .jsx फ़ाइल का नाम होना चाहिए
+@msg	give exactly one of `path` and `source`	`path` और `source` में से ठीक एक दें
 @msg	Running a script	स्क्रिप्ट चल रही है
 @msg	Copied the script report	Copied स्क्रिप्ट रिपोर्ट
+@msg	Script file access denied: {path}	स्क्रिप्ट की फ़ाइल पहुँच अस्वीकार की गई: {path}
+@msg	Script file access to the app's own folders is not allowed	स्क्रिप्ट को ऐप के अपने फ़ोल्डरों तक पहुँचने की अनुमति नहीं है
+@msg	Script file cannot encode the text	स्क्रिप्ट फ़ाइल टेक्स्ट को एन्कोड नहीं कर सकती
+@msg	Script file could not be written	स्क्रिप्ट फ़ाइल लिखी नहीं जा सकी
+@msg	Script file dialogs need a person to answer them	स्क्रिप्ट के फ़ाइल डायलॉग को उत्तर देने के लिए किसी व्यक्ति की ज़रूरत है
+@msg	Script file is not open for writing	स्क्रिप्ट फ़ाइल लिखने के लिए खुली नहीं है
+@msg	Script file name is already in use	स्क्रिप्ट फ़ाइल का नाम पहले से उपयोग में है
+@msg	Script file name must be a name without a folder	स्क्रिप्ट फ़ाइल का नाम बिना फ़ोल्डर वाला नाम होना चाहिए
+@msg	Script file permission can be kept only for a script run from a file	फ़ाइल अनुमति केवल फ़ाइल से चलाई गई स्क्रिप्ट के लिए रखी जा सकती है
+@msg	Script file permission could not be saved	स्क्रिप्ट की फ़ाइल अनुमति सेव नहीं की जा सकी
+@msg	Script folder is not empty	स्क्रिप्ट फ़ोल्डर खाली नहीं है
+@msg	Script files cannot make aliases	स्क्रिप्ट फ़ाइलें उपनाम नहीं बना सकतीं
+@msg	Script file hidden setting cannot be changed	स्क्रिप्ट फ़ाइल की छिपी सेटिंग बदली नहीं जा सकती
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: फ़ाइल डायलॉग किसी बिल्ट-इन फ़ंक्शन, getter, रूपांतरण या $.evalFile द्वारा चलाई गई फ़ाइल के callback के भीतर नहीं खुल सकता; इसे स्क्रिप्ट के अपने कोड से कॉल करें
+@msg	the script wrote more file data than one run may write (32 MiB)	स्क्रिप्ट ने एक रन में लिखे जा सकने वाले फ़ाइल डेटा से अधिक लिखा (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	स्क्रिप्ट के फ़ाइल डायलॉग के लिए `answer` इनमें से एक होना चाहिए: once, always, deny, stop
+@msg	choose a file or folder first, or deny	पहले कोई फ़ाइल या फ़ोल्डर चुनें, या अस्वीकार करें
+@msg	the script file permissions could not be saved: {e}	स्क्रिप्ट की फ़ाइल अनुमतियाँ सेव नहीं की जा सकीं: {e}
+@msg	this script's file access can be allowed only once	इस स्क्रिप्ट की फ़ाइल पहुँच केवल एक बार दी जा सकती है
+@msg	Only the person at the keyboard can allow a script's file access	किसी स्क्रिप्ट को फ़ाइल पहुँच केवल कीबोर्ड पर मौजूद व्यक्ति दे सकता है
+@msg	A script is given at most 2,048 files: the files picked after them were left out	किसी स्क्रिप्ट को अधिकतम 2,048 फ़ाइलें दी जाती हैं: उनके बाद चुनी गई फ़ाइलें छोड़ दी गईं
 @msg	Copied the link info	लिंक जानकारी कॉपी की गई
 @msg	copy needs path: the file to copy into the document's folder	copy के लिए path चाहिए: डॉक्यूमेंट के फ़ोल्डर में कॉपी करने वाली फ़ाइल
 @msg	copy takes images only: relink placed documents where their files are	copy केवल इमेज लेता है: प्लेस किए गए डॉक्यूमेंट्स को वहीं फिर से लिंक करें जहाँ उनकी फ़ाइलें हैं
@@ -7085,6 +7900,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	expected {{"objects": [...]}}	अपेक्षित: {{"objects": [...]}}
 @msg	export `{name}`: {e}	निर्यात `{name}`: {e}
 @msg	Export cancelled	निर्यात रद्द
+	Cancel Save	सेव रद्द करना
+@plural	{n} more save waiting|{n} more saves waiting	{n} और सेव प्रतीक्षा में|{n} और सेव प्रतीक्षा में
+@msg	Save canceled	सेव रद्द
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	स्क्रीन के लिए एक्सपोर्ट png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai या vectorcraft लिखता है
 @msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	निर्यात प्रीसेट फ़ाइल {MAX_PRESET_FILE_BYTES} bytes से बड़ा है
 @msg	Exported {path}	{path} एक्सपोर्ट किया गया
@@ -7189,6 +8007,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	give one of assets, layers, selection or fullDocument	assets, layers, selection या fullDocument में से एक दें
 @msg	give only one of onto, above, below, icon and a column place	केवल ऊपर, नीचे, आइकन और एक स्तंभ स्थान देने के लिए
 @msg	give only one of onto, below and above	नीचे और ऊपर केवल एक देना
+@msg	give only one of `index`, `indices` and `t`	`index`, `indices` और `t` में से केवल एक दें
 @msg	give origin: [x, y], or reset: true	origin: [x, y] दें, या reset: true
 @msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	overprintFill, overprintStroke, showCenter, imageMap, url या नोट
 @msg	give path (a file) or folder	पाथ (एक फ़ाइल) या फ़ोल्डर देना
@@ -7374,6 +8193,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	फ़ाइल में कोई प्रीव्यू के साथ जुड़े चित्र एक प्लेसहोल्डर दिखाते हैं जब तक कि उनकी फ़ाइलें नहीं मिलती: उन्हें लिंक पैनल में फिर से लिंक करें
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft की सीमाओं से आगे के लिंक्ड टाइप एरिया छोड़ दिए गए
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	लाइव पेंट मर्ज: जोड़ने के लिए एक लाइव पेंट समूह और पाथ सिलेक्ट करें
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` और `Edge` लाइव पेंट समूह के फेस और एज के नाम हैं: पाथ को कोई दूसरा नाम दें
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	लाइव पेंट पाथ और कंपाउंड पाथ लेता है: पहले टाइप, इमेज और अन्य ऑब्जेक्ट्स को पाथ में बदलें
 @msg	Live Paint: select paths or compound paths	लाइव पेंट: पाथ या यौगिक पाथ सिलेक्ट करें
 @msg	Live Paint: these paths are too degenerate to paint	लाइव पेंट: इन पाथ को पेंट करने के लिए बहुत अलग किया जाता है
@@ -7517,7 +8337,25 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no active data set	कोई सक्रिय डेटा सेट नहीं
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
+@msg	the perspective grid is hidden	पर्सपेक्टिव ग्रिड छिपा हुआ है
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	स्वचालित प्लेन पोज़िशनिंग बंद है: anchorPoint या gridlineIntersection चालू करें (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint को true या false होना चाहिए
+@msg	gridlineIntersection must be true or false	gridlineIntersection को true या false होना चाहिए
+@msg	tolerance must be 0 or more	tolerance को 0 या अधिक होना चाहिए
+@msg	give `at` or `clear`, not both	`at` या `clear` दें, दोनों नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` में संख्याओं के दो या तीन [x, y] जोड़े होने चाहिए
+@msg	direct-select two or three anchor points, or give `points`	दो या तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
+@msg	the path is straight there, so no circle matches its curvature	वहाँ पाथ सीधा है, इसलिए कोई वृत्त उसकी वक्रता से मेल नहीं खाता
+@msg	the path has a cusp there, so it has no single curvature	वहाँ पाथ में नुकीला बिंदु है, इसलिए उसकी कोई एक वक्रता नहीं है
+@msg	the path has a corner there, so it has no single curvature	वहाँ पाथ में कोना है, इसलिए उसकी कोई एक वक्रता नहीं है
+@msg	a guide has no curvature circle	गाइड का कोई वक्रता वृत्त नहीं होता
+@msg	the circle that matches the path there would reach past the canvas	वहाँ पाथ से मेल खाने वाला वृत्त कैनवास से बाहर चला जाएगा
+@msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
+@msg	`at` must be "start" or "end"	`at` को "start" या "end" होना चाहिए।
+@msg	give exactly one of `through` and `toward`	`through` और `toward` में से ठीक एक दें
+@msg	no arc fits these points: two are the same or all three lie on one line	इन पॉइंट्स पर कोई आर्क फ़िट नहीं होता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
+@msg	give `at` only with `toward`	`at` केवल `toward` के साथ दें
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}
 @msg	no artboard	कोई आर्टबोर्ड नहीं
@@ -7602,6 +8440,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no item at index {from}	इंडेक्स {from} पर कोई आइटम नहीं
 @msg	no item at one of the indices {idx}	indices {idx} में से एक पर कोई आइटम नहीं
 @msg	no key object	कोई कुंजी ऑब्जेक्ट नहीं
+@msg	Align to Key Object isn't available with the Artboard tool	आर्टबोर्ड टूल के साथ "मुख्य ऑब्जेक्ट पर संरेखित करें" उपलब्ध नहीं है
 @msg	no layer	कोई लेयर नहीं
 @msg	no layer {id} (see layer.list)	कोई लेयर {id} (layer.list देखें)
 @msg	no layers to export	निर्यात करने के लिए कोई लेयरें नहीं
@@ -7625,6 +8464,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no parent layer	कोई अभिभावक लेयर नहीं
 @msg	no Pathfinder operation applied yet	अभी तक कोई पाथफाइंडर ऑपरेशन लागू नहीं है
 @msg	no pattern `{name}`	कोई पैटर्न `{name}` नहीं
+@msg	art painted with `{name}` can't be its tile	`{name}` से रंगी कला उसकी टाइल नहीं हो सकती
 @msg	no pattern named `{choice}`	`{choice}` नाम का कोई पैटर्न नहीं
 @msg	no pattern swatch `{name}`	कोई पैटर्न स्वॉच `{name}` नहीं
 @msg	no PDF preset named `{n}`	कोई PDF प्रीसेट नहीं है जिसका नाम `{n}` है
@@ -7712,9 +8552,15 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no such spine point	ऐसा कोई स्पाइन बिंदु नहीं
 @msg	no such spine segment	ऐसा कोई खंड नहीं
 @msg	no such subpath	ऐसा कोई उप-पाथ नहीं
+@msg	`pieces` must be a list of at most 10000 pieces	`pieces` में अधिकतम 10000 टुकड़ों की लिस्ट होनी चाहिए
+@msg	give either `start` for a new path or `id`, not both	नए पाथ के लिए `start` या `id` में से एक दें, दोनों नहीं
+@msg	`subpath` and `keep` need `id`	`subpath` और `keep` के लिए `id` चाहिए
 @msg	no such user library	ऐसी कोई उपयोगकर्ता लाइब्रेरी नहीं
 @msg	no such view	कोई ऐसा दृश्य नहीं
 @msg	no such width point	ऐसी कोई चौड़ाई बिंदु नहीं
+@msg	`single` must be `incoming` or `outgoing`	`single` का मान `incoming` या `outgoing` होना चाहिए
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` और `outIndex` एक ही असतत चौड़ाई बिंदु के दो हिस्से होने चाहिए
+@msg	a discontinuous width point keeps its place	असतत चौड़ाई बिंदु अपनी जगह पर रहता है
 @msg	no swatch `{keep}`	कोई स्वॉच `{keep}` नहीं
 @msg	no swatch `{n}`	कोई स्वॉच `{n}` नहीं
 @msg	no swatch `{n}` (swatches and colour groups move separately)	कोई स्वॉच `{n}` नहीं (स्वॉच और रंग समूह अलग-अलग मूव होते हैं)
@@ -7861,7 +8707,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	Offset Path: select paths	ऑफसेट पाथ: सिलेक्शन पाथ
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ऑफसेट पाथ: ऑफ़सेट सिलेक्टेड पाथ की कुछ भी नहीं छोड़ता है (आकार की तुलना में एक निर्धारित बड़ा)
 @msg	Offset Path: the path is too complex to offset	ऑफसेट पाथ: पाथ ऑफसेट करने के लिए बहुत जटिल है
+@msg	no two circles are within reach: raise the reach	कोई भी दो वृत्त पहुँच के भीतर नहीं हैं: पहुँच बढ़ाएँ
 @msg	on must be true or false	on को true या false होना चाहिए
+@msg	one circle is inside the other	एक वृत्त दूसरे के अंदर है
 @msg	only a dock group above or below others collapses, not one beside another	केवल दूसरों के ऊपर या नीचे एक डॉक समूह गिर जाता है, एक दूसरे के बगल में नहीं
 @msg	only an exporter or an importer declares `extensions`	केवल एक्सपोर्टर या इंपोर्टर `extensions` घोषित करता है
 @msg	only an object of the Global Edit other than the one it started from can be left out	केवल ग्लोबल एडिट का एक ऑब्जेक्ट, इसके अलावा इसे शुरू किया जा सकता है, छोड़ दिया जा सकता है
@@ -7988,6 +8836,11 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	preset must be standard, diffuse, topLeft or right	preset को standard, diffuse, topLeft या right होना चाहिए
 @msg	preset must be the name of a print preset	preset किसी प्रिंट प्रीसेट का नाम होना चाहिए
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ब्राउज़र में प्रीव्यू डेस्कटॉप ऐप (वेब डाउनलोड फ़ाइलों के बजाय) की जरूरत है
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` दें, K (1024 बाइट) में वांछित फ़ाइल आकार: 0 से बड़ी और अधिकतम 1048576 संख्या
+@msg	`startWith` is `current` or `auto`	`startWith` का मान `current` या `auto` होना चाहिए
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` का मान `allSlices`, `eachSlice` या `currentSlice` होना चाहिए
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice`, `slice.list` से स्लाइस संख्या है, `use: currentSlice` के साथ
+@msg	Optimize to File Size: there is no image to measure	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें: मापने के लिए कोई इमेज नहीं है
 @msg	previewMode must be default, pixel or overprint	previewMode को default, pixel या overprint होना चाहिए
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	प्रिंट इंक फिक्स CMYK डॉक्यूमेंट्स पर काम करता है: फ़ाइल चुनें › डॉक्यूमेंट रंग मोड › CMYK कलर फर्स्ट
 @msg	print settings are not an object	प्रिंट सेटिंग एक ऑब्जेक्ट नहीं है
@@ -8070,6 +8923,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select a blend or give `id`	एक मिश्रण सिलेक्ट करें या `id` देना
 @msg	select a blend to set easing or color shift	Easing या रंग शिफ्ट सेट करने के लिए एक मिश्रण सिलेक्ट करें
 @msg	select a clip group	एक क्लिप समूह चुनें
+@msg	select a flare	एक फ्लेयर चुनें
 @msg	select a compound shape	एक मिश्रित आकार चुनें
 @msg	Select a dimension first	पहले आयाम सिलेक्ट करें
 @msg	select a gradient mesh	एक ग्रेडिएंट जाल सिलेक्ट करें
@@ -8086,6 +8940,10 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
 @msg	select an envelope	एक लिफाफे सिलेक्ट करें
 @msg	select an image	एक इमेज चुनें
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ऑब्जेक्ट {_1} पर्सपेक्टिव या फ़्री डिस्टॉर्ट से बदली गई इमेज है, जिस पर यह कमांड काम नहीं करता
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने उत्तल आकार नहीं बनाएँगे
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने डिस्टॉर्ट के क्षितिज को पार कर जाएँगे
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	इमेज {_1} को इस तरह डिस्टॉर्ट नहीं किया जा सकता: इसके कोने पर्सपेक्टिव मैपिंग के लिए एक-दूसरे के बहुत पास होंगे
 @msg	`background` must be edges, corners or colors	`background` edges, corners या colors होना चाहिए
 @msg	`match` must be distance or channels	`match` distance या channels होना चाहिए
 @msg	`{key}` must be from 0 to 100	`{key}` 0 से 100 तक होना चाहिए
@@ -8124,6 +8982,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select artwork to make a group of its colours	अपने रंगों का एक समूह बनाने के लिए आर्टवर्क सिलेक्ट करें
 @msg	select artwork to recolour, or give a colour `group`	रंग बदलने के लिए आर्टवर्क चुनें या रंग `group` दें
 @msg	select at least two objects	कम से कम दो ऑब्जेक्ट चुनें
+@msg	select at most 2000 circles to bridge	जोड़ने के लिए अधिकतम 2000 वृत्त चुनें
 @msg	Select dimensions to update	अद्यतन करने के लिए आयाम सिलेक्ट करें
 @msg	select exactly two objects	वास्तव में दो ऑब्जेक्ट चुनें
 @msg	select exactly two path ends to join	जोड़ने के लिए ठीक दो पाथ एंड पॉइंट्स सिलेक्ट करें
@@ -8162,6 +9021,17 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	One path lies inside the other, so they have no common tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई उभयनिष्ठ स्पर्शरेखा नहीं है
 @msg	The paths overlap, so they have no internal tangents	पाथ एक-दूसरे पर चढ़े हुए हैं, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
 @msg	One path lies inside the other, so they have no internal tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
+@msg	The point lies inside the path, so it has no tangents	बिंदु पाथ के अंदर है, इसलिए उसकी कोई स्पर्शरेखा नहीं है
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	बाउंडिंग आयत जोड़ें
+	Add Bounding Circle	बाउंडिंग वृत्त जोड़ें
+	Add Bounding Rectangle…	बाउंडिंग आयत जोड़ें…
+	Add Bounding Circle…	बाउंडिंग वृत्त जोड़ें…
+	One per Object	प्रत्येक ऑब्जेक्ट के लिए एक
+@msg	nothing to enclose	घेरने के लिए कुछ नहीं
+@msg	`offset` must be 0 or more	`offset` 0 या उससे अधिक होना चाहिए
+@msg	the shape would have no size	आकृति का कोई आकार नहीं होगा
+@msg	the shape would reach past the edge of the canvas	आकृति कैनवास के किनारे से आगे निकल जाएगी
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
 @msg	select two or three paths or compound paths	दो या तीन पाथ या यौगिक पाथ सिलेक्ट करें
@@ -8202,6 +9072,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select the objects to attach to the path	ऑब्जेक्ट्स का सिलेक्ट करने के लिए संलग्न करने के लिए पाथ
 @msg	select the objects to bind	ऑब्जेक्ट्स को बांधने के लिए चुनें
 @msg	select the objects to transform in perspective	ऑब्जेक्ट्स को पर्सपेक्टिव में बदलने के लिए चुनें
+@msg	select two or more circles to bridge	जोड़ने के लिए दो या अधिक वृत्त चुनें
 @msg	select two open path ends, or two open paths, to average and join	औसत निकालकर जोड़ने के लिए दो खुले पाथ एंड पॉइंट्स या दो खुले पाथ सिलेक्ट करें
 @msg	select two or more graphic styles to merge	दो या अधिक ग्राफिक स्टाइल्स का सिलेक्ट करने के लिए विलय
 @msg	select two or more objects to distribute	वितरित करने के लिए दो या दो से अधिक ऑब्जेक्ट चुनें
@@ -8221,6 +9092,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	shadings of more than 4096 patches or triangles were left out	4096 से अधिक पैच या त्रिकोणों के छायांकन को छोड़ दिया गया था
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	छायांकन जिसका कार्य अज्ञात प्रकार के होते हैं, उनके मध्य रंग से भरे होते हैं
 @msg	Shape Builder: no region under the pointer	आकृति बिल्डर: सूचक के तहत कोई क्षेत्र नहीं
+@msg	Fill Area: no enclosed area under the pointer	क्षेत्र भरें: सूचक के तहत कोई बंद क्षेत्र नहीं
+@msg	Shape Builder: select all paths you want to merge	आकृति बिल्डर: वे सभी पाथ सिलेक्ट करें जिन्हें आप मर्ज करना चाहते हैं
 @msg	Shape Builder: select paths or compound paths	आकृति बिल्डर: पाथ या मिश्रित पाथ सिलेक्ट करें
 @msg	Shaper needs 1–64 source paths	शेपर के लिए 1–64 स्रोत पाथ चाहिए
 @msg	shortcut for `{k}` must be a string	`{k}` के लिए शॉर्टकट एक स्ट्रिंग होना चाहिए
@@ -8278,6 +9151,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the active document changed while the question was open; nothing was deleted	प्रश्न खुला रहते हुए सक्रिय डॉक्यूमेंट बदल गया; कुछ भी नहीं हटाया गया
 @msg	that document is no longer open	यह डॉक्यूमेंट अब खुला नहीं है
 @msg	that makes more than {MAX_PIECES} slices	जो {MAX_PIECES} स्लाइस से अधिक बनाता है
+@msg	that makes too many bridges (at most 8000): lower the reach	इससे बहुत अधिक ब्रिज बनते हैं (अधिकतम 8000): पहुँच घटाएँ
 @msg	that makes too many pieces (at most 100000): make the dashes longer	जो बहुत सारे टुकड़े बनाता है (अधिकांश 100000 में): डैश को लंबे समय तक बनाते हैं
 @msg	that object is not in the overlap	उस ऑब्जेक्ट को ओवरलैप में नहीं है
 @msg	the {tool} tool has no options	{tool} टूल में कोई ऑप्शन्स नहीं है
@@ -8300,10 +9174,32 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट कुछ नहीं बनाता
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट एक्सपोर्ट करने लायक कुछ नहीं बनाता
 @msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
+@msg	give one <filter> element	एक <filter> एलिमेंट दें
+@msg	the <filter> element needs an id, the filter's name	<filter> एलिमेंट को एक id चाहिए, जो फ़िल्टर का नाम है
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG फ़िल्टर की id अधिकतम {MAX_NAME} वर्णों की होती है
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> SVG फ़िल्टर का एलिमेंट नहीं है
+@msg	an SVG filter has no event attributes such as {_1}	SVG फ़िल्टर में {_1} जैसे इवेंट एट्रिब्यूट नहीं होते
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG फ़िल्टर की इमेज PNG, JPEG, GIF या WebP data: URL होती हैं
+@msg	the SVG filter isn't valid XML: {e}	SVG फ़िल्टर मान्य XML नहीं है: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence का numOctaves अधिकतम {MAX_OCTAVES} होता है
+@msg	{what} is at most {max}	{what} अधिकतम {max} होता है
+@msg	feConvolveMatrix's order	feConvolveMatrix का order
+@msg	feMorphology's radius	feMorphology का radius
+@msg	a blur's stdDeviation	ब्लर का stdDeviation
+@msg	the SVG filter has no primitives	SVG फ़िल्टर में कोई प्रिमिटिव नहीं है
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG फ़िल्टर में अधिकतम {MAX_PRIMITIVES} प्रिमिटिव होते हैं
+@msg	the SVG filter is too large once its attributes are written out	एट्रिब्यूट लिखे जाने के बाद SVG फ़िल्टर बहुत बड़ा हो जाता है
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG फ़िल्टर की इमेज में कुल मिलाकर अधिकतम {MAX_IMAGE_PIXELS} पिक्सेल होते हैं
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG फ़िल्टर बनाया नहीं जा सकता: उसके प्रिमिटिव और उनके इनपुट जाँचें
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG फ़िल्टर के एलिमेंट अधिकतम {MAX_DEPTH} स्तर तक नेस्ट होते हैं
+@msg	an SVG filter is at most {_1} KB	SVG फ़िल्टर अधिकतम {_1} KB का होता है
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ऑब्जेक्ट पर कोई 3D इफ़ेक्ट नहीं है (एक्सट्रूडेड और बेवेल, रिवॉल्व, फुलाएँ या घुमाव)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` केवल `mode` वाला ऑब्जेक्ट होना चाहिए, जिसका मान shaded या wireframe हो
 @msg	its 3D effect builds no solid	इसका 3D इफ़ेक्ट कोई ठोस नहीं बनाता
-@msg	bevel must be none or one of {_1}	bevel को none या {_1} में से एक होना चाहिए
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel को none, {_1} में से एक, या {BEVEL_PROFILE} के साथ custom होना चाहिए
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom के लिए {BEVEL_PROFILE} चाहिए, यानी बेवल के बिंदु
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} एक स्ट्रिंग होना चाहिए
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} में 2 से {most} [x, y] बिंदु होने चाहिए, हर हिस्सा 0 और 1 के बीच, [0, 0] (सिरे की सतह का किनारा) से [1, 1] (बगल की दीवार) तक
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} इस आर्ट से ठोस नहीं बना सकता: इसके सिंबल इंस्टेंस, ब्लेंड और क्लिपिंग ग्रुप में बहुत अधिक ऑब्जेक्ट हैं
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} सिंबल "{symbol}" के इंस्टेंस से ठोस नहीं बना सकता: सिंबल का आर्ट उपलब्ध नहीं है
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: क्लिपिंग पाथ आर्ट को काटने के लिए बहुत जटिल है
@@ -8326,11 +9222,13 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` की हर प्रविष्टि एक ऑब्जेक्ट होनी चाहिए
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` की प्रविष्टियाँ symbol, face, x, y, scale और rotation लेती हैं, `{k}` नहीं
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` की हर प्रविष्टि को `symbol` चाहिए, यानी किसी सिंबल का नाम
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` का face, front या back होना चाहिए
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` का face, front, back या side होना चाहिए
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` का {key}, {lo} से {hi} तक की संख्या होना चाहिए
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` एक ऐरे होना चाहिए
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	ग्राफ़िक्स समतल, एक्सट्रूड और रिवॉल्व ऑब्जेक्ट प्रकारों पर लगते हैं
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	ग्राफ़िक्स समतल, एक्सट्रूड, रिवॉल्व और फुलाएँ ऑब्जेक्ट प्रकारों पर लगते हैं
 @msg	Revolve maps graphics onto its side: map them onto the front	रिवॉल्व ग्राफ़िक्स को अपनी बगल वाली सतह पर लगाता है: उन्हें सामने वाले फ़ेस पर लगाएँ
+@msg	Inflate maps graphics onto its front and back, not onto a side	फुलाएँ ग्राफ़िक्स को सामने और पिछले फ़ेस पर लगाता है, बगल वाली सतह पर नहीं
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	ऑब्जेक्ट {_1}: फुलाएँ का पिछला फ़ेस ग्राफ़िक्स तभी लेता है जब दोनों तरफ़ और कैप चालू हों
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	ग्राफ़िक्स इस सतह के लिए बहुत जटिल हैं: सिंबल्स के आर्ट को सरल बनाएँ या सेगमेंट कम करें
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` अधिकतम {MAX_GRAPHICS} ग्राफ़िक्स लेता है
 @msg	A plane has one face: map its graphics onto the front	समतल का एक ही फ़ेस होता है: उसके ग्राफ़िक्स को सामने वाले फ़ेस पर लगाएँ
@@ -8366,10 +9264,16 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	आर्टबोर्ड कैनवास पर फिट नहीं हैं: कम आर्टबोर्ड, कम रिक्ति या छोटे आकार
 @msg	the background worker stopped	पृष्ठभूमि कार्यकर्ता बंद कर दिया
 @msg	the blend has no spine	मिश्रण में कोई रीढ़ नहीं है
+@msg	the bridged circles are too complex to unite	जोड़े गए वृत्त मिलाने के लिए बहुत जटिल हैं
 @msg	the character's size can't be measured	कैरेक्टर का आकार मापा नहीं जा सकता है
+@msg	the circles are too far apart for this gap	इस गैप के लिए वृत्त एक-दूसरे से बहुत दूर हैं
+@msg	the circles are too far apart for this gap: raise the gap	इस गैप के लिए वृत्त एक-दूसरे से बहुत दूर हैं: गैप बढ़ाएँ
+@msg	the circles are too far apart for this radius	इस त्रिज्या के लिए वृत्त एक-दूसरे से बहुत दूर हैं
+@msg	the circles are too far apart for this radius: raise the radius	इस त्रिज्या के लिए वृत्त एक-दूसरे से बहुत दूर हैं: त्रिज्या बढ़ाएँ
 @msg	the CMYK image couldn't be written	CMYK इमेज को नहीं लिखा जा सकता
 @msg	the Color Picker is not open	रंग पिकर खुला नहीं है
 @msg	the compound shape is too complex to expand	मिश्रित आकार का विस्तार करने के लिए बहुत जटिल है
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, मिश्रित आकार में कोई क्षेत्र नहीं जोड़ता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	the compressed file unpacks to more than {_1} MB	संकुचित फ़ाइल {_1} MB से अधिक के लिए अनपैक
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	संपीड़ित फ़ाइल खुलकर उससे बड़ी हो जाती है जितना VectorCraft पढ़ता है (डॉक्यूमेंट के {_1} MB, हर इमेज के {_2} MB)
 @msg	the container of the listed objects is gone	सूचीबद्ध ऑब्जेक्ट्स का कंटेनर चला गया है
@@ -8456,6 +9360,26 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the job would print more than {_1} pages	नौकरी {_1} पृष्ठों से अधिक प्रिंट करेगी
 @msg	the job would print more than {MAX_PAGES} pages	इस जॉब में {MAX_PAGES} से अधिक पेज प्रिंट होंगे
 @msg	the JPEG 2000 file can't be read	JPEG 2000 फ़ाइल पढ़ा नहीं जा सकता
+@msg	CDR {version} drawings can't be opened: VectorCraft reads versions 1 to 27	CDR {version} की ड्रॉइंग नहीं खोली जा सकतीं: VectorCraft संस्करण 1 से 27 तक पढ़ता है
+@msg	this CDR drawing can't be read ({why})	इस CDR ड्रॉइंग को पढ़ा नहीं जा सकता ({why})
+@msg	CDR text, bitmaps, blends, contours, brush strokes and other objects VectorCraft doesn't read yet were left out	CDR के टेक्स्ट, बिटमैप, ब्लेंड, कंटूर, ब्रश स्ट्रोक और अन्य ऑब्जेक्ट, जिन्हें VectorCraft अभी नहीं पढ़ता, छोड़ दिए गए
+@msg	CDR fountain, pattern, texture and PostScript fills were left out	CDR के फ़ाउंटेन, पैटर्न, टेक्सचर और PostScript फ़िल छोड़ दिए गए
+@msg	colors in CDR color models VectorCraft doesn't read were opened as black	जिन CDR रंग मॉडलों को VectorCraft नहीं पढ़ता, उनके रंग काले के रूप में खोले गए
+@msg	CDR library colors that the drawing stores only by number were opened as black spot colors	CDR लाइब्रेरी के जिन रंगों को ड्रॉइंग केवल संख्या से सहेजती है, वे काले स्पॉट रंगों के रूप में खोले गए
+@msg	CDR outline arrowheads were left out	CDR आउटलाइन के तीर-शीर्ष छोड़ दिए गए
+@msg	CDR envelopes were not applied, and the shapes under them keep their outlines	CDR एनवेलप लागू नहीं किए गए, और उनके नीचे की आकृतियाँ अपनी आउटलाइन बनाए रखती हैं
+@msg	CDR lenses and object transparency were not applied, and the objects they are on show opaque	CDR लेंस और ऑब्जेक्ट पारदर्शिता लागू नहीं की गई, और जिन ऑब्जेक्ट पर वे हैं वे अपारदर्शी दिखते हैं
+@msg	parts of the drawing nested too deeply, or past the import limits, were left out	ड्रॉइंग के बहुत गहराई तक नेस्ट किए गए या आयात सीमाओं से परे के हिस्से छोड़ दिए गए
+@msg	damaged parts of the drawing were left out	ड्रॉइंग के क्षतिग्रस्त हिस्से छोड़ दिए गए
+@msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt से लंबे CDR पेज उसी लंबाई पर खोले गए, और उनके किनारों के पास का आर्ट आर्टबोर्ड के बाहर है
+@msg	this CMX file can't be read ({why})	इस CMX फ़ाइल को पढ़ा नहीं जा सकता ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	CMX के टेक्स्ट, इमेज, आयत, दीर्घवृत्त, क्लिपिंग पाथ और अन्य ऑब्जेक्ट, जिन्हें VectorCraft अभी नहीं पढ़ता, छोड़ दिए गए
+@msg	CMX fills other than uniform colors were left out	एकसमान रंगों के अलावा CMX के फ़िल छोड़ दिए गए
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	जिन CMX रंग मॉडलों को VectorCraft नहीं पढ़ता, उनके रंग काले के रूप में खोले गए
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX लाइब्रेरी के जिन रंगों को फ़ाइल केवल संख्या से सहेजती है, वे काले स्पॉट रंगों के रूप में खोले गए
+@msg	CMX outline arrowheads were left out	CMX आउटलाइन के तीर-शीर्ष छोड़ दिए गए
+@msg	CMX lenses were not applied	CMX लेंस लागू नहीं किए गए
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt से लंबे CMX पेज उसी लंबाई पर खोले गए, और उनके किनारों के पास का आर्ट आर्टबोर्ड के बाहर है
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 फ़ाइल में असमर्थित कलर स्पेस या JPX सामग्री है
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	वेक्टर क्रेफ्ट की अंतिम शुरुआत अपनी विंडो दिखाई देने से पहले {name} पर समाप्त हुई, इसलिए यह {summary} पर शुरू हुआ। उस ग्राफिक्स प्रोसेसर को फिर से आज़माने के लिए, वरीयताओं को बदलें › प्रदर्शन › ग्राफिक्स प्रोसेसर या WGPU_BACKEND सेट के साथ शुरू होता है।
 @msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	जब यह ग्राफिक्स प्रोसेसर को सूचीबद्ध करता है, तो यह केवल ओपनजीएल के साथ {summary} पर शुरू हुआ। फिर से अन्य ग्राफिक्स बैकेंड की कोशिश करने के लिए, वरीयताओं को बदलें › प्रदर्शन › ग्राफिक्स प्रोसेसर या WGPU_BACKEND सेट के साथ शुरू होता है।
@@ -8549,6 +9473,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF फ़ाइल टाइप के रूप में प्लेस करने के लिए बहुत बड़ी है (अधिकतम {_1} MB)
 @msg	the runtime panicked	रनटाइम क्रैश हो गया
 @msg	the Save PDF dialog didn't open	सेव करें PDF संवाद खुला नहीं था
+@msg	the Save PDF dialog is not open	सेव करें PDF संवाद खुला नहीं है
 @msg	the scale is not a usable number	स्केल एक प्रयोग योग्य संख्या नहीं है
 @msg	the screen color sampler is already open	स्क्रीन रंग नमूना पहले से ही खुला है
 @msg	the search couldn't start: try again in a moment	खोज शुरू नहीं हो सका: एक पल में फिर से प्रयास करें
@@ -8692,6 +9617,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	टेक्स्ट ऑब्जेक्ट के भीतर लेखन दिशा बदलने वाला टेक्स्ट अपने पहले वर्ण की दिशा में खुलता है
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	लिंक्ड एरिया, रैपअराउंड टेक्स्ट या कंपाउंड पाथ में मास्क के रूप में इस्तेमाल किया गया टाइप क्लिप नहीं करता
 @msg	Unembedded to {_1}	एम्बेड हटाकर {_1} में रखा गया
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} इमेज का एम्बेड हटाकर {folder} में रखा गया|{n} इमेज का एम्बेड हटाकर {folder} में रखा गया
+@msg	every numbered name for {name} is taken in that folder	{name} के लिए हर नंबर वाला नाम उस फ़ोल्डर में पहले से लिया गया है
 @msg	unexpected host trap	होस्ट में अप्रत्याशित ट्रैप
 @msg	unexpected resources	अप्रत्याशित संसाधन
 @msg	unknown {k} key `{key}` (size, position)	अज्ञात {k} कुंजी `{key}` (size, position)
@@ -8766,6 +9693,18 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	panels can't be shown in Presentation Mode	प्रस्तुति मोड में पैनल्स नहीं दिखाए जा सकते
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	अज्ञात पैरामीटर `{key}`; `{object}` लेता है: {keys}
+@msg	unknown parameter `{key}`; {why_not}	अज्ञात पैरामीटर `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	कोई फ़ॉर्मैट इसे नहीं लेता (document.formats देखें)
+@msg	no save format takes it (see file.formatOptions)	कोई सेव फ़ॉर्मैट इसे नहीं लेता (file.formatOptions देखें)
+@msg	PDF doesn't take it (see document.formats)	PDF इसे नहीं लेता (document.formats देखें)
+@msg	EPS doesn't take it (see document.formats)	EPS इसे नहीं लेता (document.formats देखें)
+@msg	DXF doesn't take it (see document.formats)	DXF इसे नहीं लेता (document.formats देखें)
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	पहले आज़माया गया ग्राफिक्स प्रोसेसर विंडो नहीं दिखा सका, इसलिए VectorCraft फिर से {summary} पर शुरू हुआ (सेटिंग्स › प्रदर्शन › ग्राफिक्स प्रोसेसर › स्वचालित उस प्रोसेसर का उपयोग करता है जो आपका डिस्प्ले चलाता है)
+@msg	Sent “{title}” to {to}	“{title}” को {to} पर भेजा गया
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” को {to} पर भेजा गया। प्रिंट कतार का उत्तर: {note}
+@msg	the default printer	डिफ़ॉल्ट प्रिंटर
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	ऑब्जेक्ट {object} पर रास्टर इफ़ेक्ट: {requested} ppi माँगा गया, 64 मिलियन पिक्सेल की सीमा के कारण {achieved} ppi मिला
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}
 @msg	the params must be an object, not {got}	पैरामीटर एक ऑब्जेक्ट होने चाहिए, {got} नहीं
 @msg	unknown parameter `{path}`; the object takes no keys	अज्ञात पैरामीटर `{path}`; ऑब्जेक्ट कोई कुंजी नहीं लेता
@@ -8836,7 +9775,14 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	variable `{name}` is declared twice	वेरिएबल `{name}` दो बार घोषित है
 @msg	variable `{to}` already exists	वेरिएबल `{to}` पहले से मौजूद है
 @msg	variables are locked	वेरिएबल्स लॉक हैं
-@msg	variables that aren't text were left out: {kinds}	वेरिएबल जो टेक्स्ट नहीं छोड़े गए थे: {kinds}
+@msg	variables that aren't text were left out: {kinds}	जो वेरिएबल टेक्स्ट नहीं हैं, उन्हें छोड़ दिया गया: {kinds}
+variable-kind	Visibility	दृश्यता
+variable-kind	Linked File	लिंक्ड फ़ाइल
+variable-kind	Graph Data	ग्राफ़ डेटा
+variable-kind	Unknown	अज्ञात
+variable-list-two	{0}, {1}	{0} और {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} और {1}
 @msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version ने {v} लौटाया; यह होस्ट संस्करण {ABI_VERSION} लागू करता है
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc ने 0 लौटाया (मेमोरी खत्म)
 @msg	vc_alloc returned a block outside memory	vc_alloc ने मेमोरी के बाहर का ब्लॉक लौटाया
@@ -8870,6 +9816,49 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the PSD file's layer groups are nested too deeply	PSD फ़ाइल के लेयर समूह बहुत गहराई तक नेस्ट किए गए हैं
 @msg	a layer of the PSD file is too large to read	PSD फ़ाइल की एक लेयर पढ़ने के लिए बहुत बड़ी है
 @msg	the PSD file's layers take more memory to read than allowed	PSD फ़ाइल की लेयर पढ़ने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	the file is no longer loaded	फ़ाइल अब लोड नहीं है
+@msg	the layers can't be read ({e}): the file was placed as its merged image	लेयर पढ़ी नहीं जा सकतीं ({e}): फ़ाइल अपनी मर्ज की गई इमेज के रूप में प्लेस की गई
+@msg	1 type layer came in as pixels: the text isn't editable	1 टाइप लेयर पिक्सेल के रूप में आई: टेक्स्ट एडिट नहीं किया जा सकता
+@msg	{n} type layers came in as pixels: the text isn't editable	{n} टाइप लेयर पिक्सेल के रूप में आईं: टेक्स्ट एडिट नहीं किया जा सकता
+@msg	1 adjustment layer was not applied	1 एडजस्टमेंट लेयर लागू नहीं हुई
+@msg	{n} adjustment layers were not applied	{n} एडजस्टमेंट लेयर लागू नहीं हुईं
+@msg	1 fill layer was not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	1 फ़िल लेयर ड्रॉ नहीं हुई (ग्रेडिएंट या पैटर्न फ़िल, ऐसा रंग जो पढ़ा नहीं जा सकता, या ऐसी आकृति जो कोई पिक्सेल नहीं रखती)
+@msg	{n} fill layers were not drawn (a gradient or pattern fill, a color that can't be read, or a shape that stores no pixels)	{n} फ़िल लेयर ड्रॉ नहीं हुईं (ग्रेडिएंट या पैटर्न फ़िल, ऐसा रंग जो पढ़ा नहीं जा सकता, या ऐसी आकृति जो कोई पिक्सेल नहीं रखती)
+@msg	the layer effects of 1 layer weren't drawn	1 लेयर के लेयर इफ़ेक्ट ड्रॉ नहीं हुए
+@msg	the layer effects of {n} layers weren't drawn	{n} लेयर के लेयर इफ़ेक्ट ड्रॉ नहीं हुए
+@msg	the vector masks of 1 layer weren't applied	1 लेयर के वेक्टर मास्क लागू नहीं हुए
+@msg	the vector masks of {n} layers weren't applied	{n} लेयर के वेक्टर मास्क लागू नहीं हुए
+@msg	the knockout of 1 layer wasn't applied	1 लेयर का नॉकआउट लागू नहीं हुआ
+@msg	the knockout of {n} layers wasn't applied	{n} लेयर का नॉकआउट लागू नहीं हुआ
+@msg	1 layer was left out (hidden layers and the layers clipped to them)	1 लेयर छोड़ दी गई (छिपी लेयर और उन पर क्लिप की गई लेयर)
+@msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} लेयर छोड़ दी गईं (छिपी लेयर और उन पर क्लिप की गई लेयर)
+@msg	1 layer clipped to a fill layer that wasn't drawn was left out	ड्रॉ न हुई फ़िल लेयर पर क्लिप की गई 1 लेयर छोड़ दी गई
+@msg	{n} layers clipped to fill layers that weren't drawn were left out	ड्रॉ न हुई फ़िल लेयर पर क्लिप की गई {n} लेयर छोड़ दी गईं
+@msg	layers in blend modes VectorCraft doesn't have ({modes}) were merged with the layers below them	उन ब्लेंड मोड की लेयर जो VectorCraft में नहीं हैं ({modes}), अपने नीचे की लेयर के साथ मर्ज कर दी गईं
+@msg	1 layer in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	ऐसे ब्लेंड मोड की 1 लेयर जो VectorCraft में नहीं है, सामान्य के रूप में आई: मर्ज करने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	{n} layers in blend modes VectorCraft doesn't have came in as Normal: the merge needs more memory than allowed	ऐसे ब्लेंड मोड की {n} लेयर जो VectorCraft में नहीं हैं, सामान्य के रूप में आईं: मर्ज करने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	1 layer clipped to the layer below came in unclipped: the merge needs more memory than allowed	नीचे की लेयर पर क्लिप की गई 1 लेयर बिना क्लिप के आई: मर्ज करने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	{n} layers clipped to the layer below came in unclipped: the merge needs more memory than allowed	नीचे की लेयर पर क्लिप की गई {n} लेयर बिना क्लिप के आईं: मर्ज करने के लिए अनुमति से अधिक मेमोरी चाहिए
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers उस PSD फ़ाइल पर लागू होता है जो layers: true के साथ प्लेस की जाती है
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: लिंक की गई PSD फ़ाइल अपनी फ़्लैट इमेज के रूप में प्लेस होती है; उसे उसकी स्लाइस के साथ एम्बेड करने के लिए link: false दें
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: लिंक की गई PSD फ़ाइल अपनी फ़्लैट इमेज के रूप में प्लेस होती है; link छोड़ दें या link: false दें
+@msg	the slices can't be read ({e}) and were left out	स्लाइस पढ़ी नहीं जा सकतीं ({e}) और छोड़ दी गईं
+@msg	1 slice lies outside the canvas or has no size and was left out	1 स्लाइस कैनवस के बाहर है या उसका कोई आकार नहीं है और छोड़ दी गई
+@msg	{n} slices lie outside the canvas or have no size and were left out	{n} स्लाइस कैनवस के बाहर हैं या उनका कोई आकार नहीं है और छोड़ दी गईं
+@msg	1 slice would lie outside the canvas and was left out	1 स्लाइस कैनवस के बाहर पड़ती और छोड़ दी गई
+@msg	{n} slices would lie outside the canvas and were left out	{n} स्लाइस कैनवस के बाहर पड़तीं और छोड़ दी गईं
+@msg	the slices' descriptor holds too many values	स्लाइस के डिस्क्रिप्टर में बहुत अधिक मान हैं
+@msg	the slices' descriptor has a version other than 16	स्लाइस के डिस्क्रिप्टर का संस्करण 16 नहीं है
+@msg	the slices are stored in version {v}, which isn't read	स्लाइस संस्करण {v} में सहेजी गई हैं, जो पढ़ा नहीं जाता
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	फ़ाइल में {count} स्लाइस हैं, पढ़ी जाने वाली {MAX_SLICES} से अधिक
+@msg	the slices' descriptor has no list of slices	स्लाइस के डिस्क्रिप्टर में स्लाइस की कोई सूची नहीं है
+@msg	the slices' descriptor lists something other than a slice	स्लाइस का डिस्क्रिप्टर स्लाइस के अलावा कुछ और सूचीबद्ध करता है
+@msg	a slice in the slices' descriptor has no bounds	स्लाइस के डिस्क्रिप्टर में एक स्लाइस की कोई सीमा नहीं है
+@msg	a slice's bounds in the slices' descriptor aren't numbers	स्लाइस के डिस्क्रिप्टर में एक स्लाइस की सीमाएँ संख्याएँ नहीं हैं
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	स्लाइस के एक टेक्स्ट में पढ़े जाने वाले {MAX_TEXT} अक्षरों से अधिक हैं
+@msg	the slices' descriptor nests too deep	स्लाइस का डिस्क्रिप्टर बहुत गहराई तक नेस्ट है
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	स्लाइस के डिस्क्रिप्टर में अज्ञात प्रकार का संदर्भ है ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	स्लाइस के डिस्क्रिप्टर में अज्ञात टाइप का मान है ({_1})
 @msg	the layers can't be read ({e}): the file opened as its merged image	लेयर पढ़ी नहीं जा सकतीं ({e}): फ़ाइल अपनी मर्ज की गई इमेज के रूप में खुली
 @msg	zone must be a string	zone एक स्ट्रिंग होनी चाहिए
 @msg	zone must be tab, center, left, right, top or bottom	zone को tab, center, left, right, top या bottom होना चाहिए
@@ -8900,6 +9889,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msgplural	Exported {n} document|Exported {n} documents	{n} डॉक्यूमेंट एक्सपोर्ट हुआ|{n} डॉक्यूमेंट एक्सपोर्ट हुए
 @msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	{folder} में {n} फ़ाइल एक्सपोर्ट हुई|{folder} में {n} फ़ाइलें एक्सपोर्ट हुईं
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	डॉक्यूमेंट एक ब्लीड सेट करता है जिसे यह PDF/X फ़ाइल छोड़ देती है: "डॉक्यूमेंट की ब्लीड सेटिंग्स उपयोग करें" चालू करें
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} ऑब्जेक्ट ट्रिम किनारे तक पहुँचता है पर ब्लीड से पहले रुक जाता है|{n} ऑब्जेक्ट ट्रिम किनारे तक पहुँचते हैं पर ब्लीड से पहले रुक जाते हैं
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} एक्सपोर्ट हुआ, {n} नोट के साथ: {first}|{what} एक्सपोर्ट हुआ, {n} नोट्स के साथ: {first}
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} नोट के साथ खुला: {first}|{n} नोट्स के साथ खुला: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}। {n} नोट के साथ खुला: {first}|{notice}। {n} नोट्स के साथ खुला: {first}
@@ -8912,6 +9902,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msgplural	Relinked {n} image|Relinked {n} images	{n} इमेज दोबारा लिंक हुई|{n} इमेज दोबारा लिंक हुईं
 @msgplural	Replaced {n} image|Replaced {n} images	{n} इमेज बदली गई|{n} इमेज बदली गईं
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} रिकवर किया डॉक्यूमेंट बहाल हुआ: रखने के लिए उसे सेव करें|{n} रिकवर किए डॉक्यूमेंट बहाल हुए: रखने के लिए उन्हें सेव करें
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	कॉपी किया गया, {n} नोट के साथ: {first}|कॉपी किया गया, {n} नोट्स के साथ: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	काटा गया, {n} नोट के साथ: {first}|काटा गया, {n} नोट्स के साथ: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	इमेज ट्रेस किया गया, {n} नोट के साथ: {first}|इमेज ट्रेस किया गया, {n} नोट्स के साथ: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} सेव किया गया, {n} नोट के साथ: {first}|{path} सेव किया गया, {n} नोट्स के साथ: {first}
 @msgplural	Selected {n} embedded image|Selected {n} embedded images	{n} एम्बेड की गई इमेज सिलेक्टेड|{n} एम्बेड की गई इमेज सिलेक्टेड
 @msgplural	Selected {n} image|Selected {n} images	{n} इमेज सिलेक्टेड|{n} इमेज सिलेक्टेड
@@ -9196,6 +10189,10 @@ theme	Appearance	अपीयरेंस
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
 @msg	`angle` must be from -180 to 180 degrees	`angle` -180 से 180 डिग्री तक होना चाहिए
+@msg	`roundness` must be from 0 to 100%	`roundness` 0 से 100% तक होना चाहिए
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` 0.01 से 100 pt तक होना चाहिए
+@msg	style must be "pencil" or "brush"	style "pencil" या "brush" होना चाहिए
+@msg	extend end must be "start" or "end"	extend अंत "start" या "end" होना चाहिए
 @msg	`roundness` must be from 1 to 100%	`roundness` 1 से 100% तक होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
 	Weed Box and Lines…	वीड बॉक्स और लाइनें…
@@ -9254,6 +10251,7 @@ theme	Appearance	अपीयरेंस
 @msg	Too many Revolve faces for visibility evaluation	दृश्यता की गणना के लिए रिवॉल्व के फ़ेस बहुत अधिक हैं
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft स्वॉच एक्सचेंज फ़ाइल से अधिकतम {ASE_MAX_ENTRIES} रंग और ग्रुप पढ़ता है, और इस लाइब्रेरी में {entries} हैं
 @msg	WebP encoding failed: {e}	WebP एन्कोडिंग विफल: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP एन्कोडिंग विफल: छवि लॉसी WebP के लिए बहुत बड़ी है: रिज़ॉल्यूशन कम करें या लॉसलेस चुनें
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index` पूरी संख्या होनी चाहिए
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` smallThumb, mediumThumb, largeThumb, smallList या largeList होता है
@@ -9347,3 +10345,135 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+# Tool cards (General › Show Tool Cards): one sentence on what each tool does.
+	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	टूलबार का टूल और उसकी कुंजियाँ क्या करती हैं, यह टिप की जगह एक कार्ड में दिखाता है; इसके लिए टूल युक्तियाँ दिखाएँ चालू होना चाहिए।
+	Selects whole objects and groups to move, resize or rotate them.	पूरे ऑब्जेक्ट और समूह चुनता है, ताकि उन्हें खिसकाया, आकार बदला या घुमाया जा सके।
+	Selects anchor points and path segments to reshape a path.	पाथ का आकार बदलने के लिए एंकर पॉइंट और पाथ सेगमेंट चुनता है।
+	Draws paths point by point, with straight segments and smooth curves.	सीधे सेगमेंट और चिकने वक्रों के साथ बिंदु-दर-बिंदु पाथ बनाता है।
+	Draws smooth curves through the points you click.	आपके क्लिक किए गए बिंदुओं से होकर चिकने वक्र बनाता है।
+	Adds text at a point, or in a frame you drag.	किसी बिंदु पर, या आपके द्वारा खींचे गए फ़्रेम में टेक्स्ट जोड़ता है।
+	Draws rectangles and squares.	आयत और वर्ग बनाता है।
+	Draws rectangles with rounded corners.	गोल कोनों वाले आयत बनाता है।
+	Draws ellipses and circles.	दीर्घवृत्त और वृत्त बनाता है।
+	Draws polygons with sides of equal length.	बराबर लंबाई की भुजाओं वाले बहुभुज बनाता है।
+	Draws stars.	तारे बनाता है।
+	Turns objects around a reference point.	ऑब्जेक्ट को किसी संदर्भ बिंदु के चारों ओर घुमाता है।
+	Flips objects across an axis through a reference point.	ऑब्जेक्ट को संदर्भ बिंदु से होकर जाने वाले अक्ष पर पलटता है।
+	Resizes objects from a reference point.	संदर्भ बिंदु से ऑब्जेक्ट का आकार बदलता है।
+	Slants objects from a reference point.	संदर्भ बिंदु से ऑब्जेक्ट को तिरछा करता है।
+	Moves the view of the document.	दस्तावेज़ के दृश्य को खिसकाता है।
+	Magnifies or reduces the view.	दृश्य को बड़ा या छोटा करता है।
+	Copies the color and other attributes of one object to the selection.	एक ऑब्जेक्ट का रंग और अन्य गुण चयन पर कॉपी करता है।
+	Sets the direction and length of a gradient.	ग्रेडिएंट की दिशा और लंबाई सेट करता है।
+	Creates, selects and resizes artboards.	आर्टबोर्ड बनाता है, चुनता है और उनका आकार बदलता है।
+	Changes the width of a stroke along its length.	स्ट्रोक की चौड़ाई उसकी लंबाई के साथ बदलता है।
+	Bends art by dragging pins placed on it.	आर्ट पर लगाए गए पिन खींचकर उसे मोड़ता है।
+	Pushes the outlines of paths in the direction you drag.	पाथ की रूपरेखा को उस दिशा में धकेलता है जिधर आप खींचते हैं।
+	Twists the outlines of paths into swirls.	पाथ की रूपरेखा को भँवरों में मरोड़ता है।
+	Pulls the outlines of paths in toward the brush.	पाथ की रूपरेखा को ब्रश की ओर अंदर खींचता है।
+	Pushes the outlines of paths out from the brush.	पाथ की रूपरेखा को ब्रश से बाहर की ओर धकेलता है।
+	Adds curved details along the outlines of paths.	पाथ की रूपरेखा के साथ घुमावदार विवरण जोड़ता है।
+	Adds spiky details along the outlines of paths.	पाथ की रूपरेखा के साथ नुकीले विवरण जोड़ता है।
+	Adds wrinkles along the outlines of paths.	पाथ की रूपरेखा के साथ सिलवटें जोड़ता है।
+	Moves, copies and resizes objects on the perspective grid.	पर्सपेक्टिव ग्रिड पर ऑब्जेक्ट को खिसकाता, कॉपी करता और उनका आकार बदलता है।
+	Makes a series of steps between two or more objects.	दो या अधिक ऑब्जेक्ट के बीच चरणों की एक शृंखला बनाता है।
+	Places dimension lines that show measured lengths.	मापी गई लंबाई दिखाने वाली आयाम रेखाएँ लगाता है।
+	Tap	जल्दी दबाना
+	Clear Hold	होल्ड साफ़ करें
+	Hold Shortcuts	होल्ड शॉर्टकट
+	Hold Shortcut Delay	होल्ड शॉर्टकट विलंब
+	How hold shortcuts work	होल्ड शॉर्टकट कैसे काम करते हैं
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	क्लिक करें, फिर इसके लिए दबाए रखने वाली कुंजी दबाएँ (Esc रद्द)। कुंजी दबाए रखने पर यह चलता है; जल्दी से दबाने पर कुंजी का अपना शॉर्टकट चलता है।
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	किसी कुंजी को जल्दी से दबाने पर उसका शॉर्टकट चलता है। कुंजी को विलंब जितनी देर दबाए रखने पर इसके बजाय उसके होल्ड कॉलम का टूल या कमांड चलता है। होल्ड शॉर्टकट कोई अक्षर, अंक या विराम चिह्न वाली कुंजी होती है, अकेले या Shift के साथ।
+@msg	Hold {_1} is already used by {_2}	होल्ड {_1} का उपयोग पहले से ही {_2} द्वारा किया जाता है
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	होल्ड शॉर्टकट ऐसी कुंजी होती है जो अकेले या Shift के साथ कोई कैरेक्टर टाइप करती है ({shown} में Cmd, Ctrl या Alt है)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} होल्ड शॉर्टकट नहीं हो सकता: कोई अक्षर, अंक या विराम चिह्न वाली कुंजी उपयोग करें
+	Check	चेक करें
+	Check Fold Lines	फ़ोल्ड लाइनें चेक करें
+@msg	No cut lines are in the selection.	सिलेक्शन में कोई कट लाइन नहीं है।
+@msg	No cut lines are in the document.	डॉक्यूमेंट में कोई कट लाइन नहीं है।
+@msg	The cut lines do not enclose an area.	कट लाइनें कोई एरिया नहीं घेरतीं।
+@msg	A cut line ends without meeting another cut line.	एक कट लाइन किसी दूसरी कट लाइन से मिले बिना खत्म हो जाती है।
+@msg	A gap between cut lines was closed.	कट लाइनों के बीच का गैप बंद कर दिया गया।
+@msg	The fold lines are too complex to check.	फ़ोल्ड लाइनें चेक करने के लिए बहुत जटिल हैं।
+@msg	A cut line and a crease lie on top of each other.	एक कट लाइन और एक क्रीज़ लाइन एक-दूसरे के ऊपर हैं।
+@msg	No cut lines are among the given objects.	दिए गए ऑब्जेक्ट में कोई कट लाइन नहीं है।
+@msg	Two fold lines lie on top of each other.	दो फ़ोल्ड लाइनें एक-दूसरे के ऊपर हैं।
+@msg	A crease ends inside a panel.	एक क्रीज़ लाइन किसी पैनल के अंदर खत्म होती है।
+@msg	A crease does not divide two panels.	एक क्रीज़ लाइन दो पैनलों को अलग नहीं करती।
+@msg	A crease lies outside the cut outline, wholly or in part.	एक क्रीज़ लाइन पूरी तरह या आंशिक रूप से कट आउटलाइन के बाहर है।
+@msg	The pieces of a hinge are not on one straight line.	एक हिंज के हिस्से एक सीधी लाइन पर नहीं हैं।
+@msg	A gap between cut lines is too narrow to tell apart.	कट लाइनों के बीच का गैप पहचानने के लिए बहुत पतला है।
+@msg	A cut-out area holds other fold lines or another blank.	एक कट-आउट एरिया में दूसरी फ़ोल्ड लाइनें या दूसरा ब्लैंक है।
+@msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
+@msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Nature Icons	प्रकृति चिह्न
+	Flower	फूल
+	Tree	पेड़
+	Mountain	पर्वत
+	Ornamental	अलंकरण
+	Scrollwork	अलंकारी घुमाव
+	Filigree Arrow	जालीदार तीर
+	Petal Sweep	पंखुड़ियों का घुमाव
+	Twin Curl	दोहरा घुमाव
+	Vector Packs	वेक्टर पैक
+	Compass Rose	दिशासूचक गुलाब
+	Botanical Sprig	वनस्पति टहनी
+	Facet Diamond	पहलूदार हीरा
+	Tide Crest	लहर की चोटी
+	Leaf Vine	पत्तों की बेल
+	Blossom Chain	फूलों की शृंखला
+	Pennant Garland	झंडियों की माला
+	Lantern String	लालटेन की शृंखला
+	Orbit Lines	कक्षीय रेखाएँ
+	Petal Garland	पंखुड़ी माला
+	Lattice Braid	जाली चोटी
+	Facet Sweep	पहलूदार स्ट्रोक
+	Artistic Brushes	कलात्मक ब्रश
+	Paint	चित्रकारी
+	Flat Sweep	सपाट फेरा
+	Dry Drag	सूखा घिसाव
+	Loaded Stroke	गाढ़ा ब्रश स्ट्रोक
+	Fan Sweep	पंखे जैसा फेरा
+	Engraving	नक्काशी
+	Fine Hatching	बारीक रेखांकन
+	Dense Hatching	घना रेखांकन
+	Tapered Hatching	पतला होता रेखांकन
+	Broken Hatching	टूटा रेखांकन
+	Image Brush	छवि ब्रश
+	Soft Bloom	कोमल खिलावट
+	Halftone Field	हाफ़टोन क्षेत्र
+	Solar Grain	सौर कण
+	Color Flecks	रंगीन छींटे
+	Paper Cutouts	कागज़ की कतरनें
+	Coral Layers	कोरल परतें
+	Mint Layers	मिंट परतें
+	Midnight Layers	आधी रात की परतें
+	Sunflower Sheet	सूरजमुखी शीट
+	Rose Layers	गुलाबी परतें
+	Monochrome Stack	मोनोक्रोम स्टैक
+	Dashed Arrow	बिंदीदार तीर
+	Fine Stipple	बारीक बिंदु छायांकन
+	Dense Stipple	घना बिंदु छायांकन
+	Soft Stipple	हल्का बिंदु छायांकन
+	Bold Stipple	गाढ़ा बिंदु छायांकन
+	Pressure Sensitive	दबाव संवेदनशील
+	Flex Ribbon	लचीला फीता
+	Pulse Stroke	स्पंदित रेखा
+	Round Flow	गोल प्रवाह
+	Chisel Flow	तिरछा प्रवाह
+	Fold Preview	फ़ोल्ड प्रीव्यू
+	Fold	फ़ोल्ड
+	Show Fold Lines	फ़ोल्ड लाइनें दिखाएँ
+	Three-Quarter	तीन-चौथाई
+	Open a document to preview its folded shape.	इसका फ़ोल्ड किया हुआ आकार देखने के लिए कोई डॉक्यूमेंट ओपन करें।
+@msg	Check the fold lines first.	पहले फ़ोल्ड लाइनें चेक करें।
+@msg	Panels: {panels}, hinges: {hinges}	पैनल: {panels}, हिंज: {hinges}
+@msg	Other blanks not shown: {count}	दूसरे ब्लैंक नहीं दिखाए गए: {count}
+@msg	A joint does not close by {gap} pt.	एक जोड़ {gap} pt से बंद नहीं होता।
+@msg	Two panels pass through each other.	दो पैनल एक-दूसरे के आर-पार जाते हैं।
+
+# #5804 native-picked raster editor (draft translations; native review welcome).
+	Edit Original with:	मूल फ़ाइल इसमें एडिट करें:
+file-filter	Applications	ऐप्स

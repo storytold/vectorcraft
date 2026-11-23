@@ -28,14 +28,13 @@ use crate::{VectorcraftApp, widgets};
 pub const KIND: &str = "graphData";
 
 /// The sheet's size: a row of labels over a graph's categories, a column of labels before its
-/// series; the least it shows; a cell's longest text.
+/// series; the least it shows.
 const MAX_ROWS: usize = MAX_GRAPH_CATEGORIES + 1;
 const MAX_COLS: usize = MAX_GRAPH_SERIES + 1;
 const MIN_ROWS: usize = 8;
 const MIN_COLS: usize = 6;
-const MAX_CELL: usize = 256;
 /// The largest file Import Data reads, 1 MB (1,048,576 bytes), the same as Import Data Sets'.
-const MAX_IMPORT_BYTES: usize = 1 << 20;
+const MAX_IMPORT_BYTES: usize = vectorcraft_engine::cmd::MAX_GRAPH_DATA_FILE;
 /// The Cell Style limits (Adjust column width and decimal digits).
 const MAX_DECIMALS: u64 = 10;
 const MAX_WIDTH: u64 = 20;
@@ -105,75 +104,25 @@ pub(crate) fn grid_from_data(v: &Value) -> Grid {
     grid
 }
 
-/// The sheet as `graph.setData` takes it: series labels, category labels (none when all are blank)
-/// and the values (a blank cell, or text that isn't a number, has none), without the empty rows and
-/// columns past the data.
+/// The sheet as `graph.setData` takes it ([`vectorcraft_engine::cmd::graph_data_from_grid`]),
+/// which Import Data Sets' `%` columns also use.
 pub(crate) fn data_from_grid(grid: &Grid) -> Value {
-    let filled = |s: &String| !s.trim().is_empty();
-    // At most a graph's rows and columns, as a file gives (`grid_from_text`): a grid sent by
-    // automation is any size, and the values are their product.
-    let grid = &grid[..grid.len().min(MAX_ROWS)];
-    let rows = grid.iter().rposition(|r| r.iter().take(MAX_COLS).any(filled)).map_or(1, |i| i + 1).max(1);
-    let cols = grid.iter().take(rows).filter_map(|r| r.iter().take(MAX_COLS).rposition(filled)).max().map_or(1, |i| i + 1).max(1);
-    let label = |s: &str| {
-        let s = s.trim();
-        // A label typed in straight quotes (as the CSV form takes a number as a label) is the text inside.
-        s.strip_prefix('"').and_then(|t| t.strip_suffix('"')).unwrap_or(s).to_string()
-    };
-    // Series labels up to the last one given (none when all are blank).
-    let mut series: Vec<String> = (1..cols).map(|c| label(&cell(grid, 0, c))).collect();
-    while series.last().is_some_and(String::is_empty) {
-        series.pop();
-    }
-    let mut categories: Vec<String> = (1..rows).map(|r| label(&cell(grid, r, 0))).collect();
-    if categories.iter().all(String::is_empty) {
-        categories.clear();
-    }
-    let values: Vec<Vec<Value>> = (1..rows)
-        .map(|r| {
-            (1..cols)
-                .map(|c| {
-                    let t = cell(grid, r, c);
-                    t.trim().parse::<f64>().ok().filter(|v| v.is_finite() && !t.trim().starts_with('"')).map_or(Value::Null, |v| json!(v))
-                })
-                .collect()
-        })
-        .collect();
-    json!({ "series": series, "categories": categories, "rows": values })
+    vectorcraft_engine::cmd::graph_data_from_grid(grid)
 }
 
-/// Text from a file or the clipboard as cells: tab-separated when any line holds a tab, else
-/// comma-separated (decided once, so a label with a comma in a tab-separated file stays whole), at
-/// most a graph's rows and columns.
+/// Text from a file or the clipboard as cells ([`vectorcraft_engine::cmd::graph_grid_from_text`]).
 pub(crate) fn grid_from_text(text: &str) -> Grid {
-    let sep = if text.contains('\t') { '\t' } else { ',' };
-    text.lines().take(MAX_ROWS).map(|l| l.trim_end_matches('\r').split(sep).take(MAX_COLS).map(|c| clean(c.trim())).collect()).collect()
+    vectorcraft_engine::cmd::graph_grid_from_text(text)
 }
 
-/// A text file's bytes as text: UTF-16 with its byte-order mark (spreadsheets' "Unicode Text"),
-/// else UTF-16 without one when the bytes hold NUL bytes and Import Data Sets' rule gives them a
-/// byte order ([`vectorcraft_engine::cmd::utf16_order_without_mark`]), else UTF-8 with or without
-/// one. UTF-16 is read as it is after a byte-order mark: an odd last byte is left out, and an
-/// unpaired surrogate reads as U+FFFD.
+/// A text file's bytes as text ([`vectorcraft_engine::cmd::graph_data_text`]).
 pub(crate) fn decode(bytes: &[u8]) -> String {
-    let utf16 = |rest: &[u8], le: bool| {
-        let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|p| if le { u16::from_le_bytes(*p) } else { u16::from_be_bytes(*p) }).collect();
-        String::from_utf16_lossy(&units)
-    };
-    match bytes {
-        [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
-        [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
-        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
-        _ => match bytes.contains(&0).then(|| vectorcraft_engine::cmd::utf16_order_without_mark(bytes)).flatten() {
-            Some(le) => utf16(bytes, le),
-            None => String::from_utf8_lossy(bytes).into_owned(),
-        },
-    }
+    vectorcraft_engine::cmd::graph_data_text(bytes)
 }
 
-/// A cell's text: one line (tabs and line breaks become spaces), at most MAX_CELL characters.
+/// A cell's text ([`vectorcraft_engine::cmd::graph_cell_text`]).
 fn clean(s: &str) -> String {
-    s.chars().map(|c| if matches!(c, '\t' | '\r' | '\n') { ' ' } else { c }).take(MAX_CELL).collect()
+    vectorcraft_engine::cmd::graph_cell_text(s)
 }
 
 fn cell(grid: &[Vec<String>], r: usize, c: usize) -> String {

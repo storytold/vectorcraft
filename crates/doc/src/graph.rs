@@ -575,6 +575,9 @@ pub const DEFAULT_FILLED_LINE_WIDTH: f64 = 3.0;
 pub const MIN_FILLED_LINE_WIDTH: f64 = 0.01;
 pub const MAX_FILLED_LINE_WIDTH: f64 = 1000.0;
 
+/// The weight of the black outline Draw Filled Lines draws around each band, in points.
+pub const FILLED_LINE_OUTLINE_WIDTH: f64 = 0.25;
+
 impl GraphSpec {
     /// How wide Draw Filled Lines draws a line, in points: [`Self::line_width`], else [`DEFAULT_FILLED_LINE_WIDTH`]. A
     /// width a file gives outside [`MIN_FILLED_LINE_WIDTH`] to [`MAX_FILLED_LINE_WIDTH`], or not finite, draws the

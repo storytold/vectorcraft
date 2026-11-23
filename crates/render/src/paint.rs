@@ -157,30 +157,72 @@ pub fn image_decodes() -> u64 {
 
 /// [`decode_in_room`]'s image or error.
 #[cfg(test)]
-pub(crate) fn decode_within_allowance(bytes: &[u8]) -> image::ImageResult<image::DynamicImage> {
+pub(crate) fn decode_within_allowance(bytes: &[u8]) -> Result<image::DynamicImage, DecodeError> {
     decode_in_room(bytes).map_err(|(e, _)| e)
+}
+
+/// Why [`decode_in_room`] gave no image.
+#[derive(Debug)]
+pub(crate) enum DecodeError {
+    /// The image takes more than the decode allowance, or than the room the images being painted
+    /// leave: it may be read at [`reduced_size`].
+    Limit(String),
+    /// Its pixels can't be read.
+    Unreadable(String),
+}
+
+impl std::fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecodeError::Limit(why) => write!(f, "the image is too large to decode: {why}"),
+            DecodeError::Unreadable(why) => write!(f, "the image's pixels can't be read: {why}"),
+        }
+    }
+}
+
+/// The formats the renderer draws, told from their bytes: those the image crate read for it
+/// before craft-image-codecs did (#778). TGA has no signature to tell it by and was never drawn.
+fn drawn_format(bytes: &[u8]) -> Option<craft_image_codecs::Format> {
+    use craft_image_codecs::Format as F;
+    craft_image_codecs::detect(bytes).filter(|f| matches!(f, F::Png | F::Jpeg | F::Gif | F::WebP | F::Tiff | F::Bmp))
+}
+
+/// `bytes` decoded as `format` within `allowance` bytes: the pixels as stored, not turned upright,
+/// as the image crate gave them.
+fn decode_as(format: craft_image_codecs::Format, bytes: &[u8], allowance: u64) -> Result<image::DynamicImage, craft_image_codecs::CodecError> {
+    vectorcraft_doc::decode::decode_image(format, bytes, allowance).map(|(img, _)| img)
 }
 
 /// `bytes` decoded within [`MAX_DECODE_ALLOC`], counted as RGBA: the image's size is read from its
 /// header first, and an image of more than that as RGBA gets a limit error before anything is
 /// decoded (#1717). A failure comes with why the image gave no pixels ([`room_for`]).
-fn decode_in_room(bytes: &[u8]) -> Result<image::DynamicImage, (image::ImageError, Undecoded)> {
+fn decode_in_room(bytes: &[u8]) -> Result<image::DynamicImage, (DecodeError, Undecoded)> {
     let allowance = allowance();
-    let unreadable = |e| (e, Undecoded::Unreadable);
-    let reader = || -> image::ImageResult<_> {
-        let mut r = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(allowance);
-        r.limits(limits);
-        Ok(r)
+    let unreadable = |e: String| (DecodeError::Unreadable(e), Undecoded::Unreadable);
+    let format = drawn_format(bytes).ok_or_else(|| unreadable("not an image the renderer draws".into()))?;
+    let (w, h) = match vectorcraft_doc::header_size(bytes) {
+        Some(size) => size,
+        None => {
+            return Err(match craft_image_codecs::probe_size(bytes) {
+                Err(craft_image_codecs::CodecError::LimitExceeded(e)) => (DecodeError::Limit(e), Undecoded::Unreadable),
+                Err(e) => unreadable(e.to_string()),
+                Ok(_) => unreadable("the image's size can't be read".into()),
+            });
+        }
     };
-    let (w, h) = reader().and_then(|r| r.into_dimensions()).map_err(unreadable)?;
-    let bytes = (u64::from(w) * u64::from(h)).saturating_mul(4);
+    let rgba = (u64::from(w) * u64::from(h)).saturating_mul(4);
     let pinned = crate::images::store().pinned_bytes() as u64;
-    if let Err(why) = room_for(bytes, pinned) {
-        return Err((image::ImageError::Limits(image::error::LimitError::from_kind(image::error::LimitErrorKind::InsufficientMemory)), why));
+    if let Err(why) = room_for(rgba, pinned) {
+        return Err((DecodeError::Limit(format!("{w} × {h} pixels take {rgba} bytes as RGBA")), why));
     }
-    reader().and_then(|r| r.decode()).map_err(unreadable)
+    // Within the allowance as RGBA and as decoded, a limit the decoder meets is a file that can't
+    // hold the pixels its header declares: they can't be read.
+    let samples_fit = vectorcraft_doc::decode::decoded_layout(bytes, format)
+        .is_some_and(|(_, _, per_pixel)| (u64::from(w) * u64::from(h)).saturating_mul(per_pixel) <= allowance);
+    decode_as(format, bytes, allowance).map_err(|e| match e {
+        craft_image_codecs::CodecError::LimitExceeded(m) if !samples_fit => (DecodeError::Limit(m), Undecoded::Unreadable),
+        e => unreadable(e.to_string()),
+    })
 }
 
 /// Whether an image of `rgba` bytes may be decoded while the images being painted hold `pinned`
@@ -240,40 +282,33 @@ struct Reduction {
 
 /// [`reduced_size`]'s reading of `bytes` within `allowance`.
 fn reduction(bytes: &[u8], allowance: u64) -> Option<Reduction> {
-    use image::ImageDecoder as _;
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
-    let format = reader.format()?;
-    if !matches!(format, image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::Gif | image::ImageFormat::WebP) {
-        return None;
-    }
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(allowance);
-    reader.limits(limits);
-    let d = reader.into_decoder().ok()?;
-    let (w, h) = d.dimensions();
+    use craft_image_codecs::Format as F;
+    let format = drawn_format(bytes).filter(|f| matches!(f, F::Png | F::Jpeg | F::Gif | F::WebP))?;
+    let (w, h, per_pixel) = vectorcraft_doc::decode::decoded_layout(bytes, format)?;
     let pixels = u64::from(w) * u64::from(h);
+    let total_bytes = pixels.saturating_mul(per_pixel);
     // An image of more pixels than the allowance has bytes (four times what it holds as RGBA) is
     // not read.
-    if pixels == 0 || pixels > allowance || (pixels.saturating_mul(4) <= allowance && d.total_bytes() <= allowance) {
+    if pixels == 0 || pixels > allowance || (pixels.saturating_mul(4) <= allowance && total_bytes <= allowance) {
         return None;
     }
     let to = fitted_dims(w, h, allowance)?;
     // A PNG that isn't interlaced or animated (and upright in pre-pixel EXIF) is read a row at a time when the reader's buffers fit the allowance.
-    let row_scratch = if format == image::ImageFormat::Png {
+    let row_scratch = if format == F::Png {
         let streamed = craft_image_codecs::PngDecodeRows::new_streaming(bytes, &png_streaming_limits(allowance))
             .ok()
             .filter(|dec| dec.streamable())
             .and_then(|dec| png_row_scratch(&dec.header()));
-        streamed.or_else(|| png_row_scratch_from_header(bytes, w, h, d.total_bytes())).filter(|&s| s <= allowance)
+        streamed.or_else(|| png_row_scratch_from_header(bytes, w, h, total_bytes)).filter(|&s| s <= allowance)
     } else {
         None
     };
     let rows = row_scratch.is_some();
     let scratch = row_scratch.unwrap_or_else(|| {
-        let band = u64::from(BAND) * u64::from(w) * (u64::from(d.color_type().bytes_per_pixel()) + 4);
-        d.total_bytes().saturating_add(band)
+        let band = u64::from(BAND) * u64::from(w) * (per_pixel + 4);
+        total_bytes.saturating_add(band)
     });
-    (rows || d.total_bytes() <= allowance).then_some(Reduction { size: (w, h), to, rows, scratch })
+    (rows || total_bytes <= allowance).then_some(Reduction { size: (w, h), to, rows, scratch })
 }
 
 /// Streaming retains rows, not the declared full image. Preserve the renderer's source-pixel
@@ -439,11 +474,7 @@ fn shrunk_with_png_limits(bytes: &[u8], r: &Reduction, png_limits: &craft_image_
                 .ok()?;
         }
     } else {
-        let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(allowance());
-        reader.limits(limits);
-        let img = reader.decode().ok()?;
+        let img = decode_as(drawn_format(bytes)?, bytes, allowance()).ok()?;
         let (w, h) = (img.width(), img.height());
         for y in (0..h).step_by(BAND as usize) {
             let band = img.crop_imm(0, y, w, BAND.min(h - y)).to_rgba8();
@@ -563,7 +594,7 @@ fn decode_or_reduction(bytes: &[u8]) -> Result<image::DynamicImage, Result<Reduc
     DECODES.with(|n| n.set(n.get() + 1));
     match decode_in_room(bytes) {
         Ok(img) => Ok(img),
-        Err((image::ImageError::Limits(_), Undecoded::Unreadable)) => Err(reduction(bytes, allowance()).ok_or(Undecoded::Unreadable)),
+        Err((DecodeError::Limit(_), Undecoded::Unreadable)) => Err(reduction(bytes, allowance()).ok_or(Undecoded::Unreadable)),
         Err((_, why)) => Err(Err(why)),
     }
 }
@@ -728,6 +759,78 @@ mod tests {
         let reduced = shrunk_with_png_limits(&bytes, &Reduction { size: (8, 1), to: (4, 1), rows: true, scratch: 0 }, &limits).unwrap();
         assert_eq!((reduced.width(), reduced.height()), (4, 1));
         assert!(red_at_its_coverage(&reduced));
+    }
+
+    /// The renderer's decoding through craft-image-codecs gives the pixels the image crate gave it
+    /// (#778): the same layout and samples for PNGs of each color type and depth, GIF, WebP, TIFF and
+    /// BMP, and JPEG samples within two steps (the two decoders' IDCTs round differently). The EXIF
+    /// orientation is left to the caller, as before.
+    #[test]
+    fn decoded_pixels_are_those_the_image_crate_gave() {
+        use image::{DynamicImage as D, ImageFormat as F};
+        let rgba = image::RgbaImage::from_fn(13, 7, |x, y| image::Rgba([(x * 19) as u8, (y * 37) as u8, ((x + y) * 11) as u8, (x * y * 5) as u8]));
+        let rgba16 = image::ImageBuffer::<image::Rgba<u16>, _>::from_fn(13, 7, |x, y| {
+            image::Rgba([(x * 4_999) as u16, (y * 9_001) as u16, 300, 65_535 - (x * y) as u16])
+        });
+        let images = [
+            D::ImageRgba8(rgba.clone()),
+            D::ImageRgb8(D::ImageRgba8(rgba.clone()).to_rgb8()),
+            D::ImageLuma8(D::ImageRgba8(rgba.clone()).to_luma8()),
+            D::ImageLumaA8(D::ImageRgba8(rgba.clone()).to_luma_alpha8()),
+            D::ImageRgba16(rgba16.clone()),
+            D::ImageRgb16(D::ImageRgba16(rgba16.clone()).to_rgb16()),
+            D::ImageLuma16(D::ImageRgba16(rgba16.clone()).to_luma16()),
+            D::ImageLumaA16(D::ImageRgba16(rgba16).to_luma_alpha16()),
+        ];
+        let encoded = |img: &D, f: F| {
+            let mut out = Vec::new();
+            img.write_to(&mut std::io::Cursor::new(&mut out), f).ok().map(|()| out)
+        };
+        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+        for img in &images {
+            for f in [F::Png, F::Tiff, F::Bmp, F::Gif, F::WebP, F::Jpeg] {
+                if let Some(bytes) = encoded(img, f) {
+                    files.push((format!("{f:?} {:?}", img.color()), bytes));
+                }
+            }
+        }
+        // A palette PNG with a transparent entry and a 1-bit gray PNG, as other writers make them.
+        let png = |w: u32, h: u32, depth: u8, color: u8, extra: &[&[u8]], rows: &[u8]| {
+            let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+            std::io::Write::write_all(&mut z, rows).unwrap();
+            let idat = [&b"IDAT"[..], &z.finish().unwrap()].concat();
+            let ihdr = [&b"IHDR"[..], &w.to_be_bytes(), &h.to_be_bytes(), &[depth, color, 0, 0, 0]].concat();
+            let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+            for chunk in [&ihdr[..]].into_iter().chain(extra.iter().copied()).chain([&idat[..], b"IEND"]) {
+                out.extend((chunk.len() as u32 - 4).to_be_bytes());
+                out.extend(chunk);
+                let mut crc = flate2::Crc::new();
+                crc.update(chunk);
+                out.extend(crc.sum().to_be_bytes());
+            }
+            out
+        };
+        let plte: &[u8] = b"PLTE\xff\0\0\0\xff\0\0\0\xff";
+        files.push(("indexed PNG".into(), png(4, 2, 8, 3, &[plte, b"tRNS\xff\0"], &[0, 0, 1, 2, 1, 0, 2, 1, 0, 0])));
+        files.push(("indexed PNG, opaque".into(), png(4, 2, 8, 3, &[plte], &[0, 0, 1, 2, 1, 0, 2, 1, 0, 0])));
+        files.push(("1-bit PNG".into(), png(10, 2, 1, 0, &[], &[0, 0b1010_1100, 0b0100_0000, 0, 0b0011_1111, 0b1100_0000])));
+        assert!(files.len() > 20, "{}", files.len());
+        for (what, bytes) in &files {
+            let want = image::load_from_memory(bytes).unwrap();
+            let got = decode_in_room(bytes).map_err(|(e, _)| e).unwrap();
+            let jpeg = what.starts_with("Jpeg");
+            if !jpeg {
+                assert_eq!(got.color(), want.color(), "{what}");
+            }
+            let (g, w) = (got.to_rgba16(), want.to_rgba16());
+            assert_eq!(g.dimensions(), w.dimensions(), "{what}");
+            let tolerance = if jpeg { 2 * 257 } else { 0 };
+            let worst = g.as_raw().iter().zip(w.as_raw()).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+            assert!(worst <= tolerance, "{what}: samples {worst} apart");
+            // Read past the allowance at reduced size, the same image is read whole first.
+            let whole = shrunk(bytes, &Reduction { size: w.dimensions(), to: w.dimensions(), rows: false, scratch: 0 }).unwrap();
+            assert_eq!((u32::from(whole.width()), u32::from(whole.height())), w.dimensions(), "{what}");
+        }
     }
 
     /// Opaque red beside clear black, every other column of a `w` × 1 image.

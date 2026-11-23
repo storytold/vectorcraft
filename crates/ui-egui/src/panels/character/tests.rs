@@ -343,6 +343,57 @@ fn highlight_commands_focus_the_font_kerning_and_tracking_fields() {
     assert_eq!(app.character_focus, None);
 }
 
+/// Type › Size › Other… (Highlight Font Size) shows the Character panel and gives its Font Size
+/// field the keyboard focus with the value selected: what is typed replaces it, Enter applies it
+/// as one undo step, and a selection of different sizes takes the one size typed into the blank
+/// field. Without selected type the panel shows, the command fails and nothing takes the focus.
+#[test]
+fn highlight_font_size_focuses_the_font_size_field() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "AVAX", "size": 12})).unwrap()["id"].clone();
+    let b = app.run("text.create", json!({"x": 20, "y": 120, "text": "Wave", "size": 20})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    let typed = |text: &str| {
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        vec![egui::Event::Text(text.into()), enter]
+    };
+    let size = |app: &VectorcraftApp| shared(app, |s| s.size);
+    app.run("select.set", json!({"ids": [a.clone()]})).unwrap();
+    assert_eq!(app.run("type.highlightFontSize", json!({})).unwrap(), json!({"field": "fontSize"}));
+    assert!(crate::panel_docking::showing(&app.ui, "character"), "the panel shows");
+    frame(&mut app, vec![]);
+    assert_eq!(app.character_focus, None, "the Font Size field took the focus");
+    frame(&mut app, typed("33"));
+    assert_eq!(size(&app), Some(33.0), "typing replaced the size");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(size(&app), Some(12.0), "one undo step restores the size");
+    // Choosing Other again while the field holds typed text that is not applied selects all of it.
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, vec![egui::Event::Text("999".into())]);
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, typed("18"));
+    assert_eq!(size(&app), Some(18.0), "typing replaced the text typed before");
+    ctx.memory_mut(|m| m.stop_text_input());
+    // Different sizes: the field is blank, and the size typed applies to every selected object.
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert_eq!(size(&app), None);
+    app.run("type.highlightFontSize", json!({})).unwrap();
+    frame(&mut app, vec![]);
+    frame(&mut app, typed("16"));
+    assert_eq!(size(&app), Some(16.0), "both objects take the size typed");
+    // No type selected: the panel shows, the command fails and nothing is armed.
+    app.run("select.none", json!({})).unwrap();
+    assert!(app.run("type.highlightFontSize", json!({})).is_err());
+    assert_eq!(app.character_focus, None);
+}
+
 /// A variable font gets the Variable Font button, which opens one slider per axis named as the
 /// font names it; a drag along one sets that axis of the selected type in one undo step.
 #[test]
@@ -530,6 +581,88 @@ fn small_caps_superscript_and_subscript_buttons_set_and_show_the_text() {
     assert_eq!(script_buttons(&ctx, &mut app).1, [false, true, false]);
     app.session.set_tool_option("select", &json!({"start": 0, "end": 4}));
     assert_eq!(script_buttons(&ctx, &mut app).1, [false; 3]);
+}
+
+/// Superscript and Subscript decide from the characters they change. At a Type tool caret they
+/// change every character of the text, so text that is only partly superscript turns superscript
+/// everywhere, with the caret after a superscript character too, and the button there shows off.
+/// Superscripts in different proportions count as superscript, so a press turns them off.
+#[test]
+fn superscript_and_subscript_decide_from_the_characters_they_change() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "x2", "size": 12})).unwrap()["id"].clone();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "position": "superscript"})).unwrap();
+    app.run("select.set", json!({"ids": [id.clone()]})).unwrap();
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 2, "end": 2}));
+    assert_eq!(text_editing(&app).map(|(_, a, b)| (a, b)), Some((2, 2)));
+    let ctx = egui::Context::default();
+    assert_eq!(script_buttons(&ctx, &mut app).1, [false; 3], "the text is not all superscript");
+    assert_eq!(app.run("type.superscript", json!({})).unwrap(), json!("superscript"));
+    assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "superscript"), "{:?}", scripts(&app, &id));
+    app.run("type.superscript", json!({})).unwrap();
+    assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "normal"), "{:?}", scripts(&app, &id));
+
+    // A file whose two superscript runs have different proportions.
+    app.select_tool("selection");
+    app.run("text.setRangeStyle", json!({"id": id, "position": "superscript"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 1, "end": 2, "underline": true})).unwrap();
+    let mut d = (*app.session.active().unwrap().doc).clone();
+    if let Some(NodeKind::Text(t)) = d.node_mut(NodeId(id.as_u64().unwrap())).map(|n| &mut n.kind) {
+        assert_eq!(t.runs.len(), 2);
+        t.runs[0].style.position = vectorcraft_doc::CharPosition::Superscript(vectorcraft_doc::ScriptMetrics { size: 50.0, position: 40.0 });
+    }
+    let data = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d));
+    app.run("document.open", json!({"name": "scripts.vectorcraft", "dataBase64": data})).unwrap();
+    app.run("select.set", json!({"ids": [id.clone()]})).unwrap();
+    let runs = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.position).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    let before = runs(&app);
+    assert!(before.len() == 2 && before[0] != before[1] && before.iter().all(|p| p.id() == "superscript"), "{before:?}");
+    assert_eq!(script_buttons(&ctx, &mut app).1, [false, true, false], "the button shows superscript");
+    assert_eq!(app.run("type.superscript", json!({})).unwrap(), json!("normal"));
+    assert!(scripts(&app, &id).iter().all(|(_, p)| *p == "normal"), "{:?}", scripts(&app, &id));
+}
+
+/// With Real-time Drawing off, Superscript, Subscript and Underline decide from the text with the
+/// typing applied: after a Backspace not yet applied takes out the one plain character, the rest
+/// is all superscript (or underlined), so a press turns it off.
+#[test]
+fn superscript_and_underline_decide_from_the_text_with_the_typing_applied() {
+    for (command, set, off) in
+        [("type.superscript", json!({"position": "superscript"}), json!("normal")), ("type.underline", json!({"underline": true}), json!(false))]
+    {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.session.execute("prefs.set", &json!({"key": "realTimeDrawing", "value": false})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "x2", "size": 12})).unwrap()["id"].clone();
+        let mut range = set.clone();
+        range["id"] = id.clone();
+        range["start"] = json!(1);
+        range["end"] = json!(2);
+        app.run("text.setRangeStyle", range).unwrap();
+        app.run("select.set", json!({"ids": [id.clone()]})).unwrap();
+        app.select_tool("type");
+        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+        app.session.set_tool_option("select", &json!({"start": 1, "end": 1}));
+        let ctx = egui::Context::default();
+        let backspace =
+            |pressed| egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        let raw = egui::RawInput { events: vec![backspace(true), backspace(false)], ..Default::default() };
+        ctx.run_ui(raw, |ui| crate::shortcuts::handle(&mut app, ui.ctx())).textures_delta.clear();
+        assert_eq!(app.session.tool_options()["typing"], json!(true), "{command}");
+        let node = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+            NodeKind::Text(t) => (t.plain_text(), t.runs.iter().map(|r| (r.style.position.id(), r.style.underline)).collect::<Vec<_>>()),
+            _ => panic!("text"),
+        };
+        assert_eq!(node(&app).0, "x2", "{command}: the Backspace is not applied yet");
+        assert_eq!(app.run(command, json!({})).unwrap(), off, "{command}");
+        assert_eq!(node(&app), ("2".to_string(), vec![("normal", false)]), "{command}");
+    }
 }
 
 /// The panel menu's Small Caps, Superscript and Subscript set the selected type's small caps
@@ -1685,7 +1818,7 @@ fn copy_and_cut_take_a_story_that_left_the_edited_frame() {
             // A story that holds no text has nothing to copy, so Cut does not run its delete.
             app.run("select.all", json!({})).unwrap();
             assert_eq!(text_story(&app).map(|frames| frames.len()), Some(3));
-            assert!(!text_copy(&mut app));
+            assert!(!text_copy(&mut app, false));
         }
     }
 }
@@ -1970,4 +2103,161 @@ fn selected_stories_list_each_frame_once() {
     assert_eq!(listed, expected);
     app.run("select.set", json!({"ids": []})).unwrap();
     assert!(selected_stories(&app).is_empty());
+}
+
+/// Check that the kept list of the selected stories, and the type objects it resolves to, are the
+/// ones a fresh build works out.
+fn assert_stories_are_fresh(app: &VectorcraftApp, what: &str) {
+    let st = app.session.active().unwrap();
+    let fresh = build_selected_stories(st);
+    assert_eq!(selected_stories(app), fresh, "{what}");
+    let texts = selected_story_texts(app);
+    let expected: Vec<_> = fresh
+        .iter()
+        .filter_map(|id| match &st.doc.node(*id)?.kind {
+            NodeKind::Text(t) => Some(t.as_ref()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts.len(), expected.len(), "{what}: type objects");
+    assert!(texts.iter().zip(&expected).all(|(t, e)| std::ptr::eq(*t, *e)), "{what}: the current document's type objects, in order");
+}
+
+/// The kept list of the selected stories follows every change it is worked out from: an edit, a
+/// new selection (in another order, or as long with other objects, also without a new revision),
+/// a selected group and a switch to another document at the same revision.
+#[test]
+fn kept_selected_stories_follow_the_document_and_the_selection() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    assert_stories_are_fresh(&app, "a frame of a story");
+    let builds = STORY_BUILDS.get();
+    assert_eq!(selected_stories(&app), [a, b, c].map(NodeId).to_vec());
+    assert_eq!(STORY_BUILDS.get(), builds, "a second read keeps the list");
+
+    app.run("text.setStyle", json!({"size": 9})).unwrap();
+    assert_stories_are_fresh(&app, "after an edit");
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    assert_stories_are_fresh(&app, "two stories");
+    app.run("select.set", json!({"ids": [a, other]})).unwrap();
+    assert_stories_are_fresh(&app, "the same objects in another order");
+    app.run("select.set", json!({"ids": [other, b]})).unwrap();
+    assert_stories_are_fresh(&app, "as many other objects");
+    app.session.doc_mut().unwrap().selection.objects = vec![NodeId(other)];
+    assert_stories_are_fresh(&app, "a new selection at the same revision");
+    assert_eq!(selected_stories(&app), vec![NodeId(other)]);
+
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    assert_stories_are_fresh(&app, "a selected group");
+
+    let revision = app.session.active().unwrap().revision;
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let only = app.run("text.create", json!({"x": 20, "y": 50, "text": "Only", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.selection.objects = vec![NodeId(group)];
+    st.revision = revision;
+    assert_stories_are_fresh(&app, "another document with the first one's selection and revision");
+    assert_ne!(selected_stories(&app), [a, b, c, other].map(NodeId).to_vec());
+    app.run("select.set", json!({"ids": [only]})).unwrap();
+    assert_stories_are_fresh(&app, "the other document's own type");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert_stories_are_fresh(&app, "back in the first document");
+
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert!(selected_stories(&app).is_empty());
+    assert!(selected_story_texts(&app).is_empty());
+}
+
+/// What the Character and Paragraph panels draw, and the values of their fields, with the list of
+/// the selected stories kept and with it built for every read.
+fn panels_kept_and_unkept(app: &mut VectorcraftApp) -> [(Vec<String>, String); 2] {
+    let read = |app: &mut VectorcraftApp, unkept: bool| {
+        STORIES_UNKEPT.set(unkept);
+        let ctx = egui::Context::default();
+        let mut texts = vec![];
+        for _ in 0..3 {
+            texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], |app, ui| {
+                show(app, ui);
+                crate::panels::paragraph::show(app, ui);
+            });
+        }
+        // A rect's position can be NaN, which `Rect`'s `==` refuses to compare.
+        let texts: Vec<String> = texts.iter().map(|(text, rect)| format!("{text} {rect:?}")).collect();
+        let fields = format!(
+            "{:?} {:?}",
+            [
+                shared_effective(app, |s| s.size),
+                shared_effective(app, |s| s.h_scale),
+                shared_effective(app, |s| s.v_scale),
+                shared_effective(app, |s| s.baseline_shift),
+                shared_leading(app),
+                shared(app, |s| s.tracking),
+            ],
+            (
+                shared(app, |s| (s.font_family.clone(), s.font_style.clone())),
+                shared(app, |s| (s.all_caps, s.underline, s.strikethrough, s.position)),
+                selected_fonts(app),
+                any_style(app, |s| s.underline),
+                selected_stories(app),
+                selected_story_texts(app).len(),
+                text_style(app).map(|(c, p)| (c.size, p.left_indent)),
+            )
+        );
+        STORIES_UNKEPT.set(false);
+        (texts, fields)
+    };
+    [read(app, true), read(app, false)]
+}
+
+/// The panels show the same thing whether the list of the selected stories is kept or worked out
+/// for each field: with nothing selected, one story, several stories with mixed values and a
+/// Type tool selection inside one story.
+#[test]
+fn panels_show_the_same_with_the_kept_selected_stories() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    let same = |app: &mut VectorcraftApp, what: &str| {
+        let [unkept, kept] = panels_kept_and_unkept(app);
+        assert_eq!(unkept.1, kept.1, "{what}: field values");
+        assert_eq!(unkept.0, kept.0, "{what}: what the panels draw");
+        unkept.1
+    };
+    app.run("select.set", json!({"ids": []})).unwrap();
+    same(&mut app, "nothing selected");
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let one = same(&mut app, "one story");
+    app.run("text.setStyle", json!({"ids": [c], "size": 20, "tracking": 50})).unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "underline": true, "hScale": 120})).unwrap();
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let mixed = same(&mut app, "several stories with mixed values");
+    assert_ne!(one, mixed);
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.set_tool_option("textSelection", &json!({"editing": a, "anchor": 4, "caret": 15}));
+    assert_eq!(text_editing(&app), Some((NodeId(a), 4, 15)));
+    same(&mut app, "a Type tool selection inside one story");
+}
+
+/// One frame of the Character and Paragraph panels works out the selected stories once, though
+/// many of their fields read them; a change to the document works them out again.
+#[test]
+fn panels_work_out_the_selected_stories_once_per_frame() {
+    let (mut app, [a, ..], other) = story_selected_in_its_first_frame();
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let ctx = egui::Context::default();
+    let frame = |app: &mut VectorcraftApp| {
+        let builds = STORY_BUILDS.get();
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], |app, ui| {
+            show(app, ui);
+            crate::panels::paragraph::show(app, ui);
+        });
+        STORY_BUILDS.get() - builds
+    };
+    frame(&mut app);
+    app.run("text.setStyle", json!({"size": 9})).unwrap();
+    assert_eq!(frame(&mut app), 1, "one build after an edit");
+    assert_eq!(frame(&mut app), 0, "nothing changed");
+    STORIES_UNKEPT.set(true);
+    let reads = frame(&mut app);
+    STORIES_UNKEPT.set(false);
+    assert!(reads > 1, "the fields read the list {reads} times");
 }

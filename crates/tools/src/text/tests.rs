@@ -1327,6 +1327,7 @@ fn area_type_drag_measure_labels_honor_preference() {
 
 #[test]
 fn layout_cache_follows_fonts_added_later() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     // Other tests can load system fonts; this assertion needs its own process-wide database.
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
@@ -1398,6 +1399,26 @@ fn click(tool: &mut TypeTool, c: &ToolContext, x: f64, y: f64) -> Vec<Action> {
 
 fn creates(acts: &[Action]) -> bool {
     acts.iter().any(|a| matches!(a, Action::Exec(cmd, _) if cmd == "text.create" || cmd == "text.createInPath"))
+}
+
+/// A click in the empty part of an area type frame, below its one line, edits that type: the
+/// selection tools pass such clicks through to the art behind (#7274), the Type tool does not.
+#[test]
+fn a_click_in_an_area_frame_below_its_text_edits_it() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut t = TextObject::point(Point::new(100.0, 100.0), "Hi", CharStyle { size: 20.0, ..Default::default() });
+    t.kind = TextKind::Area { frame: vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, 200.0, 200.0).to_path(0.1)) };
+    t.cached_bounds = Some(Rect::new(0.0, 0.0, 30.0, 24.0));
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    assert!(vectorcraft_doc::hit::hit_test(&d, Point::new(250.0, 250.0), c.selection_hit_options()).is_none(), "selection tools: passes through");
+    let mut tool = TypeTool::new("type");
+    let acts = click(&mut tool, &c, 250.0, 250.0);
+    assert!(!creates(&acts), "{acts:?}");
+    assert_eq!(tool.editing, Some(id));
 }
 
 /// While type is being edited, a click on blank canvas ends the editing and makes no new type;
@@ -1542,6 +1563,7 @@ fn selected_type_shows_its_ports_in_each_state() {
 /// Preferences › Hyphenation › Exceptions change, the selected type is laid out again.
 #[test]
 fn the_out_port_follows_the_hyphenation_exceptions() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     struct Clear;
     impl Drop for Clear {
         fn drop(&mut self) {
@@ -1636,10 +1658,282 @@ fn the_edited_types_ports_follow_the_limit_too() {
     tool.start_editing(id, 0);
     let boxes = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Highlight { color: [255, 255, 255, 255], .. })).count();
     assert_eq!(boxes(&tool.overlays(&cx(&d, &sel, &p))), 2 * PORTS_MAX, "at the limit, the edited one's included");
+    assert_eq!(kept_frames(&tool), PORTS_MAX - 1, "the other frames' layouts are kept");
     let copy = d.alloc_id();
     d.insert(Some(l), 1, Node::new(copy, node.kind.clone())).unwrap();
     sel.add(copy);
     assert_eq!(boxes(&tool.overlays(&cx(&d, &sel, &p))), 0, "past it, not even the edited one's");
+    assert_eq!(kept_frames(&tool), 0, "no ports drawn, no layouts kept");
+}
+
+/// How many other frames' layouts the Type tool keeps between overlays calls.
+fn kept_frames(tool: &TypeTool) -> usize {
+    tool.frames.lock().unwrap().len()
+}
+
+/// The value `f` returns, and how many layouts this thread started while it ran.
+fn counted<T>(f: impl FnOnce() -> T) -> (T, u64) {
+    let before = vectorcraft_text::test_fonts::layouts_on_this_thread();
+    let v = f();
+    (v, vectorcraft_text::test_fonts::layouts_on_this_thread() - before)
+}
+
+/// A document with area type frames of `texts` (each 120 × 40 pt, one under the other) and their ids.
+fn area_frames(texts: &[&str]) -> (Document, Vec<NodeId>) {
+    let mut d = Document::new(500.0, 2000.0);
+    let l = d.layers[0].id;
+    let mut ids = Vec::new();
+    for (i, s) in texts.iter().enumerate() {
+        let id = d.alloc_id();
+        let mut t = TextObject::point(Point::new(50.0, 50.0 + 60.0 * i as f64), s, CharStyle::default());
+        t.kind = area_kind(120.0, 40.0);
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        ids.push(id);
+    }
+    (d, ids)
+}
+
+/// Area type in a `w` × `h` pt frame.
+fn area_kind(w: f64, h: f64) -> TextKind {
+    TextKind::Area { frame: vectorcraft_geom::PathData::from_bezpath(&Rect::new(0.0, 0.0, w, h).to_path(0.1)) }
+}
+
+fn text_mut(d: &mut Document, id: NodeId) -> &mut TextObject {
+    match &mut d.node_mut(id).unwrap().kind {
+        NodeKind::Text(t) => t,
+        _ => panic!("not text"),
+    }
+}
+
+const OVERFLOWS: &str = "This text is far too long to fit in a frame of one hundred and twenty by forty points.";
+
+/// The Type tools draw the ports of several different selected frames, with and without one of
+/// them being edited, without laying any of them out again on the next frame, and draw the same
+/// overlays as a tool that lays every frame out afresh.
+#[test]
+fn type_overlays_keep_the_selected_frames_layouts() {
+    let _inputs = crate::testutil::steady_layout_inputs();
+    let (d, ids) = area_frames(&["One", "Two words", "Three words here", OVERFLOWS]);
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set(ids.iter().copied());
+    let c = cx(&d, &sel, &p);
+    let mut probe = Vec::new();
+    push_port(&mut probe, Point::ZERO, PortState::Overflow, [0, 0, 0], 1.0);
+    let Some(Overlay::Line { color: red, .. }) = probe.last().cloned() else { panic!("the red plus is drawn with lines") };
+    let red_plus = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Line { color, .. } if *color == red)).count();
+    for editing in [None, Some(ids[0])] {
+        let mut tool = TypeTool::new("areaType");
+        if let Some(id) = editing {
+            tool.start_editing(id, 0);
+        }
+        let (first, n) = counted(|| tool.overlays(&c));
+        assert!(n > 0, "{editing:?}: the first frame lays the frames out");
+        let (second, n) = counted(|| tool.overlays(&c));
+        assert_eq!(n, 0, "{editing:?}: the next frame lays none out again");
+        assert_eq!(first, second, "{editing:?}");
+        let mut fresh = TypeTool::new("areaType");
+        if let Some(id) = editing {
+            fresh.start_editing(id, 0);
+        }
+        assert_eq!(second, fresh.overlays(&c), "{editing:?}: what laying out afresh draws");
+        assert!(red_plus(&second) > 0, "{editing:?}: the overflowing frame's out port shows its red plus");
+    }
+}
+
+/// After Select All in threaded text, the story's other frames are highlighted without laying them
+/// out again on the next frame.
+#[test]
+fn type_overlays_keep_a_selected_storys_layouts() {
+    let _inputs = crate::testutil::steady_layout_inputs();
+    let (mut d, ids) = area_frames(&["Story one ", "story two ", "story three ", "story four"]);
+    d.text_threads.push(ids.clone());
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([ids[0]]);
+    let story = json!({ "story": ids.iter().map(|id| id.0).collect::<Vec<_>>() });
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("areaType");
+    tool.start_editing(ids[0], 0);
+    tool.set_option("selectAll", &story);
+    assert_eq!(tool.story_others(&c).len(), 3);
+    let highlights = |o: &[Overlay]| o.iter().filter(|o| matches!(o, Overlay::Highlight { color: [60, 120, 255, 90], .. })).count();
+    let (first, n) = counted(|| tool.overlays(&c));
+    assert!(n > 0);
+    let (second, n) = counted(|| tool.overlays(&c));
+    assert_eq!(n, 0, "the story's other frames are not laid out again");
+    assert_eq!(first, second);
+    let mut fresh = TypeTool::new("areaType");
+    fresh.start_editing(ids[0], 0);
+    fresh.set_option("selectAll", &story);
+    assert_eq!(second, fresh.overlays(&c), "what laying out afresh draws");
+    assert!(highlights(&second) >= 4, "every frame's text is highlighted: {}", highlights(&second));
+}
+
+/// A kept layout is used only while its frame's text object is unchanged: editing the text,
+/// changing the frame and undoing both lay out just the frames that changed, a frame that is no
+/// longer drawn is dropped, and choosing another tool drops them all.
+#[test]
+fn type_overlays_lay_out_again_only_the_frames_that_changed() {
+    let _inputs = crate::testutil::steady_layout_inputs();
+    let (mut d, ids) = area_frames(&["One", "Two", "Three", OVERFLOWS]);
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set(ids.iter().copied());
+    let mut tool = TypeTool::new("areaType");
+    let fresh = |d: &Document, sel: &Selection| TypeTool::new("areaType").overlays(&cx(d, sel, &p));
+    tool.overlays(&cx(&d, &sel, &p));
+    let start = d.clone();
+    // Edit the text of one frame.
+    text_mut(&mut d, ids[1]).runs[0].text = OVERFLOWS.into();
+    let (o, n) = counted(|| tool.overlays(&cx(&d, &sel, &p)));
+    assert_eq!(n, 1, "only the edited frame");
+    assert_eq!(o, fresh(&d, &sel));
+    // Make another frame tall enough for its text.
+    text_mut(&mut d, ids[3]).kind = area_kind(120.0, 400.0);
+    let (o, n) = counted(|| tool.overlays(&cx(&d, &sel, &p)));
+    assert_eq!(n, 1, "only the changed frame");
+    assert_eq!(o, fresh(&d, &sel));
+    // Undo puts both back.
+    let (o, n) = counted(|| tool.overlays(&cx(&start, &sel, &p)));
+    assert_eq!(n, 2, "the two frames undo changed");
+    assert_eq!(o, fresh(&start, &sel));
+    // A smaller selection keeps only its frames; the others are laid out again when selected again.
+    let mut one = Selection::default();
+    one.set([ids[0]]);
+    assert_eq!(counted(|| tool.overlays(&cx(&start, &one, &p))).1, 0);
+    assert_eq!(kept_frames(&tool), 1);
+    let (o, n) = counted(|| tool.overlays(&cx(&start, &sel, &p)));
+    assert_eq!(n, 3);
+    assert_eq!(o, fresh(&start, &sel));
+    tool.deactivate(&cx(&start, &sel, &p));
+    assert_eq!(kept_frames(&tool), 0, "another tool chosen");
+}
+
+/// A story of more frames than [`FRAME_LAYOUTS_MAX`] keeps that many layouts, lays the rest out on
+/// each call, and draws what laying every frame out afresh draws.
+#[test]
+fn type_overlays_keep_at_most_frame_layouts_max() {
+    let _inputs = crate::testutil::steady_layout_inputs();
+    let texts = vec!["a "; FRAME_LAYOUTS_MAX + 3];
+    let (mut d, ids) = area_frames(&texts);
+    d.text_threads.push(ids.clone());
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([ids[0]]);
+    let story = json!({ "story": ids.iter().map(|id| id.0).collect::<Vec<_>>() });
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("areaType");
+    tool.start_editing(ids[0], 0);
+    tool.set_option("selectAll", &story);
+    let first = tool.overlays(&c);
+    assert_eq!(kept_frames(&tool), FRAME_LAYOUTS_MAX);
+    let (second, n) = counted(|| tool.overlays(&c));
+    assert_eq!(n, 2, "the two other frames past the limit");
+    assert_eq!(kept_frames(&tool), FRAME_LAYOUTS_MAX);
+    assert_eq!(first, second);
+}
+
+#[test]
+fn frame_layouts_follow_fonts_and_hyphenation_exceptions() {
+    let _inputs = crate::testutil::changing_layout_inputs();
+    // Other tests can load system fonts; this assertion needs its own process-wide database.
+    #[cfg(not(target_arch = "wasm32"))]
+    if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "text::tests::frame_layouts_follow_fonts_and_hyphenation_exceptions", "--nocapture", "--test-threads=1"])
+            .env("VECTORCRAFT_FONT_CACHE_TEST_CHILD", "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated font cache test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    let (mut d, ids) = area_frames(&["One", "Two", "Three ", "four"]);
+    d.text_threads.push(vec![ids[2], ids[3]]);
+    let (mut sel, p) = (Selection::default(), paint());
+    sel.set([ids[0], ids[1], ids[2]]);
+    let c = cx(&d, &sel, &p);
+    let mut tool = TypeTool::new("areaType");
+    tool.start_editing(ids[2], 0);
+    tool.set_option("selectAll", &json!({ "story": [ids[2].0, ids[3].0] }));
+    tool.overlays(&c);
+    assert_eq!(counted(|| tool.overlays(&c)).1, 0);
+    // Two selected frames, the story's other frame and the edited one.
+    let font = vectorcraft_text::test_fonts::variable_font().unwrap();
+    assert!(FontDb::global().add_font(font) > 0, "the test font is new to this process");
+    assert_eq!(counted(|| tool.overlays(&c)).1, 4, "a font added after the layouts refreshes them");
+    assert_eq!(counted(|| tool.overlays(&c)).1, 0);
+    vectorcraft_text::set_hyphenation_exceptions(&vectorcraft_text::hyphenation_exceptions());
+    assert_eq!(counted(|| tool.overlays(&c)).1, 4, "new hyphenation exceptions refresh them");
+}
+
+/// Times the Type tool's overlays on 200 selected area type frames of about 400 characters, one of
+/// them edited, and on a 5-frame story after Select All, laying every frame out on each call as the
+/// tool did before it kept their layouts (base) against keeping them (kept). Run with
+/// `cargo test --release -p vectorcraft-tools --lib type_overlays_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "timing, run by hand"]
+fn type_overlays_timing() {
+    let _inputs = crate::testutil::steady_layout_inputs();
+    use std::time::Instant;
+    let words = "The quick brown fox jumps over the lazy dog while seven wizards box. ".repeat(6);
+    let texts: Vec<String> = (0..200).map(|i| format!("{i} {words}")).collect();
+    let (mut d, ids) = area_frames(&texts.iter().map(String::as_str).collect::<Vec<_>>());
+    for id in &ids {
+        text_mut(&mut d, *id).kind = area_kind(200.0, 200.0);
+    }
+    let story: Vec<NodeId> = ids[..5].to_vec();
+    d.text_threads.push(story.clone());
+    let p = paint();
+    let mut all = Selection::default();
+    all.set(ids.iter().copied());
+    let mut first = Selection::default();
+    first.set([ids[0]]);
+    // Before, the selected frames' layouts replaced the edited one's single kept layout; with only
+    // the edited frame selected, it stayed.
+    let cases = [("200 selected frames, one edited", &all, None, true), ("5-frame story, Select All", &first, Some(story), false)];
+    for (name, sel, story, evicted) in cases {
+        let c = cx(&d, sel, &p);
+        let mut tool = TypeTool::new("areaType");
+        tool.start_editing(ids[0], 0);
+        if let Some(s) = &story {
+            tool.set_option("selectAll", &json!({ "story": s.iter().map(|id| id.0).collect::<Vec<_>>() }));
+        }
+        let expected = tool.overlays(&c);
+        tool.frames.lock().unwrap().clear();
+        if evicted {
+            *tool.cache.lock().unwrap() = None;
+        }
+        let (_, before) = counted(|| tool.overlays(&c));
+        let (_, after) = counted(|| tool.overlays(&c));
+        println!("{name}: {before} layouts per call before, {after} after");
+        let calls = 20;
+        let (mut base, mut kept) = (Vec::new(), Vec::new());
+        for _ in 0..7 {
+            let start = Instant::now();
+            for _ in 0..calls {
+                // Before: the other frames were laid out on every call.
+                tool.frames.lock().unwrap().clear();
+                if evicted {
+                    *tool.cache.lock().unwrap() = None;
+                }
+                assert_eq!(tool.overlays(&c), expected);
+            }
+            base.push(start.elapsed().as_secs_f64() * 1000.0 / f64::from(calls));
+            let start = Instant::now();
+            for _ in 0..calls {
+                assert_eq!(tool.overlays(&c), expected);
+            }
+            kept.push(start.elapsed().as_secs_f64() * 1000.0 / f64::from(calls));
+        }
+        let median = |v: &mut Vec<f64>| {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        };
+        println!("{name}: base runs {base:.3?} ms per call, kept runs {kept:.3?} ms per call");
+        println!("{name}: median base {:.3} ms, kept {:.3} ms per call", median(&mut base), median(&mut kept));
+    }
 }
 
 /// Type on a path has its in port just before its start bracket and its out port just past its
@@ -1896,4 +2190,174 @@ fn soft_return_in_a_list_item_keeps_tab_within_the_paragraph() {
     tool.anchor = 0;
     let acts = key(&mut tool, &d, ToolKey::Tab, Mods::default());
     assert!(acts.iter().any(|a| matches!(a, Action::Exec(cmd, p) if cmd == "text.setFormat" && p["listLevel"] == 2)));
+}
+
+/// A family no computer has.
+const NO_SUCH_FAMILY: &str = "Missing Test Family 7258";
+
+/// Point type at (x, 100) whose runs are `runs` (text, family, style).
+fn add_styled_text(d: &mut Document, x: f64, runs: &[(&str, &str, &str)]) -> NodeId {
+    let id = d.alloc_id();
+    let style =
+        |family: &str, font_style: &str| CharStyle { size: 20.0, font_family: family.into(), font_style: font_style.into(), ..Default::default() };
+    let mut t = TextObject::point(Point::new(x, 100.0), "", style(runs[0].1, runs[0].2));
+    t.runs = runs.iter().map(|(text, family, font_style)| TextRun::new(*text, style(family, font_style))).collect();
+    d.insert(Some(d.layers[0].id), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+    id
+}
+
+/// Where the caret before byte `b` of type `id` is drawn (document space).
+fn caret_at(c: &ToolContext, id: NodeId, b: usize) -> Point {
+    let t = TypeTool::text(c, id).unwrap();
+    let lay = vectorcraft_text::layout(FontDb::global(), t);
+    let (a, bb) = vectorcraft_text::caret_position(&lay, b);
+    let at = t.xf * a.midpoint(bb);
+    Point::new(at.x + 0.1, at.y)
+}
+
+/// The question a click asked → its token and fields.
+fn asked(acts: &[Action]) -> (u64, Value) {
+    match acts {
+        [Action::Dialog(kind, p)] if kind == MISSING_FONT_EDIT => (p["token"].as_u64().unwrap(), p.clone()),
+        _ => panic!("expected only the missing-font question: {acts:?}"),
+    }
+}
+
+/// A click on type set in a family that isn't available asks first and starts no edit; OK starts
+/// it with the caret where the type was clicked, and the font the type names stays as it is.
+#[test]
+fn a_click_on_type_in_a_missing_font_asks_before_editing() {
+    let mut d = Document::new(500.0, 500.0);
+    let id = add_styled_text(&mut d, 100.0, &[("Hello", NO_SUCH_FAMILY, "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, id, 3);
+    let (token, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(
+        (q["id"].as_u64(), &q["missing"], &q["style"], &q["more"]),
+        (Some(id.0), &json!([format!("{NO_SUCH_FAMILY} Regular")]), &json!([]), &json!(0))
+    );
+    assert_eq!(tool.editing, None);
+    assert!(!tool.waiting());
+    // OK: the next poll starts the edit at the clicked character.
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    assert!(tool.waiting());
+    let acts = tool.poll(&c, false);
+    assert_eq!(acts, vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))]);
+    assert_eq!((tool.editing, tool.caret, tool.anchor), (Some(id), 3, 3));
+    assert!(!tool.waiting());
+    let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!("text") };
+    assert_eq!(t.runs[0].style.font_family, NO_SUCH_FAMILY);
+    // A click within the type being edited moves the caret without asking again.
+    let at = caret_at(&c, id, 1);
+    let acts = click(&mut tool, &c, at.x, at.y);
+    assert!(!acts.iter().any(|a| matches!(a, Action::Dialog(..))), "{acts:?}");
+    assert_eq!((tool.editing, tool.caret), (Some(id), 1));
+}
+
+/// `tool.setOption` checks each option first: the answer to the question is a whole-number token
+/// and a true or false `ok`, so a client can give it through that command.
+#[test]
+fn the_answer_to_the_missing_font_question_passes_the_option_check() {
+    let tool = TypeTool::new("type");
+    assert_eq!(tool.check_option("missingFontEdit", &json!({"token": 7, "ok": true})), Ok(()));
+    assert_eq!(tool.check_option("missingFontEdit", &json!({"token": 7, "ok": false})), Ok(()));
+    for bad in [json!({"token": "7", "ok": true}), json!({"token": 7, "ok": 1}), json!({"ok": true}), json!({"token": -1, "ok": true}), json!(null)] {
+        assert_eq!(
+            tool.check_option("missingFontEdit", &bad),
+            Err("`missingFontEdit` must be {token, ok} with a whole number and true or false".to_string()),
+            "{bad}"
+        );
+    }
+}
+
+/// Cancel starts no edit, and the edit in progress on other type goes on; an answer that names
+/// another question, or one given to a document changed since, starts nothing either.
+#[test]
+fn cancel_or_a_stale_answer_starts_no_edit_in_missing_fonts() {
+    let (mut d, first, mut tool) = editing("First");
+    tool.caret = 2;
+    let other = add_styled_text(&mut d, 300.0, &[("Second", NO_SUCH_FAMILY, "Bold")]);
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, other, 2);
+    let (token, _) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!((tool.editing, tool.caret), (Some(first), 2), "the edit in progress goes on while the question is open");
+    tool.set_option("missingFontEdit", &json!({"token": token + 1, "ok": true}));
+    assert!(!tool.waiting(), "another question's answer");
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": false}));
+    assert!(tool.poll(&c, false).is_empty());
+    assert_eq!((tool.editing, tool.caret), (Some(first), 2));
+    // OK after the document changed: nothing starts.
+    let (token, _) = asked(&click(&mut tool, &c, at.x, at.y));
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    let changed = ToolContext { revision: (0, 1), ..cx(&d, &sel, &p) };
+    assert!(tool.poll(&changed, false).is_empty());
+    assert_eq!(tool.editing, Some(first));
+    assert!(!tool.waiting());
+}
+
+/// Every new edit of such type asks again, after an earlier OK too, and a style the family lacks
+/// asks as a missing family does; type in available fonts is edited at once.
+#[test]
+fn each_new_edit_of_type_in_unavailable_fonts_asks() {
+    let mut d = Document::new(500.0, 500.0);
+    let styled = add_styled_text(&mut d, 100.0, &[("Wide", "Source Sans 3", "Ultra Condensed Oblique 7258")]);
+    let plain = add_styled_text(&mut d, 300.0, &[("Plain", "Source Sans 3", "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, styled, 1);
+    let (token, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!((&q["missing"], &q["style"]), (&json!([]), &json!(["Source Sans 3 Ultra Condensed Oblique 7258"])));
+    tool.set_option("missingFontEdit", &json!({"token": token, "ok": true}));
+    tool.poll(&c, false);
+    assert_eq!(tool.editing, Some(styled));
+    // Other type in an available font is edited at once.
+    let to = caret_at(&c, plain, 2);
+    let acts = click(&mut tool, &c, to.x, to.y);
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [plain.0]}))), "{acts:?}");
+    assert_eq!(tool.editing, Some(plain));
+    // Back to the first type: a new edit, so the question comes again.
+    asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(tool.editing, Some(plain));
+}
+
+/// The whole story counts: type with one run in a missing font asks even when the click lands in a
+/// run in an available font, and the question names each font once.
+#[test]
+fn a_story_with_one_run_in_a_missing_font_asks() {
+    let mut d = Document::new(500.0, 500.0);
+    let id = add_styled_text(
+        &mut d,
+        100.0,
+        &[("Here ", "Source Sans 3", "Regular"), ("gone ", NO_SUCH_FAMILY, "Regular"), ("again", NO_SUCH_FAMILY, "Regular")],
+    );
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, id, 1);
+    let (_, q) = asked(&click(&mut tool, &c, at.x, at.y));
+    assert_eq!(q["missing"], json!([format!("{NO_SUCH_FAMILY} Regular")]));
+    assert_eq!(tool.editing, None);
+}
+
+/// Type set in a CSS generic family is edited without a question, and a press dropped while the
+/// question is open leaves the edit in progress as it was.
+#[test]
+fn generic_families_and_a_dropped_press_ask_nothing_more() {
+    let mut d = Document::new(500.0, 500.0);
+    let generic = add_styled_text(&mut d, 100.0, &[("Generic", "sans-serif", "Regular")]);
+    let missing = add_styled_text(&mut d, 300.0, &[("Missing", NO_SUCH_FAMILY, "Regular")]);
+    let mut tool = TypeTool::new("type");
+    let (sel, p) = (Selection::default(), paint());
+    let c = cx(&d, &sel, &p);
+    let at = caret_at(&c, generic, 1);
+    let acts = click(&mut tool, &c, at.x, at.y);
+    assert!(acts.contains(&Action::Exec("select.set".into(), json!({"ids": [generic.0]}))), "{acts:?}");
+    let to = caret_at(&c, missing, 1);
+    asked(&tool.pointer(&c, &PointerEvent::new(PointerKind::Down, to.x, to.y)));
+    assert!(tool.drop_press(&c).is_empty());
+    assert_eq!(tool.editing, Some(generic));
 }

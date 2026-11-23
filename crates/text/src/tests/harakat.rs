@@ -454,18 +454,23 @@ fn check_spaced_harakat(db: &FontDb, family: &str) {
 }
 
 /// Right to left, with harakat coloured apart, Optical kerning keeps the Tsume of each letter's
-/// cluster as it does in "HOH": the glyphs move as far with Optical kerning as without it.
+/// cluster as it does in "HOH": the glyphs move as far with Optical kerning as without it. The test
+/// font leaves blank space beside both letters' ink, so its Tsume must move something; an installed
+/// face may not (#7821: Arial's initial beh and its fatha fill its cell), and there the Tsume takes
+/// nothing, with or without Optical kerning.
 #[test]
 fn optical_kerning_keeps_the_tsume_of_a_letter_with_coloured_harakat() {
     let db = FontDb::with_font_dirs(vec![]);
     assert_eq!(db.add_font(crate::test_fonts::lam_alef_font(b"rlig").unwrap()), 1);
-    check_optical_tsume(&db, crate::test_fonts::lam_alef_family(b"rlig"));
+    check_optical_tsume(&db, crate::test_fonts::lam_alef_family(b"rlig"), true);
     if let Some(face) = arabic_face("optical_kerning_keeps_the_tsume_of_a_letter_with_coloured_harakat") {
-        check_optical_tsume(FontDb::global(), &face.family);
+        check_optical_tsume(FontDb::global(), &face.family, false);
     }
 }
 
-fn check_optical_tsume(db: &FontDb, family: &str) {
+/// `strict`: every letter's cluster must leave blank space beside its ink, so its Tsume must move
+/// or narrow something.
+fn check_optical_tsume(db: &FontDb, family: &str, strict: bool) {
     const WORD: &str = "بَبَ"; // ب 0, fatha 2, ب 4, fatha 6
     let set = |optical: bool, letter: Option<usize>| {
         let mut t = text_with_harakat(WORD, family, Some(red()));
@@ -479,11 +484,27 @@ fn check_optical_tsume(db: &FontDb, family: &str) {
     // Tsume of the line's first cluster only narrows its advance and moves no glyph.
     let xs = |t: &TextObject| layout(db, t).glyphs.iter().flat_map(|g| [g.xf.as_coeffs()[4], g.advance]).collect::<Vec<_>>();
     assert!(xs(&set(true, None)).iter().zip(xs(&set(false, None))).any(|(a, b)| (a - b).abs() > 1e-6), "{family}: Optical moves the pair");
+    // The blank space Tsume shares out: between the letter's cluster's cell (from its glyphs'
+    // shared origin, as long as their advances) and its glyphs' ink, on each side, without Tsume.
+    let plain = layout(db, &set(false, None));
+    let blank = |letter: usize| {
+        let cluster: Vec<_> = plain.glyphs.iter().filter(|g| g.byte == letter).collect();
+        let start = cluster.iter().map(|g| g.origin.x).fold(f64::INFINITY, f64::min);
+        let end = start + cluster.iter().map(|g| g.advance).sum::<f64>();
+        let ink = cluster.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| g.outline.bounding_box());
+        let (lo, hi) = ink.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), b| (lo.min(b.x0), hi.max(b.x1)));
+        (lo - start).clamp(0.0, end - start) + (end - hi).clamp(0.0, end - start)
+    };
     // Each letter in turn: the first one's cluster ends the pair, the second one's starts it.
     for letter in [0, 4] {
         let moved = |optical: bool| xs(&set(optical, Some(letter))).iter().zip(xs(&set(optical, None))).map(|(a, b)| a - b).collect::<Vec<_>>();
         let (without, with_optical) = (moved(false), moved(true));
-        assert!(without.iter().any(|m| m.abs() > 1e-3), "{family} {letter}: Tsume moves or narrows the glyphs: {without:?}");
+        let blank = blank(letter);
+        if strict || blank > 1e-6 {
+            assert!(without.iter().any(|m| m.abs() > 1e-6), "{family} {letter}: Tsume moves or narrows the glyphs ({blank} blank): {without:?}");
+        } else {
+            assert!(without.iter().all(|m| m.abs() < 1e-6), "{family} {letter}: no blank space ({blank}), Tsume takes nothing: {without:?}");
+        }
         assert!(
             without.len() == with_optical.len() && without.iter().zip(&with_optical).all(|(a, b)| (a - b).abs() < 1e-6),
             "{family} {letter}: {without:?} {with_optical:?}"
@@ -728,7 +749,13 @@ fn duplicate_authored_glyphs_keep_occurrence_order() {
 
     let mut wrong = before.clone();
     wrong.glyphs[0].run = 1;
-    assert!(std::panic::catch_unwind(|| assert_kashida_ownership(&text, &before, &wrong, &red(), "changed owner", false)).is_err());
+    // This panic probe only reads snapshots; opaque carried-font handles need no unwind-safety bound.
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            assert_kashida_ownership(&text, &before, &wrong, &red(), "changed owner", false)
+        }))
+        .is_err()
+    );
 }
 
 /// Compare authored glyph run indices before/after Insert Kashidas (matched by byte and gid;

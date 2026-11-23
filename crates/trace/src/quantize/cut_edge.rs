@@ -607,7 +607,7 @@ pub(crate) fn settle_cut_edges(q: &mut Quantized, img: &Raster, gray: bool) -> V
     let edge = cut_edge(img);
     let mut changed = false;
     let mut stack: Vec<(usize, usize)> = Vec::new();
-    for i in 0..w * h {
+    for (i, blend) in blended.iter_mut().enumerate() {
         let mine = q.labels[i];
         if mine == TRANSPARENT || !edge.get(i).copied().unwrap_or(false) {
             continue;
@@ -630,7 +630,7 @@ pub(crate) fn settle_cut_edges(q: &mut Quantized, img: &Raster, gray: bool) -> V
                 }
             }
         });
-        blended[i] = !near.is_empty();
+        *blend = !near.is_empty();
         if keep || near.is_empty() {
             continue;
         }

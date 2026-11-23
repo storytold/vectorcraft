@@ -18,7 +18,16 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| if super::warp_effect::is_warp(&d.str("__effect")) { tl!("Warp Options").to_string() } else { heading_label(d) },
+    heading: |d| {
+        let id = d.str("__effect");
+        if super::warp_effect::is_warp(&id) {
+            tl!("Warp Options").to_string()
+        } else if has_only_pathfinder_options(&id) {
+            tl!("Pathfinder Options").to_string()
+        } else {
+            heading_label(d)
+        }
+    },
     body,
     confirm,
     preview: true,
@@ -41,7 +50,7 @@ fn three_d_refusal(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, 
     } else if !app.session.in_interaction() && d.fields.get(TRIED) != Some(&params) {
         // Waits for another interaction to end: trying inside it would replace its preview and
         // cancel it. A failure to begin leaves no interaction: the preview below then reports it.
-        let _ = app.session.begin_interaction(&d.str("__label"));
+        let _ = app.begin_interaction(&d.str("__label"));
         match app.session.preview(cmd, &params) {
             Ok(_) => {
                 d.fields.remove(form::REFUSED);
@@ -125,6 +134,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             fields.insert("__editTarget".into(), edit_target);
             fields.insert("__index".into(), json!(k));
             fields.extend(params_of(e));
+            fill_pathfinder_options(app, id, &mut fields, false);
         }
         None => {
             if let Some(k) = applied.iter().rposition(|e| e.id == id) {
@@ -135,6 +145,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
                 return Ok(json!({ "pending": EXISTS }));
             }
             fields.extend(info.defaults.as_object().cloned().unwrap_or_default());
+            fill_pathfinder_options(app, id, &mut fields, true);
             if super::warp_effect::is_warp(id) {
                 super::warp_effect::merge_remembered(&mut fields, app.last_warp.as_ref());
             }
@@ -153,6 +164,55 @@ fn target_effects(app: &VectorcraftApp, p: &Value) -> (Value, Vec<vectorcraft_do
         params["item"] = item.clone();
     }
     app.session.appearance_effect_target(&params).map(|(target, effects)| (target, effects.to_vec())).unwrap_or_else(|| (json!({}), vec![]))
+}
+
+/// Is `id` a Pathfinder effect whose only options are its Pathfinder Options (every one but Soft
+/// Mix, which also has a Mixing Rate)?
+fn has_only_pathfinder_options(id: &str) -> bool {
+    vectorcraft_effects::takes_pathfinder_options(id)
+        && vectorcraft_effects::default_params(id).is_some_and(|d| d.as_object().is_none_or(Map::is_empty))
+}
+
+/// A Pathfinder effect's Pathfinder Options in `fields`, where they are missing: for a new effect
+/// (`fresh`) the Pathfinder panel's current options, as `effect.apply` takes them; for an applied
+/// one saved without them, the values it evaluates with. A precision out of range (one that Scale
+/// Strokes & Effects took past it) or not a number opens at the value it evaluates with, kept in
+/// `__openedPrecision`: OK leaves that value out unless the user enters a precision, so the stored
+/// one stays until the user changes it.
+fn fill_pathfinder_options(app: &VectorcraftApp, id: &str, fields: &mut Map<String, Value>, fresh: bool) {
+    if !vectorcraft_effects::takes_pathfinder_options(id) {
+        return;
+    }
+    let options =
+        if fresh { super::pathfinder_options::options_in_force(app) } else { vectorcraft_effects::PathfinderEffectOptions::default().to_params() };
+    for (key, v) in options.as_object().into_iter().flatten() {
+        fields.entry(key.clone()).or_insert_with(|| v.clone());
+    }
+    if fields.get("precision").is_some_and(|v| !v.as_f64().is_some_and(|p| vectorcraft_effects::PATHFINDER_EFFECT_PRECISION.contains(&p))) {
+        let evaluated = vectorcraft_effects::PathfinderEffectOptions::from_params(&json!({"precision": fields["precision"]})).precision;
+        fields.insert("precision".into(), json!(evaluated));
+        fields.insert(OPENED_PRECISION.into(), json!(evaluated));
+    }
+}
+
+/// The precision a Pathfinder effect's dialog opened at in place of a stored one out of range,
+/// until the user enters a precision.
+pub(super) const OPENED_PRECISION: &str = "__openedPrecision";
+
+/// A Pathfinder effect's fields: Soft Mix's Mixing Rate as the other effects show their
+/// parameters, then the Pathfinder Options. Returns whether the values changed.
+fn pathfinder_fields(ui: &mut egui::Ui, d: &mut Dialog, id: &str, unit: vectorcraft_doc::Unit) -> bool {
+    let before = d.fields.clone();
+    if !has_only_pathfinder_options(id) {
+        let options: Vec<(String, Value)> =
+            vectorcraft_effects::PATHFINDER_OPTION_KEYS.iter().filter_map(|k| d.fields.remove(*k).map(|v| (k.to_string(), v))).collect();
+        let doc = vectorcraft_effects::effect_info(id).map(|e| e.params).unwrap_or_default();
+        form::param_fields(ui, d, &|_| false, &|k| choices(id, k), &|k| doc_rank(doc, k), unit);
+        d.fields.extend(options);
+        ui.add_space(6.0);
+    }
+    super::pathfinder_options::fields(ui, d);
+    before != d.fields
 }
 
 /// An applied effect's values over its defaults.
@@ -174,6 +234,7 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
         let id = d.str("__effect");
         let defaults = vectorcraft_effects::default_params(&id);
         fields.extend(defaults.and_then(|v| v.as_object().cloned()).unwrap_or_default());
+        fill_pathfinder_options(app, &id, &mut fields, true);
         if super::warp_effect::is_warp(id.as_str()) {
             super::warp_effect::merge_remembered(&mut fields, app.last_warp.as_ref());
         }
@@ -183,6 +244,7 @@ fn confirm_exists(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
         let applied = app.session.appearance_effect_target(&edit_target).map(|(_, effects)| effects.to_vec()).unwrap_or_default();
         let params = applied.get(k).map(params_of).unwrap_or_default();
         fields.extend(params);
+        fill_pathfinder_options(app, &d.str("__effect"), &mut fields, false);
         fields.insert("__item".into(), target);
     }
     fields.insert("preview".into(), json!(true));
@@ -237,6 +299,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             super::raster_effects::effect_fields(app, ui, d);
             values_changed(d)
         }
+        None if vectorcraft_effects::takes_pathfinder_options(&id) => pathfinder_fields(ui, d, &id, app.session.general_unit()),
         None => {
             let doc = vectorcraft_effects::effect_info(&id).map(|e| e.params).unwrap_or_default();
             let unit = app.session.general_unit();
@@ -255,9 +318,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     d.fields.insert("preview".into(), json!(pv));
     if pv && (changed || pv_changed || !app.session.in_interaction()) {
         let label = d.str("__label");
-        let _ = app.session.begin_interaction(&label);
-        let (cmd, p) = command(d);
-        let _ = app.session.preview(cmd, &p);
+        // A failure to begin (typing that can't be kept) shows, and nothing previews.
+        match app.begin_interaction(&label) {
+            Ok(()) => {
+                let (cmd, p) = command(d);
+                let _ = app.session.preview(cmd, &p);
+            }
+            Err(e) => app.status(e),
+        }
     } else if !pv && pv_changed {
         let _ = app.session.cancel_interaction();
     }
@@ -317,6 +385,13 @@ fn center_round(x: f64) -> f64 {
     (x * 1e4).round() / 1e4
 }
 
+/// The value screen readers give Blur Center at `c` (0 to 1 of the bounds): Horizontal and
+/// Vertical in percent, each label followed by the UI language's colon.
+pub(super) fn blur_center_value(c: [f64; 2]) -> String {
+    let percent = |v: f64| (v * 1000.0).round() / 10.0;
+    format!("{} {}%, {} {}%", crate::i18n::colon(tl!("Horizontal")), percent(c[0]), crate::i18n::colon(tl!("Vertical")), percent(c[1]))
+}
+
 /// Radial Blur's Blur Center: a box standing for the object's bounds, with the blur's pattern (rays
 /// for Zoom, rings for Spin) drawn about the center. A press or a drag in the box puts the center
 /// there; with the keyboard focus the arrow keys move it 1 % of the box (10 % with Shift). The
@@ -334,9 +409,8 @@ fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(CENTER_BOX, CENTER_BOX), Sense::hover());
         let id = ui.scope_id().with("radial-blur-center");
         let resp = ui.interact(rect, id, Sense::click_and_drag());
-        let percent = |v: f64| (v * 1000.0).round() / 10.0;
         let name = tl!("Blur Center").to_string();
-        let value = format!("{}: {}%, {}: {}%", tl!("Horizontal"), percent(c[0]), tl!("Vertical"), percent(c[1]));
+        let value = blur_center_value(c);
         let enabled = ui.is_enabled();
         resp.widget_info(|| egui::WidgetInfo {
             current_text_value: Some(value.clone()),
@@ -391,7 +465,7 @@ fn blur_center(ui: &mut egui::Ui, d: &mut Dialog) {
         ui.vertical(|ui| {
             egui::Grid::new("blur-center-fields").num_columns(2).spacing([8.0, 8.0]).show(ui, |ui| {
                 for (i, label) in ["Horizontal", "Vertical"].into_iter().enumerate() {
-                    let row = ui.label(egui::RichText::new(format!("{}:", tl!(label))).color(t.text));
+                    let row = ui.label(egui::RichText::new(crate::i18n::colon(tl!(label))).color(t.text));
                     ui.label_inputs_by(row.id, |ui| {
                         if let Some(x) =
                             widgets::range_field_named(ui, ("blur-center", i), None, c[i] * 100.0, 0.0..=100.0, &form::unit_suffix("%"), 1, 72.0)
@@ -1024,6 +1098,12 @@ fn command(d: &Dialog) -> (&'static str, Value) {
         p["index"] = index.clone();
         p["item"] = item.unwrap_or(Value::Null);
         p["params"] = params;
+        // A precision the dialog opened at in place of a stored one out of range keeps the stored one.
+        if let (Some(opened), Some(Value::Object(m))) = (d.fields.get(OPENED_PRECISION).and_then(Value::as_f64), p.get_mut("params"))
+            && m.get("precision").and_then(Value::as_f64) == Some(opened)
+        {
+            m.remove("precision");
+        }
         let id = d.str("__effect");
         // Each target keeps the map its own Warp draws with: the dialog's `version` is the first
         // target's.
@@ -1504,6 +1584,101 @@ mod tests {
             (RADIAL_BLUR, Some(0.26), Some(1.0)),
             "OK applies it"
         );
+    }
+
+    /// An applied Pathfinder effect opens Pathfinder Options with its own values (the defaults for
+    /// one saved without them); OK keeps a change as one undo step, and OK with nothing changed
+    /// records none. Soft Mix's dialog has Mixing Rate too, and a new one takes the panel's options.
+    #[test]
+    fn a_pathfinder_effect_opens_pathfinder_options_with_its_own_values() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 50, "height": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.apply", json!({"effect": "pathfinder.add", "params": {"precision": 0.5}})).unwrap();
+        let g = app.session.doc().unwrap().selection.objects[0];
+        let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let paint = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()));
+        app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
+        let text = paint(&mut app);
+        for s in ["Pathfinder Options", "Precision:", "Remove Redundant Points", "Divide and Outline Will Remove Unpainted Artwork"] {
+            assert!(text.lines().any(|l| l == s), "{s} in {text}");
+        }
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["precision"], json!(0.5));
+        let before = steps(&app);
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(steps(&app), before, "OK with nothing changed records no step");
+        app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
+        paint(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("removeRedundantPoints".into(), json!(true));
+        paint(&mut app);
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(steps(&app), before + 1, "one step");
+        let params = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(g).unwrap().appearance.effects[0].params.clone();
+        assert_eq!(params(&app)["removeRedundantPoints"], json!(true));
+        // Saved without options, it opens with the values it evaluates with.
+        app.session
+            .edit("t", |d, _| {
+                d.node_mut(g).unwrap().appearance.effects[0].params = json!({});
+                Ok(())
+            })
+            .unwrap();
+        app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
+        let fields = &app.ui.dialog.as_ref().unwrap().fields;
+        assert_eq!(
+            (&fields["precision"], &fields["removeRedundantPoints"], &fields["removeUnpainted"]),
+            (&json!(0.01), &json!(false), &json!(false))
+        );
+        app.ui.dialog = None;
+        let _ = app.session.cancel_interaction();
+        // A new Soft Mix takes the panel's options and shows Mixing Rate beside them.
+        app.run("object.pathfinder.options", json!({"removeUnpainted": true})).unwrap();
+        app.run("effect.dialog", json!({"effect": "pathfinder.softMix"})).unwrap();
+        let text = paint(&mut app);
+        assert!(text.contains("Mixing Rate") && text.lines().any(|l| l == "Remove Redundant Points"), "{text}");
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["removeUnpainted"], json!(true));
+    }
+
+    /// A Pathfinder effect whose precision Scale Strokes & Effects took past the range opens at the
+    /// bound it evaluates at. OK with nothing changed records no step, OK with another option
+    /// changed keeps the stored precision, and a precision the user sets replaces it.
+    #[test]
+    fn a_pathfinder_precision_scaled_past_its_range_opens_at_the_bound_and_ok_keeps_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 50, "height": 50})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.apply", json!({"effect": "pathfinder.add", "params": {"precision": 8}})).unwrap();
+        let g = app.session.doc().unwrap().selection.objects[0];
+        app.run("object.scale", json!({"sx": 200, "strokes": true})).unwrap();
+        let params = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node(g).unwrap().appearance.effects[0].params.clone();
+        assert_eq!(params(&app)["precision"].as_f64(), Some(16.0));
+        let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let open = |app: &mut VectorcraftApp| {
+            app.run("effect.dialog", json!({"effect": "pathfinder.add", "index": 0, "item": null})).unwrap();
+            assert_eq!(app.ui.dialog.as_ref().unwrap().fields["precision"].as_f64(), Some(10.0));
+        };
+        open(&mut app);
+        let before = steps(&app);
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!((steps(&app), params(&app)["precision"].as_f64()), (before, Some(16.0)), "OK with nothing changed");
+        open(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("removeRedundantPoints".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!((params(&app)["precision"].as_f64(), &params(&app)["removeRedundantPoints"]), (Some(16.0), &json!(true)));
+        open(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("precision".into(), json!(2.5));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(params(&app)["precision"].as_f64(), Some(2.5));
+        // Setting the bound itself (`ui.dialog.set`, or the Precision field) replaces a stored value past it.
+        app.run("object.scale", json!({"sx": 800, "strokes": true})).unwrap();
+        assert_eq!(params(&app)["precision"].as_f64(), Some(20.0));
+        open(&mut app);
+        super::super::set_field(app.ui.dialog.as_mut().unwrap(), "precision".into(), json!(10.0));
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(params(&app)["precision"].as_f64(), Some(10.0));
     }
 
     /// A Radial Blur whose saved Blur Center lies outside the object's bounds (a document written

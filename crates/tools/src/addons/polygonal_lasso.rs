@@ -167,6 +167,13 @@ impl Tool for PolygonalLassoTool {
         self.mesh.options()
     }
 
+    /// Pick the gradient mesh points the tool chosen before held (`meshPoints`).
+    fn set_option(&mut self, key: &str, value: &serde_json::Value) {
+        if key == "meshPoints" {
+            self.mesh.set_options(value);
+        }
+    }
+
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut out = self.mesh.overlays(cx, &|id| cx.selection.contains(id));
         let mut line = self.vertices.clone();

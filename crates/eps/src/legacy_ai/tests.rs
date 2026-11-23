@@ -58,7 +58,41 @@ fn sample() -> Document {
     doc.insert(Some(front), usize::MAX, ellipse).unwrap();
     let mut png = vec![];
     let img = image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -236,6 +270,81 @@ fn hue_wheel_gradients_are_written_with_the_stops_on_their_curve() {
             assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03), "{method:?} at {t}: {a:?} vs {b:?}");
         }
     }
+}
+
+/// The written definition of the gradient named `name` in `text`, and how many stops it holds.
+fn definition<'a>(text: &'a str, name: &str) -> (&'a str, usize) {
+    let def = text.split(&format!("%AI5_BeginGradient: ({name})\n")).nth(1).and_then(|d| d.split("%AI5_EndGradient").next()).unwrap();
+    (def, def.matches(" %_Bs\n").count())
+}
+
+/// The format's gradients mix their stops' colors directly: a Perceptual gradient is written in
+/// process colors with the colors on its curve as stops, no more than the reader reads, in a
+/// definition of its own rather than its swatch's, with a warning, and opens with the colors it
+/// had. A Classic gradient keeps its own stops and gives no warning.
+#[test]
+fn perceptual_gradients_are_written_with_the_stops_on_their_curve() {
+    use vectorcraft_color::{GradientMethod, Swatch};
+    let mut doc = Document::new(200.0, 100.0);
+    for (name, color) in [("Night", Color::cmyk(1.0, 1.0, 0.0, 0.0)), ("Sun", Color::cmyk(0.0, 0.0, 1.0, 0.0))] {
+        doc.swatches.push(Swatch { name: name.into(), paint: Paint::solid(color), global: true, spot: true });
+    }
+    let stop = |offset: f32, color: Color, swatch: &str| GradientStop { swatch: Some(swatch.into()), ..GradientStop::new(offset, color) };
+    let stops = vec![stop(0.0, Color::cmyk(1.0, 1.0, 0.0, 0.0), "Night"), stop(1.0, Color::cmyk(0.0, 0.0, 1.0, 0.0), "Sun")];
+    let mut g = GradientPaint::new(Gradient { method: GradientMethod::Perceptual, ..Gradient::new(GradientKind::Linear, stops) });
+    g.swatch = Some("Dusk".into());
+    let want = g.gradient.clone();
+    // The same stops mixed directly stray from the Perceptual curve, so a file holding only the
+    // two stops would not open with the colors it had.
+    let classic = Gradient { method: GradientMethod::Classic, ..want.clone() };
+    assert!(
+        (0..=100).any(|k| {
+            let t = k as f32 / 100.0;
+            want.sample(t).0.to_rgb().iter().zip(classic.sample(t).0.to_rgb()).any(|(a, b)| (a - b).abs() > 0.05)
+        }),
+        "the methods mix alike"
+    );
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == PERCEPTUAL_STOPS), "{:?}", out.warnings);
+    assert!(!out.warnings.iter().any(|w| w == HUE_STOPS), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert!(!text.contains("(Dusk)"), "the curve is not the swatch's gradient");
+    assert!(!text.contains("(Night)") && !text.contains("(Sun)"), "the stops are process colors: {text}");
+    let (_, written) = definition(&text, "Gradient");
+    assert!((3..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{written} stops");
+    let read = crate::import(&out.bytes).unwrap().document;
+    let mut back = None;
+    read.walk(|n| {
+        if let (None, Paint::Gradient(g)) = (&back, n.appearance.fill_paint()) {
+            back = Some(g.gradient.clone());
+        }
+    });
+    let back = back.unwrap();
+    assert!(back.method.is_classic());
+    assert_eq!(back.stops.len(), written, "every stop written is read");
+    assert!(back.stops.iter().all(|s| s.swatch.is_none()), "{:?}", back.stops);
+    for k in 0..=100 {
+        let t = k as f32 / 100.0;
+        let (a, b) = (want.sample(t).0.to_rgb(), back.sample(t).0.to_rgb());
+        assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03), "at {t}: {a:?} vs {b:?}");
+    }
+
+    // Classic: its own two stops, its spot colors and its swatch's name, without the warning.
+    let mut doc = Document::new(200.0, 100.0);
+    doc.swatches.push(Swatch { name: "Night".into(), paint: Paint::solid(Color::cmyk(1.0, 1.0, 0.0, 0.0)), global: true, spot: true });
+    let mut g = GradientPaint::new(classic);
+    g.swatch = Some("Dusk".into());
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(20.0, 10.0, 180.0, 90.0)), Paint::Gradient(Box::new(g)), Paint::None);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == PERCEPTUAL_STOPS), "{:?}", out.warnings);
+    let text = String::from_utf8_lossy(&out.bytes).into_owned();
+    assert_eq!(definition(&text, "Dusk").1, 2);
+    assert!(text.contains("%%DocumentCustomColors: (Night)"), "{text}");
 }
 
 /// A radial gradient repeated out from a center far from the shape is written with its ramp points
@@ -507,11 +616,15 @@ fn writes_the_documented_operators() {
 #[test]
 fn a_rotated_image_keeps_its_place() {
     let mut doc = Document::new(200.0, 100.0);
-    let mut png = vec![];
-    image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255])
-        .unwrap()
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    let img = craft_image_codecs::Image::from_raw(
+        2,
+        1,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        vec![255, 0, 0, 255, 0, 0, 255, 255],
+    )
+    .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -545,9 +658,41 @@ fn a_rotated_image_keeps_its_place() {
 /// A 16 × 16 RGB image of `doc` filling `r`.
 fn picture(doc: &mut Document, r: Rect) -> Node {
     let mut png = vec![];
-    image::RgbaImage::from_fn(16, 16, |u, v| image::Rgba([(u * 16) as u8, (v * 16) as u8, 128, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_fn(16, 16, |u, v| image::Rgba([(u * 16) as u8, (v * 16) as u8, 128, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -556,6 +701,25 @@ fn picture(doc: &mut Document, r: Rect) -> Node {
         doc.alloc_id(),
         NodeKind::Image(Box::new(ImageObject { key, width: 16, height: 16, xf, link: None, placement: Default::default(), pixels: None })),
     )
+}
+
+/// A distorted image as deep as the writer goes, the art of the innermost of 8 nested symbols, is
+/// written as one image at the placement nearest its corners, with a warning, not left out.
+#[test]
+fn a_distorted_image_nested_as_deep_as_the_limit_is_written_as_its_nearest_placement() {
+    let mut doc = Document::new(200.0, 100.0);
+    let mut art = picture(&mut doc, Rect::new(10.0, 10.0, 90.0, 90.0));
+    art.set_image_corners([(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y))).unwrap();
+    for i in 0..8 {
+        let name = format!("S{i}");
+        doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
+        art = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: name, xf: Affine::IDENTITY });
+    }
+    doc.insert(doc.default_layer(), usize::MAX, art).unwrap();
+    let out = write(&doc);
+    assert!(out.warnings.iter().any(|w| w == DEEP_DISTORTED), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes).unwrap();
+    assert_eq!(text.lines().filter(|l| l.ends_with(" XI")).count(), 1, "the one image");
 }
 
 /// A layer `Below` holding a clipping group (a circle clipping an image, as in #2692), a group
@@ -658,6 +822,51 @@ fn images_are_written_in_the_form_the_specification_shows() {
     assert!(rgb.iter().zip([247.0, 148.0, 29.0]).all(|(c, want)| (c * 255.0 - want).abs() < 0.1), "{rgb:?}");
 }
 
+/// An image's samples are written as upper-case hex on `%` comment lines (§8.1, §8.4) of 60
+/// digits, the last line shorter, each line ending with a newline: no samples write no line, and
+/// samples that fill their last line exactly write no empty `%` line after it.
+#[test]
+fn image_samples_are_written_as_hex_lines() {
+    let hex = |samples: &[u8]| {
+        let mut s = String::new();
+        super::writer::Writer::push_hex(&mut s, samples);
+        s
+    };
+    let mut samples = vec![0x00, 0x09, 0x0A, 0xAF, 0xFF];
+    samples.extend(0x10..=0x29);
+    assert_eq!(hex(&samples), "%00090AAFFF101112131415161718191A1B1C1D1E1F202122232425262728\n%29\n");
+    assert_eq!(hex(&samples[..30]), "%00090AAFFF101112131415161718191A1B1C1D1E1F202122232425262728\n");
+    assert_eq!(hex(&samples[..29]), "%00090AAFFF101112131415161718191A1B1C1D1E1F2021222324252627\n");
+    assert_eq!(hex(&[0xAB]), "%AB\n");
+    assert_eq!(hex(&[]), "");
+    // Appended after what is already written.
+    let mut s = String::from("0 0 1 1 1 1 8 3 0 0 0 0 XI\n");
+    super::writer::Writer::push_hex(&mut s, &[0xC0, 0xFF, 0xEE]);
+    assert_eq!(s, "0 0 1 1 1 1 8 3 0 0 0 0 XI\n%C0FFEE\n");
+}
+
+/// The hex lines are the same as formatting each sample with `{:02X}` and breaking the digits
+/// into lines of [`HEX_LINE`], for every length up to three lines and one more sample, and for
+/// every byte value.
+#[test]
+fn image_hex_matches_formatted_samples() {
+    let formatted = |samples: &[u8]| {
+        let digits: String = samples.iter().map(|c| format!("{c:02X}")).collect();
+        let lines: Vec<String> = digits.as_bytes().chunks(HEX_LINE).map(|l| format!("%{}\n", std::str::from_utf8(l).unwrap())).collect();
+        lines.concat()
+    };
+    let all: Vec<u8> = (0..=255u8).cycle().skip(7).take(3 * HEX_LINE / 2 + 1).collect();
+    for n in 0..=all.len() {
+        let mut s = String::new();
+        super::writer::Writer::push_hex(&mut s, &all[..n]);
+        assert_eq!(s, formatted(&all[..n]), "{n} samples");
+    }
+    let every: Vec<u8> = (0..=255u8).collect();
+    let mut s = String::new();
+    super::writer::Writer::push_hex(&mut s, &every);
+    assert_eq!(s, formatted(&every));
+}
+
 /// The pieces of an image cut into a raster mesh warp (as Object › Expand leaves a Warp on an
 /// image) are written as the image whole once, then each as the part of it that its triangle shows,
 /// and the file draws as the document does ([`write`] runs it).
@@ -666,9 +875,42 @@ fn the_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
     // GUARDS: each of a warped image's 200 pieces was written with all of the image's samples.
     let mut doc = Document::new(200.0, 160.0);
     let mut png = vec![];
-    image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage =
+            (image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -725,7 +967,41 @@ fn empty_images_get_the_size_note_and_undecodable_ones_the_decode_note() {
 /// at (`x`, `y`).
 fn colorized_image(doc: &mut Document, (w, h): (u32, u32), gray: Vec<u8>, paint: &Paint, (x, y): (f64, f64)) -> Node {
     let mut png = vec![];
-    image::GrayImage::from_raw(w, h, gray).unwrap().write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::GrayImage::from_raw(w, h, gray).unwrap()).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -891,6 +1167,63 @@ fn rgb_stops_are_written_again_unchanged() {
     let (first, again) = (stops(first), stops(again));
     assert_eq!(first.len(), 12, "{first:?}");
     assert_eq!(again, first);
+}
+
+/// With a working RGB space other than sRGB, a Lab fill and a freeform gradient's average color
+/// are written as RGB values in the working RGB space, so they read back as RGB colors that show as
+/// the colors they were written for.
+#[test]
+fn a_lab_fill_reads_back_as_the_same_color_in_a_wide_gamut_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_LEGACY_AI_WIDE_GAMUT_LAB";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "legacy_ai::tests::a_lab_fill_reads_back_as_the_same_color_in_a_wide_gamut_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let lab = Color::lab(60.0, 20.0, -30.0);
+    let mut doc = Document::new(100.0, 100.0);
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)), Paint::solid(lab), Paint::None);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    // A freeform gradient is written as the average of its stops' display colors.
+    let (a, b) = (Color::rgb(0.9, 0.2, 0.1), Color::lab(50.0, -40.0, -20.0));
+    let stops = vec![GradientStop::new(0.0, a), GradientStop::new(1.0, b)];
+    let free = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Freeform, stops))));
+    let n = shape(&mut doc, shapes::rectangle(Rect::new(60.0, 10.0, 90.0, 50.0)), free, Paint::None);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let average = {
+        let (a, b) = (a.to_rgb(), b.to_rgb());
+        [0, 1, 2].map(|i| (a[i] + b[i]) / 2.0)
+    };
+    // Written without [`write`]'s printed comparison, which paints a gradient in its first stop's
+    // color and not in the average color the writer writes for a freeform gradient.
+    let back = crate::import(&export_legacy_ai(&doc, &LegacyAiOptions::default()).unwrap().bytes).unwrap().document;
+    let mut read = vec![];
+    back.walk(|n| {
+        if let NodeKind::Path { .. } = n.kind {
+            read.push(n.appearance.fill_paint());
+        }
+    });
+    let [Paint::Solid { color: got @ Color::Rgb { .. }, .. }, Paint::Solid { color: avg @ Color::Rgb { .. }, .. }] = read.as_slice() else {
+        panic!("two RGB fills: {read:?}")
+    };
+    for (got, w, what) in [(got, lab.to_rgb(), "Lab fill"), (avg, average, "freeform gradient's average")] {
+        let g = got.to_rgb();
+        assert!(g.iter().zip(w).all(|(a, b)| (a - b).abs() < 2e-3), "{what} {got:?} shows as {g:?}, not {w:?}");
+    }
 }
 
 /// A gradient from white to #1b2a6b, the colors of #2687's circle, placed at `geom` (None: fitted
@@ -1274,6 +1607,266 @@ fn names_outside_windows_1252_are_replaced_and_kept_apart() {
     let read = crate::import(&out.bytes).unwrap().document;
     let want = [Some("?"), Some("? 2"), Some("??"), Some("?"), Some("?? 2"), None].map(|n| n.map(String::from));
     assert_eq!(inks(&read), want);
+}
+
+/// `doc` written with [`Numbered::take`](super::writer::Numbered::take) numbering names by its
+/// counters (`scanned` false) or by searching the names given for each number it tries.
+fn export_numbering(doc: &Document, scanned: bool) -> LegacyAiOutput {
+    let o = LegacyAiOptions { created: Some(0), ..LegacyAiOptions::default() };
+    super::writer::SCANNED_NAMES.with(|s| s.set(scanned));
+    let out = export_legacy_ai(doc, &o);
+    super::writer::SCANNED_NAMES.with(|s| s.set(false));
+    out.unwrap()
+}
+
+/// A linear gradient from `color` to white, named `swatch`.
+fn gradient_from(color: Color, swatch: Option<&str>) -> Paint {
+    let g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, color), GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))]);
+    let mut paint = GradientPaint::new(g);
+    paint.swatch = swatch.map(String::from);
+    Paint::Gradient(Box::new(paint))
+}
+
+/// A name the counters give is the first free `name 2`, `name 3`… for every order of names, those
+/// already numbered (`Sky 2`, `Gradient 2 2`) and the empty name included.
+#[test]
+fn numbered_names_are_the_first_free_number() {
+    let bases = ["Gradient", "Gradient 2", "Gradient 3", "Gradient 2 2", "Sky", "Sky 2", "Sky 4", "?", "? 2", ""];
+    let mut seed = 7u32;
+    let order: Vec<&str> = (0..3000)
+        .map(|_| {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            bases[(seed >> 16) as usize % bases.len()]
+        })
+        .collect();
+    let names = |scanned: bool| {
+        super::writer::SCANNED_NAMES.with(|s| s.set(scanned));
+        let mut numbered = super::writer::Numbered::default();
+        let names: Vec<String> = order.iter().map(|b| numbered.take((*b).to_string())).collect();
+        super::writer::SCANNED_NAMES.with(|s| s.set(false));
+        names
+    };
+    let (counted, scanned) = (names(false), names(true));
+    for (i, (c, s)) in counted.iter().zip(&scanned).enumerate() {
+        assert_eq!(c, s, "name {i}, {:?}", order[i]);
+    }
+    let given: std::collections::HashSet<&String> = counted.iter().collect();
+    assert_eq!(given.len(), counted.len(), "every name is given once");
+}
+
+/// Gradient definitions and spot colors whose names collide are numbered as the file has always
+/// numbered them: a gradient's swatch name or `Gradient`, then the first free number, with equal
+/// gradients sharing a definition. The whole file is the same either way.
+#[test]
+fn colliding_gradient_and_spot_names_are_numbered_as_before() {
+    let mut doc = spots_and_gradient(&["\u{8d64}", "?", "\u{9752}", "? 2"], "Gradient 3");
+    let layer = doc.layers[0].id;
+    let swatches = [None, None, Some("Gradient"), None, Some("\u{6e10}"), Some("?"), None, Some("Gradient 2"), Some("")];
+    for (i, swatch) in swatches.into_iter().enumerate() {
+        let c = i as f32 / 10.0;
+        for repeat in 0..2 {
+            let x = 10.0 + 15.0 * i as f64;
+            let r = Rect::new(x, 60.0 + 15.0 * f64::from(repeat), x + 10.0, 70.0 + 15.0 * f64::from(repeat));
+            let n = shape(&mut doc, shapes::rectangle(r), gradient_from(Color::cmyk(c, 1.0 - c, 0.5, 0.0), swatch), Paint::None);
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+    }
+    let out = export_numbering(&doc, false);
+    let before = export_numbering(&doc, true);
+    let text = String::from_utf8(out.bytes).unwrap();
+    assert_eq!(text, String::from_utf8(before.bytes).unwrap());
+    assert_eq!(out.warnings, before.warnings);
+    let defined: Vec<&str> = text.lines().filter_map(|l| l.strip_suffix(" 0 2 Bd")).collect();
+    let want = [
+        "(Gradient 3)",
+        "(Gradient)",
+        "(Gradient 2)",
+        "(Gradient 4)",
+        "(Gradient 5)",
+        "(?)",
+        "(? 2)",
+        "(Gradient 6)",
+        "(Gradient 2 2)",
+        "(Gradient 7)",
+    ];
+    assert_eq!(defined, want);
+    for name in want {
+        assert_eq!(text.matches(&format!("1 {name} ")).count(), if name == "(Gradient 3)" { 1 } else { 2 }, "{name}");
+    }
+    assert!(text.contains("%%DocumentCustomColors: (?)\n%%+ (? 2)\n%%+ (? 3)\n%%+ (? 2 2)\n"), "{text}");
+}
+
+/// `doc` written with its gradient definitions found by comparing each in turn (`scanned`) or
+/// through their index.
+fn export_scanned(doc: &Document, scanned: bool) -> LegacyAiOutput {
+    let o = LegacyAiOptions { created: Some(0), ..LegacyAiOptions::default() };
+    super::writer::SCANNED_DEFINITIONS.with(|s| s.set(scanned));
+    let out = export_legacy_ai(doc, &o);
+    super::writer::SCANNED_DEFINITIONS.with(|s| s.set(false));
+    out.unwrap()
+}
+
+/// A document of rectangles filled with gradients: one with a gradient swatch `Sky` of its own;
+/// `distinct` with gradients of their own; `reused` with one of `ramps` others in turn; one with a
+/// gradient swatch `Dawn` whose gradient is the first of those `ramps`; two whose gradients differ
+/// only in the sign of a zero offset; and two with the same gradient, whose midpoint is not a
+/// number.
+fn many_gradients(distinct: u16, reused: u16, ramps: u16) -> Document {
+    let mut doc = Document::new(1000.0, 1000.0);
+    let layer = doc.layers[0].id;
+    let shade = |i: u16, n: u16| f32::from(i) / f32::from(n.max(1));
+    let mut paints = vec![gradient_from(Color::rgb(0.1, 0.2, 0.3), Some("Sky"))];
+    for i in 0..distinct {
+        paints.push(gradient_from(Color::rgb(shade(i, distinct), 0.5, 0.0), None));
+    }
+    for i in 0..reused {
+        paints.push(gradient_from(Color::cmyk(0.0, shade(i % ramps.max(1), ramps), 0.5, 0.0), None));
+    }
+    paints.push(gradient_from(Color::cmyk(0.0, 0.0, 0.5, 0.0), Some("Dawn")));
+    let stops = |offset: f32, midpoint: f32| {
+        let mut first = GradientStop::new(offset, Color::rgb(0.2, 0.3, 0.4));
+        first.midpoint = midpoint;
+        let g = Gradient::new(GradientKind::Linear, vec![first, GradientStop::new(1.0, Color::BLACK)]);
+        Paint::Gradient(Box::new(GradientPaint::new(g)))
+    };
+    paints.extend([stops(0.0, 0.5), stops(-0.0, 0.5), stops(0.0, f32::NAN), stops(0.0, f32::NAN)]);
+    for (i, paint) in (0u16..).zip(paints) {
+        let (x, y) = (f64::from(i % 40) * 25.0, f64::from(i / 40 % 40) * 25.0);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), paint, Paint::None);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    doc
+}
+
+/// Gradient definitions found through their index are those found by comparing each in turn: the
+/// file is the same, byte for byte, with the same warnings. An earlier definition of the same
+/// gradient serves a gradient swatch of another name; gradients that differ only in the sign of a
+/// zero share a definition; a gradient that is not equal to itself is defined each time.
+#[test]
+fn indexed_gradient_definitions_write_the_same_file() {
+    let doc = many_gradients(300, 300, 7);
+    let (indexed, scanned) = (export_scanned(&doc, false), export_scanned(&doc, true));
+    let differ = indexed.bytes.iter().zip(&scanned.bytes).position(|(a, b)| a != b);
+    assert!(indexed.bytes == scanned.bytes, "the files differ from byte {differ:?} ({} and {} bytes)", indexed.bytes.len(), scanned.bytes.len());
+    assert_eq!(indexed.warnings, scanned.warnings);
+    assert_eq!(indexed.setting_notes, scanned.setting_notes);
+    let text = String::from_utf8(indexed.bytes).unwrap();
+    let defined: Vec<&str> = text.lines().filter_map(|l| l.strip_suffix(" 0 2 Bd")).collect();
+    // `Sky`, 300 of their own, 7 reused, 1 for both signs of zero and 2 for the gradient that
+    // is not a number.
+    assert_eq!(defined.len(), 1 + 300 + 7 + 1 + 2, "{defined:?}");
+    assert_eq!(defined.first(), Some(&"(Sky)"));
+    assert!(!defined.contains(&"(Dawn)"), "{defined:?}");
+}
+
+/// A gradient is matched with the definitions of the same gradient, not with each definition:
+/// 1,000 gradients of their own and 1,000 of 10 others take a comparison or so each, where
+/// comparing each definition in turn takes hundreds of thousands.
+#[test]
+fn legacy_gradient_definitions_are_found_without_comparing_each() {
+    let doc = many_gradients(1000, 1000, 10);
+    let comparisons = |scanned: bool| {
+        super::writer::GRADIENT_COMPARISONS.with(|c| c.set(0));
+        export_scanned(&doc, scanned);
+        super::writer::GRADIENT_COMPARISONS.with(std::cell::Cell::get)
+    };
+    let (indexed, scanned) = (comparisons(false), comparisons(true));
+    assert!(indexed <= 2 * 2006, "{indexed} comparisons through the index");
+    assert!(scanned > 100 * indexed, "{scanned} comparisons scanning, {indexed} through the index");
+}
+
+/// The time to write 5,000 rectangles with gradients of their own and 5,000 with 50 others, with
+/// the definitions found by comparing each in turn and through their index: the median of 7 runs
+/// of each, alternating, with the files compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture legacy_gradient_definitions_timing`.
+#[test]
+#[ignore = "timing"]
+fn legacy_gradient_definitions_timing() {
+    let doc = many_gradients(5000, 5000, 50);
+    let mut times = [vec![], vec![]];
+    let mut files: [Option<Vec<u8>>; 2] = [None, None];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, scanned) in [true, false].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let out = export_scanned(&doc, scanned);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            files[k].get_or_insert(out.bytes);
+        }
+    }
+    assert_eq!(files[0], files[1]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("10,006 gradient fills, median of 7 runs ({how}):");
+    println!("| definitions found | median (ms) | runs (ms) |");
+    println!("|---|---:|---|");
+    for (k, label) in ["comparing each in turn", "through the index"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.1}", ms(*d))).collect();
+        println!("| {label} | {:.1} | {} |", ms(times[k][3]), runs.join(", "));
+    }
+}
+
+/// The time this thread has run, and how it was measured.
+fn thread_time() -> (std::time::Duration, &'static str) {
+    if let Some(ns) = std::fs::read_to_string("/proc/thread-self/schedstat").ok().and_then(|s| s.split_whitespace().next()?.parse::<u64>().ok()) {
+        return (std::time::Duration::from_nanos(ns), "thread CPU time");
+    }
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    (START.get_or_init(std::time::Instant::now).elapsed(), "wall-clock time")
+}
+
+/// The time to write 1,500 objects that each have a gradient of their own and no swatch name,
+/// with a few named ones that collide, numbering names by counters and by searching the names
+/// given: the median of 7 runs of each, alternating, with the files compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture many_unnamed_gradients`.
+#[test]
+#[ignore = "timing"]
+fn many_unnamed_gradients_are_named_quickly() {
+    let mut doc = Document::new(1000.0, 1000.0);
+    let layer = doc.layers[0].id;
+    let count = 1500u16;
+    for i in 0..count + 4 {
+        let swatch = match i {
+            0 => Some("Gradient 3"),
+            1 => Some("Gradient"),
+            2 | 3 => Some("Sky"),
+            _ => None,
+        };
+        let t = f32::from(i) / f32::from(count + 4);
+        let (x, y) = (f64::from(i % 40) * 25.0, f64::from(i / 40) * 25.0);
+        let paint = gradient_from(Color::rgb(t, 1.0 - t, (t * 7.0).fract()), swatch);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), paint, Paint::None);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let mut times = [vec![], vec![]];
+    let mut files: [Option<Vec<u8>>; 2] = [None, None];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, scanned) in [false, true].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let out = export_numbering(&doc, scanned);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            let defs = String::from_utf8_lossy(&out.bytes).lines().filter(|l| l.ends_with(" Bd")).count();
+            assert_eq!(defs, usize::from(count) + 4);
+            files[k].get_or_insert(out.bytes);
+        }
+    }
+    assert_eq!(files[0], files[1]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("{} gradient definitions, median of 7 runs ({how}):", count + 4);
+    println!("| naming | median (ms) | runs (ms) |");
+    println!("|---|---:|---|");
+    for (k, label) in ["counters", "search of the names given"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.1}", ms(*d))).collect();
+        println!("| {label} | {:.1} | {} |", ms(times[k][3]), runs.join(", "));
+    }
 }
 
 /// #6502: the legacy writer gives Yellow, Magenta and Cyan (presets 4, 5 and 6) the file's

@@ -430,6 +430,8 @@ fn set_live_shape_refuses_an_unknown_key() {
         json!({"id": 3, "radius": 5}),
         json!({"ids": [3], "sides": 6, "polygonAngle": 15, "polygonRadius": 20, "sideLength": null, "makeSidesEqual": true}),
         json!({"pieStart": 30, "pieEnd": 90, "invertPie": true}),
+        json!({"pieEnd": 90, "constrainPie": true}),
+        json!({"ids": [3], "lineLength": 72, "lineAngle": 90}),
         json!({"items": null}),
     ] {
         assert!(check_params(ID, &ok).is_ok(), "{ok}");
@@ -705,12 +707,13 @@ fn an_effect_parameter_without_a_default_is_held_to_its_type() {
     use crate::cmd::params::undefaulted_type;
     use vectorcraft_render::effects::effect_catalog;
     // Read by checks of their own: a stored texture or a texture to load, an SVG filter and its axes, a Warp's
-    // map and the style of Crop Marks.
+    // map, the style of Crop Marks and a custom bevel's name and points.
     let own_check = |effect: &str, key: &str| match key {
         "textureImage" | "name" | "xml" => true,
         "axes" => effect == "svg.filter",
         "version" => effect.starts_with("warp."),
         "style" => effect == "cropMarks",
+        "bevelName" | "bevelProfile" => matches!(effect, "threeD.extrude" | "threeD.classicExtrude"),
         _ => false,
     };
     let mut unlisted = vec![];

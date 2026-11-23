@@ -38,7 +38,8 @@
 //! `alert`, `confirm` and `prompt` open dialogs ([`dialogs`]): in the app the run waits for the
 //! person's answer, and a run with nobody to ask takes its answers from `script.run`'s `answers`.
 //!
-//! `File` and `Folder` read files inside the script's own folder ([`files`]).
+//! `File` and `Folder` read files inside the script's own folder, and write in the run's temporary
+//! folder, the script's data folder and what a person allowed it in a file dialog ([`files`]).
 //!
 //! A script with `#targetengine name` runs in that named engine, which the session keeps with the
 //! globals its runs leave, at most [`MAX_ENGINES`] of them with [`ENGINE_HEAP_BYTES`] of heap each
@@ -103,6 +104,31 @@ pub const MAX_ARGS_BYTES: usize = 1 << 20;
 const SLICE_HOST_CALLS: u32 = 256;
 /// The bytes that may cross between a script and the host in one run.
 const MAX_BRIDGE_BYTES: u64 = 4 << 30;
+/// The most files a run's report names in `written`; past them the report has `writtenMore`.
+pub const MAX_WRITTEN: usize = 4096;
+
+/// The files a run wrote, as its report names them: at most [`MAX_WRITTEN`], each once, in the
+/// order they were first written, and whether it wrote more.
+#[derive(Default)]
+struct Written {
+    paths: Vec<String>,
+    seen: std::collections::HashSet<String>,
+    more: bool,
+}
+
+impl Written {
+    fn add(&mut self, path: String) {
+        if self.seen.contains(&path) {
+            return;
+        }
+        if self.paths.len() >= MAX_WRITTEN {
+            self.more = true;
+            return;
+        }
+        self.seen.insert(path.clone());
+        self.paths.push(path);
+    }
+}
 
 /// The version `vc.api.version` gives.
 pub const API_VERSION: &str = "1.0";
@@ -142,6 +168,8 @@ pub fn refused_to_scripts(id: &str) -> bool {
         "color.removeProfile",
         "file.print",
         "view.proofSetup",
+        "view.proofSetup.save",
+        "view.proofSetup.load",
         "view.proofColors",
         "view.overprintPreview",
         "view.separationsPreview",
@@ -259,9 +287,29 @@ struct KeptMap {
 struct KeptMaps {
     maps: std::collections::VecDeque<KeptMap>,
     bytes: usize,
+    /// The SHA-256 of each source the engine's runs compiled (their scripts and what they
+    /// evaluated), at most [`MAX_ENGINE_CODE`], and whether there were more: a later run's kept file
+    /// grants are in force only for code they were kept for ([`files::Disk`]).
+    code: std::collections::BTreeSet<String>,
+    code_full: bool,
 }
 
+/// The most sources whose SHA-256 a named engine keeps.
+pub const MAX_ENGINE_CODE: usize = 1024;
+
 impl KeptMaps {
+    /// Adds the sources `code` (and whether a run had more than it counted) to the engine's code.
+    fn keep_code(&mut self, (code, more): (Vec<String>, bool)) {
+        self.code_full |= more;
+        for hash in code {
+            if self.code.len() >= MAX_ENGINE_CODE && !self.code.contains(&hash) {
+                self.code_full = true;
+            } else {
+                self.code.insert(hash);
+            }
+        }
+    }
+
     fn keep(&mut self, tag: u32, map: include::SourceMap, script: Option<Arc<str>>) {
         let bytes = map.bytes() + script.as_ref().map_or(0, |s| s.len());
         let limit = kept_map_bytes();
@@ -705,7 +753,7 @@ struct Host {
     waiting: Cell<bool>,
     log: RefCell<Vec<Value>>,
     log_bytes: Cell<usize>,
-    written: RefCell<Vec<String>>,
+    written: RefCell<Written>,
     /// The run's number in its session, and the script's name, which its console lines carry.
     run: u64,
     name: Arc<str>,
@@ -822,6 +870,7 @@ impl Host {
             return;
         }
         let mut kept = kept.borrow_mut();
+        kept.keep_code(self.disk.borrow().code());
         kept.keep(tag, std::mem::take(&mut *self.script_map.borrow_mut()), Some(self.report_name.clone()));
         for (n, map) in std::mem::take(&mut *self.eval_maps.borrow_mut()).into_iter().enumerate() {
             match u32::try_from(n + 1).ok().and_then(|n| tag.checked_add(n)).filter(|t| *t != vectorcraft_js::UNKNOWN_SOURCE) {
@@ -942,6 +991,35 @@ impl Host {
             return None;
         }
         Some(left)
+    }
+
+    /// Adds `paths`, files the script's `File` and `Folder` objects wrote, to the report's `written`.
+    fn note_written(&self, paths: Vec<String>) {
+        let mut written = self.written.borrow_mut();
+        for path in paths {
+            written.add(path);
+        }
+    }
+
+    /// Adds `writtenMore: true` to `report` when the run wrote more files than its `written` names.
+    fn more_written(&self, report: &mut Value) {
+        if self.written.borrow().more
+            && let Some(o) = report.as_object_mut()
+        {
+            o.insert("writtenMore".into(), json!(true));
+        }
+    }
+
+    /// Writes the files the script left open and adds every file written to the report's `written`.
+    /// → the files it could not write.
+    fn flush_files(&self) -> Vec<String> {
+        let mut disk = self.disk.borrow_mut();
+        let failed = disk.flush_all();
+        disk.record_code();
+        let paths = disk.take_written();
+        drop(disk);
+        self.note_written(paths);
+        failed
     }
 
     fn over(&self, limit: &str) -> HostError {
@@ -1160,13 +1238,13 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
     crate::file_access::start_recording_writes();
-    let r = s.execute(id, params);
+    // The command reads and writes only where the script's own files may, and the open documents' files.
+    let gate = host.disk.borrow().gate(s.docs.iter().filter_map(|d| d.path.clone()).collect());
+    let r = crate::file_access::with_script_gate(gate, || s.execute(id, params));
     // A file a command wrote before it failed is on disk all the same.
     let mut written = host.written.borrow_mut();
     for path in crate::file_access::finish_recording_writes(r.is_ok()) {
-        if !written.contains(&path) {
-            written.push(path);
-        }
+        written.add(path);
     }
     drop(written);
     match r {
@@ -1483,12 +1561,14 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
     }
 }
 
-/// `message`, with what to do about a failure that comes from a script written for another program.
-fn explained(kind: &RunErrorKind, message: &str) -> String {
+/// `e`'s message, with what to do about a failure that comes from a script written for another
+/// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
+fn explained(e: &RunError) -> String {
     const HOST_OBJECTS: &[&str] = &["app", "Window", "BridgeTalk", "activeDocument", "documents"];
+    let message = &e.message;
     let names_host_object =
         message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
-    if *kind == RunErrorKind::Thrown && names_host_object {
+    if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
         message.to_string()
@@ -1506,7 +1586,7 @@ fn preprocessor_error(f: include::Failure) -> (RunError, Option<Arc<str>>) {
         include::FailKind::Limit => (RunErrorKind::Limit(LimitKind::Host), f.message),
     };
     let file = (f.index > 0).then_some(f.file);
-    (RunError { kind, message, line: f.line, column: f.column }, file)
+    (RunError { kind, message, line: f.line, column: f.column, authored: false }, file)
 }
 
 /// `e`, the error `realm` raised in the run of `host`, at the line and column of the file it is in,
@@ -1515,20 +1595,20 @@ fn located(host: &Host, realm: &Realm, e: &RunError) -> (RunError, Option<Arc<st
     let map = |m: &include::SourceMap| {
         let (index, file, line, column) = m.locate(e.line, e.column);
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
-        (RunError { kind: e.kind.clone(), message, line, column }, index, file)
+        (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, index, file)
     };
     // An error `$.evalFile` raised for a file it could not run, and no script caught, is at that
     // file's place.
     if let Some((file, line, column)) = realm.error_mark().and_then(|m| host.eval_failures.borrow().get(m as usize).cloned()) {
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
-        return (RunError { kind: e.kind.clone(), message, line, column }, Some(file));
+        return (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, Some(file));
     }
     if e.line == 0 {
         return (e.clone(), None);
     }
     // An error in code from a source whose map is not at hand, such as code that `eval` compiled,
     // is given without a place.
-    let unplaced = || (RunError { kind: e.kind.clone(), message: e.message.clone(), line: 0, column: 0 }, None);
+    let unplaced = || (RunError { line: 0, column: 0, ..e.clone() }, None);
     match realm.error_source() {
         0 => {
             let (e, index, file) = map(&host.script_map.borrow());
@@ -1701,6 +1781,15 @@ impl Session {
         self.script_report.as_ref().filter(|r| r["ok"] == false).map(failure_text)
     }
 
+    /// [`Self::script_failure_text`] split around the message when that message is text the script
+    /// supplied itself (`messageOrigin` `script`): the text before it, the message and the text after
+    /// it. `None` when the last run did not fail, or failed with one of the app's own errors.
+    pub fn script_authored_failure(&self) -> Option<(String, &str, String)> {
+        let r = self.script_report.as_ref().filter(|r| r["ok"] == false && r["messageOrigin"] == "script")?;
+        let (before, after) = failure_frame(r);
+        Some((before, r["message"].as_str().unwrap_or_default(), after))
+    }
+
     /// Has the running script used up its growth allowance, so a person must answer? A run asked
     /// to stop no longer waits: the next [`Session::script_pump`] ends it.
     pub fn script_waiting(&self) -> bool {
@@ -1731,6 +1820,32 @@ impl Session {
     pub fn script_answer(&mut self, answer: DialogAnswer) -> bool {
         let Some(k) = self.script_key.as_ref().filter(|_| !self.script_stop.is_set()) else { return false };
         with_job(k, |j| j.host.dialogs.answer(&mut j.realm, answer)).unwrap_or(false)
+    }
+
+    /// The file dialog (`File.openDialog`, `File.saveDialog`, `Folder.selectDialog` and the objects'
+    /// `openDlg`, `saveDlg` and `selectDlg`) the running script waits at. A run asked to stop no
+    /// longer waits.
+    pub fn script_picker(&self) -> Option<files::ScriptPicker> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.disk.borrow().picker.clone())).flatten()
+    }
+
+    /// Gives the file dialog the running script waits at its answer: the paths the person picked
+    /// and allowed, or a denial. The next [`Session::script_pump`] goes on from the call. → false
+    /// when no file dialog waits.
+    pub fn script_pick(&mut self, answer: files::PickAnswer) -> bool {
+        let Some(k) = self.script_key.as_ref().filter(|_| !self.script_stop.is_set()) else { return false };
+        with_job(k, |j| {
+            let Some(data) = j.host.disk.borrow_mut().answer(answer) else { return false };
+            j.host.note_written(j.host.disk.borrow_mut().take_written());
+            if let Err(e) = j.realm.answer(data) {
+                j.host.disk.borrow_mut().failed = Some(e);
+            }
+            true
+        })
+        .unwrap_or(false)
     }
 
     /// The name of the running script.
@@ -1771,7 +1886,7 @@ impl Session {
         };
         drop(key);
         let kind = LimitKind::Interrupted;
-        let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
+        let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0, authored: false };
         let _ = self.script_failed(job, &e);
         true
     }
@@ -1859,7 +1974,17 @@ impl Session {
                 realm.set_limits(limits);
                 realm
             }
-            None => Realm::with_options(options, limits),
+            None => {
+                let mut realm = Realm::with_options(options, limits);
+                // Code the run evaluates withdraws the kept file grants not kept for it, before it runs.
+                let l = link.clone();
+                realm.observe_code(move |units| {
+                    if let Ok(h) = current(&l) {
+                        h.disk.borrow_mut().saw_code(units);
+                    }
+                });
+                realm
+            }
         };
         realm.share_interrupt(&self.script_stop);
         realm.set_data_limits(DataLimits::default());
@@ -1879,7 +2004,7 @@ impl Session {
             waiting: Cell::new(false),
             log: RefCell::new(Vec::new()),
             log_bytes: Cell::new(0),
-            written: RefCell::new(Vec::new()),
+            written: RefCell::new(Written::default()),
             run: self.script_runs,
             name: console::line_name(&name),
             console: RefCell::default(),
@@ -1888,7 +2013,20 @@ impl Session {
             commands: RefCell::default(),
             run_nanos: Cell::new(0),
             dialogs: dialogs::Dialogs::new(self.script_frames, &realm, request.answers),
-            disk: RefCell::new(files::Disk::new(files.scope())),
+            disk: RefCell::new(files::Disk::new(
+                files.scope(),
+                files::Setup {
+                    framed: self.script_frames,
+                    script: request.file.clone(),
+                    // The text with its included files, so a changed included file asks again.
+                    source: expanded.as_ref().map_or_else(|_| request.source.clone(), |e| e.source.clone()),
+                    data_dir: self.script_data_dir.clone(),
+                    engine_code: kept_maps.as_ref().map_or_else(Default::default, |m| {
+                        let m = m.borrow();
+                        (m.code.iter().cloned().collect(), m.code_full)
+                    }),
+                },
+            )),
             files: RefCell::new(files),
             script_map: RefCell::default(),
             eval_maps: RefCell::default(),
@@ -1978,14 +2116,16 @@ impl Session {
             self.script_gone(key, console::Ending::Internal);
             return Some(Err(EngineError::Other(JOB_GONE.to_string())));
         };
-        if let Some(e) = job.host.dialogs.take_failure() {
+        let picker_failed = job.host.disk.borrow_mut().failed.take();
+        if let Some(e) = job.host.dialogs.take_failure().or(picker_failed) {
             return Some(self.script_failed(job, &e));
         }
         // A canceled request ends a sleep or a wait at this pump.
         if vectorcraft_doc::cancel::check().is_err() {
             self.script_stop.set();
         }
-        if (job.host.waiting.get() || job.host.asleep().is_some() || job.host.dialogs.is_waiting()) && !self.script_stop.is_set() {
+        let picking = job.host.disk.borrow().picker.is_some();
+        if (job.host.waiting.get() || job.host.asleep().is_some() || job.host.dialogs.is_waiting() || picking) && !self.script_stop.is_set() {
             JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
             self.script_key = Some(key);
             return None;
@@ -1993,14 +2133,14 @@ impl Session {
         // A stop while a dialog waits ends the run there; the interpreter cannot go on from the call.
         if job.realm.waits() {
             let kind = LimitKind::Interrupted;
-            let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0 };
+            let e = RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0, authored: false };
             return Some(self.script_failed(job, &e));
         }
         job.host.calls_this_slice.set(0);
         let outcome = run_slice(self, &mut job);
         match outcome {
             Err(panic) => {
-                let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0 };
+                let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0, authored: false };
                 Some(self.script_failed(job, &e))
             }
             Ok(Err(e)) => Some(self.script_failed(job, &e)),
@@ -2017,7 +2157,7 @@ impl Session {
                 } else {
                     format!("`answers` has {n} answers the script did not use")
                 };
-                Some(self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0 }))
+                Some(self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0, authored: false }))
             }
             Ok(Ok(Progress::Done(_))) => {
                 let r = self.script_commit(job);
@@ -2029,6 +2169,9 @@ impl Session {
 
     fn script_failed(&mut self, job: Job, e: &RunError) -> Result<Value> {
         job.host.dialogs.stopped();
+        job.host.disk.borrow_mut().picker = None;
+        // The run fails already; a file it could not write is left out of `written`.
+        let _ = job.host.flush_files();
         let fuel_left = job.realm.fuel_left();
         let (e, file) = located(&job.host, &job.realm, e);
         let mut report = failure_report(&job.name, &e, file.as_deref(), &job.host, fuel_left, job.realm.limits().fuel.saturating_sub(fuel_left));
@@ -2046,6 +2189,12 @@ impl Session {
     /// Makes the working copy the session's state: one undo step for each document whose art
     /// changed, nothing for the others.
     fn script_commit(&mut self, mut job: Job) -> Result<Value> {
+        let unwritten = job.host.flush_files();
+        if !unwritten.is_empty() {
+            let message = format!("{UNWRITTEN_FILES}: {}", unwritten.join(", "));
+            let e = RunError { kind: RunErrorKind::Thrown, message, line: 0, column: 0, authored: false };
+            return self.script_failed(job, &e);
+        }
         // The working copy goes into the session; `job.world` holds the state before the run.
         job.world.swap(self);
         self.prefs = merged_prefs(&job.world.start_prefs, &self.prefs, &job.world.choices.prefs);
@@ -2061,7 +2210,7 @@ impl Session {
             if changed && (!crate::sanity::doc_sane(&st.doc, &st.selection) || st.doc.too_deep(None)) {
                 job.world.docs = start;
                 job.world.swap(self);
-                let e = RunError { kind: RunErrorKind::Internal, message: INVALID_RESULT.to_string(), line: 0, column: 0 };
+                let e = RunError { kind: RunErrorKind::Internal, message: INVALID_RESULT.to_string(), line: 0, column: 0, authored: false };
                 return self.script_failed(job, &e);
             }
         }
@@ -2109,11 +2258,12 @@ impl Session {
             "ok": true,
             "name": job.name,
             "changed": changed_names,
-            "written": *host.written.borrow(),
+            "written": host.written.borrow().paths,
             "log": *host.log.borrow(),
             "fuelUsed": job.realm.limits().fuel - job.realm.fuel_left(),
             "hostCalls": host.calls.get(),
         });
+        host.more_written(&mut report);
         close_run(self, host, &mut report, console::Ending::Finished);
         self.end_job(job, false);
         self.script_report = Some(report.clone());
@@ -2140,6 +2290,7 @@ impl Session {
 
 const OPEN_EDIT: &str = "a drag or an undo group is open; finish it before running a script";
 const INVALID_RESULT: &str = "the script left a document that cannot be kept";
+const UNWRITTEN_FILES: &str = "Error: the script left open files that could not be written";
 const JOB_GONE: &str = "the script's run is no longer available";
 const HISTORY_LOST: &str = "a failed command changed undo steps that could not be put back, so the script was stopped";
 // Text a script reads from the errors it catches, or that ends its run with its name and place.
@@ -2164,16 +2315,18 @@ fn failure_report(name: &str, e: &RunError, file: Option<&str>, host: &Host, fue
     let mut report = json!({
         "ok": false,
         "kind": kind_id(&e.kind),
-        "message": explained(&e.kind, &e.message),
+        "message": explained(e),
+        "messageOrigin": if e.authored { "script" } else { "built-in" },
         "name": name,
         "line": e.line,
         "column": e.column,
-        "written": *host.written.borrow(),
+        "written": host.written.borrow().paths,
         "log": *host.log.borrow(),
         "fuelLeft": fuel_left,
         "fuelUsed": fuel_used,
         "hostCalls": host.calls.get(),
     });
+    host.more_written(&mut report);
     if let (Some(file), Some(o)) = (file, report.as_object_mut()) {
         o.insert("file".into(), json!(file));
     }
@@ -2256,6 +2409,12 @@ fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::
 
 /// The text of a failed run's error.
 fn failure_text(report: &Value) -> String {
+    let (before, after) = failure_frame(report);
+    format!("{before}{}{after}", report["message"].as_str().unwrap_or_default())
+}
+
+/// The text of a failed run's error before its message and after it.
+fn failure_frame(report: &Value) -> (String, String) {
     let s = |k: &str| report[k].as_str().unwrap_or_default();
     let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
     let at = match report["file"].as_str() {
@@ -2270,7 +2429,7 @@ fn failure_text(report: &Value) -> String {
     } else {
         String::new()
     };
-    format!("{}{at}: {} ({}){kept}", s("name"), s("message"), s("kind"))
+    (format!("{}{at}: ", s("name")), format!(" ({}){kept}", s("kind")))
 }
 
 /// A run's slice: the working copy in, the real session lent to the host functions, one measured

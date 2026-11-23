@@ -2,14 +2,17 @@
 //! scale, baseline shift, character rotation, the anti-aliasing method and the All Caps, Small Caps,
 //! Superscript, Subscript, Underline and Strikethrough toggles and the Language menu.
 
+use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::{Mutex, OnceLock};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
 use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
+use vectorcraft_engine::DocState;
 use vectorcraft_tools::{Mods, ToolKey};
 
 use super::{pstate, set_pstate};
@@ -279,14 +282,13 @@ pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
 /// has selected (the whole text when nothing is selected) while it edits text, else
 /// `text.setFormat` on the selected stories ([`selected_stories`]).
 pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
-    let Some((id, a, b)) = text_editing(app) else {
+    let Some((id, a, b)) = text_editing_kept(app)? else {
         target_selected_stories(app, &mut p);
         return app.run("text.setFormat", p);
     };
     if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
         return story_style(app, first, p);
     }
-    end_typing(app);
     p["id"] = json!(id.0);
     if b > a {
         p["start"] = json!(a);
@@ -337,7 +339,8 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
 /// and Optical set no space (#5111); nowhere to set at an empty line's start. Else it is a
 /// character attribute like the others: the selected range, or all the text.
 fn set_kerning(app: &mut VectorcraftApp, value: Value) {
-    let Some((id, a, b)) = text_editing(app) else {
+    let Ok(editing) = text_editing_kept(app) else { return };
+    let Some((id, a, b)) = editing else {
         format(app, json!({"kerning": value}));
         return;
     };
@@ -347,7 +350,6 @@ fn set_kerning(app: &mut VectorcraftApp, value: Value) {
     }
     let Some(NodeKind::Text(t)) = app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) else { return };
     let Some((target, before)) = vectorcraft_text::edit::caret_kerning_target(&t.plain_text(), a) else { return };
-    end_typing(app);
     let params = if before {
         json!({"id": id.0, "start": target.start, "end": target.end, "kerningBefore": value.as_f64().unwrap_or(0.0)})
     } else {
@@ -481,12 +483,14 @@ pub(crate) fn toggle_face(app: &mut VectorcraftApp, face: Face) -> Result<Value,
     Ok(json!({ "style": name }))
 }
 
-/// The Character panel fields that the Highlight Font Name, Highlight Kerning and Highlight
-/// Tracking commands give the keyboard focus ([`highlight`]).
+/// The Character panel fields that the Highlight Font Name, Highlight Font Size (Type › Size ›
+/// Other…), Highlight Kerning and Highlight Tracking commands give the keyboard focus
+/// ([`highlight`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Field {
     /// The font family menu: it opens, and its search field takes the focus.
     FontName,
+    FontSize,
     Kerning,
     Tracking,
 }
@@ -496,6 +500,7 @@ impl Field {
     fn salt(self) -> &'static str {
         match self {
             Field::FontName => "ch-font",
+            Field::FontSize => "ch-size",
             Field::Kerning => "ch-kern",
             Field::Tracking => "ch-track",
         }
@@ -504,17 +509,19 @@ impl Field {
     fn name(self) -> &'static str {
         match self {
             Field::FontName => "fontName",
+            Field::FontSize => "fontSize",
             Field::Kerning => "kerning",
             Field::Tracking => "tracking",
         }
     }
 }
 
-/// `type.highlightFontName`, `type.highlightKerning` and `type.highlightTracking`: show the
-/// Character panel if it is hidden (a shown one is activated, so its floating window comes
-/// forward), and give `field` the keyboard focus when the panel next draws it, a number field with
-/// its value selected (typing replaces it, Enter applies it). Without selected type or text the
-/// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
+/// `type.highlightFontName`, `type.highlightFontSize`, `type.highlightKerning` and
+/// `type.highlightTracking`: show the Character panel if it is hidden (a shown one is activated,
+/// so its floating window comes forward), and give `field` the keyboard focus when the panel next
+/// draws it, a number field with its value selected (typing replaces it, Enter applies it).
+/// Without selected type or text the Type tool edits, the panel shows, nothing takes the focus and
+/// the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
     if crate::panel_docking::visible(&app.ui, "character") {
@@ -533,21 +540,35 @@ pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value,
 /// `type.underline` (Cmd+Shift+U): what the Underline button does, on the text the panels act on.
 /// Returns whether the text is now underlined: off only when every character was underlined.
 pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // The typing Real-time Drawing off left unapplied is applied before the text is read.
+    text_editing_kept(app)?;
     text_style(app).ok_or("select some type first")?;
     let on = shared(app, |s| s.underline) != Some(true);
-    format(app, json!({"underline": on}));
+    run_format(app, json!({"underline": on}))?;
     Ok(json!(on))
+}
+
+/// `type.superscript` (Cmd+Shift+=) and `type.subscript` (Cmd+Alt+Shift+=): what the Superscript
+/// or Subscript button does, on the text the panels act on. Returns the position the text now
+/// has: `"normal"` only when every character had `position`, else `position`.
+pub(crate) fn toggle_position(app: &mut VectorcraftApp, position: &str) -> Result<Value, String> {
+    // The typing Real-time Drawing off left unapplied is applied before the text is read.
+    text_editing_kept(app)?;
+    text_style(app).ok_or("select some type first")?;
+    let change = position_toggle(shared_position(app), position);
+    let to = change["position"].clone();
+    run_format(app, change)?;
+    Ok(to)
 }
 
 /// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
-    let Some((id, a, b)) = text_editing(app) else { return };
+    let Ok(Some((id, a, b))) = text_editing_kept(app) else { return };
     if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
         story_style(app, first, p).ok();
         return;
     }
-    end_typing(app);
     let mut q = p;
     q["id"] = json!(id.0);
     if b > a {
@@ -571,6 +592,15 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
     Some((id, g("start"), g("end")))
 }
 
+/// [`text_editing`] after [`end_typing`], for an edit of the text: the selection is read in the
+/// text with the typing applied, which Real-time Drawing off leaves unapplied until then. When the
+/// typing can't be kept, the error (also shown in the status bar), so the edit stops instead of
+/// acting on a selection in the text without the typing.
+pub(crate) fn text_editing_kept(app: &mut VectorcraftApp) -> Result<Option<(NodeId, usize, usize)>, String> {
+    try_end_typing(app)?;
+    Ok(text_editing(app))
+}
+
 /// The frames of the threaded story whose whole text the Type tool has selected after Select All,
 /// in the order of the edited frame's thread as the document holds it now; `None` when its
 /// selection is in one type object.
@@ -589,7 +619,62 @@ pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
 /// in selected groups, each with every frame of its threaded story (locked and hidden frames
 /// included), each once, the frames of a story in thread order.
 pub(crate) fn selected_stories(app: &VectorcraftApp) -> Vec<NodeId> {
-    let Some(st) = app.session.active() else { return Vec::new() };
+    app.session.active().map_or_else(Vec::new, |st| story_frames(st).to_vec())
+}
+
+/// The last list [`selected_stories`] worked out, with the document version (its address, which
+/// the held `Weak` keeps from being reused, and its revision) and the selected objects it was
+/// worked out for. The Character and Paragraph panels read the list once for each field they show.
+struct StoryFrames {
+    doc: Weak<vectorcraft_doc::Document>,
+    revision: u64,
+    selection: Vec<NodeId>,
+    frames: Rc<[NodeId]>,
+}
+
+thread_local! {
+    static STORY_FRAMES: RefCell<Option<StoryFrames>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`build_selected_stories`] ran on this thread.
+    static STORY_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`story_frames`] builds the list on every read instead of keeping it.
+    static STORIES_UNKEPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// [`selected_stories`] of `st`: the kept list while `st`'s document, revision and selected
+/// objects are the ones it was worked out for, else a new one, kept in its place.
+fn story_frames(st: &DocState) -> Rc<[NodeId]> {
+    #[cfg(test)]
+    if STORIES_UNKEPT.get() {
+        return build_selected_stories(st).into();
+    }
+    STORY_FRAMES.with_borrow_mut(|kept| {
+        if let Some(k) = kept.as_ref()
+            && k.revision == st.revision
+            && k.doc.strong_count() > 0
+            && std::ptr::eq(k.doc.as_ptr(), Arc::as_ptr(&st.doc))
+            && k.selection == st.selection.objects
+        {
+            return k.frames.clone();
+        }
+        let frames: Rc<[NodeId]> = build_selected_stories(st).into();
+        *kept = Some(StoryFrames {
+            doc: Arc::downgrade(&st.doc),
+            revision: st.revision,
+            selection: st.selection.objects.clone(),
+            frames: frames.clone(),
+        });
+        frames
+    })
+}
+
+/// The list [`selected_stories`] describes, worked out from `st`'s selection.
+fn build_selected_stories(st: &DocState) -> Vec<NodeId> {
+    #[cfg(test)]
+    STORY_BUILDS.set(STORY_BUILDS.get() + 1);
     let mut frames = Vec::new();
     let mut taken = HashSet::new();
     for selected in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
@@ -609,9 +694,9 @@ pub(crate) fn selected_stories(app: &VectorcraftApp) -> Vec<NodeId> {
 /// The type objects of [`selected_stories`].
 pub(crate) fn selected_story_texts(app: &VectorcraftApp) -> Vec<&vectorcraft_doc::TextObject> {
     let Some(st) = app.session.active() else { return Vec::new() };
-    selected_stories(app)
-        .into_iter()
-        .filter_map(|id| match st.doc.node(id).map(|n| &n.kind) {
+    story_frames(st)
+        .iter()
+        .filter_map(|&id| match st.doc.node(id).map(|n| &n.kind) {
             Some(NodeKind::Text(t)) => Some(t.as_ref()),
             _ => None,
         })
@@ -643,13 +728,25 @@ fn story_style(app: &mut VectorcraftApp, first: NodeId, mut p: Value) -> Result<
     app.run("text.setRangeStyle", p)
 }
 
-/// Close the Type tool's typing session (one undo step) before another command edits the text.
+/// Close the Type tool's typing session (one undo step) before another command edits the text. The
+/// typing Real-time Drawing off left unapplied is applied first; when it can't be kept, the error
+/// shows and the session goes on.
 pub(crate) fn end_typing(app: &mut VectorcraftApp) {
+    try_end_typing(app).ok();
+}
+
+/// [`end_typing`] that also returns the error when the typing can't be kept.
+fn try_end_typing(app: &mut VectorcraftApp) -> Result<(), String> {
     if app.session.tool_options().get("typing").and_then(Value::as_bool) == Some(true) {
+        if let Err(e) = app.keep_typing() {
+            app.status(e.clone());
+            return Err(e);
+        }
         app.session.set_tool_option("commitTyping", &json!(true));
         app.session.commit_interaction().ok();
         app.sync_views();
     }
+    Ok(())
 }
 
 static CTX: OnceLock<egui::Context> = OnceLock::new();
@@ -658,7 +755,8 @@ static CTX: OnceLock<egui::Context> = OnceLock::new();
 static CLIP: Mutex<String> = Mutex::new(String::new());
 static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
-fn text_copy(app: &mut VectorcraftApp) -> bool {
+/// Copy the Type tool's selected text (with `cut`, for a Cut, whose caller then deletes it).
+fn text_copy(app: &mut VectorcraftApp, cut: bool) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
     let story = text_story(app);
     // An empty selection has nothing to copy, unless the story's text is in the other frames.
@@ -686,7 +784,7 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
         // plain-text copy would replace its formats, so let the publisher provide both text and
         // rich art. Paste on the canvas can then keep the runs after Type editing ends.
         if app.services.system_clipboard.is_some() {
-            app.publish_clipboard();
+            app.publish_clipboard(cut);
             return true;
         }
     }
@@ -757,10 +855,10 @@ pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Opti
     }
     match id {
         "edit.copy" => {
-            text_copy(app);
+            text_copy(app, false);
         }
         "edit.cut" => {
-            if text_copy(app) {
+            if text_copy(app, true) {
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
@@ -851,10 +949,10 @@ pub(crate) fn apply_type_input(app: &mut VectorcraftApp, t: TextInput) {
     match t {
         TextInput::Key(k, m) => text_key(app, k, m),
         TextInput::Copy => {
-            text_copy(app);
+            text_copy(app, false);
         }
         TextInput::Cut => {
-            if text_copy(app) {
+            if text_copy(app, true) {
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
@@ -1260,9 +1358,10 @@ pub(crate) fn axis_sliders(app: &mut VectorcraftApp, ui: &mut Ui, face: &vectorc
 
 /// Set Variable Font settings `axes` on the text the panel acts on, live while a slider drags.
 fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
-    match text_editing(app) {
-        Some((id, a, b)) => {
-            end_typing(app);
+    match text_editing_kept(app) {
+        // The typing can't be kept (the error shows): nothing is set.
+        Err(_) => {}
+        Ok(Some((id, a, b))) => {
             let mut q = json!({"id": id.0, "fontAxes": axes});
             // After Select All in threaded text: every frame of the story.
             if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
@@ -1274,7 +1373,7 @@ fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
             }
             super::live_run(app, "Character", "text.setRangeStyle", q, phase);
         }
-        None => {
+        Ok(None) => {
             let mut p = json!({ "fontAxes": axes });
             target_selected_stories(app, &mut p);
             super::live_run(app, "Character", "text.setFormat", p, phase);
@@ -1434,7 +1533,7 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
         // On only when every character the panel acts on has it; a mixed selection turns it on.
         let all_caps = shared(app, |s| s.all_caps) == Some(true);
         let small = shared(app, |s| s.small_caps.is_some()) == Some(true);
-        let position = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
+        let position = shared_position(app);
         let underline = shared(app, |s| s.underline) == Some(true);
         let strike = shared(app, |s| s.strikethrough) == Some(true);
         for (kind, tip, on, change) in [
@@ -1461,6 +1560,25 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
             format(app, json!({"language": name}));
         }
     });
+}
+
+/// The position kind (`normal`, `superscript` or `subscript`) that every character a Superscript
+/// or Subscript toggle changes has, else `""`: at a Type tool caret with no characters selected
+/// every character of the text (of each frame of a threaded story), as the toggle changes all of
+/// it there ([`run_format`], [`range_style`]), else the characters [`shared`] reads. Superscripts
+/// in different proportions count as superscript.
+fn shared_position(app: &VectorcraftApp) -> &'static str {
+    let Some((id, _, _)) = text_editing(app).filter(|&(_, a, b)| b <= a) else {
+        return shared(app, |s| s.position.id()).unwrap_or("");
+    };
+    let Some(st) = app.session.active() else { return "" };
+    let mut acc = Shared::None;
+    for frame in text_story(app).unwrap_or_else(|| vec![id]) {
+        if let Some(NodeKind::Text(t)) = st.doc.node(frame).map(|n| &n.kind) {
+            each_paragraph_run(t, None, |_, style, _| acc.add(style.position.id()));
+        }
+    }
+    acc.value().unwrap_or("")
 }
 
 /// The `text.setFormat` params of the Superscript or Subscript toggle `p` for text whose
@@ -1610,7 +1728,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let small = shared(app, |s| s.small_caps.is_some()) == Some(true);
-    let position = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
+    let position = shared_position(app);
     for (label, on, change) in [
         (tl!("Small Caps"), small, json!({"smallCaps": !small})),
         (tl!("Superscript"), position == "superscript", position_toggle(position, "superscript")),

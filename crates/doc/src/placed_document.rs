@@ -1,5 +1,5 @@
-//! Placed documents: another VectorCraft file, or a page of a PDF or `.ai` file, placed linked
-//! ([`PlacedDocument`]).
+//! Placed documents: another VectorCraft file, a page of a PDF or `.ai` file, or an EPS file,
+//! placed linked ([`PlacedDocument`]).
 //!
 //! The object keeps the link to the file and the file's bytes, stored like image data in
 //! [`Document::images`] (with a small preview a save writes instead, as for linked images), so the
@@ -7,9 +7,9 @@
 //! joins the object tree, so editing can't reach it: it is locked by design. Drawing and exporting
 //! expand it like a live object ([`crate::live::expanded`]).
 //!
-//! The file is read by the engine's loader (native documents, PDF and `.ai` pages), which lives
-//! above this crate and registers itself ([`set_loader`]); the art read is kept in a small cache
-//! by content. Before exporting,
+//! The file is read by the engine's loader (native documents, PDF and `.ai` pages, EPS files),
+//! which lives above this crate and registers itself ([`set_loader`]); the art read is kept in a
+//! small cache by content. Before exporting,
 //! every exporter calls [`Document::with_placed_art`], which adds the resources the art uses
 //! (images, symbols, patterns) under names of their own ([`RESOURCE_PREFIX`]) to a temporary copy
 //! of the document, so they never meet the user's or show in panels. Placed documents inside a
@@ -27,8 +27,8 @@ use vectorcraft_color::Paint;
 
 use crate::{AppearanceItem, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeKind, PatternDef, PlacementOptions, Symbol};
 
-/// A placed document: an artboard of another VectorCraft file, or a page of a PDF or `.ai` file,
-/// shown as one locked object.
+/// A placed document: an artboard of another VectorCraft file, a page of a PDF or `.ai` file, or
+/// an EPS file's art, shown as one locked object.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PlacedDocument {
     /// The file (its `page` is the artboard or page shown, 1-based).
@@ -461,7 +461,7 @@ fn read_preview(p: &PlacedDocument, bytes: &Arc<Vec<u8>>) -> Option<Arc<ReadDocu
     doc.layers.clear();
     doc.swatches.clear();
     let mime = if bytes.starts_with(&[0xff, 0xd8]) { "image/jpeg" } else { "image/png" };
-    doc.images.insert("preview".into(), ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: None });
+    doc.images.insert("preview".into(), ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: None, file_font: Default::default() });
     let xf = Affine::scale_non_uniform(frame.width() / w as f64, frame.height() / h as f64);
     let im = ImageObject { key: "preview".into(), width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
     let art = Node::new(art_id(), NodeKind::Group { children: vec![Arc::new(Node::new(art_id(), NodeKind::Image(Box::new(im))))], clip: false });
@@ -518,6 +518,9 @@ fn rename(n: &mut Node, prefix: &str) {
                 for r in &mut t.runs {
                     paint(&mut r.style.fill);
                     paint(&mut r.style.stroke);
+                }
+                if let Some(fonts) = &mut t.file_fonts {
+                    fonts.map_keys(|key| *key = format!("{prefix}{key}"));
                 }
             }
             NodeKind::Image(im) => {

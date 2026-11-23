@@ -23,34 +23,63 @@ fn slot_of(app: &VectorcraftApp, tool: &str) -> Option<usize> {
     slots(app).iter().position(|s| s.contains(&tool))
 }
 
-/// One headless frame of the toolbar, its keys handled first as in the app; returns the texts
-/// painted: (text, a point inside it, colour).
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<(String, Pos2, Color32)> {
-    fn texts(s: &egui::Shape, out: &mut Vec<(String, Pos2, Color32)>) {
-        match s {
-            egui::Shape::Text(t) => {
-                let color = t.galley.job.sections.first().map_or(t.fallback_color, |s| s.format.color);
-                out.push((t.galley.text().to_string(), t.pos + vec2(4.0, t.galley.size().y / 2.0), color));
-            }
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
+/// One headless frame of the toolbar, its keys handled first as in the app; returns what it painted.
+fn run_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<egui::Shape> {
     let input = RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), ..Default::default() };
     let mut out = ctx.run_ui(input, |ui| {
         crate::shortcuts::handle(app, ui.ctx());
         crate::toolbar::show(app, ui);
     });
     out.textures_delta.clear();
+    out.shapes.into_iter().map(|c| c.shape).collect()
+}
+
+/// The texts `shape` paints, added to `out`: (text, a point inside it, colour).
+fn texts(s: &egui::Shape, out: &mut Vec<(String, Pos2, Color32)>) {
+    match s {
+        egui::Shape::Text(t) => {
+            let color = t.galley.job.sections.first().map_or(t.fallback_color, |s| s.format.color);
+            out.push((t.galley.text().to_string(), t.pos + vec2(4.0, t.galley.size().y / 2.0), color));
+        }
+        egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+        _ => {}
+    }
+}
+
+/// One headless frame of the toolbar, its keys handled first as in the app; returns the texts
+/// painted: (text, a point inside it, colour).
+fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>) -> Vec<(String, Pos2, Color32)> {
     let mut shown = vec![];
-    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+    run_frame(app, ctx, time, events).iter().for_each(|s| texts(s, &mut shown));
     shown
+}
+
+/// The fills painted over `at`, in the order they are drawn.
+fn fills_at(shapes: &[egui::Shape], at: Pos2) -> Vec<Color32> {
+    fn fills(s: &egui::Shape, at: Pos2, out: &mut Vec<Color32>) {
+        match s {
+            egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.contains(at) => out.push(r.fill),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| fills(s, at, out)),
+            _ => {}
+        }
+    }
+    let mut out = vec![];
+    shapes.iter().for_each(|s| fills(s, at, &mut out));
+    out
 }
 
 fn ctx() -> egui::Context {
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     crate::theme::apply(&ctx, Default::default());
+    ctx
+}
+
+/// A context in `scheme` at brightness `b`, as Preferences sets them.
+fn ctx_in(scheme: crate::theme::Scheme, b: crate::theme::Brightness) -> egui::Context {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply_with(&ctx, b, crate::theme::Accent::default(), scheme);
     ctx
 }
 
@@ -90,6 +119,20 @@ fn cell_at(shown: &[(String, Pos2, Color32)], drawer: Rect, name: &str) -> (Pos2
         .find(|(s, p, _)| s == name && drawer.contains(*p))
         .map(|(_, p, c)| (*p, *c))
         .unwrap_or_else(|| panic!("no {name} in the drawer {drawer:?}"))
+}
+
+/// The WCAG contrast ratio of `c` drawn on `bg`, between 1 and 21.
+fn contrast(c: Color32, bg: Color32) -> f32 {
+    fn channel(v: u8) -> f32 {
+        let v = f32::from(v) / 255.0;
+        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    }
+    fn lum(c: Color32) -> f32 {
+        0.2126 * channel(c.r()) + 0.7152 * channel(c.g()) + 0.0722 * channel(c.b())
+    }
+    let (a, b) = (lum(c), lum(bg));
+    let (hi, lo) = if a > b { (a, b) } else { (b, a) };
+    (hi + 0.05) / (lo + 0.05)
 }
 
 /// The drawer frames each flyout group whole, under the heading most of its tools have: every
@@ -142,17 +185,52 @@ fn every_tool_is_listed_once_under_a_heading() {
     assert!(!heads.contains(&"More"), "every tool has a named heading: {heads:?}");
 }
 
+/// The Enclosing Lasso Tool is in the Lasso tool's flyout in both toolbars, right after the Lasso,
+/// once in the All Tools drawer (under Select) and in Keyboard Shortcuts' list, with no shortcut;
+/// Reset Toolbar keeps it there.
 #[test]
-fn enclosing_lasso_is_an_optional_addon_tool() {
+fn enclosing_lasso_is_in_the_lasso_flyout() {
     let mut app = app();
     let id = vectorcraft_tools::addons::enclosing_lasso::ID;
-    assert_eq!(heading(id), "Enclosing Lasso");
-    assert!(slot_of(&app, id).is_none());
-    app.run("toolbar.addTool", json!({"tool": id})).unwrap();
-    assert!(slot_of(&app, id).is_some());
+    for advanced in [false, true] {
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        let s = slots(&app);
+        let slot = slot_of(&app, "lasso").map(|i| s[i].clone()).expect("a Lasso slot");
+        let lasso = slot.iter().position(|t| *t == "lasso").expect("the Lasso");
+        assert_eq!(slot.get(lasso + 1), Some(&id), "advanced: {advanced}");
+        assert_eq!(s.iter().filter(|ids| ids.contains(&id)).count(), 1, "advanced: {advanced}");
+    }
+    assert_eq!(heading(id), "Select");
+    assert_eq!(sections().iter().flat_map(|(_, tools)| tools.iter()).filter(|t| t.id == id).count(), 1, "listed once in the drawer");
+    assert_eq!(vectorcraft_tools::catalog::all_tools().filter(|t| t.id == id).count(), 1, "listed once for Keyboard Shortcuts");
+    assert_eq!(vectorcraft_tools::tool_info(id).map(|t| (t.label, t.shortcut)), Some(("Enclosing Lasso Tool", None)));
     app.run("tool.select", json!({"tool": id})).unwrap();
+    assert_eq!(app.session.tool_id(), id);
+    let shown = slot_of(&app, id).map(|i| crate::toolbar::shown_tool(&app, &slots(&app)[i]));
+    assert_eq!(shown, Some(id), "the slot's button shows the tool once chosen");
+    app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+    assert!(slot_of(&app, id).is_none(), "it can be taken out");
     app.run("toolbar.reset", json!({})).unwrap();
+    let after_reset = slot_of(&app, "lasso").map(|i| slots(&app)[i].contains(&id));
+    assert_eq!(after_reset, Some(true), "Reset Toolbar puts it back");
+}
+
+/// A toolbar edited and saved before the Enclosing Lasso Tool joined the Lasso group keeps its
+/// saved layout: the tool stays in the drawer until Reset Toolbar or a drag adds it.
+#[test]
+fn a_saved_toolbar_without_enclosing_lasso_keeps_its_layout() {
+    let mut app = app();
+    let id = vectorcraft_tools::addons::enclosing_lasso::ID;
+    let saved = ToolbarCategory { name: Some("Select".into()), slots: vec![["lasso", "magicWand"].iter().map(|t| t.to_string()).collect()] };
+    app.ui.toolbar_edits = ToolbarEdits { basic: Some(vec![saved]), advanced: None };
+    app.ui = std::mem::take(&mut app.ui).sanitized();
+    assert_eq!(slots(&app), [["lasso", "magicWand"]]);
     assert!(slot_of(&app, id).is_none());
+    app.run("toolbar.reset", json!({})).unwrap();
+    let slot = slot_of(&app, "lasso").map(|i| slots(&app)[i].clone());
+    assert!(slot.is_some_and(|s| s.contains(&id)), "Reset Toolbar adds it");
 }
 
 #[test]
@@ -166,13 +244,13 @@ fn the_commands_add_move_remove_and_reset_tools() {
     // Before the first slot, moved out of its group.
     app.run("toolbar.addTool", json!({"tool": "magicWand", "slot": 0})).unwrap();
     assert_eq!(&slots(&app)[..3], [&["magicWand"][..], &["selection"], &["directSelection", "groupSelection"]]);
-    assert_eq!(slots(&app)[3], ["lasso"]);
+    assert_eq!(slots(&app)[3], ["lasso", "enclosingLasso"]);
     // After a slot, and into a group (last), moved out of the Rectangle group.
     app.run("toolbar.addTool", json!({"tool": "slice", "slot": 1, "place": "after"})).unwrap();
     assert_eq!(slots(&app)[2], ["slice"]);
     let ellipse = slot_of(&app, "ellipse").unwrap();
     app.run("toolbar.addTool", json!({"tool": "star", "slot": ellipse, "place": "group"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "star"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "curvatureCircle", "star"]);
     assert!(!slots(&app)[slot_of(&app, "rectangle").unwrap()].contains(&"star"));
     // Onto its own group: nothing changes.
     let before = slots(&app);
@@ -182,7 +260,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     assert_eq!(crate::toolbar::slots(&app)[0].0, Some("Select"));
     // Out: one tool, or its whole group; an emptied slot goes.
     app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
-    assert_eq!(slots(&app)[ellipse], ["star"]);
+    assert_eq!(slots(&app)[ellipse], ["circle", "curvatureCircle", "star"]);
     app.run("toolbar.removeTool", json!({"tool": "addAnchor", "group": true})).unwrap();
     assert!(slot_of(&app, "pen").is_none() && slot_of(&app, "addAnchor").is_none());
     // Bad params change nothing.
@@ -300,23 +378,103 @@ fn edit_toolbar_opens_a_drawer_beside_the_toolbar() {
     assert!(!app.ui.tools_drawer && app.session.tool_id() == "artboard");
 }
 
-/// The drawer dims the tools the toolbar holds.
+/// The drawer dims the tools the toolbar holds, in the dim text colour, which stays readable
+/// against the panel; the disabled colour, at the drawer's 12.5 px, does not (#8294). Checked in
+/// every colour scheme and brightness: the dim text reaches 4.5:1 wherever the palette's own dim
+/// text does — everywhere but Classic at its middle-dark brightness, whose dim text is about 3.6:1
+/// against its panel — and the drawer never dims it further.
 #[test]
 fn tools_in_the_toolbar_are_dimmed_in_the_drawer() {
+    for scheme in crate::theme::Scheme::ALL {
+        for b in crate::theme::Brightness::ALL {
+            let mut app = app();
+            let ctx = ctx_in(scheme, b);
+            let what = format!("{scheme:?} {b:?}");
+            app.run("window.editToolbar", json!({"open": true})).unwrap();
+            frame(&mut app, &ctx, 0.0, vec![]);
+            let shown = frame(&mut app, &ctx, 0.1, vec![]);
+            let drawer = drawer_rect(&ctx).unwrap();
+            let t = Tokens::get(&ctx);
+            let dim = t.text_dim;
+            let (_, color) = cell_at(&shown, drawer, "Ellipse Tool");
+            assert_eq!(color, dim, "{what}");
+            let readable = contrast(dim, t.panel).min(4.5);
+            assert!(
+                contrast(color, t.panel) >= readable,
+                "{what}: a dimmed tool's name must stay readable: {color:?} on {:?} is {:.2}:1",
+                t.panel,
+                contrast(color, t.panel)
+            );
+            assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, dim, "{what}");
+            assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, t.text_disabled, "{what}: the disabled colour is unreadable at the drawer's size");
+        }
+    }
+    // A tool added to the toolbar is dimmed, one removed is not.
     let mut app = app();
     let ctx = ctx();
     app.run("window.editToolbar", json!({"open": true})).unwrap();
     frame(&mut app, &ctx, 0.0, vec![]);
-    let shown = frame(&mut app, &ctx, 0.1, vec![]);
+    frame(&mut app, &ctx, 0.1, vec![]);
     let drawer = drawer_rect(&ctx).unwrap();
-    let dim = Tokens::get(&ctx).text_disabled;
-    assert_eq!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
-    assert_ne!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
+    let dim = Tokens::get(&ctx).text_dim;
     app.run("toolbar.addTool", json!({"tool": "artboard"})).unwrap();
     app.run("toolbar.removeTool", json!({"tool": "ellipse"})).unwrap();
     let shown = frame(&mut app, &ctx, 0.2, vec![]);
     assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
     assert_eq!(cell_at(&shown, drawer, "Artboard Tool").1, dim);
+}
+
+/// A hovered dimmed row keeps its text readable: its hover is a recess in the panel's darker fill,
+/// not the lighter hover fill, which would leave the dim text at 4.3:1 in the default theme
+/// (#8294). Every colour scheme and brightness keeps 4.5:1 over that fill.
+#[test]
+fn a_hovered_dimmed_row_stays_readable() {
+    for scheme in crate::theme::Scheme::ALL {
+        for b in crate::theme::Brightness::ALL {
+            let mut app = app();
+            let ctx = ctx_in(scheme, b);
+            let what = format!("{scheme:?} {b:?}");
+            app.run("window.editToolbar", json!({"open": true})).unwrap();
+            frame(&mut app, &ctx, 0.0, vec![]);
+            let shown = frame(&mut app, &ctx, 0.1, vec![]);
+            let drawer = drawer_rect(&ctx).unwrap();
+            let t = Tokens::get(&ctx);
+            let (at, _) = cell_at(&shown, drawer, "Ellipse Tool");
+            let shapes = run_frame(&mut app, &ctx, 0.2, vec![Event::PointerMoved(at)]);
+            let fills = fills_at(&shapes, at);
+            assert!(fills.contains(&t.panel_darker), "{what}: a dimmed row's hover is a recess in the panel's darker fill: {fills:?}");
+            assert!(!fills.contains(&t.hover), "{what}: not the lighter hover fill, which the dim text can't hold 4.5:1 over");
+            let mut shown = vec![];
+            shapes.iter().for_each(|s| texts(s, &mut shown));
+            let (_, color) = cell_at(&shown, drawer, "Ellipse Tool");
+            assert_eq!(color, t.text_dim, "{what}");
+            assert!(
+                contrast(color, t.panel_darker) >= 4.5,
+                "{what}: a hovered dimmed tool's name must stay readable: {color:?} on {:?} is {:.2}:1",
+                t.panel_darker,
+                contrast(color, t.panel_darker)
+            );
+        }
+    }
+}
+
+/// The drawer's headings end in the UI language's colon: in French a no-break space and a colon
+/// (#7991), in English a plain colon.
+#[test]
+fn drawer_headings_use_the_language_colon() {
+    let mut app = app();
+    let ctx = ctx();
+    app.run("window.editToolbar", json!({"open": true})).unwrap();
+    for (code, colon) in [("fr", "\u{a0}:"), ("en", ":")] {
+        let lang = crate::i18n::Lang::from_code(code).unwrap();
+        crate::i18n::set_current(lang);
+        frame(&mut app, &ctx, 0.0, vec![]);
+        let shown = frame(&mut app, &ctx, 0.1, vec![]);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let drawer = drawer_rect(&ctx).unwrap();
+        let want = format!("{}{colon}", crate::i18n::tr(lang, "Select"));
+        assert!(shown.iter().any(|(s, p, _)| s.trim() == want && drawer.contains(*p)), "{code}: {want:?}");
+    }
 }
 
 /// #1018: tools drag from the drawer onto the toolbar (between two tools, or onto one to join
@@ -344,7 +502,7 @@ fn tools_drag_between_the_drawer_and_the_toolbar() {
     let drawer = drawer_rect(&ctx).unwrap();
     let (slice, _) = cell_at(&shown, drawer, "Slice Tool");
     drag(&mut app, &ctx, 2.0, slice, tools[ellipse].center());
-    assert_eq!(slots(&app)[ellipse], ["ellipse", "slice"]);
+    assert_eq!(slots(&app)[ellipse], ["ellipse", "circle", "curvatureCircle", "slice"]);
     // A dimmed tool (in the toolbar already) doesn't drag.
     let before = slots(&app);
     let shown = frame(&mut app, &ctx, 2.9, vec![]);
@@ -359,7 +517,7 @@ fn tools_drag_between_the_drawer_and_the_toolbar() {
     // Within the toolbar: Selection onto the divider over the Lasso.
     let tools = crate::toolbar::tests::widget_rects(&ctx, BUTTON);
     drag(&mut app, &ctx, 5.0, tools[0].center(), tools[2].center_top() + vec2(0.0, 3.0));
-    assert_eq!(&slots(&app)[..3], [&["directSelection", "groupSelection"][..], &["selection"], &["lasso", "magicWand"]]);
+    assert_eq!(&slots(&app)[..3], [&["directSelection", "groupSelection"][..], &["selection"], &["lasso", "enclosingLasso", "magicWand"]]);
     // The drawer closed, the toolbar is locked: the same drag moves nothing.
     app.run("window.editToolbar", json!({"open": false})).unwrap();
     frame(&mut app, &ctx, 6.0, vec![]);
@@ -395,7 +553,7 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     // The Tools panel's tools aren't dimmed: they aren't in this toolbar. The Show section, for
     // the controls under the Tools panel's tools, is left out.
     assert!(!shown.iter().any(|(s, p, _)| s == "Show:" && drawer.contains(*p)));
-    let dim = Tokens::get(&ctx).text_disabled;
+    let dim = Tokens::get(&ctx).text_dim;
     assert_ne!(cell_at(&shown, drawer, "Ellipse Tool").1, dim);
     // Dragged onto the blank toolbar, a tool is added to it.
     let (ellipse, _) = cell_at(&shown, drawer, "Ellipse Tool");
@@ -543,6 +701,17 @@ fn the_add_tool_menu_fills_a_new_toolbar_without_a_drag() {
     click(&mut app, &ctx, 40.0, items(&shown, "Lasso Tool")[0].0);
     assert_eq!(mine(&app), [["magicWand"]]);
     assert_eq!(slots(&app), shipped);
+    // In French the menu's headings end in a no-break space and a colon (#7991).
+    open(&mut app, 49.0);
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    frame(&mut app, &ctx, 49.7, vec![]);
+    let french = frame(&mut app, &ctx, 49.8, vec![]);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    for heading in ["Remove Tool", "Select"] {
+        let want = format!("{}\u{a0}:", crate::i18n::tr(fr, heading));
+        assert_eq!(items(&french, &want).len(), 1, "{want:?}");
+    }
 }
 
 /// New Toolbar… in the drawer's menu opens the New Toolbar dialog, which asks for a name.
@@ -629,12 +798,59 @@ fn drop_targets_follow_the_buttons_edges() {
     assert_eq!(drop_target(&[], pos2(0.0, 0.0), 1), (None, Place::Before));
 }
 
-/// The add-ons' tools are in neither toolbar as they ship: the drawer lists them under their
-/// add-on's heading, and they can be added from there.
+/// The Trim at Crossings Tool is in the Scissors tool's flyout in both toolbars, after the Knife,
+/// once in the All Tools drawer and in Keyboard Shortcuts' list, with no shortcut; Reset Toolbar
+/// keeps it there.
+#[test]
+fn trim_at_crossings_is_in_the_scissors_flyout() {
+    let mut app = app();
+    let trim = vectorcraft_tools::addons::trim::ID;
+    for advanced in [false, true] {
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        let s = slots(&app);
+        let slot = slot_of(&app, "scissors").map(|i| s[i].clone()).expect("a Scissors slot");
+        let knife = slot.iter().position(|id| *id == "knife").expect("the Knife beside the Scissors");
+        assert_eq!(slot.get(knife + 1), Some(&trim), "advanced: {advanced}");
+        assert_eq!(s.iter().filter(|ids| ids.contains(&trim)).count(), 1, "advanced: {advanced}");
+    }
+    assert_eq!(sections().iter().flat_map(|(_, tools)| tools.iter()).filter(|t| t.id == trim).count(), 1, "listed once in the drawer");
+    assert_eq!(vectorcraft_tools::catalog::all_tools().filter(|t| t.id == trim).count(), 1, "listed once for Keyboard Shortcuts");
+    assert_eq!(vectorcraft_tools::tool_info(trim).map(|t| (t.label, t.shortcut)), Some(("Trim at Crossings Tool", None)));
+    app.run("tool.select", json!({"tool": trim})).unwrap();
+    assert_eq!(app.session.tool_id(), trim);
+    let shown = slot_of(&app, trim).map(|i| crate::toolbar::shown_tool(&app, &slots(&app)[i]));
+    assert_eq!(shown, Some(trim), "the slot's button shows the tool once chosen");
+    app.run("toolbar.removeTool", json!({"tool": trim})).unwrap();
+    assert!(slot_of(&app, trim).is_none(), "it can be taken out");
+    app.run("toolbar.reset", json!({})).unwrap();
+    let after_reset = slot_of(&app, "scissors").map(|i| slots(&app)[i].contains(&trim));
+    assert_eq!(after_reset, Some(true), "Reset Toolbar puts it back");
+}
+
+/// A toolbar edited and saved before the Trim at Crossings Tool joined the Scissors group keeps
+/// its saved layout: the tool stays in the drawer until Reset Toolbar or a drag adds it.
+#[test]
+fn a_saved_toolbar_without_trim_at_crossings_keeps_its_layout() {
+    let mut app = app();
+    let trim = vectorcraft_tools::addons::trim::ID;
+    let saved = ToolbarCategory { name: Some("Draw".into()), slots: vec![["eraser", "scissors", "knife"].iter().map(|id| id.to_string()).collect()] };
+    app.ui.toolbar_edits = ToolbarEdits { basic: Some(vec![saved]), advanced: None };
+    app.ui = std::mem::take(&mut app.ui).sanitized();
+    assert_eq!(slots(&app), [["eraser", "scissors", "knife"]]);
+    assert!(slot_of(&app, trim).is_none());
+    app.run("toolbar.reset", json!({})).unwrap();
+    let slot = slot_of(&app, "scissors").map(|i| slots(&app)[i].clone());
+    assert!(slot.is_some_and(|s| s.contains(&trim)), "Reset Toolbar adds it");
+}
+
+/// The add-ons' tools are in neither toolbar as they ship (the Trim at Crossings Tool, in the
+/// Scissors tool's group, and the Enclosing Lasso Tool, in the Lasso tool's group, aside): the
+/// drawer lists them under their add-on's heading, and they can be added from there.
 #[test]
 fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let mut app = app();
-    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
     let contour = vectorcraft_tools::addons::contour::ID;
     let box3d = vectorcraft_tools::addons::box3d::ID;
     let polygonal = vectorcraft_tools::addons::polygonal_lasso::ID;
@@ -649,9 +865,8 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
             "cornerTool",
             "slideAnchor",
             "sharedEdge",
-            "trimAtCrossings",
+            "tangentCircle",
             "smartPen",
-            enclosing,
             contour,
             box3d,
             polygonal
@@ -668,11 +883,10 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     };
     assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..8].to_vec())));
     assert_eq!(listed("smartPen"), Some(("Smart Pen", vec!["smartPen"])));
-    assert_eq!(listed(enclosing), Some(("Enclosing Lasso", vec![enclosing])));
     assert_eq!(listed(contour), Some(("Contour", vec![contour])));
     assert_eq!(listed(box3d), Some(("3D Box", vec![box3d])));
     assert_eq!(listed(polygonal), Some(("Polygonal Lasso", vec![polygonal])));
-    for tool in ["extendPath", "smartPen", enclosing, contour, box3d, polygonal] {
+    for tool in ["extendPath", "smartPen", contour, box3d, polygonal] {
         app.run("toolbar.addTool", json!({"tool": tool})).unwrap();
         assert!(slot_of(&app, tool).is_some(), "{tool}");
     }

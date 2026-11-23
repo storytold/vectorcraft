@@ -37,6 +37,8 @@ use crate::widgets::{self, menu_item};
 /// (Zoom Out reduces the preview, Zoom In increases it). The step sizes themselves are ours.
 const CELL_STEPS: [f32; 7] = [16.0, 22.0, 30.0, 42.0, 56.0, 72.0, 96.0];
 const CELL_DEFAULT: usize = 2;
+/// The least height of a grid's list that scrolls, when the panel leaves it less room.
+const MIN_LIST_H: f32 = 64.0;
 
 /// The grid step in [`crate::state::UiState::glyphs_preview`]. `0` means [`CELL_DEFAULT`]; a
 /// stored step is `index + 1`. A value past the steps (a hand-edited preferences file) is the
@@ -59,6 +61,26 @@ fn set_cell_index(app: &mut VectorcraftApp, index: usize) {
 fn nudge_cell(index: usize, delta: i32) -> usize {
     let last = CELL_STEPS.len() as i32 - 1;
     (index as i32 + delta).clamp(0, last) as usize
+}
+
+/// The cells in a row of a grid `w` wide that holds `count` cells of side `cell` in a list at most
+/// `list_h` tall. When the rows run past the list, its scroll bar takes a column of its own and the
+/// cells go beside it; when they fit, the cells take the whole width.
+fn grid_cols(ui: &Ui, w: f32, cell: f32, count: usize, list_h: f32) -> usize {
+    let fit = |room: f32| ((room / cell).floor() as usize).max(1);
+    let gap = ui.spacing().item_spacing.y;
+    let cols = fit(w);
+    // The height `ScrollArea::show_rows` gives the rows: the gaps between them, none after the last.
+    let content_h = count.div_ceil(cols) as f32 * (row_height(ui, cell) + gap) - gap;
+    // The list is as tall as the room left, but at least as tall as `min_scrolled_height` makes it.
+    let view_h = list_h.min(ui.available_height().max(list_h.min(MIN_LIST_H)));
+    if view_h.ceil() < content_h { fit(w - ui.spacing().scroll.allocated_width()) } else { cols }
+}
+
+/// The height of a row of cells of side `cell`: a row laid out with `Ui::horizontal` is at least as
+/// tall as a button, so the two smallest cell sizes give rows taller than their cells.
+fn row_height(ui: &Ui, cell: f32) -> f32 {
+    cell.max(ui.spacing().interact_size.y)
 }
 
 /// Character subsets offered by the Show menu.
@@ -299,6 +321,40 @@ fn insert(app: &mut VectorcraftApp, ctx: &egui::Context, ch: char) -> bool {
     }
 }
 
+/// The grid's cells for `face`: the characters listed, with their glyphs, then the glyphs listed by
+/// glyph id. `category` gives the glyphs of one of the face's categories; without it, the cells are
+/// the characters of `lo..=hi`, and in Entire Font (`subset` 0) also the glyphs no character maps.
+fn grid_glyphs(
+    face: &vectorcraft_text::FontFace,
+    category: Option<&vectorcraft_text::GlyphCategory>,
+    subset: usize,
+    (lo, hi): (u32, u32),
+) -> (Vec<(char, u32)>, std::sync::Arc<[u32]>) {
+    let all = face.mapped_chars();
+    match category {
+        // A category lists its glyphs that a character maps by that character, and the others by
+        // glyph id after them.
+        Some(c) => {
+            let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
+            // A glyph several characters map is listed once, by the first of them; a glyph only a
+            // space or control character maps is listed by glyph id, as no character it can insert.
+            let mut mapped: HashSet<u32> = HashSet::new();
+            let chars: Vec<(char, u32)> =
+                all.iter().copied().filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g)).collect();
+            (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
+        }
+        None => {
+            // The list is sorted by code point, so the range's characters lie between two bounds.
+            let start = all.partition_point(|(c, _)| (*c as u32) < lo);
+            let end = all.partition_point(|(c, _)| (*c as u32) <= hi);
+            let chars = all.get(start..end).unwrap_or_default().iter().copied().filter(|(c, _)| !c.is_control() && !c.is_whitespace()).collect();
+            // Entire Font also lists the glyphs no character maps (positional forms, alternates,
+            // ligatures) by glyph id, after the characters.
+            (chars, if subset == 0 { face.unencoded_glyphs() } else { std::sync::Arc::from([]) })
+        }
+    }
+}
+
 /// Browse and insert glyphs from the chosen font, with font controls below the glyph grid.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -335,31 +391,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.label(egui::RichText::new(tl!("No fonts are available.")).color(t.text_dim));
         return;
     };
-    let (chars, unencoded): (Vec<(char, u32)>, Vec<u32>) = match category.and_then(|i| face.glyph_categories().get(i)) {
-        // A category lists its glyphs that a character maps by that character, and the others by
-        // glyph id after them.
-        Some(c) => {
-            let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
-            // A glyph several characters map is listed once, by the first of them; a glyph only a
-            // space or control character maps is listed by glyph id, as no character it can insert.
-            let mut mapped: HashSet<u32> = HashSet::new();
-            let chars: Vec<(char, u32)> =
-                face.chars().into_iter().filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g)).collect();
-            (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
-        }
-        None => {
-            let chars = face.chars().into_iter().filter(|(c, _)| (lo..=hi).contains(&(*c as u32)) && !c.is_control() && !c.is_whitespace()).collect();
-            // Entire Font also lists the glyphs no character maps (positional forms, alternates,
-            // ligatures) by glyph id, after the characters.
-            (chars, if subset == 0 { face.unencoded_glyphs().to_vec() } else { vec![] })
-        }
-    };
+    let (chars, unencoded) = grid_glyphs(&face, category.and_then(|i| face.glyph_categories().get(i)), subset, (lo, hi));
     let total = chars.len() + unencoded.len();
     let cell = CELL_STEPS[cell_index(app)];
-    let cols = ((w / cell).floor() as usize).max(1);
-    let rows = total.div_ceil(cols);
     let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
     let list_h = widgets::panel_list_height(ui, (ui.available_height() - 64.0).max(cell * 3.0), 33.0);
+    let cols = grid_cols(ui, w, cell, total, list_h);
+    let rows = total.div_ceil(cols);
     let hover_id = egui::Id::unique("gl-hover");
     let selected = selected_char(app);
     // What a double-click on an unencoded glyph can do to the selected character.
@@ -368,20 +406,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // only when the selection moves to another character, so it still scrolls freely meanwhile.
     let follow_id = egui::Id::unique("gl-follow");
     let (followed, shown): (Option<char>, std::ops::Range<usize>) = ui.ctx().data(|d| d.get_temp(follow_id)).unwrap_or_default();
-    let mut area = egui::ScrollArea::vertical().max_height(list_h).min_scrolled_height(list_h.min(64.0)).auto_shrink([false, false]);
+    let mut area = egui::ScrollArea::vertical().max_height(list_h).min_scrolled_height(list_h.min(MIN_LIST_H)).auto_shrink([false, false]);
     if selected != followed
         && let Some(c) = selected
         && let Ok(i) = chars.binary_search_by_key(&c, |x| x.0)
         && !shown.contains(&(i / cols))
     {
-        let row_h = cell + ui.spacing().item_spacing.y;
+        let row_h = row_height(ui, cell) + ui.spacing().item_spacing.y;
         area = area.vertical_scroll_offset((((i / cols) as f32 + 0.5) * row_h - list_h * 0.5).max(0.0));
     }
     // A pick in a cell's pop-up of alternates: the character (none for a glyph no character maps),
     // the glyph of its cell, the glyph picked.
     let mut popup_pick: Option<(Option<char>, u32, u32)> = None;
     let shown =
-        area.show_rows(ui, cell, rows, |ui, range| {
+        area.show_rows(ui, row_height(ui, cell), rows, |ui, range| {
             for r in range.clone() {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -587,18 +625,18 @@ fn alternates(app: &mut VectorcraftApp, ui: &mut Ui, w: f32) {
         default: false,
     }));
     let cell = CELL_STEPS[cell_index(app)];
-    let cols = ((w / cell).floor() as usize).max(1);
-    let rows = list.len().div_ceil(cols);
     let px = (cell * ui.ctx().pixels_per_point()).round().clamp(8.0, 256.0) as u32;
     let list_h = widgets::panel_list_height(ui, (ui.available_height() - 64.0).max(cell * 3.0), 33.0);
+    let cols = grid_cols(ui, w, cell, list.len(), list_h);
+    let rows = list.len().div_ceil(cols);
     let mut pick = None;
     // A scroll position of its own for each character, so the grid starts at the top for another.
     let area = egui::ScrollArea::vertical()
         .id_salt(("gl-alternates", id.0, byte))
         .max_height(list_h)
-        .min_scrolled_height(list_h.min(64.0))
+        .min_scrolled_height(list_h.min(MIN_LIST_H))
         .auto_shrink([false, false]);
-    area.show_rows(ui, cell, rows, |ui, range| {
+    area.show_rows(ui, row_height(ui, cell), rows, |ui, range| {
         for r in range {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -2460,6 +2498,147 @@ mod tests {
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
     }
 
+    /// The panel drawn `width` by `height` after a few frames (the scroll bar fades in): the left
+    /// edge of its scroll bar, when one is drawn, the grid's cells and the rectangle they are
+    /// clipped to.
+    fn grid_with_bar(ctx: &egui::Context, app: &mut VectorcraftApp, width: f32, height: f32, time: &mut f64) -> (Option<f32>, Vec<Rect>, Rect) {
+        fn flat(s: Shape, out: &mut Vec<Shape>) {
+            match s {
+                Shape::Vec(v) => v.into_iter().for_each(|s| flat(s, out)),
+                s => out.push(s),
+            }
+        }
+        let mut shapes = vec![];
+        let mut clip = Rect::NOTHING;
+        for _ in 0..4 {
+            *time += 0.5;
+            let raw =
+                egui::RawInput { time: Some(*time), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, height))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+            out.textures_delta.clear();
+            shapes.clear();
+            for c in out.shapes {
+                if !squares(std::slice::from_ref(&c.shape)).is_empty() {
+                    clip = c.clip_rect;
+                }
+                flat(c.shape, &mut shapes);
+            }
+        }
+        // The bar's track and handle: narrow filled rectangles taller than a cell.
+        let bar = shapes
+            .iter()
+            .filter_map(|s| match s {
+                Shape::Rect(r) if r.fill != Color32::TRANSPARENT && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => Some(r.rect.left()),
+                _ => None,
+            })
+            .min_by(f32::total_cmp);
+        (bar, squares(&shapes), clip)
+    }
+
+    /// #5941: the grid's cells go beside its scroll bar. At every panel width the bar shows and the
+    /// last cell of a row ends before it.
+    #[test]
+    fn the_grids_cells_end_before_its_scroll_bar() {
+        use vectorcraft_text::test_fonts::{JOINING_ALTERNATES_FAMILY, joining_alternates_font};
+        FontDb::global().add_font(joining_alternates_font().expect("the test font builds"));
+        let (mut app, id) = editing("\u{628}");
+        app.run("text.setRangeStyle", json!({"id": id, "font": JOINING_ALTERNATES_FAMILY})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, Default::default());
+        let mut time = 0.0;
+        for width in 240..=300 {
+            let (bar, cells, _) = grid_with_bar(&ctx, &mut app, width as f32, 420.0, &mut time);
+            // Cells wider than the room beside the bar push the bar past the panel's edge.
+            let Some(bar) = bar else { panic!("width {width}: the grid scrolls and shows its bar") };
+            assert!(!cells.is_empty(), "width {width}: the grid is drawn");
+            let last = cells.iter().map(|r| r.right()).fold(f32::MIN, f32::max);
+            assert!(last <= bar - 1.0, "width {width}: the last cell ends at {last}, the bar starts at {bar}");
+        }
+    }
+
+    /// #5941: Alternates for Current Selection lays out its cells the same way. While its rows run
+    /// past the list, the cells end before the scroll bar; while they fit, no bar shows and the
+    /// cells fill the whole width.
+    #[test]
+    fn the_alternates_grid_leaves_room_for_its_scroll_bar_only_while_it_scrolls() {
+        use vectorcraft_text::test_fonts::{alternates_family, alternates_font};
+        FontDb::global().add_font(alternates_font(true).expect("the test font builds"));
+        let (mut app, id) = editing("xay");
+        app.run("text.setRangeStyle", json!({"id": id, "font": alternates_family(true)})).unwrap();
+        select(&mut app, 2, 2);
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, Default::default());
+        set_pstate(&ctx, "gl-subset", SUBSETS.len());
+        let mut time = 0.0;
+        let (mut scrolled, mut fitted) = (0, 0);
+        // The largest cells, so seven glyphs fill two to four rows. In a panel 360 pt tall, three
+        // rows of them run past the list; in one 640 pt tall, they fit. The sweep covers panel
+        // widths at three heights, then the heights around the one where three rows just fit.
+        let cell = CELL_STEPS[CELL_STEPS.len() - 1];
+        set_cell_index(&mut app, CELL_STEPS.len() - 1);
+        let sizes = [360, 420, 640].into_iter().flat_map(|h| (240..=320).map(move |w| (w, h))).chain((360..=420).map(|h| (290, h)));
+        for (width, height) in sizes {
+            let (bar, cells, clip) = grid_with_bar(&ctx, &mut app, width as f32, height as f32, &mut time);
+            assert!(!cells.is_empty(), "{width}×{height}: the grid is drawn");
+            let last = cells.iter().map(|r| r.right()).fold(f32::MIN, f32::max);
+            let left = cells.iter().map(|r| r.left()).fold(f32::MAX, f32::min);
+            let row = cells.iter().filter(|r| (r.top() - cells[0].top()).abs() < 1.0).count();
+            // The cells a row holds across the whole width.
+            let room = (((width as f32 - 2.0 * left) / cell).floor() as usize).clamp(1, 7);
+            if let Some(bar) = bar {
+                scrolled += 1;
+                assert!(last <= bar - 1.0, "{width}×{height}: the last cell ends at {last}, the bar starts at {bar}");
+                // Rows narrowed for the bar only when full-width rows would not fit either.
+                if row < room {
+                    let step = cells.iter().map(|r| r.top() - cells[0].top()).filter(|d| *d > 1.0).fold(f32::MAX, f32::min);
+                    let full = 7usize.div_ceil(room) as f32 * step - (step - cell);
+                    assert!(full > clip.height() + 0.5, "{width}×{height}: {room} to a row would fit in {full} pt, the list is {}", clip.height());
+                }
+            } else {
+                fitted += 1;
+                // Without a bar every cell shows whole; a grid that runs past its list would need one.
+                assert_eq!(cells.len(), 7, "{width}×{height}: a and its six alternates all show");
+                let bottom = cells.iter().map(|r| r.bottom()).fold(f32::MIN, f32::max);
+                assert!(
+                    bottom <= clip.bottom() + 0.5 && last <= clip.right() + 0.5,
+                    "{width}×{height}: the cells end at ({last}, {bottom}), inside the list {clip:?}"
+                );
+                assert_eq!(row, room, "{width}×{height}: without a bar a row takes the whole width (cells from {left})");
+            }
+        }
+        assert!(scrolled > 0 && fitted > 0, "both layouts are drawn: {scrolled} scrolled, {fitted} fitted");
+    }
+
+    /// #5941: at the smallest cell sizes a row of the grid is as tall as a button, taller than its
+    /// cells. A list tall enough for four rows of cells but not for four rows as drawn scrolls, so
+    /// its cells go beside the bar, at a width that holds a whole number of cells too.
+    #[test]
+    fn small_cells_leave_room_for_the_bar_when_their_rows_as_drawn_run_past_the_list() {
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, Default::default());
+        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 800.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let gap = ui.spacing().item_spacing.y;
+            let bar = ui.spacing().scroll.allocated_width();
+            for cell in [CELL_STEPS[0], CELL_STEPS[1]] {
+                let drawn = ui.spacing().interact_size.y;
+                assert!(drawn > cell, "{cell} pt cells: rows are {drawn} pt as drawn");
+                let w = 6.0 * cell;
+                // Four rows of six: they fit at the cells' own height, not at the rows' drawn height.
+                let list_h = 4.0 * (cell + drawn) / 2.0 + 3.0 * gap;
+                let beside = ((w - bar) / cell).floor() as usize;
+                assert_eq!(grid_cols(ui, w, cell, 24, list_h), beside, "{cell} pt cells in a list {list_h} pt tall");
+            }
+            // With less room left than the list's least height, the list is that tall: two rows of
+            // twelve 22 pt cells fit in it, so they take the whole width.
+            let w = 12.0 * CELL_STEPS[1];
+            ui.allocate_ui(vec2(w, 48.0), |ui| {
+                assert_eq!(grid_cols(ui, w, CELL_STEPS[1], 24, 66.0), 12, "two rows in a 64 pt list with 48 pt of room");
+            });
+        });
+        out.textures_delta.clear();
+    }
+
     /// Show › Entire Font also lists the glyphs no character maps.
     #[test]
     fn entire_font_lists_the_unencoded_glyphs() {
@@ -2921,5 +3100,73 @@ mod tests {
         let mut texts = 0;
         state.doc.walk(|n| texts += usize::from(matches!(n.kind, NodeKind::Text(_))));
         assert_eq!(texts, 0, "neither glyph created or changed text");
+    }
+
+    /// The grid's cells built from the face's character list read once are the cells built from a
+    /// fresh read of the font on every frame, for every Show choice, every category, a change of
+    /// face back and forth, and a font with no `cmap`.
+    #[test]
+    fn the_grid_lists_the_same_cells_from_the_character_list_read_once() {
+        use vectorcraft_text::test_fonts::{CATEGORIES_FAMILY, CMAPLESS_FAMILY, categories_font, cmapless_font};
+
+        /// The cells as the grid listed them on each frame from its own copy of the face's characters
+        /// (`vectorcraft-text`'s tests check that list against a fresh read of the font).
+        fn read_cells(
+            face: &vectorcraft_text::FontFace,
+            category: Option<usize>,
+            subset: usize,
+            (lo, hi): (u32, u32),
+        ) -> (Vec<(char, u32)>, Vec<u32>) {
+            match category.and_then(|i| face.glyph_categories().get(i)) {
+                Some(c) => {
+                    let wanted: HashSet<u32> = c.glyphs.iter().copied().collect();
+                    let mut mapped: HashSet<u32> = HashSet::new();
+                    let chars: Vec<(char, u32)> = face
+                        .chars()
+                        .into_iter()
+                        .filter(|(c, g)| !c.is_control() && !c.is_whitespace() && wanted.contains(g) && mapped.insert(*g))
+                        .collect();
+                    (chars, c.glyphs.iter().copied().filter(|g| !mapped.contains(g)).collect())
+                }
+                None => {
+                    let chars =
+                        face.chars().into_iter().filter(|(c, _)| (lo..=hi).contains(&(*c as u32)) && !c.is_control() && !c.is_whitespace()).collect();
+                    (chars, if subset == 0 { face.unencoded_glyphs().to_vec() } else { vec![] })
+                }
+            }
+        }
+
+        let db = FontDb::with_font_dirs(vec![]);
+        assert_eq!(db.add_font(categories_font().expect("the categories test font builds")), 1);
+        assert_eq!(db.add_font(cmapless_font().expect("the cmapless test font builds")), 1);
+        let faces: Vec<_> = [
+            (vectorcraft_text::FALLBACK_FAMILY, "Regular"),
+            ("Inter", "Regular"),
+            (CATEGORIES_FAMILY, "Regular"),
+            (vectorcraft_text::FALLBACK_FAMILY, "Regular"),
+            (CMAPLESS_FAMILY, "Regular"),
+            ("JetBrains Mono", "Regular"),
+        ]
+        .into_iter()
+        .map(|(family, style)| db.face(family, style).unwrap_or_else(|| panic!("{family} {style} is loaded")))
+        .collect();
+        let categories = db.face(CATEGORIES_FAMILY, "Regular").expect("the categories face");
+        assert!(!categories.glyph_categories().is_empty(), "the test font has categories");
+        let none = db.face(CMAPLESS_FAMILY, "Regular").expect("the cmapless face");
+        assert!(none.mapped_chars().is_empty(), "no character is mapped");
+        for face in &faces {
+            for (subset, &(name, lo, hi)) in SUBSETS.iter().enumerate() {
+                let (chars, unencoded) = grid_glyphs(face, None, subset, (lo, hi));
+                assert_eq!((chars, unencoded.to_vec()), read_cells(face, None, subset, (lo, hi)), "{face:?} {name}");
+            }
+            for (i, c) in face.glyph_categories().iter().enumerate() {
+                let (chars, unencoded) = grid_glyphs(face, Some(c), CATEGORY, (0, 0x10FFFF));
+                assert_eq!((chars, unencoded.to_vec()), read_cells(face, Some(i), CATEGORY, (0, 0x10FFFF)), "{face:?} {:?}", c.kind);
+            }
+        }
+        // Entire Font lists every glyph of a font with no `cmap` by glyph id.
+        let (chars, unencoded) = grid_glyphs(&none, None, 0, (0, 0x10FFFF));
+        assert!(chars.is_empty());
+        assert!(!unencoded.is_empty(), "the glyphs are listed by glyph id");
     }
 }

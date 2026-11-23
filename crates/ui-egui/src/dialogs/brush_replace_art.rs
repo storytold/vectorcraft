@@ -44,7 +44,7 @@ pub fn replace(app: &mut VectorcraftApp, name: &str, ids: &[u64]) {
         return;
     }
     // A preview on a copy of the document checks the art without changing anything.
-    if !app.session.in_interaction() && app.session.begin_interaction("Replace Brush Art").is_ok() {
+    if !app.session.in_interaction() && app.begin_interaction("Replace Brush Art").is_ok() {
         let checked = app.session.preview("brush.replaceArt", &params);
         // The interaction began above, on the active document: ending it puts that document back
         // as it was, and can fail only when no document is open, when there is nothing to put back.

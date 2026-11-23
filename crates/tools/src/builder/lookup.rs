@@ -38,14 +38,20 @@ fn named(n: &Node, name: &str) -> bool {
     n.name.as_deref() == Some(name)
 }
 
+/// Is `n` a Live Paint group's part named `name` ([`FACE_NAME`] or [`EDGE_NAME`]): a path with that
+/// name? Type, groups and other objects drawn in the group under such a name are not parts.
+fn part(n: &Node, name: &str) -> bool {
+    named(n, name) && n.path_data().is_some()
+}
+
 /// Face children of a Live Paint group (paint order).
 pub fn faces(group: &Node) -> Vec<&Arc<Node>> {
-    group.children().map(|c| c.iter().filter(|n| named(n, FACE_NAME)).collect()).unwrap_or_default()
+    group.children().map(|c| c.iter().filter(|n| part(n, FACE_NAME)).collect()).unwrap_or_default()
 }
 
 /// Edge children of a Live Paint group.
 pub fn edges(group: &Node) -> Vec<&Arc<Node>> {
-    group.children().map(|c| c.iter().filter(|n| named(n, EDGE_NAME)).collect()).unwrap_or_default()
+    group.children().map(|c| c.iter().filter(|n| part(n, EDGE_NAME)).collect()).unwrap_or_default()
 }
 
 /// The hidden sources group of a Live Paint group.
@@ -88,6 +94,65 @@ pub fn edge_near(group: &Node, p: Point, tol: f64) -> Option<&Arc<Node>> {
 /// The edge of `group` nearest to `p` within `tol` among its edges that are not hidden.
 pub fn visible_edge_near(group: &Node, p: Point, tol: f64) -> Option<&Arc<Node>> {
     nearest_edge(edges(group).into_iter().filter(|e| e.visible), p, tol)
+}
+
+/// The edges of `group` that are not hidden and that the polyline through the points of each chunk
+/// of `chunks` crosses or comes within [`LP_JOIN_TOL`] of, each once, in the group's order. Each
+/// stretch of the polyline tests only the edge segments whose bounds lie near it.
+pub fn visible_edges_along<'a>(group: &'a Node, chunks: &[Vec<Point>]) -> Vec<&'a Arc<Node>> {
+    use kurbo::ParamCurveNearest as _;
+    let shown: Vec<&Arc<Node>> = edges(group).into_iter().filter(|e| e.visible).collect();
+    // Each edge segment, with the index in `shown` of its edge.
+    let mut owner: Vec<usize> = vec![];
+    let mut segs: Vec<(kurbo::CubicBez, bool)> = vec![];
+    for (i, e) in shown.iter().enumerate() {
+        for s in e.path_data().map(lp_segments).unwrap_or_default() {
+            owner.push(i);
+            segs.push((s, true));
+        }
+    }
+    if segs.is_empty() {
+        return vec![];
+    }
+    let grid = LpEdgeGrid::new(&segs);
+    let close = LP_JOIN_TOL * LP_JOIN_TOL;
+    let mut hit = vec![false; shown.len()];
+    for chunk in chunks {
+        for pair in chunk.windows(2) {
+            let &[a, b] = pair else { continue };
+            let line = kurbo::Line::new(a, b);
+            let on_line = |p: Point| line.nearest(p, 1e-9).distance_sq <= close;
+            for k in grid.near_box(Rect::from_points(a, b).inflate(LP_JOIN_TOL, LP_JOIN_TOL)) {
+                let (Some((c, _)), Some(&i)) = (segs.get(k), owner.get(k)) else { continue };
+                let Some(h) = hit.get_mut(i) else { continue };
+                if *h {
+                    continue;
+                }
+                let on_seg = |p: Point| c.nearest(p, 1e-9).distance_sq <= close;
+                // An end of either one on the other covers a touch and a stretch that runs along
+                // the edge, where no single crossing point exists. Where neither crosses the other,
+                // their closest points are ends or a point of the edge where it runs parallel to
+                // the drag. A crossing kurbo finds just before or after an end of the edge counts
+                // only through the checks on that end.
+                *h = on_seg(a)
+                    || on_seg(b)
+                    || on_line(c.p0)
+                    || on_line(c.p3)
+                    || (a != b
+                        && (kurbo::PathSeg::Cubic(*c).intersect_line(line).iter().any(|x| (0.0..=1.0).contains(&x.segment_t))
+                            || lp_parallel_at(c, b - a).into_iter().any(|t| on_line(kurbo::ParamCurve::eval(c, t)))));
+            }
+        }
+    }
+    shown.into_iter().zip(hit).filter_map(|(e, h)| h.then_some(e)).collect()
+}
+
+/// The parameters strictly between 0 and 1 where cubic `c` runs parallel to direction `d`: the
+/// roots of the cross product of its derivative with `d`.
+fn lp_parallel_at(c: &kurbo::CubicBez, d: kurbo::Vec2) -> Vec<f64> {
+    let [a, b, e] = [c.p1 - c.p0, c.p2 - c.p1, c.p3 - c.p2].map(|v| v.cross(d));
+    // a(1-t)² + 2b·t(1-t) + e·t², expanded in powers of t.
+    kurbo::common::solve_quadratic(a, 2.0 * (b - a), a - 2.0 * b + e).into_iter().filter(|t| t.is_finite() && *t > 0.0 && *t < 1.0).collect()
 }
 
 /// The edge of `edges` nearest to `p` within `tol`.

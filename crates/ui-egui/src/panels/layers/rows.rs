@@ -5,6 +5,7 @@ use super::{
     Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, ROW_KEYS, SQUARE_X, Sense, Stroke,
     StrokeKind, TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
 };
+use vectorcraft_tools::intertwine::{in_intertwine, refused_member};
 
 /// Stable id for the layers panel's per-name UI state.
 pub(super) fn key(name: &str) -> egui::Id {
@@ -109,15 +110,43 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     });
 }
 
-/// Whether row `n` can take `drag` inside it.
-fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
+/// Resolve the target circle clicked this frame by the rules of a row name click
+/// ([`widgets::row_click`], #8639): plain targets it, Ctrl/Cmd adds it to the selection or takes
+/// it out, Shift selects the art of every row from the last circle clicked (else the targeted row)
+/// to it, and Shift+Ctrl/Cmd adds that art to the selection.
+pub(super) fn resolve_target_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
+    let Some((id, m)) = out.target_click.take() else { return };
+    let anchor = ui.data(|d| d.get_temp::<NodeId>(key("target-anchor"))).or(view.target);
+    let order: Vec<NodeId> = list.iter().map(|r| r.node.id).collect();
+    // The circles have no highlighted rows of their own: a range starts only at the anchor.
+    let click = widgets::row_click(&order, &[], anchor, id, m);
+    if click.moves_anchor() {
+        ui.data_mut(|d| d.insert_temp(key("target-anchor"), id));
+    }
+    let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
+    let params = match click {
+        widgets::RowClick::Only(id) => json!({"id": id.0}),
+        widgets::RowClick::Toggle(id) => json!({"id": id.0, "add": true}),
+        widgets::RowClick::Range(rows) => json!({"range": ids(&rows)}),
+        widgets::RowClick::AddRange(rows) => json!({"range": ids(&rows), "add": true}),
+    };
+    out.actions.push(("layer.target".into(), params));
+}
+
+/// Whether row `n` can take `drag` (the rows or objects `moving`) inside it. A group or an
+/// Intertwine group takes objects; an Intertwine group, or a group in one, only objects that can
+/// be intertwined.
+fn takes(n: &Node, drag: &LayersDrag, moving: &[NodeId], doc: &Document) -> bool {
     match n.kind {
         NodeKind::Layer { .. } => true,
-        NodeKind::Group { .. } => match drag {
-            LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
-            LayersDrag::Art => true,
-            LayersDrag::Guides(_) => false,
-        },
+        NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
+            let objects = match drag {
+                LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
+                LayersDrag::Art => true,
+                LayersDrag::Guides(_) => false,
+            };
+            objects && (!in_intertwine(doc, n.id) || moving.iter().filter_map(|i| doc.node(*i)).all(|m| refused_member(m).is_none()))
+        }
         _ => false,
     }
 }
@@ -136,7 +165,9 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     let Some(g) = view.ruler_guides.get(i) else { return };
     let selected = view.guides.contains(&i);
     let editable = view.doc.guide_editable(g);
-    if editable && resp.hovered() {
+    if selected {
+        ui.painter().rect_filled(r, 0.0, t.row_selected);
+    } else if editable && resp.hovered() {
         ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
     }
     ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));
@@ -171,6 +202,19 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         }
         out.actions.push(("guide.select".into(), json!({"indexes": [i], "toggle": m.shift || m.command})));
     }
+    if resp.secondary_clicked() {
+        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
+        if editable && !selected {
+            if !view.rows.is_empty() {
+                out.actions.push(("layer.highlight".into(), json!({"ids": [], "mode": "set"})));
+                out.rows_after_click = Some(vec![]);
+            }
+            out.actions.push(("guide.select".into(), json!({"indexes": [i]})));
+        }
+    }
+    resp.context_menu(|ui| {
+        guide_context_menu(ui, view, item, i, out);
+    });
     // Dragged: the selected guides when this is one of them, else this one, to another layer's row.
     // Only the primary button drags a guide row, and not while a drag down a column passes it.
     if editable && resp.drag_started_by(egui::PointerButton::Primary) && view.column.is_none() {
@@ -185,6 +229,46 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
         && let LayersDrag::Guides(guides) = &*drag
     {
         guide_drop(ui, view, guides, item.node.id, r, &resp, out);
+    }
+}
+
+/// The right-click context menu of ruler guide row `i` (`item`).
+fn guide_context_menu(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
+    let Some(g) = view.ruler_guides.get(i) else { return };
+    let selected = view.guides.contains(&i);
+    let editable = view.doc.guide_editable(g);
+    let guides: Vec<usize> = if selected { view.guides.clone() } else { vec![i] };
+    let node = g.id.and_then(|id| view.doc.node(id));
+    let guide_nodes: Vec<u64> = if selected {
+        guides.iter().filter_map(|&idx| view.ruler_guides.get(idx)?.id.map(|id| id.0)).collect()
+    } else {
+        node.map(|n| vec![n.id.0]).unwrap_or_default()
+    };
+    let visible = node.is_none_or(|n| n.visible);
+    if widgets::menu_item(ui, if visible { "Hide" } else { "Show" }, !guide_nodes.is_empty(), false) {
+        out.actions.push(("layer.setProps".into(), json!({ "ids": guide_nodes, "visible": !visible })));
+        ui.close();
+    }
+    let locked = node.is_some_and(|n| n.locked);
+    if widgets::menu_item(ui, if locked { "Unlock" } else { "Lock" }, !guide_nodes.is_empty(), false) {
+        out.actions.push(("layer.setProps".into(), json!({ "ids": guide_nodes, "locked": !locked })));
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, "Release Guides", editable, false) {
+        let params = if guides.len() > 1 { json!({}) } else { json!({ "index": i }) };
+        out.actions.push(("view.guides.release".into(), params));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Delete", editable, false) {
+        out.actions.push(("guide.remove".into(), json!({ "indexes": guides })));
+        ui.close();
+    }
+    ui.separator();
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": item.node.id.0, "layersOnly": layers_only })));
+        ui.close();
     }
 }
 
@@ -226,6 +310,64 @@ fn spine_row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         let m = ui.input(|i| i.modifiers);
         let action = if m.shift || m.command { "select.toggle" } else { "select.set" };
         out.actions.push((action.into(), json!({"ids": [blend.0]})));
+    }
+    if resp.secondary_clicked() {
+        crate::panels::set_row_keys(ui.ctx(), ROW_KEYS, true);
+        if editable && !selected {
+            out.actions.push(("select.set".into(), json!({"ids": [blend.0]})));
+        }
+    }
+    resp.context_menu(|ui| {
+        spine_context_menu(ui, view, item, out);
+    });
+}
+
+/// The right-click context menu of blend spine row `item`.
+fn spine_context_menu(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
+    let blend = item.node.id;
+    let selected = view.sel.contains(&blend);
+    let editable = (view.doc.editable())(blend);
+    let has_spine = !matches!(&item.node.kind, NodeKind::Blend { spec, .. } if spec.no_spine);
+    let ensure_selected = |out: &mut Out| {
+        if !selected {
+            out.actions.push(("select.set".into(), json!({ "ids": [blend.0] })));
+        }
+    };
+    if widgets::menu_item(ui, "Select", editable, false) {
+        out.actions.push(("select.set".into(), json!({ "ids": [blend.0] })));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Blend Options…", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("ui.blendOptions".into(), json!({})));
+        ui.close();
+    }
+    ui.separator();
+    if widgets::menu_item(ui, "Reverse Spine", editable && has_spine, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.reverseSpine".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Reverse Front to Back", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.reverseFrontToBack".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Expand", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.expand".into(), json!({})));
+        ui.close();
+    }
+    if widgets::menu_item(ui, "Release", editable, false) {
+        ensure_selected(out);
+        out.actions.push(("object.blend.release".into(), json!({})));
+        ui.close();
+    }
+    ui.separator();
+    let layers_only = view.opts.layers_only;
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": blend.0, "layersOnly": layers_only })));
+        ui.close();
     }
 }
 
@@ -379,7 +521,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let col_x = r.right() - 43.5;
     ui.painter().line_segment([egui::pos2(col_x, r.top()), egui::pos2(col_x, r.bottom())], Stroke::new(1.0, t.input_border));
     let tc = egui::pos2(r.right() - TARGET_X, r.center().y);
-    let tresp = target_circle(ui, n, tc, h, view.target.map_or(is_sel, |id| id == n.id), &mut out.actions, t);
+    let tresp = target_circle(ui, n, tc, h, shows_targeted(view, n, is_sel), &mut out.actions, t);
     let sq = egui::pos2(r.right() - SQUARE_X, r.center().y);
     if is_sel {
         let q = egui::Rect::from_center_size(sq, vec2(7.0, 7.0));
@@ -396,7 +538,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
     let m = ui.input(|i| i.modifiers);
     let on_name = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| p.x <= name_end.max(name_rect.left() + 20.0) && p.x >= name_rect.left());
     if tresp.clicked() {
-        out.actions.push(("layer.target".into(), json!({"id": n.id.0, "add": m.shift})));
+        out.target_click = Some((n.id, m));
     } else if sq_resp.clicked() {
         out.actions.push(("layer.selectAll".into(), json!({"id": n.id.0, "add": m.shift})));
     } else if resp.clicked() {
@@ -440,15 +582,49 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             d.insert_temp(key("grabbed"), n.id);
         });
     }
-    if resp.dragged_by(egui::PointerButton::Primary) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    }
+    // The cursor of a row drag is the panel's ([`super::drag_cursor`]): Alt can change it on any frame.
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
 }
 
 /// The right-click context menu of row `n`.
 fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out: &mut Out) {
     let is_multi = collect_ids.len() > 1;
+    if n.is_guide() {
+        // "Release Guide" / "Release Guides"
+        let rel_label = if is_multi { "Release Guides" } else { "Release Guide" };
+        if widgets::menu_item(ui, rel_label, true, false) {
+            out.actions.push(("view.guides.release".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        // "Duplicate" / "Duplicate Selection"
+        let dup_label = if is_multi { "Duplicate Selection" } else { "Duplicate" };
+        if widgets::menu_item(ui, dup_label, true, false) {
+            out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        // "Delete Guide" / "Delete Guides"
+        let del_label = if is_multi { "Delete Guides" } else { "Delete Guide" };
+        if widgets::menu_item(ui, del_label, true, false) {
+            out.actions.push(("layer.delete".into(), json!({ "ids": collect_ids })));
+            ui.close();
+        }
+        ui.separator();
+        // Lock / Unlock
+        let any_unlocked = collect_ids.iter().filter_map(|&id| view.doc.node(NodeId(id))).any(|node| !node.locked);
+        let lock_label = if any_unlocked { "Lock" } else { "Unlock" };
+        if widgets::menu_item(ui, lock_label, true, false) {
+            out.actions.push(("layer.setProps".into(), json!({ "ids": collect_ids, "locked": any_unlocked })));
+            ui.close();
+        }
+        // Hide / Show
+        let any_visible = collect_ids.iter().filter_map(|&id| view.doc.node(NodeId(id))).any(|node| node.visible);
+        let hide_label = if any_visible { "Hide" } else { "Show" };
+        if widgets::menu_item(ui, hide_label, true, false) {
+            out.actions.push(("layer.setProps".into(), json!({ "ids": collect_ids, "visible": !any_visible })));
+            ui.close();
+        }
+        return;
+    }
     // "Layer Options…" / "Options for Selection…" / "Options…"
     let options_label = if is_multi {
         "Options for Selection…"
@@ -472,7 +648,9 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
         }
     };
     let dup_label = if is_multi { tl!("Duplicate Selection").to_string() } else { format!("{} \"{display}\"", tl!("Duplicate")) };
-    if widgets::menu_item_name(ui, &dup_label, true, false) {
+    // A copy of the isolated node goes beside it, outside the isolated art.
+    let dup_enabled = !view.root.is_some_and(|r| collect_ids.contains(&r.0));
+    if widgets::menu_item_name(ui, &dup_label, dup_enabled, false) {
         out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
         ui.close();
     }
@@ -487,11 +665,13 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
         ui.close();
     }
     ui.separator();
+    // In isolation mode the other layers are outside the isolated art, so these pairs are off.
+    let isolated = view.root.is_some();
     // Lock Others / Unlock All Layers
     {
         let (lock_cmd, lock_params, lock_enabled) = multi_others_action(view.doc, collect_ids, false);
         let lock_label = if lock_cmd == "layer.lockOthers" { "Lock Others" } else { "Unlock All Layers" };
-        if widgets::menu_item(ui, lock_label, lock_enabled, false) {
+        if widgets::menu_item(ui, lock_label, lock_enabled && !isolated, false) {
             out.actions.push((lock_cmd, lock_params));
             ui.close();
         }
@@ -500,15 +680,17 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
     {
         let (hide_cmd, hide_params, hide_enabled) = multi_others_action(view.doc, collect_ids, true);
         let hide_label = if hide_cmd == "layer.hideOthers" { "Hide Others" } else { "Show All Layers" };
-        if widgets::menu_item(ui, hide_label, hide_enabled, false) {
+        if widgets::menu_item(ui, hide_label, hide_enabled && !isolated, false) {
             out.actions.push((hide_cmd, hide_params));
             ui.close();
         }
     }
     ui.separator();
-    // Locate Object
-    if widgets::menu_item(ui, "Locate Object", true, false) {
-        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0 })));
+    // Locate Object, or Locate Layer with Show Layers Only on
+    let layers_only = view.opts.layers_only;
+    let locate_ok = !layers_only || locate_layer_listed(view.doc, view.root);
+    if widgets::menu_item(ui, if layers_only { "Locate Layer" } else { "Locate Object" }, locate_ok, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0, "layersOnly": layers_only })));
         ui.close();
     }
     ui.separator();
@@ -590,6 +772,13 @@ fn layer_row(n: &Node, own: Option<NodeId>) -> NodeId {
     if n.is_ruler_guide() { own.unwrap_or(n.id) } else { n.id }
 }
 
+/// Whether Locate Layer can highlight a row the panel lists: outside isolation mode, or with a
+/// layer or sublayer isolated (`root`). An isolated group or object holds no layer row, and the
+/// layer holding it is not listed.
+pub(super) fn locate_layer_listed(doc: &Document, root: Option<NodeId>) -> bool {
+    root.is_none_or(|r| doc.node(r).is_some_and(Node::is_layer))
+}
+
 /// The eye and lock columns of row `n` at `r`.
 fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out) {
     let t = &view.t;
@@ -620,11 +809,17 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
         icons::paint(ui, "lock", egui::Rect::from_center_size(lock.center(), vec2(12.0, 12.0)), t.text_disabled);
     }
     let m = ui.input(|i| i.modifiers);
+    // In isolation mode the other layers are outside the isolated art: Alt-clicks change nothing.
+    let isolated = view.root.is_some();
     if er.clicked() {
         if m.alt && m.command {
-            out.actions.push(outline_others_action(view.doc, n));
+            if !isolated {
+                out.actions.push(outline_others_action(view.doc, n));
+            }
         } else if m.alt {
-            out.actions.push(others_action(view.doc, n, true));
+            if !isolated {
+                out.actions.push(others_action(view.doc, n, true));
+            }
         } else if m.command && n.is_layer() {
             // Ctrl/Cmd-click: Preview ↔ Outline for this layer.
             out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "preview": !preview})));
@@ -633,7 +828,9 @@ fn eye_and_lock(ui: &mut Ui, view: &View, n: &Node, r: egui::Rect, out: &mut Out
         }
     }
     if lr.clicked() && m.alt {
-        out.actions.push(others_action(view.doc, n, false));
+        if !isolated {
+            out.actions.push(others_action(view.doc, n, false));
+        }
     } else if lr.clicked() {
         out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "locked": !n.locked})));
     }
@@ -663,28 +860,53 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
         LayersDrag::Rows(ids) => ids.clone(),
         LayersDrag::Art => view.sel.iter().copied().collect(),
         LayersDrag::Guides(guides) => {
-            // Guides go to the layer of the row (the row's own, for a layer).
-            if let Some(layer) = if n.is_layer() { Some(n.id) } else { doc.layer_containing(n.id) } {
+            // Guides go to the layer of the row (the row's own, for a layer); in isolation mode only
+            // to a layer inside the isolated art.
+            if let Some(layer) = if n.is_layer() { Some(n.id) } else { doc.layer_containing(n.id) }
+                && view.root.is_none_or(|r| doc.ancestry(layer).is_some_and(|a| a.contains(&r)))
+            {
                 guide_drop(ui, view, guides, layer, r, resp, out);
             }
             return;
         }
     };
-    // Never into itself or a row inside it.
+    // Never into itself or a row inside it. With Alt, rows held over one of their own rows copy
+    // beside it, above or below, as `layer.move` places a copy there (#8237).
+    let alt = ui.input(|i| i.modifiers.alt);
+    let beside_itself = alt && matches!(&*drag, LayersDrag::Rows(_)) && moving.contains(&n.id);
     let around = doc.ancestry(n.id).unwrap_or_default();
-    if moving.is_empty() || moving.iter().any(|m| around.contains(m)) {
+    if moving.is_empty() || moving.iter().any(|m| around.contains(m) && !(beside_itself && *m == n.id)) {
         return;
     }
     let Some(p) = ui.input(|i| i.pointer.hover_pos()) else { return };
     let rel = (p.y - r.top()) / r.height().max(1.0);
-    let inside = takes(n, &drag, doc);
+    let inside = takes(n, &drag, &moving, doc);
     let place = match &*drag {
+        LayersDrag::Rows(_) if beside_itself && rel < 0.5 => Place::Above,
+        LayersDrag::Rows(_) if beside_itself => Place::Below,
         LayersDrag::Art if inside => Place::Inside,
         LayersDrag::Art => Place::Above,
         LayersDrag::Rows(_) if inside && rel >= 0.25 && (rel <= 0.75 || open) => Place::Inside,
         LayersDrag::Rows(_) if rel < 0.5 => Place::Above,
         LayersDrag::Rows(_) | LayersDrag::Guides(_) => Place::Below,
     };
+    // In isolation mode the isolated row takes a drop only inside it, so nothing leaves the isolated
+    // art or lands beside it; held over its own row, it goes nowhere.
+    let place = if view.root == Some(n.id) {
+        if !inside || beside_itself {
+            return;
+        }
+        Place::Inside
+    } else {
+        place
+    };
+    // Beside a member of an Intertwine group (or a row in one) only what can be intertwined goes.
+    if place != Place::Inside
+        && doc.parent_of(n.id).is_some_and(|p| in_intertwine(doc, p))
+        && moving.iter().filter_map(|i| doc.node(*i)).any(|m| refused_member(m).is_some())
+    {
+        return;
+    }
     let stroke = Stroke::new(2.0, view.t.accent);
     match place {
         Place::Above => {
@@ -709,8 +931,46 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
     }
 }
 
-/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, filled when `n`
-/// has an appearance or transparency of its own. Its response is clicked to target `n`; dragging
+/// Whether `n`'s target circle shows as targeted: `n` is the one target, or, with nothing
+/// targeted, it is selected. A layer is never selected itself (its art is), so with nothing
+/// targeted a layer shows as targeted while all of its visible, unlocked art is selected, as an
+/// object added to the selection from its circle does (#8646).
+fn shows_targeted(view: &View, n: &Node, is_sel: bool) -> bool {
+    match view.target {
+        Some(id) => id == n.id,
+        None if n.is_layer() => {
+            if view.sel.is_empty() {
+                return false;
+            }
+            let art = n.layer_art(true);
+            !art.is_empty() && art.iter().all(|id| view.sel.contains(id))
+        }
+        None => is_sel,
+    }
+}
+
+/// The radius of the inner ring of a targeted item's target circle (the double ring); the outer
+/// ring's radius is 5.
+pub(super) const TARGET_RING: f32 = 2.8;
+/// The width of the inner ring.
+pub(super) const TARGET_STROKE: f32 = 1.0;
+/// The radius of the dot filling the circle of an item that has an appearance of its own and is
+/// not targeted.
+pub(super) const TARGET_DOT: f32 = 3.2;
+/// The radius of that dot inside a targeted item's inner ring: clear of the ring, so a targeted
+/// item with an appearance of its own shows both (#8711).
+pub(super) const TARGET_DOT_IN_RING: f32 = 1.5;
+
+/// The marks inside a target circle's outer ring: the inner ring's radius when the item is
+/// `targeted`, and the appearance dot's radius when it is `styled` (has an appearance of its own).
+/// Each of the four combinations looks different, as the Layers panel's target icons do.
+pub(super) fn target_marks(targeted: bool, styled: bool) -> (Option<f32>, Option<f32>) {
+    let dot = if targeted { TARGET_DOT_IN_RING } else { TARGET_DOT };
+    (targeted.then_some(TARGET_RING), styled.then_some(dot))
+}
+
+/// The target circle of `n`'s row at `c`: a ring, doubled while `n` is targeted, with a dot when
+/// `n` has an appearance or transparency of its own ([`target_marks`]). Its response is clicked to target `n`; dragging
 /// it carries `n`'s appearance ([`PanelDrag::Appearance`]) onto another row's circle (Alt
 /// copies it) or the trash.
 fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, actions: &mut Vec<(String, Value)>, t: &Tokens) -> egui::Response {
@@ -729,11 +989,12 @@ fn target_circle(ui: &mut Ui, n: &Node, c: egui::Pos2, h: f32, targeted: bool, a
     }
     let ring = if held { t.accent } else { t.icon };
     ui.painter().circle_stroke(c, 5.0, Stroke::new(if held { 1.5 } else { 1.0 }, ring));
-    if targeted {
-        ui.painter().circle_stroke(c, 2.8, Stroke::new(1.0, t.icon));
+    let (inner, dot) = target_marks(targeted, has_styled_target(n));
+    if let Some(r) = inner {
+        ui.painter().circle_stroke(c, r, Stroke::new(TARGET_STROKE, t.icon));
     }
-    if has_styled_target(n) {
-        ui.painter().circle_filled(c, 3.2, t.icon);
+    if let Some(r) = dot {
+        ui.painter().circle_filled(c, r, t.icon);
     }
     if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);

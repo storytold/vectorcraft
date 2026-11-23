@@ -5,7 +5,8 @@
 //! Contents (`AIDeformEditModeKey`), a warp's style, bend, distortions and orientation
 //! (`DeformStyle`, `DeformValue`, `DeformHoriz`, `DeformVert`, `Rotate`), with Distort Appearance
 //! the size of the box the contents map from (`AIDeformArtWidthKey`, `AIDeformArtHeightKey`), the
-//! contents in an `X=` … `X+` block (while they are edited, the grid) as `AIDeformArtKey`, and the
+//! contents in an `X=` … `X+` block (in a symbol's art, in the canvas's space with y down; while
+//! they are edited, the grid) as `AIDeformArtKey`, and the
 //! kind (`AIDeformStyle`: 1 a warp, 2 a mesh, 3 a top object); then the distorted art on plain
 //! lines, and the plugin's `XP` after it. A top object's outline is the edge of the grid written
 //! for it, one grid edge to each segment of its sides, a side with fewer segments than the side
@@ -401,7 +402,13 @@ impl Writer<'_> {
         if *editing {
             self.grid(record.grid.as_ref());
         } else if self.open_group("u") {
+            // In a symbol's art, the contents in the dictionary are in the canvas's space, y down.
+            let to_art = self.to_art;
+            if self.in_symbol {
+                self.to_art = Affine::translate(self.canvas_origin) * to_art;
+            }
             self.contents(content, true);
+            self.to_art = to_art;
             self.end_group("U", Xy::PLAIN);
         }
         let block = std::mem::replace(&mut self.body, outer);
@@ -448,15 +455,17 @@ impl Writer<'_> {
     /// An envelope's grid, when it has one, as a gray gradient mesh (`/Mesh X!` … `/End X!`): its
     /// size (`[cols rows] /Size`), then each patch's place (`[col row] /P`), its four corners
     /// (`/N`: gray, opacity, the point, the handle towards the next corner and a weight, the handle
-    /// towards the previous one and a weight, in art space), from its top left one down, across and
-    /// up, and `/E`. One object.
+    /// towards the previous one and a weight, in art space; in a symbol's art, in the space a
+    /// gradient mesh's corners are written in there), from its top left one down, across and up,
+    /// and `/E`. One object.
     fn grid(&mut self, grid: Option<&(usize, usize, Vec<GridPoint>)>) {
         let Some((rows, cols, pts)) = grid else { return };
         if !self.take_objects(1) {
             return;
         }
         let (rows, cols, width) = (*rows, *cols, cols + 1);
-        let to_art = self.to_art;
+        // In a symbol's art, corners are written in the space a gradient mesh's are written in there.
+        let to_art = if self.in_symbol { self.instance_space } else { self.to_art };
         let s = &mut self.body;
         let _ = writeln!(s, "/Mesh X!\n2 /Version X#\n/Cartesian /Type X#\n[{cols} {rows}] /Size X#\n/Data X#\n/DeviceGray /CS X#");
         let num = |s: &mut String, v: f64| {

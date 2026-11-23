@@ -957,6 +957,32 @@ fn the_control_bar_resizes_the_active_artboard_about_the_reference_point() {
     assert_eq!(boards(&app).0, want, "Artboard 2 widens from its left edge");
 }
 
+/// With the Artboard tool, a click on the Control bar's X:, Y:, W: or H: label opens the Transform
+/// panel's artboard fields in a popover under it, as the Transform link does, and a second click
+/// closes it; the artboards stay as they were and no field takes the keyboard.
+#[test]
+fn the_artboard_control_bars_x_y_w_and_h_labels_open_the_transform_panel() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100, "units": "Points"})).unwrap();
+    app.select_tool("artboard");
+    let ctx = bar_context();
+    let before = boards(&app);
+    // The bar draws one W:, and the popover's artboard fields another.
+    let ws = |texts: &[(String, egui::Rect)]| texts.iter().filter(|(t, _)| t == "W:").count();
+    for label in ["X:", "Y:", "W:", "H:"] {
+        let texts = bar_texts(&mut app, &ctx);
+        assert_eq!(ws(&texts), 1, "{label}: the bar alone: {texts:?}");
+        let at = text_rect(&texts, label).center();
+        bar_click(&mut app, &ctx, at);
+        let texts = bar_texts(&mut app, &ctx);
+        assert_eq!(ws(&texts), 2, "{label}: the Transform panel opens: {texts:?}");
+        assert_eq!(ctx.memory(|m| m.focused()), None, "{label}: no field took the keyboard");
+        bar_click(&mut app, &ctx, at);
+        assert_eq!(ws(&bar_texts(&mut app, &ctx)), 1, "{label}: a second click closes it");
+    }
+    assert_eq!(boards(&app), before, "the artboards stay");
+}
+
 /// The Control bar's Portrait and Landscape buttons swap the active artboard's width and height,
 /// its top-left corner staying put, in one undo step each.
 #[test]

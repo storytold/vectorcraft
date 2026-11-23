@@ -49,7 +49,8 @@ pub(crate) fn doc_sane(d: &Document, sel: &Selection) -> bool {
         && objects_in_range(d, &sel.objects)
 }
 
-fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
+/// Is every edge of `r` finite and within [`MAX_COORD`] of the origin?
+pub(crate) fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
     [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_COORD)
 }
 

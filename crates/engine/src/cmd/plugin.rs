@@ -161,6 +161,8 @@ pub struct FilterRun {
     parent: Option<NodeId>,
     /// The document it was made from, and that document's revision then.
     document: (u64, u64),
+    /// The plug-in's limits with the Plug-in Instruction Budget in force when it was made.
+    limits: vectorcraft_plugins::Limits,
 }
 
 /// A filter's output handed in by a [`FilterRun`] made away from `plugin.run`, with what the run
@@ -245,7 +247,11 @@ impl FilterRun {
         let capacity = (plugin.limits().max_memory_bytes / 2).min(i32::MAX as usize).saturating_sub(params.len());
         let (input, read_only) = objects::encode_input_with(&st.doc, &inputs, &kinds, capacity).map_err(err)?;
         let document = (st.uid, st.revision);
-        Ok(FilterRun { plugin, command, input, params, inputs, read_only, parent, document })
+        let limits = match s.prefs.plugin_instruction_budget {
+            crate::PluginBudget::Normal => plugin.limits().clone(),
+            crate::PluginBudget::Large => plugin.large_limits(),
+        };
+        Ok(FilterRun { plugin, command, input, params, inputs, read_only, parent, document, limits })
     }
 
     /// The plug-in, for its name and budget.
@@ -274,7 +280,13 @@ impl FilterRun {
     /// can run on any thread; inside a [`vectorcraft_doc::cancel::scope`] Cancel stops it between
     /// two slices of its budget.
     pub fn run(&self) -> Result<Vec<u8>> {
-        self.plugin.run(&self.input, &self.params).map_err(err)
+        self.plugin.run_limited(&self.input, &self.params, &self.limits).map_err(err)
+    }
+
+    /// The limits it runs under: the plug-in's, with the Plug-in Instruction Budget in force when
+    /// it was made.
+    pub fn limits(&self) -> &vectorcraft_plugins::Limits {
+        &self.limits
     }
 
     /// Does the plug-in call commands (its manifest's `commandAllowlist`)? Then it runs only in the
@@ -289,7 +301,7 @@ impl FilterRun {
         let may = self.plugin.manifest().permissions();
         let calls = super::plugin_call::Calls::of(s, may.contains(&Permission::DocRead), may.contains(&Permission::DocWrite));
         let mut bridge = |id: &str, args: &Value| super::plugin_call::call(s, &calls, id, args);
-        self.plugin.run_calling(&self.input, &self.params, self.plugin.limits(), &mut bridge).0.map_err(err)
+        self.plugin.run_calling(&self.input, &self.params, &self.limits, &mut bridge).0.map_err(err)
     }
 
     /// Runs a plug-in that calls commands and applies its output: the calls and the output are one
@@ -1032,7 +1044,7 @@ fn load_folder(s: &Session, folder: &str) -> Value {
             if r.disabled_changed {
                 s.store_disabled_plugins_in(&turn);
             }
-            json!({"folder": folder, "loaded": r.loaded, "failed": r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>()})
+            json!({"folder": folder, "loaded": r.loaded, "failed": r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>(), "leftOut": r.left_out})
         }
         Err(e) => json!({"folder": folder, "error": e.to_string()}),
     }
@@ -1258,7 +1270,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}], leftOut} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1321,7 +1333,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reload Plug-ins",
             ["Object", "Plug-ins"],
             None,
-            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it (desktop; a bad module, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}]}",
+            "{path?: a folder (default: the Additional Plug-ins Folder preference)} install every *.wasm in it, the first 1,000 by file name (desktop; a bad module, one that isn't a regular file, and one disabled with plugin.setEnabled, is reported and skipped, and so are a heavy filter and a plug-in that lists permissions the user hasn't granted this very module, its bytes included; an error in Safe Mode) → {folder, loaded: [id], failed: [{file, error}], leftOut: the count of *.wasm files past the first 1,000, not tried}",
             always,
             reload
         ),

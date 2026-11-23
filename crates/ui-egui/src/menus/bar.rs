@@ -1,33 +1,37 @@
 use super::entries::{Row, entry, shown_shortcut};
 use super::invoke::{field_event, focused_text_field, invoke, to_field, with_held_keys};
+use super::keyboard::{self, AccessRow, SourcePath};
 use super::tree::menu_tree_named;
 use super::{Entry, Item, Tokens, Value, VectorcraftApp, widgets};
 
 /// Render the menu bar.
 /// The in-window menu bar. Returns where its titles end (x): the bar itself takes the full width.
 pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
-    let t = Tokens::get(ui.ctx());
     let ctx = ui.ctx().clone();
     // The press that opens a menu takes the keyboard from a focused text field: the field and its
     // selection are kept while the menus are open, so their Select All, Cut, Copy and Paste act on
     // its text (#516), the frame after the click that chose them (that click takes the keyboard
     // from it again).
     type Field = (egui::Id, egui::text_edit::TextEditState);
-    let (field_key, chosen_key) = (egui::Id::unique("menu-bar-field"), egui::Id::unique("menu-bar-field-event"));
+    let chosen_key = egui::Id::unique("menu-bar-field-event").with(ctx.viewport_id());
     if let Some(((field, state), e)) = ctx.data(|d| d.get_temp::<(Field, egui::Event)>(chosen_key)) {
         ctx.data_mut(|d| d.remove::<(Field, egui::Event)>(chosen_key));
-        state.store(&ctx, field);
+        keyboard::restore_field(&ctx, field, state);
         to_field(&ctx, field, e);
     }
-    if let Some(field) = focused_text_field(&ctx).and_then(|id| Some((id, egui::TextEdit::load_state(&ctx, id)?))) {
-        ctx.data_mut(|d| d.insert_temp::<Field>(field_key, field));
-    }
-    let mut clicked: Option<(String, Value)> = None;
-    let mut file_open = false;
+    keyboard::remember_field(&ctx);
+    keyboard::begin_bar(&ctx);
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
-    // No application menu in the window (as in Illustrator): the bar starts at File on every
+    // No application menu in the window: the bar starts at File on every
     // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
     let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != "VectorCraft").collect();
+    let root_rows = keyboard::root_rows(&tree);
+    let show_cues = keyboard::cues(&ctx);
+    // Only the bar temporarily sees no resting pointer while keyboard navigation owns it.
+    // Real movement/clicks keep normal pointer menus; restore before refresh/invoke/other UI.
+    let pointer = keyboard::suppress_stationary_hover(&ctx).then(|| ctx.input_mut(|i| std::mem::take(&mut i.pointer)));
+    let mut clicked: Option<(String, Value)> = None;
+    let mut file_open = false;
     // A menu bar for its layout and menu-button style, but the titles use `Popup::menu` directly:
     // egui 0.37's `MenuButton` opens the title under a resting pointer while another menu is open,
     // and the app switches titles on movement only (`switch_on_hover`, the native behaviour).
@@ -35,9 +39,12 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         .ui(ui, |ui| {
             let mut titles = Vec::with_capacity(tree.len());
             for (title, items) in tree.iter() {
-                let text = egui::RichText::new(tl!(title)).size(13.0).color(t.text);
-                let resp = ui.add(egui::Button::new(text));
-                egui::Popup::menu(&resp).show(|ui| menu_body(app, ui, items, &mut clicked));
+                let cue = root_rows.iter().find(|r| r.label == crate::i18n::t(title)).and_then(|r| r.cue.as_ref()).filter(|_| show_cues);
+                let text = keyboard::text(ui, crate::i18n::t(title), "", cue, Some(13.0));
+                let resp = ui.push_id(("menu-bar-root", *title), |ui| ui.add(egui::Button::new(text))).inner;
+                crate::palette::note_spot(ui, resp.rect, || crate::palette::SpotAt::Menu((*title).to_string()));
+                keyboard::bind_root(&ctx, title, &resp);
+                egui::Popup::menu(&resp).show(|ui| bar_menu_body(app, ui, items, &keyboard::root_path(title), &mut clicked));
                 if *title == "File" {
                     file_open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&resp));
                 }
@@ -46,6 +53,10 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
             (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
         })
         .inner;
+    if let Some(pointer) = pointer {
+        ctx.input_mut(|i| i.pointer = pointer);
+    }
+    keyboard::finish_bar(&ctx, open, clicked.is_some());
     // The File menu opening reads the Scripts folder again, for File › Scripts.
     let file_key = egui::Id::unique("menu-bar-file-open");
     let file_was_open = ctx.data(|d| d.get_temp::<bool>(file_key)).unwrap_or(false);
@@ -57,9 +68,9 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
     // while one is, or the menu would open under them.
     ctx.data_mut(|d| d.insert_temp(menu_open_id(), open));
 
-    let field = ctx.data(|d| d.get_temp::<Field>(field_key));
-    if !open && focused_text_field(&ctx).is_none() {
-        ctx.data_mut(|d| d.remove::<Field>(field_key));
+    let field = keyboard::field(&ctx);
+    if !open && !keyboard::active(&ctx) && focused_text_field(&ctx).is_none() {
+        keyboard::forget_field(&ctx);
     }
     if let Some((id, p)) = clicked {
         match field.and_then(|f| Some((f, field_event(app, &id)?))) {
@@ -122,10 +133,37 @@ pub(super) fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item],
     });
 }
 
+fn bar_menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], path: &SourcePath, clicked: &mut Option<(String, Value)>) {
+    if !keyboard::active(ui.ctx()) && !keyboard::cues(ui.ctx()) {
+        menu_body(app, ui, items, clicked);
+        return;
+    }
+    widgets::menu_scroll(ui, |ui| {
+        widgets::menu_min_width(ui, 230.0);
+        render_items_scoped(app, ui, items, true, Some(path), clicked);
+    });
+}
+
 /// `items` as menu buttons; with `checks`, items that can be on or off show a check mark (or the
 /// room for one).
 pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], checks: bool, clicked: &mut Option<(String, Value)>) {
+    render_items_scoped(app, ui, items, checks, None, clicked);
+}
+
+fn render_items_scoped(
+    app: &VectorcraftApp,
+    ui: &mut egui::Ui,
+    items: &[Item],
+    checks: bool,
+    path: Option<&SourcePath>,
+    clicked: &mut Option<(String, Value)>,
+) {
     let t = Tokens::get(ui.ctx());
+    let rows = path.map(|p| keyboard::level(app, p, items)).unwrap_or_default();
+    let mut rows = rows.iter();
+    if let Some(path) = path {
+        keyboard::note_level(ui.ctx(), path);
+    }
     for e in items.iter().filter_map(|it| entry(app, it)) {
         match e {
             Entry::Sep => {
@@ -135,20 +173,52 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
                 ui.label(egui::RichText::new(h).size(11.0).color(t.text_dim));
             }
             Entry::Sub(label, children) => {
-                ui.menu_button(label, |ui| {
-                    widgets::menu_scroll(ui, |ui| {
-                        widgets::menu_min_width(ui, 200.0);
-                        render_items(app, ui, children, checks || only_toggles(app, children), clicked);
+                if let Some(access) = rows.next() {
+                    ui.push_id(access.key.salt(), |ui| {
+                        let cue = access.cue.as_ref().filter(|_| keyboard::cues(ui.ctx()));
+                        let text = keyboard::text(ui, label, "", cue, None);
+                        if !ui.is_sizing_pass() {
+                            keyboard::prepare_submenu(ui.ctx(), access, ui.next_auto_id());
+                        }
+                        let (response, _) = egui::menu::SubMenuButton::new(text).ui(ui, |ui| {
+                            widgets::menu_scroll(ui, |ui| {
+                                widgets::menu_min_width(ui, 200.0);
+                                render_items_scoped(
+                                    app,
+                                    ui,
+                                    children,
+                                    checks || shows_marks(app, children),
+                                    Some(&keyboard::child_path(&access.key)),
+                                    clicked,
+                                );
+                            });
+                        });
+                        if !ui.is_sizing_pass() {
+                            keyboard::bind_response(ui.ctx(), access, &response);
+                        }
                     });
-                });
+                } else {
+                    ui.menu_button(label, |ui| {
+                        widgets::menu_scroll(ui, |ui| {
+                            widgets::menu_min_width(ui, 200.0);
+                            render_items(app, ui, children, checks || shows_marks(app, children), clicked);
+                        });
+                    });
+                }
             }
-            Entry::Item(row) => render_row(app, ui, &row, checks, clicked),
+            Entry::Item(row) => render_row(app, ui, &row, checks, rows.next(), clicked),
         }
     }
 }
 
-/// Whether every item of a submenu can be on or off: a menu drawn without check marks (the canvas
-/// context menu) still shows them there, since its label alone can't say whether it is on.
+/// Whether a submenu of a menu drawn without check marks (the canvas context menu) still shows
+/// them: when every item can be on or off, or when it holds Auto Spell Check (the Spelling
+/// submenu, with Check Spelling… after it), since a toggle's label alone can't say whether it is on.
+fn shows_marks(app: &VectorcraftApp, items: &[Item]) -> bool {
+    only_toggles(app, items) || items.iter().any(|it| matches!(it, Item::Cmd(_, "edit.autoSpellCheck", _)))
+}
+
+/// Whether every item of a submenu can be on or off.
 fn only_toggles(app: &VectorcraftApp, items: &[Item]) -> bool {
     let mut rows = items.iter().filter_map(|it| entry(app, it)).filter(|e| !matches!(e, Entry::Sep)).peekable();
     rows.peek().is_some() && rows.all(|e| matches!(e, Entry::Item(r) if r.checked.is_some()))
@@ -156,24 +226,28 @@ fn only_toggles(app: &VectorcraftApp, items: &[Item]) -> bool {
 
 /// One menu item: its label (with a check mark, or the room for one, under `checks`), its shortcut,
 /// and Type › Font's samples.
-fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, clicked: &mut Option<(String, Value)>) {
+fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, access: Option<&AccessRow>, clicked: &mut Option<(String, Value)>) {
     let sc = row.shortcut.map(shown_shortcut).unwrap_or_default();
     let Some((id, p)) = row.command else {
         ui.add_enabled_ui(false, |ui| {
-            ui.add(egui::Button::new(row.label.as_ref()).shortcut_text(sc));
+            let cue = access.and_then(|r| r.cue.as_ref()).filter(|_| keyboard::cues(ui.ctx()));
+            let text = keyboard::text(ui, row.label.as_ref(), "", cue, None);
+            ui.add(egui::Button::new(text).shortcut_text(sc));
         })
         .response
         .on_disabled_hover_text(tl!("Coming soon — tracked in the parity plan"));
         return;
     };
-    let text = match row.checked.filter(|_| checks) {
-        Some(true) => format!("✓  {}", row.label),
-        Some(false) => format!("     {}", row.label),
-        None => row.label.to_string(),
+    let prefix = match row.checked.filter(|_| checks) {
+        Some(true) => "✓  ",
+        Some(false) => "     ",
+        None => "",
     };
+    let cue = access.and_then(|r| r.cue.as_ref()).filter(|_| keyboard::cues(ui.ctx()));
+    let text = keyboard::text(ui, row.label.as_ref(), prefix, cue, None);
     // Type → Font: each family's sample after its name (Enable in-menu font previews).
     let sampled = p.get("font").and_then(Value::as_str).filter(|_| id == "text.setStyle" && app.session.prefs.font_preview);
-    let r = match sampled {
+    let draw = |ui: &mut egui::Ui| match sampled {
         Some(family) => {
             let slot = egui::IdSalt::new(("font-sample", family));
             let button = egui::Button::new(text).right_text(egui::Atom::custom(slot, crate::font_menu::MENU_SAMPLE_SIZE));
@@ -185,12 +259,22 @@ fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, 
         }
         None => ui.add_enabled(row.enabled, egui::Button::new(text).shortcut_text(sc)),
     };
+    let r = match access {
+        Some(access) => ui.push_id(access.key.salt(), draw).inner,
+        None => draw(ui),
+    };
+    let keyboard_chosen = !ui.is_sizing_pass() && access.is_some_and(|access| keyboard::bind_response(ui.ctx(), access, &r));
     let r = match (row.enabled, disabled_hint(app, id)) {
         (false, Some(why)) => r.on_disabled_hover_text(why),
         _ => r,
     };
-    if r.clicked() {
-        *clicked = row.target().map(|target| with_held_keys(target, ui.input(|i| i.modifiers)));
+    if r.clicked() || keyboard_chosen {
+        *clicked = row.target().map(|target| {
+            if access.is_none() || r.clicked_by(egui::PointerButton::Primary) { with_held_keys(target, ui.input(|i| i.modifiers)) } else { target } // access-key Alt is not an Alt-click alternate action
+        });
+        if access.is_some() {
+            keyboard::chosen(ui.ctx());
+        }
         ui.close();
     }
 }

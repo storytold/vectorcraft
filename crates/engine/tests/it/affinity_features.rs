@@ -670,7 +670,24 @@ fn cmyk_pixel_layers_show_through_the_documents_cmyk_profile() {
     let loaded = open("photo.af", &cmyk_layer(false, Some(&icc)));
     let blob = photo(&loaded.doc);
     assert!(!blob.is_cmyk());
-    let px = image::load_from_memory(&blob.bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     let profile = IccProfile::from_bytes(None, &icc).unwrap();
     let srgb = cms::icc::builtin_rgb(cms::SRGB).unwrap();
     let want = profile.to_rgb_of(&srgb, &[1.0, 0.0, 0.0, 0.0], Intent::RelativeColorimetric, true).unwrap().map(|v| (v * 255.0).round() as i32);
@@ -691,7 +708,29 @@ fn cmyk_pixel_layers_without_a_profile_keep_their_inks_or_use_the_working_profil
     let loaded = open("photo.af", &cmyk_layer(true, None));
     let blob = photo(&loaded.doc);
     assert!(!blob.is_cmyk());
-    assert_eq!(image::load_from_memory(&blob.bytes).unwrap().to_rgba8().get_pixel(8, 8).0[3], 0);
+    assert_eq!(
+        craft_image_codecs::decode(&blob.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(8, 8)
+            .0[3],
+        0
+    );
     assert!(loaded.warnings.iter().any(|w| w.contains("CMYK pixel layers with transparency")), "{:?}", loaded.warnings);
 }
 

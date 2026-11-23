@@ -30,11 +30,20 @@ pub fn specs() -> Vec<CommandSpec> {
             colors
         ),
         cmd!(
+            query "color.used",
+            "Document Colors",
+            [],
+            None,
+            "{selection?: true (false: the objects select.all takes, also while something is selected), limit?: n (only the n most used; default all)} → {colors: [{key, hex, color: the color in its own model ({model, …}), count, swatch?: the global swatch it is linked to (from its first linked use in paint order, a plain use before a gradient stop that mixes the swatch's ink with process inks; left out when only such stops link it), tint?: 0..100 to three decimals (the percent of that swatch's color the same use stores)}] as recolor.colors lists them, selection: true when they are the selection's, uses: the uses of every color, those past limit included} the unique colors of the selection, or with nothing selected or selection false of the objects select.all takes without the hidden and locked objects inside them, most used first; the selection is left as it is",
+            has_doc,
+            used
+        ),
+        cmd!(
             "recolor.apply",
             "Recolor Artwork",
             ["Edit", "Edit Colors"],
             None,
-            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex); may be empty: an empty row recolours nothing, adds no library swatch and gives `group` no colour unless `added`], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null (in from, to and groupColors, #rrggbbaa and #rgba are refused), exclude?: false (the row's colours are kept), tint?: 100 (percent; with limitTo, art linked to the global or spot swatch the new color is takes this share of its tint), added?: false (an empty row's new color is a color added to `group`)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour | null] (what `group` is rewritten with, a null removing the group's swatch at its place; default: the new colors of the rows with current colors, in order, then those of the empty rows with `added`, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true, globalAdjust?: {saturation?: 0, brightness?: 0, temperature?: 0, luminosity?: 0} (Global Adjust: percent from -100 to 100, 0 changes nothing; every colour a row that isn't excluded recolours, and the group's new colours, take the same change after the row's new colour: saturation scales HSB saturation by 1 + saturation/100, brightness moves HSB brightness that share of the way to full or to black, temperature adds 0.2 × temperature/100 to red and takes it from blue, luminosity moves Lab lightness that share of the way to 100 or 0 keeping a and b; with limitTo each row's new colour takes the change before it snaps to the library)} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step (none when nothing changes). On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke, and on a graph label the new paint of its characters and rows for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (docs/mcp.md) → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model), notChanged: {locked, hidden} (as edit.colors.invert), warning?: set when notChanged counts any object}",
+            "{map: rows [{from: [colour keys (recolor.colors) or \"#rrggbb\" (every colour shown as that hex); may be empty: an empty row recolours nothing, adds no library swatch and gives `group` no colour unless `added`], to: colour (hex, key, {c,m,y,k} or {l,a,b}) | null (in from, to and groupColors, #rrggbbaa and #rgba are refused), exclude?: false (the row's colours are kept), tint?: 100 (percent; with limitTo, art linked to the global or spot swatch the new color is takes this share of its tint), added?: false (an empty row's new color is a color added to `group`)}] | {\"key or #rrggbb\": colour, …} (one row per colour), method?: \"exact\" (default)|\"preserveTints\"|\"scaleTints\"|\"tintsShades\"|\"hueShift\" (how a row's colours take its new colour, relative to the row's darkest, average or most saturated colour), limitTo?: swatch library id or name; or \"document\" (the document's swatches): new colours snap to its nearest colour, group?: colour group to rewrite, groupColors?: [colour | null | \"keep\"] (what the color swatches of `group` are rewritten with, in order: a gradient, pattern or None swatch keeps its place and paint; a null removing the color swatch at its place and \"keep\" leaving that swatch its colour, without the Global Adjust (past the color swatches it adds nothing); default: the new colors of the rows with current colors, in order, then those of the empty rows with `added`, excluded rows left out), rename?: the group's new name, includeImages?: true, includePatterns?: true, globalAdjust?: {saturation?: 0, brightness?: 0, temperature?: 0, luminosity?: 0} (Global Adjust: percent from -100 to 100, 0 changes nothing; every colour a row that isn't excluded recolours, and the group's new colours, take the same change after the row's new colour: saturation scales HSB saturation by 1 + saturation/100, brightness moves HSB brightness that share of the way to full or to black, temperature adds 0.2 × temperature/100 to red and takes it from blue, luminosity moves Lab lightness that share of the way to 100 or 0 keeping a and b; with limitTo each row's new colour takes the change before it snaps to the library)} recolour the selection (gradients, text, meshes, image pixels and pattern tiles included; each new colour keeps the model of the one it replaces (model?: \"keep\" default | \"new\" (the new colour's own model, so a CMYK colour replacing RGB art gives CMYK art) | \"document\" (the document's colour mode)), except a library swatch's with limitTo: art takes the swatch itself, linked to a global or spot colour at its tints, and the swatch joins the document's swatches; art linked to a global swatch of `group` that is rewritten with its row's new color stays linked to it, at its tint, unless the row converts the color into the art's model; other recolored art, and art in a row linked to a global swatch of `group` that is rewritten with another color, keeps its row's new color and loses its swatch link) and the group, as one undo step (none when nothing changes). On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke, and on a graph label the new paint of its characters and rows for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (docs/mcp.md) → {changed, swatches: [names added to the document's swatches], relinked?: with group, the other paints linked to its global swatches that took their new colors, note?: set when a colour kept a model other than its new colour's (see model), notChanged: {locked, hidden} (as edit.colors.invert), warning?: set when notChanged counts any object}",
             has_doc,
             apply
         ),
@@ -130,7 +139,8 @@ type Region = (vectorcraft_geom::BezPath, vectorcraft_geom::FillRule);
 #[derive(Clone)]
 struct ImageRead<'a> {
     blob: &'a vectorcraft_doc::ImageBlob,
-    xf: vectorcraft_geom::Affine,
+    /// Pixel space to the page: the image's transform, or a distorted image's projective map.
+    map: vectorcraft_geom::Homography,
     size: (f64, f64),
     area: Option<Rect>,
     clip: Option<Vec<Region>>,
@@ -261,9 +271,9 @@ impl<'a> Theme<'a> {
             let keeps: Vec<Box<dyn Fn(f64, f64) -> bool + '_>> = group
                 .iter()
                 .map(|r| {
-                    let (xf, (w, h), area, clip, cost, tested) = (r.xf, r.size, r.area, &r.clip, elements(r), &tested);
+                    let (map, (w, h), area, clip, cost, tested) = (r.map, r.size, r.area, &r.clip, elements(r), &tested);
                     Box::new(move |u: f64, v: f64| {
-                        let p = xf * Point::new(u * w, v * h);
+                        let Some(p) = map.apply(Point::new(u * w, v * h)) else { return false };
                         area.is_none_or(|a| a.contains(p))
                             && clip.as_ref().is_none_or(|rs| {
                                 tested.set(tested.get().saturating_add(cost));
@@ -278,7 +288,7 @@ impl<'a> Theme<'a> {
                 .map(|(r, keep)| {
                     use vectorcraft_geom::kurbo::Shape;
                     let (w, h) = r.size;
-                    let inv = r.xf.inverse();
+                    let inv = r.map.inverse();
                     // The box sampled: the marquee, cut to the clipping paths' bounds, so a small
                     // region a clip shows of a large image is still sampled densely.
                     let clip_box = r.clip.as_ref().map(|rs| rs.iter().map(|(bp, _)| bp.bounding_box()).reduce(|a, b| a.union(b)).unwrap_or_default());
@@ -286,12 +296,16 @@ impl<'a> Theme<'a> {
                         (Some(a), Some(c)) => Some(a.intersect(c)),
                         (a, c) => a.or(c),
                     };
-                    let box_uv = region.map(|a| {
-                        let uv: Vec<Point> =
-                            [(a.x0, a.y0), (a.x1, a.y0), (a.x0, a.y1), (a.x1, a.y1)].into_iter().map(|(x, y)| inv * Point::new(x, y)).collect();
+                    // A region that crosses a distorted image's horizon has no box: the whole
+                    // image is sampled, and `keep` tests each pixel.
+                    let box_uv = region.zip(inv).and_then(|(a, inv)| {
+                        let uv: Vec<Point> = [(a.x0, a.y0), (a.x1, a.y0), (a.x0, a.y1), (a.x1, a.y1)]
+                            .into_iter()
+                            .map(|(x, y)| inv.apply(Point::new(x, y)))
+                            .collect::<Option<_>>()?;
                         let low = |f: fn(&Point) -> f64| uv.iter().map(f).fold(f64::INFINITY, f64::min);
                         let high = |f: fn(&Point) -> f64| uv.iter().map(f).fold(f64::NEG_INFINITY, f64::max);
-                        [low(|p| p.x) / w, low(|p| p.y) / h, high(|p| p.x) / w, high(|p| p.y) / h]
+                        Some([low(|p| p.x) / w, low(|p| p.y) / h, high(|p| p.x) / w, high(|p| p.y) / h])
                     });
                     (box_uv, if r.clip.is_some() { clipped } else { budget }, keep.as_ref())
                 })
@@ -401,7 +415,9 @@ impl<'a> Theme<'a> {
                     None
                 };
                 let size = (f64::from(im.width.max(1)), f64::from(im.height.max(1)));
-                self.queue_image(ImageRead { blob, xf: im.xf, size, area, clip: self.clip.clone(), colorize });
+                // A distorted image's pixels are where its projective map puts them.
+                let map = n.image_map().unwrap_or_else(|| vectorcraft_geom::Homography::from_affine(im.xf));
+                self.queue_image(ImageRead { blob, map, size, area, clip: self.clip.clone(), colorize });
                 return;
             }
             NodeKind::SymbolInstance { symbol, xf } => {
@@ -945,16 +961,19 @@ fn pick_theme(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"colors": colors.iter().map(key_str).collect::<Vec<_>>(), "objects": theme.objects}))
 }
 
-/// A colour the art uses: how often, and the global swatch it is linked to.
+/// A color the art uses: how often, and the global swatch of its first linked use in paint order.
 struct Used {
     color: Color,
     count: usize,
     swatch: Option<String>,
+    /// The global swatch of the first linked use that is not a gradient stop mixing the swatch's
+    /// ink with process inks, with the tint (0..1) its paint stores when the paint gives one.
+    plain: Option<(String, Option<f32>)>,
 }
 
 /// The unique colours of the objects `ids` and the objects inside them, most used first (ties by
-/// key): fills, strokes, gradient stops, text, mesh points and the tiles of the patterns used as
-/// fills or strokes. With `only`, an object not in it is left out with everything it holds.
+/// key): fills, strokes, gradient stops, text, mesh points, the tiles of the patterns used as
+/// fills or strokes, and the tiles of the patterns those tiles use. With `only`, an object not in it is left out with everything it holds.
 fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) -> Vec<Used> {
     fn read<'a>(n: &'a Node, only: Option<&BTreeSet<NodeId>>, out: &mut Vec<&'a Node>) {
         if only.is_some_and(|o| !o.contains(&n.id)) {
@@ -967,42 +986,62 @@ fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) ->
     }
     let mut index: HashMap<ColorKey, usize> = HashMap::new();
     let mut used: Vec<(ColorKey, Used)> = vec![];
-    let mut count = |c: &Color, link: Option<&str>| {
+    let mut count_tint = |c: &Color, link: Option<&str>, tint: Option<f32>, mixed: bool| {
         let k = ColorKey::of(c);
         let i = *index.entry(k).or_insert_with(|| {
-            used.push((k, Used { color: *c, count: 0, swatch: None }));
+            used.push((k, Used { color: *c, count: 0, swatch: None, plain: None }));
             used.len() - 1
         });
         let u = &mut used[i].1;
         u.count += 1;
-        if u.swatch.is_none() {
-            u.swatch = link.filter(|l| d.swatch(l).is_some_and(|w| w.global && w.paint.color().is_some())).map(str::to_string);
+        if u.swatch.is_some() && (u.plain.is_some() || mixed) {
+            return;
+        }
+        if let Some(l) = link.filter(|l| d.swatch(l).is_some_and(|w| w.global && w.paint.color().is_some())) {
+            if u.swatch.is_none() {
+                u.swatch = Some(l.to_string());
+            }
+            if u.plain.is_none() && !mixed {
+                u.plain = Some((l.to_string(), tint));
+            }
         }
     };
-    // The patterns used as fills or strokes: their tiles count once each.
+    // The patterns used as fills or strokes, and the patterns their tiles use: each tile counts
+    // once, and a pattern whose tile uses itself, directly or through other patterns, counts once.
     let mut patterns: Vec<&str> = vec![];
     let mut nodes = vec![];
     for n in ids.iter().filter_map(|id| d.node(*id)) {
         read(n, only, &mut nodes);
     }
     for m in nodes {
-        for p in node_paints(m).chain(override_paints(m)) {
-            match p {
-                Paint::Solid { color, swatch, .. } => count(color, swatch.as_deref()),
-                Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| count(&s.color, s.swatch.as_deref())),
-                Paint::Pattern { pattern, .. } if !patterns.contains(&pattern.as_str()) => patterns.push(pattern),
-                _ => {}
-            }
-        }
-        if let NodeKind::Mesh(mesh) = &m.kind {
-            mesh.points.iter().for_each(|p| count(&p.color, None));
-        }
+        paints(m, &mut count_tint, &mut patterns);
     }
-    for def in patterns.iter().filter_map(|p| d.pattern(p)) {
-        def.art.iter().for_each(|n| node_colors(n, &mut count));
+    let mut next = 0;
+    while let Some(&name) = patterns.get(next) {
+        next += 1;
+        for a in d.pattern(name).map(|def| def.art.as_slice()).unwrap_or_default() {
+            a.walk(&mut |m| paints(m, &mut count_tint, &mut patterns));
+        }
     }
     used.sort_by(|a, b| b.1.count.cmp(&a.1.count).then(a.0.cmp(&b.0)));
     used.into_iter().map(|(_, u)| u).collect()
+}
+
+/// Count the colors `m` holds itself with `count` (the color, its swatch, the tint the paint
+/// stores, and whether it is a gradient stop that mixes the swatch's ink with process inks), and
+/// add the patterns it is painted with to `patterns`.
+fn paints<'a>(m: &'a Node, count: &mut impl FnMut(&Color, Option<&str>, Option<f32>, bool), patterns: &mut Vec<&'a str>) {
+    for p in node_paints(m).chain(override_paints(m)) {
+        match p {
+            Paint::Solid { color, swatch, tint } => count(color, swatch.as_deref(), Some(*tint), false),
+            Paint::Gradient(g) => g.gradient.stops.iter().for_each(|s| count(&s.color, s.swatch.as_deref(), Some(s.tint), s.plates.is_some())),
+            Paint::Pattern { pattern, .. } if !patterns.contains(&pattern.as_str()) => patterns.push(pattern),
+            _ => {}
+        }
+    }
+    if let NodeKind::Mesh(mesh) = &m.kind {
+        mesh.points.iter().for_each(|p| count(&p.color, None, None, false));
+    }
 }
 
 /// The colors `n` shows, in paint order ([`node_colors`]), then the colors of the tiles of the
@@ -1047,30 +1086,61 @@ fn scope_ids(s: &Session, p: &Value, cmd: &str) -> Result<(Vec<NodeId>, Option<B
     let st = s.doc()?;
     let ids = match p.get("ids") {
         Some(_) => checked_ids_param(s, p, "ids", cmd)?,
-        None if st.selection.is_empty() => {
-            let only = super::select::selectable_ids(&st.doc, st.isolation);
-            return Ok((super::select::selectable(&st.doc, st.isolation), Some(only)));
-        }
+        None if st.selection.is_empty() => return Ok(all_art(st)),
         None => st.selection.objects.clone(),
     };
     let mut seen = BTreeSet::new();
     Ok((super::edit::outermost(&st.doc, ids).into_iter().filter(|id| seen.insert(*id)).collect(), None))
 }
 
-fn colors(s: &mut Session, p: &Value) -> Result<Value> {
-    let (ids, only) = scope_ids(s, p, "recolor.colors")?;
-    let st = s.doc()?;
-    let v: Vec<Value> = used_colors(&st.doc, &ids, only.as_ref())
-        .iter()
+/// The objects Select All takes, and the objects whose colors count ([`scope_ids`] with nothing
+/// selected).
+fn all_art(st: &crate::DocState) -> (Vec<NodeId>, Option<BTreeSet<NodeId>>) {
+    let only = super::select::selectable_ids(&st.doc, st.isolation);
+    (super::select::selectable(&st.doc, st.isolation), Some(only))
+}
+
+/// The `colors` list of `recolor.colors` and `color.used` for the objects `ids` (see
+/// [`used_colors`]). Each names the swatch of its first linked use. With `with_color`, each has its
+/// color in its own model, and the swatch and tint come from its first linked use that is not a
+/// gradient stop mixing the swatch's ink with process inks (none when every linked use is one).
+fn colors_json(used: &[Used], with_color: bool) -> Vec<Value> {
+    used.iter()
         .map(|u| {
             let mut v = json!({"key": key_str(&u.color), "hex": u.color.to_hex(), "count": u.count});
-            if let Some(w) = &u.swatch {
+            if with_color {
+                v["color"] = json!(u.color);
+                if let Some((w, tint)) = &u.plain {
+                    v["swatch"] = json!(w);
+                    if let Some(t) = tint {
+                        v["tint"] = json!((f64::from(*t) * 100_000.0).round() / 1000.0);
+                    }
+                }
+            } else if let Some(w) = &u.swatch {
                 v["swatch"] = json!(w);
             }
             v
         })
-        .collect();
-    Ok(json!({ "colors": v }))
+        .collect()
+}
+
+fn colors(s: &mut Session, p: &Value) -> Result<Value> {
+    let (ids, only) = scope_ids(s, p, "recolor.colors")?;
+    let st = s.doc()?;
+    Ok(json!({ "colors": colors_json(&used_colors(&st.doc, &ids, only.as_ref()), false) }))
+}
+
+/// `color.used {selection?, limit?}`: the colors of the selection, or of the art Select All takes.
+fn used(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "color.used";
+    let limit = super::index_opt(p, "limit", C)?.unwrap_or(usize::MAX);
+    let selection = switch_or(p, "selection", true, C)? && !s.doc()?.selection.is_empty();
+    let (ids, only) = if selection { scope_ids(s, &json!({}), C)? } else { all_art(s.doc()?) };
+    let st = s.doc()?;
+    let used = used_colors(&st.doc, &ids, only.as_ref());
+    let uses: usize = used.iter().map(|u| u.count).sum();
+    let shown = used.get(..limit.min(used.len())).unwrap_or_default();
+    Ok(json!({ "colors": colors_json(shown, true), "selection": selection, "uses": uses }))
 }
 
 /// `recolor.weigh`'s rows as given, each with `from` as a list (a `{current: new}` map gives a
@@ -1680,12 +1750,28 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         Some(Value::Array(cs)) => Some(cs),
         Some(_) => return Err(bad(C, "`groupColors` must be an array")),
     };
-    // A null in groupColors removes the group's swatch at its place.
+    // The places of groupColors are those of the group's color swatches: a gradient, pattern or
+    // None swatch keeps its place and paint. A null removes the color swatch at its place, and
+    // "keep" leaves it its color, without the Global Adjust.
+    let own: Vec<Color> = match group {
+        Some(g) => s
+            .doc()?
+            .doc
+            .swatch_groups
+            .iter()
+            .find(|x| x.name == g)
+            .map(|g| g.swatches.iter().filter_map(|w| w.paint.color()).collect())
+            .unwrap_or_default(),
+        None => vec![],
+    };
     let new: Vec<Option<Color>> = match group_colors {
         Some(cs) => cs
             .iter()
-            .map(|v| match v {
+            .enumerate()
+            .map(|(i, v)| match v {
                 Value::Null => Ok(None),
+                // Past the group's color swatches it adds nothing.
+                Value::String(k) if k == "keep" => Ok(own.get(i).copied()),
                 v => color_value(v)
                     .map(|c| adjust.apply(c))
                     .map(|c| Some(in_doc_model(palette.as_ref().map_or(c, |pl| pl.nearest(c)))))
@@ -1733,6 +1819,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             .map(|g| {
                 g.swatches
                     .iter()
+                    .filter(|w| w.paint.color().is_some())
                     .zip(&new)
                     .filter(|(w, _)| w.global && !w.is_reserved())
                     .filter_map(|(w, c)| Some((w, (*c)?)))
@@ -1752,7 +1839,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             .collect();
         map.converted.set(false);
         let changed = keeping_series_paint(d, &ids, |d| Ok(Recolor::with_links(scope, &f, &lf).run(d, &ids)))?;
-        let edit = group.map(|g| super::swatch::rewrite_group(d, g, &new, rename, C)).transpose()?;
+        let edit = group.map(|g| super::swatch::rewrite_group(d, g, &new, true, rename, C)).transpose()?;
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         // Rewriting the group's swatches can change the colors of art linked to them, left out or
         // not, and of the patterns it uses. Art that only loses its link keeps its colors and is
@@ -1984,7 +2071,41 @@ mod tests {
     /// A `size` px image of one color `rgba`.
     fn blob(rgba: [u8; 4], size: u32) -> ImageBlob {
         let mut png = Vec::new();
-        image::RgbaImage::from_pixel(size, size, image::Rgba(rgba)).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(size, size, image::Rgba(rgba))).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         ImageBlob::png(png)
     }
 
@@ -2000,7 +2121,14 @@ mod tests {
         bp.line_to((size, size));
         bp.line_to((0.0, size));
         bp.close_path();
-        ImageRead { blob, xf: Affine::IDENTITY, size: (size, size), area: None, clip: Some(vec![(bp, FillRule::NonZero)]), colorize: None }
+        ImageRead {
+            blob,
+            map: vectorcraft_geom::Homography::from_affine(Affine::IDENTITY),
+            size: (size, size),
+            area: None,
+            clip: Some(vec![(bp, FillRule::NonZero)]),
+            colorize: None,
+        }
     }
 
     /// The reads of one image inside clip groups share the work limit: three reads of a 64 px
@@ -2025,9 +2153,42 @@ mod tests {
         let d = Document::new(100.0, 100.0);
         let red = blob([255, 0, 0, 255], 64);
         let mut png = Vec::new();
-        image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba(if x >= 56 && y >= 56 { [0, 0, 255, 255] } else { [255, 0, 0, 255] }))
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-            .unwrap();
+        {
+            let __dyn: image::DynamicImage =
+                (image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba(if x >= 56 && y >= 56 { [0, 0, 255, 255] } else { [255, 0, 0, 255] }))).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
         let corner = ImageBlob::png(png);
         let mut t = Theme::new(&d);
         let whole = ImageRead { clip: None, ..clipped(&corner, 64.0, 4) };

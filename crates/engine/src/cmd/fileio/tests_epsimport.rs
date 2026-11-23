@@ -115,7 +115,25 @@ fn tiff_predicted_4_bit_images_open_from_eps_and_postscript_ai_files() {
         let mut grays = vec![];
         d.walk(|n| {
             if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
-                grays = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_luma8().into_raw();
+                grays = craft_image_codecs::decode(&d.images[&im.key].bytes)
+                    .map(|__cimg| {
+                        let (__w, __h) = __cimg.dimensions();
+                        match (__cimg.layout(), __cimg.sample_type()) {
+                            (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                        }
+                    })
+                    .unwrap()
+                    .to_luma8()
+                    .into_raw();
             }
         });
         assert_eq!(grays, [0, 5, 15, 3, 9, 9, 2, 0].map(|v| v * 17), "{name}");

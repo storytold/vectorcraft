@@ -16,16 +16,18 @@
 
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, Lab};
+use vectorcraft_color::cms;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::ColorMode;
 use vectorcraft_engine::cmd::color_value;
+use vectorcraft_engine::cmd::swatchlib;
 
 use super::form::PREVIEWED;
 use super::{DialogAction, DialogSpec};
 use crate::panels::color::{
     GAMUT_WARNING, WEB_WARNING, gamut_fix, hex_digits, is_web_safe, parse_hex, warning_chip, web_safe, working_hsb, working_rgb,
 };
+use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries};
 use crate::panels::{c32, color_json};
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -101,11 +103,22 @@ impl Channel {
             Channel::Green => "G",
         }
     }
-    fn is_hsb(self) -> bool {
+    /// The channel's name, translated: Hue, Saturation, Brightness, Red, Green or Blue.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Channel::Hue => tl!("Hue"),
+            Channel::Saturation => tl!("Saturation"),
+            Channel::Brightness => tl!("Brightness"),
+            Channel::Red => tl!("Red"),
+            Channel::Green => tl!("Green"),
+            Channel::Blue => tl!("Blue"),
+        }
+    }
+    pub(crate) fn is_hsb(self) -> bool {
         matches!(self, Channel::Hue | Channel::Saturation | Channel::Brightness)
     }
     /// Indices of (slider, field x, field y) into the channel's space: [h, s, b] or [r, g, b].
-    fn axes(self) -> (usize, usize, usize) {
+    pub(crate) fn axes(self) -> (usize, usize, usize) {
         match self {
             Channel::Hue => (0, 1, 2),
             Channel::Saturation => (1, 0, 2),
@@ -117,7 +130,7 @@ impl Channel {
     }
     /// The color field's axes (across, up) as keys and screen readers see them: hue in degrees,
     /// saturation and brightness in percent, red, green and blue from 0 to 255.
-    fn field_axes(self) -> [widgets::FieldAxis<'static>; 2] {
+    pub(crate) fn field_axes(self) -> [widgets::FieldAxis<'static>; 2] {
         let axis = |i: usize| {
             let (name, units, suffix) = match (self.is_hsb(), i) {
                 (true, 0) => (tl!("Hue"), 360.0, "°"),
@@ -280,6 +293,27 @@ pub(super) fn over_effect(parent: &Dialog, field: &str, colour: Color) -> Dialog
     );
     d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
     store(&mut d, &Picked::of(colour));
+    d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
+    d
+}
+
+/// The entry of the dialog's color list that a Color Picker opened with [`over_list_entry`] sets.
+const COLOUR_INDEX: &str = "__colourIndex";
+
+/// The list a Color Picker opened with [`over_list_entry`] puts in the dialog's field before its OK
+/// sets the entry.
+const COLOUR_LIST: &str = "__colourList";
+
+/// The Color Picker over the dialog `parent`, on `colour`, that sets entry `index` of the dialog's
+/// list of colors `field` (Document Setup's `gridColors`) with its OK and goes back to it, leaving
+/// the other entries as they are. With `fill`, its OK first puts `fill` in the field and then sets
+/// the entry. Cancel goes back to `parent` as it was. It previews nothing.
+pub(super) fn over_list_entry(parent: &Dialog, field: &str, index: usize, colour: Color, fill: Option<Value>) -> Dialog {
+    let mut d = over_effect(parent, field, colour);
+    d.fields.insert(COLOUR_INDEX.into(), json!(index));
+    if let Some(list) = fill {
+        d.fields.insert(COLOUR_LIST.into(), list);
+    }
     d
 }
 
@@ -290,11 +324,22 @@ const RECOLOR_ROW: &str = "__recolorRow";
 /// The Color Picker over the Recolor Artwork dialog `parent`, on `color`, the new color of row
 /// `row`: it previews nothing itself, its OK goes back to `parent` with the row's new color set
 /// ([`super::recolor::with_new_color`]) and its Cancel goes back to `parent` as it was.
-pub(super) fn over_recolor(parent: &Dialog, color: Color, row: usize) -> Dialog {
-    let mut d = Dialog::new(
-        KIND,
-        json!({"original": color_json(&color), "channel": Channel::default().id(), "webOnly": false, "swatches": false, RECOLOR_ROW: row}),
-    );
+/// When `swatches` is true, the picker opens showing the Swatches view.
+pub(super) fn over_recolor(parent: &Dialog, color: Color, row: usize, swatches: bool) -> Dialog {
+    let mut fields = json!({
+        "original": color_json(&color),
+        "channel": Channel::default().id(),
+        "webOnly": false,
+        "swatches": swatches,
+        RECOLOR_ROW: row,
+    });
+    let lib = parent.str("limitTo");
+    if !lib.is_empty()
+        && let Some(object) = fields.as_object_mut()
+    {
+        object.insert("library".into(), json!(lib));
+    }
+    let mut d = Dialog::new(KIND, fields);
     d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
     store(&mut d, &Picked::of(color));
     d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
@@ -309,22 +354,46 @@ fn button_width(ui: &Ui) -> f32 {
     })
 }
 
-/// A compact width shared by the heading and body, bounded by the available window width.
-fn layout_size(ui: &Ui) -> (f32, f32, f32, bool) {
+/// A compact width shared by the heading and body, bounded by the available window width, and the
+/// width of the body's scroll bar column. While the body scrolls, the width leaves out that column,
+/// so the body and its bar fit in the window side by side.
+fn layout_size(ui: &Ui) -> (f32, f32, f32, bool, f32) {
     let button_w = button_width(ui);
     let values_w = PREVIEW_W + COLUMN_GAP + button_w;
     let fixed_w = SLIDER_GAP + SLIDER_W + COLUMN_GAP + values_w;
-    let stacked = ui.available_width() < MIN_FIELD + fixed_w;
-    let side = (ui.available_width() - fixed_w).clamp(MIN_FIELD, FIELD);
-    (side, values_w, button_w, stacked)
+    let fit = |room: f32| ((room - fixed_w).clamp(MIN_FIELD, FIELD), room < MIN_FIELD + fixed_w);
+    let (side, stacked) = fit(ui.available_width());
+    // The margin keeps the bar's column whenever the body may scroll, as its height is estimated.
+    if body_height(ui, side, stacked) + 40.0 > scroll_height(ui) {
+        let bar = ui.spacing().scroll.allocated_width();
+        let (side, stacked) = fit(ui.available_width() - bar);
+        (side, values_w, button_w, stacked, bar)
+    } else {
+        (side, values_w, button_w, stacked, 0.0)
+    }
+}
+
+/// The tallest the body's scrolling content is drawn.
+fn scroll_height(ui: &Ui) -> f32 {
+    (ui.ctx().content_rect().height() - 112.0).max(1.0)
+}
+
+/// How tall the body's field, slider and value columns are with a field `side` wide, `stacked` or
+/// side by side.
+fn body_height(ui: &Ui, side: f32, stacked: bool) -> f32 {
+    // Let the auto-sized window grow for the checkbox too, rather than clipping it to the
+    // scroll area's previous height while the dialog measures itself.
+    let field_h = side + 8.0 + 20.0 + 2.0 * ui.spacing().item_spacing.y;
+    if stacked { field_h + COLUMN_GAP + FIELD } else { field_h.max(FIELD) }
 }
 
 /// Full-width, draggable title band using the app's existing theme colours.
 fn header(ui: &mut Ui, title: &str) {
-    let (side, values_w, _, stacked) = layout_size(ui);
+    let (side, values_w, _, stacked, bar) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let width = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };
-    ui.set_width(width.min(ui.available_width()));
+    // The width includes the bar's column: the body measures from it and leaves the column out.
+    ui.set_width((width + bar).min(ui.available_width()));
     let margin = f32::from(super::MARGIN);
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H - margin), Sense::hover());
     let band = Rect::from_min_max(r.min - vec2(margin, margin), r.max + vec2(margin, 0.0));
@@ -347,7 +416,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
     let p = picked(d);
     let original = d.fields.get("original").and_then(color_value).unwrap_or(p.color);
     let gamut = gamut_fix(app, ui.ctx(), "picker-gamut", &p.color);
-    let (side, values_w, button_w, stacked) = layout_size(ui);
+    super::modal::fits_itself(ui);
+    let (side, values_w, button_w, stacked, _) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let content_w = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };
     let mut pick: Option<Picked> = None;
@@ -357,11 +427,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
     let mut action = DialogAction::None;
     // Shrink the field first, then stack the columns in narrow windows. Only vertical
     // scrolling is needed, so no controls depend on a horizontal scrollbar.
-    let height = (ui.ctx().content_rect().height() - 112.0).max(1.0);
-    // Let the auto-sized window grow for the checkbox too, rather than clipping it to the
-    // scroll area's previous height while the dialog measures itself.
-    let field_h = side + 8.0 + 20.0 + 2.0 * ui.spacing().item_spacing.y;
-    let body_height = if stacked { field_h + COLUMN_GAP + FIELD } else { field_h.max(FIELD) };
+    let height = scroll_height(ui);
+    let body_height = body_height(ui, side, stacked);
     let layout = if stacked { egui::Layout::top_down(egui::Align::Min) } else { egui::Layout::left_to_right(egui::Align::Min) };
     egui::ScrollArea::vertical()
         .id_salt("cp-content")
@@ -378,10 +445,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
             ui.with_layout(layout, |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 ui.allocate_ui_with_layout(vec2(side + SLIDER_GAP + SLIDER_W, side), egui::Layout::top_down(egui::Align::Min), |ui| {
-                    ui.horizontal_top(|ui| {
-                        if swatches {
-                            pick = swatch_list(app, ui, &p.color, side).map(Picked::of);
-                        } else {
+                    if swatches {
+                        pick = swatch_list(app, ui, d, &p.color, side).map(Picked::of);
+                    } else {
+                        ui.horizontal_top(|ui| {
                             let (z, x, y) = field_pos(channel, &p);
                             let at = |x: f32, y: f32| c32(&field_pick(channel, z, x, y).snapped(web).color);
                             if let (Some((x, y)), _) =
@@ -393,13 +460,22 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
                             let track = |z: f32| c32(&Picked::of(slider_color(channel, z, x, y)).snapped(web).color);
                             let (v, suffix, max) = channel_value(channel, &p);
                             let shown = widgets::SliderValue::field(v as f64, 0.0..=max as f64, suffix, 0);
-                            if let (Some(z), _) =
-                                widgets::channel_slider_valued(ui, "cp-slider", tl!(channel.label()), Some(shown), z, vec2(SLIDER_W, side), &track)
-                            {
-                                pick = Some(field_pick(channel, z, x, y));
+                            match widgets::channel_slider_stepped(
+                                ui,
+                                "cp-slider",
+                                tl!(channel.label()),
+                                Some(shown),
+                                z,
+                                true,
+                                vec2(SLIDER_W, side),
+                                &track,
+                            ) {
+                                (Some(z), ..) => pick = Some(field_pick(channel, z, x, y)),
+                                (None, _, Some(v)) => pick = Some(field_pick(channel, (v / max as f64) as f32, x, y)),
+                                _ => {}
                             }
-                        }
-                    });
+                        });
+                    }
                     ui.add_space(8.0);
                     if widgets::check(ui, tl!("Only Web Colors"), web, true) {
                         d.fields.insert("webOnly".into(), json!(!web));
@@ -482,13 +558,18 @@ fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
     if unchanged || !selected {
         return;
     }
-    let _ = app.session.begin_interaction(if artboard {
+    let label = if artboard {
         "Artboard Options"
     } else if d.bool("stroke") {
         "Stroke Color"
     } else {
         "Fill Color"
-    });
+    };
+    // A failure to begin (typing that can't be kept) shows, and nothing previews.
+    if let Err(e) = app.begin_interaction(label) {
+        app.status(e);
+        return;
+    }
     if let Err(e) = app.session.preview(cmd, &params) {
         app.status(e.to_string());
     }
@@ -612,7 +693,7 @@ fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, O
                     edit = Some(Picked::of(if i < 3 {
                         let mut l = [lab.l, lab.a, lab.b];
                         l[i] = if i == 0 { nv.clamp(0.0, 100.0) } else { nv.clamp(-128.0, 127.0) };
-                        cms.from_lab(Lab::new(l[0], l[1], l[2]))
+                        Color::lab(l[0], l[1], l[2])
                     } else {
                         let mut k = cmyk;
                         k[i - 3] = (nv / 100.0).clamp(0.0, 1.0);
@@ -626,37 +707,78 @@ fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, O
     (edit, chosen)
 }
 
-/// The document's colour swatches as a list; returns the clicked swatch's colour.
-fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, current: &Color, side: f32) -> Option<Color> {
+/// The document's colour swatches or a swatch library as a list; returns the clicked swatch's colour.
+fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Color, side: f32) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     let mut chosen = None;
-    ui.allocate_ui(vec2(side + SLIDER_GAP + SLIDER_W, side), |ui| {
-        ui.set_min_size(vec2(side + SLIDER_GAP + SLIDER_W, side));
+    let list_w = side + SLIDER_GAP + SLIDER_W;
+    ui.allocate_ui_with_layout(vec2(list_w, side), egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.set_min_size(vec2(list_w, side));
+        let libs = colour_libraries(app);
+        let keys: Vec<&str> = [swatchlib::DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.id.as_str())).collect();
+        let names: Vec<&str> = [DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.name.as_str())).collect();
+        let builtin = |k: usize| k.checked_sub(1).is_none_or(|i| libs.get(i).is_some_and(|l| l.submenu.is_none()));
+        let shown = super::shown_names(crate::i18n::current(), &names, builtin);
+        let cur = d.str("library");
+        let cur = if cur.is_empty() { swatchlib::DOCUMENT_SWATCHES } else { &cur };
+        let at = keys.iter().position(|k| *k == cur).unwrap_or(0);
+        let current_label = shown.get(at).copied().unwrap_or_default();
+        if let Some(i) = widgets::dropdown_names(ui, "cp-library", current_label, &shown, list_w)
+            && let Some(&k) = keys.get(i)
+        {
+            d.fields.insert("library".into(), json!(k));
+        }
+        ui.add_space(4.0);
         widgets::list_box(ui, |ui| {
-            egui::ScrollArea::vertical().id_salt("cp-swatches").max_height((side - 8.0).max(1.0)).show(ui, |ui| {
-                ui.set_width(side + SLIDER_GAP + SLIDER_W - 8.0);
-                let Some(st) = app.session.active() else {
-                    widgets::dim_label(ui, tl!("Open a document to see its swatches."));
-                    return;
-                };
-                let doc = &st.doc;
-                for s in doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|g| g.swatches.iter())) {
-                    let Paint::Solid { color, .. } = &s.paint else { continue };
-                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
-                    if resp.hovered() {
-                        ui.painter().rect_filled(r, 0.0, t.hover);
+            let max_h = (side - 28.0).max(1.0);
+            // The rows take the list's width less its scroll bar's column.
+            egui::ScrollArea::vertical().id_salt("cp-swatches").max_width(list_w - 8.0).max_height(max_h).auto_shrink([false, true]).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                let cur = d.str("library");
+                if cur.is_empty() || cur == swatchlib::DOCUMENT_SWATCHES {
+                    let Some(st) = app.session.active() else {
+                        widgets::dim_label(ui, tl!("Open a document to see its swatches."));
+                        return;
+                    };
+                    let doc = &st.doc;
+                    for s in doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|g| g.swatches.iter())) {
+                        let Some(color) = s.paint.color() else { continue };
+                        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
+                        if resp.hovered() {
+                            ui.painter().rect_filled(r, 0.0, t.hover);
+                        }
+                        let chip = Rect::from_min_size(r.left_center() + vec2(4.0, -7.0), vec2(14.0, 14.0));
+                        widgets::swatch_tile(ui, chip, &s.paint, color == *current, false);
+                        ui.painter().text(
+                            egui::pos2(chip.right() + 8.0, r.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            &s.name,
+                            egui::FontId::proportional(12.0),
+                            t.text,
+                        );
+                        if resp.clicked() {
+                            chosen = Some(color);
+                        }
                     }
-                    let chip = Rect::from_min_size(r.left_center() + vec2(4.0, -7.0), vec2(14.0, 14.0));
-                    widgets::swatch_tile(ui, chip, &s.paint, color == current, false);
-                    ui.painter().text(
-                        egui::pos2(chip.right() + 8.0, r.center().y),
-                        egui::Align2::LEFT_CENTER,
-                        &s.name,
-                        egui::FontId::proportional(12.0),
-                        t.text,
-                    );
-                    if resp.clicked() {
-                        chosen = Some(*color);
+                } else if let Some((_, lib)) = swatchlib::library(&app.session, &cur) {
+                    for s in lib.swatches.iter().chain(lib.groups.iter().flat_map(|g| g.swatches.iter())) {
+                        let Some(color) = s.paint.color() else { continue };
+                        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
+                        if resp.hovered() {
+                            ui.painter().rect_filled(r, 0.0, t.hover);
+                        }
+                        let chip = Rect::from_min_size(r.left_center() + vec2(4.0, -7.0), vec2(14.0, 14.0));
+                        widgets::swatch_tile(ui, chip, &s.paint, color == *current, false);
+                        ui.painter().text(
+                            egui::pos2(chip.right() + 8.0, r.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            &s.name,
+                            egui::FontId::proportional(12.0),
+                            t.text,
+                        );
+                        if resp.clicked() {
+                            chosen = Some(color);
+                        }
                     }
                 }
             });
@@ -671,7 +793,23 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, current: &Color, side: f32) ->
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(field) = d.fields.get(COLOUR_FIELD).and_then(Value::as_str) {
         let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
-        parent.fields.insert(field.to_string(), json!(picked(d).color.to_hex()));
+        let hex = json!(picked(d).color.to_hex());
+        match d.fields.get(COLOUR_INDEX) {
+            None => {
+                parent.fields.insert(field.to_string(), hex);
+            }
+            Some(index) => {
+                if let Some(list) = d.fields.get(COLOUR_LIST) {
+                    parent.fields.insert(field.to_string(), list.clone());
+                }
+                let entry = index
+                    .as_u64()
+                    .and_then(|i| usize::try_from(i).ok())
+                    .and_then(|i| parent.fields.get_mut(field)?.as_array_mut()?.get_mut(i))
+                    .ok_or("no such color")?;
+                *entry = hex;
+            }
+        }
         // The dialog previews the new colour when it comes back: end this picker's interaction, as
         // Cancel does, so the dialog starts its preview afresh.
         let _ = app.session.cancel_interaction();

@@ -577,9 +577,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// `text` with the colon of a field label.
+/// `text` with the colon of a field label, as the UI language writes it.
 fn colon(text: &str) -> String {
-    format!("{text}:")
+    crate::i18n::colon(text)
 }
 
 /// A checkbox bound to `d.fields[key]`, dimmed while the type picked has no use for it.
@@ -975,6 +975,22 @@ mod tests {
         app.run("select.set", json!({"ids": []})).unwrap();
         assert!(open(app).is_err());
         assert!(app.ui.dialog.is_none());
+    }
+
+    /// Field labels end in the UI language's colon: in French a no-break space and a colon (#7991).
+    #[test]
+    fn field_labels_use_the_language_colon() {
+        let mut app = app_with_graph("column");
+        crate::menus::invoke(&mut app, COMMAND, json!({}));
+        set(&mut app, PAGE, json!("valueAxis"));
+        let fr = crate::i18n::Lang::from_code("fr").unwrap();
+        crate::i18n::set_current(fr);
+        let mut h = harness(app);
+        h.run_steps(3);
+        let want = format!("{}\u{a0}:", crate::i18n::tr(fr, "Suffix"));
+        let found = h.query_by_role_and_label(Role::TextInput, &want).is_some();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(found, "a text field named {want:?}");
     }
 
     /// A Type button changes the graph's type and keeps its data.

@@ -147,9 +147,8 @@ fn is_of_kind(d: &Document, n: &Node, kind: &str) -> bool {
 
 /// Are the encoded image `bytes` grayscale or 1-bit? Reads only the header.
 fn is_gray(bytes: &[u8]) -> bool {
-    use image::ImageDecoder as _;
-    let decoder = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok().and_then(|r| r.into_decoder().ok());
-    decoder.is_some_and(|d| matches!(d.color_type(), image::ColorType::L8 | image::ColorType::La8 | image::ColorType::L16 | image::ColorType::La16))
+    craft_image_codecs::decode(bytes)
+        .is_ok_and(|img| matches!(img.layout(), craft_image_codecs::ChannelLayout::Gray | craft_image_codecs::ChannelLayout::GrayA))
 }
 
 fn filter(s: &mut Session, p: &Value) -> Result<Value> {

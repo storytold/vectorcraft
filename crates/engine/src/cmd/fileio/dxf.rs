@@ -226,9 +226,10 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>) -> 
             vec![(Some(b), rect(b)?, false)]
         }
     };
+    let regions: Vec<(Rect, bool)> = drawings.iter().map(|&(_, region, crop)| (region, crop)).collect();
+    let outs = vectorcraft_cad::export_drawings(doc, &opts, &regions).map_err(|e| bad(C, e))?;
     let mut enc = Encoded::default();
-    for (board, region, crop) in drawings {
-        let out = vectorcraft_cad::export(doc, &DxfOptions { region, crop, ..opts.clone() }).map_err(|e| bad(C, e))?;
+    for ((board, _, _), out) in drawings.into_iter().zip(outs) {
         enc.files.push((board, out.bytes));
         for w in out.warnings {
             if !enc.warnings.contains(&w) {

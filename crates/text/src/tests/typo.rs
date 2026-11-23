@@ -1108,16 +1108,47 @@ fn each_run_hyphenates_in_its_own_language() {
     let saved_without_one = hyphens(None);
     assert!(saved_without_one > 0, "some words hyphenated");
     assert_eq!(hyphens(Some("en-GB")), saved_without_one);
-    assert_eq!(hyphens(Some("de")), 0, "German has no break points yet");
+    assert_eq!(hyphens(Some("fr")), 0, "French has no break points yet");
+    assert_eq!(hyphens(Some("ru")), 0, "English words in a Russian run are not hyphenated as English");
     assert_eq!(hyphens(Some("x-from-a-file")), 0, "a tag that isn't known has no hyphenation");
 
-    // both in one paragraph: the English run breaks and the German one doesn't
+    // both in one paragraph: the English run breaks and the French one doesn't
     let mut t = area(&format!("{text} {text}"), style(14.0), frame, Justify::Left);
     t.para.hyphenate = true;
-    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("de".into()));
+    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("fr".into()));
     let l = layout(db(), &t);
     let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
     assert!(!at.is_empty() && at.iter().all(|b| *b < text.len()), "hyphens only in the English run: {at:?}");
+}
+
+/// A justified Russian paragraph in a narrow frame breaks its long words at the Russian rules'
+/// points with either composer, and not at all with Hyphenate off.
+#[test]
+fn a_russian_run_hyphenates_at_russian_break_points() {
+    let text = "Государственное законодательство регулирует достопримечательности.";
+    let frame = Rect::new(0.0, 0.0, 120.0, 600.0);
+    let st = CharStyle { language: Some("ru-RU".into()), ..style(14.0) };
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let mut t = area(text, st.clone(), frame, Justify::JustifyLeft);
+        t.para.composer = composer;
+        t.para.hyphenate = true;
+        let l = layout(db(), &t);
+        let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
+        assert!(!at.is_empty(), "{composer:?}: some words hyphenated");
+        for b in at {
+            // The word the hyphen splits, and where in it the line ends.
+            let start = text[..b].rfind(' ').map_or(0, |i| i + 1);
+            let end = text[b..].find([' ', '.']).map_or(text.len(), |i| b + i);
+            let word = &text[start..end];
+            let point = text[start..b].chars().count();
+            assert!(
+                hyphen::hyphen_points_for_language(word, &t.para.hyphenation, Some("ru")).contains(&point),
+                "{composer:?}: {word} broken after {point} letters"
+            );
+        }
+        t.para.hyphenate = false;
+        assert_eq!(layout(db(), &t).glyphs.iter().filter(|g| g.len == 0).count(), 0, "{composer:?}: Hyphenate off");
+    }
 }
 
 #[test]
@@ -1329,6 +1360,40 @@ fn inset_and_first_baseline_options() {
     assert!(cap.lines[0].baseline < base.lines[0].baseline && cap.lines[0].baseline > 5.0);
 }
 
+/// First Baseline Em Box Height: the top of the first line's ideographic em box (the one leading
+/// measured from em box top to top uses) touches the top of the type area inside the inset. On a
+/// line of several sizes the largest em box decides, and a Min further down sets the baseline.
+#[test]
+fn em_box_height_puts_the_first_lines_em_box_top_at_the_type_area_top() {
+    let frame = Rect::new(0.0, 0.0, 300.0, 300.0);
+    let em_box = |t: &TextObject, inset: f64, min: f64| {
+        let opts = LayoutOptions { first_baseline: FirstBaseline::EmBoxHeight, first_baseline_min: min, inset, ..Default::default() };
+        layout_with(db(), t, &opts).lines[0].baseline
+    };
+    // The em box top the EmBoxTop leading model sets a frame's first line at.
+    let em_top = |t: &TextObject| {
+        let mut t = t.clone();
+        t.para.leading_model = vectorcraft_doc::LeadingModel::EmBoxTop;
+        layout(db(), &t).lines[0].baseline
+    };
+    let t = area(COPY, style(12.0), frame, Justify::Left);
+    let top = em_top(&t);
+    assert!(top > 5.0 && top < 12.0, "{top}");
+    let ascent = layout(db(), &t).lines[0].baseline;
+    assert!((top - ascent).abs() > 0.1, "not the ascent: {top} {ascent}");
+    assert!((em_box(&t, 0.0, 0.0) - top).abs() < 1e-9);
+    assert!((em_box(&t, 10.0, 0.0) - (10.0 + top)).abs() < 1e-9, "measured from the inset");
+    // A Min nearer the top than the em box changes nothing; one further down is the baseline.
+    assert!((em_box(&t, 10.0, top / 2.0) - (10.0 + top)).abs() < 1e-9);
+    assert!((em_box(&t, 10.0, 30.0) - 40.0).abs() < 1e-9);
+    // 10 pt and 20 pt on the first line: the 20 pt em box top is at the top.
+    let mut mixed = area("small Large", style(10.0), frame, Justify::Left);
+    mixed.runs = vec![run("small ", 10.0), run("Large", 20.0)];
+    let large = area("Large", style(20.0), frame, Justify::Left);
+    assert!((em_box(&mixed, 0.0, 0.0) - em_box(&large, 0.0, 0.0)).abs() < 1e-9);
+    assert!((em_box(&large, 0.0, 0.0) - 2.0 * top * 10.0 / 12.0).abs() < 1e-6);
+}
+
 /// `LineInfo::first_baseline`: each line that starts a column has its baseline that far below the
 /// column's top inside the inset, for every first baseline option, with and without a minimum and
 /// an inset, in both leading models, and for lines of several sizes (each line in one size).
@@ -1343,8 +1408,14 @@ fn lines_starting_a_column_sit_at_their_first_baseline() {
     let text: String = runs.iter().map(|r| r.text.as_str()).collect();
     let mut other_sizes = 0;
     for model in [vectorcraft_doc::LeadingModel::RomanBaseline, vectorcraft_doc::LeadingModel::EmBoxTop] {
-        for first_baseline in [FirstBaseline::Ascent, FirstBaseline::CapHeight, FirstBaseline::XHeight, FirstBaseline::Leading, FirstBaseline::Fixed]
-        {
+        for first_baseline in [
+            FirstBaseline::Ascent,
+            FirstBaseline::CapHeight,
+            FirstBaseline::XHeight,
+            FirstBaseline::Leading,
+            FirstBaseline::EmBoxHeight,
+            FirstBaseline::Fixed,
+        ] {
             for (first_baseline_min, inset) in [(0.0, 0.0), (18.0, 6.0)] {
                 for height in [100.0, 120.0, 140.0] {
                     let mut t = area(&text, style(12.0), Rect::new(0.0, 0.0, 420.0, height), Justify::Left);

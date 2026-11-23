@@ -14,7 +14,7 @@ use vectorcraft_color::Color;
 use vectorcraft_doc::LAYER_COLORS;
 
 use super::tile_edge_color::{checked, resolve};
-use super::{DialogSpec, form, run_and_close};
+use super::{DialogSpec, form, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -124,7 +124,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         checked(&d.str("highlightColor"))?;
     }
     let values: Map<String, Value> = KEYS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
-    run_and_close(app, "tool.setOption", json!({ "tool": "shapeBuilder", "values": values }))
+    set_tool_options_and_close(app, json!({ "tool": "shapeBuilder", "values": values }))
 }
 
 #[cfg(test)]
@@ -157,6 +157,22 @@ mod tests {
         assert_eq!(opts["gapLength"], 72.0);
         assert_eq!(opts["gapDetection"], true);
         assert_eq!(opts["openFilledAsClosed"], true);
+    }
+
+    /// Double-clicking the Fill Area tool opens the Shape Builder Tool Options, whose Gap
+    /// Detection the active Fill Area tool takes on OK.
+    #[test]
+    fn the_fill_area_tool_opens_the_shape_builder_options() {
+        let mut a = app();
+        a.select_tool("fillArea");
+        let r = a.run("tool.options", json!({"tool": "fillArea"})).unwrap();
+        assert_eq!(r["dialog"], json!(KIND));
+        let d = a.ui.dialog.as_mut().unwrap();
+        d.fields.insert("gapDetection".into(), json!(true));
+        d.fields.insert("gapLength".into(), json!(6));
+        super::super::confirm(&mut a).unwrap();
+        let opts = a.session.tool_options_of("fillArea");
+        assert_eq!((opts["gapDetection"].clone(), opts["gapLength"].clone()), (json!(true), json!(6.0)));
     }
 
     #[test]

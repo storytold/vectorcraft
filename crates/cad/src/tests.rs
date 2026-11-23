@@ -852,8 +852,19 @@ fn the_cnc_preset_writes_version_2000_in_millimeters_with_type_as_paths_and_stro
 /// A 4 × 2 px PNG placed at (10, 20) under key `raster-1`, and before it in paint order
 /// `fill`'s rectangle.
 fn image_and_fill_doc(fill: Paint) -> Document {
-    let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 2, image::Rgba([0, 0, 255, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(
+            4,
+            2,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [0u8, 0, 255, 255].repeat(8),
+        )
+        .unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     let mut d = doc_with(|d| {
         let im = ImageObject {
             key: "raster-1".into(),
@@ -869,7 +880,7 @@ fn image_and_fill_doc(fill: Paint) -> Document {
             Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))),
         ]
     });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     d
 }
 
@@ -963,7 +974,10 @@ fn images_can_be_left_out_with_their_files() {
     assert_eq!(out.setting_notes, [IMAGES_OFF]);
     // An image that can't be decoded is not read when images are left out.
     let mut broken = d.clone();
-    broken.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None });
+    broken.images.insert(
+        "raster-1".into(),
+        ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None, file_font: Default::default() },
+    );
     let left_out = export(&broken, &DxfOptions { include_images: false, ..opts(&broken) }).unwrap();
     assert!(left_out.warnings.is_empty(), "{:?}", left_out.warnings);
     assert_eq!(left_out.setting_notes, [IMAGES_OFF]);
@@ -971,6 +985,37 @@ fn images_can_be_left_out_with_their_files() {
     // R12 has no images anyway: its own note alone.
     let r12 = export(&d, &DxfOptions { version: DxfVersion::R12, include_images: false, ..opts(&d) }).unwrap();
     assert!(r12.warnings.iter().any(|w| w.contains("no images")) && r12.setting_notes.is_empty());
+}
+
+/// DXF does not clip, so an image changed by Perspective Distort is written as one image at the
+/// placement nearest its corners, with a warning; an undistorted image gets no warning.
+#[test]
+fn a_distorted_image_is_written_as_its_nearest_parallelogram_with_a_warning() {
+    let mut d = image_and_fill_doc(Paint::None);
+    let warned = |o: &DxfOutput| o.warnings.iter().any(|w| w.contains("Perspective Distort or Free Distort"));
+    assert!(!warned(&export(&d, &opts(&d)).unwrap()));
+    let id = d.layers[0].children().unwrap()[1].id;
+    let q = [(12.0, 20.0), (28.0, 20.0), (30.0, 30.0), (10.0, 30.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let out = export(&d, &opts(&d)).unwrap();
+    assert!(warned(&out), "{:?}", out.warnings);
+    assert_eq!(kinds(&out).iter().filter(|k| *k == "IMAGE").count(), 1, "{:?}", kinds(&out));
+    // Placed as an undistorted image with the nearest affine placement as its transform would be.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(id).unwrap()).unwrap();
+    let mut plain = d.clone();
+    let n = plain.node_mut(id).unwrap();
+    n.extras_mut().image_quad = None;
+    if let NodeKind::Image(im) = &mut n.kind {
+        im.xf = near;
+    }
+    let placement = |o: &DxfOutput| {
+        let e = entities(o).into_iter().find(|e| kind(e) == "IMAGE").expect("an IMAGE");
+        [10, 20, 11, 21, 12, 22].map(|c| all(&e, c))
+    };
+    assert_eq!(placement(&out), placement(&export(&plain, &opts(&plain)).unwrap()));
+    // With images left out, no IMAGE is written and the distortion warning does not appear.
+    let left_out = export(&d, &DxfOptions { include_images: false, ..opts(&d) }).unwrap();
+    assert!(!warned(&left_out), "{:?}", left_out.warnings);
 }
 
 #[test]
@@ -1312,8 +1357,19 @@ fn a_font_height_reference_is_written_as_the_size_drawn() {
 
 #[test]
 fn images_link_png_or_jpeg_files() {
-    let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 128])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(
+            4,
+            2,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [255u8, 0, 0, 128].repeat(8),
+        )
+        .unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     let mut d = doc_with(|d| {
         let im = ImageObject {
             key: "raster-1".into(),
@@ -1326,7 +1382,7 @@ fn images_link_png_or_jpeg_files() {
         };
         vec![Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
     });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     let out = export(&d, &opts(&d)).unwrap();
     let e = entities(&out);
     assert_eq!(kind(&e[0]), "IMAGE");
@@ -1369,7 +1425,7 @@ fn images_without_pixels_are_left_out_with_one_note() {
             })
             .collect()
     });
-    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None });
+    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None, file_font: Default::default() });
     let out = export(&d, &opts(&d)).unwrap();
     assert!(entities(&out).is_empty() && out.images.is_empty());
     assert_eq!(out.warnings, ["an image has no pixels and was left out"]);
@@ -1469,5 +1525,203 @@ fn export_bytes_match_shared_writer_goldens() {
         }
         let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
         assert_eq!(got, expected, "DXF bytes changed versus {}", path.display());
+    }
+}
+
+/// One drawing written by applying the live effects for it alone and walking the result, as each
+/// drawing of a multi-drawing export was written before [`export_drawings`].
+fn export_baking_alone(doc: &Document, opts: &DxfOptions) -> DxfOutput {
+    let baked = crate::bake_for_drawings(doc);
+    crate::scene::Scene::new(baked.as_ref().unwrap_or(doc), opts).run()
+}
+
+/// A written drawing's bytes, linked images (name and bytes), warnings and setting notes.
+type Written = (Vec<u8>, Vec<(String, Vec<u8>)>, Vec<String>, Vec<String>);
+
+/// Every field of a written drawing, for comparing two.
+fn written(out: &DxfOutput) -> Written {
+    let images = out.images.iter().map(|i| (i.name.clone(), i.bytes.clone())).collect();
+    (out.bytes.clone(), images, out.warnings.clone(), out.setting_notes.clone())
+}
+
+/// A Transform effect that moves its object `x` pt right.
+fn moved_by(mut n: Node, x: f64) -> Node {
+    n.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": x}), visible: true });
+    n
+}
+
+/// A line moved by a Transform effect, an instance of a symbol whose art carries the same effect
+/// stained by its fill, a semi-transparent line in a blending mode, and a placed PNG image.
+fn drawings_doc() -> Document {
+    let png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(
+            2,
+            2,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [0u8, 128, 255, 255].repeat(4),
+        )
+        .unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
+    let mut d = doc_with(|d| {
+        let line = path(d, shapes::line((10.0, 10.0).into(), (20.0, 10.0).into()), Paint::None, Paint::solid(Color::BLACK), 1.0);
+        let mut instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY });
+        instance.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+        let mut faint = path(d, shapes::line((10.0, 90.0).into(), (190.0, 90.0).into()), Paint::None, Paint::solid(Color::BLACK), 1.0);
+        faint.opacity = 0.5;
+        faint.blend = vectorcraft_color::BlendMode::Multiply;
+        let im = ImageObject {
+            key: "raster-1".into(),
+            width: 2,
+            height: 2,
+            xf: Affine::translate((150.0, 20.0)) * Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        vec![moved_by(line, 100.0), instance, faint, Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
+    });
+    let art = path(&mut d, shapes::rectangle(Rect::new(10.0, 40.0, 30.0, 60.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved_by(art, 20.0)) });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
+    d
+}
+
+#[test]
+fn drawings_apply_the_live_effects_once_and_match_drawings_written_alone() {
+    let d = drawings_doc();
+    assert!(crate::bake_for_drawings(&d).is_some(), "the document has live effects to apply");
+    // The left and right halves cropped, the whole page uncropped, and a region off the page.
+    let drawings = [
+        (Rect::new(0.0, 0.0, 100.0, 100.0), true),
+        (Rect::new(100.0, 0.0, 200.0, 100.0), true),
+        (Rect::new(0.0, 0.0, 200.0, 100.0), false),
+        (Rect::new(300.0, 0.0, 400.0, 100.0), true),
+    ];
+    // With every option, and with images and hatches left out (which adds setting notes).
+    let all_in = opts(&d);
+    for o in [all_in.clone(), DxfOptions { include_images: false, include_hatches: false, ..all_in }] {
+        let bakes = std::cell::Cell::new(0);
+        let outs = crate::export_drawings_with(&d, &o, &drawings, |doc| {
+            bakes.set(bakes.get() + 1);
+            crate::bake_for_drawings(doc)
+        })
+        .unwrap();
+        assert_eq!(bakes.get(), 1, "the live effects are applied once for every drawing");
+        assert_eq!(outs.len(), drawings.len());
+        for ((region, crop), out) in drawings.iter().zip(&outs) {
+            let alone = export_baking_alone(&d, &DxfOptions { region: *region, crop: *crop, ..o.clone() });
+            assert_eq!(written(out), written(&alone), "the drawing over {region:?}, crop {crop}");
+            let one = export(&d, &DxfOptions { region: *region, crop: *crop, ..o.clone() }).unwrap();
+            assert_eq!(written(&one), written(&alone), "export over {region:?}, crop {crop}");
+        }
+        let public: Vec<_> = export_drawings(&d, &o, &drawings).unwrap().iter().map(written).collect();
+        assert_eq!(public, outs.iter().map(written).collect::<Vec<_>>());
+        // The halves hold different art, the left half a line with losses, and the region off the
+        // page nothing.
+        assert!(!entities(&outs[0]).is_empty() && !entities(&outs[1]).is_empty() && !outs[0].warnings.is_empty());
+        assert_ne!(outs[0].bytes, outs[1].bytes);
+        assert!(entities(&outs[3]).is_empty() && outs[3].images.is_empty());
+        if o.include_images {
+            assert_eq!(outs[2].images.len(), 1);
+        } else {
+            assert!(!outs[2].setting_notes.is_empty() && outs[2].images.is_empty());
+        }
+    }
+}
+
+#[test]
+fn drawings_are_checked_before_the_live_effects_are_applied() {
+    let d = drawings_doc();
+    let o = opts(&d);
+    let bakes = std::cell::Cell::new(0);
+    let count = |doc: &Document| {
+        bakes.set(bakes.get() + 1);
+        crate::bake_for_drawings(doc)
+    };
+    let page = (d.artboards[0].rect, false);
+    let off = (Rect::new(0.0, 0.0, f64::NAN, 100.0), false);
+    assert_eq!(crate::export_drawings_with(&d, &o, &[page, off], count).unwrap_err(), "the export region is not finite");
+    let e = crate::export_drawings_with(&d, &DxfOptions { scale: 0.0, ..o.clone() }, &[page], count).unwrap_err();
+    assert!(e.starts_with("scale must be a number"), "{e}");
+    assert!(crate::export_drawings_with(&d, &o, &[], count).unwrap().is_empty());
+    assert_eq!(bakes.get(), 0, "nothing is applied for drawings that are refused or for none");
+}
+
+/// The thread's time on the CPU in nanoseconds where Linux reports it, otherwise `None`.
+fn thread_cpu_ns() -> Option<u64> {
+    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+}
+
+/// Time a Use Artboards export of eight artboards whose art has live effects, written drawing by
+/// drawing with the effects applied for each (as before [`export_drawings`]) and with
+/// [`export_drawings`], alternating, seven times each, and check that both write the same
+/// drawings. Prints the median of each in milliseconds of the thread's CPU time (on Linux) and of
+/// wall-clock time.
+/// Run with `cargo test --release -p vectorcraft-cad --lib dxf_artboards_bake_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn dxf_artboards_bake_perf() {
+    const BOARDS: usize = 8;
+    let mut d = Document::new(200.0 * BOARDS as f64, 200.0);
+    let layer = d.layers[0].id;
+    let effect = |id: &str, params: serde_json::Value| vectorcraft_doc::Effect { id: id.into(), params, visible: true };
+    let mut art = vec![];
+    for i in 0..50 {
+        let (x, y) = (f64::from(i % 10) * 5.0, f64::from(i / 10) * 5.0);
+        art.push(Arc::new(path(&mut d, shapes::rectangle(Rect::new(x, y, x + 4.0, y + 4.0)), Paint::None, Paint::solid(Color::BLACK), 0.5)));
+    }
+    let mut cell = Node::group(d.alloc_id(), art);
+    cell.appearance.effects.push(effect("distort.zigZag", serde_json::json!({"size": 1.0, "relative": false, "ridges": 4, "points": "smooth"})));
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Cell".into(), art: Arc::new(cell) });
+    for b in 0..BOARDS {
+        let x0 = 200.0 * b as f64;
+        for i in 0..250 {
+            let (x, y) = (x0 + f64::from(i % 25) * 8.0, f64::from(i / 25) * 8.0);
+            let mut n = path(&mut d, shapes::ellipse(Rect::new(x, y, x + 6.0, y + 6.0)), Paint::None, Paint::solid(Color::BLACK), 0.5);
+            let params = serde_json::json!({"size": 1.0, "relative": false, "detail": 10.0, "points": "smooth", "seed": i});
+            n.appearance.effects.push(effect("distort.roughen", params));
+            d.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        for i in 0..20 {
+            let xf = Affine::translate((x0 + f64::from(i % 5) * 40.0, 100.0 + f64::from(i / 5) * 25.0));
+            let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Cell".into(), xf });
+            d.insert(Some(layer), usize::MAX, instance).unwrap();
+        }
+    }
+    let o = DxfOptions { unit: Unit::Points, ..DxfOptions::default() };
+    let drawings: Vec<(Rect, bool)> = (0..BOARDS).map(|b| (Rect::new(200.0 * b as f64, 0.0, 200.0 * (b + 1) as f64, 200.0), true)).collect();
+    let before = || drawings.iter().map(|&(region, crop)| export_baking_alone(&d, &DxfOptions { region, crop, ..o.clone() })).collect::<Vec<_>>();
+    let after = || export_drawings(&d, &o, &drawings).unwrap();
+    let time = |f: &dyn Fn() -> Vec<DxfOutput>| {
+        let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+        let outs = f();
+        let wall = wall.elapsed().as_secs_f64() * 1000.0;
+        let cpu = cpu.zip(thread_cpu_ns()).map(|(a, b)| (b - a) as f64 / 1e6);
+        (outs, cpu, wall)
+    };
+    let (mut runs_before, mut runs_after) = (vec![], vec![]);
+    for _ in 0..7 {
+        let (a, cpu_a, wall_a) = time(&before);
+        let (b, cpu_b, wall_b) = time(&after);
+        assert_eq!(a.len(), BOARDS);
+        assert_eq!(a.iter().map(written).collect::<Vec<_>>(), b.iter().map(written).collect::<Vec<_>>(), "both write the same drawings");
+        runs_before.push((cpu_a, wall_a));
+        runs_after.push((cpu_b, wall_b));
+    }
+    let median = |runs: &[(Option<f64>, f64)], cpu: bool| {
+        let mut v: Vec<f64> = runs.iter().filter_map(|r| if cpu { r.0 } else { Some(r.1) }).collect();
+        v.sort_by(f64::total_cmp);
+        v.get(v.len() / 2).copied()
+    };
+    for (name, runs) in [("drawing by drawing", &runs_before), ("export_drawings", &runs_after)] {
+        println!(
+            "{name}: {BOARDS} artboards, median CPU {:?} ms, median wall {:?} ms; runs (CPU ms, wall ms) {runs:?}",
+            median(runs, true),
+            median(runs, false)
+        );
     }
 }

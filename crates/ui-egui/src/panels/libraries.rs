@@ -830,8 +830,10 @@ fn thumbnail(ctx: &egui::Context, library: &str, item: &str, png: &str, px: u32)
     if let Some(t) = CACHE.with(|c| c.borrow().get(&key).cloned()) {
         return t;
     }
-    let tex =
-        vectorcraft_format::base64_decode(png).and_then(|png| image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()).map(|img| {
+    let tex = vectorcraft_format::base64_decode(png)
+        .and_then(|png| craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png).ok())
+        .and_then(|img| image::RgbaImage::from_raw(img.width(), img.height(), img.to_rgba8()).map(image::DynamicImage::ImageRgba8))
+        .map(|img| {
             let rgba = shrunk_thumbnail(img, px);
             let image = egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw());
             ctx.load_texture(format!("library-{library}-{item}-{px}"), image, egui::TextureOptions::LINEAR)

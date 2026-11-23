@@ -164,8 +164,8 @@ fn clicks_in_a_clip_group_evaluate_its_clipping_paths_region_once_until_it_chang
     // So with a marquee across the art's left edge: in the view, only in Outline view. The
     // clipping path's own left edge lies there too, and counts in both.
     let edge = Rect::new(-5.0, 40.0, 5.0, 60.0);
-    assert_eq!(marquee_in_view(&d, edge, None, true, false), [mask_id]);
-    assert_eq!(marquee_in_view(&d, edge, None, true, true), [mask_id, art_id]);
+    assert_eq!(marquee_in_view(&d, edge, None, true, false, false), [mask_id]);
+    assert_eq!(marquee_in_view(&d, edge, None, true, true, false), [mask_id, art_id]);
     // `marquee_in` measures by the plain shapes, as its callers clip by them.
     assert!(marquee_in(d.node(g).unwrap(), edge).is_some());
     // Hidden, the effect no longer moves the region.
@@ -489,8 +489,8 @@ fn a_marquee_touches_a_paths_shifted_art_not_its_source() {
     for leaves in [false, true] {
         assert_eq!(marquee(&d, drawn, None, leaves), [a], "where it is drawn");
         assert!(marquee(&d, own, None, leaves).is_empty(), "its own place");
-        assert!(marquee_in_view(&d, drawn, None, leaves, true).is_empty(), "outline: no drawn art");
-        assert_eq!(marquee_in_view(&d, own, None, leaves, true), [a], "outline: its own place");
+        assert!(marquee_in_view(&d, drawn, None, leaves, true, false).is_empty(), "outline: no drawn art");
+        assert_eq!(marquee_in_view(&d, own, None, leaves, true, false), [a], "outline: its own place");
     }
 }
 
@@ -868,6 +868,68 @@ fn a_selected_guide_hidden_by_a_mask_counts_only_while_guides_can_be_clicked() {
     let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
     assert_eq!(selected_hidden_at(&d, hidden, opt, &[guide_id]), Some(guide_id));
     assert_eq!(selected_hidden_at(&d, hidden, HitOptions { skip_guides: true, ..opt }, &[guide_id]), None);
+}
+
+/// #8538: while guides are locked or hidden (`skip_guides`), a marquee touches no guide path, at
+/// the top of a layer or in a group (the group is not taken for it), nor in a group in a group,
+/// with leaves or without. The group's other members still take it, and with the guides unlocked
+/// the guide does.
+#[test]
+fn a_marquee_skips_guide_paths_in_groups_while_guides_are_locked() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let guide = |d: &mut Document, r: Rect| {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default_art());
+        if let NodeKind::Path { guide, .. } = &mut n.kind {
+            *guide = true;
+        }
+        n
+    };
+    let top = guide(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0));
+    let inner = guide(&mut d, Rect::new(100.0, 0.0, 120.0, 20.0));
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(200.0, 0.0, 220.0, 20.0)), Appearance::default_art());
+    let (top_id, inner_id, art_id) = (top.id, inner.id, art.id);
+    let (outer_id, nested_id) = (d.alloc_id(), d.alloc_id());
+    let nested = Node::group(nested_id, vec![Arc::new(inner)]);
+    d.insert(Some(l), 0, top).unwrap();
+    d.insert(Some(l), 1, Node::group(outer_id, vec![Arc::new(nested), Arc::new(art)])).unwrap();
+    let (on_top, on_inner, on_art) = (Rect::new(-5.0, 5.0, 5.0, 10.0), Rect::new(95.0, 5.0, 105.0, 10.0), Rect::new(195.0, 5.0, 205.0, 10.0));
+    for leaves in [false, true] {
+        let m = |r: Rect, skip: bool| marquee_in_view(&d, r, None, leaves, false, skip);
+        assert!(m(on_top, true).is_empty(), "a guide at the top, leaves {leaves}");
+        assert!(m(on_inner, true).is_empty(), "a guide in a group in a group, leaves {leaves}");
+        assert!(m(Rect::new(0.0, 0.0, 300.0, 200.0), true).iter().all(|id| ![top_id, inner_id].contains(id)), "all, leaves {leaves}");
+        assert_eq!(m(on_art, true), [if leaves { art_id } else { outer_id }], "the group's art, leaves {leaves}");
+        // Unlocked: the guides are touched.
+        assert_eq!(m(on_top, false), [top_id], "unlocked, leaves {leaves}");
+        assert_eq!(m(on_inner, false), [if leaves { inner_id } else { outer_id }], "unlocked, leaves {leaves}");
+    }
+    // An enclosing loop's candidates leave them out alike.
+    assert!(enclosure_candidates(&d, on_inner, None, false, true).is_empty());
+    assert_eq!(enclosure_candidates(&d, on_inner, None, false, false), [inner_id]);
+}
+
+/// #8538: an enclosing loop's candidates leave out a compound path whose touched contours are all
+/// locked or hidden guides, as the marquee does.
+#[test]
+fn guide_contours_do_not_make_a_compound_an_enclosure_candidate() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let part = |d: &mut Document, r: Rect| {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default_art());
+        if let NodeKind::Path { guide, .. } = &mut n.kind {
+            *guide = true;
+        }
+        Arc::new(n)
+    };
+    let (a, b) = (part(&mut d, Rect::new(10.0, 10.0, 50.0, 50.0)), part(&mut d, Rect::new(20.0, 20.0, 40.0, 40.0)));
+    let id = d.alloc_id();
+    let mut compound = Node::group(id, vec![]);
+    compound.kind = NodeKind::Compound { children: vec![a, b], rule: Default::default() };
+    d.insert(Some(l), 0, compound).unwrap();
+    let r = Rect::new(0.0, 0.0, 60.0, 60.0);
+    assert!(enclosure_candidates(&d, r, None, false, true).is_empty(), "locked or hidden");
+    assert_eq!(enclosure_candidates(&d, r, None, false, false), [id], "shown and unlocked");
 }
 
 /// A selected path in a Shaper group's original shapes, where an outer mask hides it, counts only
@@ -1262,6 +1324,60 @@ fn evaluated_art_is_not_kept_while_a_placed_document_may_show_in_it() {
     assert_eq!(evaluated(), before + 2);
 }
 
+/// For instances of the symbols whose names start with "Painted", a fill that paints the square
+/// from (300, 0) to (320, 20); nothing for anything else.
+fn painted_far_away(_: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
+    match &n.kind {
+        NodeKind::SymbolInstance { symbol, .. } if symbol.starts_with("Painted") => {
+            let square = shapes::rectangle(Rect::new(300.0, 0.0, 320.0, 20.0)).to_bezpath();
+            vec![(square, FillRule::NonZero, AppearanceItem::Fill(crate::FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)))))]
+        }
+        _ => vec![],
+    }
+}
+
+/// Clicks and hovers measure the shapes a symbol instance's fill and stroke effects paint once,
+/// and again only after the instance or the symbols change.
+#[test]
+fn clicks_measure_a_symbol_instances_painted_shapes_once_until_it_changes() {
+    set_image_paint(painted_far_away);
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::default_art());
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Painted".into(), art: Arc::new(art) });
+    let inst = d.alloc_id();
+    let mut n = Node::new(inst, NodeKind::SymbolInstance { symbol: "Painted".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    n.appearance = Appearance::default_art().into();
+    let offset = crate::Effect { id: "path.offsetPath".into(), params: serde_json::json!({"offset": 10}), visible: true };
+    n.appearance.items[0].effects_mut().push(offset);
+    d.insert(Some(l), 0, n).unwrap();
+    let measured = || PAINT_EVALUATED.with(std::cell::Cell::get);
+    let before = measured();
+    let at = |d: &Document, x: f64| hit_test(d, Point::new(x, 10.0), HitOptions::default()).map(|h| h.leaf);
+    assert_eq!(at(&d, 310.0), Some(inst), "a click where the instance's fill paints");
+    assert_eq!(at(&d, 500.0), None);
+    assert_eq!(at(&d, 10.0), Some(inst));
+    assert_eq!(measured(), before + 1);
+    d.node_mut(inst).unwrap().appearance.items[0].effects_mut()[0].params = serde_json::json!({"offset": 12});
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert_eq!(measured(), before + 2, "a changed instance is measured again");
+    let other = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art());
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Other".into(), art: Arc::new(other) });
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert_eq!(measured(), before + 3, "changed symbols measure it again");
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert_eq!(measured(), before + 3);
+    // An image's pixels change when its file is read again, so with one in a symbol's art every
+    // click measures the instance.
+    let xf = vectorcraft_geom::Affine::IDENTITY;
+    let im = crate::ImageObject { key: "k".into(), width: 10, height: 10, xf, link: None, placement: Default::default(), pixels: None };
+    let image = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Photo".into(), art: Arc::new(image) });
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert_eq!(at(&d, 310.0), Some(inst));
+    assert!(measured() >= before + 5, "each click measures it: {}", measured() - before);
+}
+
 /// A kept evaluation is the evaluation of the object only while the fonts and plug-ins
 /// ([`LiveInputs`]) are as they were.
 #[test]
@@ -1274,17 +1390,30 @@ fn a_kept_evaluation_is_stale_after_the_live_inputs_change() {
 }
 
 /// An evaluation of `n` in `d`, with inputs 7, holding no symbols, patterns or art.
-fn kept_evaluation(d: &Document, n: &Node) -> EvaluatedLive {
-    EvaluatedLive {
+fn kept_evaluation(d: &Document, n: &Node) -> Evaluated<Vec<Node>> {
+    Evaluated {
         node: n.clone(),
         symbols: vec![],
         patterns: vec![],
         swatches: d.swatches.clone(),
         swatch_groups: d.swatch_groups.clone(),
+        unknown: d.unknown.clone(),
         inputs: 7,
         art: std::rc::Rc::new(vec![]),
         size: 0,
     }
+}
+
+/// A kept evaluation is stale once a symbol's 9-slice guides or natural size change: they place
+/// the symbol's art, and the document keeps them apart from the symbols.
+#[test]
+fn a_kept_evaluation_is_stale_after_a_symbols_placement_changes() {
+    let mut d = Document::new(100.0, 100.0);
+    let n = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let e = kept_evaluation(&d, &n);
+    assert!(e.is_of(&d, &n, 7));
+    d.unknown.insert(crate::SYMBOL_SIZES.into(), serde_json::json!({"Logo": [40.0, 20.0]}));
+    assert!(!e.is_of(&d, &n, 7));
 }
 
 /// A kept evaluation is stale once a swatch changes, in a color group too: a painted live effect's
@@ -1326,8 +1455,17 @@ fn masked_square(layer: bool) -> (Document, NodeId, NodeId, NodeId) {
     }
 }
 
-const SELECTING: HitOptions =
-    HitOptions { tol: 3.0, outline: false, path_only: false, type_path_only: false, skip_guides: false, clip_outlines: true, scope: None };
+const SELECTING: HitOptions = HitOptions {
+    tol: 3.0,
+    outline: false,
+    path_only: false,
+    type_path_only: false,
+    skip_guides: false,
+    clip_outlines: true,
+    area_type_interior: false,
+    ignore_layer_preview: false,
+    scope: None,
+};
 
 /// For the selection tools a clip group's clipping path is hit on its outline, within the
 /// tolerance, before the art it clips and just outside it too; inside, the art is hit.
@@ -1621,6 +1759,41 @@ fn type_path_only_picks_type_on_its_path() {
     assert_eq!(hit(Point::new(60.0, 339.5), path_only), Some((on_path, HitKind::Outline)), "type on a path: its path");
 }
 
+/// Area type is hit on its frame's edge and where its lines are laid out, not in the empty rest of
+/// its frame: a click there reaches the art behind, in Preview and in Outline mode (#7274). The
+/// Type tool still finds the type anywhere inside its frame.
+#[test]
+fn area_type_passes_clicks_through_its_empty_frame() {
+    use crate::{CharStyle, TextKind, TextObject};
+    let mut d = Document::new(400.0, 400.0);
+    let l = d.layers[0].id;
+    // A filled square behind the type, its edge at x = 150 inside the frame.
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(150.0, 150.0, 350.0, 350.0)), Appearance::default_art());
+    let square_id = square.id;
+    d.insert(Some(l), 9, square).unwrap();
+    // Area type at (100, 100): a 200 × 200 frame with one 80 wide line at its top.
+    let mut area = TextObject::point(Point::new(100.0, 100.0), "Area", CharStyle { size: 20.0, ..CharStyle::default() });
+    area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)) };
+    area.cached_bounds = Some(Rect::new(0.0, 0.0, 80.0, 24.0));
+    area.cached_baselines = vec![(Point::new(0.0, 18.0), Point::new(80.0, 18.0))];
+    let area_id = d.alloc_id();
+    d.insert(Some(l), 9, Node::new(area_id, NodeKind::Text(Box::new(area)))).unwrap();
+    let outline = HitOptions { outline: true, ..Default::default() };
+    for (opt, mode) in [(HitOptions::default(), "preview"), (outline, "outline")] {
+        let hit = |p: Point| hit_test(&d, p, opt).map(|h| h.leaf);
+        assert_eq!(hit(Point::new(140.0, 110.0)), Some(area_id), "{mode}: on the line of type");
+        assert_eq!(hit(Point::new(200.0, 100.5)), Some(area_id), "{mode}: on the frame's top edge");
+        assert_eq!(hit(Point::new(299.0, 250.0)), Some(area_id), "{mode}: on the frame's right edge");
+        assert_eq!(hit(Point::new(220.0, 130.0)), None, "{mode}: the empty frame, nothing behind");
+        assert_eq!(hit(Point::new(120.0, 250.0)), None, "{mode}: the empty frame, nothing behind");
+        assert_eq!(hit(Point::new(150.0, 250.0)), Some(square_id), "{mode}: the square's edge behind the empty frame");
+    }
+    assert_eq!(hit_test(&d, Point::new(250.0, 250.0), HitOptions::default()).map(|h| h.leaf), Some(square_id), "the square's fill");
+    // The Type tool: anywhere inside the frame.
+    let typing = HitOptions { area_type_interior: true, ..Default::default() };
+    assert_eq!(hit_test(&d, Point::new(250.0, 250.0), typing).map(|h| h.leaf), Some(area_id), "type tool: inside the frame");
+}
+
 /// Type Object Selection by Path Only with the layout's baselines: every line's for point type,
 /// area type's besides its frame, a vertical column's centre line, and type in perspective
 /// where it is drawn.
@@ -1820,6 +1993,216 @@ fn objects_at_matches_repeated_hits_on_random_documents() {
             let opt = HitOptions { outline: next(5) == 0, path_only: next(5) == 0, clip_outlines: next(2) == 0, ..Default::default() };
             assert_eq!(objects_at(&d, p, opt, None), objects_at_repeated(&d, p, opt, None), "round {round}, {p:?}, {opt:?}");
         }
+    }
+}
+
+/// [`objects_at_repeated_after`] with each found object looked up in the ordered list itself: the
+/// reference the tests below hold the set lookup to, and the base that `select_behind_isolation_timing` times.
+fn objects_at_repeated_after_by_list(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>, mut tops: Vec<NodeId>) -> Vec<NodeId> {
+    while let Some(top) = hit_test_skipping(doc, p, opt, &|id| tops.contains(&id), true).map(|h| h.top_object(scope)) {
+        if tops.contains(&top) {
+            break;
+        }
+        tops.push(top);
+    }
+    tops
+}
+
+/// A layer holding a group of `count` overlapping 50 × 50 squares, member `i` at x = 5 × (`i` mod
+/// 10), with a square at x = 0 below the group and above it, and one at x = 100 above it: the
+/// document, the group and its members, topmost first.
+fn isolated_stack(count: u32) -> (Document, NodeId, Vec<NodeId>) {
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let square = |d: &mut Document, x: f64| Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, 0.0, x + 50.0, 50.0)), Appearance::default_art());
+    let below = square(&mut d, 0.0);
+    d.insert(Some(l), usize::MAX, below).unwrap();
+    let members: Vec<Node> = (0..count).map(|i| square(&mut d, f64::from(i % 10) * 5.0)).collect();
+    let mut ids: Vec<NodeId> = members.iter().map(|n| n.id).collect();
+    let g = d.alloc_id();
+    d.insert(Some(l), usize::MAX, Node::group(g, members.into_iter().map(Arc::new).collect())).unwrap();
+    for x in [0.0, 100.0] {
+        let above = square(&mut d, x);
+        d.insert(Some(l), usize::MAX, above).unwrap();
+    }
+    ids.reverse();
+    (d, g, ids)
+}
+
+/// Select Behind in an isolated group of 40 overlapping squares, with art around the group above
+/// and below them: each member once, front to back, over 41 rounds of hit tests, and nothing where
+/// only the art around the group lies.
+#[test]
+fn select_behind_in_isolation_lists_a_large_stack_once() {
+    let (d, g, ids) = isolated_stack(40);
+    let at = |x: f64, scope| objects_at(&d, Point::new(x, 25.0), HitOptions::default(), scope);
+    assert_eq!(at(47.5, Some(g)), ids);
+    assert_eq!(at(47.5, Some(g)).iter().collect::<HashSet<_>>().len(), 40, "no object twice");
+    assert_eq!(at(47.5, None).len(), 3, "not isolated: the square above, the group and the square below");
+    // At x = 17.5 only the members at x = 0 to 20 are hit (the one at 20 on its stroke, within
+    // the tolerance): `ids[k]` is member 39 - k.
+    let left: Vec<NodeId> = ids.iter().enumerate().filter(|(k, _)| (39 - k) % 10 <= 4).map(|(_, id)| *id).collect();
+    assert_eq!(left.len(), 20);
+    assert_eq!(at(17.5, Some(g)), left);
+    assert!(at(125.0, Some(g)).is_empty(), "only the square around the group");
+    assert_eq!(at(125.0, None).len(), 1);
+    let isolated = HitOptions { scope: Some(g), ..HitOptions::default() };
+    let p = Point::new(47.5, 25.0);
+    assert_eq!(objects_at_repeated_after(&d, p, isolated, Some(g), ids[..15].to_vec()), ids, "the objects passed in stay first");
+    let (d, g, clip, art) = masked_square(false);
+    let isolated = HitOptions { scope: Some(g), ..SELECTING };
+    for p in [Point::new(140.0, 90.0), Point::new(170.0, 90.0), Point::new(100.0, 90.0)] {
+        let want = objects_at_repeated_after_by_list(&d, p, isolated, Some(g), vec![]);
+        assert_eq!(objects_at(&d, p, SELECTING, Some(g)), want, "clip group isolated, {p:?}");
+    }
+    assert_eq!(objects_at(&d, Point::new(170.0, 90.0), SELECTING, Some(g)), vec![art], "the art its mask hides");
+    assert!(objects_at(&d, Point::new(140.0, 90.0), SELECTING, Some(g)).contains(&clip), "the mask on its outline");
+}
+
+/// Documents built at random (nested groups, clipping groups, envelopes in Edit Contents, hidden
+/// and locked objects), each object in turn isolated, and each list started with some of the
+/// objects already found: the set lookup returns what the ordered-list lookup returns, field for
+/// field.
+#[test]
+fn select_behind_in_isolation_matches_the_list_lookup_on_random_documents() {
+    let mut seed = 0x2545_f491_u32;
+    let mut next = move |n: u32| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed % n
+    };
+    fn fill(d: &mut Document, parent: NodeId, depth: u32, next: &mut impl FnMut(u32) -> u32) {
+        for _ in 0..2 + next(5) {
+            let id = d.alloc_id();
+            let rect = |next: &mut dyn FnMut(u32) -> u32| {
+                let (x, y) = (f64::from(next(60)), f64::from(next(60)));
+                Rect::new(x, y, x + 10.0 + f64::from(next(50)), y + 10.0 + f64::from(next(50)))
+            };
+            let mut n = match next(if depth < 3 { 9 } else { 4 }) {
+                4 | 5 => Node::group(id, Vec::new()),
+                6 => {
+                    let mut g = Node::group(id, Vec::new());
+                    g.set_clips(true);
+                    g
+                }
+                7 => {
+                    let content =
+                        (0..2).map(|_| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(rect(next)), Appearance::default_art()))).collect();
+                    Node::new(
+                        id,
+                        NodeKind::Envelope {
+                            content,
+                            kind: Box::new(crate::live::EnvelopeKind::Warp {
+                                style: "arc".to_string(),
+                                bend: 0.0,
+                                h: 0.0,
+                                v: 0.0,
+                                horizontal: true,
+                                version: 0,
+                            }),
+                            fidelity: 100.0,
+                            editing: next(2) == 0,
+                            options: Default::default(),
+                            frame: Box::new(vectorcraft_geom::Affine::IDENTITY),
+                        },
+                    )
+                }
+                _ => Node::path(id, shapes::rectangle(rect(next)), if next(4) == 0 { Appearance::default() } else { Appearance::default_art() }),
+            };
+            n.visible = next(8) != 0;
+            n.locked = next(8) == 0;
+            let group = matches!(n.kind, NodeKind::Group { .. });
+            d.insert(Some(parent), usize::MAX, n).unwrap();
+            if group {
+                fill(d, id, depth + 1, next);
+            }
+        }
+    }
+    let mut compared = 0;
+    for round in 0..60 {
+        let mut d = Document::new(120.0, 120.0);
+        let layer = d.layers[0].id;
+        fill(&mut d, layer, 0, &mut next);
+        let mut scopes = vec![None];
+        d.walk(|n| {
+            if n.id != layer {
+                scopes.push(Some(n.id));
+            }
+        });
+        for _ in 0..6 {
+            let p = Point::new(f64::from(next(120)), f64::from(next(120)));
+            let opt = HitOptions { outline: next(5) == 0, path_only: next(5) == 0, clip_outlines: next(2) == 0, ..Default::default() };
+            for &scope in &scopes {
+                let opt = HitOptions { scope, ..opt };
+                let want = objects_at_repeated_after_by_list(&d, p, opt, scope, vec![]);
+                let context = format!("round {round}, {p:?}, {opt:?}");
+                assert_eq!(objects_at_repeated_after(&d, p, opt, scope, vec![]), want, "{context}");
+                if scope.is_some() {
+                    assert_eq!(objects_at(&d, p, opt, scope), want, "{context}");
+                }
+                for found in 1..want.len() {
+                    let start = want[..found].to_vec();
+                    assert_eq!(objects_at_repeated_after(&d, p, opt, scope, start.clone()), want, "{context}, {found} found");
+                    assert_eq!(objects_at_repeated_after_by_list(&d, p, opt, scope, start), want, "{context}, {found} found");
+                }
+                compared += usize::from(!want.is_empty());
+            }
+        }
+    }
+    assert!(compared > 500, "only {compared} non-empty lists compared");
+}
+
+/// Times Select Behind in an isolated group of 200 and of 1,000 overlapping squares, the set lookup
+/// against the ordered-list lookup, alternating the two in one process:
+/// `cargo test --release -p vectorcraft-doc --lib -- --ignored --nocapture select_behind_isolation_timing`.
+#[test]
+#[ignore = "a timing, not a check"]
+fn select_behind_isolation_timing() {
+    /// This thread's CPU time in nanoseconds on Linux; the elapsed time since `start` elsewhere.
+    fn clock(start: std::time::Instant) -> u128 {
+        let cpu = std::fs::read_to_string("/proc/thread-self/schedstat").ok();
+        cpu.and_then(|s| s.split_whitespace().next()?.parse().ok()).unwrap_or_else(|| start.elapsed().as_nanos())
+    }
+    type Lookup = fn(&Document, Point, HitOptions, Option<NodeId>, Vec<NodeId>) -> Vec<NodeId>;
+    let start = std::time::Instant::now();
+    println!("clock: {}", if std::fs::metadata("/proc/thread-self/schedstat").is_ok() { "thread CPU time" } else { "wall clock" });
+    let p = Point::new(47.5, 25.0);
+    for count in [200, 1_000] {
+        let (d, g, ids) = isolated_stack(count);
+        let opt = HitOptions { scope: Some(g), ..HitOptions::default() };
+        assert_eq!(objects_at_repeated_after(&d, p, opt, Some(g), vec![]), ids);
+        assert_eq!(objects_at_repeated_after_by_list(&d, p, opt, Some(g), vec![]), ids);
+        // The time per call of `f`: batches of calls double until one takes at least 100 ms.
+        let per_call = |f: Lookup| {
+            let mut calls = 1u32;
+            loop {
+                let t = clock(start);
+                for _ in 0..calls {
+                    std::hint::black_box(f(&d, std::hint::black_box(p), opt, Some(g), vec![]));
+                }
+                let spent = clock(start) - t;
+                if spent >= 100_000_000 || calls >= 1 << 20 {
+                    return (spent as f64 / f64::from(calls), calls);
+                }
+                calls *= 2;
+            }
+        };
+        let (mut old, mut new) = (vec![], vec![]);
+        for _ in 0..7 {
+            old.push(per_call(objects_at_repeated_after_by_list));
+            new.push(per_call(objects_at_repeated_after));
+        }
+        old.sort_by(|a, b| a.0.total_cmp(&b.0));
+        new.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let (o, n) = (old[3], new[3]);
+        println!(
+            "{count} objects: list lookup {:.2} ms per call ({} calls), set lookup {:.2} ms per call ({} calls), median of 7 runs",
+            o.0 / 1e6,
+            o.1,
+            n.0 / 1e6,
+            n.1
+        );
     }
 }
 
@@ -2397,7 +2780,7 @@ fn a_symbol_instance_is_hit_where_a_moved_clipping_path_in_its_art_shows_the_art
         assert_eq!(marquee(&d, edge, None, false), [g], "layer {layer}");
         assert_eq!(marquee(&d, edge, None, true), [inst], "layer {layer}");
         assert!(marquee(&d, past, None, false).is_empty());
-        assert!(marquee_in_view(&d, edge, None, false, true).is_empty(), "Outline view");
+        assert!(marquee_in_view(&d, edge, None, false, true, false).is_empty(), "Outline view");
     }
     // Preview off for the layer the instance is on.
     let (mut d, _, _) = build("test.move", Affine::IDENTITY, false, true, false);
@@ -2446,6 +2829,32 @@ fn a_symbol_instance_is_hit_on_the_stroke_of_its_art_past_its_box() {
     assert_eq!(at(50.0, HitOptions::default()), Some(inst), "in the box");
     assert_eq!(at(116.0, HitOptions::default()), None, "past the stroke");
     assert_eq!(at(108.0, HitOptions { outline: true, ..HitOptions::default() }), None, "Outline view");
+}
+
+/// A symbol's art on a layer of the symbol whose Preview is off is hit in outline, unless the
+/// click sets [`HitOptions::ignore_layer_preview`]: then the stroke past the instance's box hits.
+#[test]
+fn ignore_layer_preview_reaches_symbol_art_on_a_preview_off_layer() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    // A 20 pt stroke reaches 10 pt past the 0..100 square.
+    let look = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 20.0);
+    let square = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look);
+    let mut layer = Node::layer(d.alloc_id(), "Art", crate::LayerColor::Preset(2));
+    if let NodeKind::Layer { children, preview, .. } = &mut layer.kind {
+        *children = vec![Arc::new(square)];
+        *preview = false;
+    }
+    let art = Node::group(d.alloc_id(), vec![Arc::new(layer)]);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Stroked".into(), art: Arc::new(art) });
+    let inst = d.alloc_id();
+    let xf = vectorcraft_geom::Affine::IDENTITY;
+    d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Stroked".into(), xf })).unwrap();
+    let at = |x: f64, opt: HitOptions| hit_test(&d, Point::new(x, 50.0), opt).map(|h| h.leaf);
+    let painted = HitOptions { ignore_layer_preview: true, ..HitOptions::default() };
+    assert_eq!(at(108.0, HitOptions::default()), None, "Preview off: in outline");
+    assert_eq!(at(108.0, painted), Some(inst), "ignore_layer_preview: on the stroke past the box");
+    assert_eq!(at(116.0, painted), None, "past the stroke");
 }
 
 /// Outside a symbol instance's box, an instance nested in its art counts where its own art is, not
@@ -2656,6 +3065,119 @@ fn a_click_counts_the_members_of_an_intertwine_group_in_symbol_art_toward_one_li
     assert_eq!(hit, None);
     assert!(leaves <= 100, "{leaves} leaves tested");
     assert_eq!(with_art_limit(100, || at(140.0)).0, Some(id), "on the squares' paths");
+}
+
+/// Whether a symbol instance's fill or stroke effects reshape its art, for these tests: when
+/// [`painted_far_away`] gives it shapes.
+fn reshapes_when_painted(n: &Node) -> bool {
+    !painted_far_away(None, n).is_empty()
+}
+
+/// An instance of the symbol named `symbol`, not moved, whose fill has a geometry effect:
+/// [`reshapes_when_painted`] holds for it when the name starts with "Painted", so a part pick and a
+/// part outline walk its art as drawn with its fill's effects ([`InstanceArt::drawn`]).
+fn painted_instance_of(d: &mut Document, symbol: &str) -> Arc<Node> {
+    let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    n.appearance = Appearance::default_art().into();
+    let offset = crate::Effect { id: "path.offsetPath".into(), params: serde_json::json!({"offset": 10}), visible: true };
+    n.appearance.items[0].effects_mut().push(offset);
+    Arc::new(n)
+}
+
+/// Five levels of symbols: "Painted 0" is a 1 pt square, and each level above holds 8 instances
+/// of the level below whose fills have a geometry effect. Returns the id of an instance of
+/// "Painted 4" on the layer.
+fn painted_chain(d: &mut Document) -> NodeId {
+    let l = d.layers[0].id;
+    let dot = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art());
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Painted 0".into(), art: Arc::new(dot) });
+    for level in 1..5 {
+        let members = (0..8).map(|_| painted_instance_of(d, &format!("Painted {}", level - 1))).collect();
+        group_symbol(d, &format!("Painted {level}"), members);
+    }
+    let inst = instance_of(d, "Painted 4");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    id
+}
+
+/// The outline of a part of a dynamic symbol's instance visits at most the art walk's limit of
+/// objects, though the part is an instance whose art, drawn with its fill's effects, nests
+/// instances 3 levels deep, 8 at each level. Within the limit every square is outlined.
+#[test]
+fn a_parts_outline_walks_nested_reshaped_symbol_instances_within_one_limit() {
+    set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
+    let mut d = Document::new(600.0, 400.0);
+    let id = painted_chain(&mut d);
+    let n = d.node(id).unwrap();
+    let squares = |o: &BezPath| o.elements().iter().filter(|e| matches!(e, vectorcraft_geom::kurbo::PathEl::MoveTo(_))).count();
+    // Part [0] is an instance of "Painted 3": 8 × 8 × 8 squares.
+    assert_eq!(squares(&symbol_part_outline(&d, n, &[0]).unwrap()), 512, "within the limit");
+    let (outline, _, arts) = with_art_limit(100, || symbol_part_outline(&d, n, &[0]).unwrap());
+    assert!(squares(&outline) < 100, "{} squares outlined", squares(&outline));
+    assert!(arts < 100, "{arts} instances' art walked");
+}
+
+/// A part pick in a dynamic symbol's instance visits at most the art walk's limit of objects of
+/// nested instances whose art, drawn with their fills' effects, is walked: in a chain of nested
+/// instances, and in instances whose clip groups the click misses, where only the clip group
+/// itself is tested. A click on the clipped art of a nested instance is still found.
+#[test]
+fn a_part_pick_walks_nested_reshaped_symbol_instances_within_one_limit() {
+    set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
+    let mut d = Document::new(600.0, 400.0);
+    let id = painted_chain(&mut d);
+    let opt = HitOptions::default();
+    let (hit, _, arts) = with_art_limit(100, || symbol_part_at(&d, d.node(id).unwrap(), Point::new(150.0, 50.0), opt));
+    assert_eq!(hit, None);
+    assert!(arts <= 40, "chain: {arts} instances' art walked");
+    // 30 instances of a clip group whose 10 pt clipping path holds 40 squares: 42 objects each.
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let mask = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default());
+    let mut members = vec![Arc::new(mask)];
+    members.extend((0..40).map(|_| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 5.0, 5.0)), Appearance::default_art()))));
+    let mut clip = Node::group(d.alloc_id(), members);
+    clip.set_clips(true);
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Painted clip".into(), art: Arc::new(clip) });
+    let members = (0..30).map(|_| painted_instance_of(&mut d, "Painted clip")).collect();
+    group_symbol(&mut d, "Clips", members);
+    let inst = instance_of(&mut d, "Clips");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    let n = d.node(id).unwrap();
+    let (hit, _, arts) = with_art_limit(300, || symbol_part_at(&d, n, Point::new(150.0, 50.0), opt));
+    assert_eq!(hit, None);
+    assert!(arts <= 8, "clip groups: {arts} instances' art walked");
+    assert_eq!(with_art_limit(300, || symbol_part_at(&d, n, Point::new(2.0, 2.0), opt)).0, Some(vec![29]), "the clipped art");
+}
+
+/// The outline of a part of a dynamic symbol's instance leaves out the hidden objects in the art of
+/// an instance nested in the part whose fill's effects reshape it, as a part pick passes over them.
+#[test]
+fn a_parts_outline_leaves_out_hidden_art_of_nested_reshaped_symbol_instances() {
+    use vectorcraft_geom::kurbo::Shape;
+    set_image_paint(painted_far_away);
+    set_instance_reshapes(reshapes_when_painted);
+    let mut d = Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let shown = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art());
+    let mut hidden = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(50.0, 50.0, 60.0, 60.0)), Appearance::default_art());
+    hidden.visible = false;
+    group_symbol(&mut d, "Painted hidden", vec![Arc::new(shown), Arc::new(hidden)]);
+    let member = painted_instance_of(&mut d, "Painted hidden");
+    group_symbol(&mut d, "Hides", vec![member]);
+    let inst = instance_of(&mut d, "Hides");
+    let id = inst.id;
+    d.insert(Some(l), 0, Arc::unwrap_or_clone(inst)).unwrap();
+    let n = d.node(id).unwrap();
+    assert_eq!(symbol_part_at(&d, n, Point::new(55.0, 55.0), HitOptions::default()), None, "the hidden square is not picked");
+    let outline = symbol_part_outline(&d, n, &[0]).unwrap();
+    let squares = outline.elements().iter().filter(|e| matches!(e, vectorcraft_geom::kurbo::PathEl::MoveTo(_))).count();
+    assert_eq!(squares, 1, "only the shown square is outlined");
+    assert!(outline.bounding_box().x1 <= 1.0, "the outline reaches {:?}", outline.bounding_box());
 }
 
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than

@@ -102,11 +102,18 @@ fn a_given_palette_keeps_the_entries_pixels_use() {
     assert_eq!(ix.transparent, Some(0));
     assert_eq!(ix.palette[1..], [[255, 0, 0], [0, 0, 255]], "unused entries left out, the order kept");
     assert_eq!(ix.indices, [1, 2, 0, 1]);
-    // At most 255 of the given colors are used, leaving room for the transparent entry.
+    // With no transparent pixel all 256 of the given colors can be used; with one, the first 255
+    // leave room for the transparent entry.
     let many: Vec<[u8; 3]> = (0..300u32).map(|i| [(i % 256) as u8, (i / 256) as u8, 0]).collect();
     let all = image(256, 2, |x, y| [x as u8, y as u8, 0]);
     let ix = quantize_to(&all, 256, 2, &o, &many);
-    assert!(ix.palette.len() <= 255 && ix.palette.iter().all(|c| many[..255].contains(c)), "{}", ix.palette.len());
+    assert!(ix.palette.len() == 256 && ix.palette.iter().all(|c| many[..256].contains(c)), "{}", ix.palette.len());
+    assert!(ix.palette.contains(&many[255]), "the 256th color is used");
+    let mut clear = all.clone();
+    clear[3] = 0;
+    let ix = quantize_to(&clear, 256, 2, &o, &many);
+    assert_eq!(ix.transparent, Some(0));
+    assert!(ix.palette.len() <= 256 && ix.palette[1..].iter().all(|c| many[..255].contains(c)), "{}", ix.palette.len());
 }
 
 #[test]
@@ -141,7 +148,24 @@ fn transparent_pixels_get_their_own_entry() {
 
     let file = encode_indexed(&ix, &PngOptions::default()).unwrap();
     assert_eq!(chunk(&file, b"tRNS").unwrap(), [0]);
-    let back = image::load_from_memory(&file).unwrap().to_rgba8();
+    let back = craft_image_codecs::decode(&file)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(back.get_pixel(0, 0).0, [255, 0, 0, 255]);
     assert_eq!(back.get_pixel(1, 0)[3], 0);
 }
@@ -154,7 +178,24 @@ fn png8_decodes_at_every_bit_depth_and_interlaced() {
         for interlaced in [false, true] {
             let file = encode_indexed(&ix, &PngOptions { ppi: Some(144.0), interlaced }).unwrap();
             assert_eq!((file[24], file[25], file[28]), (depth, 3, u8::from(interlaced)));
-            let back = image::load_from_memory(&file).unwrap().to_rgb8();
+            let back = craft_image_codecs::decode(&file)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgb8();
             let want: Vec<u8> = colours(&ix).into_iter().flatten().collect();
             assert_eq!(back.into_raw(), want, "{colors} colours, interlaced {interlaced}");
             assert!(chunk(&file, b"pHYs").is_some());
@@ -169,7 +210,24 @@ fn gif_decodes() {
     for interlaced in [false, true] {
         let file = gif::encode(&ix, interlaced).unwrap();
         assert_eq!(&file[..6], b"GIF89a");
-        let back = image::load_from_memory_with_format(&file, image::ImageFormat::Gif).unwrap().to_rgba8();
+        let back = craft_image_codecs::decode_as(craft_image_codecs::Format::Gif, &file)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         assert_eq!(back.dimensions(), (21, 17));
         for (i, p) in back.pixels().enumerate() {
             match ix.indices[i] {

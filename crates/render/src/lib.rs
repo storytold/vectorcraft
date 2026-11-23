@@ -43,6 +43,7 @@ use lru::FrameCache;
 pub use brush_fx::instance_art;
 pub use changed::{Changed, changed, placed_area, view_pixels};
 pub use effects::stroke::width_outline;
+pub use fx::pinned_appearance_for_geometry_edit;
 pub use images::{IMAGE_CACHE_MAX, image_cache_bytes, installed_memory, newly_undecodable, set_image_cache_budget};
 pub use live::expand_live;
 pub use pattern::render_pattern_swatch;
@@ -56,6 +57,11 @@ type MeasuredArt = (Arc<Node>, Arc<Node>, Option<u64>);
 /// A 3D effect's art ([`Renderer::three_d_bounds`]), held weakly, and its bounds once measured at a
 /// raster effects resolution (its bits) with a brush library (its key).
 type ThreeDArt = (std::sync::Weak<Node>, Option<((u64, u64), Option<Rect>)>);
+
+/// A node whose Rasterize image the Transform effects after it place ([`fx::rasterize_stage`]):
+/// the node, the node it draws its image from, the maps that place the image, and the frame it
+/// was last drawn in.
+type FxStage = (Arc<Node>, Arc<Node>, Arc<[Affine]>, u64);
 
 /// Reusable renderer (keeps the render context, geometry and glyph caches between frames; decoded
 /// images are shared by all renderers, see [`set_image_cache_budget`]).
@@ -126,9 +132,11 @@ pub struct Renderer {
     /// Live-effect geometry per node ([`fx::FxGeom`]), keyed by `Arc` identity like `geom`.
     fx_geom: PtrMap<usize, fx::FxGeom>,
     /// Per node whose Rasterize image moves with the Transform effects after it, keyed by `Arc`
-    /// identity like `fx_geom`: the node, the node it draws its image from and the map that moves
-    /// the image ([`fx::rasterize_stage`]), and the frame it was last drawn in.
-    fx_stages: PtrMap<usize, (Arc<Node>, Arc<Node>, Affine, u64)>,
+    /// identity like `fx_geom` ([`FxStage`]).
+    fx_stages: PtrMap<usize, FxStage>,
+    /// While one of several placements of a path's Rasterize image is drawn: the first cache slot
+    /// of that placement's rasters and where the image is kept for all of them ([`fx::Kept`]).
+    fx_placement: Option<(usize, std::rc::Rc<fx::Kept>)>,
     stamp: u64,
     /// Opacity folded into paint alpha for the leaf being drawn (avoids a compositing layer).
     alpha: f32,
@@ -278,7 +286,7 @@ mod renderer;
 mod text_geom;
 mod threads;
 
-pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds, rasterize_stage};
+pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds, painted_bounds_with, rasterize_stage};
 pub use frame::FrameStats;
 use frame::{
     ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey,

@@ -111,7 +111,7 @@ pub(super) fn font_items(english_names: bool) -> Vec<Item> {
 /// The catalogue's menu path of the effects in 3D and Materials › 3D (Classic).
 const CLASSIC_3D: &[&str] = &["Effect", "3D and Materials", "3D (Classic)"];
 
-/// The raster effects' submenus of the Effect menu (the Photoshop-style effects, below the
+/// The raster effects' submenus of the Effect menu (the pixel effects, below the
 /// vector effects): (submenu, the catalogue's menu path of its effects).
 /// The raster Stylize submenu shares its path with the vector one and lists only the effects at
 /// that path that [`vectorcraft_effects::PIXEL_EFFECTS`] names.
@@ -157,13 +157,13 @@ pub(super) fn effect_menu() -> Vec<Item> {
         "Warp",
     ];
     let top_level = |e: &vectorcraft_effects::EffectInfo| e.menu == ["Effect"] && order.contains(&e.label);
-    // An effect goes in the vector submenu its path names unless it is a Photoshop-style effect,
+    // An effect goes in the vector submenu its path names unless it is a pixel effect,
     // which goes in the raster submenu of the same name when `RASTER_MENUS` has one (Stylize ›
     // Glowing Edges).
     let in_vector_menu =
         |e: &vectorcraft_effects::EffectInfo| order.iter().any(|s| e.menu == ["Effect", *s]) && !vectorcraft_effects::PIXEL_EFFECTS.contains(&e.id);
     let item = |e: &vectorcraft_effects::EffectInfo| match e.defaults.as_object().is_some_and(|o| o.is_empty()) {
-        // No options (Effect → Pathfinder, Crop Marks): apply directly, like Illustrator.
+        // No options (Effect → Pathfinder, Crop Marks): apply directly.
         true => Item::Cmd(e.label, "effect.apply", json!({ "effect": e.id })),
         false => Item::Cmd(e.label, "effect.dialog", json!({ "effect": e.id })),
     };

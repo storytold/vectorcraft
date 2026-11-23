@@ -25,12 +25,17 @@
 //!   document's), RGB with sRGB (colours of another RGB space as their sRGB equivalents) and grey
 //!   with the sRGB tone curve. Otherwise they are device colours. PDF/A, PDF/X-3 and PDF/X-4
 //!   always tag them, whatever `profiles` says; PDF/X-1a never does, and always converts to a
-//!   CMYK destination (see [`crate::pdfx`]). A CMYK image that keeps its numbers is tagged with
-//!   the CMYK profile it carries, if any, with `all` and `taggedSource`, and in PDF/A, PDF/X-3
-//!   and PDF/X-4 unless `profiles` is `destination` ([`ColorOut::cmyk_image_icc`]). When
+//!   CMYK destination (see [`crate::pdfx`]). In PDF/X-3 and PDF/X-4, CMYK colors in the profile
+//!   of a CMYK output intent are DeviceCMYK, and so are all CMYK colors with `none`, unless
+//!   colors are converted to a CMYK destination of another profile ([`ColorOut::device_cmyk`]).
+//!   A CMYK image that keeps
+//!   its numbers is tagged with the CMYK profile it carries, if any, with `all` and
+//!   `taggedSource`, and in PDF/A, PDF/X-3 and PDF/X-4 unless `profiles` is `destination`
+//!   ([`ColorOut::cmyk_image_icc`]); not when that profile is a DeviceCMYK output intent's. When
 //!   `profiles` isn't set, colors are written as with `none` and gray and RGB images keep the
 //!   profiles they carry (but in PDF/X-1a); when it is set to `none`, no image keeps its own
-//!   profile, a JPEG's `ICC_PROFILE` segments included, except in PDF/A, PDF/X-3 and PDF/X-4
+//!   profile, a JPEG's `ICC_PROFILE` segments included, except in PDF/A, PDF/X-3 and PDF/X-4,
+//!   where CMYK images lose theirs only when CMYK colors are DeviceCMYK
 //!   ([`ColorOut::source_profiles`]).
 //! - Output intent: the profile `outputIntent` names, embedded as the `/GTS_PDFX` output intent
 //!   of the catalog with the condition, identifier and registry; Trapped goes in the document
@@ -82,6 +87,13 @@ pub(crate) struct ColorOut {
     no_profiles: bool,
     /// The CMYK profile that tags CMYK colours.
     cmyk_profile: String,
+    /// CMYK colors are written as DeviceCMYK although colors are tagged
+    /// ([`Self::device_cmyk`]): the profile of the CMYK output intent they are in, embedded once
+    /// as its `DestOutputProfile`.
+    device_icc: Option<Arc<[u8]>>,
+    /// With [`Self::device_icc`], CMYK images are untagged too, whatever profile they carry
+    /// (`profiles` is `none`).
+    untag_cmyk_images: bool,
     /// Tagged RGB colours are written as their sRGB equivalents: why (a warning), when their RGB
     /// space isn't sRGB.
     pub srgb_note: Option<String>,
@@ -132,6 +144,8 @@ impl Default for ColorOut {
             image_icc: false,
             no_profiles: false,
             cmyk_profile,
+            device_icc: None,
+            untag_cmyk_images: false,
             srgb_note: None,
             pixels: OnceLock::new(),
             tagged_pixels: OnceLock::new(),
@@ -290,7 +304,30 @@ impl ColorOut {
         }
         out.catalog = catalog(set, &out.cmyk_profile);
         out.standard = set.standard;
+        // In PDF/X-3 and PDF/X-4 the CMYK output intent characterizes DeviceCMYK: CMYK colors in
+        // its profile are written as DeviceCMYK, and with `none` every CMYK color is, unless
+        // colors are converted to a CMYK destination of another profile. Files without a standard
+        // keep the tags that `profiles` asks for.
+        let intent_cmyk = out.catalog.as_ref().and_then(|c| c.intent.as_ref()?.profile.as_ref()).filter(|(_, n)| *n == 4);
+        let none = set.output.profiles == Some(ProfileInclusion::None);
+        let to_cmyk = out.dest.as_ref().is_some_and(|d| d.model == Model::Cmyk);
+        if out.tagged
+            && set.standard.is_pdfx()
+            && let Some(intent) = intent_cmyk.and_then(|(name, _)| cms::icc_bytes(name).ok())
+            && ((none && !to_cmyk) || cms::icc_bytes(&out.cmyk_profile).is_ok_and(|own| own == intent))
+        {
+            out.device_icc = Some(intent);
+            out.untag_cmyk_images = none;
+        }
         Ok(out)
+    }
+
+    /// CMYK colors are written as DeviceCMYK although colors are tagged, in PDF/X-3 and PDF/X-4
+    /// with a CMYK output intent: its profile is the one they are in, or `profiles` is `none` and
+    /// there is no CMYK destination of another profile. RGB and gray colors stay tagged, and
+    /// so does a CMYK image that carries another profile, except with `none`.
+    pub(crate) fn device_cmyk(&self) -> bool {
+        self.device_icc.is_some()
     }
 
     /// Transparency blends in CMYK: converting to CMYK, or (without conversion) in a CMYK
@@ -415,22 +452,29 @@ impl ColorOut {
 
     /// The CMYK profile CMYK image `blob` is tagged with ([`crate::images::cmyk_icc`]): the one it
     /// carries, when its numbers are kept and the Profiles setting or the standard includes source
-    /// profiles. `None` otherwise, and in PDF/X-1a, whose images are untagged CMYK.
+    /// profiles. `None` otherwise, and in PDF/X-1a, whose images are untagged CMYK. When CMYK
+    /// colors are DeviceCMYK ([`Self::device_cmyk`]), an image that carries the output intent's
+    /// profile is untagged too, and so is every CMYK image with `none`.
     pub(crate) fn cmyk_image_icc(&self, blob: &vectorcraft_doc::ImageBlob) -> Option<Vec<u8>> {
         if !self.image_icc || self.cmyk_pixels().is_some() {
             return None;
         }
-        crate::images::cmyk_icc(blob)
+        let icc = crate::images::cmyk_icc(blob)?;
+        match &self.device_icc {
+            Some(intent) if self.untag_cmyk_images || icc == **intent => None,
+            _ => Some(icc),
+        }
     }
 
     /// How CMYK image `blob` is tagged ([`crate::images::recode_cmyk`]): with the profile
     /// [`Self::cmyk_image_icc`] gives (`icc`), else untagged, without a JPEG's own `ICC_PROFILE`
-    /// segments when Don't Include Profiles was set.
+    /// segments when Don't Include Profiles was set or CMYK colors are DeviceCMYK
+    /// ([`Self::device_cmyk`]).
     pub(crate) fn cmyk_tag<'a>(&self, icc: Option<&'a [u8]>) -> crate::images::CmykTag<'a> {
         use crate::images::CmykTag;
         match icc {
             Some(icc) => CmykTag::Profile(icc),
-            None if self.no_profiles => CmykTag::Removed,
+            None if self.no_profiles || self.device_cmyk() => CmykTag::Removed,
             None => CmykTag::Untagged,
         }
     }

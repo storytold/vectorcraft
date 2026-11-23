@@ -29,6 +29,7 @@
 
 mod catalog;
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -100,7 +101,7 @@ fn plural_polish(n: u64) -> usize {
 pub static LANGUAGES: [LangInfo; 29] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
     // Hindi shares the integer zero/one rule with French. Desktop UI fonts are loaded lazily
-    // from installed faces by ui_fonts; the web needs a Devanagari font in its font set.
+    // from installed faces by ui_fonts; the web fetches a Devanagari craft-fonts face on demand.
     LangInfo {
         code: "hi",
         name: "हिन्दी",
@@ -623,6 +624,13 @@ pub fn t(s: &str) -> &str {
     tr(current(), s)
 }
 
+/// `label`, already in the current language, followed by a field label's colon as the current
+/// language writes it (its catalog row for ":"): French puts a no-break space before the colon, and
+/// Chinese and Japanese write a full-width colon.
+pub fn colon(label: &str) -> String {
+    format!("{label}{}", t(":"))
+}
+
 /// Translate an English UI string; unknown strings come back unchanged.
 pub fn tr(lang: Lang, s: &str) -> &str {
     lang.catalog().plain(s).unwrap_or(s)
@@ -631,6 +639,11 @@ pub fn tr(lang: Lang, s: &str) -> &str {
 /// Like [`tr`], for an English string that needs a disambiguating `context`.
 pub fn tr_ctx<'a>(lang: Lang, context: &str, s: &'a str) -> &'a str {
     lang.catalog().contextual(context, s).unwrap_or_else(|| tr(lang, s))
+}
+
+/// The translation of `s` in `lang`'s `context` rows alone, or `None` when it has no such row.
+pub fn tr_ctx_row(lang: Lang, context: &str, s: &str) -> Option<&'static str> {
+    lang.catalog().contextual(context, s)
 }
 
 /// A name the app gives something (a default swatch's), translated where the current language has
@@ -673,6 +686,23 @@ pub fn label_or_name(lang: Lang, s: &str, built_in: bool) -> &str {
     if built_in { tr(lang, s) } else { s }
 }
 
+/// A built-in name that may end in a number ("Warm Gray 3") in `lang`: its own row, or the row of
+/// the name before the number followed by the number as it is. Any other name, a color value
+/// such as `K=35` among them, comes back as it is.
+pub fn numbered_label(lang: Lang, s: &str) -> Cow<'_, str> {
+    if let Some(shown) = lang.catalog().plain(s) {
+        return Cow::Borrowed(shown);
+    }
+    if let Some((head, n)) = s.rsplit_once(' ')
+        && !n.is_empty()
+        && n.bytes().all(|b| b.is_ascii_digit())
+        && let Some(shown) = lang.catalog().plain(head)
+    {
+        return Cow::Owned(format!("{shown} {n}"));
+    }
+    Cow::Borrowed(s)
+}
+
 /// How deep [`message`] translates placeholder values that are messages themselves. The status
 /// bar's line for an EPS file that can't be opened has five levels: `Couldn't open {name}: {e}`,
 /// the loader's `can't open …: {e}` (matched by `{path}: {e}`), the reader's `this PostScript file
@@ -683,8 +713,10 @@ const MESSAGE_DEPTH: usize = 5;
 /// parts of them (file names, numbers, a reason with no entry, a JSON object or array such as
 /// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”`, `'…'` or backticks, such as a
 /// symbol's or a script property's name, and an `{ident}` placeholder's value, a script identifier),
-/// stay as they are. A part that starts with `{` is translated only when it is a whole message with
-/// an exact entry. A part that starts with `[` is translated when it has an exact entry, such as
+/// stay as they are. A `{to}` placeholder's value that is not quoted, a printer's name such as
+/// `Office Laser (Floor 2)`, is translated only when it has an exact entry, such as
+/// `the default printer`. A part that starts with `{` is translated only when it is a whole message
+/// with an exact entry. A part that starts with `[` is translated when it has an exact entry, such as
 /// `[x, y] (two numbers)`, or when it fits a template that starts with `[` and an index of digits,
 /// such as an effect's refusal ``[0] `id`: {why}``.
 pub fn message(lang: Lang, s: &str) -> String {
@@ -720,18 +752,84 @@ fn fill_message(lang: Lang, s: &str, found: Option<(&[String], catalog::Captures
             message_at(lang, v, depth - 1)
         }
     };
+    let left_out = left_out_kinds(lang, s, &caps);
     let liquify = liquify_skip_values(lang, s, &caps);
     let values: Vec<(&str, String)> = caps
         .into_iter()
-        .map(|(k, v)| match (&liquify, k) {
-            (Some((tool, _)), "_1") => (k, tool.clone()),
-            (Some((_, kinds)), "_2") => (k, kinds.clone()),
-            (_, "ident") => (k, v.to_string()),
+        .map(|(k, v)| match (&left_out, &liquify, k) {
+            (Some(kinds), _, "kinds") => (k, kinds.clone()),
+            (_, Some((tool, _)), "_1") => (k, tool.clone()),
+            (_, Some((_, kinds)), "_2") => (k, kinds.clone()),
+            (_, _, "ident") => (k, v.to_string()),
+            (_, _, "to") if !quoted(v) => (k, exact_translation(lang.catalog(), v).unwrap_or_else(|| v.to_string())),
             _ => (k, nested(v)),
         })
         .collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();
     fill_once(template, &args)
+}
+
+/// The kinds the warning about an SVG's variables that aren't text names (the engine's
+/// `left_out_kind` in `crates/engine/src/cmd/variablecmds/library.rs`), each translated by its
+/// `variable-kind` row.
+const LEFT_OUT_KINDS: [&str; 4] = ["Visibility", "Linked File", "Graph Data", "Unknown"];
+
+/// The list of kinds in `lang` when `s` is the warning about an SVG's variables that aren't text
+/// and `caps` are its captures. Each entry is a kind of [`LEFT_OUT_KINDS`] or a `trait` the file
+/// names, in backticks with each backtick in it doubled, followed by its count in parentheses; the
+/// entries are separated by `, `. A kind of [`LEFT_OUT_KINDS`] is shown in `lang`, a `trait` as the
+/// warning writes it, and the entries keep their order and counts, joined with the
+/// `variable-list-two` row for two, and the `variable-list-middle` and `variable-list-end` rows for
+/// more; a missing row leaves its part in English. `None` for any other message, or a list that
+/// does not have that form.
+fn left_out_kinds(lang: Lang, s: &str, caps: &[(&str, &str)]) -> Option<String> {
+    let [("kinds", kinds)] = caps else { return None };
+    if s.strip_prefix("variables that aren't text were left out: ") != Some(*kinds) {
+        return None;
+    }
+    let catalog = lang.catalog();
+    let mut entries = Vec::new();
+    let mut rest = *kinds;
+    loop {
+        let (name, after) = if let Some(quoted) = rest.strip_prefix('`') {
+            // The `trait` ends at the first backtick that is not doubled.
+            let mut at = 0;
+            let close = loop {
+                let found = at + quoted[at..].find('`')?;
+                if quoted[found + 1..].starts_with('`') {
+                    at = found + 2;
+                } else {
+                    break found;
+                }
+            };
+            rest.split_at(close + 2)
+        } else {
+            let kind = LEFT_OUT_KINDS.iter().find(|k| rest.starts_with(**k))?;
+            (catalog.contextual("variable-kind", kind).unwrap_or(kind), &rest[kind.len()..])
+        };
+        let (count, after) = after.strip_prefix(" (")?.split_once(')')?;
+        if count.is_empty() || !count.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        entries.push(format!("{name} ({count})"));
+        if after.is_empty() {
+            break;
+        }
+        rest = after.strip_prefix(", ")?;
+    }
+    let join = |context: &str, a: &str, b: &str| {
+        let pattern = "{0}, {1}";
+        fill_once(catalog.contextual(context, pattern).unwrap_or(pattern), &[("0", a), ("1", b)])
+    };
+    match entries.as_slice() {
+        [] => None,
+        [one] => Some(one.clone()),
+        [a, b] => Some(join("variable-list-two", a, b)),
+        [first, middle @ .., last] => {
+            let head = middle.iter().fold(first.clone(), |acc, w| join("variable-list-middle", &acc, w));
+            Some(join("variable-list-end", &head, last))
+        }
+    }
 }
 
 /// The tool labels in Liquify's warning about the objects under the brush that it left as they
@@ -834,6 +932,35 @@ pub fn msg(s: &str) -> String {
     let out = message(lang, s);
     *last = Some((lang.code(), s.to_string(), out.clone()));
     out
+}
+
+/// Stands in for the value [`message_keeping`] shows as it is while the text around it is
+/// translated.
+const KEPT_VALUE: char = '\u{FFFC}';
+
+/// The message `before`, `kept` and `after` make, with `before` and `after` translated as
+/// [`message`] translates a message and `kept` (such as text a script threw) shown as it is, even
+/// when it reads like a message that has a translation. When the translation does not hold the
+/// place of `kept` exactly once, the message is shown in English.
+pub fn message_keeping(lang: Lang, before: &str, kept: &str, after: &str) -> String {
+    keeping(|s| message(lang, s), before, kept, after)
+}
+
+/// [`message_keeping`] in the current language, remembering the last translation as [`msg`] does.
+pub fn msg_keeping(before: &str, kept: &str, after: &str) -> String {
+    keeping(msg, before, kept, after)
+}
+
+fn keeping(translate: impl Fn(&str) -> String, before: &str, kept: &str, after: &str) -> String {
+    let english = || format!("{before}{kept}{after}");
+    if before.contains(KEPT_VALUE) || after.contains(KEPT_VALUE) {
+        return english();
+    }
+    let shown = translate(&format!("{before}{KEPT_VALUE}{after}"));
+    match shown.split_once(KEPT_VALUE) {
+        Some((head, tail)) if !tail.contains(KEPT_VALUE) => format!("{head}{kept}{tail}"),
+        _ => english(),
+    }
 }
 
 /// [`trn`] in the current language.

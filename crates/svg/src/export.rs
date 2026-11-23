@@ -1,5 +1,6 @@
 //! The SVG writer.
 
+use craft_svg::tree::usvg;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -19,6 +20,8 @@ use crate::{
     EDITING_NS, Encoding, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output, Profile, Styling, base64_encode, body_hash, fmt_num, fnv1a,
     xml_escape,
 };
+
+use craft_svg::write::SvgWriter;
 
 use crate::css::{self, Props, blend_css, css_string, font_descriptor};
 
@@ -75,6 +78,18 @@ fn update_editing_hash(svg: &mut String) {
     }
 }
 
+/// Format physical dimensions (inches, mm, cm) with enough precision and significant digits
+/// that small nonzero sizes do not round to zero or distort relative aspect ratio.
+fn physical_num(v: f64) -> String {
+    if !v.is_finite() || v <= 0.0 {
+        return "0".into();
+    }
+    let leading_zeros = (-v.log10().floor() as i32).max(0);
+    let decimals = (leading_zeros + 3).clamp(3, 14) as u8;
+    let s = fmt_num(v, decimals);
+    if s == "0" && v > 0.0 { format!("{v:.16}").trim_end_matches('0').trim_end_matches('.').to_string() } else { s }
+}
+
 /// `doc` as SVG with `opts`, the native file `native` embedded for Preserve Editing, its generated
 /// ids starting with `id_prefix`.
 fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix: &str) -> Output {
@@ -114,6 +129,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         linked: Vec::new(),
         instance_xf: Affine::IDENTITY,
         symbols: HashMap::new(),
+        symbol_lookup: doc.symbol_boxes(),
         symbol_nest: 0,
         symbol_nodes: 0,
         inline_graphic: false,
@@ -155,30 +171,43 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         opts.encoding
     };
     let nl = if opts.minify { "" } else { "\n" };
-    let mut out = String::new();
+    let mut svg = SvgWriter::fragment();
     // A file in neither UTF-8 nor UTF-16 must name its encoding.
     if !opts.minify || encoding == Encoding::Latin1 {
-        out.push_str(&format!("<?xml version=\"1.0\" encoding=\"{}\"?>{nl}", encoding.xml_name()));
+        svg.decl(encoding.xml_name(), nl);
     }
     if opts.styling == Styling::StyleEntities && !w.classes.is_empty() {
-        out.push_str("<!DOCTYPE svg [");
-        for (i, c) in w.classes.iter().enumerate() {
-            out.push_str(&format!("{nl}{}<!ENTITY st{} \"{}\">", w.indent(1), i + 1, entity_value(c)));
-        }
-        out.push_str(&format!("{nl}]>{nl}"));
+        let entities = w
+            .classes
+            .iter()
+            .enumerate()
+            .map(|(i, c)| format!("{}<!ENTITY st{} \"{}\">", w.indent(1), i + 1, entity_value(c)))
+            .collect::<Vec<_>>()
+            .join(nl);
+        svg.doctype_internal("svg", &entities, nl);
     }
     let (ww, hh) = (w.num(rect.width()), w.num(rect.height()));
-    out.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"");
+    let mut root = svg.root().attr("xmlns:xlink", "http://www.w3.org/1999/xlink");
     for (ns, prefix) in &w.foreign_ns {
-        out.push_str(&format!(" xmlns:{prefix}=\"{}\"", xml_attr_escape(ns)));
+        root = root.attr(&format!("xmlns:{prefix}"), ns);
     }
     if w.tiny() {
-        out.push_str(" version=\"1.2\" baseProfile=\"tiny\"");
+        root = root.attr("version", "1.2").attr("baseProfile", "tiny");
     }
     if !opts.responsive {
-        out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
+        if let Some(suffix) = doc.units.svg_suffix() {
+            let w_val = physical_num(doc.units.from_pt(rect.width()));
+            let h_val = physical_num(doc.units.from_pt(rect.height()));
+            root = root.attr("width", format_args!("{w_val}{suffix}")).attr("height", format_args!("{h_val}{suffix}"));
+        } else {
+            root = root.attr("width", &ww).attr("height", &hh);
+        }
     }
-    out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
+    let vb_w = if rect.width() > 0.0 && ww == "0" { physical_num(rect.width()) } else { ww.clone() };
+    let vb_h = if rect.height() > 0.0 && hh == "0" { physical_num(rect.height()) } else { hh.clone() };
+    root.attr("viewBox", format_args!("0 0 {vb_w} {vb_h}")).open();
+    let mut out = svg.as_str().to_string();
+    out.push_str(nl);
     let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();
     let fonts = w.font_faces();
     if !w.defs.is_empty() || css || !fonts.is_empty() {
@@ -292,6 +321,9 @@ struct Writer<'a> {
     instance_xf: Affine,
     /// What each symbol's instances can share, by symbol name (see [`Writer::symbol_use`]).
     symbols: HashMap<String, SymbolDef>,
+    /// The document's symbols, found by name ([`vectorcraft_doc::SymbolBoxes::symbol`]) in time
+    /// independent of how many symbols the document holds.
+    symbol_lookup: vectorcraft_doc::SymbolBoxes<'a>,
     /// Symbols being written inside one another (instances nested deeper are left out: a symbol
     /// can't contain itself).
     symbol_nest: u32,

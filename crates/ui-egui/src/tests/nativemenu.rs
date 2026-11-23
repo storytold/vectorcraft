@@ -210,6 +210,19 @@ fn the_window_menu_has_the_system_items() {
     assert_eq!(Standard::Zoom.label(), "Zoom");
 }
 
+/// The Mac Help menu keeps Search Commands… first among VectorCraft's items, with its shortcut,
+/// then a separator.
+#[test]
+fn the_mac_help_menu_starts_with_search_commands() {
+    let bar = bar(&app(true));
+    let help = &bar.menu(MenuRole::Help).unwrap().children;
+    assert_eq!(ids(help)[..2], ["help.commandPalette".to_string(), "---".into()]);
+    let search = find(&bar, "help.commandPalette");
+    assert_eq!(search.label, "Search Commands…");
+    assert_eq!(search.shortcut, menus::shortcut_of("help.commandPalette"));
+    assert!(search.shortcut.is_some());
+}
+
 /// A system key a command already has stays the command's: the system item goes without. The
 /// user's shortcuts show in the menus.
 #[test]

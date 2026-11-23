@@ -419,6 +419,24 @@ impl Tool for CropImageTool {
         };
     }
 
+    /// `rect` is `[x, y, width, height]`, or null to put the box back where it starts. `ppi`,
+    /// `reference` and `linked` take the values [`check_options`] takes (the selected image's
+    /// limit on `ppi` is checked by `tool.setOption`, which knows the selection).
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        if matches!(key, "ppi" | "reference" | "linked") {
+            return check_options(&serde_json::Map::from_iter([(key.to_string(), value.clone())]), None);
+        }
+        if key != "rect" {
+            return Err(crate::option_check::unknown(key));
+        }
+        let numbers = value.as_array().filter(|a| a.len() == 4).and_then(|a| a.iter().map(Value::as_f64).collect::<Option<Vec<_>>>());
+        match numbers.as_deref() {
+            _ if value.is_null() => Ok(()),
+            Some([x, y, w, h]) if [x, y, w, h].iter().all(|n| n.is_finite()) && *w >= 0.0 && *h >= 0.0 => Ok(()),
+            _ => Err(format!("`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative")),
+        }
+    }
+
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.reset();
         vec![]
@@ -635,6 +653,15 @@ mod tests {
         ] {
             assert_eq!(check_options(&values(v.clone()), Some(36.0)), Err(want.to_string()), "{v}");
         }
+        // The tool takes the same values on its own, without an image's limit.
+        let t = CropImageTool::default();
+        for (k, v) in [("ppi", json!(72)), ("ppi", json!(null)), ("reference", json!(0)), ("linked", json!(true)), ("rect", json!(null))] {
+            assert_eq!(t.check_option(k, &v), Ok(()), "{k}: {v}");
+        }
+        assert_eq!(t.check_option("reference", &json!(9)), Err("`reference` must be a whole number from 0 to 8, not 9".into()));
+        assert_eq!(t.check_option("linked", &json!(1)), Err("`linked` must be true or false, not 1".into()));
+        assert_eq!(t.check_option("ppi", &json!(2401)), Err("`ppi` must be a number from 1 to 2400 or null, not 2401".into()));
+        assert_eq!(t.check_option("size", &json!(1)), Err("unknown option `size`".into()));
     }
 
     /// An image's own resolution, and the most it can be cropped to.

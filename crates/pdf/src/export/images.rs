@@ -183,22 +183,33 @@ impl Exporter<'_> {
     /// CMYK image `im` with the alpha of its opacity mask `m`, when the mask is a greyscale image
     /// on the image's own pixel grid (an image's soft mask as it opens): the alpha is written as the
     /// image's soft mask, as an RGBA image's is, rather than as a luminosity soft mask over it,
-    /// through which CoreGraphics draws CMYK images on black boxes (#2159). `None` for other
-    /// images and masks; cached like [`Self::load_image`], `interpolate` as there.
-    pub(super) fn masked_image(&mut self, im: &vectorcraft_doc::ImageObject, m: &vectorcraft_doc::OpacityMask, interpolate: bool) -> Option<Image> {
+    /// through which CoreGraphics draws CMYK images on black boxes (#2159). `shown` is `im` as it is
+    /// shown ([`vectorcraft_doc::Document::shown_image`]). When a color mask shows other pixels
+    /// that are not CMYK (`im`'s own pixels with the hidden colors clear), `im`'s inks are written
+    /// with the mask's alpha multiplied by the shown pixels' alpha, so the hidden colors stay
+    /// hidden; shown pixels that are CMYK are written themselves. `None` for other images and
+    /// masks, and for shown pixels of another size; cached like [`Self::load_image`],
+    /// `interpolate` as there.
+    pub(super) fn masked_image(
+        &mut self,
+        im: &vectorcraft_doc::ImageObject,
+        shown: &vectorcraft_doc::ImageObject,
+        m: &vectorcraft_doc::OpacityMask,
+        interpolate: bool,
+    ) -> Option<Image> {
         let art = &m.art;
         let NodeKind::Image(mi) = &art.kind else { return None };
         // A color-masked image in the mask's art masks with the pixels it shows.
-        let shown = self.doc.shown_image(art, mi);
-        let mi = &*shown;
+        let shown_mask = self.doc.shown_image(art, mi);
+        let mi = &*shown_mask;
         let plain =
             art.opacity >= 1.0 && art.blend == BlendMode::Normal && art.extras().mask.is_none() && !art.appearance.effects.iter().any(|e| e.visible);
         if m.invert || !plain || (mi.xf, mi.width, mi.height) != (im.xf, im.width, im.height) {
             return None;
         }
-        let size = self.image_size(im);
+        let size = self.image_size(shown);
         let interpolate = interpolate && self.interpolate;
-        let mut cache = format!("{}\u{0}{}\u{0}{}", im.key, mi.key, m.clip);
+        let mut cache = format!("{}\u{0}{}\u{0}{}\u{0}{}", im.key, shown.key, mi.key, m.clip);
         if self.downsampled() {
             cache.push_str(&format!("\u{0}{:.3}x{:.3}", size.0, size.1));
         }
@@ -209,8 +220,20 @@ impl Exporter<'_> {
             return i.clone();
         }
         let doc = self.doc;
-        let img = doc.image_blob(im).filter(|b| b.is_cmyk()).and_then(|blob| {
-            let alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
+        // Pixels a color mask shows that are not CMYK carry the hidden colors as their alpha.
+        let shown_blob = doc.image_blob(shown);
+        let (source, hidden) = match shown_blob {
+            Some(b) if shown.key != im.key && !b.is_cmyk() => (doc.image_blob(im), Some(b)),
+            b => (b, None),
+        };
+        let img = source.filter(|b| b.is_cmyk()).and_then(|blob| {
+            let mut alpha = crate::images::mask_alpha(doc.image_blob(mi)?, im.width, im.height, m.clip)?;
+            if let Some(hidden) = hidden {
+                let shown_alpha = crate::images::image_alpha(hidden, im.width, im.height)?;
+                for (a, s) in alpha.iter_mut().zip(shown_alpha) {
+                    *a = ((u32::from(*a) * u32::from(s) + 127) / 255) as u8;
+                }
+            }
             let icc = self.out.cmyk_image_icc(blob);
             let tag = self.out.cmyk_tag(icc.as_deref());
             let r = crate::images::recode_cmyk(blob, size, self.compression, interpolate, self.out.cmyk_pixels(), Some(alpha), tag);
@@ -452,7 +475,8 @@ mod tests {
             assert!(exporter.colorized_image(&image("pic", scale), &paint, true).is_some(), "colorized at {scale}");
             let art = vectorcraft_doc::Node::new(doc.layers[0].id, vectorcraft_doc::NodeKind::Image(Box::new(image("alpha", scale))));
             let mask = vectorcraft_doc::OpacityMask::new(art, true);
-            assert!(exporter.masked_image(&image("inks", scale), &mask, true).is_some(), "masked at {scale}");
+            let inks = image("inks", scale);
+            assert!(exporter.masked_image(&inks, &inks, &mask, true).is_some(), "masked at {scale}");
         }
         assert_eq!(exporter.images.len(), 2, "{:?}", exporter.images.keys().collect::<Vec<_>>());
     }

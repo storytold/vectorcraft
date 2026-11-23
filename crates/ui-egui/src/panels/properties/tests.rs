@@ -1515,6 +1515,26 @@ fn the_width_profile_shows_for_a_variable_width_or_the_width_tool() {
     assert_eq!(WidthProfile::id_of(profile.as_ref()), "taperStart");
 }
 
+/// A brushed stroke with a variable width: the Width Profile list lists only Uniform, which removes
+/// the profile.
+#[test]
+fn the_width_profile_of_a_brushed_stroke_offers_only_uniform() {
+    let mut app = new_app();
+    let line = app.run("shape.line", json!({"x1": 20, "y1": 100, "x2": 300, "y2": 100})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [line]})).unwrap();
+    app.run("stroke.set", json!({"profile": "lens"})).unwrap();
+    app.run("brush.apply", json!({"ids": [line], "name": "3 pt. Round"})).unwrap();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    let spacing = ctx.global_style().spacing.item_spacing.x;
+    let texts = press(&mut app, &ctx, text_at(&texts, "Profile:").right_center() + vec2(spacing + 50.0, 0.0));
+    assert!(!shows(&texts, "Taper Start"), "{texts:?}");
+    press(&mut app, &ctx, text_at(&texts, "Uniform").center());
+    let profile =
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(line.as_u64().unwrap())).unwrap().appearance.stroke().unwrap().profile.clone();
+    assert_eq!(profile, None);
+}
+
 /// With Direct Selection, a path whose corner is selected shows that corner's kind and radius;
 /// each edit sets that corner alone in one undo step. Not with the Selection tool, nor with the
 /// whole path selected; a live rectangle keeps its own Corner Radius row instead.
@@ -1555,11 +1575,11 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     // The whole path selected.
     app.run("select.set", json!({"ids": [star]})).unwrap();
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Corner:"), "no corner selected");
-    // A live rectangle's corner: its own Corner Radius row, once.
+    // A live rectangle's corner: its own Corner Radius row and Corner menu, once each.
     let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
     app.run("select.anchors", json!({"id": r, "anchors": [[0, 1]], "mode": "set"})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
-    assert!(!shows(&texts, "Corner:"), "{texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corner:").count(), 1, "{texts:?}");
     assert_eq!(texts.iter().filter(|(t, _)| t == "Corner Radius:").count(), 1, "{texts:?}");
 }
 
@@ -1785,6 +1805,64 @@ fn offset_path_and_simplify_are_not_quick_actions_for_type_alone() {
     app.run("select.set", json!({"ids": [t, r]})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
     assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "type and a path: {texts:?}");
+}
+
+/// Contextual Quick Actions for type selection (G12): with text selected, Quick Actions shows
+/// Create Outlines, Retype and Find and Replace…; clicking Create Outlines converts the text
+/// to vector paths with one undo step. A non-text selection (plain path) displays Offset Path
+/// and Simplify without displaying Create Outlines.
+#[test]
+fn type_quick_actions_show_text_commands_and_create_outlines() {
+    let mut app = new_app();
+    let t = app.run("text.create", json!({"x": 50, "y": 200, "text": "Hello"})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Create Outlines"), "text shows Create Outlines: {texts:?}");
+    assert!(shows(&texts, "Retype"), "text shows Retype: {texts:?}");
+    assert!(shows(&texts, "Find and Replace…"), "text shows Find and Replace…: {texts:?}");
+    assert!(shows(&texts, "Arrange: Bring to Front") && shows(&texts, "Lock"), "standard object actions: {texts:?}");
+    assert!(!shows(&texts, "Offset Path") && !shows(&texts, "Simplify"), "no offset path/simplify for type alone");
+
+    let undo0 = app.session.doc().unwrap().history.undo.len();
+    press(&mut app, &ctx, text_at(&texts, "Create Outlines").center());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo0 + 1, "one undo step");
+    let sel = app.session.doc().unwrap().selection.objects.clone();
+    assert!(!sel.is_empty(), "outlines are selected");
+    for id in &sel {
+        let node = app.session.doc().unwrap().doc.node(*id).unwrap();
+        assert!(!matches!(node.kind, NodeKind::Text(_)), "converted from live text: {:?}", node.kind);
+    }
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo0);
+    let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(t.as_u64().unwrap())).unwrap();
+    assert!(matches!(node.kind, NodeKind::Text(_)), "undo restores live text");
+
+    // Non-text selection (plain path): continues to show Offset Path and Simplify without Create Outlines.
+    let r = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [r]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    assert!(shows(&texts, "Offset Path") && shows(&texts, "Simplify"), "path shows Offset Path and Simplify");
+    assert!(!shows(&texts, "Create Outlines"), "path does not show Create Outlines");
+
+    // Find and Replace… quick action opens the Find and Replace dialog.
+    app.run("select.set", json!({"ids": [t]})).unwrap();
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Find and Replace…").center());
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("findReplace"), "opens findReplace dialog");
+
+    // Retype quick action reveals the Retype panel and leaves it open if already visible.
+    app.ui.dialog = None;
+    let retype_panel = crate::panels::retype::ID;
+    assert!(!crate::panel_docking::visible(&app.ui, retype_panel), "Retype is initially hidden");
+
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Retype").center());
+    assert!(crate::panel_docking::visible(&app.ui, retype_panel), "Retype panel is revealed when initially hidden");
+
+    // Clicking Retype again leaves the panel open rather than toggling it closed.
+    let texts = tall(&mut app, &ctx, vec![]);
+    press(&mut app, &ctx, text_at(&texts, "Retype").center());
+    assert!(crate::panel_docking::visible(&app.ui, retype_panel), "Retype panel remains visible when already open");
 }
 
 /// A dynamic symbol instance with appearance changes of its own has Reset in Quick Actions, which
@@ -2164,4 +2242,35 @@ fn the_graph_section_needs_one_graph_selected() {
     assert!(graph::shown(&app).is_some(), "two series of one graph");
     app.run("select.set", json!({"ids": [groups[0], series_groups(&app, b)[0]]})).unwrap();
     assert_eq!(graph::shown(&app), None, "series of two graphs");
+}
+
+/// With the Type tool, the Character section's font style shows the style of the first selected
+/// character (or of the character before the caret), not the text object's first run; with the
+/// Selection tool, the first run's (#8189).
+#[test]
+fn character_section_shows_the_type_tool_selections_style() {
+    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+    vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    // Regular 0..8, Bold 8..13, Condensed 13..22.
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Regular Bold Condensed", "font": TWO_AXIS_FAMILY})).unwrap()["id"].clone();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 8, "end": 13, "style": "Bold"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 13, "end": 22, "style": "Condensed"})).unwrap();
+    let ctx = egui::Context::default();
+    let shown = |app: &mut VectorcraftApp| {
+        let texts = panel_frame(app, &ctx, vec![], type_sections);
+        texts.into_iter().map(|(t, _)| t).filter(|t| ["Regular", "Bold", "Condensed"].contains(&t.as_str())).collect::<Vec<_>>()
+    };
+    for (start, end, want) in [(8, 12, "Bold"), (13, 22, "Condensed"), (0, 7, "Regular"), (15, 15, "Condensed"), (13, 13, "Bold")] {
+        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+        assert_eq!(crate::panels::character::text_editing(&app).map(|(_, a, b)| (a, b)), Some((start, end)));
+        assert_eq!(shown(&mut app), [want], "{start}..{end}");
+    }
+    app.session.select_tool("selection", Default::default()).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(crate::panels::character::text_editing(&app), None);
+    assert_eq!(shown(&mut app), ["Regular"], "the Selection tool shows the first run's style");
 }

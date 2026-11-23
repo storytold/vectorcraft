@@ -312,6 +312,91 @@ fn view_options_toggle_without_undo_steps_and_survive_presets() {
     assert_eq!(PerspectiveGrid::from_doc(&back), Some(g));
 }
 
+/// The view options are not undo steps, so undo and redo of other steps leave them as they are:
+/// Lock Grid, Lock Station Point, Snap to Grid, Show Rulers and whether the grid shows. Undoing a
+/// grid definition brings back the old grid with the current view options.
+#[test]
+fn undo_and_redo_keep_the_view_options() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    let old = grid(&s);
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40}));
+    run(&mut s, "perspective.grid.preset", json!({"kind": 1}));
+    let n = undo_len(&s);
+    for (id, on) in
+        [("perspective.grid.lock", true), ("perspective.grid.lockStation", true), ("perspective.grid.snap", false), ("perspective.grid.rulers", true)]
+    {
+        run(&mut s, id, json!({"on": on}));
+    }
+    run(&mut s, "perspective.grid.show", json!({"visible": false}));
+    assert_eq!(undo_len(&s), n);
+    let view = |g: &PerspectiveGrid| (g.locked, g.lock_station, g.snap, g.rulers, g.visible);
+    let want = (true, true, false, true, false);
+    assert_eq!(view(&grid(&s)), want);
+    // Undo the one-point preset: the two-point grid comes back with today's view options.
+    s.execute("edit.undo", &json!({})).unwrap();
+    let g = grid(&s);
+    assert_eq!((g.kind, g.vp_left, view(&g)), (old.kind, old.vp_left, want));
+    // Undo the rectangle, which left the grid alone.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(view(&grid(&s)), want);
+    // An option changed now holds through the redo steps.
+    run(&mut s, "perspective.grid.lock", json!({"on": false}));
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    let g = grid(&s);
+    assert_eq!((g.kind, view(&g)), (1, (false, true, false, true, false)));
+}
+
+/// The view options set on a document whose steps hold no grid yet stay as they are when undo
+/// brings back a step without one, and the active plane chosen without an undo step stays too.
+#[test]
+fn undo_keeps_the_view_options_of_a_grid_no_step_defined() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40}));
+    run(&mut s, "shape.rectangle", json!({"x": 100, "y": 10, "width": 50, "height": 40}));
+    assert!(!s.doc().unwrap().doc.unknown.contains_key(vectorcraft_tools::distort::perspective::DOC_KEY));
+    run(&mut s, "perspective.grid.show", json!({"visible": true}));
+    run(&mut s, "perspective.grid.lock", json!({"on": true}));
+    run(&mut s, "perspective.grid.snap", json!({"on": false}));
+    run(&mut s, "perspective.plane.set", json!({"plane": "ground"}));
+    let view = |g: &PerspectiveGrid| (g.visible, g.locked, g.snap, g.plane);
+    let want = (true, true, false, vectorcraft_tools::distort::perspective::Plane::Ground);
+    assert_eq!(view(&grid(&s)), want);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(view(&grid(&s)), want);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(view(&grid(&s)), want);
+}
+
+/// A step that changed a view option itself takes it back on undo and sets it again on redo: a
+/// preset shows the grid, and a grid definition can lock it.
+#[test]
+fn undo_takes_back_the_view_options_a_step_changed() {
+    let mut s = session();
+    run(&mut s, "perspective.grid.preset", json!({"kind": 2}));
+    run(&mut s, "perspective.grid.show", json!({"visible": false}));
+    run(&mut s, "perspective.grid.preset", json!({"kind": 1}));
+    assert!(grid(&s).visible);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!grid(&s).visible, "the preset showed the grid");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(grid(&s).visible);
+    let cell = grid(&s).cell;
+    run(&mut s, "perspective.grid.set", json!({"locked": true, "cell": cell + 10.0}));
+    assert!(grid(&s).locked);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((grid(&s).locked, grid(&s).cell), (false, cell));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!((grid(&s).locked, grid(&s).cell), (true, cell + 10.0));
+    // An option the step left alone and changed after it stays as it is.
+    run(&mut s, "perspective.grid.snap", json!({"on": false}));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((grid(&s).locked, grid(&s).snap), (false, false));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!((grid(&s).locked, grid(&s).snap), (true, false));
+}
+
 /// Lock Grid, Lock Station Point, Snap to Grid and Show Rulers refuse an `on` given as text or as
 /// another value that is not true or false: the grid and the undo history stay as they were. Null is
 /// read as the key left out, so it toggles the option.

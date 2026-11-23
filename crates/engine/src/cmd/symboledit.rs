@@ -314,12 +314,12 @@ pub(crate) fn follow_history(st: &mut crate::DocState, was: Option<&SymbolEdit>)
     }
 }
 
-/// Does `n` hold an instance of symbol `name`, directly or through the art of the symbols it holds
-/// instances of?
-fn holds_symbol(d: &Document, n: &Node, name: &str, seen: &mut HashSet<String>) -> bool {
+/// Does `n` hold an instance of symbol `name` (opacity masks included), directly or through the art
+/// of the symbols it holds instances of?
+pub(crate) fn holds_symbol(d: &Document, n: &Node, name: &str, seen: &mut HashSet<String>) -> bool {
     let mut found = false;
     let mut nested = vec![];
-    n.walk(&mut |c| {
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |c| {
         if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
             if symbol == name {
                 found = true;
@@ -422,6 +422,19 @@ fn each_changed_instance(n: &mut Node, name: &str, f: &mut dyn FnMut(&mut Vec<Sy
             each_changed_instance(Arc::make_mut(c), name, f);
         }
     }
+}
+
+/// Each instance's appearance changes to objects of symbol `name`'s art follow those objects after
+/// its art changed from `old` outside symbol editing (a graph in it drawn again): a change to an
+/// object that is no longer there is dropped ([`follow_objects`]).
+pub(crate) fn follow_art_change(d: &mut Document, name: &str, old: &Arc<Node>) {
+    let Some(new) = d.symbols.iter().find(|s| s.name == name).map(|s| s.art.clone()) else { return };
+    let parts = |art: &Arc<Node>| match (&art.kind, art.children()) {
+        (NodeKind::Group { .. }, Some(ch)) => (ch.to_vec(), true),
+        _ => (vec![art.clone()], false),
+    };
+    let (old, new) = (parts(old), parts(&new));
+    follow_objects(d, name, (&old.0, old.1), (&new.0, new.1));
 }
 
 /// Each instance's appearance changes to objects of symbol `name`'s art follow those objects

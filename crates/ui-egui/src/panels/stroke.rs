@@ -76,7 +76,7 @@ fn dash_state(dash: Option<&Dash>, last: Option<(Vec<f64>, bool)>) -> (Vec<f64>,
 }
 
 /// Six dash/gap fields → a dash pattern: stops at the first empty dash; a dash without a gap
-/// repeats its length as the gap (Illustrator's behaviour).
+/// repeats its length as the gap.
 pub fn dash_pattern(fields: &[Option<f64>; 6]) -> Vec<f64> {
     edited_dash_pattern(fields, &[])
 }
@@ -109,8 +109,14 @@ fn arrow_label(a: Option<&Arrowhead>) -> &'static str {
 fn arrow_name(a: Option<&Arrowhead>) -> String {
     match a {
         Some(Arrowhead::Custom(c)) => c.name.clone(),
-        _ => tl!(arrow_label(a)).to_string(),
+        _ => builtin_arrow_name(arrow_label(a)).to_string(),
     }
+}
+
+/// A built-in arrowhead's name `label` in the interface language. Its `arrowhead` row comes first,
+/// so a name that is also an effect's (Feather) can be translated for each one.
+pub(crate) fn builtin_arrow_name(label: &str) -> &str {
+    crate::i18n::tr_ctx(crate::i18n::current(), "arrowhead", label)
 }
 
 /// The preview cache key of `a`: its name, and for a custom head its art.
@@ -355,10 +361,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Profile.
     ui.horizontal(|ui| {
         row_label(ui, tl!("Profile:"));
-        if let Some(id) = profile_dropdown(app, ui, st.as_ref().and_then(|s| s.profile.as_ref())) {
+        if let Some(id) = profile_dropdown(app, ui, st.as_ref()) {
             set(app, json!({"profile": id}));
         }
-        let can_flip = st.as_ref().is_some_and(|s| s.profile.is_some());
+        let can_flip = st.as_ref().is_some_and(|s| s.profile.is_some()) && brush_keeps_size(app, ui.ctx(), st.as_ref()).is_none();
         // Lucide names these icons for their mirror line: the vertical-line icon flips the
         // profile along the path, while the horizontal-line icon flips it across the path.
         if widgets::icon_button_enabled(ui, "flip-vertical-2", tl!("Flip Along"), false, can_flip, 22.0).clicked() {
@@ -416,7 +422,7 @@ pub(super) fn arrow_doc(mut a: Option<Arrowhead>, start: bool, w: f64, h: f64) -
 
 /// Draw an arrowhead preview (the head as the canvas draws it) in `r`: a line with the head at the
 /// left (`start`) or right end.
-fn paint_arrow(ui: &Ui, r: Rect, a: Option<&Arrowhead>, start: bool, color: Color32) {
+pub(crate) fn paint_arrow(ui: &Ui, r: Rect, a: Option<&Arrowhead>, start: bool, color: Color32) {
     if let Some(tex) = widgets::doc_preview(ui, &format!("arrow:{}:{start}", arrow_key(a)), r.size(), |w, h| arrow_doc(a.cloned(), start, w, h)) {
         ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), color);
     }
@@ -498,24 +504,68 @@ pub fn paint_profile(ui: &Ui, r: Rect, points: Option<&[(f64, f64, f64)]>, color
 /// The width of the [`profile_dropdown`] button.
 pub(crate) const PROFILE_DROPDOWN_WIDTH: f32 = 100.0;
 
-/// The Profile dropdown (Stroke panel, Control bar): the stroke's own silhouette on the button
-/// (a custom profile too), the built-in profiles and then the saved ones in the list. Returns the
-/// id or name picked.
-pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, cur: Option<&WidthProfile>) -> Option<String> {
+/// While a width profile changes none of the strokes the Profile list edits, because each draws
+/// with a brush: whether any of them has a profile. None while a profile changes one of them.
+/// With nothing selected, and while the Live Paint Bucket is active, the list sets up the next
+/// object drawn, whose stroke is `shown` (the stroke the panels show). Otherwise it edits the
+/// strokes `stroke.set` targets
+/// ([`vectorcraft_engine::Session::brushed_strokes_profiled`], cached per document revision and
+/// active Appearance row), such as a selected group's own stroke while `shown` is its first
+/// member's.
+pub(crate) fn brush_keeps_size(app: &VectorcraftApp, ctx: &egui::Context, shown: Option<&StrokeLayer>) -> Option<bool> {
+    let st = app.session.active()?;
+    let bucket = app.session.bucket_paints();
+    if bucket || (st.selection.objects.is_empty() && st.selection.subjects().is_empty()) {
+        let s = shown?;
+        let name = s.brush.as_deref()?;
+        return super::brushes::document_brushes(st).iter().any(|b| b.name == name).then_some(s.profile.is_some());
+    }
+    let key = (st.uid, st.revision, app.session.appearance_item());
+    match pstate::<Option<((u64, u64, Option<usize>), Option<bool>)>>(ctx, "stroke-brushed") {
+        Some((k, v)) if k == key => v,
+        _ => {
+            let v = app.session.brushed_strokes_profiled();
+            set_pstate(ctx, "stroke-brushed", Some((key, v)));
+            v
+        }
+    }
+}
+
+/// The Profile dropdown (Stroke panel, Properties panel, Control bar): the stroke's own silhouette
+/// on the button (a custom profile too), the built-in profiles and then the saved ones in the list.
+/// Returns the id or name picked. While the strokes draw with a brush ([`brush_keeps_size`]), the
+/// button is dimmed and says why when hovered; it opens no list while every one is uniform, and
+/// only the Uniform row, which removes the profiles, while one has a profile.
+pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, shown: Option<&StrokeLayer>) -> Option<String> {
     let t = Tokens::get(ui.ctx());
-    let (r, resp) = ui.allocate_exact_size(vec2(PROFILE_DROPDOWN_WIDTH, 24.0), Sense::click());
+    let cur = shown.and_then(|s| s.profile.as_ref());
+    let brushed = brush_keeps_size(app, ui.ctx(), shown);
+    let keeps_size = brushed.is_some();
+    let uniform = brushed == Some(false);
+    let sense = if uniform { Sense::hover() } else { Sense::click() };
+    let (r, resp) = ui.allocate_exact_size(vec2(PROFILE_DROPDOWN_WIDTH, 24.0), sense);
     ui.painter().rect_filled(r, 2, t.input);
-    ui.painter().rect_stroke(r, 2, Stroke::new(1.0, if resp.hovered() { t.text } else { t.input_border }), StrokeKind::Inside);
+    let border = if resp.hovered() && !uniform { t.text } else { t.input_border };
+    ui.painter().rect_stroke(r, 2, Stroke::new(1.0, border), StrokeKind::Inside);
     let body = Rect::from_min_max(r.min + vec2(6.0, 5.0), pos2(r.right() - 20.0, r.bottom() - 5.0));
-    paint_profile(ui, body, cur.and_then(|p| silhouette(&p.points)), t.text_strong);
-    icons::paint(ui, "chevron-down", Rect::from_center_size(pos2(r.right() - 9.0, r.center().y), vec2(10.0, 10.0)), t.icon);
-    let resp = resp.on_hover_text(tl!("Variable Width Profile"));
+    let (shape, icon) = if keeps_size { (t.text_disabled, t.text_disabled) } else { (t.text_strong, t.icon) };
+    paint_profile(ui, body, cur.and_then(|p| silhouette(&p.points)), shape);
+    icons::paint(ui, "chevron-down", Rect::from_center_size(pos2(r.right() - 9.0, r.center().y), vec2(10.0, 10.0)), icon);
+    let tip = if keeps_size {
+        tl!("The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.")
+    } else {
+        tl!("Variable Width Profile")
+    };
+    let resp = resp.on_hover_text(tip);
+    if uniform {
+        return None;
+    }
     let mut out = None;
     egui::Popup::menu(&resp).show(|ui| {
         egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
             // A divider between the built-in profiles and the saved ones.
             let mut divide = true;
-            for e in app.session.profile_entries() {
+            for e in app.session.profile_entries().filter(|e| !keeps_size || e.matches(None)) {
                 if !e.built_in && std::mem::take(&mut divide) {
                     ui.separator();
                 }

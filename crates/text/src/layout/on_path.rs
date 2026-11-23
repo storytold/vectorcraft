@@ -4,9 +4,10 @@ use super::flow::{list_markers, repeat_mark_glyph};
 use super::region::in_range;
 use super::{
     Affine, ArcPath, BezPath, Ctx, GlyphBend, Justify, LineInfo, ListMarker, ParamCurve, PathAlign, PathData, PathEffect, PathEl, Point, Range,
-    SGlyph, Shape, TextObject, Vec2, style_metrics,
+    SGlyph, Shape, TextObject, Vec2, apply_desired, style_metrics,
 };
 use crate::fontdb::PathAlignHeights;
+use std::collections::HashMap;
 use unicode_bidi::{BidiClass, BidiInfo};
 
 /// The distance along type on a path each glyph takes: its advance measured `spacing` points above
@@ -425,6 +426,25 @@ fn line_start_repeat(cx: &Ctx<'_>, t: &TextObject, pr: &Range<usize>, glyphs: &m
     Some((g.byte, c))
 }
 
+/// Justification…: paragraph `pi`'s glyphs at its Desired word and letter spacing and glyph scaling
+/// (vertical type is not glyph scaled), with the Desired Glyph Scaling of each glyph it scales put
+/// in `scales` by byte offset. Type on a path is one line that is never justified to a width, so
+/// Minimum and Maximum are not used.
+fn set_desired(cx: &Ctx<'_>, t: &TextObject, pi: usize, glyphs: &mut [SGlyph], scales: &mut HashMap<usize, f64>) {
+    let flex = apply_desired(glyphs, &t.layout_justification(t.para_at(pi)), !cx.vertical);
+    scales.extend(glyphs.iter().zip(&flex).filter(|(_, f)| f.scale != 1.0).map(|(g, f)| (g.byte, f.scale)));
+}
+
+/// Records on the glyph just drawn for `g` the Desired Glyph Scaling it is drawn at (`scales`, by
+/// byte offset). A list marker's glyphs (no length) share their paragraph's first byte and are not
+/// scaled.
+fn record_scale(cx: &mut Ctx<'_>, g: &SGlyph, scales: &HashMap<usize, f64>) {
+    let scale = if g.len > 0 { scales.get(&g.byte).copied() } else { None };
+    if let (Some(scale), Some(out)) = (scale, cx.out.glyphs.last_mut()) {
+        out.scale = scale;
+    }
+}
+
 /// Lay type on a path out along `path` (text space), between its brackets.
 pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
@@ -434,11 +454,15 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
     let mut rtl = None;
     let mut shaped = Vec::new();
     let markers = list_markers(t, paras);
+    // The Desired Glyph Scaling each scaled glyph is drawn at, by its byte offset.
+    let mut scales = HashMap::new();
     for (pi, pr) in paras.iter().enumerate() {
         let text = cx.text;
         let bidi = para_bidi_with(text.get(pr.clone()).unwrap_or_default(), para.direction, &cx.char_directions(pr));
         rtl.get_or_insert(is_rtl(bidi.as_ref()) && !cx.vertical);
         let mut glyphs = cx.shape_para(pr.clone(), bidi.as_ref(), t.para_at(pi));
+        // Justification…, before anything measures the glyphs along the path.
+        set_desired(cx, t, pi, &mut glyphs, &mut scales);
         // Bullets and numbers: a list paragraph's text starts after its marker here too, unless
         // the paragraph continues from the frame before in its thread.
         if pi > 0 || !t.first_para_continues {
@@ -727,6 +751,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         }
         let at = cx.out.glyphs.len();
         cx.emit(g, pre, origin, angle, g.adv, 0);
+        record_scale(cx, g, &scales);
         let hidden = hide_before_open_path(cx, &ap, lead, at, s + step * 0.5, rise);
         if !hidden && let Some(mark) = repeat.take_if(|&mut (byte, _)| g.len > 0 && g.byte == byte) {
             cx.out.repeat_marks.push(mark);

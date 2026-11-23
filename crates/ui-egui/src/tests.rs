@@ -30,6 +30,7 @@ mod plugins;
 mod printps;
 mod printtiling;
 mod puppetwarp;
+mod quickpenbar;
 mod recolor;
 mod recovery;
 pub(super) mod removeanchors;

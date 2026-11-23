@@ -61,6 +61,14 @@ Unlike `regions`, which splits the filled areas of closed shapes, `live_paint` t
 
 `shape_builder` gives the Shape Builder's regions. With closed paths only, they are the `regions`. Once an open path is among them, they are the `live_paint` faces, so a stroke-only line across a shape splits it and lines can enclose a region of their own. The second list holds the pieces of each path that has no closed subpath, keyed by its index, so the Shape Builder can delete them one by one. The caller closes any open path whose fill should count. Inputs with more than `SHAPE_BUILDER_MAX_SEGMENTS` segments fall back to the filled areas.
 
+```rust
+pub struct Adjacency { pub faces: Vec<MapFace>, pub edges: Vec<MapEdge>, pub slivers: Vec<PathData>, pub outlines: Vec<MapOutline> }
+pub struct MapEdge { pub path: PathData, pub sources: Vec<usize>, pub left: Option<usize>, pub right: Option<usize>, pub piece: usize }
+pub fn adjacency(shapes: &[Shape], precision: f64) -> Option<Adjacency>;
+```
+
+`adjacency` maps the paths as `live_paint` does and also reports, for each edge, every input it lies on and the faces on its left and right as it runs along its path (document coordinates, y down). A line drawn on top of another keeps both inputs on the edge, whatever the input order. A piece of line that ends inside a face has that face on both sides. Faces narrower than `precision` are listed as slivers, and `outlines` holds the outer boundary of each connected piece of the paths. It returns `None` for more than `SHAPE_BUILDER_MAX_SEGMENTS` segments, non-finite input or a `precision` that is not a positive number.
+
 ## Offset / stroke
 
 ```rust

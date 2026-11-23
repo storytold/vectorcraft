@@ -50,7 +50,24 @@ pub(super) fn pixel(d: &Document, x: u32, y: u32) -> [u8; 4] {
             _ => None,
         })
         .unwrap();
-    let img = image::load_from_memory(&d.images[&im].bytes).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&d.images[&im].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     img.get_pixel(x, y).0
 }
 
@@ -197,7 +214,24 @@ end"##,
     assert_eq!(of_kind(d, "Image").len(), 2);
     let im = all(d).into_iter().find(|n| matches!(&n.kind, NodeKind::Image(im) if im.width == 2)).unwrap();
     let NodeKind::Image(im) = &im.kind else { panic!() };
-    let img = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&d.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     // Painted where the mask is 1, transparent where it is 0.
     assert_eq!([img.get_pixel(0, 0).0, img.get_pixel(1, 0).0], [[255, 0, 0, 255], [0, 255, 0, 0]]);
     assert_eq!([img.get_pixel(0, 1).0, img.get_pixel(1, 1).0], [[0, 0, 255, 0], [255, 255, 255, 255]]);
@@ -1144,6 +1178,96 @@ fn filter_output_counts_against_the_memory_budget() {
     let many = import(&file("t", &format!("/z <{z}> def 100 {{ z /FlateDecode filter pop }} repeat 0 0 1 1 rectfill")));
     let Err(err) = many else { panic!("the budget ends the program") };
     assert!(err.contains("too much memory"), "{err}");
+}
+
+/// A shading painted with `shfill` and not extended paints only between its ends: an axial one
+/// between the lines through them across its axis, a radial one from a point over its circles
+/// (PLRM 3rd ed. §4.9.3: `Extend` is `[false false]` by default). Extended both ways it paints
+/// the whole clip.
+#[test]
+fn shadings_not_extended_paint_only_between_their_ends() {
+    let shade = |kind: u8, coords: &str, extend: &str| {
+        let r = read(&format!(
+            "<< /ShadingType {kind} /ColorSpace /DeviceRGB /Coords [{coords}] {extend} \
+             /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill"
+        ));
+        let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+        bounds(&n)
+    };
+    // Axial, from x 10 to 90 (and its reflection in y: the document's y runs down).
+    let b = shade(2, "10 0 90 0", "");
+    assert!(near(b, Rect::new(10.0, 0.0, 90.0, 100.0)), "{b:?}");
+    let b = shade(2, "10 0 90 0", "/Extend [false true]");
+    assert!(near(b, Rect::new(10.0, 0.0, 100.0, 100.0)), "{b:?}");
+    let b = shade(2, "10 0 90 0", "/Extend [true true]");
+    assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{b:?}");
+    // Radial from the centre point to a circle of radius 30.
+    let b = shade(3, "50 50 0 50 50 30", "");
+    assert!((b.width() - 60.0).abs() < 0.5 && (b.height() - 60.0).abs() < 0.5 && (b.center().x - 50.0).abs() < 0.5, "{b:?}");
+    // Its circle is cut to a polygon whose sides lie within 0.01 pt of it, also for a large one.
+    let r = read(
+        "<< /ShadingType 3 /ColorSpace /DeviceRGB /Coords [50 50 0 50 50 45] \
+         /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill",
+    );
+    let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("{n:?}") };
+    let ring: Vec<Point> = path.subpaths.iter().flat_map(|s| s.anchors.iter().map(|a| a.p)).collect();
+    let centre = Point::new(50.0, 50.0);
+    for (a, b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+        assert!((a.distance(centre) - 45.0).abs() < 1e-6, "{a:?}");
+        assert!(a.midpoint(*b).distance(centre) > 45.0 - 0.01, "{a:?} {b:?}");
+    }
+    // Stretched 4 times across and squashed to a quarter down (areas unchanged), the sides still
+    // lie within 0.01 pt of the ellipse it becomes.
+    let r = read(
+        "50 50 translate 4 0.25 scale << /ShadingType 3 /ColorSpace /DeviceRGB /Coords [0 0 0 0 0 10] \
+         /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill",
+    );
+    let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("{n:?}") };
+    let sides = path.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>();
+    // A side of a regular polygon in the circle lies 1 - cos(pi / sides) of the radius inside it;
+    // stretched to 40 pt across, that is at most 0.01 pt.
+    assert!(40.0 * (1.0 - (std::f64::consts::PI / sides as f64).cos()) <= 0.01 + 1e-9, "{sides} sides");
+    let b = shade(3, "50 50 0 50 50 30", "/Extend [true true]");
+    assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{b:?}");
+
+    // Axial along y, and extended at its start only.
+    let b = shade(2, "0 20 0 70", "");
+    assert!(near(b, Rect::new(0.0, 30.0, 100.0, 80.0)), "{b:?}");
+    let b = shade(2, "10 0 90 0", "/Extend [true false]");
+    assert!(near(b, Rect::new(0.0, 0.0, 90.0, 100.0)), "{b:?}");
+    // Diagonal: from (60, 60) to (90, 90) it paints where x + y lies from 120 to 180, a strip
+    // across the square's top-right corner whose own corners are cut off.
+    let r = read(
+        "<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [60 60 90 90] \
+         /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill",
+    );
+    let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+    assert!(near(bounds(&n), Rect::new(20.0, 0.0, 100.0, 80.0)), "{:?}", bounds(&n));
+    let NodeKind::Path { path, .. } = &n.kind else { panic!("{n:?}") };
+    for a in path.subpaths.iter().flat_map(|s| s.anchors.iter()) {
+        // Back in PostScript's y-up space.
+        let s = a.p.x + (100.0 - a.p.y);
+        assert!((120.0 - 1e-6..=180.0 + 1e-6).contains(&s), "{a:?}");
+    }
+    // The current transformation turns the axis: rotated a quarter turn about the centre, an axis
+    // from -40 to 40 along x runs up the page from y 10 to 90.
+    let r = read(
+        "50 50 translate 90 rotate << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [-40 0 40 0] \
+         /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> shfill",
+    );
+    let n = all(&r.document).into_iter().find(|n| matches!(fill(n), Some(Paint::Gradient(_)))).expect("a gradient fill");
+    assert!(near(bounds(&n), Rect::new(0.0, 10.0, 100.0, 90.0)), "{:?}", bounds(&n));
+    // Radial from a point off the circle's centre covers the hull of that point and the circle.
+    let b = shade(3, "20 50 0 60 50 30", "");
+    assert!((b.x0 - 20.0).abs() < 0.5 && (b.x1 - 90.0).abs() < 0.5 && (b.y0 - 20.0).abs() < 0.5 && (b.y1 - 80.0).abs() < 0.5, "{b:?}");
+    // Radial shadings this doesn't bound (extended at one end, or starting from a circle) still
+    // paint the whole area.
+    for (coords, extend) in [("50 50 0 50 50 30", "/Extend [true false]"), ("50 50 0 50 50 30", "/Extend [false true]"), ("50 50 10 50 50 30", "")] {
+        let b = shade(3, coords, extend);
+        assert!(near(b, Rect::new(0.0, 0.0, 100.0, 100.0)), "{coords} {extend}: {b:?}");
+    }
 }
 
 /// A sampled function of one input in an axial shading: interpolated linearly, its gradient has a

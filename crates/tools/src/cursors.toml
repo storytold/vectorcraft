@@ -75,6 +75,7 @@ group = "Selection"
 shown_when = [
     "The Group Selection tool: each click selects the next enclosing group.",
     "Direct Selection with Alt held (Alt makes it Group Selection for the next click).",
+    "Over a panel where a click or a drop adds something, such as the strip under the Gradient panel's ramp, where a click adds a stop, or the Layers panel's list while rows are Alt-dragged, where the drop adds copies (where the system has no copy cursor the app can show).",
 ]
 hotspot = "The arrow's tip."
 look = "ArrowHollow with a plus badge."
@@ -169,6 +170,15 @@ shown_when = [
 ]
 hotspot = "Where the new frame's top-left corner goes (the click), or the path clicked."
 look = "A small block of text lines: the overflow text the pointer carries."
+
+[[cursor]]
+id = "LoadedTextLink"
+group = "Selection"
+shown_when = [
+    "The Selection tool loaded with text from a port, over a closed path, area type or type on a path that a click threads the text into: not the frame the text came from, not a frame already in a thread and not a path inside a compound path. Over empty canvas or other art the pointer stays the loaded text, and a click there makes a new frame.",
+]
+hotspot = "The point of the object's path the click threads the text into."
+look = "The loaded text's block of lines with two linked chain rings below right."
 
 # ── Pen family ────────────────────────────────────────────────────────────────────────────────────
 
@@ -514,6 +524,7 @@ id = "LivePaintBucket"
 group = "Colour and gradient"
 shown_when = [
     "The Live Paint Bucket where a click paints nothing: away from Live Paint groups and the selected paths' regions, or over a part the Paint Fills and Paint Strokes options (and Shift) leave unpainted.",
+    "The Fill Area tool outside every area that visible, unlocked paths enclose, where a click adds nothing.",
     "With Use Precise Cursors on, the crosshair shows instead.",
 ]
 hotspot = "The drop the paint pours onto."
@@ -524,6 +535,7 @@ id = "LivePaintBucketFace"
 group = "Colour and gradient"
 shown_when = [
     "The Live Paint Bucket over a face of a Live Paint group, or a region of the selected paths, that a click fills.",
+    "The Fill Area tool over an enclosed area, where a click adds a path of that area.",
     "With Use Precise Cursors on, the crosshair shows instead.",
 ]
 hotspot = "The drop the paint pours onto."
@@ -721,8 +733,12 @@ hotspot = "The tip."
 [[cursor]]
 id = "Knife"
 group = "Drawing and editing tools"
-shown_when = ["The Knife tool: a freehand drag cuts objects along the line."]
+shown_when = [
+    "The Knife tool: a freehand drag cuts objects along the line.",
+    "The Trim at Crossings Tool: a click removes the stretch of path under the pointer between its crossings, a drag removes every stretch its rectangle touches, and an Alt-drag removes every stretch its freehand line crosses.",
+]
 hotspot = "The blade's point."
+look = "A knife pointing down-left: a white blade with a straight back and a curved edge, and a black handle."
 
 [[cursor]]
 id = "Scissors"

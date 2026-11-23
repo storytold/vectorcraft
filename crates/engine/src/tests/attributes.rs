@@ -90,6 +90,23 @@ fn values_that_differ_read_null_and_recent_urls_keep_the_newest_first() {
     assert_eq!(info(&mut s, json!({"ids": [p.0, a.0]}))["showCenter"], Value::Null);
 }
 
+/// The recent URLs keep the 30 newest distinct URLs, the most the panel's URL menu can list, and
+/// a URL given again moves to the front without taking a second place.
+#[test]
+fn recent_urls_keep_the_thirty_newest() {
+    let mut s = session();
+    rect(&mut s, 0.0);
+    for i in 0..35 {
+        run(&mut s, "attributes.set", json!({"url": format!("https://example.com/{i}")}));
+    }
+    let want: Vec<String> = (5..35).rev().map(|i| format!("https://example.com/{i}")).collect();
+    assert_eq!(info(&mut s, json!({}))["recentUrls"], json!(want));
+    run(&mut s, "attributes.set", json!({"url": "https://example.com/20"}));
+    let urls = info(&mut s, json!({}))["recentUrls"].as_array().unwrap().clone();
+    assert_eq!((urls.len(), urls[0].as_str(), urls[1].as_str()), (30, Some("https://example.com/20"), Some("https://example.com/34")));
+    assert_eq!(urls.iter().filter(|u| *u == "https://example.com/20").count(), 1);
+}
+
 /// A five-pointed star drawn as one self-intersecting path (its centre is wound twice).
 fn star(s: &mut Session) -> NodeId {
     let (c, r) = (50.0f64, 45.0f64);

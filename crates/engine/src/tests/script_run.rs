@@ -170,6 +170,58 @@ fn an_error_names_the_script_its_place_and_kind() {
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
 
+/// A failed run's report keeps its message and kind and says where the message came from: text the
+/// script supplied, or one of the app's own errors. The status text and the console line read the
+/// same either way, and only the app's own errors get advice about other applications' objects.
+#[test]
+fn failed_script_report_keeps_message_and_adds_origin() {
+    let mut s = two_docs();
+    for (source, kind, message, origin) in [
+        ("throw new Error('invalid array length');", "thrown", "Error: invalid array length", "script"),
+        ("throw new RangeError('invalid array length');", "thrown", "RangeError: invalid array length", "script"),
+        ("throw 'invalid array length';", "thrown", "invalid array length", "script"),
+        ("throw 'ReferenceError: app is not defined';", "thrown", "ReferenceError: app is not defined", "script"),
+        ("try { new Array(-1); } catch (e) { throw new Error(e.message); }", "thrown", "Error: invalid array length", "script"),
+        ("new Array(-1);", "thrown", "RangeError: invalid array length", "built-in"),
+        ("try { new Array(-1); } catch (e) { throw e; }", "thrown", "RangeError: invalid array length", "built-in"),
+        ("vc.run();", "thrown", "TypeError: vc.run: give a command id, as a string", "built-in"),
+    ] {
+        let e = run(&mut s, source).unwrap_err().to_string();
+        let report = s.script_report().unwrap().clone();
+        assert_eq!(
+            (report["kind"].as_str(), report["message"].as_str(), report["messageOrigin"].as_str()),
+            (Some(kind), Some(message), Some(origin)),
+            "{source}"
+        );
+        let (line, column) = (&report["line"], &report["column"]);
+        let before = format!("t.js: line {line}, column {column}: ");
+        assert_eq!(e, format!("{before}{message} ({kind})"), "{source}");
+        assert_eq!(s.script_failure_text().as_deref(), Some(e.as_str()));
+        let authored = s.script_authored_failure();
+        assert_eq!(authored, (origin == "script").then(|| (before.clone(), message, format!(" ({kind})"))), "{source}");
+        let console = s.execute("script.console", &json!({})).unwrap();
+        let error = console["lines"].as_array().unwrap().iter().rev().find(|l| l["kind"] == "error").map(|l| l["text"].clone());
+        assert_eq!(error, Some(json!(format!("t.js:{line}:{column}: {message}"))), "{source}");
+    }
+    // The app's own reference error names the `vc` object; the same text a script threw does not.
+    run(&mut s, "app.activeDocument;").unwrap_err();
+    assert!(s.script_report().unwrap()["message"].as_str().unwrap().contains("`vc`"));
+    assert_eq!(s.script_report().unwrap()["messageOrigin"], "built-in");
+    // An error in code `eval` compiled keeps where its message came from.
+    let e = run(&mut s, "eval(\"throw new Error('invalid array length')\");").unwrap_err().to_string();
+    assert_eq!(e, "t.js: Error: invalid array length (thrown)");
+    assert_eq!(s.script_authored_failure(), Some(("t.js: ".to_string(), "Error: invalid array length", " (thrown)".to_string())));
+    // Syntax errors and limits are the app's own.
+    run(&mut s, "var = 1;").unwrap_err();
+    assert_eq!((s.script_report().unwrap()["kind"].as_str(), s.script_authored_failure()), (Some("syntax"), None));
+    s.execute("script.run", &json!({"source": "while (true) {}", "name": "t.js", "maxFuel": 100_000})).unwrap_err();
+    assert_eq!((s.script_report().unwrap()["messageOrigin"].as_str(), s.script_authored_failure()), (Some("built-in"), None));
+    // A run that completes has no failure to split.
+    run(&mut s, "throw 'x';").unwrap_err();
+    run(&mut s, "1").unwrap();
+    assert_eq!(s.script_authored_failure(), None);
+}
+
 /// An error raised where the run has no place for it, such as in code `eval` compiled, is named
 /// with the script and its kind alone, with one colon after the script's name.
 #[test]
@@ -245,10 +297,46 @@ fn files_are_checked_before_they_are_read() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A new empty folder for test `name`.
+fn fresh_folder(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("vc-script-run-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// Starts `source` in the app after a folder dialog it opens first, and allows the script the folder
+/// `dir` there once.
+fn start_allowed(s: &mut Session, dir: &std::path::Path, source: &str) {
+    s.script_frames = true;
+    assert_eq!(run(s, &format!("Folder.selectDialog('Folder');\n{source}")).unwrap()["running"], true);
+    for _ in 0..10_000 {
+        if s.script_picker().is_some() {
+            let paths = vec![dir.to_string_lossy().into_owned()];
+            assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths, always: false }));
+            return;
+        }
+        assert!(s.script_pump().is_none(), "the run waits at its folder dialog");
+    }
+    panic!("the run did not open its folder dialog");
+}
+
+/// Runs `source` in the app as [`start_allowed`] starts it, to its end.
+fn run_allowed(s: &mut Session, dir: &std::path::Path, source: &str) -> Result<Value> {
+    start_allowed(s, dir, source);
+    let r = loop {
+        if let Some(r) = s.script_pump() {
+            break r;
+        }
+    };
+    s.script_frames = false;
+    r
+}
+
 #[test]
 fn a_failed_batch_puts_back_the_session_and_names_a_file_it_wrote() {
-    let path = std::env::temp_dir().join(format!("vc-script-batch-{}.svg", std::process::id()));
-    let _ = std::fs::remove_file(&path);
+    let dir = fresh_folder("batch");
+    let path = dir.join("out.svg");
     let p = path.to_string_lossy().into_owned();
     let mut s = two_docs();
     let source = format!(
@@ -257,24 +345,94 @@ fn a_failed_batch_puts_back_the_session_and_names_a_file_it_wrote() {
             {{command: 'document.export', params: {{path: {p:?}, format: 'svg'}}}},\
             {{command: 'no.such', params: {{}}}}]}}); }} catch (e) {{ vc.log(e.name); }}"
     );
-    let r = run(&mut s, &source).unwrap();
+    let r = run_allowed(&mut s, &dir, &source).unwrap();
     assert_eq!(r["log"], json!(["Error"]), "{r}");
     assert!(!s.guides_locked(), "the failed batch's Lock Guides does not stay");
     assert!(path.exists());
     assert_eq!(r["written"], json!([p]), "{r}");
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn an_export_that_fails_names_no_file() {
-    let path = std::env::temp_dir().join(format!("vc-script-no-folder-{}", std::process::id())).join("out.svg");
+    let dir = fresh_folder("no-folder");
+    let path = dir.join("missing").join("out.svg");
     let p = path.to_string_lossy().into_owned();
     let mut s = two_docs();
     let source = format!("try {{ vc.run('document.export', {{path: {p:?}, format: 'svg'}}); }} catch (e) {{ vc.log(e.name); }}");
-    let r = run(&mut s, &source).unwrap();
+    let r = run_allowed(&mut s, &dir, &source).unwrap();
     assert_eq!(r["log"], json!(["Error"]), "{r}");
     assert!(!path.exists());
     assert_eq!(r["written"], json!([]), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The commands a script runs read and write only where its `File` and `Folder` objects may (its
+/// temporary folder and what a person allowed it, here), and the files of the open documents,
+/// also in a run the person started.
+#[test]
+fn a_scripts_commands_reach_only_its_own_places_and_the_open_documents() {
+    let dir = fresh_folder("gate");
+    let (inside, outside) = (dir.join("in"), dir.join("out"));
+    std::fs::create_dir_all(&inside).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let call = |id: &str, path: &std::path::Path| {
+        let p = path.to_string_lossy().into_owned();
+        let format = if id == "document.export" { ", format: 'svg'" } else { "" };
+        format!(
+            "try {{ vc.run('{id}', {{path: {p:?}{format}}}); vc.log('ok'); }} catch (e) {{ vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }}\n"
+        )
+    };
+    let mut s = two_docs();
+    let r = run(&mut s, &call("document.export", &outside.join("a.svg"))).unwrap();
+    assert_eq!(r["log"], json!(["denied"]), "a script given as text writes nowhere: {r}");
+    assert!(!outside.join("a.svg").exists());
+    let source = format!("{}{}", call("document.export", &inside.join("b.svg")), call("document.export", &outside.join("c.svg")));
+    let r = run_allowed(&mut s, &inside, &source).unwrap();
+    assert_eq!(r["log"], json!(["ok", "denied"]), "{r}");
+    assert!(inside.join("b.svg").exists() && !outside.join("c.svg").exists());
+    let r = run(&mut s, "var t = Folder.temp.fsName + '/t.svg'; vc.run('document.export', {path: t, format: 'svg'}); vc.log(new File(t).exists);")
+        .unwrap();
+    assert_eq!(r["log"], json!([true]), "the run's temporary folder: {r}");
+    let own = outside.join("own.svg");
+    s.execute("document.save", &json!({"path": own.to_string_lossy()})).unwrap();
+    std::fs::copy(&own, outside.join("copy.svg")).unwrap();
+    let source = format!(
+        "vc.run('shape.rectangle', {{x: 1, y: 1, width: 1, height: 1}});\n{}{}{}{}",
+        call("document.save", &own),
+        call("document.open", &own),
+        call("document.open", &outside.join("copy.svg")),
+        call("document.save", &outside.join("other.svg"))
+    );
+    let r = run(&mut s, &source).unwrap();
+    assert_eq!(r["log"], json!(["ok", "ok", "denied", "denied"]), "an open document's own file, and no other: {r}");
+    assert!(!outside.join("other.svg").exists());
+    let source = format!("{}{}", call("document.open", &own), call("document.open", &outside.join("copy.svg")));
+    let r = crate::file_access::unconfined(|| run(&mut s, &source)).unwrap();
+    assert_eq!(r["log"], json!(["ok", "denied"]), "a run the person starts reads through the gate as well: {r}");
+    std::fs::remove_file(&own).unwrap();
+    let r = run(&mut s, &call("document.save", &own)).unwrap();
+    assert_eq!(r["log"], json!(["ok"]), "a document's own file that was removed is made again: {r}");
+    assert!(own.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A command a script runs does not save into the app's own libraries; the same command run
+/// outside a script does.
+#[test]
+fn a_scripts_commands_do_not_save_into_the_apps_libraries() {
+    let dir = fresh_folder("gate-library");
+    let user = dir.join("user");
+    let mut s = two_docs();
+    s.swatch_libraries.set_user_dir(Some(user.to_string_lossy().into_owned()));
+    let source = "try { vc.run('swatch.library.save', {user: true, name: 'Mine'}); vc.log('ok'); } \
+                  catch (e) { vc.log(String(e.message).indexOf('Script file access denied') >= 0 ? 'denied' : e.message); }";
+    let r = run(&mut s, source).unwrap();
+    assert_eq!(r["log"], json!(["denied"]), "{r}");
+    assert!(std::fs::read_dir(&user).map_or(true, |mut d| d.next().is_none()), "nothing is written in the user library folder");
+    s.execute("swatch.library.save", &json!({"user": true, "name": "Mine"})).unwrap();
+    assert_eq!(std::fs::read_dir(&user).unwrap().count(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -346,17 +504,18 @@ fn a_command_whose_result_cannot_cross_is_put_back() {
 
 #[test]
 fn an_abandoned_run_reports_the_files_it_wrote() {
-    let path = std::env::temp_dir().join(format!("vc-script-abandon-{}.svg", std::process::id()));
-    let _ = std::fs::remove_file(&path);
+    let dir = fresh_folder("abandon");
+    let path = dir.join("out.svg");
     let p = path.to_string_lossy().into_owned();
     let mut s = two_docs();
-    paused(&mut s, &format!("vc.run('document.export', {{path: {p:?}, format: 'svg'}}); while (true) {{}}"));
-    assert!(path.exists(), "the first slice exported");
+    start_allowed(&mut s, &dir, &format!("vc.run('document.export', {{path: {p:?}, format: 'svg'}}); while (true) {{}}"));
+    assert!(s.script_pump().is_none());
+    assert!(path.exists(), "the slice after the dialog exported");
     assert!(s.script_abandon());
     let report = s.script_report().unwrap();
     assert_eq!((report["kind"].as_str(), report["written"].clone()), (Some("stopped"), json!([p])), "{report}");
     assert!(s.script_failure_text().unwrap().contains(&p));
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -886,19 +1045,19 @@ fn a_run_waiting_to_grow_stops_at_the_next_slice_once_its_work_is_canceled() {
 
 #[test]
 fn a_file_saved_before_a_failure_stays_written_and_is_named() {
-    let path = std::env::temp_dir().join(format!("vc-script-save-{}.svg", std::process::id()));
-    let _ = std::fs::remove_file(&path);
+    let dir = fresh_folder("save");
+    let path = dir.join("out.svg");
     let p = path.to_string_lossy().into_owned();
     let mut s = two_docs();
     let before = state(&s);
     let source =
         format!("vc.run('file.saveAs', {{path: {p:?}}}); vc.run('shape.rectangle', {{x:1,y:1,width:1,height:1}}); throw new Error('later');");
-    let e = run(&mut s, &source).unwrap_err().to_string();
+    let e = run_allowed(&mut s, &dir, &source).unwrap_err().to_string();
     assert!(path.exists());
     assert!(e.contains(&p), "{e}");
     assert_eq!(s.script_report().unwrap()["written"], json!([p]));
     assert_eq!(state(&s), before, "the document does not keep the new path");
-    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A run in the app's frames keeps the file-access scope its `script.run` came in, whatever scope
@@ -923,16 +1082,13 @@ fn a_framed_run_keeps_the_file_access_scope_it_started_in() {
         }
     };
     let mut s = two_docs();
-    s.script_frames = true;
     let confined_target = outside.join("confined.svg");
-    let started = crate::file_access::confine(Some(&roots), || run(&mut s, &export(&confined_target))).unwrap();
-    assert_eq!(started["running"], true);
+    crate::file_access::confine(Some(&roots), || start_allowed(&mut s, &dir, &export(&confined_target)));
     let r = crate::file_access::unconfined(|| finish(&mut s)).unwrap();
     assert_eq!(r["log"], json!(["Error"]), "a confined caller's run stays confined: {r}");
     assert!(!confined_target.exists());
     let user_target = outside.join("user.svg");
-    let started = crate::file_access::unconfined(|| run(&mut s, &export(&user_target))).unwrap();
-    assert_eq!(started["running"], true);
+    crate::file_access::unconfined(|| start_allowed(&mut s, &dir, &export(&user_target)));
     let r = crate::file_access::confine(Some(&roots), || finish(&mut s)).unwrap();
     assert_eq!(r["log"], json!(["ok"]), "a run the person started is not confined by a later caller: {r}");
     assert!(user_target.exists());
