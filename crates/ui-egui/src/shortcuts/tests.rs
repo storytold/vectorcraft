@@ -957,6 +957,27 @@ fn typing_chords_run_type_commands_not_object_commands() {
     }
 }
 
+/// A Type tool command the user gives another chord runs on that chord while the tool types, and no longer on its old
+/// one.
+#[test]
+fn a_type_command_moved_to_another_chord_runs_on_it_while_typing() {
+    use vectorcraft_doc::Justify;
+    let mut app = new_app();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "One Two"})).unwrap()["id"].as_u64().unwrap();
+    let right = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => t.para_at(0).justify == Justify::Right,
+        _ => false,
+    };
+    let ctx = ready(&mut app);
+    edit(&mut app, 4, 7);
+    app.run("shortcuts.set", json!({"id": "type.alignRight", "shortcut": "Cmd+Shift+F13"})).unwrap();
+    key_frame(&mut app, &ctx, vec![]);
+    key_frame(&mut app, &ctx, tap(Key::R, cmd() | Modifiers::SHIFT));
+    assert!(!right(&app), "the old chord");
+    key_frame(&mut app, &ctx, tap(Key::F13, cmd() | Modifiers::SHIFT));
+    assert!(right(&app), "the new chord: {}", app.ui.status);
+}
+
 // ---- Nudge table (kb.C23) ------------------------------------------------------------------
 
 /// The nudge of `dir` with `mods` on the selection.
@@ -1203,6 +1224,8 @@ fn brackets_size_the_blob_brush_and_the_eraser() {
     let ctx = ready(&mut app);
     for tool in ["blobBrush", "eraser"] {
         app.select_tool(tool);
+        // The tool takes its keys from the first frame that shows it.
+        key_frame(&mut app, &ctx, vec![]);
         let before = size(&mut app);
         key_frame(&mut app, &ctx, vec![text("]")]);
         key_frame(&mut app, &ctx, vec![text("]")]);

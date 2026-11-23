@@ -85,8 +85,10 @@ fn help_f1_opens_discover_without_a_document() {
     for _ in 0..3 {
         app_frame(&mut app, &ctx, vec![]);
     }
-    let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    app_frame(&mut app, &ctx, vec![key(egui::Key::F1)]);
+    // A press and its release, as a keyboard sends them: a second press of a key still down is a repeat.
+    let key =
+        |key| [true, false].map(|pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE });
+    app_frame(&mut app, &ctx, key(egui::Key::F1).to_vec());
     assert!(crate::panel_docking::showing(&app.ui, "discover"));
     assert!(app.session.active().is_none());
     app.run("help.discover", json!({})).unwrap();
@@ -102,7 +104,7 @@ fn help_f1_opens_discover_without_a_document() {
     for _ in 0..2 {
         app_frame(&mut app, &ctx, vec![]);
     }
-    app_frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
+    app_frame(&mut app, &ctx, key(egui::Key::Escape).to_vec());
     assert!(!crate::panel_docking::showing(&app.ui, "discover"));
     app.run("help.discover", json!({})).unwrap();
     app.run("help.discover.back", json!({})).unwrap();
@@ -128,7 +130,7 @@ fn help_f1_opens_discover_without_a_document() {
     assert!(text.contains(tutorial.title), "{text}");
     app.ui.discover.focus = true;
     app_frame(&mut app, &ctx, vec![]);
-    app_frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
+    app_frame(&mut app, &ctx, key(egui::Key::Escape).to_vec());
     assert!(!crate::panel_docking::showing(&app.ui, "discover"));
 
     app.run("file.new", json!({})).unwrap();
@@ -143,7 +145,7 @@ fn help_f1_opens_discover_without_a_document() {
     }
     assert!(app.session.tool_ends_on_escape(view));
     let canvas_ctx = crate::testing::ui_context();
-    app_frame(&mut app, &canvas_ctx, vec![key(egui::Key::Escape)]);
+    app_frame(&mut app, &canvas_ctx, key(egui::Key::Escape).to_vec());
     assert!(!app.session.tool_ends_on_escape(view));
     assert!(crate::panel_docking::showing(&app.ui, "discover"));
 }
