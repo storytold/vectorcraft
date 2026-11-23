@@ -58,7 +58,7 @@ pub(crate) const CONTROL_ROOM: egui::Vec2 = vec2(2200.0, 900.0);
 /// One frame of the Control bar with the app's frame input, as the hosts give it: its command buttons show their icons.
 pub(crate) fn control_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
     let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, CONTROL_ROOM)), events, ..Default::default() };
-    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| chrome::control_bar(app, ui));
+    let out = crate::testing::part_frame(app, ctx, raw, chrome::control_bar);
     shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
 }
 
@@ -73,7 +73,7 @@ pub(crate) fn click_control(app: &mut VectorcraftApp, ctx: &egui::Context, at: P
 fn canvas_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
     let screen = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
     let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
-    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| canvas::show(app, ui));
+    let out = crate::testing::part_frame(app, ctx, raw, canvas::show);
     shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
 }
 

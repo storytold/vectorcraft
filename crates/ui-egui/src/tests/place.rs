@@ -634,7 +634,7 @@ fn control_named(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) -> P
     ctx.enable_accesskit();
     let screen = egui::Rect::from_min_size(Pos2::ZERO, crate::tests_removeanchors::CONTROL_ROOM);
     let raw = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
-    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| crate::chrome::control_bar(app, ui));
+    let out = crate::testing::part_frame(app, ctx, raw, crate::chrome::control_bar);
     out.platform_output
         .accesskit_update
         .iter()
