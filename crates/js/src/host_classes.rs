@@ -17,20 +17,22 @@
 //! setter gets `this` and the value assigned. A class with an indexer answers `object[i]` for each
 //! array index `i` with it, called with `this` and the index as a number. Other names are looked up
 //! as usual, and a name that the object and its prototypes lack goes to the indexer as a string (as
-//! a number when it is the text of one, such as `-1`), so the indexer may throw for a name nothing has. Assigning to such a name reads it with the indexer
-//! first, so the assignment throws what the read throws; otherwise the value is not kept. `k in
-//! object` calls the indexer with `true` as a third argument, and is true when it gives a value other
-//! than `undefined`.
+//! a number when it is the text of one, such as `-1`), so the indexer may throw for a name nothing
+//! has. Names the engine looks up itself, such as `toJSON` in `JSON.stringify`, do not go to the
+//! indexer. Assigning to such a name reads it with the indexer first, so the assignment throws what
+//! the read throws; otherwise the value is not kept. `k in object` calls the indexer with `true` as
+//! a third argument, and is true when it gives a value other than `undefined`.
 //!
 //! `hasOwnProperty` and `propertyIsEnumerable` are true on an object of a host class for each
 //! member of its class and of the classes it descends from, apart from the members that are not
 //! available yet ([`HostMember::Unavailable`]). `for`-`in` lists the properties among those members,
-//! and not the methods.
+//! and not the methods. `Object.keys`, `Object.getOwnPropertyNames` and
+//! `Object.getOwnPropertyDescriptor` do not report the members.
 
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::heap::{CONFIGURABLE, Class, ENUMERABLE, Func, Key, NativeKind, ObjId, Object, Prop, WRITABLE, key};
+use crate::heap::{CONFIGURABLE, Class, ENUMERABLE, Func, Key, ObjId, Object, Prop, key};
 use crate::host::ArgRead;
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::value::Value;
@@ -271,37 +273,20 @@ pub(crate) fn install(i: &mut Interp, classes: Vec<HostClass>, instances: Vec<(S
     Ok(())
 }
 
-/// Adds the global properties `getters`, each read with its function as a member of a host class is.
-/// Assigning one, as `var name = value` at the top level does, replaces it with a plain global
-/// variable that holds the value.
-pub(crate) fn install_globals(i: &mut Interp, getters: Vec<(String, HostFunction)>) -> JsResult<()> {
+/// Adds the global properties `globals`, each read with its getter and assigned with its setter as
+/// a member of a host class is. Assigning one without a setter keeps its value, and throws in strict
+/// mode code.
+pub(crate) fn install_globals(i: &mut Interp, globals: Vec<(String, HostFunction, Option<HostFunction>)>) -> JsResult<()> {
     let global = i.global;
-    let proto = i.intrinsics.function_proto;
-    for (name, f) in getters {
+    for (name, get, set) in globals {
         let mark = i.temp_roots.len();
-        let get = hosted_function(i, f, &name);
+        let get = hosted_function(i, get, &name);
         i.temp_roots.push(Value::Object(get));
-        let replace = i.heap.alloc_object(Object::new(
-            Class::Function(Func::Native { f: replace_global, kind: NativeKind::Plain, constructor: false, name: "" }),
-            Some(proto),
-        ));
-        i.temp_roots.push(Value::Object(replace));
-        let args: Rc<[Value]> = Rc::from([Value::str(&name)]);
-        let set = i.heap.alloc_object(Object::new(Class::Function(Func::Bound { target: replace, this: Value::Undefined, args }), Some(proto)));
+        let set = set.map(|f| hosted_function(i, f, &name));
         i.temp_roots.truncate(mark);
-        i.define(global, key(&name), Prop::Accessor { get: Some(get), set: Some(set), flags: CONFIGURABLE })?;
+        i.define(global, key(&name), Prop::Accessor { get: Some(get), set, flags: CONFIGURABLE })?;
     }
     Ok(())
-}
-
-/// The setter of a global [`install_globals`] adds: makes the global `args[0]` a plain variable
-/// holding `args[1]`.
-fn replace_global(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let name = interp.to_key(args.first().unwrap_or(&Value::Undefined))?;
-    let value = args.get(1).cloned().unwrap_or(Value::Undefined);
-    let global = interp.global;
-    interp.define(global, name, Prop::Data { value, flags: WRITABLE | ENUMERABLE | CONFIGURABLE })?;
-    Ok(Value::Undefined)
 }
 
 fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {

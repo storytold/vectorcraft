@@ -15,15 +15,18 @@
 //!
 //! Collections are counted from 0, and `pageItems` lists art topmost first, as
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/CMYKColor/> reads the frontmost path as
-//! `pathItems[0]`. A document's selection lists the selected objects in the same order, not in the
-//! order they were selected (<https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/>).
-//! A collection read with a name, `pageItems["name"]`, gives the object `getByName` gives, as that
-//! page describes, and throws `Not found` when none has the name; `"name" in pageItems` is false then,
-//! and assigning to such a name throws the same error. As that page also describes, a script may name
-//! `activeDocument`, `documents` and `selection` without `app.`; assigning one of those names makes it
-//! a variable of the script's own.
+//! `pathItems[0]`. A collection read with a name, `pageItems["name"]`, gives the object `getByName`
+//! gives, and a script may name the application's members without `app.`, as
+//! <https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/> describes; here
+//! that holds for `activeDocument`, `documents` and `selection`.
 //!
 //! VectorCraft's own rules, which the help pages do not state:
+//! - A document's selection lists the selected objects topmost first, as `pageItems` does, whatever
+//!   order they were selected or made in.
+//! - A collection read with a name that nothing has throws `Not found`, and `"name" in pageItems` is
+//!   false then. Assigning to such a name throws the same error.
+//! - Assigning `activeDocument` or `selection` without `app.` assigns `app.activeDocument` or the
+//!   active document's selection. Assigning `documents` keeps its value.
 //! - Collections list documents in tab order. `pageItems` lists every object, with the objects
 //!   inside groups and compound paths after the group or compound path, and leaves out layers and
 //!   ruler guides. An index out of range gives `undefined`; `index` and `getByName` throw
@@ -36,8 +39,12 @@
 //! - Assigning `Document.selection` takes one object, a list of them, `null` or `[]`; every object
 //!   must be one of that document's that can be selected, or nothing changes.
 //! - Members the help pages list that are not here yet throw an error that says so.
-//! - Assigning `opacity` to an object in a hidden or locked layer throws `Cannot edit` and changes
-//!   nothing. An object that is hidden or locked itself, or is in a hidden or locked group, takes it.
+//! - Assigning `hidden`, `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an
+//!   object in a hidden or locked layer throws `Cannot edit` and changes nothing; its `name` and
+//!   `note` still change. An object that is hidden or locked itself, or is in a hidden or locked
+//!   group, takes them.
+//! - An object with nothing in it, such as an empty group or a compound path whose paths moved out,
+//!   reads its bounds, `position`, `width` and `height` as zeros, and assigning them does nothing.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -707,6 +714,18 @@ fn app_selection(h: &Host, _: &[Data]) -> Answer {
         Some(uid) => selection_of(h, uid),
         None => Ok(Data::Null),
     }
+}
+
+/// `app.selection = objects`: the active document's selection, as `selection` of that document is
+/// assigned.
+fn app_set_selection(h: &Host, a: &[Data]) -> Answer {
+    let doc = {
+        let s = h.session.borrow();
+        let active = s.active_index().and_then(|index| s.documents().get(index).map(|st| Doc { index, uid: st.uid }));
+        active.ok_or_else(|| HostError::Error(NO_ACTIVE_DOCUMENT.into()))?
+    };
+    let ids = selection_ids(h, doc, arg(a, 1))?;
+    set_selection(h, doc, ids)
 }
 
 fn app_coords(h: &Host, _: &[Data]) -> Answer {
@@ -1490,12 +1509,27 @@ fn item_set_note(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
+/// Refuses a change to the item's appearance, place or size while a layer it is in is hidden or
+/// locked. Its name and note may still change.
+fn refuse_in_closed_layer(h: &Host, item: Item) -> std::result::Result<(), HostError> {
+    let refused = with_doc(h, item.doc, |_, st| {
+        let d = &st.doc;
+        let closed = |i: &NodeId| d.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. }) && (!n.visible || n.locked));
+        d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)).then(|| d.node(item.id).and_then(typename).unwrap_or("page item"))
+    });
+    match refused {
+        Some(name) => Err(HostError::Error(format!("Cannot edit {name} {}: a layer it is in is hidden or locked", item.id.0))),
+        None => Ok(()),
+    }
+}
+
 fn item_hidden(h: &Host, a: &[Data]) -> Answer {
     read_item(h, a, |_, n| Ok(Data::Bool(!n.visible)))
 }
 
 fn item_set_hidden(h: &Host, a: &[Data]) -> Answer {
     let hidden = boolean(arg(a, 1), "hidden")?;
+    refuse_in_closed_layer(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.visible != hidden, json!({"visible": !hidden}))
 }
 
@@ -1505,6 +1539,7 @@ fn item_locked(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_locked(h: &Host, a: &[Data]) -> Answer {
     let locked = boolean(arg(a, 1), "locked")?;
+    refuse_in_closed_layer(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.locked == locked, json!({"locked": locked}))
 }
 
@@ -1521,14 +1556,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
     // replaces the one the graph keeps for its series or kind.
     let item = this_item(h, a)?;
-    let refused = with_doc(h, item.doc, |_, st| {
-        let d = &st.doc;
-        let closed = |i: &NodeId| d.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. }) && (!n.visible || n.locked));
-        d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)).then(|| d.node(item.id).and_then(typename).unwrap_or("page item"))
-    });
-    if let Some(name) = refused {
-        return Err(HostError::Error(format!("Cannot edit {name} {}: a layer it is in is hidden or locked", item.id.0)));
-    }
+    refuse_in_closed_layer(h, item)?;
     let now = with_doc(h, item.doc, |_, st| st.doc.node(item.id).map(|n| f64::from(n.opacity) * 100.0));
     let v = now.filter(|now| (now - v).abs() < 1e-4).unwrap_or(v);
     set_props(h, a, |_| false, json!({"opacity": v}))
@@ -1554,18 +1582,19 @@ fn item_set_selected(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// The item's geometric bounds (`visual`: its visible bounds) in document coordinates and the
-/// document's [`Frame`].
-fn item_rect(h: &Host, item: Item, visual: bool) -> std::result::Result<(Rect, Frame), HostError> {
-    with_doc(h, item.doc, |_, st| {
-        let r = st.doc.bounds_of(&[item.id], visual).ok_or_else(|| HostError::Error("the object has no bounds".into()))?;
-        Ok((r, frame(st)?))
-    })
+/// document's [`Frame`]. An object with nothing in it, such as an empty group or a compound path
+/// whose paths moved out, has no bounds: its bounds read as zeros, and moving or resizing it does
+/// nothing.
+fn item_rect(h: &Host, item: Item, visual: bool) -> std::result::Result<(Option<Rect>, Frame), HostError> {
+    with_doc(h, item.doc, |_, st| Ok((st.doc.bounds_of(&[item.id], visual), frame(st)?)))
 }
 
 fn bounds(h: &Host, a: &[Data], visual: bool) -> Answer {
     let item = this_item(h, a)?;
-    let (r, f) = item_rect(h, item, visual)?;
-    Ok(f.bounds(h.dom.coords.get(), r))
+    match item_rect(h, item, visual)? {
+        (Some(r), f) => Ok(f.bounds(h.dom.coords.get(), r)),
+        (None, _) => Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])),
+    }
 }
 
 fn item_geometric(h: &Host, a: &[Data]) -> Answer {
@@ -1578,8 +1607,10 @@ fn item_visible(h: &Host, a: &[Data]) -> Answer {
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    let (r, f) = item_rect(h, item, false)?;
-    Ok(pair(f.to_script(h.dom.coords.get(), Point::new(r.x0, r.y0))))
+    match item_rect(h, item, false)? {
+        (Some(r), f) => Ok(pair(f.to_script(h.dom.coords.get(), Point::new(r.x0, r.y0)))),
+        (None, _) => Ok(pair([0.0, 0.0])),
+    }
 }
 
 fn item_left(h: &Host, a: &[Data]) -> Answer {
@@ -1598,19 +1629,20 @@ fn item_top(h: &Host, a: &[Data]) -> Answer {
 
 fn item_width(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    Ok(num(item_rect(h, item, false)?.0.width()))
+    Ok(num(item_rect(h, item, false)?.0.map_or(0.0, |r| r.width())))
 }
 
 fn item_height(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
-    Ok(num(item_rect(h, item, false)?.0.height()))
+    Ok(num(item_rect(h, item, false)?.0.map_or(0.0, |r| r.height())))
 }
 
 /// Moves the item so its top-left corner is at `x` and `y` in script coordinates (`None`: that one
 /// stays).
 fn move_to(h: &Host, a: &[Data], x: Option<f64>, y: Option<f64>) -> Answer {
     let item = this_item(h, a)?;
-    let (r, f) = item_rect(h, item, false)?;
+    refuse_in_closed_layer(h, item)?;
+    let (Some(r), f) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let c = h.dom.coords.get();
     let now = f.to_script(c, Point::new(r.x0, r.y0));
     let to = f.to_document(c, [x.unwrap_or(now[0]), y.unwrap_or(now[1])]);
@@ -1646,7 +1678,8 @@ fn resize(h: &Host, a: &[Data], width: bool) -> Answer {
         return Err(HostError::Range(format!("{what} must be more than 0 and at most 3999856 points")));
     }
     let item = this_item(h, a)?;
-    let (r, _) = item_rect(h, item, false)?;
+    refuse_in_closed_layer(h, item)?;
+    let (Some(r), _) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let now = if width { r.width() } else { r.height() };
     if now <= 0.0 {
         return Err(HostError::Error(format!("the object has no {what} to scale")));
@@ -2009,7 +2042,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("typename", typename_of("Application")),
         ("documents", get(l, app_documents)),
         ("activeDocument", property(l, app_active, app_set_active)),
-        ("selection", get(l, app_selection)),
+        ("selection", property(l, app_selection, app_set_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
         ("toString", class_text("Application")),
@@ -2137,11 +2170,11 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         None,
     ));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])?;
-    // The application's members a script may name without `app.`.
+    // The application's members a script may name without `app.`, assigned as `app.<member>` is.
     realm.define_host_globals(vec![
-        ("activeDocument".into(), function(l, app_active)),
-        ("documents".into(), function(l, app_documents)),
-        ("selection".into(), function(l, app_selection)),
+        ("activeDocument".into(), function(l, app_active), Some(function(l, app_set_active))),
+        ("documents".into(), function(l, app_documents), None),
+        ("selection".into(), function(l, app_selection), Some(function(l, app_set_selection))),
     ])
 }
 

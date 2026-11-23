@@ -2622,11 +2622,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
 - `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
   describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
-  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. A script may name `activeDocument`,
-  `documents` and `selection` without `app.`, as
+  `app.selection` (assigning it sets the active document's selection), `app.coordinateSystem` and
+  `app.getIsFileOpen(path)`. A script may name the application's members without `app.`, as
   [Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)
-  describes; assigning one of those names, as `var selection = ...` does, makes it a variable of the script's own
-  (VectorCraft's own rule). `app.documents`
+  describes; in VectorCraft that holds for `activeDocument`, `documents` and `selection`. Assigning `activeDocument` or `selection` without `app.`, as `var selection = ...` at the top level also
+  does, assigns the application's member, and assigning `documents` keeps its value (VectorCraft's own rule).
+  `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
@@ -2667,11 +2668,14 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
-  object, with or without a relative object, throws `Cannot duplicate` and makes no copy. Assigning `opacity` to an
-  object in a hidden or locked layer throws `Cannot edit` and changes nothing; an object that is hidden or locked
-  itself takes it (VectorCraft's own rule). `move` with the object itself as the relative object and `PLACEBEFORE`
-  or `PLACEAFTER` leaves it where it is and adds no undo step. When `move` takes the last path out of a compound
-  path, the compound path stays, empty, so a script that holds it can still read it. `duplicate` on a path inside a compound path throws
+  object, with or without a relative object, throws `Cannot duplicate` and makes no copy. Assigning `hidden`,
+  `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer
+  throws `Cannot edit` and changes nothing, while its `name` and `note` still change; an object that is hidden or
+  locked itself takes them (VectorCraft's own rule). `move` with the object itself as the relative object and
+  `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move` takes the last path out of
+  a compound path, the compound path stays, empty, so a script that holds it can still read it. An object with
+  nothing in it, such as an empty group or that compound path, reads its bounds, `position`, `width` and `height`
+  as zeros, and assigning them does nothing (VectorCraft's own rule). `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
   `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
   same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
@@ -2680,12 +2684,13 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
   `pageItems` lists the art topmost first, as the example on
   [CMYKColor](https://ai-scripting.docsforadobe.dev/jsobjref/CMYKColor/) reads the frontmost path as `pathItems[0]`,
-  and a document's `selection` lists the selected objects in the same order, not in the order they were selected
-  ([Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)).
-  A collection read with a name, such as `pageItems["Logo"]` or `documents["Untitled-1"]`, gives the object
-  `getByName` gives, as that page describes, and throws `Not found` when none has the name, a name the collection
-  class lacks as a member included; `"name" in pageItems` is false then, and assigning to such a name throws
-  `Not found` too. `name` takes a number or a Boolean as the text `String(value)` gives. `String(object)` gives
+  and a document's `selection` lists the selected objects in the same order, whatever order they were selected or
+  made in (VectorCraft's own rule). A collection read with a name, such as `pageItems["Logo"]` or
+  `documents["Untitled-1"]`, gives the object `getByName` gives, as
+  [Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)
+  shows. A read with a name that nothing has, a name the collection class lacks as a member included, throws
+  `Not found`; `"name" in pageItems` is false then, and assigning to such a name throws `Not found` too
+  (VectorCraft's own rule). `JSON.stringify` does not read `toJSON` from a collection this way. `name` takes a number or a Boolean as the text `String(value)` gives. `String(object)` gives
   `[PathItem Logo]` for a page item named `Logo` (`[PathItem ]` with no name), `[Document <name>]`,
   `[Layer <name>]`, `[Application]` and `[PageItems]` (VectorCraft's own rule).
   VectorCraft's own rules: documents are listed in tab order, and page items with the
@@ -2715,7 +2720,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `app.beep`, throw an error that says they are not available yet when they are read or assigned.
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the
-  other properties but not the methods. Other members
+  other properties but not the methods. `Object.keys`, `Object.getOwnPropertyNames` and
+  `Object.getOwnPropertyDescriptor` do not report those members. Assigning a member that an object's class does not
+  have does not keep the value and does not throw. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and

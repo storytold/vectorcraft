@@ -538,7 +538,7 @@ fn resolve_rooted(interp: &mut Interp, settings: &Settings, holder: ObjId, k: &K
     keep(interp, &v);
     let name = Value::String(Str::from_rc(k.clone()));
     if let Value::Object(o) = v {
-        let to_json = interp.get_from(o, &key("toJSON"), &v)?;
+        let to_json = interp.get_property_only(o, &key("toJSON"), &v)?;
         if interp.is_callable(&to_json) {
             v = interp.call(&to_json, &v, std::slice::from_ref(&name))?;
             keep(interp, &v);

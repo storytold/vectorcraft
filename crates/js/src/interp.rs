@@ -1446,6 +1446,17 @@ impl Interp {
         }
     }
 
+    /// [[Get]] of a name that is not an array index, without the indexer of an object of a host
+    /// class: a name the object and its prototypes lack is `undefined`. For names the engine looks
+    /// up itself, such as `toJSON`, which a collection's indexer would answer with an error.
+    pub(crate) fn get_property_only(&mut self, start: ObjId, k: &[u16], receiver: &Value) -> JsResult<Value> {
+        match self.find_property(start, k)? {
+            None | Some(Prop::Accessor { get: None, .. }) => Ok(Value::Undefined),
+            Some(Prop::Data { value, .. }) => Ok(value),
+            Some(Prop::Accessor { get: Some(g), .. }) => self.call(&Value::Object(g), receiver, &[]),
+        }
+    }
+
     /// The prototype a primitive's properties are looked up on.
     fn primitive_proto(&mut self, v: &Value, k: &[u16]) -> JsResult<ObjId> {
         match v {

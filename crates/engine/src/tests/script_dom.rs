@@ -506,9 +506,16 @@ fn moving_the_last_path_out_of_a_compound_path_keeps_the_compound_path() {
         "var d = app.activeDocument, c = d.pageItems[0], m = [d.pageItems[2], d.pageItems[1]];\
          m[0].move(c, ElementPlacement.PLACEBEFORE); vc.log(d.pageItems.length);\
          m[1].move(c, ElementPlacement.PLACEBEFORE); vc.log(d.pageItems.length);\
-         vc.log([c.typename, c === d.pageItems[2]]);",
+         vc.log([c.typename, c === d.pageItems[2]]);\
+         var bad = []; for (var k in c) { try { c[k]; } catch (e) { bad.push(k + ': ' + e.message); } } vc.log(bad);\
+         vc.log([c.geometricBounds, c.visibleBounds, c.position, c.width, c.height]);\
+         c.left = 5; c.top = 5; c.position = [1, 2]; c.width = 10; c.height = 10; vc.log(c.geometricBounds);",
     );
-    assert_eq!(out, vec![json!(3), json!(3), json!(["CompoundPathItem", true])]);
+    let zeros = json!([0, 0, 0, 0]);
+    assert_eq!(out[..3], [json!(3), json!(3), json!(["CompoundPathItem", true])]);
+    // Every property `for`-`in` lists reads, and the emptied compound path has zero bounds that
+    // moving or resizing leaves as they are.
+    assert_eq!(out[3..], [json!([]), json!([zeros, zeros, [0, 0], 0, 0]), zeros]);
     let doc = &s.active().unwrap().doc;
     assert!(doc.node(compound).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())), "the compound path stays, empty");
     // Each path went directly above the compound path, the second above the first.
@@ -1409,17 +1416,18 @@ fn page_items_report_their_available_members_as_their_own() {
     assert_eq!(out[2], json!([true, true, -1, -1]));
 }
 
-/// A name a page item class's prototype has, such as `constructor`, or that a script tries to put on
-/// the prototype, is not an object's own.
+/// A name a page item class's prototype has, such as `constructor`, is not an object's own, and a
+/// script cannot put a name on the prototype.
 #[test]
 fn a_property_added_to_a_class_prototype_is_not_an_objects_own() {
     let (mut s, _, _) = doc();
     let out = log(
         &mut s,
         "var p = app.activeDocument.pageItems[0]; PathItem.prototype.foo = 1; PageItem.prototype.bar = 2;\
+         vc.log([PathItem.prototype.foo === undefined, PageItem.prototype.bar === undefined, 'foo' in p]);\
          vc.log([p.hasOwnProperty('foo'), p.hasOwnProperty('bar'), p.propertyIsEnumerable('foo'), p.hasOwnProperty('constructor')]);",
     );
-    assert_eq!(out, vec![json!([false, false, false, false])]);
+    assert_eq!(out, vec![json!([true, true, false]), json!([false, false, false, false])]);
 }
 
 /// Reading every property `for`-`in` lists calls each getter, and each call counts against the run:
@@ -1449,7 +1457,7 @@ fn reading_every_listed_property_is_charged_and_can_be_stopped() {
 }
 
 /// `pageItems` lists art topmost first, and the selection lists the selected objects in that
-/// order whatever order they were selected in.
+/// order whatever order they were selected or made in.
 #[test]
 fn page_items_and_the_selection_list_the_topmost_object_first() {
     let (mut s, a, b) = doc();
@@ -1464,6 +1472,16 @@ fn page_items_and_the_selection_list_the_topmost_object_first() {
          d.selection = [d.pageItems[1], d.pageItems[0]]; vc.log(d.selection[0].name);",
     );
     assert_eq!(out, vec![json!(["top", "bottom", "top", "bottom"]), json!("top")]);
+    // An object made last and sent to the back comes after the others it is selected with.
+    let c = rect(&mut s, 200.0, 200.0, 20.0, 20.0);
+    s.execute("object.setProps", &json!({"ids": [c.0], "name": "last"})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, c = d.pageItems.getByName('last'); c.zOrder(ZOrderMethod.SENDTOBACK);\
+         d.selection = null; c.selected = true; d.pageItems.getByName('top').selected = true;\
+         vc.log([d.selection[0].name, d.selection[1].name, d.pageItems[2].name]);",
+    );
+    assert_eq!(out, vec![json!(["top", "last", "last"])]);
 }
 
 /// A collection read with a name gives what `getByName` gives, and throws as it does for no match.
@@ -1483,10 +1501,11 @@ fn a_collection_read_with_a_name_gives_the_named_object() {
     assert_eq!(out, vec![json!([true, "n", true, false, true]), json!([true, true, false]), json!(["Not found", "Not found"])]);
 }
 
-/// `opacity` on an object in a hidden or locked layer throws and the run changes nothing; an object
-/// that is hidden or locked itself takes it.
+/// `opacity`, `hidden`, `locked` and the position and size setters on an object in a hidden or
+/// locked layer throw and the run changes nothing, while its name and note still change; an object
+/// that is hidden or locked itself takes them.
 #[test]
-fn opacity_refuses_art_in_a_hidden_or_locked_layer() {
+fn setters_refuse_art_in_a_hidden_or_locked_layer() {
     let (mut s, a, b) = doc();
     let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
     let c = rect(&mut s, 200.0, 200.0, 20.0, 20.0);
@@ -1498,12 +1517,20 @@ fn opacity_refuses_art_in_a_hidden_or_locked_layer() {
         (json!({"ids": [layer.0], "locked": true}), json!({"ids": [layer.0], "locked": false})),
     ] {
         s.execute("object.setProps", &on).unwrap();
-        let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
-        // The change made before the refusal is put back with the rest of the run.
-        let e = failure(&mut s, "var p = app.activeDocument.pageItems; p.getByName('free').opacity = 20; p.getByName('closed').opacity = 50;");
-        assert!(e.contains(&format!("Cannot edit PathItem {}", c.0)), "{on}: {e}");
-        assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before, "{on}");
-        assert_eq!(undo_steps(&s), steps, "{on}");
+        for set in ["opacity = 50", "hidden = true", "locked = true", "left = 5", "top = 5", "position = [5, 5]", "width = 10", "height = 10"] {
+            let (before, steps) = (format!("{:?}", s.active().unwrap().doc.layers), undo_steps(&s));
+            // The change made before the refusal is put back with the rest of the run.
+            let e = failure(&mut s, &format!("var p = app.activeDocument.pageItems; p.getByName('free').opacity = 20; p.getByName('closed').{set};"));
+            assert!(e.contains(&format!("Cannot edit PathItem {}", c.0)), "{on} {set}: {e}");
+            assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before, "{on} {set}");
+            assert_eq!(undo_steps(&s), steps, "{on} {set}");
+        }
+        let out = log(
+            &mut s,
+            "var c = app.activeDocument.pageItems.getByName('closed'); c.note = 'n'; c.name = 'renamed'; vc.log([c.name, c.note]);\
+             c.name = 'closed'; c.note = '';",
+        );
+        assert_eq!(out, vec![json!(["renamed", "n"])], "{on}");
         s.execute("object.setProps", &off).unwrap();
     }
     s.execute("object.setProps", &json!({"ids": [a.0], "locked": true})).unwrap();
@@ -1548,10 +1575,10 @@ fn objects_of_the_object_model_print_their_class_and_name() {
 }
 
 /// `activeDocument`, `documents` and `selection` without `app.` read the application's members, and
-/// assigning one makes it the script's own variable.
+/// assigning one assigns the member: `selection` selects, `documents` keeps its value.
 #[test]
 fn the_application_members_can_be_named_without_app() {
-    let (mut s, a, _) = doc();
+    let (mut s, a, b) = doc();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     let out = log(
         &mut s,
@@ -1559,17 +1586,24 @@ fn the_application_members_can_be_named_without_app() {
            selection.length, selection[0] === app.activeDocument.pageItems[1], typeof activeDocument]);",
     );
     assert_eq!(out, vec![json!([true, true, 1, 1, true, "object"])]);
-    // A script's own variable of the same name holds what the script puts in it.
-    let out = log(&mut s, "var selection = 5, documents; vc.log([selection, typeof documents, app.selection.length]);");
-    assert_eq!(out, vec![json!([5, "object", 1])]);
-    assert_eq!(s.active().unwrap().selection.objects, vec![a]);
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument; selection = null; vc.log(d.selection.length);\
+         selection = [d.pageItems[0], d.pageItems[1]]; vc.log(d.selection.length);\
+         app.selection = d.pageItems[0]; vc.log([d.selection.length, selection[0] === d.pageItems[0]]);\
+         var selection = d.selection; documents = 5; activeDocument = d; vc.log([selection.length, typeof documents]);",
+    );
+    assert_eq!(out, vec![json!(0), json!(2), json!([1, true]), json!([1, "object"])]);
+    assert_eq!(s.active().unwrap().selection.objects, vec![b]);
+    assert!(failure(&mut s, "activeDocument = 5;").contains("not a Document"));
+    failure(&mut s, "'use strict'; documents = 5;");
     // With no document open, reading `activeDocument` throws as `app.activeDocument` does.
     let mut s = Session::new();
     assert!(failure(&mut s, "activeDocument;").contains("No active document"));
 }
 
-/// Assigning to a name a collection does not have throws as reading it does; a page item keeps
-/// no member it lacks and does not throw.
+/// Assigning to a name a collection does not have throws as reading it does, and assigning an
+/// index does not replace the object there.
 #[test]
 fn assigning_a_name_a_collection_lacks_throws() {
     let (mut s, _, _) = doc();
@@ -1577,7 +1611,20 @@ fn assigning_a_name_a_collection_lacks_throws() {
     for source in ["app.activeDocument.pageItems.qux = 4;", "app.documents.qux = 4;"] {
         assert!(failure(&mut s, source).contains("Not found"), "{source}");
     }
-    let out = log(&mut s, "var i = app.activeDocument.pageItems[0]; i.foo = 1; app.activeDocument.pageItems[0] = 3; vc.log([i.foo === undefined]);");
-    assert_eq!(out, vec![json!([true])]);
+    let out = log(&mut s, "var p = app.activeDocument.pageItems; p[0] = 3; vc.log(typeof p[0]);");
+    assert_eq!(out, vec![json!("object")]);
     assert_eq!(undo_steps(&s), steps);
+}
+
+/// `JSON.stringify` writes a collection, or data that holds one, without reading a `toJSON` the
+/// collection lacks, while a script that reads `toJSON` itself gets `Not found`.
+#[test]
+fn json_stringify_writes_a_collection() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems, m = ''; vc.log([JSON.stringify(p), JSON.stringify({list: [p, app.documents]})]);\
+         try { p.toJSON; } catch (e) { m = e.message; } vc.log(m);",
+    );
+    assert_eq!(out, vec![json!(["{}", "{\"list\":[{},{}]}"]), json!("Not found")]);
 }

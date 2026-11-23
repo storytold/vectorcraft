@@ -522,11 +522,11 @@ impl Realm {
         }
     }
 
-    /// Adds the global properties `getters`, each read with its function, which gets `undefined` as
-    /// `this`. Assigning one, as `var name = value` at the top level does, makes it a plain global
-    /// variable that holds the value.
-    pub fn define_host_globals(&mut self, getters: Vec<(String, crate::HostFunction)>) -> Result<(), RunError> {
-        match crate::host_classes::install_globals(&mut self.interp, getters) {
+    /// Adds the global properties `globals`: a name, the function that answers a read, and the
+    /// function that answers an assignment, each called with `undefined` as `this` (and the value
+    /// assigned). Assigning one without a setter keeps its value, and throws in strict mode code.
+    pub fn define_host_globals(&mut self, globals: Vec<(String, crate::HostFunction, Option<crate::HostFunction>)>) -> Result<(), RunError> {
+        match crate::host_classes::install_globals(&mut self.interp, globals) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }

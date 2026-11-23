@@ -75,13 +75,13 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
          DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
-         documents= Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= ZOrderMethod",
+         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection toString typename",
+         selection selection= toString typename",
     ),
     ("DocumentPreset.", "prototype"),
     (
