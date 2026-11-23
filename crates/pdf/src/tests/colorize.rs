@@ -384,7 +384,10 @@ fn separations_show_an_overprinting_image_whose_pixels_refuse_its_color() {
     for postscript in [true, false] {
         let mut d = doc(ColorMode::Cmyk, Some(spot.clone()));
         let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-        d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
+        d.images.insert(
+            "pic".into(),
+            ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() },
+        );
         let id = d.layers[0].children().unwrap()[0].id;
         d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
         let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
