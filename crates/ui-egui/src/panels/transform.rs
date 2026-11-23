@@ -77,13 +77,7 @@ pub struct TransformUi {
 
 impl Default for TransformUi {
     fn default() -> Self {
-        TransformUi {
-            reference_point: 4,
-            popover: false,
-            closed_by_press: false,
-            gesture_origin: Value::Null,
-            gesture_boards: Vec::new(),
-        }
+        TransformUi { reference_point: 4, popover: false, closed_by_press: false, gesture_origin: Value::Null, gesture_boards: Vec::new() }
     }
 }
 
