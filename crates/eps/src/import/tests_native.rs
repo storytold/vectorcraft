@@ -5527,8 +5527,9 @@ fn right_aligned_and_centred_point_type_hold_the_pages_type() {
             .replace("/1 14.0 /53", &format!("/1 14.0 /8 {tracking} /53"));
         let art = native_with_text(&layer("Art", true, &format!("{}\n{}", square(10, 10), text_object(0))), &doc);
         let ax = 14.0 * tracking / 1000.0;
+        // The page's type is in its text object's colour (magenta, as `text_document` paints it).
         let page = format!(
-            "{} 0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont \
+            "{} 0 1 0 0 setcmykcolor /Helvetica findfont 14 scalefont setfont \
              (Hi there) dup stringwidth pop {} add {from_width} 61.5 moveto {ax} 0 3 -1 roll ashow",
             page_square(10, 10),
             8.0 * ax
