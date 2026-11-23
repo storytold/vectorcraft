@@ -218,6 +218,33 @@ fn the_toolbar_follows_the_drawing_and_flips_the_last_arc() {
     });
 }
 
+/// Near the bottom of the canvas, a path heading down gets its toolbar above its end, not over it; near
+/// the top, one heading up gets it below.
+#[test]
+fn the_toolbar_goes_to_the_other_side_where_it_runs_off_the_canvas() {
+    let mut app = app();
+    on_canvas(&mut app, |rig| {
+        assert!(bar(rig).is_some());
+        let canvas = canvas_rect(rig);
+        let doc = |rig: &Rig, y: f32| rig.app().canvas_view().unwrap().to_doc(egui::pos2(canvas.center().x, y));
+        // A line to the right along the canvas's bottom edge, then one along its top edge drawn upward.
+        for (from, to, heads_down) in [(canvas.bottom() - 8.0, canvas.bottom() - 8.0, true), (canvas.top() + 40.0, canvas.top() + 8.0, false)] {
+            escape(rig);
+            let (a, b) = (doc(rig, from), doc(rig, to));
+            click_doc(rig, a.x - 40.0, a.y);
+            click_doc(rig, b.x, b.y);
+            let r = bar(rig).unwrap();
+            let end = screen(rig, b.x, b.y);
+            assert!(canvas.contains_rect(r), "{r:?} on the canvas {canvas:?}");
+            if heads_down {
+                assert!(r.bottom() < end.y && r.left() > end.x, "{r:?} above and right of {end:?}");
+            } else {
+                assert!(r.top() > end.y, "{r:?} below {end:?}");
+            }
+        }
+    });
+}
+
 /// The toolbar stays shown while its handle is dragged farther than the toolbar's height, when the
 /// press is no longer on it.
 #[test]
