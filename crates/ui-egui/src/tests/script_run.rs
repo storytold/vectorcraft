@@ -2,8 +2,8 @@
 //! a run advanced frame by frame, Stop, and the questions a run and quitting ask.
 
 use craft::host::{PickKind, Picked};
-use craft::ui::dialog::DialogResult;
-use serde_json::json;
+use craft::ui::dialog::{DialogResult, StackDialog};
+use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;
@@ -44,9 +44,14 @@ fn finish(app: &mut VectorcraftApp) {
 
 const DRAW: &str = "vc.run('shape.rectangle', {x:0,y:0,width:10,height:10}); vc.run('shape.rectangle', {x:20,y:0,width:10,height:10});";
 
+/// The open file dialog's fields, as automation lists them.
+fn files_fields(app: &VectorcraftApp) -> Option<Value> {
+    script_run::with_host(app, |host, _| host.get::<ScriptFiles>().and_then(|d| d.json_fields())).unwrap()
+}
+
 /// The paths the open file dialog holds.
 fn picked(app: &VectorcraftApp) -> Vec<String> {
-    script_run::with_host(app, |host, _| host.get::<ScriptFiles>().map(|d| d.paths().to_vec())).unwrap().unwrap_or_default()
+    files_fields(app).and_then(|f| serde_json::from_value(f["paths"].clone()).ok()).unwrap_or_default()
 }
 
 /// Presses Choose… in the open file dialog, answers the host's file dialog with `paths`, and lets
@@ -455,10 +460,8 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     script_runs::poll(&mut app);
     let refs: Vec<&str> = given.iter().map(String::as_str).collect();
     choose(&mut app, &picker, &refs);
-    let (paths, left_out) =
-        script_run::with_host(&app, |host, _| host.get::<ScriptFiles>().map(|d| (d.paths().to_vec(), d.left_out()))).unwrap().unwrap();
-    assert_eq!(paths, given[..2048]);
-    assert!(left_out);
+    assert_eq!(picked(&app), given[..2048]);
+    assert_eq!(files_fields(&app).unwrap()["leftOut"], true);
     cancel(&mut app, PICKER_KIND);
     finish(&mut app);
 }

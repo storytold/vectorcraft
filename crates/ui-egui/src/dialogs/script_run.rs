@@ -18,7 +18,8 @@
 //!
 //! A script's file dialog (kind `scriptFiles`: `File.openDialog`, `File.saveDialog`,
 //! `Folder.selectDialog` and the objects' `openDlg`, `saveDlg` and `selectDlg`) has the fields
-//! `kind` (open, save or folder), `prompt`, `canAlways` and `answer`. Only the person at the
+//! `kind` (open, save or folder), `prompt`, `canAlways`, `paths` (what Choose… picked), `leftOut` (Choose… picked
+//! more files than a script is given) and `answer`. Only the person at the
 //! keyboard answers Allow Once or Always Allow: `ui.dialog.set` refuses `once` and `always`, and a
 //! click made by automation, or on paths that a pick automation opened, is refused and the dialog
 //! opens again with the same paths; `deny` and `stop` are taken from automation too. The paths it
@@ -290,16 +291,6 @@ impl ScriptFiles {
         }
     }
 
-    /// The paths Choose… picked.
-    pub(crate) fn paths(&self) -> &[String] {
-        &self.paths
-    }
-
-    /// Whether Choose… left out files past the most a script is given.
-    pub(crate) fn left_out(&self) -> bool {
-        self.left_out
-    }
-
     /// Keeps what a pick chose: in place of the paths before, or after them when the script asked
     /// for several files. At most [`MAX_ENTRIES`] are kept, the number of files a script is given.
     /// A pick that chose nothing changes nothing.
@@ -377,7 +368,14 @@ impl StackDialog for ScriptFiles {
     }
 
     fn json_fields(&self) -> Option<Value> {
-        Some(json!({"kind": self.kind.id(), "prompt": self.prompt, "canAlways": self.can_always, "answer": self.answer}))
+        Some(json!({
+            "kind": self.kind.id(),
+            "prompt": self.prompt,
+            "canAlways": self.can_always,
+            "paths": self.paths,
+            "leftOut": self.left_out,
+            "answer": self.answer,
+        }))
     }
 
     fn set_json_field(&mut self, _: &egui::Context, field: &str, value: Value) -> Result<(), String> {
