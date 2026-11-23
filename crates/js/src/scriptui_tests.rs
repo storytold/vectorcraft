@@ -494,3 +494,87 @@ fn a_radio_button_turned_on_turns_off_the_others_of_its_set() {
         "a radio button after another kind of control starts a new set"
     );
 }
+
+#[test]
+fn a_click_on_a_radio_button_turns_off_only_the_radio_buttons_of_its_set() {
+    let (mut r, _, _) = realm(vec![click(4), close()]);
+    let source = "var w = new Window('dialog'); var r1 = w.add('radiobutton', undefined, 'A'); w.add('statictext', undefined, 'Other'); \
+        var r2 = w.add('radiobutton', undefined, 'B'); var r3 = w.add('radiobutton', undefined, 'C'); r1.value = true; r2.value = true; \
+        [w.show(), r1.value, r2.value, r3.value].join()";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("0,true,false,true".into()));
+}
+
+#[test]
+fn a_group_takes_its_creation_properties_fourth_after_an_empty_third_argument() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run("var g = new Window('dialog').add('group', undefined, undefined, {name: 'g', orientation: 'column'}); [g.name, g.orientation].join()")
+        .unwrap();
+    assert_eq!(v, JsValue::String("g,column".into()));
+}
+
+#[test]
+fn a_capturing_listener_that_stops_a_click_keeps_the_default_button_open() {
+    let (mut r, _, _) = realm(vec![click(1), close()]);
+    let source = "var w = new Window('dialog'); w.add('button', undefined, 'OK'); var log = []; \
+        w.addEventListener('click', function (e) { log.push('stopped'); e.stopPropagation(); }, true); [w.show(), log.join()].join('|')";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("0|stopped".into()));
+    let (mut r, _, _) = realm(vec![click(1)]);
+    let source = "var w = new Window('dialog'); w.add('button', undefined, 'OK'); var seen = 0; \
+        w.addEventListener('click', function () { seen++; }); [w.show(), seen].join()";
+    assert_eq!(
+        r.run(source).unwrap(),
+        JsValue::String("1,1".into()),
+        "a listener on the dialog that does not capture leaves the default button to close it"
+    );
+}
+
+#[test]
+fn listeners_are_limited_show_is_the_dialog_s_and_stop_propagation_reaches_only_running_events() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var b = w.add('button'); \
+             for (var n = 0; n < 256; n++) b.addEventListener('click', function () {}); \
+             var more; try { b.addEventListener('click', function () {}); more = 'added'; } catch (e) { more = e.name; } \
+             var shown; try { b.addEventListener('show', function () {}); shown = 'added'; } catch (e) { shown = e.message; } \
+             var kept, o = Object.freeze({}); var c = w.add('button'); c.addEventListener('click', function (e) { kept = e; }); c.notify(); \
+             kept.stopPropagation.call(o); kept.stopPropagation(); kept.preventDefault(); \
+             [more, shown, Object.getOwnPropertyNames(o).length, kept.cancelable].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("RangeError|addEventListener: the event show runs only on a dialog|0|false".into()));
+}
+
+#[test]
+fn a_removed_control_leaves_its_dialog() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); w.add('statictext'); var g = w.add('group'); var b = g.add('button', undefined, 'Go'); var heard = 0; \
+             w.addEventListener('click', function () { heard++; }, true); w.addEventListener('click', function () { heard++; }); \
+             w.remove(g); b.notify('onClick'); var errors = []; \
+             try { g.remove(0); } catch (e) { errors.push(e.message); } try { g.add('button'); } catch (e) { errors.push(e.message); } \
+             var added = 0; try { while (true) { w.add('button'); added++; } } catch (e) {} \
+             [g.parent, heard, added, errors.join(';')].join('|')",
+        )
+        .unwrap();
+    assert_eq!(
+        v,
+        JsValue::String("|0|511|remove: the control was removed from its dialog;add: the control was removed from its dialog".into()),
+        "a removed group's controls no longer count toward the dialog's limit and cannot be counted off it twice"
+    );
+}
+
+#[test]
+fn a_text_getter_that_changes_a_list_while_remove_looks_it_up_makes_remove_throw() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['a', 'b', 'c']); \
+             Object.defineProperty(l.items[0], 'text', {get: function () { l.remove(1); return 'a'; }}); \
+             var m; try { l.remove('c'); m = 'removed'; } catch (e) { m = e.message; } [m, l.items.length, l.items[1].text].join('|')",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("remove: the list changed while the item was looked up|2|c".into()));
+}

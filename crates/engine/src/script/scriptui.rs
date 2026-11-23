@@ -617,28 +617,30 @@ fn layout(d: &mut ScriptUiDialog) {
                 let [w, h] = size[k];
                 let h_align = kid.alignment.0.or(node.align_children.0).unwrap_or(Align::Center);
                 let v_align = kid.alignment.1.or(node.align_children.1).unwrap_or(Align::Center);
-                let place = |align: Align, own: f32, room: f32| match align {
+                let max = kid.max_size;
+                // A control that fills its container's room stays within its maximum.
+                let place = |align: Align, own: f32, room: f32, axis: usize| match align {
                     Align::Start => (0.0, own),
                     Align::End => ((room - own).max(0.0), own),
                     Align::Center => (((room - own) / 2.0).max(0.0), own),
-                    Align::Fill => (0.0, room.max(own)),
+                    Align::Fill => (0.0, max[axis].map_or(room.max(own), |m| room.max(own).min(m.max(own)))),
                 };
                 match node.orientation {
                     Orientation::Row => {
-                        let (dy, kh) = place(v_align, h, ch);
+                        let (dy, kh) = place(v_align, h, ch, 1);
                         let r = UiRect { x: x + cursor, y: y + dy, w, h: kh };
                         cursor += w + node.spacing;
                         r
                     }
                     Orientation::Column => {
-                        let (dx, kw) = place(h_align, w, cw);
+                        let (dx, kw) = place(h_align, w, cw, 0);
                         let r = UiRect { x: x + dx, y: y + cursor, w: kw, h };
                         cursor += h + node.spacing;
                         r
                     }
                     Orientation::Stack => {
-                        let (dx, kw) = place(h_align, w, cw);
-                        let (dy, kh) = place(v_align, h, ch);
+                        let (dx, kw) = place(h_align, w, cw, 0);
+                        let (dy, kh) = place(v_align, h, ch, 1);
                         UiRect { x: x + dx, y: y + dy, w: kw, h: kh }
                     }
                 }

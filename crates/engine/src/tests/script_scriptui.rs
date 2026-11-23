@@ -327,6 +327,12 @@ fn a_control_s_size_keeps_within_its_minimum_and_maximum() {
     assert_eq!(d.nodes[2].rect.h, 60.0, "the minimum height holds over the estimate");
     let plain: ScriptUiDialog = scriptui::parse(&description(vec![dialog, node("button", 0.0)])).unwrap();
     assert!(plain.nodes[1].rect.h < 60.0 && plain.nodes[1].rect.w > 0.0, "a size of -1 leaves the side to the estimate");
+    let column = with(with(node("dialog", -1.0), "orientation", Data::String("column".into())), "size", pair(300.0, -1.0));
+    let fill = |n: Data| with(n, "alignment", Data::String("fill".into()));
+    let capped = with(fill(node("button", 0.0)), "max", pair(90.0, -1.0));
+    let d: ScriptUiDialog = scriptui::parse(&description(vec![column, capped, fill(node("button", 0.0))])).unwrap();
+    assert!(d.nodes[2].rect.w > 90.0, "a control that fills its column takes the column's width");
+    assert_eq!(d.nodes[1].rect.w, 90.0, "a control that fills its column stays within its maximum width");
 }
 
 #[test]
