@@ -12,6 +12,7 @@
 use std::sync::RwLock;
 
 use craft::keymap::{Binding, Chord, CommandDef, CommandKind, CommandRef, Key, Mods, Overrides, Platform, Scope};
+use craft::ui::runtime::commands::{ChromeCommand, CommandSet as _};
 use serde_json::{Value, json};
 
 use crate::shortcut_editor::{self, EffectItem, Entry, Snapshot};
@@ -62,7 +63,28 @@ fn command_in(key: &str, effects: &[EffectItem]) -> CommandRef {
     if let Some(id) = key.strip_prefix("plugin:") {
         return CommandRef::with_params("plugin.dialog", json!({ "id": id }));
     }
+    // Tab's and Shift+Tab's panels toggles are the framework's chrome commands: only their chords toggle the panels
+    // instead of moving focus.
+    if let Some((_, chrome)) = CHROME.iter().find(|(entry, _)| *entry == key) {
+        return (*chrome).into();
+    }
     CommandRef::new(key)
+}
+
+/// The entry keys of Tab's Panels toggle (`window.dock`) and Shift+Tab's (`window.panels`), with the framework's
+/// chrome command each runs.
+const CHROME: [(&str, ChromeCommand); 2] = [("window.dock", ChromeCommand::TogglePanels), ("window.panels", ChromeCommand::TogglePanelsKeepTools)];
+
+/// The entry key of the framework's chrome command `command`, when it is one of [`CHROME`].
+fn chrome_entry(command: &CommandRef) -> Option<&'static str> {
+    let chrome = ChromeCommand::from_ref(command)?;
+    CHROME.iter().find(|(_, c)| *c == chrome).map(|(entry, _)| *entry)
+}
+
+/// The app command whose state the row of `command` shows: `window.dock` and `window.panels` for the framework's
+/// panels toggles.
+pub(crate) fn state_id(command: &CommandRef) -> &str {
+    chrome_entry(command).unwrap_or(&command.id)
 }
 
 /// `overrides` with each Effect menu item's shortcut under the command its item runs while the
@@ -95,19 +117,26 @@ pub fn entry_key(command: &CommandRef) -> String {
         ("plugin.dialog", _) if command.params.get("id").and_then(Value::as_str).is_some() => {
             format!("plugin:{}", command.params.get("id").and_then(Value::as_str).unwrap_or_default())
         }
+        _ if let Some(entry) = chrome_entry(command) => entry.to_string(),
         _ => command.key(),
     }
 }
 
 /// The [`Overrides`] key of an entry key.
 pub fn stored_key(key: &str) -> String {
-    if key.starts_with("panel:") || key.starts_with("effect:") || key.starts_with("plugin:") { command_of(key).key() } else { key.to_string() }
+    if key.starts_with("panel:") || key.starts_with("effect:") || key.starts_with("plugin:") || CHROME.iter().any(|(entry, _)| *entry == key) {
+        command_of(key).key()
+    } else {
+        key.to_string()
+    }
 }
 
 /// The entry key of an [`Overrides`] key.
 pub fn entry_of_stored(key: &str) -> String {
     CommandRef::parse_key(key)
-        .filter(|c| matches!(c.id.as_str(), "window.panel" | "effect.dialog" | "effect.apply" | "plugin.dialog"))
+        .filter(|c| {
+            matches!(c.id.as_str(), "window.panel" | "effect.dialog" | "effect.apply" | "plugin.dialog") || ChromeCommand::from_ref(c).is_some()
+        })
         .map_or_else(|| key.to_string(), |c| entry_key(&c))
 }
 

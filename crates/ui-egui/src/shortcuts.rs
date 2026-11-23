@@ -2,7 +2,7 @@
 //! nudges and the window's panel and artboard shortcuts.
 
 use craft::keymap::{CommandRef, Mods};
-use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
+use craft::ui::runtime::commands::{ChromeCommand, CommandSet as _, FirePhase, FireSource, Fired};
 use craft::ui::runtime::keys::{self, Intent};
 use craft::ui::runtime::windows::WindowHost;
 use serde_json::json;
@@ -20,6 +20,15 @@ pub(crate) use presentation::presentation_step;
 /// Runs one command the key stage fired. A tool key chooses its tool (and starts or ends a hold), `Select All`
 /// with the Artboard tool selects artboards, and every other command runs as its menu item does.
 pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &Fired) {
+    // While a field had the keys in every pass of the frame, a key runs no command, as in production: the key stage still
+    // fires command chords and function keys while typing, and an app's own egui widget's focus is no typing to it. A
+    // release still ends a hold.
+    if fired.source == FireSource::Key
+        && fired.phase != FirePhase::Release
+        && ctx.data(|d| d.get_temp::<(u64, bool)>(field_keys_id())).is_some_and(|(_, field)| field)
+    {
+        return;
+    }
     // A menu's Select All (the macOS menu bar's, or the window's menu that gave the keys back) selects the text of the
     // field that has the keys, as Cmd+A does: it goes to the field as the framework's edit command. The Type tool's
     // text is selected by the app's own Select All.
@@ -55,6 +64,13 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
     let picked = fired.source == FireSource::Palette;
     if picked && let Some(why) = crate::palette::refusal(app, command) {
         app.status(why);
+        return;
+    }
+    // Tab's Panels toggle fired from the palette, a menu or automation: the framework toggles the panels itself.
+    if ChromeCommand::from_ref(command).is_some() {
+        if picked {
+            crate::palette::record_pick(app, command);
+        }
         return;
     }
     // While a tool's gesture runs, keys run no command; the active tool's own shortcut, between clicks, chooses it
@@ -104,6 +120,28 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
     if picked {
         crate::palette::record_pick(app, command);
     }
+}
+
+fn field_keys_id() -> egui::Id {
+    egui::Id::new("vectorcraft.fieldHasKeys")
+}
+
+/// Each pass, before the UI: whether a text field has the keys, for [`run_fired`] when the frame ends: a framework
+/// field, or egui focus on a widget that is no framework focus stop. A stop's widget keeps egui's focus for a pass after
+/// its dialog closed, as none: it is no field. The Type tool's text on the canvas is not a field.
+pub(crate) fn note_field_keys(app: &VectorcraftApp, ctx: &egui::Context) {
+    let stop_id = egui::Id::new("vectorcraft.stopFocus");
+    let focused = ctx.memory(|m| m.focused());
+    let stop = focused.filter(|_| craft::ui::runtime::focus::focused_rec(ctx).is_some());
+    if let Some(stop) = stop {
+        ctx.data_mut(|d| d.insert_temp(stop_id, stop));
+    }
+    let own = focused.is_some() && stop.is_none() && focused != ctx.data(|d| d.get_temp(stop_id));
+    let field = !app.session.tool_wants_text() && (WindowHost::of(ctx).typing() || own);
+    // Every pass of the frame: a field a closed dialog left reads as one in the first pass only.
+    let frame = ctx.cumulative_frame_nr();
+    let held = ctx.data(|d| d.get_temp::<(u64, bool)>(field_keys_id())).is_none_or(|(at, held)| at != frame || held);
+    ctx.data_mut(|d| d.insert_temp(field_keys_id(), (frame, field && held)));
 }
 
 /// A key bound only to commands that can't run now (`FrameOutput::dimmed`) does what production's key did, its menu

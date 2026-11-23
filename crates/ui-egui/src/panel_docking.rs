@@ -877,7 +877,7 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, extra
             let anchor = p.anchor.clone().ok_or("anchor is required")?;
             moved_to(&scene, &unit, anchor, &p)?
         }
-        ("window.panel.float", _) => float_actions(&scene, layout, &space, &unit, &p)?,
+        ("window.panel.float", _) => float_actions(app.ui_ctx.as_ref(), &scene, layout, &space, &unit, &p)?,
         ("window.panel.dock", _) => match (extra.side, p.anchor.clone()) {
             (Some(_), Some(_)) => return Err("give anchor or side, not both".into()),
             (Some(edge), None) => move_actions(&scene, &unit, DockTo::Dock(edge)).map_err(dock_error)?,
@@ -948,8 +948,9 @@ fn moved_to(scene: &DockScene<'_, String>, unit: &DragUnit<String>, anchor: Stri
 /// The actions that float `unit`: where a drag of it would float it when the params give no
 /// geometry, else at `x`, `y`, `width` and `height`, each defaulting to the rect of the window it
 /// already floats alone in, or to where the float space puts it. A whole window keeps its rect
-/// unless given one.
+/// unless given one. A window in an OS window of its own (on `ctx`) is where that window is.
 fn float_actions(
+    ctx: Option<&egui::Context>,
     scene: &DockScene<'_, String>,
     layout: &Layout<String>,
     space: &FloatSpace<String>,
@@ -982,7 +983,7 @@ fn float_actions(
         DragUnit::Group(_) => window.is_some_and(|w| w.groups().len() == 1),
         _ => window.is_some(),
     };
-    let kept = window.filter(|_| whole).map(|w| w.rect);
+    let kept = window.filter(|_| whole).map(|w| shown_rect(ctx, w));
     let base = kept.unwrap_or_else(|| space.place(space.size_of(unit, None)));
     let min = egui::pos2(p.x.unwrap_or(base.min.x), p.y.unwrap_or(base.min.y));
     let rect = egui::Rect::from_min_size(min, egui::vec2(p.width.unwrap_or(base.width()), p.height.unwrap_or(base.height())));
@@ -992,6 +993,13 @@ fn float_actions(
         (None, _) => unit_action(unit, Target::float(rect)),
     };
     Ok(std::iter::once(float).chain(expand).collect())
+}
+
+/// Where floating `window` is, in the main window's points: where the OS put its own window when it has one (on `ctx`),
+/// else its rect in the main window.
+fn shown_rect(ctx: Option<&egui::Context>, window: &Floating<String>) -> egui::Rect {
+    let native = window.native.as_ref().and_then(|n| Some(egui::Rect::from_min_size(n.position()?.into(), n.normal.size.into())));
+    native.zip(ctx).and_then(|(rect, ctx)| craft::ui::docking::native::in_app(ctx, rect)).unwrap_or(window.rect)
 }
 
 /// Applies `actions` ([`apply`]) and reveals `reveal`, the panel the command showed: the panels
@@ -1245,8 +1253,9 @@ pub(crate) fn continue_move(app: &mut VectorcraftApp, panel: &str, grab: egui::V
 
 /// Draw the canvas, the tool rails and the panels below the bars, and apply what the user did to
 /// them. Tab and Shift+Tab hide the panels through the window's shell; Shift+Tab keeps the rails.
-/// Presentation Mode hides every panel and rail; the canvas stays.
-pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+/// Presentation Mode hides every panel and rail; the canvas stays. `keeps_tools`: the shell around the dock hides the
+/// panels and keeps the tools (Shift+Tab), as its `ShellCx` says; [`chrome_state`] is for code outside its pass.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: bool) {
     let ctx = ui.ctx().clone();
     if let Some(panel) = app.dock_rt.raise.take() {
         raise(app, &ctx, &panel);
@@ -1256,8 +1265,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // (`visible`, `showing`) see it; their changes go through `apply`.
     let mut workspace = Arc::clone(&app.ui.dock_workspace);
     let flyout_before = app.ui.open_panel.clone();
-    let mut flyout = flyout_before.clone();
     let presenting = app.ui.screen_mode >= 3;
+    // Shift+Tab, from its key, a menu or automation, closes a panel popped out of the icon column.
+    let mut flyout = flyout_before.clone().filter(|_| !keeps_tools);
     let auto_collapse = app.session.prefs.auto_collapse_icon_panels;
     // The specs and rails leave the app for the pass, which lends the app to the panel bodies.
     let specs = std::mem::take(&mut app.dock_rt.specs);
@@ -1265,7 +1275,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // The rails are what Shift+Tab keeps; while the panels show, the area hides none.
     let hide = if presenting {
         HidePanels::All
-    } else if chrome_state(&ctx, ctx.viewport_id()).panels_hidden {
+    } else if keeps_tools {
         HidePanels::Except(&rails)
     } else {
         HidePanels::None

@@ -193,7 +193,7 @@ impl VectorcraftApp {
             original_editor: Default::default(),
             screen_pick: craft::color_ui::ui::ScreenPick::new(),
             font_watch: None,
-            fonts_seen: 0,
+            fonts_changed: Default::default(),
             font_preview_owner: None,
             background: Default::default(),
             opening: Default::default(),
@@ -437,7 +437,11 @@ impl VectorcraftApp {
         // them, even if the worker below finishes them during this same tick.
         ctx.data_mut(|d| d.insert_temp(egui::Id::unique("clipboard.pending-at-tick"), self.clipboard_publishing.is_pending()));
         screen_color::tick(self, ctx);
-        self.poll_finished_work();
+        // Once a frame: work that finishes during a frame's first pass is applied in the next frame, not in a second
+        // pass of this one.
+        if ctx.current_pass_index() == 0 {
+            self.poll_finished_work();
+        }
         crate::script_runs::poll(self);
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
@@ -474,7 +478,11 @@ impl VectorcraftApp {
         crate::keymap::note_os(ctx);
         prefs_dialog::apply_runtime(self, ctx);
         self.run_control(ctx);
-        if let Some(u) = self.pending_url.take() {
+        // In the next frame's first pass, as production's one-pass frames did: a second pass of the frame that asked
+        // for it (one a background run's result can bring) doesn't open it early.
+        if ctx.current_pass_index() == 0
+            && let Some(u) = self.pending_url.take()
+        {
             ctx.open_url(egui::OpenUrl::new_tab(u));
         }
         self.flush_clipboard_out();
@@ -509,6 +517,9 @@ impl VectorcraftApp {
                 app.canvas.windows.area = Some(ui.available_rect_before_wrap());
                 app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
                 let floats = crate::doc_windows::current_floats(app);
+                // The current window's body is in its floating window, drawn after this pane: the pane's drop catcher
+                // waits for it ([`crate::doc_windows::show`]).
+                app.canvas.panes.drops = floats.then(Vec::new);
                 if !canvas::tiled_area(app, ui) {
                     if floats {
                         let rect = ui.available_rect_before_wrap();
@@ -556,6 +567,8 @@ impl VectorcraftApp {
         let ctx = ui.ctx().clone();
         // A copy made by injected input is not the user's: the clipboard keeps it inside the app.
         self.clipboard.set_synthetic(WindowHost::of(&ctx).injected_pass());
+        // A modal window opened between passes (the macOS menu bar, automation) closes the popups before they draw.
+        panel_docking::close_overlays_for_modal(self, &ctx);
         // Whether this pass draws the last step of an action playing at Step by Step.
         let step_held = crate::panels::actions::playback_held(self);
         let t0 = monotonic_ms();
@@ -579,8 +592,8 @@ impl VectorcraftApp {
             .window_title(window_title)
             .screen_mode(Bind::given(given))
             .allow_reveal(!self.ui.presenting())
-            .body(|ui, _cx, app: &mut VectorcraftApp| {
-                panel_docking::show(app, ui);
+            .body(|ui, cx, app: &mut VectorcraftApp| {
+                panel_docking::show(app, ui, cx.shell().is_some_and(|shell| shell.panels_hidden()));
                 crate::place::window_files(app, ui);
             })
             .show(ui, self);
@@ -636,6 +649,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
     root.values.set(view::zoom_scheme(prefs, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
+    // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
+    root.tab_toggles_chrome = true;
     root
 }
 

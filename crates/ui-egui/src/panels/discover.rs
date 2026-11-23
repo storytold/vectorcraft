@@ -330,8 +330,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     refresh(app);
     let mut query = app.ui.discover.query.clone();
     let field = TextField::search(tl!("Search").to_string(), Bind::bound(&mut query)).limit(MAX_QUERY).show(ui);
-    if std::mem::take(&mut app.ui.discover.focus) {
-        focus::request(ui.ctx(), FocusTarget::Id(field.response.id));
+    // A measuring pass (a floating panel's first) moves no focus: the request waits for a pass that takes it.
+    if app.ui.discover.focus && focus::request(ui.ctx(), FocusTarget::Id(field.response.id)) {
+        app.ui.discover.focus = false;
     }
     // Escape closes the panel and keeps the query the search field clears with it, so Help opens on it again.
     if field.escaped {

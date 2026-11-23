@@ -192,7 +192,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
     let rect = ui.max_rect();
     if kind == BodyKind::Pane {
         if let Some(later) = &mut app.canvas.panes.drops {
-            later.push((win, rect));
+            later.push((win, rect, ui.layer_id()));
             return;
         }
         // A pane outside Tile (a floating window's, the main window's while the current window floats).
@@ -255,7 +255,8 @@ pub(crate) fn drop_on_pane(app: &mut VectorcraftApp, win: Win, drop: &Dropped) {
 /// the pane's window and the drop there.
 pub(crate) fn released_on_pane(app: &VectorcraftApp, art: CarriedArt, at: Pos2, op: DropOperation) -> Option<(Win, Dropped)> {
     let outside = app.canvas.windows.last_noted.iter().rev();
-    let (win, rect) = outside.chain(app.canvas.panes.drops.iter().flatten().rev()).copied().find(|(_, rect)| rect.contains(at))?;
+    let waiting = app.canvas.panes.drops.iter().flatten().rev().map(|(win, rect, _)| (*win, *rect));
+    let (win, rect) = outside.copied().chain(waiting).find(|(_, rect)| rect.contains(at))?;
     let view = pane_view(app, win, rect)?;
     Some((win, Dropped { payload: Payload::Art(art), at: view.to_doc(at), zoom: view.zoom, op }))
 }

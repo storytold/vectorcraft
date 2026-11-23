@@ -230,8 +230,9 @@ pub struct VectorcraftApp {
     pub(crate) screen_pick: craft::color_ui::ui::ScreenPick,
     /// The font catalog's watch for fonts installed or removed while the app runs.
     pub(crate) font_watch: Option<craft::font_catalog::Watch>,
-    /// The font catalog generation the documents' fonts were last scanned again for.
-    pub(crate) fonts_seen: u64,
+    /// Set by [`Self::font_watch`] when it found fonts installed or removed, until the documents' fonts are scanned
+    /// again for them.
+    pub(crate) fonts_changed: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The font menu whose live preview the canvas shows, while one does.
     pub(crate) font_preview_owner: Option<egui::Id>,
     /// Saves and exports running in the background (Preferences → File Handling).

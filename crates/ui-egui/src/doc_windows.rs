@@ -314,10 +314,12 @@ pub(crate) fn focus_main_window(app: &VectorcraftApp, ctx: &egui::Context) {
     }
 }
 
-/// Draw the floating document windows, after the main window's canvas. Call once per frame from
-/// the main window. Art released over a pane in the frame the pointer reached it drops there then.
+/// Draw the floating document windows, after the main window's canvas, then the drop catcher of the main window's
+/// pane, which waited for the current window's body. Call once per frame from the main window. Art released over a
+/// pane in the frame the pointer reached it drops there then.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     show_windows(app, ui);
+    crate::canvas::panes::catch_waiting(app, ui);
     crate::canvas::panes::drop_released(app);
 }
 
@@ -389,7 +391,9 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
             let areas = [(win, ui.available_rect_before_wrap())];
             let unfitted = crate::canvas::panes::refit_resized(app, &areas);
             if live {
-                show_document(app, ui, win, BodyKind::Live);
+                // The canvas fills the area below the tab, as a pane's does.
+                let mut body = ui.new_child(egui::UiBuilder::new().max_rect(areas[0].1));
+                show_document(app, &mut body, win, BodyKind::Live);
             } else {
                 pressed |= crate::canvas::pane(app, ui, win, areas[0].1);
             }

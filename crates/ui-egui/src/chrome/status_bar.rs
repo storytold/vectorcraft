@@ -107,6 +107,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 0 => format!("{label}\u{2026}"),
                 more => format!("{label}\u{2026} (+{more})"),
             };
+            // The message's rule, so the work shows where the message was.
+            Divider::vertical().show(ui);
             StatusProgress::new(text, None).show(ui);
         } else {
             let mut message = StatusMessage::new(status_message(app));

@@ -1597,7 +1597,8 @@ mod tests {
             let doc = app.session.active().map(|st| {
                 (st.doc.clone(), format!("{:?}", st.selection), st.history.undo.len(), st.revision, st.active_layer, st.layer_rows.clone())
             });
-            (doc, app.session.script_console().lines().len(), app.any_dialog_open(), ui)
+            // A modeless dialog (Find and Replace) blocks nothing, so `any_dialog_open` leaves it out: the host lists it.
+            (doc, app.session.script_console().lines().len(), (app.any_dialog_open(), crate::tests::picks::open_dialogs(app).len()), ui)
         };
         let acts = |id: &str| {
             [Session::new(), Fixture::Single.session(), Fixture::Multi.session()].into_iter().any(|session| {
@@ -2427,7 +2428,8 @@ mod tests {
             }
         };
         window.frame(vec![]);
-        let open = |w: &Window| w.app.ui.tools_drawer || popup.is_some_and(|id| overlay::is_open(&w.ctx, id));
+        // A menu that took its close is closed while it animates out.
+        let open = |w: &Window| w.app.ui.tools_drawer || popup.is_some_and(|id| overlay::entry(&w.ctx, id).is_some_and(|e| !e.exiting));
         assert!(open(&window), "the {overlay} is open");
         fire(&mut window.app, &window.ctx, CommandRef::new("object.move"), FireSource::Menu);
         assert!(window.app.any_dialog_open(), "Move… opens its dialog: {}", window.app.ui.status);
@@ -2466,7 +2468,8 @@ mod tests {
         window.frame(vec![]);
         seen.push(built(&window));
         let english = seen.last().map(|(key, _)| *key);
-        crate::i18n::set_current(Lang::from_code("de").unwrap());
+        // The language as the app takes it: each frame's tick sets the drawing language from the preference.
+        window.app.session.prefs.interface_language = "de".into();
         window.frame(vec![]);
         window.frame(vec![]);
         seen.push(built(&window));

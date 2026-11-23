@@ -306,7 +306,9 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             assert_eq!(group_of(&layout, &"color".into()), vec!["color".to_string()], "a group of its own below");
             assert_eq!(group_of(&layout, &"gradient".into()), vec!["gradient".to_string()]);
             h.frames(1);
-            let (top, middle, bottom) = (h.tab("gradient").unwrap(), h.tab("swatches").unwrap(), h.tab("color").unwrap());
+            // The window floats at the theme's float size, where the strip of Swatches' group shows its front tab,
+            // Stroke, and lists Swatches in its overflow.
+            let (top, middle, bottom) = (h.tab("gradient").unwrap(), h.tab("stroke").unwrap(), h.tab("color").unwrap());
             assert!(top.top() < middle.top() && middle.top() < bottom.top(), "gradient above, color below");
             // `onto` names a floating group; a docked one is refused.
             assert!(h.app.run("window.panel.float", json!({"panel": "stroke", "onto": "layers"})).is_err());
