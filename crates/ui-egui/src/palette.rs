@@ -769,8 +769,9 @@ pub(crate) fn refusal(app: &VectorcraftApp, command: &CommandRef) -> Option<Stri
 
 /// Shows the palette while it is open. The framework palette ranks, caps the results, keeps the
 /// recent picks and closes on a press outside it; a pick reaches the app as a command fired from
-/// the palette, which the runner runs and records ([`record_pick`]). Nothing is built while the
-/// palette is closed.
+/// the palette, which the runner runs and records ([`record_pick`]). Enter on a dimmed result
+/// closes the palette and the status line says why, as a refused pick does. Nothing is built while
+/// the palette is closed.
 pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if !app.ui.palette_open {
         return;
@@ -780,7 +781,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let crate::state::UiState { palette_open, recent_commands, command_uses, .. } = &mut app.ui;
     let uses: &CommandUses = command_uses;
     let count = |command: &CommandRef| uses.count_of(&command.key_text());
-    CommandPalette::new(label, &built.entries, &built.index, Bind::bound(palette_open)).recents(Bind::bound(recent_commands)).uses(&count).show(ui);
+    let shown = CommandPalette::new(label, &built.entries, &built.index, Bind::bound(palette_open))
+        .recents(Bind::bound(recent_commands))
+        .uses(&count)
+        .show(ui);
+    if let Some(command) = shown.refused {
+        app.ui.palette_open = false;
+        if let Some(why) = refusal(app, &command) {
+            app.status(why);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1304,8 +1314,10 @@ mod tests {
             window.app.ui.command_uses.count(id);
         }
         let (recent, uses) = (window.app.ui.recent_commands.clone(), window.app.ui.command_uses.clone());
+        window.app.ui.status.clear();
         window.pick_typed("edit.findReplace", 0);
         assert!(!window.app.any_dialog_open(), "no document: the pick is refused");
+        assert!(!window.app.ui.palette_open && !window.app.ui.status.is_empty(), "the palette closes and the status line says why");
         assert_eq!(window.app.ui.recent_commands, recent);
         assert_eq!(window.app.ui.command_uses, uses);
     }

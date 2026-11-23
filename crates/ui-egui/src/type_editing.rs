@@ -401,7 +401,8 @@ fn move_key(step: NavMove, mods: MoveMods) -> Option<(ToolKey, Mods)> {
 impl Component for TypeEditor<'_> {
     const ROLE: Role = Role::MULTILINE_TEXT_INPUT;
     const INPUT: craft::ui::contract::Input = craft::ui::contract::Input::Editor;
-    const KEYS: KeyUse = KeyUse::CODE;
+    // The app's Cmd chords and function keys run while the Type tool types, as in production.
+    const KEYS: KeyUse = KeyUse::CODE.with_command_keys();
     type Style = TypeEditorStyle;
     type Output = TypeEditorOutput;
 
