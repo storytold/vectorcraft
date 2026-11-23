@@ -63,6 +63,8 @@ fn run_frame(
             ui.ctx().request_discard("lifecycle test");
         }
     });
+    // The commands the frame fired run as the host's next frame begins (`testing::app_frame`).
+    craft::ui::shell::embed::before_input(ctx, |output| app.frame_input(output));
     out.textures_delta.clear();
     (passes, out.platform_output.ime)
 }
@@ -72,6 +74,8 @@ fn run_frame(
 fn a_discarded_rerun_runs_a_duplicate_once() {
     let mut app = app();
     let ctx = crate::testing::ui_context();
+    // A paste event is the paste chord; its text is on the clipboard service, as the web shell offers it there.
+    app.clipboard.offer_paste(vec![craft::platform::clipboard::Flavor::text(PASTE_SVG)]);
     // Fonts install on the first pass and are ready on the second.
     run_frame(&mut app, &ctx, vec![], |_| {}, false);
     run_frame(&mut app, &ctx, vec![], |_| {}, false);
