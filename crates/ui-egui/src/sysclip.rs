@@ -334,13 +334,20 @@ impl VectorcraftApp {
     /// Copy needs, and `take` keeps it single-shot. A Copy or Cut that labels left to the next pass
     /// hands its text over as soon as it runs ([`crate::shortcuts::handle`]).
     pub(crate) fn flush_clipboard_out(&mut self) {
-        let Some(text) = self.clipboard_out.take() else { return };
-        // Something else is being copied: the formats of an earlier Copy not written yet would replace it.
-        self.drop_unwritten_formats();
-        // A fenced or failed write loses the text: nothing else carries it.
-        if let Ok(Written::Written) = self.clipboard.write_text(&text) {
-            // Text copied here is not the art in the internal clipboard: a paste takes it as another app's copy.
-            self.clipboard.forget_ours();
+        if let Some(text) = self.clipboard_out.take() {
+            // Something else is being copied: the formats of an earlier Copy not written yet would replace it.
+            self.drop_unwritten_formats();
+            // A fenced or failed write loses the text: nothing else carries it.
+            if let Ok(Written::Written) = self.clipboard.write_text(&text) {
+                // Text copied here is not the art in the internal clipboard: a paste takes it as another app's copy.
+                self.clipboard.forget_ours();
+            }
+        }
+        // Without a host clipboard, what was copied goes out through egui.
+        if let Some(text) = self.fallback_copy.lock().ok().and_then(|mut slot| slot.take())
+            && let Some(ctx) = &self.ui_ctx
+        {
+            ctx.copy_text(text);
         }
     }
 

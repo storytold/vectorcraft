@@ -44,7 +44,19 @@ impl VectorcraftApp {
         });
         self.finish_captures(finished);
         let settle = settle_ms(ctx.global_style().animation_time);
-        while let Some(req) = self.channel.as_mut().and_then(ControlChannel::next_request) {
+        while let Some(req) = self.deferred_control.take().or_else(|| self.channel.as_mut().and_then(ControlChannel::next_request)) {
+            // A request held past its deadline is answered as one still queued then.
+            if req.deadline.is_some_and(|deadline| motion::now() >= deadline) {
+                let _ = req.reply.send(json!({"ok": false, "error": craft::automation::control::expired_error()}));
+                continue;
+            }
+            // `ui.pointer` and `ui.tool.select` act at once, while `ui.key` and other synthetic input reach the tool
+            // in a later pass: they wait for that earlier input, so a key pressed during a drag reaches its tool first.
+            if matches!(req.method.as_str(), "ui.pointer" | "ui.tool.select") && !host.injected_idle() {
+                self.deferred_control = Some(req);
+                ctx.request_repaint();
+                break;
+            }
             let roots = self.automation_roots.clone();
             self.ui.answering_control = true;
             // Guarded per request: a panic must not stop the requests behind it.
