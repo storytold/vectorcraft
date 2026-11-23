@@ -199,7 +199,11 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     let st = app.session.active().ok_or("no document open")?;
     let art = !st.selection.is_empty();
-    let group = p.get("group").and_then(Value::as_str);
+    let group = match p.get("group") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(g)) => Some(g.as_str()),
+        Some(_) => return Err("`group` must be a colour group name".into()),
+    };
     // The group is looked for in the document without the preview of the dialog this one replaces
     // (which can rename the group), as that dialog's Cancel below leaves it.
     let unpreviewed = match &st.interaction {
@@ -283,12 +287,14 @@ pub(super) fn library_choices(app: &VectorcraftApp) -> (Vec<String>, Vec<String>
     (keys, shown)
 }
 
-/// The `limitTo` key of `ui.recolorDialog`'s `library` (none without it, the first library for "").
+/// The `limitTo` key of `ui.recolorDialog`'s `library` (none without it or for null, the first
+/// library for ""); a `library` that is not a string is an error.
 pub(super) fn library_param(app: &VectorcraftApp, p: &Value) -> Result<String, String> {
-    match p.get("library").and_then(Value::as_str) {
-        Some("") => Ok(first_library(app).unwrap_or_default()),
-        Some(l) => limit_key(app, l),
-        None => Ok(String::new()),
+    match p.get("library") {
+        Some(Value::String(l)) if l.is_empty() => Ok(first_library(app).unwrap_or_default()),
+        Some(Value::String(l)) => limit_key(app, l),
+        None | Some(Value::Null) => Ok(String::new()),
+        Some(_) => Err("`library` must be a library id or name".into()),
     }
 }
 

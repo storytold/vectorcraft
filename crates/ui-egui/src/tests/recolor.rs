@@ -2097,6 +2097,27 @@ fn reopening_a_group_over_a_preview_that_renames_it_finds_the_group() {
     dialogs::cancel(&mut app);
 }
 
+/// A `library` or `group` that is not a string is an error, with or without a preset, and opens
+/// no dialog.
+#[test]
+fn recolor_rejects_a_library_or_group_that_is_not_a_string() {
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    for p in [
+        json!({"colors": 1, "library": 123}),
+        json!({"preset": true, "colors": 1, "library": 123}),
+        json!({"preset": true, "colors": 1, "library": true}),
+        json!({"group": 5}),
+        json!({"group": ["Brights"]}),
+    ] {
+        assert!(app.run("ui.recolorDialog", p.clone()).is_err(), "{p}");
+        assert!(app.ui.dialog.is_none(), "{p} opens no dialog");
+    }
+    app.run("ui.recolorDialog", json!({"colors": 1, "library": null, "group": null})).unwrap();
+    assert_eq!(field(&app, "limitTo"), json!(""), "a null library is no limit");
+    dialogs::cancel(&mut app);
+}
+
 /// Every paint under `v`, in order: its color, the swatch it is linked to and its tint.
 fn paints_in(v: &Value, out: &mut Vec<(Color, Option<String>, f64)>) {
     match v {
