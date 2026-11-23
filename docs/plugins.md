@@ -27,14 +27,14 @@ in `crates/engine/src/cmd/plugin.rs`).
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `budget: "heavy"` for a [heavy filter](#heavy-filters) or [exporter](#heavy-exporters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
+| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) or [exporter](#heavy-exporters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
 | `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval), `needsReplace` (true when `plugin.install` needs `replace: true`), and the `commandAllowlist` ids no command has (`unknownCommands`) and those no plug-in may call (`refusedCommands`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
 | `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
-| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` files past the first 1,000, which were not tried. |
+| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter or exporter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` files past the first 1,000, which were not tried. |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
@@ -76,8 +76,8 @@ in a dialog of the same kind once the file is picked, and its Open button opens 
 with its parameters' defaults. Open Recent opens a file the way File › Open does: it does not remember the importer or
 the parameters given to Open With. A built-in format reads the file if one can, and otherwise the first importer by id
 that lists its extension reads it with its parameters' defaults. **File › Open** of a `.wasm` file installs a plug-in
-too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the background
-([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
+too (on the web this is how plug-ins get in). A heavy filter or exporter asks before it is installed, and runs in the background
+([below](#heavy-filters), [heavy exporters](#heavy-exporters)). A plug-in that lists permissions asks for them before it is installed
 ([below](#permissions)).
 
 ### Commands
@@ -129,7 +129,7 @@ defaults):
 | Module size | 32 MiB | rejected |
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
-| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; an object filter with the [Large instruction budget](#instruction-budget-preference) 250 M + 4,000 per byte; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte; [storage calls](#settings-and-cache) take one more for every 64 bytes they move | `Limit("instruction budget")` |
+| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; an object filter with the [Large instruction budget](#instruction-budget-preference) 250 M + 4,000 per byte; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte; a [heavy exporter](#heavy-exporters)'s export in the background 100 G + 4,000 per byte; [storage calls](#settings-and-cache) take one more for every 64 bytes they move | `Limit("instruction budget")` |
 | Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (checked every 20 M instructions and after each [storage call](#settings-and-cache); the web build reads the page's `performance.now()`) | `Limit("time budget")` |
 | Import input | 128 MiB of the file (`vectorcraft_plugins::import::MAX_INPUT_BYTES`) | the file doesn't open; a larger file named by `path` is not read past that |
 | Call depth | 1,024 frames | trap |
@@ -172,8 +172,8 @@ measured with the page's `performance.now()`.
 
 Some filters do heavy but legitimate work, such as routing a plotter's pen, packing shapes onto a sheet or running a
 simulation, which a minute and 50 M instructions don't cover. Such a filter declares `"budget": "heavy"` in its
-manifest (only a filter may: a live effect runs whenever the document is drawn, an exporter has an export's budget and
-an importer an import's). Each of its runs gets 1 G instructions (20 times a light run's) plus the 4,000 per input byte,
+manifest (only a filter or an [exporter](#heavy-exporters) may: a live effect runs whenever the document is drawn, and
+an importer has an import's budget). Each of its runs gets 1 G instructions (20 times a light run's) plus the 4,000 per input byte,
 and 300 s (`vectorcraft_plugins::{HEAVY_FUEL, HEAVY_WALL_TIME_MS}`). Its output can't add to the budget: the host learns
 how much there is only once the run has ended.
 
@@ -191,6 +191,27 @@ how much there is only once the run has ended.
   it runs at once, under the same instruction budget and 300 s limit.
 - `plugin.run` itself runs a heavy filter where it is called, as it runs any filter: an MCP client waits for it, and
   its `notifications/cancelled` stops it.
+
+### Heavy exporters
+
+Some exporters write a machine file that takes far more work than drawing the document, such as an embroidery machine's
+stitches or a cutter's toolpath, which an export's 10 G instructions don't cover. Such an exporter declares `"budget":
+"heavy"` in its manifest too. Each export it runs in the background gets 100 G instructions (10 times an export's) plus
+the 4,000 per byte of the document (`vectorcraft_plugins::export::HEAVY_FUEL`), in an export's 300 s, which bounds it
+on a slow host. The Large instruction budget changes neither.
+
+- **Installing asks first**, as for a heavy filter: the same dialog, `allowHeavy: true`, the `Plug-ins` folder and the
+  Additional Plug-ins Folder all treat it the same way.
+- **It gets its budget in the background.** File › Export › Export As, Export for Screens and the Asset Export panel
+  run it on the export's worker with Background Export on (the default), where the progress window's Cancel stops it.
+  An export the app runs at once, where nothing can stop it, gives it an export's usual 10 G instead, so the window is
+  never held for minutes: on the web, which has no worker, and on the desktop with Background Export off. An export
+  that needs more stops there with `Limit("instruction budget of an export run at once (…)")`, which says where it
+  gets its own budget, and writes no file.
+- `document.export`, and a control client's `wait: true`, run it where they are called with its whole budget, as
+  `plugin.run` runs a heavy filter: the client waits for it.
+- Hosts from before heavy exporters refuse the manifest when the plug-in is installed: an exporter that needs to
+  install there too ships a light build as well.
 
 ### Permissions
 
@@ -547,8 +568,9 @@ the module's start function, in a run that isn't a filter's run on a document, o
 - `name`: the menu label, or an exporter's or importer's format name in Export As, Open and Open With (1–64 printable
   characters). `kind`: `"filter"` (object filter), `"effect"` (live effect), `"exporter"` or `"importer"`. Exporters
   and importers came after the first ABI v1 hosts, which refuse the kind when the plug-in is installed.
-- `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
-  filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
+- `budget` (filters and exporters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
+  filters](#heavy-filters), [heavy exporters](#heavy-exporters)). Hosts from before it ignore the key, so there the
+  filter gets a light run's budget. Hosts from before heavy exporters refuse `"heavy"` on an exporter at install.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names
   ([permissions](#permissions)); without it, what its kind implies.
 - `inputs` (filters at `api` 2 only): the kinds of object besides paths and compound paths the filter reads, any of

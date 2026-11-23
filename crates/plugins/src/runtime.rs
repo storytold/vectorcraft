@@ -82,10 +82,14 @@ pub const LARGE_FUEL: u64 = 250_000_000;
 /// The limit a run reports when its input and parameters together are past half its memory.
 pub(crate) const SELECTION_TOO_LARGE: &str = "memory budget (the selection is too large to hand over)";
 
-/// A heavy run's budget as people read it: (minutes it may take, times the instructions a light
-/// run gets).
-pub fn heavy_terms() -> (u64, u64) {
-    (HEAVY_WALL_TIME_MS / 60_000, HEAVY_FUEL / Limits::default().fuel_base.max(1))
+/// A heavy run's budget as people read it, for a plug-in of kind `kind`: (minutes it may take,
+/// times the instructions a light run of its kind gets). A heavy filter's run is measured against
+/// a light filter's, a heavy exporter's export against an export's.
+pub fn heavy_terms(kind: crate::Kind) -> (u64, u64) {
+    match kind {
+        crate::Kind::Exporter => (crate::export::WALL_TIME_MS / 60_000, crate::export::HEAVY_FUEL / crate::export::FUEL.max(1)),
+        _ => (HEAVY_WALL_TIME_MS / 60_000, HEAVY_FUEL / Limits::default().fuel_base.max(1)),
+    }
 }
 
 /// Resource limits for running plug-ins.
@@ -115,6 +119,10 @@ pub struct Limits {
     /// ([`crate::export::limits`]).
     pub export_fuel: u64,
     pub export_wall_time_ms: u64,
+    /// The most a heavy exporter's export is given instead of `export_fuel`, in the same
+    /// `export_wall_time_ms` ([`crate::export::HEAVY_FUEL`]). Set it to `export_fuel` to give heavy
+    /// exporters nothing more.
+    pub heavy_export_fuel: u64,
 }
 
 impl Default for Limits {
@@ -131,6 +139,7 @@ impl Default for Limits {
             heavy_wall_time_ms: HEAVY_WALL_TIME_MS,
             export_fuel: crate::export::FUEL,
             export_wall_time_ms: crate::export::WALL_TIME_MS,
+            heavy_export_fuel: crate::export::HEAVY_FUEL,
         }
     }
 }

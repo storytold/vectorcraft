@@ -288,6 +288,27 @@ fn a_cancelled_export_stops_the_exporter() {
     assert!(took >= wait && took < Duration::from_secs(10), "stopped while running, not before: {took:?}");
 }
 
+/// An exporter that asks for a heavy budget installs only once the user agrees, as a heavy filter
+/// does, and is told so in an export's terms; once installed, its exports get more instructions
+/// than a plain exporter's.
+#[test]
+fn a_heavy_exporter_installs_once_the_user_agrees() {
+    let mut s = session();
+    s.allow_plugin_grants_from_requests();
+    let id = "test.heavy.exporter";
+    let manifest = tpl::exporter(id, r#"["thx"]"#, "{}").replace(r#""kind":"exporter""#, r#""kind":"exporter","budget":"heavy""#);
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, r#"{"dataBase64":""}"#)).unwrap());
+    assert_eq!(s.execute("plugin.inspect", &json!({"dataBase64": data})).unwrap()["budget"], "heavy");
+    let e = s.execute("plugin.install", &json!({"dataBase64": data})).unwrap_err().to_string();
+    assert!(e.contains("heavy budget") && e.contains("each export") && e.contains("allowHeavy"), "{e}");
+    assert!(vectorcraft_plugins::registry::get(id).is_none());
+    let info = s.execute("plugin.install", &json!({"dataBase64": data, "allowHeavy": true})).unwrap();
+    assert_eq!((info["budget"].as_str(), info["format"].as_str()), (Some("heavy"), Some("plugin.test.heavy.exporter")));
+    let p = vectorcraft_plugins::registry::get(id).unwrap();
+    assert!(vectorcraft_plugins::export::limits(&p).fuel_base > vectorcraft_plugins::Limits::default().export_fuel);
+    s.execute("plugin.remove", &json!({"id": id})).unwrap();
+}
+
 /// Every string in `v`, at any depth.
 fn strings_in(v: &Value, out: &mut Vec<String>) {
     match v {

@@ -303,7 +303,7 @@ fn a_heavy_filter_finishes_what_a_light_one_cannot() {
     assert_eq!(run_err(&light, Limits::default()).0, Error::Limit("instruction budget".into()));
     let p = Plugin::load(&heavy, Limits::default()).unwrap();
     assert_eq!((p.limits().fuel_base, p.limits().wall_time_ms), (HEAVY_FUEL, HEAVY_WALL_TIME_MS));
-    assert_eq!(heavy_terms(), (5, 20));
+    assert_eq!(heavy_terms(Kind::Filter), (5, 20));
     assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
 }
 
@@ -343,6 +343,27 @@ fn an_exporter_returns_its_file_with_an_export_s_budget() {
     let importer = Plugin::load(&build(&tpl::returning(&tpl::importer("test.reads", r#"["tst"]"#, "{}"), "{}")), Limits::default()).unwrap();
     let e = export::run(&importer, b"{}", &Value::Null, target).unwrap_err();
     assert!(e.to_string().contains("is a plug-in of kind `importer`, not an exporter"), "{e}");
+}
+
+/// A heavy exporter's export gets the larger budget its host allows for one: an export that needs
+/// more than an export's usual instructions finishes when its exporter is heavy and is stopped when
+/// it isn't. Run at once (`export::at_once`), the heavy exporter gets the usual budget, and the
+/// error says where it gets its own; outside it, it has its larger budget again.
+#[test]
+fn a_heavy_exporter_finishes_what_a_plain_one_cannot_except_at_once() {
+    use vectorcraft_plugins::export::{self, Target};
+    let target = Target { extension: "tst", name: "a" };
+    let limits = Limits { fuel_per_byte: 0, export_fuel: 500_000, heavy_export_fuel: 100_000_000, ..Limits::default() };
+    let plain = tpl::exporter("test.export.plain", r#"["tst"]"#, "{}");
+    let heavy = plain.replace("test.export.plain", "test.export.heavy").replace(r#""kind":"exporter""#, r#""kind":"exporter","budget":"heavy""#);
+    let load = |m: &str| Plugin::load(&build(&tpl::spinning(m, 1_000_000, r#"{"dataBase64":"SGk="}"#)), limits.clone()).unwrap();
+    let (plain, heavy) = (load(&plain), load(&heavy));
+    let run = |p: &Plugin| export::run(p, b"{}", &Value::Null, target).map(|out| out.data_base64);
+    assert_eq!(run(&plain), Err(Error::Limit("instruction budget".into())));
+    assert_eq!(run(&heavy), Ok("SGk=".to_string()));
+    assert_eq!(export::at_once(|| run(&heavy)), Err(Error::Limit(export::AT_ONCE_LIMIT.into())));
+    assert_eq!(export::at_once(|| run(&plain)), Err(Error::Limit("instruction budget".into())));
+    assert_eq!(run(&heavy), Ok("SGk=".to_string()));
 }
 
 /// An importer runs on an import's budget, which replaces its own instruction and time budgets and
