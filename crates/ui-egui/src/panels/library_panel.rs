@@ -16,6 +16,7 @@
 //! (`UiState::library_selection`).
 
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use craft::behavior::{IconId, Selection, SelectionModel};
@@ -30,7 +31,7 @@ use craft::ui::patterns::presets::{
 use craft::ui::primitives::{ContentPainterCx, IconSpec};
 use craft::ui::runtime::access::PopupKind;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
-use craft::ui::sections::{FooterAction, FooterBar};
+use craft::ui::sections::{FooterAction, FooterBar, FooterOutput, Panel};
 use egui::{Rect, Ui};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -576,7 +577,11 @@ pub(crate) fn user_slot(id: &str, prefix: &str, libraries: Vec<LibraryInfo>) -> 
 pub(crate) fn show_window(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(panel) = last_open(&app.ui).map(LibraryPanel::panel) else { return };
     let area = egui::Area::new(egui::Id::unique("test-library-panel")).fixed_pos(egui::pos2(20.0, 20.0));
-    area.show(ctx, |ui| crate::dock::panel_body(app, ui, &panel));
+    area.show(ctx, |ui| {
+        // A dock gives the panel a room of its own, which the browser scrolls in above the footer.
+        ui.set_min_size(egui::vec2(320.0, 740.0));
+        crate::dock::panel_body(app, ui, &panel);
+    });
 }
 
 /// The saved [`View`] nearest to what the browser's toolbar picked: the inverse of [`View::preset`].
@@ -591,9 +596,9 @@ fn saved_view(view: PresetView, zoom: f64) -> View {
     }
 }
 
-/// The browser rows of library `id`'s `rows`: a folder is a group, and the items after it are inside it.
+/// The browser rows of library `id`'s `rows`, flat: a folder is a row of its own before its items, which a click
+/// selects as it selects an item (production's folder tiles neither opened nor closed).
 fn browser_rows<K: LibraryKind>(panel: &str, id: &str, rows: &[Row<K::Item>]) -> Vec<PresetRow<LibraryKey>> {
-    let mut depth = 0;
     rows.iter()
         .map(|r| {
             let label = K::label(id, r.name);
@@ -602,13 +607,9 @@ fn browser_rows<K: LibraryKind>(panel: &str, id: &str, rows: &[Row<K::Item>]) ->
                 Some(item) => {
                     let mut row = K::row(id, item, &label);
                     row.key = key;
-                    row.depth = depth;
                     row
                 }
-                None => {
-                    depth = 1;
-                    PresetRow::group(key, label.into_owned(), 0)
-                }
+                None => PresetRow::item(key, label.into_owned(), 0).icon(IconId::new("dc-folder")),
             }
         })
         .collect()
@@ -662,18 +663,28 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     let state_id = egui::Id::unique(("library-panel-state", &panel));
     let mut state: PresetState<LibraryKey> = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
     (state.view, state.zoom) = view.preset();
-    let out = PresetBrowser::new(library_name(id, &name).to_string(), Bind::bound(&mut state), &source)
-        .toolbar(true)
-        .search(!hide_find)
-        .select(SelectMode::Multi)
-        .selection(Bind::given(selection.clone()))
-        .empty(tl!("This library is empty."))
-        .row_menu(PresetRowMenu::Off)
-        .drags(K::drags())
-        .show(ui);
+    let title = library_name(id, &name).to_string();
+    // The footer stays under the browser, which scrolls in the room left above it.
+    let footer_out = RefCell::new(None);
+    let any = !selection.items.is_empty();
+    let mut shown = Panel::new(title.clone())
+        .collection_body()
+        .footer(|ui, _| *footer_out.borrow_mut() = Some(footer_bar::<K>(any).show_footer(ui)))
+        .show(ui, |ui, _| {
+            PresetBrowser::new(title.clone(), Bind::bound(&mut state), &source)
+                .toolbar(true)
+                .search(!hide_find)
+                .select(SelectMode::Multi)
+                .selection(Bind::given(selection.clone()))
+                .empty(tl!("This library is empty."))
+                .row_menu(PresetRowMenu::Off)
+                .drags(K::drags())
+                .show(ui)
+        });
+    let events = shown.settle(|_, out| std::mem::take(&mut out.events)).unwrap_or_default();
     let mut chosen = selection;
     let mut clicked = None;
-    for event in out.events {
+    for event in events {
         match event {
             PresetEvent::Selection(change) => chosen.apply(change),
             // A plain click on an item also adds and applies it; folders and modifier clicks only select.
@@ -691,19 +702,26 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     if let Some(name) = clicked {
         K::click(app, ui, id, &name);
     }
-    footer::<K>(app, ui, id, names);
+    if let Some(out) = footer_out.into_inner() {
+        footer::<K>(app, ui, id, names, out);
+    }
 }
 
-/// The panel's footer: the libraries menu, previous / next library, and Add to … for the selection `names`.
-fn footer<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, names: Vec<String>) {
+/// The panel's footer: the libraries menu, previous / next library, and Add to … , on while `any` item or folder is
+/// selected.
+fn footer_bar<K: LibraryKind>(any: bool) -> FooterBar {
     let icon = |name: &'static str| IconSpec::svg(IconId::new(name));
-    let out = FooterBar::actions([
+    FooterBar::actions([
         FooterAction::new(icon("library"), K::MENU).popup(PopupKind::Menu),
         FooterAction::new(icon("chevron-left"), tl!("Previous Library")),
         FooterAction::new(icon("chevron-right"), tl!("Next Library")),
-        FooterAction::new(icon("dc-new-item"), K::ADD).enabled(!names.is_empty()),
+        FooterAction::new(icon("dc-new-item"), K::ADD).enabled(any),
     ])
-    .show_footer(ui);
+}
+
+/// What the footer `out` reported: the libraries menu opened, a library stepped to, or Add to … for the selection
+/// `names`.
+fn footer<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, names: Vec<String>, out: FooterOutput) {
     if let Some(menu) = out.responses.first() {
         Menu::new(K::MENU).opened_by(menu, Trigger::Click).show(ui, |ui, _| library_menu::<K>(app, ui));
     }
