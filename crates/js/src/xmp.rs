@@ -159,6 +159,12 @@ impl Item {
     pub(crate) fn has_lang(&self) -> bool {
         self.lang.as_deref().is_some_and(|l| !l.is_empty())
     }
+
+    /// The options `XMPProperty.options` gives for the item: an `xml:lang` qualifier, also an empty
+    /// one, is a qualifier and a language, as on a property.
+    pub(crate) fn options(&self) -> u32 {
+        if self.lang.is_some() { PROP_HAS_QUALIFIERS | PROP_HAS_LANG } else { 0 }
+    }
 }
 
 /// A property's value.

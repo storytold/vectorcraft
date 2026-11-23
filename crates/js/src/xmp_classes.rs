@@ -422,7 +422,7 @@ fn get_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
         Step::Whole => property(i, &ns, &path, value.text(), value.options(), ""),
         Step::Item(index) => match value {
             xmp::Value::Array { items, .. } => match position(index, items.len()).and_then(|p| items.get(p)) {
-                Some(item) => property(i, &ns, &path, Some(&item.text), 0, item.lang.as_deref().unwrap_or("")),
+                Some(item) => property(i, &ns, &path, Some(&item.text), item.options(), item.lang.as_deref().unwrap_or("")),
                 None => Ok(Value::Undefined),
             },
             _ => Err(not_array(i, what, &name)),
@@ -567,7 +567,7 @@ fn get_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRes
     };
     let Some(item) = item else { return Ok(Value::Undefined) };
     let path = format!("{path}[{}]", p + 1);
-    property(i, &ns, &path, Some(&item.text), 0, item.lang.as_deref().unwrap_or(""))
+    property(i, &ns, &path, Some(&item.text), item.options(), item.lang.as_deref().unwrap_or(""))
 }
 
 fn does_array_item_exist(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {

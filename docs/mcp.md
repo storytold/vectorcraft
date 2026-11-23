@@ -3062,7 +3062,8 @@ rules for these objects:
   `setArrayItem`, `deleteArrayItem`, `doesArrayItemExist`, `getLocalizedText` and `setLocalizedText`, and the
   functions `XMPMeta.registerNamespace`, `getNamespacePrefix` and `getNamespaceURI`. A path is a property name,
   `prefix:name`, or either with `[n]` (from 1) or `[last()]` for an array item. Arrays hold simple items; a structure
-  or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options. A
+  or a value with qualifiers that a packet holds is kept as it was written, and `getProperty` gives its options. An
+  array item with an `xml:lang` qualifier has the qualifier and language options in `getProperty` and `getArrayItem`. A
   value with qualifiers in the `rdf:value` form also gives the text of its `rdf:value`, and an empty property element
   whose attributes are fields is a structure. The namespaces that a packet's property, element and attribute names use are registered with the prefix the packet
   gives them, or `prefix_1_` when that prefix names another namespace; a namespace the packet declares but no name

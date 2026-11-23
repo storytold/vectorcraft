@@ -76,6 +76,17 @@ fn a_packet_reads_into_properties() {
     assert_eq!(string(&with_packet("XMPMeta.getNamespacePrefix('http://example.com/ns/')")), "ex:");
 }
 
+/// An array item with an `xml:lang` qualifier has the qualifier and language options, read by path
+/// or by index; an item without one has none.
+#[test]
+fn array_items_report_their_language_qualifier() {
+    let qualified = f64::from(0x10 | 0x40);
+    assert_eq!(run(&with_packet("m.getProperty(XMPConst.NS_DC, 'title[2]').options")), JsValue::Number(qualified));
+    assert_eq!(run(&with_packet("m.getArrayItem(XMPConst.NS_DC, 'title', 1).options")), JsValue::Number(qualified));
+    assert_eq!(run(&with_packet("m.getProperty(XMPConst.NS_DC, 'subject[1]').options")), JsValue::Number(0.0));
+    assert_eq!(run(&with_packet("m.getArrayItem(XMPConst.NS_DC, 'subject', 2).options")), JsValue::Number(0.0));
+}
+
 #[test]
 fn properties_arrays_and_namespaces_round_trip() {
     let src = "var ns = 'http://example.com/rt/';
