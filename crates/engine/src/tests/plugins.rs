@@ -183,8 +183,8 @@ fn filters_make_guides_and_locked_objects_left_unselected() {
 }
 
 /// A compound path handed back with its path as it was keeps its members, hidden and locked ones
-/// included. A changed path replaces its members, and is refused while a member is hidden, locked
-/// or a guide, as is turning it into a plain path.
+/// included. A changed path replaces its members, and is refused while a member is hidden, locked,
+/// a guide or not a path, as is turning it into a plain path.
 #[test]
 fn a_filter_keeps_or_replaces_a_compound_path_s_members_whole() {
     use std::sync::Arc;
@@ -286,6 +286,14 @@ fn a_filter_keeps_or_replaces_a_compound_path_s_members_whole() {
     install_wat(&mut s, &reshape("test.engine.compound.reshape", guide, json!({})));
     let err = s.execute("plugin.run", &json!({"id": "test.engine.compound.reshape", "ids": [guide.0]})).unwrap_err().to_string();
     assert!(err.contains("guide member"), "{err}");
+    let flatten = tpl::returning(
+        &tpl::manifest("test.engine.compound.flatten.unflagged", "filter", "{}"),
+        &json!({"objects": [{"id": guide.0, "type": "path"}]}).to_string(),
+    );
+    install_wat(&mut s, &flatten);
+    let err = s.execute("plugin.run", &json!({"id": "test.engine.compound.flatten.unflagged", "ids": [guide.0]})).unwrap_err().to_string();
+    assert!(err.contains(&format!("compound path {} has {flagged}", guide.0)), "{err}");
+    assert_eq!(guides(&s, guide), [true, false], "a refused flatten leaves the guide member as it was");
     for (id, on) in [("test.engine.compound.unguide", false), ("test.engine.compound.reguide", true)] {
         let target = guide_of(&mut s);
         install_wat(&mut s, &reshape(id, target, json!({ "guide": on })));
