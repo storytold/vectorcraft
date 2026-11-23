@@ -752,7 +752,7 @@ fn path_stroke_color(h: &super::Host, a: &[Data]) -> Answer {
 /// process swatch reads, throws: it does not name the swatch it was read from.
 fn set_spot_color(h: &super::Host, a: &[Data], fill: bool, spot: &Data, tint: f64) -> Answer {
     if matches!(spot, Data::Undefined) {
-        return Err(HostError::Error("assigning a SpotColor without a spot is not available yet".into()));
+        return Err(HostError::Error("SpotColor.spot must be a Spot; a color read from a global process swatch cannot be assigned yet".into()));
     }
     let (item, look) = this_look(h, a)?;
     let now = if fill { &look.fill } else { &look.stroke };

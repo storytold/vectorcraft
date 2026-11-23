@@ -26,7 +26,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction};
 
 use super::{Link, current, num, text};
 
-/// The classes whose objects can be read from a fill or stroke but not assigned yet.
+/// The classes whose objects [`assigned`] refuses as not available yet. A path's `fillColor` and
+/// `strokeColor` take a `SpotColor` before [`assigned`] runs; a swatch's or spot's `color` does not.
 const LATER: &[&str] = &["GradientColor", "SpotColor", "PatternColor"];
 
 /// The components of each color class, with the value `new` gives them.

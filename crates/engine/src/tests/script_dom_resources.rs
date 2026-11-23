@@ -256,6 +256,21 @@ fn a_spot_keeps_an_rgb_color_in_a_cmyk_document() {
 }
 
 #[test]
+fn a_process_swatch_that_kept_an_rgb_color_takes_it_back_without_a_step() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300, "colorMode": "cmyk"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Sky", "color": "#3080c0", "keepModel": true})).unwrap();
+    let paint = |s: &Session| s.active().unwrap().doc.swatch("Sky").map(|w| w.paint.clone());
+    let rgb = matches!(paint(&s), Some(vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, .. }));
+    assert!(rgb, "the process swatch holds an RGB color in the CMYK document");
+    let before = paint(&s);
+    let steps = undo_steps(&s);
+    log(&mut s, "var w = app.activeDocument.swatches.getByName('Sky'); w.color = w.color;");
+    assert_eq!(paint(&s), before, "the swatch keeps its RGB color");
+    assert_eq!(undo_steps(&s), steps, "assigning the swatch its own color records no step");
+}
+
+#[test]
 fn spots_list_registration_and_keep_it() {
     let (mut s, _) = doc();
     let out = log(

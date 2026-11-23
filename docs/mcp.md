@@ -2731,8 +2731,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   Registration). Assigning a `SpotColor` (https://ai-scripting.docsforadobe.dev/jsobjref/SpotColor/) links the fill or
   stroke to its `spot`, a `Spot` of the path's document, at its `tint` (0 to 100; VectorCraft's own defaults are 100
   for `new SpotColor()` and 0 for a color object without a `tint`), with `paint.setFill` or `paint.setStroke`. A `SpotColor` read from a color linked to a global process
-  swatch has no `spot` and does not name the swatch, so assigning it throws an error that says it is not available yet,
-  and the path keeps its paint. Assigning a `GradientColor` or `PatternColor` throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
+  swatch has no `spot` and does not name the swatch, so assigning it, or a `SpotColor` whose `spot` was never set,
+  throws an error that says `SpotColor.spot` must be a Spot, and the path keeps its paint. Assigning a `GradientColor` or `PatternColor` throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
   art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
   stroke; a new-art gradient goes on the bounds of the path, or of the compound path or compound shape whose paint
   it shows, and a new-art pattern with a placement of its own, or one missing from the document, throws an error.
@@ -2793,7 +2793,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   removed, or renamed or deleted with `vc.run`, every member throws `Stale Swatch` (`Stale Spot`, `Stale SwatchGroup`,
   `Stale Symbol`, `Stale GraphicStyle`, `Stale Brush`). A run holds at most 100,000 of these objects. An object of
   another document throws `Cross-document placement is not available`. `Document.gradients`, `Document.patterns` and
-  assigning a `SpotColor` to art are not available yet.
+  assigning a `SpotColor` to a swatch's or spot's `color` are not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global

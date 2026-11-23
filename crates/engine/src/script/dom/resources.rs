@@ -727,9 +727,10 @@ fn set_swatch_color(h: &Host, kind: Kind, a: &[Data]) -> Answer {
         return Err(HostError::Error("a spot's color must be an RGBColor, a CMYKColor or a LabColor".into()));
     }
     // A spot keeps the color space it is given; a process swatch stores an RGB color in a CMYK
-    // document as CMYK, as `swatch.edit` does without `keepModel`.
+    // document as CMYK, as `swatch.edit` does without `keepModel`, unless the color is the
+    // swatch's own, which `swatch.edit` keeps as it is.
     let stored = if w.spot { color } else { stored_in(h, r.doc, color) };
-    if now == stored {
+    if now == color || now == stored {
         return Ok(Data::Undefined);
     }
     let mut params = json!({"name": r.name, "color": colors::param(&color)});

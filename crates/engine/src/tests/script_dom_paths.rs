@@ -404,7 +404,7 @@ fn a_global_process_link_read_as_a_spot_color_is_not_assigned() {
         "var q = app.activeDocument.pathItems; q[3].fillColor = q[0].fillColor;",
     ] {
         let e = failure(&mut s, script);
-        assert!(e.contains("without a spot is not available yet"), "{script}: {e}");
+        assert!(e.contains("global process swatch cannot be assigned yet"), "{script}: {e}");
         assert_eq!(paints(&s), before, "{script}");
         assert_eq!(undo_steps(&s), steps, "{script}");
     }
@@ -431,7 +431,7 @@ fn a_spot_color_without_a_spot_of_the_document_is_refused() {
     let before = layers(&s);
     let steps = undo_steps(&s);
     for (source, part) in [
-        ("app.documents[0].pathItems[0].fillColor = new SpotColor();", "without a spot is not available yet"),
+        ("app.documents[0].pathItems[0].fillColor = new SpotColor();", "SpotColor.spot must be a Spot; a color read"),
         ("var c = new SpotColor(); c.spot = 5; app.documents[0].pathItems[0].fillColor = c;", "SpotColor.spot must be a Spot"),
         ("var a = app.documents[0], c = new SpotColor(); c.spot = a.swatches.getByName('Ink'); a.pathItems[0].fillColor = c;", "must be a Spot"),
         (
@@ -828,7 +828,7 @@ fn bad_color_components_throw_and_change_nothing() {
         ("app.activeDocument.pathItems[0].fillColor = {typename: 'Foo'};", "color object"),
         ("app.activeDocument.pathItems[0].fillColor = 5;", "color object"),
         ("app.activeDocument.pathItems[0].fillColor = new GradientColor();", "not available yet"),
-        ("app.activeDocument.pathItems[0].strokeColor = new SpotColor();", "without a spot is not available yet"),
+        ("app.activeDocument.pathItems[0].strokeColor = new SpotColor();", "SpotColor.spot must be a Spot; a color read"),
     ] {
         let e = failure(&mut s, source);
         assert!(e.contains(part), "{source}: {e}");
