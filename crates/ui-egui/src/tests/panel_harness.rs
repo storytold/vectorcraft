@@ -88,16 +88,9 @@ impl Panel {
         tree.keys().into_iter().filter_map(|key| tree.name_of(key)).map(str::to_owned).collect()
     }
 
-    /// The control named `name` in the latest frame. A caption link takes the name of the number field it captions
-    /// (the Control bar's X, Y, W and H): the field is the control.
+    /// The control named `name` in the latest frame.
     fn look(&self, name: &str) -> Target {
-        use craft::ui::contract::Role;
-        let found = self.fixture.by_label(name).unwrap_or_else(|| panic!("no {name:?} in {:?}", self.names()));
-        let tree = self.fixture.tree();
-        if tree.role_of(found.node) != Some(Role::LINK) {
-            return found;
-        }
-        self.fixture.by_role(Role::SPIN_BUTTON).into_iter().find(|t| tree.name_of(t.node) == Some(name)).unwrap_or(found)
+        self.fixture.by_label(name).unwrap_or_else(|| panic!("no {name:?} in {:?}", self.names()))
     }
 
     /// A fresh frame, then the control named `name`.
