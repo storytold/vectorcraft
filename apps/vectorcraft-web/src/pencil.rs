@@ -22,9 +22,9 @@ use std::cell::RefCell;
 #[cfg(target_arch = "wasm32")]
 use std::rc::Rc;
 
-use egui::{Event, PointerButton, Pos2, TouchDeviceId, TouchId, TouchPhase};
 use craft::behavior::PointerSample;
 use craft::ui::runtime::pen::PenSource;
+use egui::{Event, PointerButton, Pos2, TouchDeviceId, TouchId, TouchPhase};
 use vectorcraft_ui_egui::touch::{self, Source};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast as _;

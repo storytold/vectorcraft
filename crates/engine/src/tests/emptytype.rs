@@ -302,4 +302,3 @@ fn ime_target_survives_edits_and_changes_with_the_document() {
     let second = s.tool_ime_target(v).expect("the new document's type has a target");
     assert_ne!(first.0, second.0, "a document replacement is a new IME owner");
 }
-
