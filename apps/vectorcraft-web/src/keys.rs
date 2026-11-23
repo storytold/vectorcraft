@@ -9,6 +9,7 @@
 
 use craft::keymap::Chord;
 // PLAN: assumed path `craft::ui::runtime::commands` for the ui contract's `commands` module.
+#[cfg(target_arch = "wasm32")]
 use craft::ui::runtime::commands;
 use egui::{Key, Modifiers};
 
@@ -33,6 +34,7 @@ pub(crate) fn browser_chord(key: &str, code: &str, modifiers: Modifiers, alt_gra
 
 /// Whether the browser's own action for a key press is cancelled: the keymap in effect, the
 /// user's shortcuts included, binds its chord. Before the first frame nothing is bound.
+#[cfg(target_arch = "wasm32")]
 pub(crate) fn kept_from_browser(ctx: &egui::Context, key: &str, code: &str, modifiers: Modifiers, alt_graph: bool) -> bool {
     browser_chord(key, code, modifiers, alt_graph).is_some_and(|chord| commands::holder(ctx, &chord).is_some())
 }
