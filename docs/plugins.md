@@ -880,7 +880,8 @@ fill and stroke the piece returns, three more keys:
   `[[x, y], …]`, each a pair of numbers, and a Transform's `copies` and `reference` are whole numbers. The values
   `effect.apply` checks for one effect are checked the same way: an SVG filter's `xml`, `scale`, `origin`, `axes` and
   `name`, a Warp's `version`, a `color` (`"#rrggbb"`, `[r, g, b]` with each component from 0 to 1, or a color object
-  with components from 0 to 1 and a Lab lightness from 0 to 100), a Levels or Curves `channel` and a Radial Blur's
+  whose RGB, CMYK or Gray components are each from 0 to 1, or whose Lab `l` is from 0 to 100 and `a` and `b` are any
+  finite numbers), a Levels or Curves `channel` and a Radial Blur's
   center. A Drop Shadow's, Inner Glow's or Outer Glow's `mode` must name a blend mode (`"multiply"`, `"color-burn"`).
   Omitted parameters take the effect's defaults. On a fill or stroke only raster effects are taken, and only from an effect in the object's stack:
   the fills or strokes that an effect on a fill or a stroke returns take `opacity` and `blend` but no `effects` (its
