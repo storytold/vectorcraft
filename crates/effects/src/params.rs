@@ -187,7 +187,7 @@ pub fn check_returned_effect(e: &Effect, row: bool) -> Result<(), String> {
 
 /// The values in `given`, the parameters of built-in effect `id` that a painted live-effect plug-in
 /// returned, that are checked further: an SVG filter's XML, `scale`, `origin`, `axes` and
-/// `name`; a Free Distort's four `corners`; Curves' `points` as pairs; a Transform's whole
+/// `name`; a Free Distort's four `corners`; Curves' `points` as pairs from 0 to 255; a Transform's whole
 /// `copies` and `reference`; a Warp's `version`; a `color` the effect can draw; a
 /// shadow's or glow's blend `mode`; a Levels or Curves `channel`; a Radial
 /// Blur's center; and the type of each parameter without a default.
@@ -218,8 +218,8 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
     if id == "distort.freeDistort" && given.get("corners").is_some_and(|c| !c.as_array().is_some_and(|c| c.len() == 4 && c.iter().all(pair))) {
         return Err("`corners` must be four [x, y] pairs of numbers".into());
     }
-    if id == "adjust.curves" && given.get("points").and_then(Value::as_array).is_some_and(|p| !p.iter().all(pair)) {
-        return Err("`points` must be \"x,y x,y …\" or [[x, y], …] pairs of numbers".into());
+    if id == "adjust.curves" && given.get("points").is_some_and(|p| !is_curve_points(p)) {
+        return Err("`points` must be \"x,y x,y …\" or [[x, y], …] pairs of numbers from 0 to 255".into());
     }
     if id == "distort.transform"
         && let Some(key) = ["copies", "reference"].into_iter().find(|k| given.get(*k).and_then(Value::as_f64).is_some_and(|x| x.fract() != 0.0))
@@ -259,6 +259,20 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
         return Err("`linear` must be true or false".into());
     }
     Ok(())
+}
+
+/// Can Curves read `v` as its `points`: `"x,y x,y …"` (pairs split by whitespace or `;`) or
+/// `[[x, y], …]`, each number from 0 to 255?
+fn is_curve_points(v: &Value) -> bool {
+    let level = |x: f64| (0.0..=255.0).contains(&x);
+    match v {
+        Value::String(s) => s
+            .split(|c: char| c.is_whitespace() || c == ';')
+            .filter(|p| !p.is_empty())
+            .all(|p| p.split_once(',').is_some_and(|(x, y)| [x, y].into_iter().all(|n| n.trim().parse::<f64>().is_ok_and(level)))),
+        Value::Array(a) => a.iter().all(|p| p.as_array().is_some_and(|p| p.len() == 2 && p.iter().all(|n| n.as_f64().is_some_and(level)))),
+        _ => false,
+    }
 }
 
 /// Can an effect read `v` as its `color`: a hex color or name [`Color::from_hex`] reads, `[r, g, b]`
