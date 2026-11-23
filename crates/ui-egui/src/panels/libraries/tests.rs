@@ -26,17 +26,15 @@ fn app() -> VectorcraftApp {
     app
 }
 
-/// The panel under a one-row list whose row drags what [`CARRIED`] holds, through the drag
-/// session a real source starts.
+/// The panel under a one-row list whose row drags what [`CARRIED`] holds when the drag starts, through the drag
+/// session a real source starts. The row is always there, so the panel's rows stay where a test measured them.
 fn with_source(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if let Some(drag) = CARRIED.with(|carried| carried.borrow().clone()) {
-        let rows = [SOURCE.to_string()];
-        let _ = List::<String>::new("Source")
-            .select(SelectMode::None)
-            .natural_height(true)
-            .drag_payload(move |_: &ListDrag<String>| Some(drag.clone()))
-            .show_items(ui, &keyed(&rows, String::clone), &mut |key, _| ListRow::new(key.clone()));
-    }
+    let rows = [SOURCE.to_string()];
+    let _ = List::<String>::new("Source")
+        .select(SelectMode::None)
+        .natural_height(true)
+        .drag_payload(|_: &ListDrag<String>| CARRIED.with(|carried| carried.borrow().clone()))
+        .show_items(ui, &keyed(&rows, String::clone), &mut |key, _| ListRow::new(key.clone()));
     show(app, ui);
 }
 
@@ -180,7 +178,9 @@ fn item_onto_a_group_header_goes_into_that_group() {
 fn group_header_onto_a_groups_top_half_moves_the_group() {
     let mut panel = ordered();
     let to = top(&panel, "Warm");
-    panel.drag_to("Cool", to, Modifiers::NONE);
+    // The drag starts on Cool's title row (its heading), not the middle of the section, which lies in its body.
+    let from = panel.rect_role("Cool", craft::ui::contract::Role::HEADING).center();
+    panel.drag_between(from, to, Modifiers::NONE);
     panel.frame();
     assert_eq!(group_names(&mut panel.app()).iter().map(|(g, _)| g.as_str()).collect::<Vec<_>>(), ["Cool", "Warm"]);
 }
@@ -289,10 +289,12 @@ fn the_list_view_shows_hex_values_and_takes_drops_by_row() {
     }
     let mut panel = Harness::new(app, show);
     panel.frame();
+    // A list row's text after its name is read with the row, as its description.
+    let beside = |panel: &Harness, name: &str, hex: &str| panel.description(name).is_some_and(|d| d.contains(hex));
     assert!(!panel.shows("#0044aa"), "chips by default");
     panel.app().ui.libraries_list_view = true;
     panel.frame();
-    assert!(panel.shows("#0044aa") && panel.shows("#ffcc00"), "a colour's hex value beside its name");
+    assert!(beside(&panel, "Ocean Blue", "#0044aa") && beside(&panel, "Sun Yellow", "#ffcc00"), "a colour's hex value beside its name");
     // Sun Yellow onto Ocean Blue's top half: first.
     let to = top(&panel, "Ocean Blue");
     panel.drag_to("Sun Yellow", to, Modifiers::NONE);
