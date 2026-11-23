@@ -320,6 +320,7 @@ impl Session {
             plane_placed: false,
             copies: None,
             move_box: std::sync::OnceLock::new(),
+            keep_on_switch: false,
         });
         Ok(())
     }

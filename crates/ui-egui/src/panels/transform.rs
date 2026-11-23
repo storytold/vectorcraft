@@ -69,11 +69,13 @@ pub struct TransformUi {
     gesture_origin: Value,
     /// The artboards' rectangles when a field's running gesture began ([`live_artboard`]).
     gesture_boards: Vec<Rect>,
+    /// The selection's box when a field's running gesture began ([`gesture_start`]).
+    gesture_start: Rect,
 }
 
 impl Default for TransformUi {
     fn default() -> Self {
-        TransformUi { reference_point: 4, popover: false, gesture_origin: Value::Null, gesture_boards: Vec::new() }
+        TransformUi { reference_point: 4, popover: false, gesture_origin: Value::Null, gesture_boards: Vec::new(), gesture_start: Rect::ZERO }
     }
 }
 
@@ -188,6 +190,15 @@ fn gesture_origin(app: &mut VectorcraftApp) -> Value {
         app.ui.transform_panel.gesture_origin = reference_origin(app);
     }
     app.ui.transform_panel.gesture_origin.clone()
+}
+
+/// The box the selection's fields measure from, `now` outside a gesture: while one runs, the box as it began, since
+/// the fields read the gesture's values against the box before the transform and its previews move the selection's.
+fn gesture_start(app: &mut VectorcraftApp, now: Rect) -> Rect {
+    if !app.session.in_interaction() {
+        app.ui.transform_panel.gesture_start = now;
+    }
+    app.ui.transform_panel.gesture_start
 }
 
 /// Where the registration point of the one selected symbol instance is on the page, while Use
@@ -400,7 +411,7 @@ fn set_object_bounds(app: &mut VectorcraftApp, source: TransformSource, row: &Tr
 pub(crate) fn object_fields(app: &mut VectorcraftApp, ui: &mut Ui, groups: TransformGroups) {
     let bx = app.selection_box();
     let state = bx.as_ref().map(|b| box_state(app, b));
-    let start = bx.map_or(Rect::ZERO, |b| b.rect);
+    let start = gesture_start(app, bx.map_or(Rect::ZERO, |b| b.rect));
     let out = fields(app, state, start, groups, false).show(ui);
     apply_fields(app, &out, EditPath::Preview, set_object_bounds);
 }
@@ -410,7 +421,8 @@ pub(crate) fn object_fields(app: &mut VectorcraftApp, ui: &mut Ui, groups: Trans
 pub(crate) fn object_bar_fields(app: &mut VectorcraftApp, ui: &mut Ui) -> Option<TransformFieldsOutput> {
     let bx = app.selection_box()?;
     let state = box_state(app, &bx);
-    let out = fields(app, Some(state), bx.rect, panel_groups(), true).show(ui);
+    let start = gesture_start(app, bx.rect);
+    let out = fields(app, Some(state), start, panel_groups(), true).show(ui);
     apply_fields(app, &out, EditPath::Preview, set_object_bounds);
     Some(out)
 }
