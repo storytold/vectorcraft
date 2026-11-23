@@ -161,36 +161,14 @@ pub(super) fn grid(p: &egui::Painter, xf: &Xf, spacing: f64, subdiv: u32, look: 
     }
 }
 
-/// A ruler label for `v` (in the ruler's unit) on a ruler whose labels are `step` apart: whole
-/// numbers, or the fewest decimals that write `step` exactly, so a binary step keeps its value
-/// (an inch ruler's 1/16 reads `0.0625`, not the `0.06` that rounding the step's magnitude gave).
-/// How far down the left ruler a label of `chars` characters reaches, counting from its top: it
-/// is spelled one character per line, [`RULER_CHAR`] apart, and the last one is a line tall.
-pub(crate) fn vertical_label_height(chars: usize) -> f32 {
-    chars.saturating_sub(1) as f32 * RULER_CHAR + RULER_LINE
-}
-
-/// A ruler label's line spacing and line height on the left ruler.
-const RULER_CHAR: f32 = 8.5;
-
-const RULER_LINE: f32 = 9.5;
-
-pub(crate) fn ruler_label(v: f64, step: f64) -> String {
-    let exact = |d: u32| (step * 10f64.powi(d as i32)).fract().abs() < 1e-9;
-    let decimals = (0..=7).find(|d| exact(*d)).unwrap_or(7) as usize;
-    let s = format!("{v:.decimals$}");
-    // Trailing zeros go, as `Unit::number` drops them: a sixteenth-inch ruler labels the inch `1`,
-    // not `1.0000`, which the vertical ruler would spell down six lines.
-    let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.') } else { &s };
-    if s.trim_start_matches('-').chars().all(|c| c == '0' || c == '.') { "0".into() } else { s.into() }
-}
+pub(crate) use craft_ui::ruler::{ruler_label, vertical_label_height};
+pub(crate) const RULER_CHAR: f32 = craft_ui::ruler::RULER_CHAR_SPACING;
 
 /// The rulers, numbered in `unit` (the General unit).
 /// The top ruler, the left ruler and the box where they meet.
 pub(super) fn ruler_rects(full: egui::Rect) -> [egui::Rect; 3] {
-    let top = egui::Rect::from_min_max(pos2(full.left() + RULER, full.top()), pos2(full.right(), full.top() + RULER));
-    let left = egui::Rect::from_min_max(pos2(full.left(), full.top() + RULER), pos2(full.left() + RULER, full.bottom()));
-    [top, left, egui::Rect::from_min_size(full.min, vec2(RULER, RULER))]
+    let r = craft_ui::ruler::ruler_rects(full, RULER);
+    [r.top, r.left, r.corner]
 }
 
 /// A drag from a ruler onto the canvas makes a guide where the button is released (the engine's

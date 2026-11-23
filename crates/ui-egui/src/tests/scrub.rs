@@ -85,10 +85,10 @@ fn w_field(width: &Cell<f64>) -> impl Fn(&mut egui::Ui) -> Option<f64> + '_ {
 fn dragging_the_label_steps_the_field_with_shift_and_ctrl() {
     for (mods, dx, want) in [
         // One unit per PX_PER_STEP points, ten with Shift, a tenth with Ctrl/Cmd; left goes down.
-        (Modifiers::NONE, 40.0, 100.0 + 40.0 / scrub::PX_PER_STEP as f64),
-        (Modifiers::NONE, -40.0, 100.0 - 40.0 / scrub::PX_PER_STEP as f64),
-        (Modifiers::SHIFT, 40.0, 100.0 + 400.0 / scrub::PX_PER_STEP as f64),
-        (Modifiers::COMMAND, 40.0, 100.0 + 4.0 / scrub::PX_PER_STEP as f64),
+        (Modifiers::NONE, 40.0, 100.0 + 40.0 / craft_ui::numeric::PX_PER_STEP as f64),
+        (Modifiers::NONE, -40.0, 100.0 - 40.0 / craft_ui::numeric::PX_PER_STEP as f64),
+        (Modifiers::SHIFT, 40.0, 100.0 + 400.0 / craft_ui::numeric::PX_PER_STEP as f64),
+        (Modifiers::COMMAND, 40.0, 100.0 + 4.0 / craft_ui::numeric::PX_PER_STEP as f64),
     ] {
         let mut row = Row::new();
         let width = Cell::new(100.0);
@@ -270,7 +270,7 @@ fn scrubbing_w_in_the_app_is_one_undo_step() {
     let (mut app, ctx) = app_with_rect();
     let undo = undo_len(&app);
     drag_w(&mut app, &ctx, 40.0, false);
-    assert!((width(&app) - (100.0 + 40.0 / scrub::PX_PER_STEP as f64)).abs() < 1e-6, "{}", width(&app));
+    assert!((width(&app) - (100.0 + 40.0 / craft_ui::numeric::PX_PER_STEP as f64)).abs() < 1e-6, "{}", width(&app));
     assert_eq!(undo_len(&app), undo + 1, "one undo step for the drag");
     app.run("edit.undo", json!({})).unwrap();
     assert!((width(&app) - 100.0).abs() < 1e-6);
@@ -304,7 +304,7 @@ fn a_scrub_leaves_another_documents_undo_group_open() {
     assert!((width(&app) - 100.0).abs() < 1e-6, "Escape: {}", width(&app));
     assert_eq!(other(&app), (true, 1), "Escape");
     drag_w(&mut app, &ctx, 40.0, false);
-    assert!((width(&app) - (100.0 + 40.0 / scrub::PX_PER_STEP as f64)).abs() < 1e-6, "{}", width(&app));
+    assert!((width(&app) - (100.0 + 40.0 / craft_ui::numeric::PX_PER_STEP as f64)).abs() < 1e-6, "{}", width(&app));
     assert_eq!(other(&app), (true, 1), "released");
 }
 
@@ -324,7 +324,7 @@ fn a_scrub_inside_an_open_undo_group_joins_its_step() {
     assert_eq!(app.session.journal.len(), journal, "and drops the drag's journal entries");
     assert_eq!(objects(app.session.doc().unwrap()), 2, "the rectangle drawn in the group stays");
     drag_w(&mut app, &ctx, 40.0, false);
-    assert!((width(&app) - (100.0 + 40.0 / scrub::PX_PER_STEP as f64)).abs() < 1e-6, "{}", width(&app));
+    assert!((width(&app) - (100.0 + 40.0 / craft_ui::numeric::PX_PER_STEP as f64)).abs() < 1e-6, "{}", width(&app));
     assert!(app.session.doc().unwrap().undo_group.is_some(), "the group stays open");
     assert_eq!(undo_len(&app), undo, "the drag joins the group's step");
     app.run("edit.undoGroup.end", json!({})).unwrap();
@@ -418,11 +418,11 @@ fn the_control_bars_stroke_and_opacity_links_scrub_their_fields() {
 
     drag_at(&mut app, &ctx, at, -40.0);
     // 40 points left: 40 / PX_PER_STEP steps of 1% down from 100%.
-    assert!((opacity(&app) as f64 - (1.0 - 40.0 / scrub::PX_PER_STEP as f64 / 100.0)).abs() < 1e-4, "{}", opacity(&app));
+    assert!((opacity(&app) as f64 - (1.0 - 40.0 / craft_ui::numeric::PX_PER_STEP as f64 / 100.0)).abs() < 1e-4, "{}", opacity(&app));
     assert_eq!(undo_len(&app), undo + 1, "one undo step");
 
     let at = find(&mut app, "Stroke:");
     drag_at(&mut app, &ctx, at, 40.0);
-    assert!((weight(&app) - (w0 + 40.0 / scrub::PX_PER_STEP as f64)).abs() < 1e-6, "{}", weight(&app));
+    assert!((weight(&app) - (w0 + 40.0 / craft_ui::numeric::PX_PER_STEP as f64)).abs() < 1e-6, "{}", weight(&app));
     assert_eq!(undo_len(&app), undo + 2, "one undo step");
 }
