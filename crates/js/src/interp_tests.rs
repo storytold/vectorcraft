@@ -99,6 +99,8 @@ fn variables_functions_and_closures() {
 fn a_trailing_comma_adds_no_argument_or_parameter() {
     assert_eq!(num("function f(a, b,) { return arguments.length * 10 + f.length; } f(1,)"), 12.0);
     assert_eq!(num("function P(x,) { this.n = arguments.length; } new P(5,).n"), 1.0);
+    assert_eq!(num("var f = new Function('a,', 'return arguments.length'); f(1, 2) * 10 + f.length"), 21.0);
+    assert_eq!(num("Function('a', '', 'return a')(4)"), 4.0);
 }
 
 #[test]

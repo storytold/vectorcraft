@@ -146,9 +146,10 @@ fn a_comma_may_end_arguments_and_parameters() {
     for src in ["(function (a,) {});", "({get a() {}, m: function (x,) {}});", "f(g(1,),);", "'use strict'; function h(a,) {}"] {
         ok(src);
     }
-    for src in ["f(,);", "f(1,,);", "f(, 1);", "function g(,) {}", "function g(a,,) {}", "new F(,);", "({set a(v,) {}});"] {
+    for src in ["f(,);", "f(1,,);", "f(, 1);", "function g(,) {}", "function g(a,,) {}", "new F(,);"] {
         err(src);
     }
+    assert!(err("({set a(v,) {}});").message.contains("setter"));
 }
 
 #[test]
