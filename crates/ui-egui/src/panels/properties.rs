@@ -869,33 +869,50 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         ui.add_space(6.0);
         let link = super::transform::proportional(app, ui);
-        egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
-            dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field_named(ui, "tx", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, fw) {
-                super::transform::run_transform(
-                    app,
-                    "object.setBounds",
-                    json!({"x": reference.bounds_xy(v + origin.x, 0.0).0, "reference": refi, "copy": copy}),
-                );
-            }
-            dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(b.width()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
-            }
-            ui.end_row();
-            dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field_named(ui, "ty", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, fw) {
-                super::transform::run_transform(
-                    app,
-                    "object.setBounds",
-                    json!({"y": reference.bounds_xy(0.0, v + origin.y).1, "reference": refi, "copy": copy}),
-                );
-            }
-            dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(b.height()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
-            }
-            ui.end_row();
+        // Two grids, X and Y then W and H: Tab follows the order the fields are made in, so it
+        // goes down each column (#3953).
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            egui::Grid::new("xf-grid-pos").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                dim_label(ui, "X:");
+                if let Some(v) = widgets::num_field_named(ui, "tx", Some(crate::i18n::t("X:")), Some(rp.x - origin.x), units, fw) {
+                    super::transform::run_transform(
+                        app,
+                        "object.setBounds",
+                        json!({"x": reference.bounds_xy(v + origin.x, 0.0).0, "reference": refi, "copy": copy}),
+                    );
+                }
+                ui.end_row();
+                dim_label(ui, "Y:");
+                if let Some(v) = widgets::num_field_named(ui, "ty", Some(crate::i18n::t("Y:")), Some(rp.y - origin.y), units, fw) {
+                    super::transform::run_transform(
+                        app,
+                        "object.setBounds",
+                        json!({"y": reference.bounds_xy(0.0, v + origin.y).1, "reference": refi, "copy": copy}),
+                    );
+                }
+                ui.end_row();
+            });
+            egui::Grid::new("xf-grid-size").num_columns(2).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
+                dim_label(ui, "W:");
+                if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(b.width()), units, fw) {
+                    super::transform::run_transform(
+                        app,
+                        "object.setBounds",
+                        json!({"width": v, "reference": refi, "proportional": link, "copy": copy}),
+                    );
+                }
+                ui.end_row();
+                dim_label(ui, "H:");
+                if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(b.height()), units, fw) {
+                    super::transform::run_transform(
+                        app,
+                        "object.setBounds",
+                        json!({"height": v, "reference": refi, "proportional": link, "copy": copy}),
+                    );
+                }
+                ui.end_row();
+            });
         });
         super::transform::constrain_link(app, ui);
     });

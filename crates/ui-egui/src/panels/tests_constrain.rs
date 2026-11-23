@@ -300,13 +300,13 @@ fn the_link_is_a_preference_agents_can_read_and_set() {
 /// One Tab moves from a field to the next field: a field's label (its scrub zone), spinner and
 /// preset chevron are not tab stops of their own, and the W/H link between W and H, which is
 /// still focusable, comes after the fields. In the Transform panel and the Properties panel the
-/// fields run X, W, Y, H (a grid, two to a row); in the Control bar X, Y, W, H.
+/// fields run X, Y, W, H; the Control bar retains its own X, Y, W, H order.
 #[test]
 fn one_tab_moves_from_a_field_to_the_next() {
-    // From X (the selection's centre, 60 pt) the next field is W in the panels and Y in the bar.
+    // From X (the selection's centre, 60 pt) the next field is Y in both panels and the bar.
     for (name, draw, next) in [
-        ("Transform panel", transform::show as Draw, "width"),
-        ("Properties", properties::transform_section as Draw, "width"),
+        ("Transform panel", transform::show as Draw, "y"),
+        ("Properties", properties::transform_section as Draw, "y"),
         ("Control bar", crate::chrome::control_bar as Draw, "y"),
     ] {
         let mut app = rect_app();
@@ -334,13 +334,13 @@ fn one_tab_moves_from_a_field_to_the_next() {
     tab_then_type(&mut app, transform::show, "0°", "30");
     let shear = app.session.active().map(|st| st.doc.bounds_of(&st.selection.objects, false).map(|b| (b.width().round(), b.height().round())));
     assert_eq!(shear, Some(Some((129.0, 50.0))), "Transform panel: Tab went from Rotate to Shear");
-    // Shift+Tab goes back one field, one press too: from W to X in the panels.
+    // Shift+Tab goes back one field, one press too: from W to Y in the panels.
     for (name, draw) in [("Transform panel", transform::show as Draw), ("Properties", properties::transform_section as Draw)] {
         let mut app = rect_app();
         shift_tab_then_type(&mut app, draw, "100 pt", "200");
         let st = app.session.active().unwrap();
         let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
-        assert_eq!((b.width().round(), b.x0.round()), (100.0, 150.0), "{name}: Shift+Tab went from W to X");
+        assert_eq!((b.width().round(), b.y0.round()), (100.0, 175.0), "{name}: Shift+Tab went from W to Y");
     }
 }
 
