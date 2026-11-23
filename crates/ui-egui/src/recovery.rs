@@ -313,7 +313,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
 /// Enqueues the dialog for the first copy still to ask about → whether there was one and a window to show it.
 fn ask(app: &VectorcraftApp) -> bool {
     let (Some(copy), Some(dialogs)) = (app.recovery.offered.first(), app.dialogs()) else { return false };
-    let now = u64::try_from(chrono::Utc::now().timestamp()).unwrap_or(0);
+    let now = vectorcraft_doc::metadata::now_unix().and_then(|t| u64::try_from(t).ok()).unwrap_or(0);
     let age = copy["saved"].as_u64().map_or(Duration::ZERO, |saved| Duration::from_secs(now.saturating_sub(saved)));
     let document = RecoveredDocument::new(copy["file"].as_str().unwrap_or_default(), copy["title"].as_str().unwrap_or_default(), age);
     dialogs.with(|h| h.enqueue(StartupStage::Recovery, RecoveryDialog::new(document)));
