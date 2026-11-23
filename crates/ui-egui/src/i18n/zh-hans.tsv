@@ -7229,6 +7229,7 @@ axis	Y Axis	Y 轴
 @msg	the output	输出
 @msg	the path has no anchor points	路径没有锚点
 @msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	复合路径 {id} 有隐藏、锁定或参考线成员，因此无法替换其成员
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	复合路径 {id} 有不是路径的成员，因此无法替换其成员
 @msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
 @msg	a number >= {_1}	大于或等于 {_1} 的数字

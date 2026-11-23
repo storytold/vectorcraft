@@ -1037,11 +1037,15 @@ fn same_geometry(returned: &PathData, current: &PathData) -> bool {
     returned.subpaths.iter().eq(current.subpaths.iter().filter(|sp| !sp.anchors.is_empty()))
 }
 
-/// Refuses an output that replaces the members of compound path `n` while one of them is hidden,
-/// locked or (unless the output sets `guide`) a guide.
+/// Refuses an output that replaces the members of compound path `n` while one of them isn't a path
+/// (plug-ins aren't given its geometry), or is hidden, locked or (unless the output sets `guide`) a
+/// guide.
 fn check_members_replaceable(n: &Node, children: &[Arc<Node>], sets_guide: bool, at: &str) -> Result<()> {
+    let id = n.id.0;
+    if children.iter().any(|c| c.path_data().is_none()) {
+        return Err(out_err(at, format!("compound path {id} has a member that isn't a path, so its members can't be replaced")));
+    }
     if children.iter().any(|c| !c.visible || c.locked || (!sets_guide && is_guide(c))) {
-        let id = n.id.0;
         return Err(out_err(at, format!("compound path {id} has a hidden, locked or guide member, so its members can't be replaced")));
     }
     Ok(())

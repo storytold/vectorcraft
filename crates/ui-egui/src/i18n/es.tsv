@@ -7373,6 +7373,7 @@ axis	Y Axis	Eje Y
 @msg	the output	la salida
 @msg	the path has no anchor points	el trazado no tiene puntos de ancla
 @msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	el trazado compuesto {id} tiene un miembro oculto, bloqueado o guía, por lo que sus miembros no se pueden reemplazar
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	el trazado compuesto {id} tiene un miembro que no es un trazado, por lo que sus miembros no se pueden reemplazar
 @msg	too many anchor points (limit {MAX_ANCHORS})	demasiados puntos de ancla (límite {MAX_ANCHORS})
 @msg	true or false	true o false
 @msg	a number >= {_1}	un número >= {_1}

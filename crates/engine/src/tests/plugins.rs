@@ -239,7 +239,16 @@ fn a_filter_keeps_or_replaces_a_compound_path_s_members_whole() {
     };
     let hidden_only = compound_of(&mut s, vec![hidden(h, 360.0)]);
     let locked_only = compound_of(&mut s, vec![Node::path(i, square_at(360.0), Appearance::default()), locked(j, 380.0)]);
-    for target in [hidden_only, locked_only] {
+    // A member that is itself a compound path, shown and unlocked but holding a hidden member: its
+    // geometry isn't in the input, so a new path or a plain path would drop it.
+    let [k, l, m, _] = new_ids(&mut s);
+    let inner = Node::new(k, NodeKind::Compound { children: vec![Arc::new(hidden(l, 400.0))], rule: FillRule::NonZero });
+    let nested = compound_of(&mut s, vec![Node::path(m, square_at(440.0), Appearance::default()), inner]);
+    let was_nested = node(&s, nested).clone();
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.echo", "ids": [nested.0]}));
+    assert_eq!(node(&s, nested).kind, was_nested.kind, "handed back as it was, a nested compound member stays");
+    let flagged = "a hidden, locked or guide member";
+    for (target, why) in [(hidden_only, flagged), (locked_only, flagged), (nested, "a member that isn't a path")] {
         install_wat(&mut s, &reshape("test.engine.compound.reshape", target, json!({})));
         let flatten = tpl::returning(
             &tpl::manifest("test.engine.compound.flatten", "filter", "{}"),
@@ -249,7 +258,7 @@ fn a_filter_keeps_or_replaces_a_compound_path_s_members_whole() {
         let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
         for id in ["test.engine.compound.reshape", "test.engine.compound.flatten"] {
             let e = s.execute("plugin.run", &json!({"id": id, "ids": [target.0]})).unwrap_err().to_string();
-            assert!(e.contains(&format!("compound path {} has a hidden, locked or guide member", target.0)), "{id}: {e}");
+            assert!(e.contains(&format!("compound path {} has {why}", target.0)), "{id}: {e}");
             assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before, "{id}");
         }
     }
@@ -284,6 +293,15 @@ fn a_filter_keeps_or_replaces_a_compound_path_s_members_whole() {
         assert_eq!(members(&s, target).iter().map(|m| m.3.clone()).collect::<Vec<_>>(), [Some(square_at(200.0)), Some(square_at(240.0))], "{id}");
         assert_eq!(guides(&s, target), [on, on], "{id}: every new member takes the output's `guide`");
     }
+    // Turning it into a plain path is allowed the same way when the output sets `guide`.
+    let target = guide_of(&mut s);
+    let flatten = tpl::returning(
+        &tpl::manifest("test.engine.compound.flatten.guide", "filter", "{}"),
+        &json!({"objects": [{"id": target.0, "type": "path", "guide": true}]}).to_string(),
+    );
+    install_wat(&mut s, &flatten);
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.flatten.guide", "ids": [target.0]}));
+    assert!(matches!(node(&s, target).kind, NodeKind::Path { guide: true, .. }), "{:?}", node(&s, target).kind);
 }
 
 #[test]

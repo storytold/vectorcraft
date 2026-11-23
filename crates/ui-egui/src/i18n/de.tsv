@@ -6980,6 +6980,7 @@ axis	Y Axis	Y-Achse
 @msg	the output	die Ausgabe
 @msg	the path has no anchor points	der Pfad hat keine Ankerpunkte
 @msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	der zusammengesetzte Pfad {id} hat ein ausgeblendetes, gesperrtes oder als Hilfslinie dienendes Element, daher lassen sich seine Elemente nicht ersetzen
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	der zusammengesetzte Pfad {id} hat ein Element, das kein Pfad ist, daher lassen sich seine Elemente nicht ersetzen
 @msg	too many anchor points (limit {MAX_ANCHORS})	zu viele Ankerpunkte (Grenze {MAX_ANCHORS})
 @msg	true or false	true oder false
 @msg	a number >= {_1}	eine Zahl >= {_1}
