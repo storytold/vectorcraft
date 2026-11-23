@@ -3255,6 +3255,34 @@ fn script_file_access_shows_paths_as_plain_text() {
     let _ = std::fs::remove_dir_all(store.parent().unwrap());
 }
 
+/// Two paths that differ only after the characters a row shows keep their whole paths in the Revoke
+/// buttons' screen-reader descriptions, so each button names the grant it removes.
+#[test]
+fn script_file_access_revoke_names_the_whole_path() {
+    let mut long = std::env::temp_dir().join("vc-ui-prefs-grants-nowhere");
+    for _ in 0..11 {
+        long.push("d".repeat(100));
+    }
+    let (script, one, two) = (long.with_file_name("a.jsx"), long.join("1.txt"), long.join("2.txt"));
+    let (mut a, store) = app_with_grants("grants-long", json!([grant(&script, &one, "1", false, false), grant(&script, &two, "1", false, false)]));
+    open(&mut a, Some("General"));
+    let ctx = fonts_context();
+    ctx.enable_accesskit();
+    script_access_in_view(&mut a, &ctx, "Revoke");
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+    let raw = egui::RawInput { screen_rect, time: Some(ctx.input(|i| i.time) + 0.25), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(&mut a, ui.ctx()));
+    out.textures_delta.clear();
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    let descriptions: Vec<String> =
+        nodes.iter().filter(|(_, n)| n.label() == Some("Revoke")).filter_map(|(_, n)| n.description().map(str::to_string)).collect();
+    for path in [&one, &two] {
+        let whole = path.to_string_lossy();
+        assert!(descriptions.iter().any(|d| d.ends_with(&*whole)), "{whole} in {descriptions:?}");
+    }
+    let _ = std::fs::remove_dir_all(store.parent().unwrap());
+}
+
 fn description_fits(ui: &egui::Ui, text: &str) -> bool {
     let mut job = egui::text::LayoutJob::simple(text.to_string(), egui::FontId::proportional(11.5), egui::Color32::WHITE, 530.0);
     job.wrap.max_rows = 3;

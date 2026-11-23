@@ -102,6 +102,13 @@ pub(super) fn shown(path: &str) -> String {
     permissions::display_text(path, MAX_SHOWN_PATH)
 }
 
+/// `path` as a row's tooltip and its Revoke button's screen-reader description give it: control and
+/// bidirectional formatting characters written as escapes, and whole, so two paths that a row shows
+/// alike stay apart.
+fn shown_whole(path: &str) -> String {
+    permissions::display_text(path, usize::MAX)
+}
+
 /// A kept script or path as `script.grants` names it to the request being served: whole where that
 /// request may read it, else its file name alone (empty for a path that ends in no name).
 pub(crate) fn as_listed(path: &str) -> &str {
@@ -185,15 +192,16 @@ pub(super) fn show(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog) 
             let size = egui::vec2(ui.available_width(), ROW_HEIGHT);
             match *line {
                 Line::Script(i) => {
-                    let script = shown(rows[i]["script"].as_str().unwrap_or_default());
+                    let script = rows[i]["script"].as_str().unwrap_or_default();
                     ui.allocate_ui_with_layout(size, egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        let text = egui::RichText::new(&script).color(t.text_strong).size(12.0);
-                        ui.add(egui::Label::new(text).truncate()).on_hover_text(&script);
+                        let text = egui::RichText::new(shown(script)).color(t.text_strong).size(12.0);
+                        ui.add(egui::Label::new(text).truncate()).on_hover_text(shown_whole(script));
                     });
                 }
                 Line::Row(i) => {
                     let row = &rows[i];
-                    let (script, path) = (shown(row["script"].as_str().unwrap_or_default()), shown(row["path"].as_str().unwrap_or_default()));
+                    let (script, path) = (row["script"].as_str().unwrap_or_default(), row["path"].as_str().unwrap_or_default());
+                    let (script, path, path_whole) = (shown_whole(script), shown(path), shown_whole(path));
                     ui.allocate_ui_with_layout(size, egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         ui.add_space(12.0);
                         // The path, then the access and the Revoke button at the right.
@@ -202,7 +210,7 @@ pub(super) fn show(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog) 
                         let cell = |width: f32| egui::vec2(width, ROW_HEIGHT);
                         ui.allocate_ui_with_layout(cell(path_width), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                             ui.set_width(path_width);
-                            ui.add(egui::Label::new(egui::RichText::new(&path).color(t.text)).truncate()).on_hover_text(&path);
+                            ui.add(egui::Label::new(egui::RichText::new(&path).color(t.text)).truncate()).on_hover_text(&path_whole);
                         });
                         ui.add_space(12.0);
                         ui.allocate_ui_with_layout(cell(access_width), egui::Layout::left_to_right(egui::Align::Center), |ui| {
@@ -212,11 +220,11 @@ pub(super) fn show(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog) 
                         });
                         let button = widgets::secondary_button(ui, tl!("Revoke"));
                         // A screen reader names the script and the path along with the button.
-                        ui.ctx().accesskit_node_builder(button.id, |node| node.set_description(format!("{script}: {path}")));
+                        ui.ctx().accesskit_node_builder(button.id, |node| node.set_description(format!("{script}: {path_whole}")));
                         if focus == Some(i) {
                             button.request_focus();
                         }
-                        if button.on_hover_text(&path).clicked() {
+                        if button.on_hover_text(&path_whole).clicked() {
                             revoke_at = Some(i);
                         }
                     });
