@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::BlendMode;
 use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
-use vectorcraft_doc::{AnchorRef, Appearance, Document, Node, NodeId, NodeKind, SegmentRef, TextObject};
+use vectorcraft_doc::{AnchorRef, Appearance, Document, LockedArtboards, Node, NodeId, NodeKind, SegmentRef, TextObject};
 use vectorcraft_geom::{FillRule, PathData, SubPath};
 use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, PathfinderOp};
@@ -190,7 +190,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clean Up…",
             ["Object", "Path"],
             None,
-            "{strayPoints?: true, unpaintedObjects?: true, emptyTextPaths?: true} → {removed}",
+            "{strayPoints?: true, unpaintedObjects?: true, emptyTextPaths?: true, hairlineSlivers?: false (closed paths and compound paths outside template layers with a visible fill, no visible stroke and no effect, whose fill no circle `sliverWidth` across fits inside; a compound path counts as one object, and guides, the clipping paths of groups and layers and the members of live and generated art stay), sliverWidth?: pt 0.001..3 (0.03 mm, VectorCraft's own default)} remove them from the visible, unlocked objects (not those on a locked artboard), as one undo step → {removed, warning?: how many shapes hairlineSlivers could not measure (too complex, or past the run's limit of work) and left as they are}",
             has_doc,
             clean_up
         ),
@@ -1662,12 +1662,150 @@ fn is_painted(a: &Appearance) -> bool {
     })
 }
 
+/// Hairline Slivers' width by default, in points: 0.03 mm, VectorCraft's own value.
+pub const HAIRLINE_SLIVER_WIDTH: f64 = 0.03 * 72.0 / 25.4;
+/// The widths Hairline Slivers takes, in points.
+pub const HAIRLINE_SLIVER_WIDTH_RANGE: std::ops::RangeInclusive<f64> = 0.001..=3.0;
+
+/// The Hairline Slivers width `p` gives as `key` (by default [`HAIRLINE_SLIVER_WIDTH`]; a string
+/// with a unit reads too): an error when it is not a distance in [`HAIRLINE_SLIVER_WIDTH_RANGE`].
+pub(crate) fn sliver_width(p: &Value, key: &str, cmd: &str) -> Result<f64> {
+    let w = length_given(p, key, cmd)?.unwrap_or(HAIRLINE_SLIVER_WIDTH);
+    if !HAIRLINE_SLIVER_WIDTH_RANGE.contains(&w) {
+        let (lo, hi) = (HAIRLINE_SLIVER_WIDTH_RANGE.start(), HAIRLINE_SLIVER_WIDTH_RANGE.end());
+        return Err(bad(cmd, format!("`{key}` must be from {lo} to {hi} pt")));
+    }
+    Ok(w)
+}
+
+/// Hairline Slivers: is `n` a path or compound path (not a guide or clipping path) whose subpaths
+/// are all closed, with a visible fill, no visible stroke and no effect (on the object or on a fill or stroke),
+/// whose fill no circle `width` across fits inside? A compound path is measured as one fill.
+/// `None` when the fill can't be measured with what is left of `budget` ([`po::thinner_than_within`]).
+/// A hidden member of a compound path is measured too, since the compound path paints it.
+fn is_hairline_sliver(n: &Node, width: f64, budget: &mut po::ThicknessBudget) -> Option<bool> {
+    // A shape with no fill that paints is left to Unpainted Objects.
+    if !n.appearance.has_drawn_fill() || draws_beyond_its_fill(&n.appearance) {
+        return Some(false);
+    }
+    let (subpaths, rule): (Vec<&SubPath>, FillRule) = match &n.kind {
+        NodeKind::Path { path, rule, guide: false, clipping: false, .. } => (path.subpaths.iter().collect(), *rule),
+        NodeKind::Compound { children, rule } => {
+            let mut all = vec![];
+            for c in children {
+                let NodeKind::Path { path, guide: false, .. } = &c.kind else { return Some(false) };
+                all.extend(path.subpaths.iter());
+            }
+            (all, *rule)
+        }
+        _ => return Some(false),
+    };
+    // Paths of one anchor are stray points, and open paths are lines.
+    if subpaths.is_empty() || subpaths.iter().any(|sp| !sp.closed || sp.anchors.len() < 2) {
+        return Some(false);
+    }
+    po::thinner_than_within(&PathData::new(subpaths.into_iter().cloned().collect()), rule, width, budget)
+}
+
+/// Does `a` paint anything beyond the fill of the geometry it is on: a stroke that draws, or an
+/// effect on the object or on one of its fills and strokes?
+fn draws_beyond_its_fill(a: &Appearance) -> bool {
+    a.has_drawn_stroke() || !a.effects.is_empty() || a.items.iter().any(|i| !i.effects().is_empty())
+}
+
+/// A group that stands for live or generated art (Live Paint, a graph, a dimension, a flare, a
+/// tracing result, objects on a path, a compound shape, type's glyph outlines, the pieces a clipping
+/// path paints and the like), as Artwork Cleanup's checks find most of them: Hairline Slivers
+/// leaves its members alone.
+fn holds_generated_art(n: &Node) -> bool {
+    let e = n.extras();
+    vectorcraft_tools::builder::is_live_paint(n)
+        || e.type_outlines
+        || e.clip_pieces
+        || e.graph.is_some()
+        || e.shaper.is_some()
+        || e.dimension.is_some()
+        || e.flare.is_some()
+        || e.trace.is_some()
+        || e.objects_on_path.is_some()
+        || e.live_paint_gaps.is_some()
+        || e.compound_shape
+}
+
+/// The objects Hairline Slivers finds in `d` for `width`.
+pub(crate) struct Slivers {
+    pub ids: Vec<NodeId>,
+    /// Closed paths and compound paths whose fill couldn't be measured, which are left as they are.
+    pub unmeasured: Vec<NodeId>,
+}
+
+/// The status-bar warning for `count` shapes Hairline Slivers couldn't measure, when there are any.
+pub(crate) fn unmeasured_warning(count: usize) -> Option<String> {
+    (count > 0).then(|| {
+        format!(
+            "Hairline Slivers: {count} shapes could not be measured (too complex, or past the limit of work for one run) and were left as they are"
+        )
+    })
+}
+
+/// The hairline slivers ([`is_hairline_sliver`]) among the visible, unlocked objects of `d` (not
+/// those on a locked artboard or in a template layer) for which `within` holds, in the layers and
+/// groups of the whole document. A compound path counts as one object. The clipping paths of groups
+/// and layers (and all of a clipping group used as one), the members of live and generated art, and
+/// the members of groups and layers whose own stroke or effect paints them are left out.
+pub(crate) fn hairline_slivers(d: &Document, width: f64, within: &dyn Fn(NodeId) -> bool) -> Slivers {
+    struct Walk<'a> {
+        width: f64,
+        locks: LockedArtboards<'a>,
+        within: &'a dyn Fn(NodeId) -> bool,
+        // One budget for the whole document, so that thousands of shapes that need a search take
+        // a bounded time; the shapes after it runs out count as unmeasured.
+        budget: po::ThicknessBudget,
+        out: Vec<(NodeId, Option<bool>)>,
+    }
+    fn visit(n: &Node, clip_path: bool, w: &mut Walk<'_>) {
+        if !n.visible || n.locked || n.is_template() || clip_path {
+            return;
+        }
+        match &n.kind {
+            NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
+                if holds_generated_art(n) || draws_beyond_its_fill(&n.appearance) {
+                    return;
+                }
+                let clips = n.clips();
+                for (i, c) in children.iter().enumerate() {
+                    visit(c, clips && i == 0, w);
+                }
+            }
+            // Art on a locked artboard, or outside `within`, is left out before it is measured.
+            NodeKind::Path { .. } | NodeKind::Compound { .. } if !w.locks.holds_id(n.id) && (w.within)(n.id) => {
+                match is_hairline_sliver(n, w.width, &mut w.budget) {
+                    Some(false) => {}
+                    found => w.out.push((n.id, found)),
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut w = Walk { width, locks: d.locked_artboards(), within, budget: po::ThicknessBudget::document(), out: vec![] };
+    for l in &d.layers {
+        visit(l, false, &mut w);
+    }
+    let mut found = w.out;
+    let editable = d.editable();
+    found.retain(|(id, _)| editable(*id));
+    let (sure, unsure): (Vec<_>, Vec<_>) = found.into_iter().partition(|(_, f)| f.is_some());
+    Slivers { ids: sure.into_iter().map(|(id, _)| id).collect(), unmeasured: unsure.into_iter().map(|(id, _)| id).collect() }
+}
+
 fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.path.cleanUp";
     let stray = switch_or(p, "strayPoints", true, C)?;
     let unpainted = switch_or(p, "unpaintedObjects", true, C)?;
     let empty_text = switch_or(p, "emptyTextPaths", true, C)?;
-    let found = {
+    let slivers = switch_or(p, "hairlineSlivers", false, C)?;
+    let width = sliver_width(p, "sliverWidth", C)?;
+    let (found, warning) = {
         let d = &s.doc()?.doc;
         let mut v = vec![];
         fn visit(n: &Node, parent_compound: bool, parent_clip: bool, first: bool, v: &mut Vec<NodeId>, opts: (bool, bool, bool)) {
@@ -1709,10 +1847,22 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let editable = d.editable();
         v.retain(|id| editable(*id));
-        v
+        let mut warning = None;
+        if slivers {
+            let found = hairline_slivers(d, width, &|_| true);
+            let listed: BTreeSet<NodeId> = v.iter().copied().collect();
+            // A shape another option removes isn't left as it is.
+            warning = unmeasured_warning(found.unmeasured.iter().filter(|id| !listed.contains(id)).count());
+            v.extend(found.ids.into_iter().filter(|id| !listed.contains(id)));
+        }
+        (v, warning)
+    };
+    let reply = |removed: usize| match &warning {
+        Some(w) => json!({ "removed": removed, "warning": w }),
+        None => json!({ "removed": removed }),
     };
     if found.is_empty() {
-        return Ok(json!({ "removed": 0 }));
+        return Ok(reply(0));
     }
     s.edit("Clean Up", |d, _| {
         let mut gone = Beside::replacing(d, &found);
@@ -1723,7 +1873,7 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
         }
         gone.finish(d)
     })?;
-    Ok(json!({ "removed": found.len() }))
+    Ok(reply(found.len()))
 }
 
 // ---------- Divide Objects Below ----------

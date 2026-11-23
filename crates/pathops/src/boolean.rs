@@ -21,7 +21,7 @@ thread_local! {
     /// The contour passes made over an arrangement on this thread, each of which walks all of it.
     pub(crate) static CONTOUR_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// The sweeps [`normalize_bez`] made on this thread.
-    static NORMALIZE_SWEEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(crate) static NORMALIZE_SWEEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// The input curves [`exact_merge`] tested on this thread.
     static EXACT_MERGE_CURVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }

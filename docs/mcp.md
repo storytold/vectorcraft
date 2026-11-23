@@ -7205,6 +7205,24 @@ the dialog on those settings next time.
 `"joins": 3`, `"rows": "many"` or `"addGuides": "yes"`, and change nothing. A distance still takes a string with a unit
 (`"5 mm"`). `joins` must be `miter`, `round` or `bevel`. Omitting a param or giving null keeps its default.
 
+`object.path.cleanUp` with `hairlineSlivers: true` also removes hairline slivers: closed paths and compound paths with
+a visible fill, no visible stroke and no effect, so thin that no circle `sliverWidth` across fits inside their fill
+(Unpainted Objects covers shapes with no paint). A compound path is measured as one fill, so a compound path with one
+sliver member and one real shape stays. `sliverWidth` is a distance from 0.001 to 3 pt; it defaults to 0.03 mm,
+VectorCraft's own value, and `hairlineSlivers` is off by default. In the desktop app the Clean Up dialog has a Hairline
+Slivers checkbox and a Sliver Width field, shown in the stroke unit, or in points when that unit's field would round
+0.001 pt to 0. `select.object.hairlineSlivers {width?}` (Select › Object › Hairline Slivers…) selects the objects Clean
+Up would remove, only inside the isolated group while one is isolated, and replies `{count, warning?}`. Neither command
+takes hidden or locked objects, objects in template layers, art on locked artboards, guides, the clipping paths of
+groups and layers, shapes with an effect, or the members of Live Paint groups and other live or generated art. A shape
+that holds a circle 15/16 of the width across is kept too. A shape too complex to measure is kept as well, and so is
+every shape still unmeasured when one run reaches its limit of work; the reply's `warning` says how many there were:
+
+```json
+{"name":"run_command","arguments":{"command":"object.path.cleanUp","params":{"strayPoints":false,"unpaintedObjects":false,"emptyTextPaths":false,"hairlineSlivers":true,"sliverWidth":"0.03 mm"}}}
+{"name":"run_command","arguments":{"command":"select.object.hairlineSlivers","params":{"width":0.1}}}
+```
+
 ## Smooth
 
 `object.path.smooth` smooths the selected paths (or the objects in `ids`), compound path members included, as one undo

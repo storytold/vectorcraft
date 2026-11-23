@@ -21,7 +21,16 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         let linked = d.fields.get("__rowGutterLinked").is_some() && d.fields.get("__rowGutterLinked") == d.fields.get("rowGutter");
         let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
         let choices = |k: &str| rasterize_color_models(&command, k, cmyk).or_else(|| choices(&command, k));
-        form::param_fields(ui, d, &|k| lengths.contains(&k), &choices, &rank, app.session.general_unit());
+        // Hairline Slivers' widths show in the stroke unit (Preferences › Units › Stroke), or in
+        // points when that unit's field rounds the narrowest width to 0.
+        let unit = match command.as_str() {
+            "object.path.cleanUp" | "select.object.hairlineSlivers" => {
+                let stroke = app.session.stroke_unit();
+                if stroke.number(*vectorcraft_engine::HAIRLINE_SLIVER_WIDTH_RANGE.start()) == "0" { vectorcraft_doc::Unit::Points } else { stroke }
+            }
+            _ => app.session.general_unit(),
+        };
+        form::param_fields(ui, d, &|k| lengths.contains(&k), &choices, &rank, unit);
         if command == crate::addons::packaging::SET_ROLE_SWATCH {
             crate::addons::packaging::follow_role(app, d);
         }
@@ -154,6 +163,8 @@ fn lengths(command: &str) -> &'static [&'static str] {
         crate::addons::cutting::BRIDGES => &["width"],
         "object.textWrap.options" => &["offset"],
         crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE => &["offset"],
+        "object.path.cleanUp" => &["sliverWidth"],
+        "select.object.hairlineSlivers" => &["width"],
         _ => &[],
     }
 }
@@ -168,6 +179,7 @@ pub(super) fn length_range(command: &str, key: &str) -> Option<std::ops::RangeIn
         (crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE, "offset") => {
             Some(0.0..=vectorcraft_engine::MAX_COORD)
         }
+        ("object.path.cleanUp", "sliverWidth") | ("select.object.hairlineSlivers", "width") => Some(vectorcraft_engine::HAIRLINE_SLIVER_WIDTH_RANGE),
         _ => None,
     }
 }
@@ -192,6 +204,7 @@ fn order(command: &str) -> &'static [&'static str] {
         crate::addons::packaging::SET_ROLE_SWATCH => &["role", "swatch"],
         crate::addons::pathtools::COMMON_TANGENTS => &["tangents", "centerline"],
         crate::addons::pathtools::BOUNDING_RECTANGLE | crate::addons::pathtools::BOUNDING_CIRCLE => &["offset", "each"],
+        "object.path.cleanUp" => &["strayPoints", "unpaintedObjects", "emptyTextPaths", "hairlineSlivers", "sliverWidth"],
         _ => &[],
     }
 }

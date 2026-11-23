@@ -1066,6 +1066,314 @@ fn clean_up_removes_junk() {
     assert!(d.node(unpainted).is_none() && d.node(stray).is_none() && d.node(empty).is_none());
 }
 
+/// A path drawn by `d`, filled black with no stroke.
+fn filled(s: &mut Session, d: &str) -> NodeId {
+    let id = NodeId(s.execute("path.create", &json!({ "d": d })).unwrap()["id"].as_u64().unwrap());
+    fill_only(s, id);
+    id
+}
+
+fn fill_only(s: &mut Session, id: NodeId) {
+    s.edit("t", |d, _| {
+        d.node_mut(id).unwrap().appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0).into();
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Hairline Slivers' test art: (the slivers, the shapes with a width).
+fn sliver_art(s: &mut Session) -> (Vec<NodeId>, Vec<NodeId>) {
+    // A triangle whose third anchor lies 0.002 pt from its first: diagonal, so its bounds are wide
+    // and tall. A long one across the page. A compound path of two slivers.
+    let triangle = filled(s, "M10 10 L50 40 L10.001 10.0015 Z");
+    let long = filled(s, "M20 500 L780 20 L20.0005 500.001 Z");
+    let a = filled(s, "M300 300 L340 330 L300.001 300.0015 Z");
+    let b = filled(s, "M300 350 L340 380 L300.001 350.0015 Z");
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let two = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    fill_only(s, two);
+    // Kept: a diagonal strip 0.2 pt across (0.07 mm), a dot 0.3 pt round, a stroked sliver (it
+    // draws a line), an open path, and a compound path of a sliver and a square.
+    let strip = filled(s, "M100 100 L180 160 L180.12 159.84 L100.12 99.84 Z");
+    let dot = NodeId(s.execute("shape.ellipse", &json!({"x": 400, "y": 400, "width": 0.3, "height": 0.3})).unwrap()["id"].as_u64().unwrap());
+    fill_only(s, dot);
+    let stroked = filled(s, "M200 10 L240 40 L200.001 10.0015 Z");
+    s.edit("t", |d, _| {
+        d.node_mut(stroked).unwrap().appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb(0.0, 0.0, 0.0)), 1.0).into();
+        Ok(())
+    })
+    .unwrap();
+    let open = filled(s, "M500 10 L540 40 L500.001 10.0015");
+    let c = filled(s, "M600 300 L640 330 L600.001 300.0015 Z");
+    let square = filled(s, "M600 400 L620 400 L620 420 L600 420 Z");
+    s.execute("select.set", &json!({"ids": [c.0, square.0]})).unwrap();
+    let mixed = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    fill_only(s, mixed);
+    s.execute("select.none", &json!({})).unwrap();
+    (vec![triangle, long, two], vec![strip, dot, stroked, open, mixed])
+}
+
+#[test]
+fn clean_up_removes_hairline_slivers_and_keeps_shapes_with_a_width() {
+    let mut s = session();
+    let (slivers, kept) = sliver_art(&mut s);
+    // Off by default.
+    assert_eq!(s.execute("object.path.cleanUp", &json!({})).unwrap()["removed"], 0);
+    // A sliver with no fill and no stroke is Unpainted Objects' to remove, and one whose fill is
+    // at 0 % opacity paints nothing either.
+    let unpainted = filled(&mut s, "M700 10 L740 40 L700.001 10.0015 Z");
+    let clear = filled(&mut s, "M700 60 L740 90 L700.001 60.0015 Z");
+    s.edit("t", |d, _| {
+        d.node_mut(unpainted).unwrap().appearance = Appearance::basic(Paint::None, Paint::None, 0.0).into();
+        let mut a = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, 0.0);
+        if let Some(vectorcraft_doc::AppearanceItem::Fill(f)) = a.items.first_mut() {
+            f.opacity = 0.0;
+        }
+        d.node_mut(clear).unwrap().appearance = a.into();
+        Ok(())
+    })
+    .unwrap();
+    let kept = [kept, vec![unpainted, clear]].concat();
+    let undo = s.doc().unwrap().history.undo.len();
+    let only = json!({"strayPoints": false, "unpaintedObjects": false, "emptyTextPaths": false, "hairlineSlivers": true});
+    let r = s.execute("object.path.cleanUp", &only).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(slivers.iter().all(|id| d.node(*id).is_none()), "slivers left");
+    for (k, id) in kept.iter().enumerate() {
+        assert!(d.node(*id).is_some(), "shape {k} with a width went");
+    }
+    assert_eq!(r["removed"], slivers.len());
+    // One undo step brings every sliver back.
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(slivers.iter().all(|id| s.doc().unwrap().doc.node(*id).is_some()));
+    // A wider width (0.255 pt) takes the 0.2 pt strip too, and still keeps the dot.
+    let wide = json!({"strayPoints": false, "unpaintedObjects": false, "emptyTextPaths": false, "hairlineSlivers": true, "sliverWidth": "0.09 mm"});
+    assert_eq!(s.execute("object.path.cleanUp", &wide).unwrap()["removed"], slivers.len() + 1);
+    assert!(s.doc().unwrap().doc.node(kept[0]).is_none() && s.doc().unwrap().doc.node(kept[1]).is_some());
+}
+
+/// Select › Object › Hairline Slivers selects what Clean Up removes, and neither takes hidden or
+/// locked slivers.
+#[test]
+fn select_hairline_slivers_selects_what_clean_up_removes() {
+    let mut s = session();
+    let (slivers, _) = sliver_art(&mut s);
+    let hidden = filled(&mut s, "M10 200 L50 230 L10.001 200.0015 Z");
+    let locked = filled(&mut s, "M10 250 L50 280 L10.001 250.0015 Z");
+    s.edit("t", |d, _| {
+        d.node_mut(hidden).unwrap().visible = false;
+        d.node_mut(locked).unwrap().locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("select.object.hairlineSlivers", &json!({})).unwrap();
+    assert_eq!(r["count"], slivers.len());
+    let mut selected: Vec<NodeId> = s.doc().unwrap().selection.objects.to_vec();
+    selected.sort_unstable();
+    let mut want = slivers.clone();
+    want.sort_unstable();
+    assert_eq!(selected, want);
+    // Inside an isolated group, only the slivers in it are selected.
+    let inner = filled(&mut s, "M10 300 L50 330 L10.001 300.0015 Z");
+    let square = filled(&mut s, "M100 300 L120 300 L120 320 L100 320 Z");
+    s.execute("select.set", &json!({"ids": [inner.0, square.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    // A sliver in a group is selected as Clean Up finds it.
+    assert_eq!(s.execute("select.object.hairlineSlivers", &json!({})).unwrap()["count"], slivers.len() + 1);
+    assert!(s.doc().unwrap().selection.objects.contains(&inner));
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    assert_eq!(s.execute("select.object.hairlineSlivers", &json!({})).unwrap()["count"], 1);
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), vec![inner]);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    // A template layer that was unlocked afterward.
+    let template = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let traced = filled(&mut s, "M10 350 L50 380 L10.001 350.0015 Z");
+    s.edit("t", |d, _| {
+        let n = d.node_mut(template).unwrap();
+        if let NodeKind::Layer { template, .. } = &mut n.kind {
+            *template = true;
+        }
+        n.locked = false;
+        Ok(())
+    })
+    .unwrap();
+    assert!(s.doc().unwrap().doc.node(template).unwrap().is_template());
+    s.execute("select.object.hairlineSlivers", &json!({})).unwrap();
+    assert!(!s.doc().unwrap().selection.objects.contains(&traced));
+    let only = json!({"strayPoints": false, "unpaintedObjects": false, "emptyTextPaths": false, "hairlineSlivers": true});
+    s.execute("object.path.cleanUp", &only).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(hidden).is_some() && d.node(locked).is_some() && d.node(traced).is_some());
+}
+
+/// Hairline Slivers leaves alone a sliver with an effect on its fill, the members of a Live Paint
+/// group and of type's glyph outlines, a sliver that its group's stroke draws along, and a layer's
+/// clipping path; Clean Up's other options keep the layer's clipping path too.
+#[test]
+fn hairline_slivers_leave_effects_live_paint_and_clipping_layers_alone() {
+    let mut s = session();
+    let only = json!({"strayPoints": false, "unpaintedObjects": false, "emptyTextPaths": false, "hairlineSlivers": true});
+    let rough = filled(&mut s, "M10 10 L50 40 L10.001 10.0015 Z");
+    s.execute("select.set", &json!({"ids": [rough.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "item": 0})).unwrap();
+    let a = filled(&mut s, "M100 100 L140 130 L100.001 100.0015 Z");
+    let square = filled(&mut s, "M90 90 L150 90 L150 150 L90 150 Z");
+    s.execute("select.set", &json!({"ids": [a.0, square.0]})).unwrap();
+    s.execute("livePaint.make", &json!({})).unwrap();
+    // A group's own 5 pt stroke draws along its member.
+    let member = filled(&mut s, "M200 200 L240 230 L200.001 200.0015 Z");
+    s.execute("select.set", &json!({"ids": [member.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.edit("t", |d, _| {
+        d.node_mut(group).unwrap().appearance = Appearance::basic(Paint::None, Paint::solid(Color::rgb(0.0, 0.0, 0.0)), 5.0).into();
+        Ok(())
+    })
+    .unwrap();
+    // A thin part of type's glyph outlines.
+    let glyph = filled(&mut s, "M300 200 L340 230 L300.001 200.0015 Z");
+    s.execute("select.set", &json!({"ids": [glyph.0]})).unwrap();
+    let outlines = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.edit("t", |d, _| {
+        d.node_mut(outlines).unwrap().extras_mut().type_outlines = true;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.object.hairlineSlivers", &json!({})).unwrap()["count"], 0);
+    assert_eq!(s.execute("object.path.cleanUp", &only).unwrap()["removed"], 0);
+    // A layer clipped by a thin compound path: neither Hairline Slivers nor Unpainted Objects
+    // removes the clipping path.
+    let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    filled(&mut s, "M300 300 L400 300 L400 400 L300 400 Z");
+    let b = filled(&mut s, "M300 300 L340 330 L300.001 300.0015 Z");
+    let c = filled(&mut s, "M300 350 L340 380 L300.001 350.0015 Z");
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    let clip = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap();
+    assert!(s.doc().unwrap().doc.node(layer).unwrap().clips());
+    assert_eq!(s.execute("select.object.hairlineSlivers", &json!({})).unwrap()["count"], 0);
+    s.execute("object.path.cleanUp", &only).unwrap();
+    assert!(s.doc().unwrap().doc.node(clip).is_some(), "the layer's clipping path went");
+    // A clip group whose clipping path is a sliver.
+    let art = filled(&mut s, "M300 500 L400 500 L400 600 L300 600 Z");
+    let mask = filled(&mut s, "M300 500 L340 530 L300.001 500.0015 Z");
+    s.execute("select.set", &json!({"ids": [art.0, mask.0]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    // A guide drawn as a sliver, and a sliver with an effect on its stroke.
+    let guide = filled(&mut s, "M400 10 L440 40 L400.001 10.0015 Z");
+    let stroke_fx = filled(&mut s, "M450 10 L490 40 L450.001 10.0015 Z");
+    s.edit("t", |d, _| {
+        if let NodeKind::Path { guide, .. } = &mut d.node_mut(guide).unwrap().kind {
+            *guide = true;
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [stroke_fx.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "item": 1})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert_eq!(s.execute("select.object.hairlineSlivers", &json!({})).unwrap()["count"], 0);
+    s.execute("object.path.cleanUp", &only).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(mask).is_some(), "the clip group's clipping path went");
+    assert!(d.node(guide).is_some() && d.node(stroke_fx).is_some(), "a guide or a sliver with a stroke effect went");
+    // A layer clipped by a group (as an opened file can have it): its sliver member clips too.
+    let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    filled(&mut s, "M500 500 L600 500 L600 600 L500 600 Z");
+    let bare = filled(&mut s, "M500 500 L540 530 L500.001 500.0015 Z");
+    s.execute("select.set", &json!({"ids": [bare.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.edit("t", |d, _| {
+        if let NodeKind::Layer { clip, children, .. } = &mut d.node_mut(layer).unwrap().kind {
+            *clip = true;
+            let i = children.iter().position(|c| c.id == g).unwrap();
+            let c = children.remove(i);
+            children.insert(0, c);
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert!(s.doc().unwrap().doc.node(layer).unwrap().clips());
+    assert_eq!(s.execute("select.object.hairlineSlivers", &json!({})).unwrap()["count"], 0);
+    s.execute("object.path.cleanUp", &only).unwrap();
+    assert!(s.doc().unwrap().doc.node(bare).is_some(), "the clipping group's member went");
+}
+
+/// A sliver on a locked artboard is left alone.
+#[test]
+fn hairline_slivers_leave_art_on_a_locked_artboard_alone() {
+    let mut s = session();
+    let sliver = filled(&mut s, "M10 10 L50 40 L10.001 10.0015 Z");
+    s.edit("t", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let only = json!({"strayPoints": false, "unpaintedObjects": false, "emptyTextPaths": false, "hairlineSlivers": true});
+    assert_eq!(s.execute("select.object.hairlineSlivers", &json!({})).unwrap()["count"], 0);
+    assert_eq!(s.execute("object.path.cleanUp", &only).unwrap()["removed"], 0);
+    assert!(s.doc().unwrap().doc.node(sliver).is_some());
+}
+
+/// A shape too complex to measure is kept, and both commands say how many there were.
+#[test]
+fn hairline_slivers_keep_shapes_too_complex_to_measure_and_count_them() {
+    let mut s = session();
+    let sliver = filled(&mut s, "M10 10 L50 40 L10.001 10.0015 Z");
+    // A closed zigzag of more anchors than one shape is measured with.
+    let n = vectorcraft_pathops::MAX_THICKNESS_PIECES + 1;
+    let anchors = (0..n).map(|k| vectorcraft_geom::Anchor::corner(kurbo::Point::new(100.0 + k as f64 * 0.001, 100.0 + (k % 2) as f64))).collect();
+    let huge = filled(&mut s, "M100 100 L110 100 L110 110 Z");
+    s.edit("t", |d, _| {
+        if let NodeKind::Path { path, .. } = &mut d.node_mut(huge).unwrap().kind {
+            *path = PathData::single(vectorcraft_geom::SubPath::new(anchors, true));
+        }
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("select.object.hairlineSlivers", &json!({})).unwrap();
+    assert_eq!(r["count"], 1);
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains('1')), "{r}");
+    let only = json!({"strayPoints": false, "unpaintedObjects": false, "emptyTextPaths": false, "hairlineSlivers": true});
+    let r = s.execute("object.path.cleanUp", &only).unwrap();
+    assert_eq!(r["removed"], 1);
+    assert!(r["warning"].as_str().is_some_and(|w| w.contains('1')), "{r}");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(sliver).is_none() && d.node(huge).is_some());
+}
+
+/// The width of Hairline Slivers is refused outside 0.001 to 3 pt, or when it is no number, and the
+/// document, the selection and the undo history stay as they were.
+#[test]
+fn hairline_slivers_refuse_a_width_out_of_range() {
+    let mut s = session();
+    sliver_art(&mut s);
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.selection.objects.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    for w in [json!(0), json!(-1), json!(0.0005), json!(3.5), json!("thin"), json!(true)] {
+        for (cmd, key) in [("object.path.cleanUp", "sliverWidth"), ("select.object.hairlineSlivers", "width")] {
+            let mut p = serde_json::Map::new();
+            p.insert(key.into(), w.clone());
+            if cmd == "object.path.cleanUp" {
+                p.insert("hairlineSlivers".into(), json!(true));
+            }
+            let r = s.execute(cmd, &Value::Object(p));
+            assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if msg.contains(key)), "{cmd} {w}: {r:?}");
+            assert!(state(&s) == before, "{cmd} {w} changed the document");
+        }
+    }
+    // Both ends of the range are taken.
+    for w in [json!(0.001), json!(3), json!("3 pt")] {
+        assert!(s.execute("select.object.hairlineSlivers", &json!({ "width": w })).is_ok(), "{w}");
+        let p = json!({"strayPoints": false, "unpaintedObjects": false, "emptyTextPaths": false, "hairlineSlivers": true, "sliverWidth": w});
+        assert!(s.execute("object.path.cleanUp", &p).is_ok(), "{w}");
+    }
+}
+
 /// Offset Path, Simplify, Split Into Grid and Clean Up refuse a param of the wrong type with an
 /// error naming the param, and leave the document, the selection and the undo history as they were.
 /// Null keeps a param's default, and a distance still takes a string with a unit.

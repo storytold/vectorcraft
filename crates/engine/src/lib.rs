@@ -32,7 +32,7 @@ pub use cmd::distortcmds::{perspective_click, width_point_pair};
 pub use cmd::flare::flare_settings;
 pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
-pub use cmd::pathops::auto_simplify_level;
+pub use cmd::pathops::{HAIRLINE_SLIVER_WIDTH, HAIRLINE_SLIVER_WIDTH_RANGE, auto_simplify_level};
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::select::{path_fingerprint, storable_selection, stored_path_params, stored_path_step};
 pub use cmd::textwrap::TEXT_WRAP_OFFSET_RANGE;
