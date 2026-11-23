@@ -32,12 +32,12 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>
 /// One headless frame of the canvas panel's body and the floating document windows on a 1200 ×
 /// 800 window. The windows' access nodes, by name, are kept for [`window_of`].
 fn run_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
-    let raw = egui::RawInput {
-        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
-        max_texture_side: Some(8192),
-        events,
-        ..Default::default()
-    };
+    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
+    // The main window and the OS windows [`native_host`] ran last frame, as egui-winit lists them:
+    // a window missing from the list is a closed one.
+    let mut viewports = ctx.data_mut(|d| d.remove_temp::<egui::ViewportIdMap<egui::ViewportInfo>>(egui::Id::unique(OS_WINDOWS))).unwrap_or_default();
+    viewports.insert(egui::ViewportId::ROOT, main_window(screen));
+    let raw = egui::RawInput { screen_rect: Some(screen), max_texture_side: Some(8192), events, viewports, ..Default::default() };
     ctx.enable_accesskit();
     let out = crate::testing::part_frame(app, ctx, raw, |app, ui| {
         app.canvas_area(ui);
@@ -61,6 +61,20 @@ type Named = (egui::accesskit::Role, String, egui::Rect);
 
 /// Where [`run_frame`] keeps the last frame's [`Named`] nodes.
 const NAMED: &str = "doc-window-tests-named";
+
+/// Where [`native_host`] keeps the OS windows it ran, for [`run_frame`]'s next frame.
+const OS_WINDOWS: &str = "doc-window-tests-os-windows";
+
+/// The main window, with the keyboard, its top-left corner at (0, 0) on the screen.
+fn main_window(screen: egui::Rect) -> egui::ViewportInfo {
+    egui::ViewportInfo {
+        inner_rect: Some(screen),
+        outer_rect: Some(screen),
+        focused: Some(true),
+        native_pixels_per_point: Some(1.0),
+        ..Default::default()
+    }
+}
 
 /// The last frame's [`Named`] nodes of `role` whose name `matches`.
 fn named(ctx: &egui::Context, role: egui::accesskit::Role, matches: impl Fn(&str) -> bool) -> Option<egui::Rect> {
@@ -434,13 +448,15 @@ fn native_host() -> std::rc::Rc<std::cell::RefCell<Host>> {
             ..Default::default()
         };
         let events = std::mem::take(&mut shared.borrow_mut().events);
-        let input = egui::RawInput {
-            viewport_id: id,
-            viewports: std::iter::once((id, info)).collect(),
-            screen_rect: Some(rect),
-            events,
-            ..Default::default()
-        };
+        let os_windows = egui::Id::unique(OS_WINDOWS);
+        let mut viewports = ctx.data_mut(|d| {
+            let windows = d.get_temp_mut_or_default::<egui::ViewportIdMap<egui::ViewportInfo>>(os_windows);
+            windows.insert(id, egui::ViewportInfo { events: vec![], ..info.clone() });
+            windows.clone()
+        });
+        viewports.insert(egui::ViewportId::ROOT, main_window(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))));
+        viewports.insert(id, info);
+        let input = egui::RawInput { viewport_id: id, viewports, screen_rect: Some(rect), events, ..Default::default() };
         let mut full = ctx.run_ui(input, |ui| (viewport.viewport_ui_cb)(ui));
         full.textures_delta.clear();
     });
