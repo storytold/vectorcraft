@@ -22,5 +22,6 @@ impl VectorcraftApp {
             shortcuts::escape(self, ctx);
         }
         shortcuts::follow_holds(self, ctx);
+        shortcuts::settings_on_a_mac(self, ctx);
     }
 }

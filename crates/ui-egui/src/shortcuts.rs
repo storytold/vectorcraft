@@ -106,6 +106,30 @@ pub(crate) fn follow_holds(app: &mut VectorcraftApp, ctx: &egui::Context) {
     held_tool::follow(app, ctx);
 }
 
+/// On a Mac, Cmd+, opens Settings as in every Mac app (#663), beside Preferences' own shortcut, unless a shortcut
+/// has the chord.
+pub(crate) fn settings_on_a_mac(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if ctx.os() != egui::os::OperatingSystem::Mac {
+        return;
+    }
+    let pressed = ctx.input(|i| {
+        i.events.iter().any(|e| {
+            matches!(e, egui::Event::Key { key: egui::Key::Comma, pressed: true, repeat: false, modifiers, .. } if modifiers.matches_exact(egui::Modifiers::COMMAND))
+        })
+    });
+    let chord = craft::keymap::Chord::new(Mods::CMD, craft::keymap::Key::Comma);
+    let bound = || {
+        craft::ui::runtime::commands::keymap(ctx)
+            .is_some_and(|keymap| !matches!(keymap.lookup(&chord, false, &craft::keymap::Active::NONE), craft::keymap::Lookup::None))
+    };
+    if pressed
+        && !bound()
+        && let Err(e) = app.run("edit.preferences", json!({}))
+    {
+        app.status(e);
+    }
+}
+
 /// An Escape the window took (nothing focused, no popup or session took it) leaves Presentation Mode, or else ends
 /// the first thing on: pattern editing, isolation, Global Edit, a rotated view or a full screen mode.
 pub(crate) fn escape(app: &mut VectorcraftApp, ctx: &egui::Context) {
