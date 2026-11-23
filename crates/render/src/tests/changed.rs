@@ -136,6 +136,34 @@ fn moving_a_shadowed_object_changes_where_its_shadow_falls() {
 }
 
 #[test]
+fn moving_a_radial_repeat_redraws_the_effects_on_its_rotated_copies() {
+    for effected in [false, true] {
+        let mut old = Document::new(110.0, 80.0);
+        let source_id = old.alloc_id();
+        let mut source = Node::path(
+            source_id,
+            shapes::rectangle(Rect::new(47.0, 25.0, 49.0, 45.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        if effected {
+            source.appearance.effects.push(vectorcraft_doc::Effect {
+                id: "distort.transform".into(),
+                params: serde_json::json!({"scaleH": 400, "scaleV": 100, "reference": 4}),
+                visible: true,
+            });
+        }
+        let repeat = vectorcraft_doc::RepeatSpec::radial(vec![Arc::new(source)], 4, Some(12.0));
+        let id = old.alloc_id();
+        old.insert(Some(old.layers[0].id), 0, Node::new(id, vectorcraft_doc::NodeKind::Repeat(repeat))).unwrap();
+        let mut moved = old.clone();
+        moved.node_mut(id).unwrap().transform(Affine::translate((3.0, 4.0)), false);
+        // A partial redraw must reproduce the whole frame, both on the move and on Undo.
+        area(redraw(&old, &moved));
+        area(redraw(&moved, &old));
+    }
+}
+
+#[test]
 fn adding_removing_and_restacking_change_those_objects() {
     let (old, [loose, _, _, _, other]) = document();
     let mut added = old.clone();

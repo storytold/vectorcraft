@@ -730,7 +730,13 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
         NodeKind::Blend { .. } => {
             let b = n.reach_bounds_with(symbols)?;
             let a = live_content_reach(symbols, n);
-            vectorcraft_geom::union_opt(Some(b.inflate(a, a)), placed_blend_effect_bounds(symbols, n))
+            vectorcraft_geom::union_opt(Some(b.inflate(a, a)), placed_live_effect_bounds(symbols, n))
+        }
+        // A radial repeat rotates each copy before applying the source's geometry effects.
+        NodeKind::Repeat(_) => {
+            let b = n.visual_bounds_with(symbols)?;
+            let a = live_content_reach(symbols, n);
+            vectorcraft_geom::union_opt(Some(b.inflate(a, a)), placed_live_effect_bounds(symbols, n))
         }
         _ => {
             let b = n.visual_bounds_with(symbols)?;
@@ -815,7 +821,7 @@ pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) ->
 /// (Revolve builds no art from type).
 fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     let b = match &n.kind {
-        NodeKind::Blend { .. } => vectorcraft_geom::union_opt(n.reach_bounds_with(symbols), placed_blend_effect_bounds(symbols, n)),
+        NodeKind::Blend { .. } => vectorcraft_geom::union_opt(n.reach_bounds_with(symbols), placed_live_effect_bounds(symbols, n)),
         _ => n.visual_bounds_with(symbols),
     }?;
     Some(match &n.kind {
@@ -824,13 +830,14 @@ fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     })
 }
 
-/// A rotated blend's effect-bearing content, measured after spine placement. Geometry effects
-/// run on the placed shapes, so their reach on the original keys need not cover what they paint.
-/// Effect-free blends keep the quick rail envelope without evaluating their steps.
-fn placed_blend_effect_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let NodeKind::Blend { spec, .. } = &n.kind else { return None };
-    if spec.orientation != vectorcraft_doc::BlendOrientation::AlignToPath {
-        return None;
+/// A radial repeat's copies or a spine-aligned blend's steps, measured after rotation. Geometry
+/// effects run on the placed shapes, so their reach on the source need not cover what they paint.
+/// Without effects, the renderer keeps the quick bounds without evaluating the copies or steps.
+fn placed_live_effect_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    match &n.kind {
+        NodeKind::Blend { spec, .. } if spec.orientation == vectorcraft_doc::BlendOrientation::AlignToPath => {}
+        NodeKind::Repeat(r) if matches!(r.kind, vectorcraft_doc::RepeatKind::Radial { .. }) => {}
+        _ => return None,
     }
     let mut has_effects = false;
     n.walk(&mut |c| {
