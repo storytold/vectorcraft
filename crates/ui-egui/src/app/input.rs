@@ -19,6 +19,9 @@ impl VectorcraftApp {
             crate::custom_toolbars::cancel_move_on_escape(self, ctx);
             if !crate::menus::handle_keyboard_input(self, ctx) {
                 shortcuts::handle(self, ctx);
+            } else {
+                // Alt held while the menu bar takes the keys (Alt+F, then Escape) is no Alt tap.
+                self.alt_tap.taken_by_menu_bar(ctx);
             }
         }
         // A Copy taken in this UI phase (an egui copy event, or a command it runs) is published in

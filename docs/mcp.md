@@ -7380,7 +7380,9 @@ path's last point, drawn with the tool's `action` option:
   and bulges to the left of the direction drawn, meeting the path before it at a corner.
 
 Alt (Option on macOS) pressed and let go with no other key, click or wheel turn in between switches to the next action:
-Line, Continuous Arc, Sharp Corner Arc, and back to Line. C flips the last piece, while it is a sharp-corner arc, to
+Line, Continuous Arc, Sharp Corner Arc, and back to Line. On Windows and Linux that tap does not activate the in-window
+menu bar. A tap with a text field focused, or one that starts while Shift is held, activates the menu bar and leaves
+the action as it is. C flips the last piece, while it is a sharp-corner arc, to
 the other side of its chord. `[` and `]` make the arc size 15° smaller or larger, for the last sharp-corner arc and the
 arcs after it. During a drag, C and `[` `]` change the sharp-corner arc being dragged, and Alt switches its action. A
 dragged piece ends where the press is let go. A click on the first point closes the path, and a click on an end of an
