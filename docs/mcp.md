@@ -5567,8 +5567,18 @@ empty row does not count toward Colors. While it is empty and not `added`, the d
 the base color when the empty row is selected), the harmony rules,
 linked moves and the Color Theme Picker leave its new color as it is, and Save All Colors and a new color group saved
 from colors alone leave its new color out. With `limitTo`, a row's `tint` (a percentage, default 100) gives the art
-linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. `recolor.randomize`
-moves a row's `tint` with its new color and removes it from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
+linked to the global or spot swatch its new color is that share of its tint; `tint` must be a number. A row's
+`swatch: {name, library?}` names the swatch its new color was picked from (`library` is a swatch library id or name,
+default `"document"`): of the swatches with that name, the first with the row's new color (compared as color keys,
+which round) is used. While it is a global or spot swatch and there is no Global Adjust (or `limitTo` is given), the
+row's art takes the swatch as it would with `limitTo`, linked to it at its tints (and its `tint` applies), and a library
+swatch joins the document's swatches. A process swatch, or a swatch or library that is not there (such as a swatch
+deleted after it was picked), links nothing, and the row recolors as its new color alone does; the result's
+`swatchesNotFound` lists the names of the swatches that are not there. A row whose new color is
+picked from a global or spot swatch in the Color Picker's swatch list in Recolor Artwork carries it, so with no Limit to
+Library the art still takes the swatch picked; the dialog drops a row's `swatch` when the row's new color changes. A
+`swatch` that is not `{name, library?}` is an error. `recolor.randomize`
+moves a row's `tint` and `swatch` with its new color and removes them from a color it changes, and moves a row's `model` with its new color. `swatch.editGroup {group, colors, rename?}` rewrites a colour group in one undo
 step (art linked to its global swatches follows); a `null` in `colors` removes the group's swatch at that place, and
 given the group's own colors in order and no new name, it records no undo step. A color key (`recolor.colors`) that
 names a swatch's color, rounded to the key's steps, counts as that color, and the swatch keeps its color unrounded. And `recolor.apply` with `group` recolours the art and rewrites the

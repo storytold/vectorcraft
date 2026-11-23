@@ -1749,6 +1749,185 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
     }
 }
 
+/// Each paint under `v`: where it is (`stop` for a gradient stop, `stroke`, `type` for the
+/// characters of a text object, else `fill`), its color, the swatch it is linked to and its tint.
+fn picked_paints(v: &Value, at: &str, out: &mut Vec<(String, Color, Option<String>, f64)>) {
+    match v {
+        Value::Object(m) => {
+            if let Some(c) = m.get("color").and_then(|c| serde_json::from_value::<Color>(c.clone()).ok()) {
+                let (swatch, tint) =
+                    (m.get("swatch").and_then(Value::as_str).map(String::from), m.get("tint").and_then(Value::as_f64).unwrap_or(1.0));
+                out.push((at.to_string(), c, swatch, tint));
+            }
+            // An appearance item is tagged with its `kind`; a text object's characters are its runs.
+            let at = if m.get("kind").and_then(Value::as_str) == Some("stroke") { "stroke" } else { at };
+            for (k, x) in m {
+                let here = match k.as_str() {
+                    "stops" if at != "type" => "stop",
+                    "runs" => "type",
+                    _ => at,
+                };
+                picked_paints(x, here, out);
+            }
+        }
+        Value::Array(a) => a.iter().for_each(|x| picked_paints(x, at, out)),
+        _ => {}
+    }
+}
+
+fn paints_now(app: &VectorcraftApp) -> Vec<(String, Color, Option<String>, f64)> {
+    let d = &app.session.doc().unwrap().doc;
+    let mut out = vec![];
+    for c in d.layers.iter().filter_map(|l| l.children()) {
+        picked_paints(&serde_json::to_value(c).unwrap(), "fill", &mut out);
+    }
+    out
+}
+
+/// Every number under an `opacity` key under `v`.
+fn opacities_under(v: &Value, out: &mut Vec<f64>) {
+    match v {
+        Value::Object(m) => {
+            out.extend(m.get("opacity").and_then(Value::as_f64));
+            m.values().for_each(|x| opacities_under(x, out));
+        }
+        Value::Array(a) => a.iter().for_each(|x| opacities_under(x, out)),
+        _ => {}
+    }
+}
+
+fn opacities_now(app: &VectorcraftApp) -> Vec<f64> {
+    let mut out = vec![];
+    for c in app.session.doc().unwrap().doc.layers.iter().filter_map(|l| l.children()) {
+        opacities_under(&serde_json::to_value(c).unwrap(), &mut out);
+    }
+    out
+}
+
+/// The lightness of a gray other than black and white.
+fn mid_gray(c: &Color) -> Option<f32> {
+    let [r, g, b] = c.to_rgb();
+    ((r - g).abs() < 1e-3 && (g - b).abs() < 1e-3 && r > 0.01 && r < 0.99).then_some(r)
+}
+
+/// Gray art placed from an SVG file (fills, a stroke, a group at 50% opacity, `fill-opacity`, an
+/// even-odd compound path, a gradient's stops and type), recolored with one color, Scale Tints or
+/// Preserve Tints and no Limit to Library, takes the swatch picked for its row in the Color Picker's
+/// swatch list: a spot or global swatch gives tints of it linked to it, darker grays at higher
+/// tints, with the opacities kept, and editing the swatch recolors every one of them at the same
+/// tints; a process swatch gives tints of its color with no link, as a color picked any other way. With Preserve Black on, black stays black; with it
+/// off, black takes the full ink.
+#[test]
+fn a_swatch_picked_for_a_row_links_the_art_to_it_without_a_library() {
+    use egui::accesskit::Role;
+
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80"><rect x="0" y="0" width="20" height="20" fill="#000000"/><rect x="25" y="0" width="20" height="20" fill="#333333" stroke="#808080" stroke-width="2"/><g opacity="0.5"><rect x="50" y="0" width="20" height="20" fill="#808080"/></g><rect x="75" y="0" width="20" height="20" fill="#cccccc" fill-opacity="0.7"/><rect x="100" y="0" width="20" height="20" fill="#ffffff"/><path d="M130 0 L150 0 L150 20 Z M135 5 L145 5 L145 15 Z" fill="#666666" fill-rule="evenodd"/><defs><linearGradient id="g"><stop offset="0" stop-color="#222222"/><stop offset="1" stop-color="#dddddd"/></linearGradient></defs><rect x="160" y="0" width="20" height="20" fill="url(#g)"/><text x="0" y="60" font-size="18" fill="#555555">Gray</text></svg>"##;
+    let path = std::env::temp_dir().join(format!("vectorcraft-recolor-picked-swatch-{}.svg", std::process::id()));
+    std::fs::write(&path, svg).unwrap();
+    let cases = [
+        ("spot", json!({"spot": true}), true, true, "scaleTints"),
+        ("spot, Preserve Black off", json!({"spot": true}), true, false, "scaleTints"),
+        ("spot, Preserve Tints", json!({"spot": true}), true, true, "preserveTints"),
+        ("global", json!({"global": true}), true, true, "scaleTints"),
+        ("process", json!({}), false, true, "scaleTints"),
+    ];
+    for (kind, options, linked, preserve_black, method) in cases {
+        let mut app = app();
+        // The swatch list then shows Ink without scrolling.
+        let doc = &app.session.doc().unwrap().doc;
+        let names: Vec<_> = doc
+            .swatches
+            .iter()
+            .filter(|s| !s.is_reserved())
+            .map(|s| s.name.clone())
+            .chain(doc.swatch_groups.iter().map(|g| g.name.clone()))
+            .collect();
+        app.run("swatch.delete", json!({"names": names})).unwrap();
+        let mut swatch = json!({"name": "Ink", "color": "cmyk 0 100 0 0"});
+        swatch.as_object_mut().unwrap().extend(options.as_object().unwrap().clone());
+        app.run("swatch.new", swatch).unwrap();
+        app.run("file.place", json!({"path": path.to_string_lossy(), "at": [120, 50]})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let before = paints_now(&app);
+        let opacities = opacities_now(&app);
+        assert!(opacities.iter().any(|o| (o - 0.5).abs() < 1e-6) && opacities.iter().any(|o| (o - 0.7).abs() < 1e-6), "{opacities:?}");
+        let black = |c: &Color| c.to_rgb().iter().all(|v| *v < 0.01);
+        // The paints the ink takes: every mid gray, and black too without Preserve Black.
+        let inked: Vec<usize> = (0..before.len()).filter(|&i| mid_gray(&before[i].1).is_some() || !preserve_black && black(&before[i].1)).collect();
+        for at in ["fill", "stroke", "stop", "type"] {
+            assert!(inked.iter().any(|&i| before[i].0 == at), "{kind}: gray {at} paints came in: {before:?}");
+        }
+
+        let mut h = assign_harness(app, json!({"colors": 1}));
+        set(h.state_mut(), "method", json!(method));
+        set(h.state_mut(), "preserveBlack", json!(preserve_black));
+        h.run_steps(3);
+        let rows = field(h.state(), "rows");
+        let rows = rows.as_array().unwrap();
+        let row = rows.iter().position(|r| !r["exclude"].as_bool().unwrap_or(false)).unwrap();
+        assert_eq!(rows.iter().filter(|r| !r["exclude"].as_bool().unwrap_or(false)).count(), 1, "{kind}: one row: {rows:?}");
+        assert_eq!(field(h.state(), "limitTo"), json!(""), "no library");
+        row_context_menu(&mut h, row);
+        h.get_by_label("   Pick from Swatches").click();
+        h.run_steps(3);
+        h.get_by_role_and_label(Role::Button, "Ink").click();
+        h.run_steps(2);
+        let picker = h.state().ui.dialog.as_ref().unwrap();
+        assert_eq!(
+            picker.fields.get("color").and_then(vectorcraft_engine::cmd::color_value),
+            Some(Color::cmyk(0.0, 1.0, 0.0, 0.0)),
+            "{:?}",
+            picker.fields
+        );
+        h.get_by_role_and_label(Role::Button, "OK").click();
+        h.run_steps(3);
+        assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("recolor"));
+        // A process swatch gives the row its color alone.
+        let swatch = linked.then(|| json!({"name": "Ink", "library": "document"}));
+        assert_eq!(field(h.state(), "rows")[row].get("swatch").cloned(), swatch, "{kind}: the row keeps a global or spot swatch");
+        let app = h.state_mut();
+        dialogs::confirm(app).unwrap();
+        assert!(app.ui.dialog.is_none());
+
+        let after = paints_now(app);
+        assert_eq!(after.len(), before.len(), "{kind}: the art has the same paints");
+        assert_eq!(opacities_now(app), opacities, "{kind}: the opacities are kept");
+        for (i, (b, a)) in before.iter().zip(&after).enumerate() {
+            if !inked.contains(&i) {
+                assert_eq!(a.1, b.1, "{kind}: paint {i} keeps its color");
+            }
+        }
+        for &i in &inked {
+            assert!(mid_gray(&after[i].1).is_none() && !black(&after[i].1), "{kind}: paint {i} took the ink: {:?}", after[i]);
+            assert_eq!(after[i].2.as_deref(), linked.then_some("Ink"), "{kind}: paint {i} linked");
+        }
+        if linked {
+            // Darker grays take higher tints.
+            for &i in &inked {
+                for &j in &inked {
+                    let (li, lj) = (mid_gray(&before[i].1).unwrap_or(0.0), mid_gray(&before[j].1).unwrap_or(0.0));
+                    if li < lj - 0.02 {
+                        assert!(after[i].3 >= after[j].3, "{kind}: paint {i} is darker than {j} and at a higher tint");
+                    }
+                }
+            }
+            let r = app.run("swatch.edit", json!({"name": "Ink", "color": "cmyk 100 0 0 0"})).unwrap();
+            let edited = paints_now(app);
+            for &i in &inked {
+                let (at, c, link, tint) = &edited[i];
+                assert_eq!((link.as_deref(), *tint), (Some("Ink"), after[i].3), "{kind}: paint {i} ({at}) keeps its link and tint");
+                assert!(c.to_rgb()[0] < after[i].1.to_rgb()[0] && c != &after[i].1, "{kind}: paint {i} ({at}) shows the edited ink: {c:?}");
+            }
+            // swatch.edit counts every paint that follows it, a gradient as one paint however many
+            // of its stops follow (the art holds one gradient).
+            let stops = inked.iter().filter(|&&i| before[i].0 == "stop").count();
+            let paints = inked.len() - stops + usize::from(stops > 0);
+            assert_eq!(r["relinked"].as_u64(), u64::try_from(paints).ok(), "{kind}: every inked paint follows the swatch: {r}");
+        }
+    }
+    let _ = std::fs::remove_file(&path);
+}
+
 /// Whether the dialog's button `name` is disabled.
 fn disabled(h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str) -> bool {
     h.get_by_role_and_label(egui::accesskit::Role::Button, name).accesskit_node().is_disabled()

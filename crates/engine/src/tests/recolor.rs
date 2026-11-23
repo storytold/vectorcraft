@@ -855,6 +855,204 @@ fn a_rows_tint_tints_the_spot_color_the_art_links_to() {
     assert!(e.to_string().contains("`tint` must be a number"), "{e}");
 }
 
+/// A row's `swatch` (the swatch its new color was picked from) links its art to that swatch without
+/// Limit to Library: a spot or global swatch gives linked tints, and a process swatch, a swatch
+/// whose color is not the row's new color and a swatch that is not there link nothing. A `swatch`
+/// that is not `{name, library?}` is refused. Randomize moves the swatch with its color.
+#[test]
+fn a_rows_swatch_links_its_art_without_limit_to_library() {
+    for (options, linked) in [(json!({"spot": true}), true), (json!({"global": true}), true), (json!({}), false)] {
+        let mut s = session();
+        let mut w = json!({"name": "Ink", "color": "cmyk 0 100 0 0"});
+        w.as_object_mut().unwrap().extend(options.as_object().unwrap().clone());
+        run(&mut s, "swatch.new", w);
+        let dark = rect(&mut s, json!("gray 80"));
+        let light = rect(&mut s, json!("gray 40"));
+        select_all(&mut s);
+        let row = |swatch: Value| json!([{"from": ["gray 80", "gray 40"], "to": "cmyk 0 100 0 0", "swatch": swatch}]);
+        run(&mut s, "recolor.apply", json!({"map": row(json!({"name": "Ink"})), "method": "scaleTints"}));
+        let d = &s.doc().unwrap().doc;
+        let paint = |id: NodeId| match d.node(id).unwrap().appearance.fill_paint() {
+            vectorcraft_color::Paint::Solid { color, swatch, tint } => (color, swatch, tint),
+            p => panic!("{p:?}"),
+        };
+        let ((c1, l1, t1), (c2, l2, t2)) = (paint(dark), paint(light));
+        assert_eq!(l1.is_some() && l2.is_some(), linked, "{options}: {l1:?} {l2:?}");
+        // A process swatch's row keeps the art's gray model (see the next test).
+        if linked {
+            assert!(t1 > t2 && t2 > 0.0, "{options}: the lighter gray is a lighter tint: {t1} {t2}");
+            assert!(close(c1, Color::cmyk(0.0, 1.0, 0.0, 0.0)), "{options}: {c1:?}");
+        }
+        assert!(!close(c2, c1), "{options}: {c1:?} {c2:?}");
+        // Without the swatch the same row gives tints with no link.
+        run(&mut s, "edit.undo", json!({}));
+        select_all(&mut s);
+        run(&mut s, "recolor.apply", json!({"map": row(Value::Null), "method": "scaleTints"}));
+        assert_eq!(paint_link(&s, dark), None, "{options}: no swatch, no link");
+        run(&mut s, "edit.undo", json!({}));
+        select_all(&mut s);
+        // A swatch of another color than the row's new color links nothing.
+        let other = json!([{"from": ["gray 80", "gray 40"], "to": "#00ff00", "swatch": {"name": "Ink", "library": "document"}}]);
+        run(&mut s, "recolor.apply", json!({"map": other, "method": "scaleTints"}));
+        assert_eq!(paint_link(&s, dark), None, "{options}: another color");
+        run(&mut s, "edit.undo", json!({}));
+        select_all(&mut s);
+        // With a Global Adjust the art takes the adjusted colors, not the swatch.
+        let adjust = json!({"saturation": -40});
+        run(&mut s, "recolor.apply", json!({"map": row(json!({"name": "Ink"})), "method": "scaleTints", "globalAdjust": adjust}));
+        assert_eq!(paint_link(&s, dark), None, "{options}: adjusted");
+        assert!(!close(fill(&s, dark), Color::cmyk(0.0, 1.0, 0.0, 0.0)), "{options}: the adjustment applies");
+        run(&mut s, "edit.undo", json!({}));
+        select_all(&mut s);
+        // A swatch or library that is not there (deleted since the pick) links nothing, and the result
+        // names it.
+        for gone in [json!({"name": "Missing"}), json!({"name": "Ink", "library": "nowhere"})] {
+            let r = run(&mut s, "recolor.apply", json!({"map": row(gone.clone()), "method": "scaleTints"}));
+            assert_eq!(paint_link(&s, dark), None, "{options}: {gone}");
+            assert_eq!(r["swatchesNotFound"], json!([gone["name"]]), "{options}: {r}");
+            run(&mut s, "edit.undo", json!({}));
+            select_all(&mut s);
+        }
+        for bad in [json!("Ink"), json!({"name": ""}), json!({"name": "Ink", "library": 3})] {
+            let e = s.execute("recolor.apply", &json!({"map": row(bad.clone())})).unwrap_err();
+            assert!(e.to_string().contains("`swatch` must be"), "{bad}: {e}");
+        }
+        let two = json!([
+            {"from": ["gray 80"], "to": "cmyk 0 100 0 0", "swatch": {"name": "Ink"}},
+            {"from": ["gray 40"], "to": "#00ff00"},
+        ]);
+        let r = run(&mut s, "recolor.randomize", json!({"map": two, "seed": 3}));
+        let rows = r["map"].as_array().unwrap();
+        let ink = rows.iter().find(|r| r["to"] == "cmyk 0 100 0 0").unwrap();
+        let green = rows.iter().find(|r| r["to"] == "rgb 0 255 0").unwrap();
+        assert_eq!(ink["swatch"], json!({"name": "Ink", "library": "document"}), "{r}");
+        assert!(green.get("swatch").is_none(), "{r}");
+        let r = run(&mut s, "recolor.randomize", json!({"map": two, "order": false, "saturationBrightness": true, "seed": 3}));
+        assert!(r["map"].as_array().unwrap().iter().all(|r| r.get("swatch").is_none()), "a changed color drops its swatch: {r}");
+    }
+}
+
+/// A swatch whose components are finer than a color key's hundredths still links the art of the row
+/// whose new color is its key.
+#[test]
+fn a_rows_swatch_with_a_finer_color_than_its_key_still_links() {
+    let mut s = session();
+    let ink = Color::cmyk(0.123_456, 0.876_543, 0.0, 0.0);
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 0.123_456, "m": 0.876_543, "y": 0.0, "k": 0.0}, "spot": true}));
+    let id = rect(&mut s, json!("gray 50"));
+    select_all(&mut s);
+    let to = vectorcraft_color::recolor::ColorKey::of(&ink).to_string();
+    run(&mut s, "recolor.apply", json!({"map": [{"from": ["gray 50"], "to": to, "swatch": {"name": "Ink"}}], "method": "scaleTints"}));
+    assert_eq!(paint_link(&s, id).as_deref(), Some("Ink"));
+    assert!(close(fill(&s, id), ink), "the swatch's own color: {:?}", fill(&s, id));
+}
+
+/// A row's `swatch` from a loaded library links the art to it and adds it to the document's
+/// swatches; of two library swatches with the same name, the one with the row's new color is used,
+/// and rows that pick the same one link to one added swatch; of a process and a spot swatch with
+/// one name and color, the first is used; and a process swatch recolors as the row's new color
+/// alone does, in the color model `model` gives.
+#[test]
+fn a_rows_library_swatch_joins_the_document_and_a_process_swatch_changes_nothing() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "cmyk 0 100 0 0", "spot": true}));
+    run(&mut s, "swatch.new", json!({"name": "Twin", "color": "cmyk 100 0 0 0", "spot": true}));
+    let data = run(&mut s, "swatch.library.save", json!({"names": ["Ink", "Twin"], "name": "Inks"}))["data"].as_str().unwrap().to_string();
+    // Both of the library's swatches are named Ink.
+    let data = data.replace("\"Twin\"", "\"Ink\"");
+    let lib = run(&mut s, "swatch.library.load", json!({"data": data, "name": "inks.vcswatches"}))["library"].as_str().unwrap().to_string();
+    run(&mut s, "swatch.delete", json!({"names": ["Ink", "Twin"]}));
+    let id = rect(&mut s, json!("gray 50"));
+    select_all(&mut s);
+    let row = |to: &str| json!([{"from": ["gray 50"], "to": to, "swatch": {"name": "Ink", "library": lib}}]);
+    let r = run(&mut s, "recolor.apply", json!({"map": row("cmyk 100 0 0 0"), "method": "scaleTints"}));
+    assert_eq!(r["swatches"], json!(["Ink"]), "{r}");
+    let d = &s.doc().unwrap().doc;
+    let w = d.swatch("Ink").unwrap();
+    assert!(w.spot && close(w.paint.color().unwrap(), Color::cmyk(1.0, 0.0, 0.0, 0.0)), "the swatch of the row's color joined: {w:?}");
+    assert_eq!(paint_link(&s, id).as_deref(), Some("Ink"));
+    assert!(close(fill(&s, id), Color::cmyk(1.0, 0.0, 0.0, 0.0)), "{:?}", fill(&s, id));
+    run(&mut s, "edit.undo", json!({}));
+
+    // Three rows that pick the magenta, the cyan and again the cyan Ink: the two cyan rows link to
+    // one swatch added to the document.
+    let more = [rect(&mut s, json!("gray 20")), rect(&mut s, json!("gray 80"))];
+    select_all(&mut s);
+    let three = json!([
+        {"from": ["gray 50"], "to": "cmyk 0 100 0 0", "swatch": {"name": "Ink", "library": lib}},
+        {"from": ["gray 20"], "to": "cmyk 100 0 0 0", "swatch": {"name": "Ink", "library": lib}},
+        {"from": ["gray 80"], "to": "cmyk 100 0 0 0", "swatch": {"name": "Ink", "library": lib}},
+    ]);
+    let r = run(&mut s, "recolor.apply", json!({"map": three, "method": "scaleTints"}));
+    assert_eq!(r["swatches"].as_array().map(Vec::len), Some(2), "{r}");
+    let (a, b, c) = (paint_link(&s, id), paint_link(&s, more[0]), paint_link(&s, more[1]));
+    assert!(a.is_some() && b.is_some() && a != b && b == c, "{a:?} {b:?} {c:?}");
+    run(&mut s, "edit.undo", json!({}));
+
+    // Of a process and a spot swatch with one name and color, the first, the process one, is used.
+    run(&mut s, "swatch.new", json!({"name": "Pair", "color": "cmyk 0 0 100 0"}));
+    run(&mut s, "swatch.new", json!({"name": "Pear", "color": "cmyk 0 0 100 0", "spot": true}));
+    let data = run(&mut s, "swatch.library.save", json!({"names": ["Pair", "Pear"], "name": "Pairs"}))["data"]
+        .as_str()
+        .unwrap()
+        .replace("\"Pear\"", "\"Pair\"");
+    let pairs = run(&mut s, "swatch.library.load", json!({"data": data, "name": "pairs.vcswatches"}))["library"].as_str().unwrap().to_string();
+    run(&mut s, "swatch.delete", json!({"names": ["Pair", "Pear"]}));
+    select_all(&mut s);
+    let map = json!([{"from": ["gray 50"], "to": "cmyk 0 0 100 0", "swatch": {"name": "Pair", "library": pairs}}]);
+    run(&mut s, "recolor.apply", json!({"map": map, "method": "scaleTints"}));
+    assert_eq!(paint_link(&s, id), None, "the process swatch");
+    run(&mut s, "edit.undo", json!({}));
+
+    // A global process Ink and a spot Ink of one color, from two libraries, while the document's Ink
+    // is another color: each row links to its own added swatch.
+    let mut libraries = vec![];
+    for (file, kind) in [("global.vcswatches", json!({"global": true})), ("spot.vcswatches", json!({"spot": true}))] {
+        let mut w = json!({"name": "Ink", "color": "cmyk 0 0 0 100"});
+        w.as_object_mut().unwrap().extend(kind.as_object().unwrap().clone());
+        run(&mut s, "swatch.new", w);
+        let data = run(&mut s, "swatch.library.save", json!({"names": ["Ink"], "name": file}))["data"].as_str().unwrap().to_string();
+        libraries.push(run(&mut s, "swatch.library.load", json!({"data": data, "name": file}))["library"].as_str().unwrap().to_string());
+        run(&mut s, "swatch.delete", json!({"names": ["Ink"]}));
+    }
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#00ff00"}));
+    select_all(&mut s);
+    let two = json!([
+        {"from": ["gray 50"], "to": "cmyk 0 0 0 100", "swatch": {"name": "Ink", "library": libraries[0]}},
+        {"from": ["gray 20"], "to": "cmyk 0 0 0 100", "swatch": {"name": "Ink", "library": libraries[1]}},
+    ]);
+    let r = run(&mut s, "recolor.apply", json!({"map": two, "method": "scaleTints"}));
+    assert_eq!(r["swatches"].as_array().map(Vec::len), Some(2), "{r}");
+    let (global, spot) = (paint_link(&s, id).unwrap(), paint_link(&s, more[0]).unwrap());
+    let d = &s.doc().unwrap().doc;
+    assert!(global != spot && !d.swatch(&global).unwrap().spot && d.swatch(&spot).unwrap().spot, "{global} {spot}");
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "swatch.delete", json!({"names": ["Ink"]}));
+    select_all(&mut s);
+
+    run(&mut s, "swatch.new", json!({"name": "Leaf", "color": "cmyk 60 0 100 10"}));
+    select_all(&mut s);
+    let fills = |s: &mut Session, swatch: Value, model: &str| {
+        let map = json!([{"from": ["gray 50"], "to": "cmyk 60 0 100 10", "swatch": swatch}]);
+        let r = run(s, "recolor.apply", json!({"map": map, "method": "scaleTints", "model": model}));
+        let paint = s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint();
+        run(s, "edit.undo", json!({}));
+        select_all(s);
+        (paint, r.get("note").cloned())
+    };
+    for model in ["keep", "new", "document"] {
+        let alone = fills(&mut s, Value::Null, model);
+        assert_eq!(fills(&mut s, json!({"name": "Leaf"}), model), alone, "{model}: a process swatch is its color");
+    }
+}
+
+fn paint_link(s: &Session, id: NodeId) -> Option<String> {
+    match s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint() {
+        vectorcraft_color::Paint::Solid { swatch, .. } => swatch,
+        p => panic!("{p:?}"),
+    }
+}
+
 /// Randomize order moves a row's tint with its new color; changing saturation and brightness
 /// drops the tint of every color it changes.
 #[test]
