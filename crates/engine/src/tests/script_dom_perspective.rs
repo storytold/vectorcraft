@@ -277,6 +277,28 @@ fn get_preset_settings_given_back_to_add_document_makes_the_same_document() {
 }
 
 #[test]
+fn startup_presets_list_names_presets_add_document_takes() {
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "var l = app.startupPresetsList; vc.log(l); l.push('Mine'); l[0] = 'x'; vc.log(app.startupPresetsList.length === l.length - 1);\
+         vc.log(app.startupPresetsList[0] !== 'x');\
+         for (var i = 0; i < l.length - 1; i++) { var n = app.startupPresetsList[i]; var p = app.getPresetSettings(n);\
+         var d = app.documents.addDocument(n); vc.log([n, d.width === p.width && d.documentColorSpace === p.colorMode]); }",
+    );
+    let names: Vec<&str> = out[0].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    for name in ["Print", "Web", "Basic CMYK", "Basic RGB"] {
+        assert!(names.contains(&name), "{name}: {names:?}");
+    }
+    assert_eq!(out[1..3], [json!(true), json!(true)]);
+    assert_eq!(out.len(), 3 + names.len());
+    for (name, made) in names.iter().zip(&out[3..]) {
+        assert_eq!(made, &json!([name, true]), "{name}");
+    }
+    assert_eq!(s.documents().len(), names.len());
+}
+
+#[test]
 fn members_not_built_yet_say_so() {
     let mut s = doc();
     for (owner, member) in [

@@ -2741,8 +2741,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `GroupItems.createFromFile` throw an error that says they are not available yet.
 - A document also has `showPerspectiveGrid()`, `hidePerspectiveGrid()`, `getPerspectiveActivePlane()`,
   `setActivePlane(gridPlane)` and `selectPerspectivePreset(gridType, presetName)`
-  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/), and `app` has `getPresetSettings(preset)`
-  (https://ai-scripting.docsforadobe.dev/jsobjref/Application/). `showPerspectiveGrid` and `hidePerspectiveGrid`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/), and `app` has `getPresetSettings(preset)` and
+  `startupPresetsList` (https://ai-scripting.docsforadobe.dev/jsobjref/Application/). `showPerspectiveGrid` and `hidePerspectiveGrid`
   run `perspective.grid.show`, and `setActivePlane` runs `perspective.plane.set`; none of them adds an undo step, and
   a failed run puts the grid back. `selectPerspectivePreset` runs `perspective.grid.preset` with a built-in or saved
   preset of `perspective.presets.list` (its name in any case), which shows the grid and is part of the run's undo
@@ -2758,7 +2758,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   preset's units are not one of the six `RulerUnits` values a new document takes, `rasterResolution` when the
   preset's PPI is not 72, 150 or 300, `numArtboards` and `artboardRowsOrCols` when the preset has more than 100
   artboards, and `artboardRowsOrCols` alone for a grid by column that no row count lays out the same, so
-  `addDocument` with the same preset keeps the preset's own. As the Document page describes,
+  `addDocument` with the same preset keeps the preset's own. `startupPresetsList` is a read-only array of the
+  startup preset names, each of which `addDocument` and `getPresetSettings` take: the New Document profiles in the
+  order the New Document dialog lists them (`Mobile`, `Web`, `Print`, `Film & Video`, `Art & Illustration`,
+  `Branding`, `Social`), then `Basic CMYK` and `Basic RGB`. This order is VectorCraft's own. Each read gives a new
+  array, so changing it changes nothing else. As the Document page describes,
   `showPerspectiveGrid` and `setActivePlane` give `true` on success, and `hidePerspectiveGrid` gives `true` when it
   hides a grid and `false` when the grid was already hidden.
   VectorCraft's own rules: `showPerspectiveGrid` and `setActivePlane` also give `true` when nothing changed.

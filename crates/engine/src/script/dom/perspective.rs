@@ -26,6 +26,10 @@
 //!   of more than 100 artboards, and the layout of a grid by column that no row count lays out the
 //!   same. Changing the result changes nothing else. Each result counts toward the run's limit
 //!   of `DocumentPreset` objects, as `new DocumentPreset()` does.
+//! - `startupPresetsList` is an array of the startup preset names, each of which
+//!   `documents.addDocument` and `getPresetSettings` take: the New Document profiles in the order
+//!   the New Document dialog lists them, then `Basic CMYK` and `Basic RGB`. Each read gives a new
+//!   array, so changing it changes nothing else.
 //! - The workspace methods, `loadColorSettings`, `showPresets` and the perspective grid preset
 //!   files are not available yet.
 
@@ -33,7 +37,7 @@ use serde_json::json;
 use vectorcraft_js::{Data, HostError, HostMember};
 use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
 
-use super::{Answer, MAX_TEXT_BYTES, arg, later, method, named, num, on_doc, startup_preset, text, this_doc, with_doc};
+use super::{Answer, MAX_TEXT_BYTES, arg, get, later, method, named, num, on_doc, startup_preset, text, this_doc, with_doc};
 use crate::script::{Host, Link};
 
 type Result<T> = std::result::Result<T, HostError>;
@@ -234,6 +238,14 @@ fn preset_settings(h: &Host, a: &[Data]) -> Answer {
     super::add_preset(h, out)
 }
 
+/// The startup presets besides the New Document profiles, which give a document of one color mode.
+const BASIC_PRESETS: [&str; 2] = ["Basic CMYK", "Basic RGB"];
+
+/// `app.startupPresetsList`: the names of the startup presets, as a new array.
+fn startup_presets(_: &Host, _: &[Data]) -> Answer {
+    Ok(Data::Array(crate::cmd::newdoc::profile_names().chain(BASIC_PRESETS).map(text).collect()))
+}
+
 /// The members this module adds to `Document`'s.
 pub(super) fn document_members(l: &Link) -> Vec<(String, HostMember)> {
     let mut m = named(vec![
@@ -249,7 +261,7 @@ pub(super) fn document_members(l: &Link) -> Vec<(String, HostMember)> {
 
 /// The members this module adds to `Application`'s.
 pub(super) fn application_members(l: &Link) -> Vec<(String, HostMember)> {
-    let mut m = named(vec![("getPresetSettings", method(l, preset_settings))]);
+    let mut m = named(vec![("getPresetSettings", method(l, preset_settings)), ("startupPresetsList", get(l, startup_presets))]);
     let missing = ["saveWorkspace", "switchWorkspace", "deleteWorkspace", "resetWorkspace", "loadColorSettings", "showPresets"];
     m.extend(missing.into_iter().map(|n| later(l, "Application", n)));
     m

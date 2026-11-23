@@ -84,7 +84,8 @@ const INSIDE: &[(&str, &str)] = &[
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= deleteWorkspace \
          deleteWorkspace= documents getIsFileOpen getPresetSettings loadColorSettings loadColorSettings= resetWorkspace \
-         resetWorkspace= saveWorkspace saveWorkspace= selection showPresets showPresets= switchWorkspace switchWorkspace= \
+         resetWorkspace= saveWorkspace saveWorkspace= selection showPresets showPresets= startupPresetsList switchWorkspace \
+         switchWorkspace= \
          typename",
     ),
     ("DocumentPreset.", "prototype"),
