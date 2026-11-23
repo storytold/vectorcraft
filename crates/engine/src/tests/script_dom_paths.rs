@@ -975,6 +975,38 @@ fn reading_selected_while_moving_points_writes_the_path_once() {
 }
 
 #[test]
+fn selection_reads_and_writes_see_points_the_script_added() {
+    let (mut s, a, _) = doc();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0], q = p.pathPoints.add(); q.selected = PathPointSelection.ANCHORPOINT;\
+         vc.log(q.selected); vc.log(p.selectedPathPoints.length);",
+    );
+    assert_eq!(out, vec![json!("PathPointSelection.ANCHORPOINT"), json!(1)]);
+    assert_eq!(selected_anchors(&s, a), Some(vec![(0, 4)]));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let out = log(&mut s, "var p = app.activeDocument.pathItems[0]; p.pathPoints.add(); vc.log([p.selectedPathPoints.length, p.pathPoints.length]);");
+    assert_eq!(out, vec![json!([6, 6])]);
+}
+
+#[test]
+fn selecting_a_point_of_a_path_with_selected_segments_replaces_the_segments() {
+    let (mut s, a, _) = doc();
+    s.execute("select.segments", &json!({"id": a.0, "segments": [[0, 1]], "mode": "set"})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0]; vc.log(p.selectedPathPoints.length);\
+         p.pathPoints[1].selected = PathPointSelection.NOSELECTION;",
+    );
+    assert_eq!(out, vec![json!(0)]);
+    assert!(s.active().unwrap().selection.segments.contains_key(&a), "a value the point has leaves the segments selected");
+    log(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = PathPointSelection.ANCHORPOINT;");
+    let sel = &s.active().unwrap().selection;
+    assert!(!sel.segments.contains_key(&a));
+    assert_eq!(selected_anchors(&s, a), Some(vec![(0, 0)]));
+}
+
+#[test]
 fn path_point_selected_refuses_handles_bad_values_and_locked_paths() {
     let (mut s, a, _) = doc();
     let e = failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = PathPointSelection.LEFTDIRECTION;");
@@ -1117,4 +1149,6 @@ fn assigning_guides_throws_in_both_directions_while_guides_are_locked() {
     let e = failure(&mut s, "app.activeDocument.pathItems[1].guides = true;");
     assert!(e.contains("guides are locked"), "{e}");
     assert_eq!((is_guide(&s, a), is_guide(&s, b), undo_steps(&s)), (true, false, steps));
+    log(&mut s, "var ps = app.activeDocument.pathItems; ps[0].guides = true; ps[1].guides = false;");
+    assert_eq!((is_guide(&s, a), is_guide(&s, b), undo_steps(&s)), (true, false, steps), "a value the path has runs no command");
 }

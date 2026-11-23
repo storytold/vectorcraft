@@ -44,10 +44,12 @@
 //!   group or compound path is selected as a whole. Direction handles are not selected on their
 //!   own, so `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error that says they
 //!   are not available yet, and so does `NOSELECTION` on a point of a path in a selected group or
-//!   compound path. Selecting a point of a guide while guides are locked throws an error. A
-//!   clipping path cannot be made a guide. Assigning `guides` on a path inside a compound path
-//!   throws an error that says it is not available yet, on a path that cannot be edited or
-//!   selected throws `Cannot edit` for both values, and while guides are locked throws an error.
+//!   compound path. Selecting a point of a path with selected segments replaces that path's
+//!   segment selection. Selecting a point of a guide while guides are locked throws an error. A
+//!   clipping path cannot be made a guide. Assigning `guides` a value the path does not have
+//!   throws an error that says it is not available yet on a path inside a compound path, throws
+//!   `Cannot edit` on a path that cannot be edited or selected, and throws an error while guides
+//!   are locked; assigning the value the path has runs no command.
 //! - The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
 //!   `changeStrokePattern` given as different values throw an error; gradients move with the art,
 //!   so `changeFillGradients` false throws an error that says it is not available yet.
@@ -598,9 +600,10 @@ fn path_guides(h: &super::Host, a: &[Data]) -> Answer {
 pub const COMPOUND_MEMBER_GUIDES: &str = "Changing guides on a path inside a compound path is not available yet";
 
 /// `guides = true` makes the path a guide with `view.guides.make`, and `false` makes it a path again
-/// with `view.guides.release`; the selection stays as it was. A clipping path cannot be a guide, a
-/// path inside a compound path throws [`COMPOUND_MEMBER_GUIDES`], and while guides are locked both
-/// values throw an error.
+/// with `view.guides.release`; the selection stays as it was. A value the path has already runs no
+/// command and throws no error. Otherwise a clipping path cannot be a guide, a path inside a
+/// compound path throws [`COMPOUND_MEMBER_GUIDES`], and while guides are locked both values throw
+/// an error.
 fn path_set_guides(h: &super::Host, a: &[Data]) -> Answer {
     let on = boolean(arg(a, 1), "guides")?;
     let item = this_path(h, a)?;
@@ -1433,10 +1436,12 @@ const HANDLE_SELECTIONS: &[&str] = &["PathPointSelection.LEFTDIRECTION", "PathPo
 
 /// `selected = PathPointSelection.ANCHORPOINT` adds the point to the direct-selected anchors, and
 /// `NOSELECTION` removes it, with `select.anchorsMany`; the other selected objects and anchors stay
-/// selected. A value the point has already runs no command. Direction handles cannot be selected,
-/// so `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error, and so does
-/// `NOSELECTION` on a path selected through a group or compound path that holds it, and
-/// `ANCHORPOINT` on a guide while guides are locked.
+/// selected, except that selecting an anchor of a path with selected segments replaces that path's
+/// segment selection, as `select.anchorsMany` does. A value the point has already runs no command.
+/// Direction handles cannot be selected, so `LEFTDIRECTION`, `RIGHTDIRECTION` and
+/// `LEFTRIGHTPOINT` throw an error, and so does `NOSELECTION` on a path selected through a group or
+/// compound path that holds it, and `ANCHORPOINT` on a guide while guides are locked. The setter
+/// writes the waiting point changes first, as every member that is not a point function does.
 fn pt_set_selected(h: &super::Host, a: &[Data]) -> Answer {
     let on = match arg(a, 1) {
         Data::String(s) if s == "PathPointSelection.ANCHORPOINT" => true,

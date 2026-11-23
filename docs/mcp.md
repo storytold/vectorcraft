@@ -2701,15 +2701,16 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   mode, which stays as it was. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
   members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
   `guides`, `clipping`, `selectedPathPoints`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`,
-  `stroked`, `strokeColor`, `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,
-  `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)` (counterclockwise for a
-  positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The geometry changes through
-  `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the stroke options through
-  `stroke.set`, the fill rule through `path.setFillRule`, overprint through `object.setOverprint` and the transforms
-  through `object.move`, `object.rotate` and `object.scale`. Changes to the points of a path (`closed`,
-  `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one `path.setAnchors` before the
-  script uses any other member or command, or the points of another path, and when the script ends; a path aligned
-  to the pixel grid, or in an object that is, is written at each change, so its points read as the grid snaps them.
+  `stroked`, `strokeColor`, `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to
+  500), `strokeDashes`, `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)`
+  (counterclockwise for a positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The
+  geometry changes through `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the
+  stroke options through `stroke.set`, the fill rule through `path.setFillRule`, overprint through
+  `object.setOverprint` and the transforms through `object.move`, `object.rotate` and `object.scale`. Changes to the
+  points of a path (`closed`, `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one
+  `path.setAnchors` before the script uses any other member or command, or the points of another path, and when the
+  script ends; a path aligned to the pixel grid, or in an object that is, is written at each change, so its points
+  read as the grid snaps them.
   `pathPoints`
   (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
   `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
@@ -2737,13 +2738,13 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   and the endpoints of selected segments are not; a path in a selected group or compound path is selected as a whole.
   Direction handles are not selected on their own, so assigning `LEFTDIRECTION`, `RIGHTDIRECTION` or `LEFTRIGHTPOINT`
   to `selected` throws an error that says it is not available yet, and so does assigning `NOSELECTION` to a point of a
-  path in a selected group or compound path. Selecting a point of a path that cannot be selected throws `Cannot
-  select`, and selecting a point of a guide while guides are locked throws an error. A clipping path cannot be made a
-  guide, and `guides = true` on one throws an error; assigning `guides` on a path inside a compound path throws an
-  error that says it is not available yet, assigning either value on a path that is hidden, locked or cannot be
-  selected throws `Cannot edit`, and assigning either value while guides are locked throws an error. Color
-  components left out
-  count as 0, `new
+  path in a selected group or compound path. Selecting a point of a path with selected segments replaces that path's
+  segment selection. Changing `selected` adds no undo step. Selecting a point of a path that cannot be selected
+  throws `Cannot select`, and selecting a point of a guide while guides are locked throws an error. A clipping path
+  cannot be made a guide, and `guides = true` on one throws an error. Assigning `guides` the value a path already
+  has runs no command. Assigning the other value throws an error that says it is not available yet on a path inside
+  a compound path, throws `Cannot edit` on a path that is hidden, locked or cannot be selected, and throws an error
+  while guides are locked. Color components left out count as 0, `new
   cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
   range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest
   decimals, at least 4, that give the stored value back, so assigning a color read from a path leaves the path as it
