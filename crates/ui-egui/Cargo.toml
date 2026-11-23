@@ -69,7 +69,6 @@ egui = { workspace = true, features = ["bytemuck", "default_fonts", "monochrome_
 # reach our tests; `theme::install_fonts` starts from `FontDefinitions::default()`, which is empty
 # without them (production would lay out tofu, and the no-interface-fonts tests would bind nothing).
 bytemuck = { version = "1", features = ["extern_crate_alloc"] }
-egui_extras = { workspace = true }
 image = { workspace = true }
 craft-image-codecs = { workspace = true }
 serde = { workspace = true }
@@ -99,6 +98,7 @@ rustix = { workspace = true, features = ["std", "process"] }
 # `Fixture` and the stories sit behind craft-ui's `testing` feature.
 craft = { workspace = true, features = ["ui-testing"] }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
+egui_extras = { workspace = true }
 vectorcraft-apischema = { workspace = true }
 vectorcraft-testkit = { workspace = true }
 # A variable font built in code (no font file is committed).

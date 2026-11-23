@@ -173,6 +173,7 @@ impl VectorcraftApp {
             pointer_waits: Vec::new(),
             context: 0,
             ui_ctx: None,
+            #[cfg(not(target_arch = "wasm32"))]
             updates_rt: Default::default(),
             frame_rate: Default::default(),
             hover_doc: None,

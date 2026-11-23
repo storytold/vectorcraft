@@ -11,7 +11,9 @@ use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, file_face_names, font_files};
 use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
-use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
+#[cfg(not(target_arch = "wasm32"))]
+use super::MetadataProvider;
+use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
 
 fn has_file_fonts(n: &vectorcraft_doc::Node) -> bool {
     matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if t.file_fonts.is_some())
