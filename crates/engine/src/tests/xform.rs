@@ -1713,6 +1713,59 @@ fn coordinate_moves_journal_the_locked_art_preference() {
     assert_eq!(s.journal.last().unwrap().1["lockedAndHidden"], true);
 }
 
+/// #8581: after the Artboard tool Alt-drags a copy of an artboard, Transform Again copies the copy
+/// by the same distance, so the artboards make an evenly spaced row, the art copied along; after a
+/// plain move it moves the same artboard again. Once the artboards are gone it says so.
+#[test]
+fn transform_again_repeats_an_artboard_tool_copy_and_move() {
+    let mut s = session();
+    rect(&mut s, 100.0, 100.0, 50.0, 50.0);
+    s.execute("select.none", &json!({})).unwrap();
+    let xs = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect.x0).collect::<Vec<_>>();
+    let objects = |s: &Session| s.doc().unwrap().doc.node_count();
+    let (x0, art) = (xs(&s)[0], objects(&s));
+    gesture(&mut s, "artboard", &[(400.0, 300.0), (420.0, 300.0), (1300.0, 300.0), (1300.0, 300.0)], Mods { alt: true, ..Mods::default() });
+    let dragged = xs(&s);
+    assert_eq!(dragged.len(), 2, "{dragged:?}");
+    let step = dragged[1] - x0;
+    assert!(step > 800.0, "{dragged:?}");
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(xs(&s), [x0, x0 + step, x0 + 2.0 * step, x0 + 3.0 * step], "a row of copies");
+    assert_eq!(objects(&s), art + 3, "each copy took the rectangle with it");
+    // A plain move of the last artboard, repeated, moves it again.
+    let last = x0 + 3.0 * step;
+    gesture(&mut s, "artboard", &[(last + 400.0, 300.0), (last + 400.0, 320.0), (last + 400.0, 500.0), (last + 400.0, 500.0)], Mods::default());
+    let ys = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect.y0).collect::<Vec<_>>();
+    let down = ys(&s)[3] - ys(&s)[0];
+    assert!(down > 100.0, "{:?}", ys(&s));
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!(ys(&s)[3] - ys(&s)[0], 2.0 * down, "moved again by the same distance");
+    assert_eq!(xs(&s).len(), 4, "a move makes no copy");
+    // The repeat uses the options the move used, not the preferences of the moment.
+    let recorded = |s: &Session| match s.doc().unwrap().last_transform.clone() {
+        Some(LastTransform::Artboards(p)) => p,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!((recorded(&s)["patterns"].clone(), recorded(&s)["lockedAndHidden"].clone()), (json!(false), json!(false)));
+    s.execute("prefs.set", &json!({"key": "transformPatternTiles", "value": true})).unwrap();
+    s.prefs.move_locked_with_artboard = true;
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    assert_eq!((recorded(&s)["patterns"].clone(), recorded(&s)["lockedAndHidden"].clone()), (json!(false), json!(false)));
+    assert_eq!(ys(&s)[3] - ys(&s)[0], 3.0 * down);
+    // A drag that ends where it began moves nothing and keeps the last transform.
+    let before = recorded(&s);
+    let y = ys(&s)[3] + 50.0;
+    gesture(&mut s, "artboard", &[(last + 400.0, y), (last + 400.0, y + 80.0), (last + 400.0, y), (last + 400.0, y)], Mods::default());
+    assert_eq!(recorded(&s), before, "the drag back to its start is not the transform to repeat");
+    // The artboard is gone: an error, and nothing else moves.
+    s.execute("artboard.delete", &json!({"index": 3})).unwrap();
+    let before = (xs(&s), ys(&s));
+    let err = s.execute("object.transformAgain", &json!({})).unwrap_err();
+    assert!(err.to_string().contains("are gone"), "{err}");
+    assert_eq!((xs(&s), ys(&s)), before);
+}
+
 /// A drag with the Artboard tool journals whether locked art went along, so a replay under the
 /// other preference moves the same art.
 #[test]

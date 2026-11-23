@@ -621,5 +621,47 @@ fn artboard_move(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok((index, moved))
     })?;
+    // Transform Again repeats it on the artboards it left: the moved ones, or the copies.
+    let mut again = p.clone();
+    if let Some(o) = again.as_object_mut() {
+        o.remove("index");
+        o.remove("indices");
+        // The values this move used, not the preferences of the moment the repeat runs.
+        o.insert("moveArt".into(), json!(move_art));
+        o.insert("copy".into(), json!(copy));
+        o.insert("patterns".into(), json!(sc.patterns));
+        o.insert("lockedAndHidden".into(), json!(locked_art));
+        let d = &s.doc()?.doc;
+        o.insert("ids".into(), json!(index.iter().filter_map(|i| d.artboards.get(*i).map(|a| a.id)).collect::<Vec<_>>()));
+    }
+    let st = s.doc_mut()?;
+    match &mut st.interaction {
+        Some(it) => it.artboards_again = Some(again),
+        None => {
+            st.last_transform = Some(crate::LastTransform::Artboards(again));
+            st.last_perspective = None;
+        }
+    }
     Ok(json!({ "index": index.first(), "indices": index, "moved": moved.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// Transform Again after an artboard move or copy: the same move again, on the artboards the last
+/// one left (by id, so a copy repeated copies the copies). They are gone: an error, not a move of
+/// whatever now has their positions.
+pub(crate) fn artboard_move_again(s: &mut Session, again: &Value) -> Result<Value> {
+    let ids: Vec<u32> =
+        again.get("ids").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).filter_map(|v| u32::try_from(v).ok()).collect();
+    let indices: Vec<usize> = {
+        let d = &s.doc()?.doc;
+        ids.iter().filter_map(|id| d.artboards.iter().position(|a| a.id == *id)).collect()
+    };
+    if indices.is_empty() {
+        return Err(EngineError::Other("the artboards Transform Again would move are gone".into()));
+    }
+    let mut p = again.clone();
+    if let Some(o) = p.as_object_mut() {
+        o.remove("ids");
+        o.insert("indices".into(), json!(indices));
+    }
+    artboard_move(s, &p)
 }

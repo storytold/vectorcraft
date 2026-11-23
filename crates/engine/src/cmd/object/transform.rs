@@ -538,5 +538,6 @@ pub(super) fn transform_again(s: &mut Session, p: &Value) -> Result<Value> {
             apply_transform(s, "Transform Again", ids, m, &merge(options), true)
         }
         LastTransform::Each(params) => crate::cmd::menucmds::transform_each_again(s, &merge(params)),
+        LastTransform::Artboards(params) => crate::cmd::xform::artboard_move_again(s, &merge(params)),
     }
 }

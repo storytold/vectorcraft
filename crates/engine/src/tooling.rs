@@ -1757,7 +1757,8 @@ impl Session {
             if !std::sync::Arc::ptr_eq(&it.doc, &st.doc) {
                 return None;
             }
-            let interaction_fields = (it.preview.clone(), it.copies.clone(), it.perspective_again.clone(), it.plane_placed);
+            let interaction_fields =
+                (it.preview.clone(), it.copies.clone(), it.perspective_again.clone(), it.plane_placed, it.artboards_again.clone());
             (st.doc.clone(), st.selection.clone(), st.revision, self.pending_paint.clone(), interaction_fields)
         };
         let (overlays, transform_box) = if self.preview(cmd, p).is_ok() {
@@ -1780,6 +1781,7 @@ impl Session {
                 it.copies = interaction_fields.1;
                 it.perspective_again = interaction_fields.2;
                 it.plane_placed = interaction_fields.3;
+                it.artboards_again = interaction_fields.4;
             }
         }
         self.pending_paint = paint;

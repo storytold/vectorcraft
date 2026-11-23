@@ -24,6 +24,9 @@ pub struct Interaction {
     /// The perspective transform the previews make (`perspective.transform` params): Transform
     /// Again repeats it once the drag is committed.
     pub perspective_again: Option<Value>,
+    /// The artboard move or copy the previews make ([`LastTransform::Artboards`]): Transform Again
+    /// repeats it once the drag is committed.
+    pub artboards_again: Option<Value>,
     /// A preview drew an object on, or attached one to, a plane held by Automatic Plane
     /// Positioning: the plane goes back to its place once the drag is committed.
     pub(crate) plane_placed: bool,
@@ -43,6 +46,10 @@ pub enum LastTransform {
     /// The last Transform Each's parameters: each object transforms about its own bounds, so the
     /// repeat runs the command on the selection of the moment rather than one matrix.
     Each(Value),
+    /// The last artboard move or copy (`artboard.move` params, with `ids`: the artboards it left
+    /// moved, or the copies it made). The repeat moves or copies those again by the same distance,
+    /// so a copy repeated makes a row of evenly spaced artboards (#8581).
+    Artboards(Value),
 }
 
 /// This holds the copies that a transform or a perspective edit with `copy` made of an
