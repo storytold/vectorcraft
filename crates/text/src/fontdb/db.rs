@@ -61,6 +61,7 @@ impl FontDb {
             images: Mutex::new(GlyphCache::default()),
             colours: Mutex::new(GlyphCache::default()),
             catalog: Arc::new(catalog),
+            file_faces: RwLock::new(super::FileFaces::default()),
             canonical_cache: Mutex::new(CanonicalNames::new()),
             #[cfg(not(target_arch = "wasm32"))]
             version_scanned: RwLock::new(std::collections::HashSet::new()),

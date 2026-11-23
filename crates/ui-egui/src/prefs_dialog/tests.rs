@@ -669,8 +669,8 @@ fn every_setting_from_general_to_devices_has_one_description() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
-/// Every sentence names a setting the window builds or the engine lists, and every complete
-/// catalog translates it.
+/// Every sentence names a setting the window builds or the engine lists, and shows in its
+/// catalog's translation where there is one, in English where there is none.
 #[test]
 fn every_description_names_a_setting_and_fits_in_every_language() {
     let mut a = app();
@@ -684,8 +684,13 @@ fn every_description_names_a_setting_and_fits_in_every_language() {
             bad.push(format!("`{key}` is not a setting the window shows"));
         }
         for lang in crate::i18n::Lang::all() {
-            if lang != crate::i18n::Lang::EN && crate::i18n::tr(lang, sentence) == *sentence {
-                bad.push(format!("{}: no row for {sentence:?}", lang.code()));
+            let text = crate::i18n::tr(lang, sentence);
+            let translated = crate::i18n::has(lang, sentence);
+            if lang != crate::i18n::Lang::EN && translated && text == *sentence {
+                bad.push(format!("{}: the available translation for {sentence:?} was not used", lang.code()));
+            }
+            if !translated && text != *sentence {
+                bad.push(format!("{}: missing {sentence:?} did not fall back to English", lang.code()));
             }
         }
     }

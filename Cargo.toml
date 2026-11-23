@@ -31,17 +31,18 @@ craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7b
 craft-plotter = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 # WMF, EMF and EMF+ reader (craft-libs#778).
-craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
+craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "8f6ad14b58ca2efee67aac5d0f5573bad6a5ca81" }
 craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
-# Production pins craft-svg, craft-eps and craft-image-codecs ahead of the framework branch (craft-libs main, not yet
-# on next); one pin again after the next sync.
+# Production pins craft-svg, craft-eps, craft-image-codecs, craft-metafile and craft-stream-codecs ahead of the
+# framework branch (craft-libs main, not yet on next); one pin again after the next sync.
 craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "ba25ccd233934d1b2f74e3c0f235168bf5f13ef3" }
 craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f", default-features = false, features = ["read", "write"] }
 craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
-craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
+craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d20a82481b1f7b1d32c818b19c620338af9755d3" }
 craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
+craft-codepage = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 # The framework facade (`craft::ui`, `craft::settings`, `craft::platform`, ...). No default features: each crate names
 # the members it imports.
 craft = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }

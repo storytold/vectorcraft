@@ -77,6 +77,7 @@ pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: 
     // Update Links (Preferences › File Handling) applies there as it is set now.
     let update_links = app.session.prefs.update_links == "automatically";
     let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
+    let open_params = app.session.prefs.with_pdf_font_choice(&params);
     // The automation roots in force here are in force there.
     let scope = ScopeHandle::capture();
     let opener = scope.clone();
@@ -90,7 +91,7 @@ pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: 
                     vectorcraft_engine::guard::catch_panic(|| {
                         cancel::scope(&raised, None, || {
                             // A profile question Edit › Color Settings asks waits for the UI thread.
-                            fileio::read_for_open_asking(&name, &bytes, Some(name.clone()), &params, update_links, low_res_proxy_eps, true)
+                            fileio::read_for_open_asking(&name, &bytes, Some(name.clone()), &open_params, update_links, low_res_proxy_eps, true)
                                 .map_err(|e| e.to_string())
                         })
                     })

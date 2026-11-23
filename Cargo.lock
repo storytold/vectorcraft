@@ -1251,7 +1251,7 @@ dependencies = [
 [[package]]
 name = "craft-metafile"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
+source = "git+https://github.com/storytold/craft-libs?rev=8f6ad14b58ca2efee67aac5d0f5573bad6a5ca81#8f6ad14b58ca2efee67aac5d0f5573bad6a5ca81"
 dependencies = [
  "encoding_rs",
  "image",
@@ -1342,7 +1342,7 @@ dependencies = [
 [[package]]
 name = "craft-stream-codecs"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
+source = "git+https://github.com/storytold/craft-libs?rev=d20a82481b1f7b1d32c818b19c620338af9755d3#d20a82481b1f7b1d32c818b19c620338af9755d3"
 dependencies = [
  "fax",
  "hayro-ccitt",
@@ -2634,7 +2634,7 @@ dependencies = [
 [[package]]
 name = "hayro-jbig2"
 version = "0.3.0"
-source = "git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0#d7c9632bfb3040cf45db394e7500cc93c81c49e0"
+source = "git+https://github.com/storytold/craft-libs?rev=d20a82481b1f7b1d32c818b19c620338af9755d3#d20a82481b1f7b1d32c818b19c620338af9755d3"
 dependencies = [
  "fearless_simd",
  "hayro-ccitt",
@@ -6901,6 +6901,7 @@ dependencies = [
  "cfb",
  "chrono",
  "craft-cdr",
+ "craft-codepage",
  "craft-docpath",
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=ba25ccd233934d1b2f74e3c0f235168bf5f13ef3)",
  "craft-jxl",
@@ -7200,6 +7201,7 @@ dependencies = [
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=ba25ccd233934d1b2f74e3c0f235168bf5f13ef3)",
  "craft-mime",
  "craft-svg",
+ "craft-xml 0.1.0 (git+https://github.com/storytold/craft-libs?rev=d7c9632bfb3040cf45db394e7500cc93c81c49e0)",
  "data-url",
  "flate2",
  "image",
@@ -7251,6 +7253,7 @@ dependencies = [
  "icu_segmenter",
  "kurbo 0.13.1",
  "log",
+ "serde_json",
  "skrifa 0.47.0",
  "subsetter",
  "unicode-bidi",
