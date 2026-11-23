@@ -1272,6 +1272,21 @@ fn a_plate_leaves_out_an_overprinting_image_without_its_ink() {
     assert!(body(true, false).contains("image"), "{}", body(true, false));
 }
 
+/// With Discard White Overprint on, an overprinting colorized image in a tint of a spot ink whose
+/// color is white still overprints: it is written as that ink, which is not paper white.
+#[test]
+fn a_white_spot_ink_colorized_image_overprints_with_discard_white_overprint() {
+    let mut d = overprinting_colorized_doc(vec![0, 128, 255], Color::WHITE, true);
+    d.swatches.push(Swatch { name: "White Ink".into(), paint: Paint::solid(Color::WHITE), global: true, spot: true });
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::Solid { color: Color::WHITE, swatch: Some("White Ink".into()), tint: 0.5 }));
+    d.setup.discard_white_overprint = true;
+    for level in Level::ALL {
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert!(ps.contains("(White Ink) cvn") && ps.contains("true op"), "{ps}");
+    }
+}
+
 #[test]
 fn uncolorized_image_stays_on_original_eps_path() {
     let d = colorized_doc(vec![0, 128, 255], None);

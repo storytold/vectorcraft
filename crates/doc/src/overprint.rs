@@ -299,6 +299,13 @@ impl Document {
         self.swatches_iter().filter(|s| s.spot).map(|s| s.name.clone()).collect()
     }
 
+    /// Whether `p` is a tint above 0% of a spot swatch with a solid color, which prints as an ink
+    /// of its own even when its color is white ([`is_white`]); a link is judged by the first
+    /// swatch of its name.
+    pub fn spot_ink(&self, p: &Paint) -> bool {
+        matches!(p, Paint::Solid { swatch: Some(name), tint, .. } if *tint > 0.0 && self.swatch(name).is_some_and(|s| s.spot && s.paint.color().is_some()))
+    }
+
     /// Files from before per-fill/stroke overprint listed the objects marked Overprint Black
     /// under [`LEGACY_OVERPRINT_KEY`]: their 100% black fills and strokes overprint now.
     pub fn migrate_overprint_black(&mut self) {
