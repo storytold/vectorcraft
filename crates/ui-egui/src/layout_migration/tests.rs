@@ -241,7 +241,8 @@ fn unreadable_docking_data_is_dropped_and_reported() {
         assert!(read.ui.dock_workspace.validate().is_ok(), "{key}: what is left still converts");
     }
     assert!(UiState::read_preferences(b"[1, 2]").is_none());
-    assert!(UiState::read_preferences(br#"{"toolbar": "invalid"}"#).is_none(), "other fields stay strict");
+    // `toolbar` (Window › Tools) is the layout's now, so another of the old fields stands in.
+    assert!(UiState::read_preferences(br#"{"toolbar_compact": "invalid"}"#).is_none(), "other fields stay strict");
 }
 
 /// A hand-edited file: unknown and repeated panels, sizes out of range, more groups than any

@@ -300,6 +300,18 @@ pub(crate) fn from_legacy(f: &LegacyDock, toolbars: &[CustomToolbar]) -> Option<
             closed.push((id, location));
         }
     }
+    // Older versions closed a panel by leaving it out of the layout: a default panel left out
+    // stays closed, at its default place, instead of coming back when the workspace is fitted.
+    let default = panel_docking::default_workspace(&[]);
+    for id in default.layout().panels() {
+        if closed.len() < MAX_PANELS
+            && !layout.contains(id)
+            && !closed.iter().any(|(p, _)| p == id)
+            && let Ok(location) = default.layout().location(id)
+        {
+            closed.push((id.clone(), location));
+        }
+    }
     let workspace = Workspace::from_parts(layout, closed, floated);
     workspace.validate().ok()?;
     Some(workspace)

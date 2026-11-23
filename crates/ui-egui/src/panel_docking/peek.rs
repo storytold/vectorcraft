@@ -3,7 +3,8 @@
 //! reveals the dock on that edge until the pointer moves away; Tab or Shift+Tab shows the panels
 //! for good.
 
-use craft::behavior::dock::{DockEdge, Layout};
+use craft::behavior::Axis;
+use craft::behavior::dock::{DockEdge, Layout, Node, tree_panels};
 use craft::ui::runtime::env::RevealEdge;
 use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
 use serde_json::{Value, json};
@@ -56,7 +57,24 @@ impl Edge {
 /// The panels docked on `edge`'s side of the canvas. Tool rails are not among them: Shift+Tab
 /// keeps them, and a peek shows panels.
 pub(crate) fn edge_panels(layout: &Layout<String>, edge: Edge) -> Vec<String> {
-    super::edge_columns(layout, edge.dock()).iter().flat_map(|c| c.panels()).filter(|p| !super::is_rail(p)).cloned().collect()
+    let mut out: Vec<String> = super::edge_columns(layout, edge.dock()).iter().flat_map(|c| c.panels()).cloned().collect();
+    // Panels split off beside the canvas outside a dock: the other child of each side-by-side
+    // split on the way down to the canvas.
+    let canvas = super::CANVAS.to_string();
+    let mut node = layout.root.as_ref();
+    while let Some(Node::Split { axis, first, second, .. }) = node {
+        let (inner, outer, side) = if tree_panels(first).contains(&&canvas) { (first, second, Edge::Right) } else { (second, first, Edge::Left) };
+        if *axis == Axis::X && side == edge {
+            for panel in tree_panels(outer) {
+                if !out.contains(panel) {
+                    out.push(panel.clone());
+                }
+            }
+        }
+        node = Some(inner);
+    }
+    out.retain(|p| !super::is_rail(p));
+    out
 }
 
 /// `window.panels.peek {side: left|right|null}`: show the docked panels on that side while Tab or

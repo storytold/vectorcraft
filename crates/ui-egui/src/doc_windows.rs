@@ -35,6 +35,9 @@ use views::{find, key, window_param};
 pub(crate) const GRAB: egui::Vec2 = egui::vec2(40.0, 12.0);
 /// How far apart Cascade sets the windows, down and to the right, in points.
 pub(crate) const CASCADE_STEP: f32 = 30.0;
+/// How far the first cascaded window sits from the document area's top-left corner, clear of the
+/// tab strip.
+const CASCADE_MARGIN: f32 = 24.0;
 /// The smallest size of a document window, in points.
 const MIN_SIZE: egui::Vec2 = egui::vec2(240.0, 180.0);
 
@@ -150,7 +153,11 @@ fn window_size(area: egui::Rect) -> egui::Vec2 {
 /// down and to the right, starting again at the corner when the next would leave the area.
 fn cascade_windows(area: egui::Rect, n: usize) -> Vec<egui::Rect> {
     // PLAN: needs `craft-behavior` in crates/ui-egui/Cargo.toml (not in this set's files)
-    craft::behavior::placement::cascade_rects(area, window_size(area), n, CASCADE_STEP)
+    let size = window_size(area);
+    // The margin shrinks where the area has no room for it.
+    let margin = CASCADE_MARGIN.min((area.size() - size).min_elem()).max(0.0);
+    let inside = egui::Rect::from_min_max(area.min + egui::Vec2::splat(margin), area.max);
+    craft::behavior::placement::cascade_rects(inside, size, n, CASCADE_STEP)
 }
 
 /// The document area windows open in: the main window's last one, else a 1200 × 800 area.

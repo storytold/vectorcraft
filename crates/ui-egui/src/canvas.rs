@@ -130,18 +130,25 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     let presenting = app.ui.screen_mode == 3;
     let scaling = app.ui_scaling();
     let target = view_target(app, win);
+    // A measuring run applies no view request: the view, its request and its fit wait for the pass
+    // that shows the canvas.
+    let measuring = craft::ui::runtime::measure::active(ui.ctx());
     let Some(view) = doc_windows::view_mut(app, win) else { return false };
     // Presentation Mode shows the active artboard on the whole screen: it fits again when the screen changes.
     let refit = !view.fitted || (presenting && view.rect != area);
-    view.rect = area;
-    let (mut queued, bounds) = match view.request.take() {
+    let (request, moved) = if measuring {
+        (view.request.clone(), view.moved)
+    } else {
+        view.rect = area;
+        (view.request.take(), view.moved.take())
+    };
+    let (mut queued, bounds) = match request {
         Some((request, bounds)) => (vec![request], bounds),
         None => (vec![], None),
     };
     if refit && queued.is_empty() {
         queued.push(ViewRequest::Place(ViewCommands::FitArtboard));
     }
-    let moved = view.moved.take();
     let mut cv = view.canvas(scaling, area);
     let (x, y, mut zero) = rulers::texts(app, win);
     let strips = if app.ui.view.rulers && !presenting {
@@ -178,6 +185,9 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         }
     });
     let output = shown.output;
+    if measuring {
+        return false;
+    }
     if kind == BodyKind::Live
         && let Some(out) = &output.rulers
     {
