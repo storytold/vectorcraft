@@ -39,6 +39,11 @@
 //!   says it is not available yet. `rotateAbout` and `scaleAbout` default to
 //!   `Transformation.CENTER`. A transform that leaves the path where it is (`rotate(360)`,
 //!   `resize(100, 100)`) checks its arguments and runs no command, on a path with no points too.
+//! - `PathPoint.selected` and `selectedPathPoints` count every point of a path selected as a whole
+//!   as a selected anchor point, and not the endpoints of selected segments; a path in a selected
+//!   group is not selected as a whole. Direction handles are not selected on their own, so
+//!   `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error that says they are not
+//!   available yet. A clipping path cannot be made a guide.
 //! - The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
 //!   `changeStrokePattern` given as different values throw an error; gradients move with the art,
 //!   so `changeFillGradients` false throws an error that says it is not available yet.
@@ -583,6 +588,39 @@ fn path_length(h: &super::Host, a: &[Data]) -> Answer {
 fn path_guides(h: &super::Host, a: &[Data]) -> Answer {
     let item = this_path(h, a)?;
     read_path(h, item, |_, n, _| Data::Bool(matches!(n.kind, NodeKind::Path { guide: true, .. })))
+}
+
+/// `guides = true` makes the path a guide with `view.guides.make`, and `false` makes it a path again
+/// with `view.guides.release`; the selection stays as it was. A clipping path cannot be a guide.
+fn path_set_guides(h: &super::Host, a: &[Data]) -> Answer {
+    let on = boolean(arg(a, 1), "guides")?;
+    let item = this_path(h, a)?;
+    let (now, clipping) = read_path(h, item, |_, n, _| match &n.kind {
+        NodeKind::Path { guide, clipping, .. } => (*guide, *clipping),
+        _ => (false, false),
+    })?;
+    if now == on {
+        return Ok(Data::Undefined);
+    }
+    if !with_doc(h, item.doc, |_, st| editable(&st.doc, item.id)) {
+        return Err(cannot_edit(item.id));
+    }
+    if !on {
+        edit_path(h, item, "view.guides.release", json!({}))?;
+        return Ok(Data::Undefined);
+    }
+    if clipping {
+        return Err(HostError::Error(format!("Cannot make PathItem {} a guide: it is a clipping path", item.id.0)));
+    }
+    see_all_points(h);
+    let kept = h.dom.editing.replace(Some(item));
+    let r = on_doc(h, item.doc.uid, true, |h| {
+        command(h, "select.set", &json!({"ids": [item.id.0]}))?;
+        command(h, "view.guides.make", &json!({}))
+    });
+    h.dom.editing.set(kept);
+    r?;
+    Ok(Data::Undefined)
 }
 
 fn path_clipping(h: &super::Host, a: &[Data]) -> Answer {
@@ -1323,6 +1361,86 @@ fn pt_parent(h: &super::Host, a: &[Data]) -> Answer {
     Ok(path_ref(h, item))
 }
 
+/// The point at index `i` of `subs` is a selected anchor point of the path `id` in `sel`: every
+/// point of a path selected as a whole is, and of a path with direct-selected anchors only those
+/// anchors are. The endpoints of selected segments are not.
+fn anchor_selected(sel: &crate::doc::Selection, id: NodeId, subs: &[SubPath], i: usize) -> bool {
+    if !sel.contains(id) || sel.segments.contains_key(&id) {
+        return false;
+    }
+    match sel.partial(id) {
+        None => true,
+        Some(picked) => locate(subs, i).is_some_and(|r| picked.contains(&r)),
+    }
+}
+
+/// `selected`: `PathPointSelection.ANCHORPOINT` when the point is a selected anchor point
+/// ([`anchor_selected`]), otherwise `PathPointSelection.NOSELECTION`.
+fn pt_selected(h: &super::Host, a: &[Data]) -> Answer {
+    let (item, i) = this_point(h, a)?;
+    let on = read_path(h, item, |st, _, pd| anchor_selected(&st.selection, item.id, &pd.subpaths, i))?;
+    Ok(Data::String(if on { "PathPointSelection.ANCHORPOINT" } else { "PathPointSelection.NOSELECTION" }.into()))
+}
+
+/// The `PathPointSelection` values that select a point's direction handles.
+const HANDLE_SELECTIONS: &[&str] = &["PathPointSelection.LEFTDIRECTION", "PathPointSelection.RIGHTDIRECTION", "PathPointSelection.LEFTRIGHTPOINT"];
+
+/// `selected = PathPointSelection.ANCHORPOINT` adds the point to the direct-selected anchors, and
+/// `NOSELECTION` removes it, with `select.anchorsMany`; the other selected objects and anchors stay
+/// selected. A value the point has already runs no command. Direction handles cannot be selected,
+/// so `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error.
+fn pt_set_selected(h: &super::Host, a: &[Data]) -> Answer {
+    let on = match arg(a, 1) {
+        Data::String(s) if s == "PathPointSelection.ANCHORPOINT" => true,
+        Data::String(s) if s == "PathPointSelection.NOSELECTION" => false,
+        Data::String(s) if HANDLE_SELECTIONS.contains(&s.as_str()) => {
+            return Err(HostError::Error(format!("PathPoint.selected = {s} is not available yet: only anchor points can be selected")));
+        }
+        _ => return Err(HostError::Type("selected must be a PathPointSelection value".into())),
+    };
+    let (item, i) = this_point(h, a)?;
+    let (now, at, selectable) = with_doc(h, item.doc, |_, st| {
+        let subs = st.doc.node(item.id).and_then(|n| n.path_data()).map_or(&[][..], |pd| &pd.subpaths[..]);
+        let selectable = crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id);
+        (anchor_selected(&st.selection, item.id, subs, i), locate(subs, i), selectable)
+    });
+    if now == on {
+        return Ok(Data::Undefined);
+    }
+    let Some((s, j)) = at else { return Err(HostError::Error(STALE_POINT.into())) };
+    if on && !selectable {
+        return Err(HostError::Error(format!("Cannot select PathItem {}", item.id.0)));
+    }
+    let params = json!({"items": [{"id": item.id.0, "anchors": [[s, j]]}], "mode": if on { "add" } else { "subtract" }});
+    on_doc(h, item.doc.uid, false, |h| command(h, "select.anchorsMany", &params))?;
+    Ok(Data::Undefined)
+}
+
+/// `selectedPathPoints`: the points that are selected anchor points ([`anchor_selected`]), in the
+/// order of `pathPoints`.
+fn path_selected_points(h: &super::Host, a: &[Data]) -> Answer {
+    let item = this_path(h, a)?;
+    let picked: Vec<usize> = read_path(h, item, |st, _, pd| {
+        let sel = &st.selection;
+        if !sel.contains(item.id) || sel.segments.contains_key(&item.id) {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let mut first = 0;
+        for (s, sp) in pd.subpaths.iter().enumerate() {
+            let n = sp.anchors.len();
+            out.extend((0..n).filter(|j| sel.partial(item.id).is_none_or(|p| p.contains(&(s, *j)))).map(|j| first + j));
+            first += n;
+        }
+        out
+    })?;
+    h.charge_call(picked.len() as u64)?;
+    let [high, low] = id_parts(item.id);
+    let cuts = float(point_cuts(h, item));
+    let points = picked.into_iter().map(|i| host_ref("PathPoint", &[float(h.run), float(item.doc.uid), high, low, float(i as u64), cuts])).collect();
+    Ok(Data::Array(points))
+}
+
 /// `remove()`: deletes the point; a subpath left with no points goes too.
 fn pt_remove(h: &super::Host, a: &[Data]) -> Answer {
     let (item, i) = this_point(h, a)?;
@@ -1350,7 +1468,7 @@ pub(super) fn path_item_members(l: &Link) -> Vec<(String, HostMember)> {
         ("evenodd", property(l, path_evenodd, path_set_evenodd)),
         ("area", get(l, path_area)),
         ("length", get(l, path_length)),
-        ("guides", get(l, path_guides)),
+        ("guides", property(l, path_guides, path_set_guides)),
         ("clipping", get(l, path_clipping)),
         ("setEntirePath", point_method(l, path_set_entire)),
         ("filled", property(l, path_filled, path_set_filled)),
@@ -1368,8 +1486,9 @@ pub(super) fn path_item_members(l: &Link) -> Vec<(String, HostMember)> {
         ("translate", method(l, path_translate)),
         ("rotate", method(l, path_rotate)),
         ("resize", method(l, path_resize)),
+        ("selectedPathPoints", get(l, path_selected_points)),
     ]);
-    m.extend(["selectedPathPoints", "polarity", "resolution"].into_iter().map(|n| later(l, "PathItem", n)));
+    m.extend(["polarity", "resolution"].into_iter().map(|n| later(l, "PathItem", n)));
     m
 }
 
@@ -1411,19 +1530,16 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         class(
             "PathPoint",
             None,
-            {
-                let mut m = named(vec![
-                    ("typename", typename_of("PathPoint")),
-                    ("parent", point_get(l, pt_parent)),
-                    ("anchor", point_property(l, pt_anchor, pt_set_anchor)),
-                    ("leftDirection", point_property(l, pt_left, pt_set_left)),
-                    ("rightDirection", point_property(l, pt_right, pt_set_right)),
-                    ("pointType", point_property(l, pt_type, pt_set_type)),
-                    ("remove", point_method(l, pt_remove)),
-                ]);
-                m.push(later(l, "PathPoint", "selected"));
-                m
-            },
+            named(vec![
+                ("typename", typename_of("PathPoint")),
+                ("parent", point_get(l, pt_parent)),
+                ("anchor", point_property(l, pt_anchor, pt_set_anchor)),
+                ("leftDirection", point_property(l, pt_left, pt_set_left)),
+                ("rightDirection", point_property(l, pt_right, pt_set_right)),
+                ("pointType", point_property(l, pt_type, pt_set_type)),
+                ("selected", property(l, pt_selected, pt_set_selected)),
+                ("remove", point_method(l, pt_remove)),
+            ]),
             None,
         ),
     ]

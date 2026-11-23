@@ -807,8 +807,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G6 Automation and scripting
 
-- **Missing:** the rest of the document object model for scripts (layers, artboards, type, the selected path
-  points, gradient stops and the other classes) and the `#engine` script directive (#1183 is open). Scripts have
+- **Missing:** the rest of the document object model for scripts (layers, artboards, type, gradient
+  stops and the other classes) and the `#engine` script directive (#1183 is open). Scripts have
   `app`, the open documents, new documents, each document's selection and its page items, and `Document.pathItems`
   makes paths and reads and changes their points, colors, stroke options and transforms. File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry, `#targetengine`
   runs a script in a named engine whose globals last between runs,

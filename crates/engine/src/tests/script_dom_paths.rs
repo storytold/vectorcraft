@@ -880,3 +880,102 @@ fn many_path_edits_are_one_undo_step() {
         assert!((node(&s, id).appearance.stroke_width() - 1.0).abs() < 1e-9);
     }
 }
+
+fn selected_anchors(s: &Session, id: NodeId) -> Option<Vec<(usize, usize)>> {
+    s.active().unwrap().selection.anchors.get(&id).map(|set| set.iter().copied().collect())
+}
+
+#[test]
+fn path_point_selected_selects_and_deselects_anchor_points() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0], pp = p.pathPoints;\
+         vc.log(pp[1].selected); vc.log(p.selectedPathPoints.length);\
+         pp[1].selected = PathPointSelection.ANCHORPOINT; pp[2].selected = PathPointSelection.ANCHORPOINT;\
+         vc.log(pp[1].selected); vc.log(pp[0].selected); vc.log(p.selected);\
+         var sp = p.selectedPathPoints; vc.log(sp.length); vc.log(sp[1].anchor.join() == pp[2].anchor.join());",
+    );
+    assert_eq!(
+        out,
+        vec![
+            json!("PathPointSelection.NOSELECTION"),
+            json!(0),
+            json!("PathPointSelection.ANCHORPOINT"),
+            json!("PathPointSelection.NOSELECTION"),
+            json!(true),
+            json!(2),
+            json!(true)
+        ]
+    );
+    assert_eq!(selected_anchors(&s, a), Some(vec![(0, 1), (0, 2)]));
+    assert!(s.active().unwrap().selection.contains(b), "the other selected object stays selected");
+    assert_eq!(undo_steps(&s), steps, "a selection change is not an undo step");
+    let r = run(
+        &mut s,
+        "var pp = app.activeDocument.pathItems[0].pathPoints;\
+         pp[1].selected = PathPointSelection.ANCHORPOINT; pp[0].selected = PathPointSelection.NOSELECTION;",
+    )
+    .unwrap();
+    assert_eq!((undo_steps(&s), &r["slowestCommands"]), (steps, &json!([])), "a value the point has runs no command");
+    log(&mut s, "app.activeDocument.pathItems[0].pathPoints[1].selected = PathPointSelection.NOSELECTION;");
+    assert_eq!(selected_anchors(&s, a), Some(vec![(0, 2)]));
+}
+
+#[test]
+fn a_path_selected_as_a_whole_has_every_point_selected() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pathItems[0]; vc.log(p.selectedPathPoints.length); vc.log(p.pathPoints[3].selected);\
+         p.pathPoints[0].selected = PathPointSelection.NOSELECTION; vc.log(p.selectedPathPoints.length);\
+         vc.log(app.activeDocument.pathItems[1].selectedPathPoints.length);",
+    );
+    assert_eq!(out, vec![json!(4), json!("PathPointSelection.ANCHORPOINT"), json!(3), json!(0)]);
+    assert_eq!(selected_anchors(&s, a), Some(vec![(0, 1), (0, 2), (0, 3)]));
+}
+
+#[test]
+fn path_point_selected_refuses_handles_bad_values_and_locked_paths() {
+    let (mut s, a, _) = doc();
+    let e = failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = PathPointSelection.LEFTDIRECTION;");
+    assert!(e.contains("not available yet"), "{e}");
+    let e = failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = true;");
+    assert!(e.contains("PathPointSelection"), "{e}");
+    s.execute("object.setProps", &json!({"ids": [a.0], "locked": true})).unwrap();
+    let e = failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = PathPointSelection.ANCHORPOINT;");
+    assert!(e.contains("Cannot select"), "{e}");
+    assert!(s.active().unwrap().selection.is_empty());
+}
+
+fn is_guide(s: &Session, id: NodeId) -> bool {
+    matches!(node(s, id).kind, NodeKind::Path { guide: true, .. })
+}
+
+#[test]
+fn assigning_guides_makes_and_releases_a_guide() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let steps = undo_steps(&s);
+    let out = log(&mut s, "var p = app.activeDocument.pathItems[0]; p.guides = true; vc.log(p.guides);");
+    assert_eq!(out, vec![json!(true)]);
+    assert!(is_guide(&s, a));
+    assert_eq!(s.active().unwrap().selection.objects, vec![b], "the selection stays as it was");
+    assert_eq!(undo_steps(&s), steps + 1);
+    let r = run(&mut s, "app.activeDocument.pathItems[0].guides = true;").unwrap();
+    assert_eq!((undo_steps(&s), &r["slowestCommands"]), (steps + 1, &json!([])), "a value the path has runs no command");
+    log(&mut s, "app.activeDocument.pathItems[0].guides = false;");
+    assert!(!is_guide(&s, a));
+    assert_eq!(s.active().unwrap().selection.objects, vec![b]);
+    let e = failure(&mut s, "app.activeDocument.pathItems[0].guides = 1;");
+    assert!(e.contains("guides"), "{e}");
+    assert!(!is_guide(&s, a));
+    // A path in a group becomes a guide on its own.
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    log(&mut s, "app.activeDocument.pathItems[1].guides = true;");
+    assert!(is_guide(&s, b) && !is_guide(&s, a));
+}

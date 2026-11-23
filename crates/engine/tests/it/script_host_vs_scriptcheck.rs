@@ -122,8 +122,8 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "PathItem.prototype.",
         "area clipping closed closed= constructor evenodd evenodd= fillColor fillColor= fillOverprint fillOverprint= filled \
-         filled= guides length pathPoints polarity polarity= resize resolution resolution= rotate selectedPathPoints \
-         selectedPathPoints= setEntirePath strokeCap strokeCap= strokeColor strokeColor= strokeDashOffset strokeDashOffset= \
+         filled= guides guides= length pathPoints polarity polarity= resize resolution resolution= rotate selectedPathPoints \
+         setEntirePath strokeCap strokeCap= strokeColor strokeColor= strokeDashOffset strokeDashOffset= \
          strokeDashes strokeDashes= strokeJoin strokeJoin= strokeMiterLimit strokeMiterLimit= strokeOverprint strokeOverprint= \
          strokeWidth strokeWidth= stroked stroked= translate",
     ),
