@@ -430,9 +430,10 @@ fn targets(app: &VectorcraftApp, key: &str) -> Vec<String> {
     if sel.iter().any(|s| s == key) { sel } else { vec![key.to_string()] }
 }
 
-/// The styles `names` of those that may be deleted: not the Default Graphic Style.
+/// The styles of `names` that Delete removes: all of them, the Default Graphic Style too when other styles go with
+/// it, as production's Delete button and panel menu did; none when the Default is the only one.
 fn doomed(names: &[String]) -> Vec<String> {
-    names.iter().filter(|n| *n != DEFAULT_GRAPHIC_STYLE).cloned().collect()
+    if names.iter().all(|n| n == DEFAULT_GRAPHIC_STYLE) { Vec::new() } else { names.to_vec() }
 }
 
 /// The footer's actions, by their index in the order [`show`] gives them: the first [`AT_START`] sit at the start
