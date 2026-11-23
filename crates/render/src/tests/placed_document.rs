@@ -9,8 +9,9 @@ use crate::*;
 
 /// Every file reads as a 40×20 artboard filled blue; a file whose bytes start with `loop` also
 /// places itself (the same key) in its middle, one whose bytes start with `cut` also shows an
-/// image whose pixels can't be decoded over its left half, and one whose bytes start with `bad`
-/// can't be read.
+/// image whose pixels can't be decoded over its left half, one whose bytes start with `pict` also
+/// shows a linked red image over its left half (its own Show Images in Outline Mode off), and one
+/// whose bytes start with `bad` can't be read.
 fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     if bytes.starts_with(b"bad") {
         return None;
@@ -31,6 +32,22 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
             pixels: None,
         };
         children.push(Arc::new(Node::new(NodeId(3), NodeKind::Image(Box::new(im)))));
+    }
+    if bytes.starts_with(b"pict") {
+        let raw = [255u8, 0, 0, 255].repeat(16);
+        let red = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, raw).ok()?;
+        let png = craft_image_codecs::encode(&red, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
+        d.images.insert("pict-image".into(), ImageBlob::new("image/png", png.to_vec()));
+        let im = vectorcraft_doc::ImageObject {
+            key: "pict-image".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(5.0),
+            link: Some(LinkInfo::new("/art/red.png")),
+            placement: Default::default(),
+            pixels: None,
+        };
+        children.push(Arc::new(Node::new(NodeId(4), NodeKind::Image(Box::new(im)))));
     }
     if bytes.starts_with(b"loop") {
         d.images.insert(p.key.clone(), ImageBlob::new("application/json", bytes.to_vec()));
@@ -204,6 +221,18 @@ fn outline_mode_draws_a_placed_document_as_its_box_crossed_unless_the_setup_show
     d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
     let r = outline(&d);
     assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the file's art is drawn moved after a drop shadow");
+}
+
+#[test]
+fn outline_mode_shows_a_linked_image_in_a_placed_document_by_this_documents_setup() {
+    // The file's red image is (10, 10)–(50, 50) here; (35, 30) is inside it, off its diagonals and
+    // off the placed box's.
+    let mut d = doc_with("outline-pict-1", b"pict");
+    d.setup.outline_images = true;
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let [red, green, blue, _] = r.pixel(35, 30);
+    assert!(red == green && green == blue && (50..=58).contains(&red), "the image's gray pixels, not crossed: {:?}", r.pixel(35, 30));
 }
 
 #[test]
