@@ -61,6 +61,36 @@ pub(crate) fn part_frame(
     out
 }
 
+/// Held by a test that changes the custom dictionary, which the whole process shares, or that needs it to hold still:
+/// every change moves the dictionary's generation, and a Check Spelling walk that sees it move checks its scope again
+/// from the start.
+pub(crate) fn custom_dictionary() -> std::sync::MutexGuard<'static, ()> {
+    static HELD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    HELD.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The default proof view, held: View › Proof Colors, Overprint Preview and Separations Preview are the whole process's
+/// and the canvas draws through them, so a test that sets them, or that compares the canvas's renders, holds this. It
+/// leaves the default view when it is dropped.
+pub(crate) struct DefaultProofView {
+    _held: std::sync::MutexGuard<'static, ()>,
+}
+
+impl DefaultProofView {
+    pub(crate) fn new() -> Self {
+        static HELD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let held = HELD.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        vectorcraft_render::proof::set_view(Default::default());
+        DefaultProofView { _held: held }
+    }
+}
+
+impl Drop for DefaultProofView {
+    fn drop(&mut self) {
+        vectorcraft_render::proof::set_view(Default::default());
+    }
+}
+
 /// Gives `fixture` the app's input for its next frame as the hosts give it (`embed::before_input`): the commands the
 /// frames since the last call fired run first.
 pub(crate) fn fixture_input(app: &mut crate::VectorcraftApp, fixture: &mut craft::ui::testing::Fixture) {

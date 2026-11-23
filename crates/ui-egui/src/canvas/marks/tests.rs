@@ -187,6 +187,7 @@ fn auto_spell_check_underlines_the_unknown_words() {
 /// An edit, Ignore All and Add to Dictionary each change the segments of the next pass.
 #[test]
 fn auto_spell_check_follows_edits_ignore_all_and_the_dictionary() {
+    let _dictionary = crate::testing::custom_dictionary();
     let (mut app, id) = spelling_doc("Wqzxvtr and Pzxqvrt");
     assert_eq!(segments(&mut app), 2);
     app.session.execute("text.setText", &json!({"id": id.0, "text": "Wqzxvtr and Pzxqvrt or Qxzvwtr"})).unwrap();
