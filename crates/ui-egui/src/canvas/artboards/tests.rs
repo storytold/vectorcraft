@@ -58,6 +58,16 @@ fn outline_has_a_white_canvas_line_edges_and_no_paper() {
     assert!(frames_of(&app, false).iter().all(|f| f.fill.is_some()));
 }
 
+/// User Interface › Canvas Color paints the pasteboard in Preview; Outline keeps its white one.
+#[test]
+fn the_canvas_color_preference_paints_the_pasteboard() {
+    let mut app = app_with(1);
+    app.run("prefs.set", json!({"key": "canvasColor", "value": "darkGray"})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(pasteboard_color(&app, st, false), PasteboardColor::Custom(DataColor::new(Color32::from_gray(0x5a))));
+    assert_eq!(pasteboard_color(&app, st, true), PasteboardColor::Custom(DataColor::new(Color32::WHITE)));
+}
+
 #[test]
 fn hidden_artboards_leave_a_paper_canvas_and_the_artboard_tool_brings_them_back() {
     let mut app = app_with(2);

@@ -66,14 +66,16 @@ pub(super) fn border(outline: bool) -> PageBorder {
     if outline { PageBorder::Line } else { PageBorder::DropShadow }
 }
 
-/// The pasteboard's color: white in Outline, the paper under Hide Artboards, else the interface's.
+/// The pasteboard's color: white in Outline, the paper under Hide Artboards, else User Interface › Canvas Color, or the
+/// interface's when that matches the interface brightness.
 pub(super) fn pasteboard_color(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, outline: bool) -> PasteboardColor {
     if outline {
         PasteboardColor::Custom(DataColor::new(Color32::WHITE))
     } else if !shows_artboards(app) {
         PasteboardColor::Custom(DataColor::new(paper_color(&st.doc.setup)))
     } else {
-        PasteboardColor::Default
+        crate::prefs_dialog::canvas_color(&app.session.prefs.canvas_color)
+            .map_or(PasteboardColor::Default, |c| PasteboardColor::Custom(DataColor::new(c)))
     }
 }
 
