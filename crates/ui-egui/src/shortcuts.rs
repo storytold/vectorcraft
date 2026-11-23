@@ -91,13 +91,12 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
     }
 }
 
-/// A key pressed for a command that can't run now (`FrameOutput::dimmed`) runs nothing and says why, as the command's
-/// refusal did in production.
-pub(crate) fn refuse_dimmed(app: &mut VectorcraftApp, fired: &Fired) {
-    let id = engine_id(&fired.command.id).map_or_else(|| fired.command.id.to_string(), str::to_string);
-    let command = CommandRef::with_params(id, fired.command.params.clone());
-    if let Some(why) = crate::palette::refusal(app, &command) {
-        app.status(why);
+/// A key bound only to commands that can't run now (`FrameOutput::dimmed`) does what production's key did, its menu
+/// item's action, which says why it can't run or does nothing; nothing while the gate holds the commands (a file dialog,
+/// a shortcut being recorded, Presentation Mode).
+pub(crate) fn run_dimmed(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &Fired) {
+    if crate::menus::model::gate_lets(app, &fired.command) {
+        run_fired(app, ctx, fired);
     }
 }
 

@@ -139,8 +139,6 @@ pub(crate) fn recording_shortcut(app: &VectorcraftApp) -> bool {
 /// open or the shortcuts dialog records a chord, and in Presentation Mode every command but
 /// leaving it.
 pub(crate) fn command_input(app: &VectorcraftApp) -> CommandInput {
-    let blocked = app.file_dialog_open() || recording_shortcut(app);
-    let presenting = app.ui.screen_mode == 3;
     let prefs = &app.session.prefs;
     let mut input = CommandInput::new()
         .states(&app.menus.states)
@@ -149,9 +147,24 @@ pub(crate) fn command_input(app: &VectorcraftApp) -> CommandInput {
     if let Some(catalog) = &app.menus.catalog {
         input = input.catalog(catalog.clone());
     }
-    input.gate(CommandGate::new((blocked, presenting), |&(blocked, presenting): &(bool, bool), command: &CommandRef| {
-        !blocked && (!presenting || command.id == "view.presentation")
-    }))
+    input.gate(CommandGate::new(gate_state(app), gate_open))
+}
+
+/// What the commands' gate reads: whether a file dialog is open or a shortcut is being recorded, and whether the app
+/// presents.
+fn gate_state(app: &VectorcraftApp) -> (bool, bool) {
+    (app.file_dialog_open() || recording_shortcut(app), app.ui.screen_mode == 3)
+}
+
+/// Whether `command` may run now: nothing while a file dialog is open or a shortcut is being recorded, and only
+/// Presentation Mode's own toggle while presenting.
+fn gate_open(&(blocked, presenting): &(bool, bool), command: &CommandRef) -> bool {
+    !blocked && (!presenting || command.id == "view.presentation")
+}
+
+/// [`gate_open`] for `command` in the app's state now.
+pub(crate) fn gate_lets(app: &VectorcraftApp, command: &CommandRef) -> bool {
+    gate_open(&gate_state(app), command)
 }
 
 fn role(title: &str) -> MenuRole {
