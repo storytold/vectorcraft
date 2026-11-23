@@ -6615,11 +6615,11 @@ fn a_stroke_leaving_an_open_path_across_it_drops_the_side_it_is_near() {
     assert!(ends_at(sp, Point::new(100.0, 100.0), Point::new(290.0, 50.0), 0.5), "the long side stays: {sp:?}");
 }
 
-/// A stroke drawn across an open shape's opening, from near one end to near the other, redraws the
-/// part between where it starts and ends, whichever way it is drawn: the ends stay and the shape
-/// stays open. Only a stroke that starts at one end and finishes on the other closes it.
+/// A stroke drawn over an open shape's open ends, from near one end to near the other, redraws
+/// those ends along the stroke and closes the shape, whichever way it is drawn; the shape's body
+/// between stays.
 #[test]
-fn a_stroke_across_an_open_shapes_opening_redraws_the_part_between_and_leaves_it_open() {
+fn a_stroke_over_an_open_shapes_ends_closes_it_along_the_stroke() {
     for reversed in [false, true] {
         let mut s = session();
         // A C open on the right: from the top right round the left to the bottom right.
@@ -6643,12 +6643,109 @@ fn a_stroke_across_an_open_shapes_opening_redraws_the_part_between_and_leaves_it
         s.execute("path.freehand", &json!({"points": stroke, "redraw": {"id": id.0, "within": 4}})).unwrap();
         assert_eq!(paths(&s).len(), 1, "reversed {reversed}: no new path");
         let sp = &path(&s, id).subpaths[0];
-        assert!(!sp.closed, "reversed {reversed}: still open");
-        let (e1, e2) = (on(40.0), on(320.0));
-        assert!(ends_at(sp, Point::new(e1.0, e1.1), Point::new(e2.0, e2.1), 1.0), "reversed {reversed}: both ends stay: {sp:?}");
+        assert!(sp.closed, "reversed {reversed}: the shape closed");
         let bb = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath());
-        assert!(bb.x1 > 310.0 && bb.x0 > 200.0, "reversed {reversed}: the stroke in place of the C's body: {bb:?}");
+        assert!(bb.x1 > 310.0 && bb.x0 < 105.0, "reversed {reversed}: closed along the stroke, the body kept: {bb:?}");
+        // The old ends (at 40° and 320°) are gone.
+        for deg in [40.0, 320.0] {
+            let e = on(deg);
+            assert!(!sp.anchors.iter().any(|q| q.p.distance(Point::new(e.0, e.1)) < 1.0), "reversed {reversed}: the end at {deg}° is redrawn");
+        }
     }
+}
+
+/// A stroke that starts and ends on an open path decides by the way it runs along the path at its
+/// ends: where it starts it replaces the part it runs along, where it lands it joins the part it runs
+/// into, an end that goes straight off or onto the path follows the other end, and when both do it
+/// closes only round both pieces beyond. A stroke lifted away from the path ends there. The path is
+/// an L whose bottom arm turns up and back over to a hook near the upright arm.
+#[test]
+fn a_redraw_on_an_open_path_follows_the_way_its_ends_run() {
+    // From the upright arm's top (100, 0) down, along the bottom, up the right side, back along the
+    // top to the hook, which ends at (160, 60).
+    let shape = [[100.0, 0.0], [100.0, 300.0], [400.0, 300.0], [400.0, 100.0], [160.0, 100.0], [160.0, 60.0]];
+    // A stroke through `pts`, a point every 2 pt, as a hand draws it.
+    let dense = |pts: &[[f64; 2]]| {
+        let mut out = vec![json!(pts[0])];
+        for w in pts.windows(2) {
+            let (a, b) = (Point::new(w[0][0], w[0][1]), Point::new(w[1][0], w[1][1]));
+            let n = (a.distance(b) / 2.0).ceil().max(1.0) as usize;
+            out.extend((1..=n).map(|i| {
+                let q = a.lerp(b, i as f64 / n as f64);
+                json!([q.x, q.y])
+            }));
+        }
+        out
+    };
+    let has = |sp: &vectorcraft_geom::SubPath, x: f64, y: f64| sp.anchors.iter().any(|a| a.p.distance(Point::new(x, y)) < 1.0);
+    // Over the loop above the path, from the top edge round to the left of the upright arm.
+    let over = [[250.0, 40.0], [200.0, -30.0], [100.0, -40.0], [40.0, 0.0]];
+    // Each: its name, the stroke, and whether the path is closed and keeps the bottom right corner,
+    // the upright arm's top and the hook's end.
+    let cases = [
+        // Runs along the top towards the hook, then up the upright arm: the hook goes, the end is
+        // left where the pen is lifted, on the arm, and the rest of the path stays.
+        (
+            "towards the hook, landing up the arm",
+            vec![[250.0, 100.0], [165.0, 100.0], [130.0, 95.0], [100.0, 90.0], [100.0, 40.0]],
+            [false, true, true, false],
+        ),
+        // Runs along the top away from the hook, then lands running up the arm: the part between
+        // is replaced, both ends stay.
+        (
+            "away from the hook, landing up the arm",
+            vec![[250.0, 100.0], [300.0, 100.0], [320.0, 60.0], [250.0, 30.0], [140.0, 40.0], [100.0, 90.0], [100.0, 60.0]],
+            [false, false, true, true],
+        ),
+        // Straight up off the top, over the arm's top, landing running down the arm: the arm's top and
+        // the hook go and the path closes round the rest.
+        (
+            "straight off, landing down the arm",
+            [&[[250.0, 100.0]][..], &over, &[[40.0, 120.0], [85.0, 140.0], [100.0, 150.0], [100.0, 180.0]]].concat(),
+            [true, true, false, false],
+        ),
+        // Straight off and straight onto the arm, round both the arm's top and the hook: it closes.
+        ("straight off and on, round both", [&[[250.0, 100.0]][..], &over, &[[40.0, 150.0], [100.0, 150.0]]].concat(), [true, true, false, false]),
+        // The same loop carried on across the arm and lifted inside: the path ends there; the hook,
+        // the shorter side, goes.
+        (
+            "across the arm, lifted away",
+            [&[[250.0, 100.0]][..], &over, &[[40.0, 150.0], [100.0, 150.0], [200.0, 160.0]]].concat(),
+            [false, true, true, false],
+        ),
+    ];
+    for (name, stroke, [closed, body, top, hook]) in cases {
+        let mut s = session();
+        let id = NodeId(s.execute("path.freehand", &json!({"points": shape, "fit": false})).unwrap()["id"].as_u64().unwrap());
+        s.execute("path.freehand", &json!({"points": dense(&stroke), "redraw": {"id": id.0, "within": 12}})).unwrap();
+        assert_eq!(paths(&s).len(), 1, "{name}: no new path");
+        let sp = &path(&s, id).subpaths[0];
+        assert_eq!(sp.closed, closed, "{name}: closed: {sp:?}");
+        assert_eq!(has(sp, 400.0, 300.0), body, "{name}: the bottom right corner: {sp:?}");
+        assert_eq!(has(sp, 100.0, 0.0), top, "{name}: the upright arm's top: {sp:?}");
+        assert_eq!(has(sp, 160.0, 60.0), hook, "{name}: the hook's end: {sp:?}");
+    }
+}
+
+/// A stroke that starts on an open C's upper arm running towards its end, goes round the opening
+/// and lands on the lower arm running back into the C closes it into a ring.
+#[test]
+fn a_stroke_run_over_both_arms_of_a_c_closes_it() {
+    let mut s = session();
+    let on = |deg: f64| {
+        let a = deg.to_radians();
+        json!([200.0 + 100.0 * a.cos(), 200.0 - 100.0 * a.sin()])
+    };
+    let c: Vec<_> = (0..=28).map(|i| on(40.0 + 10.0 * f64::from(i))).collect();
+    let id = NodeId(s.execute("path.freehand", &json!({"points": c, "fidelity": 0.5})).unwrap()["id"].as_u64().unwrap());
+    let mut stroke: Vec<_> = (0..=8).map(|i| on(56.0 - 2.0 * f64::from(i))).collect();
+    stroke.extend([json!([300.0, 160.0]), json!([310.0, 200.0]), json!([300.0, 240.0])]);
+    stroke.extend((0..=8).map(|i| on(324.0 - 2.0 * f64::from(i))));
+    s.execute("path.freehand", &json!({"points": stroke, "redraw": {"id": id.0, "within": 4}})).unwrap();
+    let sp = &path(&s, id).subpaths[0];
+    assert!(sp.closed, "a ring: {sp:?}");
+    let bb = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath());
+    assert!(bb.x0 < 105.0 && bb.x1 > 300.0, "the C's body and the stroke: {bb:?}");
 }
 
 /// A tall bump redrawn over most of an open line replaces that part: the ends beyond it stay and
