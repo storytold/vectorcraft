@@ -670,14 +670,24 @@ pub fn continue_playback(app: &mut VectorcraftApp, _: &Value) -> Result<Value, S
         return Err("no action is waiting at a stop".into());
     };
     playing.stop = None;
-    let run = next_run(&mut playing.steps, playing.options.speed);
+    let speed = playing.options.speed;
+    let run = next_run(&mut playing.steps, speed);
     let label = playing.label.clone();
     if playing.steps.is_empty() {
         app.ui.action_playing = None;
     }
     close_stop_message(app);
     let ran = !run.is_empty();
-    let results = if ran { run_steps(app, &label, run).inspect_err(|_| app.ui.action_playing = None)? } else { vec![] };
+    let results = if ran {
+        run_steps(app, &label, run).inspect_err(|e| {
+            app.ui.action_playing = None;
+            if speed != PlaybackSpeed::Accelerated {
+                app.session.toast(Toast::new(tl!(e), Level::Error));
+            }
+        })?
+    } else {
+        vec![]
+    };
     after_run(app, ran);
     Ok(playback_result(app, results))
 }
@@ -6711,6 +6721,33 @@ mod tests {
         assert_eq!(play(&mut app, 0, 0).unwrap()["atStop"], json!(true));
         assert_names_step(&app.run(CONTINUE_PLAYBACK, json!({})).unwrap_err(), 6, "object.align");
         assert!(app.ui.action_playing.is_none(), "the playback ended");
+
+        fn check_continue_error(speed: &str) -> String {
+            let (mut app, x) = app_with_three_moves();
+            let action = &mut app.ui.action_sets[0].actions[0];
+            action.steps.insert(0, (STOP_STEP.to_string(), json!({"message": "", "allowContinue": true})));
+            action.steps.insert(1, ("object.align".into(), json!({})));
+            app.run(PLAYBACK_OPTIONS, json!({"speed": speed})).unwrap();
+            assert_eq!(play(&mut app, 0, 0).unwrap()["atStop"], json!(true), "{speed}");
+            assert!(app.session.take_toasts().is_empty(), "{speed}: waiting at a stop is silent");
+            let position = x(&app);
+            let undo = undo_steps(&app);
+            let error = app.run(CONTINUE_PLAYBACK, json!({})).unwrap_err();
+            assert_names_step(&error, 2, "object.align");
+            assert!(app.ui.action_playing.is_none(), "{speed}: the failed Continue ends playback");
+            assert_eq!(x(&app), position, "{speed}: the failing batch and subsequent moves change nothing");
+            assert_eq!(undo_steps(&app), undo, "{speed}: a failed Continue adds no undo step");
+            let expected = if speed == "accelerated" { vec![] } else { vec![Toast::new(tl!(&error), Level::Error)] };
+            assert_eq!(app.session.take_toasts(), expected, "{speed}: only paced Continue failures raise one error toast");
+            frame(&mut app, 10.0);
+            assert!(app.session.take_toasts().is_empty(), "{speed}: later frames do not repeat the failure toast");
+            error
+        }
+
+        let error = check_continue_error("accelerated");
+        for speed in ["step", "pause"] {
+            assert_eq!(check_continue_error(speed), error, "{speed}: Continue preserves the returned error");
+        }
     }
 
     /// At Step by Step and Pause For a View menu step is one step of the playback and adds no undo

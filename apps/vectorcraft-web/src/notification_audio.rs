@@ -134,7 +134,7 @@ impl Drop for Service {
     }
 }
 
-pub(crate) fn start() -> Box<dyn FnMut()> {
+pub(crate) fn start() -> Box<dyn FnMut(std::time::Duration)> {
     let tick = Rc::new(RefCell::new(Tick::default()));
     let activated = tick.clone();
     let activation: Closure<dyn FnMut(web_sys::Event)> = Closure::new(move |event: web_sys::Event| {
@@ -154,5 +154,9 @@ pub(crate) fn start() -> Box<dyn FnMut()> {
         }
     }
     let service = Service { tick, activation, window };
-    Box::new(move || service.play())
+    Box::new(move |remaining| {
+        if !remaining.is_zero() {
+            service.play();
+        }
+    })
 }

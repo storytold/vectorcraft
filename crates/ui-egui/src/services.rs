@@ -92,7 +92,8 @@ pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 pub type OpenInFn = Box<dyn FnMut(&str) -> Result<bool, String>>;
 
 /// Request the original notification sound without blocking the UI.
-pub type NotificationSound = Box<dyn FnMut()>;
+/// The duration is the visible message's remaining lifetime when the cue is committed.
+pub type NotificationSound = Box<dyn FnMut(std::time::Duration)>;
 
 /// Platform services injected by the host app (desktop or web).
 #[derive(Default)]

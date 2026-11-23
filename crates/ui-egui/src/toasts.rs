@@ -89,6 +89,10 @@ impl Shown {
 /// Commit cues only after the app knows this pass will be presented.
 /// No callback consumes pending cues too: adding sound later must not replay old messages.
 pub(crate) fn commit_sounds(app: &mut VectorcraftApp) {
+    commit_sounds_at(app, crate::clock::now_secs());
+}
+
+fn commit_sounds_at(app: &mut VectorcraftApp, now: f64) {
     let Some(sound) = app.services.notification_sound.as_mut() else {
         for entry in &mut app.toasts.list {
             entry.sound_pending = false;
@@ -100,7 +104,10 @@ pub(crate) fn commit_sounds(app: &mut VectorcraftApp) {
         let visible = std::mem::take(&mut entry.sound_visible);
         if entry.sound_pending && visible {
             entry.sound_pending = false;
-            sound();
+            let remaining = (entry.until - now).clamp(0.0, 60.0);
+            if remaining > 0.0 {
+                sound(Duration::from_secs_f64(remaining));
+            }
         }
     }
 }
@@ -402,7 +409,7 @@ mod tests {
     fn count_sounds(app: &mut VectorcraftApp) -> std::rc::Rc<std::cell::Cell<usize>> {
         let calls = std::rc::Rc::new(std::cell::Cell::new(0));
         let counted = calls.clone();
-        app.services.notification_sound = Some(Box::new(move || counted.set(counted.get() + 1)));
+        app.services.notification_sound = Some(Box::new(move |_remaining| counted.set(counted.get() + 1)));
         calls
     }
 
@@ -494,7 +501,7 @@ mod tests {
             });
         });
         output.textures_delta.clear();
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 0.0);
         assert_eq!(calls.get(), 0, "measurement is not presentation");
         let mut output = ctx.run_ui(Default::default(), |ui| {
             let tokens = Tokens::get(ui.ctx());
@@ -502,13 +509,13 @@ mod tests {
             stack(ui, &mut app.toasts.list, &tokens, WIDTH);
         });
         output.textures_delta.clear();
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 0.0);
         assert_eq!(calls.get(), 0, "a fully clipped row must not request sound");
         pass(&mut app, &ctx, 0.1, vec![]);
         let text = pass(&mut app, &ctx, 0.1, vec![]);
         assert!(text.iter().any(|s| s == "A visible row"));
-        commit_sounds(&mut app);
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 0.1);
+        commit_sounds_at(&mut app, 0.1);
         assert_eq!(calls.get(), 1);
     }
 
@@ -520,7 +527,7 @@ mod tests {
         pass(&mut app, &ctx, 0.0, vec![]);
         pass(&mut app, &ctx, 0.0, vec![]);
         pass(&mut app, &ctx, 0.5, vec![]);
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 0.5);
         assert!(app.toasts.list.is_empty());
         assert_eq!(calls.get(), 0);
         // Isolate overflow from the expired row's small Area/scroll viewport; keep this App and cue counter.
@@ -537,7 +544,7 @@ mod tests {
             let rect = entry.rect.unwrap();
             assert!(rect.top() >= MARGIN - 0.5 && rect.bottom() <= 700.0 - MARGIN + 0.5, "{rect:?}");
         }
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 0.6);
         assert_eq!(calls.get(), MAX_SHOWN, "the overflowed arrival was not shown");
         app.run("app.toast", json!({"message": "Dismiss before commit"})).unwrap();
         pass(&mut app, &ctx, 0.7, vec![]);
@@ -548,7 +555,7 @@ mod tests {
         pass(&mut app, &ctx, 0.9, vec![press(true)]);
         pass(&mut app, &ctx, 1.0, vec![press(false)]);
         assert!(!messages(&app).contains(&"Dismiss before commit"));
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 1.0);
         assert_eq!(calls.get(), MAX_SHOWN);
     }
 
@@ -558,15 +565,43 @@ mod tests {
         app.run("app.toast", json!({"message": "No audio device is required"})).unwrap();
         pass(&mut app, &ctx, 0.0, vec![]);
         assert!(pass(&mut app, &ctx, 0.0, vec![]).iter().any(|s| s == "No audio device is required"));
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 0.0);
         let calls = count_sounds(&mut app);
         pass(&mut app, &ctx, 0.1, vec![]);
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 0.1);
         assert_eq!(calls.get(), 0, "installing sound cannot replay an old message");
         app.run("app.toast", json!({"message": "A later arrival"})).unwrap();
         pass(&mut app, &ctx, 0.2, vec![]);
         pass(&mut app, &ctx, 0.2, vec![]);
-        commit_sounds(&mut app);
+        commit_sounds_at(&mut app, 0.2);
         assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn sound_commit_keeps_the_remaining_lifetime_and_drops_expired_visible_rows() {
+        let (mut app, ctx) = app();
+        let durations = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let captured = durations.clone();
+        app.services.notification_sound = Some(Box::new(move |remaining| captured.borrow_mut().push(remaining)));
+        app.run("app.toast", json!({"message": "Still visible", "seconds": 0.5})).unwrap();
+        pass(&mut app, &ctx, 0.0, vec![]);
+        assert!(pass(&mut app, &ctx, 0.0, vec![]).iter().any(|text| text == "Still visible"));
+        commit_sounds_at(&mut app, 0.25);
+        assert_eq!(durations.borrow().len(), 1);
+        assert!(durations.borrow()[0] > Duration::ZERO && durations.borrow()[0] < Duration::from_millis(500));
+
+        app.run("app.toast", json!({"message": "Expires before commit", "seconds": 0.5})).unwrap();
+        pass(&mut app, &ctx, 1.0, vec![]);
+        assert!(pass(&mut app, &ctx, 1.0, vec![]).iter().any(|text| text == "Expires before commit"));
+        assert!(app.toasts.list.last().unwrap().sound_visible);
+        commit_sounds_at(&mut app, 1.5);
+        assert_eq!(durations.borrow().len(), 1, "a visible row can expire between paint and commit");
+
+        app.run("app.toast", json!({"message": "Later fresh arrival", "seconds": 0.5})).unwrap();
+        pass(&mut app, &ctx, 1.6, vec![]);
+        assert!(pass(&mut app, &ctx, 1.6, vec![]).iter().any(|text| text == "Later fresh arrival"));
+        commit_sounds_at(&mut app, 1.7);
+        assert_eq!(durations.borrow().len(), 2);
+        assert!(durations.borrow()[1] > Duration::ZERO && durations.borrow()[1] < Duration::from_millis(500));
     }
 }
