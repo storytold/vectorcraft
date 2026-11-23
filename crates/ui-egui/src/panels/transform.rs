@@ -30,6 +30,61 @@ pub fn constrained(w: f64, h: f64, new_w: Option<f64>, new_h: Option<f64>) -> (f
     }
 }
 
+/// The width and height `b` covers on the page: its axis-aligned bounds, whatever its angle. The
+/// Transform panel, the Properties panel and the Control bar show these, as the reference app
+/// does, so a box turned a quarter swaps them.
+pub fn page_size(b: &OrientedBox) -> (f64, f64) {
+    let corners = b.corners();
+    let (mut x0, mut x1) = (f64::INFINITY, f64::NEG_INFINITY);
+    let (mut y0, mut y1) = (f64::INFINITY, f64::NEG_INFINITY);
+    for p in corners {
+        (x0, x1) = (x0.min(p.x), x1.max(p.x));
+        (y0, y1) = (y0.min(p.y), y1.max(p.y));
+    }
+    (x1 - x0, y1 - y0)
+}
+
+/// `object.setBounds` params that make the page-axis width (`width`) or height `target` for `b`,
+/// keeping its angle. With the link on, the box scales about its own axes by `target / its page
+/// size`; without it, the own side is solved so the page side lands on `target` (a quarter turn
+/// changes the other own side), and a target below what the other side already covers scales both
+/// own sides by the page ratio. `None` when `target` is not a size.
+pub fn page_size_params(b: &OrientedBox, target: f64, width: bool, link: bool) -> Option<serde_json::Value> {
+    if !target.is_finite() || target <= 0.0 {
+        return None;
+    }
+    let (w, h) = (b.rect.width(), b.rect.height());
+    let (pw, ph) = page_size(b);
+    if link {
+        let current = if width { pw } else { ph };
+        if current <= 1e-9 {
+            return None;
+        }
+        let f = target / current;
+        let (nw, nh) = (w * f, h * f);
+        return Some(if width { json!({"width": nw, "proportional": true}) } else { json!({"height": nh, "proportional": true}) });
+    }
+    let (c, s) = (b.angle.to_radians().cos().abs(), b.angle.to_radians().sin().abs());
+    if c <= 1e-9 {
+        // A quarter turn: the page width is the own height and the page height the own width.
+        return Some(if width { json!({"height": target}) } else { json!({"width": target}) });
+    }
+    let own = if width { (target - s * h) / c } else { (target - s * w) / c };
+    if own <= 0.0 || !own.is_finite() {
+        // The target is below what the other own side already covers on the page (at 45° a
+        // 100 x 50 box covers at least 35.355 in either page direction): no change of this own
+        // side alone can reach it. Scale both own sides by the page ratio instead, so the typed
+        // size lands instead of the field discarding it.
+        let current = if width { pw } else { ph };
+        if current <= 1e-9 {
+            return None;
+        }
+        let f = target / current;
+        return Some(json!({"width": w * f, "height": h * f, "proportional": true}));
+    }
+    Some(if width { json!({"width": own, "proportional": false}) } else { json!({"height": own, "proportional": false}) })
+}
+
 /// The artboard the Artboard tool has active, while that tool is in use.
 fn tool_artboard(app: &VectorcraftApp) -> Option<(usize, Rect)> {
     if app.session.tool_id() != "artboard" {
@@ -277,17 +332,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
-    // The bounding box, rotated with rotated objects: W/H are its own sides, X/Y its reference
-    // point on the page.
+    // The bounding box, rotated with rotated objects: W/H are the width and height it covers on
+    // the page (its axis-aligned bounds), X/Y its reference point on the page.
     let bx = app.selection_box();
-    let bounds = bx.map(|b| b.rect);
+    let size = bx.map(|b| page_size(&b));
     let reference = bx.map(|b| panel_reference(app, ui, &b));
     let refi = reference.map_or_else(|| reference_index(ui), |r| r.index);
     // `object.setBounds`'s x and y that put the reference (the registration point) at x, y.
     let to_box = |x: f64, y: f64| reference.map_or((x, y), |r| r.bounds_xy(x, y));
     let link = proportional(app, ui);
     let copy = alt_enter_copies(app, ui);
-    let has = bounds.is_some();
+    let has = bx.is_some();
     let rp = reference.map(|r| r.point);
     ui.horizontal(|ui| {
         if let Some(i) = widgets::reference_point(ui, refi) {
@@ -301,8 +356,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     run_transform(app, "object.setBounds", json!({"x": to_box(v + origin.x, 0.0).0, "reference": refi, "copy": copy}));
                 }
                 widgets::dim_label(ui, "W:");
-                if let Some(v) = widgets::size_field_named(ui, "xfp-w", Some(tl!("W:")), bounds.map(|b| b.width()), units, 80.0) {
-                    run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
+                if let Some(v) = widgets::size_field_named(ui, "xfp-w", Some(tl!("W:")), size.map(|s| s.0), units, 80.0)
+                    && let Some(mut p) = bx.and_then(|b| page_size_params(&b, v, true, link))
+                {
+                    p["reference"] = json!(refi);
+                    p["copy"] = json!(copy);
+                    run_transform(app, "object.setBounds", p);
                 }
                 ui.end_row();
                 widgets::dim_label(ui, "Y:");
@@ -310,8 +369,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     run_transform(app, "object.setBounds", json!({"y": to_box(0.0, v + origin.y).1, "reference": refi, "copy": copy}));
                 }
                 widgets::dim_label(ui, "H:");
-                if let Some(v) = widgets::size_field_named(ui, "xfp-h", Some(tl!("H:")), bounds.map(|b| b.height()), units, 80.0) {
-                    run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
+                if let Some(v) = widgets::size_field_named(ui, "xfp-h", Some(tl!("H:")), size.map(|s| s.1), units, 80.0)
+                    && let Some(mut p) = bx.and_then(|b| page_size_params(&b, v, false, link))
+                {
+                    p["reference"] = json!(refi);
+                    p["copy"] = json!(copy);
+                    run_transform(app, "object.setBounds", p);
                 }
                 ui.end_row();
             });
