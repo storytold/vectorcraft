@@ -823,10 +823,13 @@ impl Interp<'_> {
             for ((d, ..), &(_, n)) in moves.iter().zip(&codes.codes) {
                 let c: String = chars.by_ref().take(n).collect();
                 if painted && !c.trim().is_empty() {
-                    let (t, ..) = self.set_text_in(&c, pen, vertical)?;
+                    let (mut t, ..) = self.set_text_in(&c, pen, vertical)?;
                     if draw == Draw::Path {
                         self.type_path(&t)?;
                     } else {
+                        if kept {
+                            super::file_fonts::mark(&mut t);
+                        }
                         let clips = self.g.clips.clone();
                         self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips);
                     }
@@ -880,6 +883,9 @@ impl Interp<'_> {
             if draw == Draw::Path {
                 self.type_path(&t)?;
             } else {
+                if kept {
+                    super::file_fonts::mark(&mut t);
+                }
                 let clips = self.g.clips.clone();
                 if self.out.push(Node::new(NodeId(0), NodeKind::Text(Box::new(t))), &clips).is_some()
                     && let Some(after) = self.out.drawn.get_mut(start..)

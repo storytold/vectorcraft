@@ -106,9 +106,10 @@ impl FileFontGlyphs {
     }
 }
 
-/// The type among `nodes` (and in their groups) set in the families and styles `kept` holds fonts
-/// for (family and style → the font's blob in `images`): drawn in them while its text is the
-/// file's, and laid out again for its bounds.
+/// The type among `nodes` (and in their groups) shown in fonts the file carries ([`mark`]), in the
+/// families and styles `kept` holds fonts for (family and style → the font's blob in `images`):
+/// drawn in them while its text is the file's, and laid out again for its bounds. Type in a font
+/// the file only names keeps the fallback font, also where its family and style are the same.
 pub(crate) fn keep_file_fonts(nodes: &mut [Arc<Node>], kept: &HashMap<(String, String), String>, images: &BTreeMap<String, ImageBlob>) {
     if kept.is_empty() {
         return;
@@ -121,6 +122,9 @@ pub(crate) fn keep_file_fonts(nodes: &mut [Arc<Node>], kept: &HashMap<(String, S
             keep_file_fonts(children, kept, images);
         }
         let NodeKind::Text(t) = &n.kind else { continue };
+        if t.file_fonts.is_none() {
+            continue;
+        }
         let mut fonts: Vec<FileFont> = vec![];
         for r in &t.runs {
             let (family, style) = (&r.style.font_family, &r.style.font_style);
@@ -130,15 +134,23 @@ pub(crate) fn keep_file_fonts(nodes: &mut [Arc<Node>], kept: &HashMap<(String, S
                 fonts.push(FileFont { family: family.clone(), style: style.clone(), key: key.clone() });
             }
         }
-        if fonts.is_empty() {
-            continue;
-        }
         if let NodeKind::Text(t) = &mut Arc::make_mut(n).kind {
+            if fonts.is_empty() {
+                t.file_fonts = None;
+                continue;
+            }
             t.file_fonts = Some(Box::new(FileFonts::new(fonts, &t.plain_text())));
             db.bind_file_fonts(t, |key| images.get(key));
             t.cached_bounds = Some(vectorcraft_text::layout(db, t).bounds);
         }
     }
+}
+
+/// Mark type `t` as shown in a font the file carries, so that [`keep_file_fonts`] gives it the font
+/// kept for its family and style (the key is filled in then).
+pub(crate) fn mark(t: &mut vectorcraft_doc::TextObject) {
+    let fonts = t.runs.first().map(|r| FileFont { family: r.style.font_family.clone(), style: r.style.font_style.clone(), key: String::new() });
+    t.file_fonts = Some(Box::new(FileFonts::new(fonts.into_iter().collect(), &t.plain_text())));
 }
 
 #[cfg(test)]

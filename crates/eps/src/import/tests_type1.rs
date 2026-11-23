@@ -178,6 +178,19 @@ fn embedded_type1_type_draws_with_the_files_glyphs() {
     assert!(t.runs.iter().all(|r| r.style.tracking == 0.0), "{:?}", t.runs);
 }
 
+/// Type in a font the file only names keeps the fallback font, and the spacing set for it, also
+/// when its family and style are those of a font the file carries (`TestOne-Roman` beside the
+/// embedded `TestOne`): only type shown in the carried font gets the font kept from it.
+#[test]
+fn a_named_font_in_a_carried_family_and_style_keeps_the_fallback_font() {
+    let r = program(OWN, false, "/TestOne findfont 50 scalefont setfont 10 20 moveto (A) show /TestOne-Roman 50 selectfont 10 60 moveto (AA) show");
+    let t = texts(&r);
+    assert_eq!(t.len(), 2, "{:?}", all(&r.document));
+    assert_eq!((t[1].runs[0].style.font_family.as_str(), t[1].runs[0].style.font_style.as_str()), ("Test One", "Regular"));
+    assert!(t[0].file_fonts.is_some());
+    assert!(t[1].file_fonts.is_none(), "the named font's type isn't drawn in the carried font");
+}
+
 /// A character the file draws with a different glyph from the one the kept font already has for
 /// it (here a second font of the same name whose A is a narrower square) can't go in that font:
 /// that string comes in as outlines, the first stays type in the file's glyphs.
