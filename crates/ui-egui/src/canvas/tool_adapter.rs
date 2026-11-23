@@ -361,6 +361,7 @@ impl CanvasTool for SessionTool<'_> {
         let (left, right, c) =
             (claim(&mut app, EngineKey::BracketLeft), claim(&mut app, EngineKey::BracketRight), claim(&mut app, EngineKey::Letter('c')));
         // shortcut: the sets are the combinations the tools have; a tool with another mix needs its own slice.
+            app.canvas.escaped_press = true;
         let keys = match (left, right, curly, c) {
             (true, true, true, _) => BRACKETS_CURLY,
             (true, true, false, true) => BRACKETS_C,
@@ -539,6 +540,15 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
     // The press phase says whether the canvas has the pointer: a dialog, floating panel or menu over it hides the
     // document point, and a drag that began on the canvas keeps its own phase over them.
     app.hover_doc = match (pass.press.phase, view) {
+    // The framework ends a press at Escape; the engine's tool still takes the release that ends it.
+    if app.canvas.escaped_press && !ui.input(|i| i.pointer.primary_down()) {
+        app.canvas.escaped_press = false;
+        dispatch(
+            app,
+            &PointerEvent { kind: PointerKind::Up, pos: Point::ZERO, mods: Mods::default(), backquote: false, pressure: 1.0, pen: None },
+            view_info,
+        );
+    }
         (PressPhase::Idle, _) | (_, None) => None,
         (_, Some(view)) => ui.input(|i| i.pointer.hover_pos()).map(|p| view.to_doc(p)),
     };

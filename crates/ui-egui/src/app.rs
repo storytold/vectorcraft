@@ -115,6 +115,7 @@ impl VectorcraftApp {
                 grab: None,
                 carry_target: None,
                 last_drag: None,
+                escaped_press: false,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
                 images_with_other_art: None,

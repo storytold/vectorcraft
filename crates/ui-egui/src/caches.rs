@@ -96,6 +96,9 @@ pub struct CanvasCache {
     /// The last drag the tool was sent and the screen point it was at: when the view scrolls under the held
     /// pointer, the drag goes on at that point in the scrolled view.
     pub last_drag: Option<(egui::Pos2, vectorcraft_tools::PointerEvent)>,
+    /// Escape cancelled the tool's press while the button is still down: its release still sends the tool its Up,
+    /// which gives back a selection tool Cmd lent.
+    pub escaped_press: bool,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
     /// Window › Arrange › Float in Window: what the floating document windows keep between frames.
