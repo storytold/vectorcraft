@@ -185,20 +185,7 @@ pub(in crate::cmd) fn windows_1252(b: u8) -> char {
 
 /// Byte `b` of Mac Roman.
 pub(in crate::cmd) fn mac_roman(b: u8) -> char {
-    const HIGH: [char; 128] = [
-        'Ä', 'Å', 'Ç', 'É', 'Ñ', 'Ö', 'Ü', 'á', 'à', 'â', 'ä', 'ã', 'å', 'ç', 'é', 'è', //
-        'ê', 'ë', 'í', 'ì', 'î', 'ï', 'ñ', 'ó', 'ò', 'ô', 'ö', 'õ', 'ú', 'ù', 'û', 'ü', //
-        '†', '°', '¢', '£', '§', '•', '¶', 'ß', '®', '©', '™', '´', '¨', '≠', 'Æ', 'Ø', //
-        '∞', '±', '≤', '≥', '¥', 'µ', '∂', '∑', '∏', 'π', '∫', 'ª', 'º', 'Ω', 'æ', 'ø', //
-        '¿', '¡', '¬', '√', 'ƒ', '≈', '∆', '«', '»', '…', '\u{A0}', 'À', 'Ã', 'Õ', 'Œ', 'œ', //
-        '–', '—', '“', '”', '‘', '’', '÷', '◊', 'ÿ', 'Ÿ', '⁄', '€', '‹', '›', 'ﬁ', 'ﬂ', //
-        '‡', '·', '‚', '„', '‰', 'Â', 'Ê', 'Á', 'Ë', 'È', 'Í', 'Î', 'Ï', 'Ì', 'Ó', 'Ô', //
-        '\u{F8FF}', 'Ò', 'Ú', 'Û', 'Ù', 'ı', 'ˆ', '˜', '¯', '˘', '˙', '˚', '¸', '˝', '˛', 'ˇ',
-    ];
-    match b {
-        0x80.. => HIGH.get(usize::from(b - 0x80)).copied().unwrap_or(char::REPLACEMENT_CHARACTER),
-        _ => char::from(b),
-    }
+    craft_codepage::windows_byte(craft_codepage::MAC_ROMAN_CODE_PAGE, b)
 }
 
 /// `text` with its line breaks (CR LF, CR or LF) as paragraph breaks, cleaned up as `o` says:
@@ -344,7 +331,7 @@ mod tests {
         let ansi = TextOptions { character_set: CharacterSet::Ansi, ..TextOptions::default() };
         assert_eq!(decode(&[0x93, b'q', 0x94, 0xE9], ansi), "“q”é");
         let mac = TextOptions { character_set: CharacterSet::Ansi, mac: true, ..TextOptions::default() };
-        assert_eq!(decode(&[0xD2, b'q', 0xD3, 0x8E, 0xA5, 0xDB], mac), "“q”é•€");
+        assert_eq!(decode(&[0xD2, b'q', 0xD3, 0x8E, 0xCA, 0xA5, 0xDB, 0xDE, 0xF0], mac), "“q”é\u{a0}•€ﬁ\u{f8ff}");
     }
 
     /// The other character sets decode by their Encoding Standard decoders: the platform matters
