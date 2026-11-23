@@ -43,7 +43,8 @@ pub struct ScriptPalette {
     pub dialog: ScriptUiDialog,
     pub visible: bool,
     /// The SHA-256 the file grants of the script that first showed it are kept for, which its
-    /// handlers' runs keep using.
+    /// handlers' runs keep using: the grants allowed with Always. A grant allowed once is the
+    /// showing run's alone, as for any later run of the script.
     pub(crate) grants: String,
 }
 
@@ -253,8 +254,8 @@ pub(crate) fn parse_event(
         ("click", None) => UiEvent::Click(id),
         ("click", Some(_)) => return Err("a click takes no `value`".into()),
         ("change", Some(Value::String(t))) => UiEvent::Change(id, UiValue::Text(t.clone())),
-        ("change", Some(Value::Number(v))) if list => match v.as_u64() {
-            Some(k) => UiEvent::Change(id, UiValue::Index(Some(usize::try_from(k).unwrap_or(usize::MAX)))),
+        ("change", Some(Value::Number(v))) if list => match scriptui::list_index(v) {
+            Some(k) => UiEvent::Change(id, UiValue::Index(Some(k))),
             None => return Err("a list's `value` must be an item index or null".into()),
         },
         ("change", Some(Value::Number(v))) => UiEvent::Change(id, UiValue::Number(v.as_f64().unwrap_or(f64::NAN))),
@@ -333,10 +334,12 @@ impl Session {
     /// waits, no run is going, and no undo group is open, which a run cannot start in. A drag in
     /// progress is not counted, since starting the run settles it.
     pub fn script_palette_can_start(&self) -> bool {
-        !self.script_palettes.waiting.is_empty()
-            && !self.script_running()
-            && self.explicit_undo_group.is_none()
-            && self.docs.iter().all(|d| d.undo_group.is_none())
+        !self.script_palettes.waiting.is_empty() && !self.script_running() && !self.undo_group_open()
+    }
+
+    /// Whether an undo group is open, the session's or a document's, which a run cannot start in.
+    pub(crate) fn undo_group_open(&self) -> bool {
+        self.explicit_undo_group.is_some() || self.docs.iter().any(|d| d.undo_group.is_some())
     }
 
     /// Puts `event` for the shown palette `id` in line, to run in its engine once no run is going
@@ -383,11 +386,14 @@ impl Session {
     }
 
     /// `script.palette.event` with no run going and nobody to ask: runs the waiting events in turn,
-    /// the one just given last. → that one's report.
+    /// the one just given last. → that one's report. An event whose run could not begin, for
+    /// example because the recovery copies could not be saved, ends this with its error, and the
+    /// events after it keep waiting.
     pub(crate) fn script_palette_run_waiting(&mut self) -> Result<Value> {
         let mut last = Err(EngineError::Other("no script palette event waits".into()));
         while let Some(started) = self.script_palette_start() {
-            last = started.and_then(|_| self.script_run_to_end());
+            started?;
+            last = self.script_run_to_end();
         }
         last
     }

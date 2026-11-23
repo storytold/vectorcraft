@@ -6583,6 +6583,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`answers` must be a list of answers	`answers` ha de ser una llista de respostes
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` té més de {MAX_ANSWERS} respostes
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	ja esperen {MAX_WAITING} esdeveniments de paletes d'scripts; aquest no s'ha conservat
+@msg	The list's items changed before the choice was taken	Els elements de la llista han canviat abans que es prengués l'elecció
 @msg	`answers` is larger than 1 MiB	`answers` ocupa més d'1 MiB
 @msg	must be an object with `kind` and `value`	ha de ser un objecte amb `kind` i `value`
 @msg	must have exactly `kind` and `value`	ha de tenir exactament `kind` i `value`

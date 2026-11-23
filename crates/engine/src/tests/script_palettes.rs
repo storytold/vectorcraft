@@ -263,6 +263,81 @@ fn double_clicks_while_queued_run_once() {
 }
 
 #[test]
+fn a_list_change_takes_a_whole_float_as_its_item_index() {
+    let mut s = one_doc();
+    run(
+        &mut s,
+        "#targetengine floats\nvar p = new Window('palette'); var l = p.add('listbox', undefined, ['a', 'b']); \
+         l.onChange = function () { vc.log(String(l.selection)); }; p.show();",
+    )
+    .unwrap();
+    let id = only_palette(&s);
+    let picked = s.execute("script.palette.event", &json!({"palette": id, "event": "change", "control": 1, "value": 1.0})).unwrap();
+    assert_eq!(picked["log"], json!(["b"]));
+    for value in [json!(0.5), json!(-1)] {
+        let given = s.execute("script.palette.event", &json!({"palette": id, "event": "change", "control": 1, "value": value}));
+        assert!(given.is_err(), "{value}");
+    }
+}
+
+#[test]
+fn with_nobody_to_ask_an_event_while_an_undo_group_is_open_is_refused_and_not_kept() {
+    let mut s = one_doc();
+    run(&mut s, TOOLS).unwrap();
+    let id = only_palette(&s);
+    s.execute("edit.undoGroup.begin", &json!({})).unwrap();
+    let e = s.execute("script.palette.event", &json!({"palette": id, "event": "click", "control": 1})).unwrap_err().to_string();
+    assert!(e.contains("undo group is open"), "{e}");
+    assert_eq!(s.script_palette_events_waiting(), 0, "the refused click does not wait");
+    s.execute("edit.undoGroup.end", &json!({})).unwrap();
+    let clicked = s.execute("script.palette.event", &json!({"palette": id, "event": "click", "control": 1})).unwrap();
+    assert_eq!(clicked["log"], json!(["click 1"]), "only the click given after the group ran");
+}
+
+#[test]
+fn with_nobody_to_ask_an_event_whose_run_cannot_begin_ends_with_its_error_and_the_next_waits() {
+    let mut s = one_doc();
+    run(&mut s, TOOLS).unwrap();
+    let id = only_palette(&s);
+    assert_eq!(s.script_palette_event(id, UiEvent::Change(2, crate::script::UiValue::Text("a".into()))), Ok(Waiting::Added));
+    // The document has changes, and the session has nowhere to keep a recovery copy of it.
+    s.script_copy_first = true;
+    let e = s.execute("script.palette.event", &json!({"palette": id, "event": "click", "control": 1})).unwrap_err().to_string();
+    assert!(e.contains("recovery copy"), "{e}");
+    assert_eq!(s.script_palette_events_waiting(), 1, "the click after the change whose run could not begin still waits");
+    s.script_copy_first = false;
+    assert_eq!(s.script_palette_run_waiting().unwrap()["log"], json!(["click 1"]));
+}
+
+#[test]
+fn a_handler_s_error_keeps_its_file_when_a_palette_getter_throws_after_it() {
+    let base = std::env::temp_dir().join(format!("vc-script-palette-place-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let base = std::fs::canonicalize(&base).unwrap();
+    let first = base.join("first.jsx");
+    std::fs::write(
+        &first,
+        "#targetengine places\nvar armed = false; var p = new Window('palette'); var b = p.add('button', undefined, 'Go');\n\
+         Object.defineProperty(p, 'text', {get: function () { if (armed) { throw new Error('getter'); } return 'P'; }});\np.show();",
+    )
+    .unwrap();
+    let second = base.join("second.jsx");
+    std::fs::write(&second, "#targetengine places\n\n\nb.onClick = function () { armed = true; throw new Error('handler'); };").unwrap();
+    let mut s = one_doc();
+    for file in [&first, &second] {
+        s.execute("script.run", &json!({"path": file.to_string_lossy()})).unwrap();
+    }
+    let id = only_palette(&s);
+    let e = s.execute("script.palette.event", &json!({"palette": id, "event": "click", "control": 1})).unwrap_err().to_string();
+    assert!(e.contains("handler"), "{e}");
+    let report = s.script_report().unwrap();
+    assert!(report["file"].as_str().is_some_and(|f| f.ends_with("second.jsx")), "{report}");
+    assert_eq!(report["line"], 4, "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
 fn a_palette_from_a_script_without_a_named_engine_is_refused() {
     let mut s = one_doc();
     for source in ["", "#targetengine main\n"] {

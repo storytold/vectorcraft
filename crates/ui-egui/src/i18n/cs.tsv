@@ -8987,6 +8987,7 @@ breakText	Glyphs	Glyfy
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pro tento dialog {kind} musí být jedna z hodnot: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` má více než {MAX_ANSWERS} odpovědí
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	už čeká {MAX_WAITING} událostí palet skriptů; tato nebyla zachována
+@msg	The list's items changed before the choice was taken	Položky seznamu se změnily dříve, než byla volba převzata
 @msg	`answers` is larger than 1 MiB	`answers` je větší než 1 MiB
 @msg	`answers` must be a list of answers	`answers` musí být seznam odpovědí
 @msg	`artboard` must be the index of an artboard of the document	`artboard` musí být index pracovní plochy dokumentu

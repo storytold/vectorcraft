@@ -7294,6 +7294,7 @@ axis	Y Axis	Y 軸
 @msg	`answer` for this {kind} dialog must be one of: {_1}	この {kind} ダイアログの `answer` には次のいずれかを指定してください: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` の回答が {MAX_ANSWERS} 個を超えています
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	スクリプトパレットのイベントがすでに {MAX_WAITING} 件待機しているため、このイベントは保持されませんでした
+@msg	The list's items changed before the choice was taken	選択が受け付けられる前にリストの項目が変更されました
 @msg	`answers` is larger than 1 MiB	`answers` が 1 MiB を超えています
 @msg	`answers` must be a list of answers	`answers` には回答のリストを指定してください
 @msg	`artboard` must be the index of an artboard of the document	`artboard` にはドキュメントのアートボードのインデックスを指定してください

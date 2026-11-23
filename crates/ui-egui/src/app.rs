@@ -370,11 +370,10 @@ impl VectorcraftApp {
         crate::dialogs::proof_setup::poll(self, ctx);
         // A palette event whose run starts on the next frame. While a run goes on, the block below
         // asks for its frames, and a run that waits for the person goes on at their next input. An
-        // event that waits for an open undo group to end looks again four times a second.
+        // event that waits for an open undo group asks for no frame; the pass that ends the group
+        // asks for the next one (`ui_frame`).
         if self.session.script_palette_can_start() {
             ctx.request_repaint();
-        } else if self.session.script_palette_events_waiting() > 0 && !self.session.script_running() {
-            ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         if self.session.script_running()
             && !self.session.script_waiting()
@@ -672,6 +671,10 @@ impl VectorcraftApp {
         }
         scrub::end_frame(self, &ctx);
         native_menu::sync(self, &ctx);
+        // A palette event that waited for an undo group this pass ended starts its run next frame.
+        if self.session.script_palette_can_start() {
+            ctx.request_repaint();
+        }
         // Observe once, after all of this pass's input, dialogs, floating panels, palette and
         // commands: the latest completed pass is authoritative for owner, text and cause.
         crate::ime::end_of_pass(self, &ctx);

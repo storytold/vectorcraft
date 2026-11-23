@@ -444,7 +444,10 @@ fn a_palette_s_show_returns_at_once_and_its_events_run_its_handlers() {
     assert_eq!(names(&calls), ["palette", "paletteShow", "paletteUpdate"]);
     r.run("Window.__vcPaletteEvent(); Window.__vcPaletteEvent();").unwrap();
     assert_eq!(r.run("log.join('|') + '|' + label.text").unwrap(), JsValue::String("click|change typed|clicked".into()));
-    assert_eq!(calls.borrow().iter().filter(|(n, id)| n == "paletteUpdate" && *id == 1.0).count(), 3, "each event gives the host the new controls");
+    let updates = |calls: &Calls| calls.borrow().iter().filter(|(n, id)| n == "paletteUpdate" && *id == 1.0).count();
+    assert_eq!(updates(&calls), 1, "the handlers give the host nothing");
+    r.refresh_script_ui().unwrap();
+    assert_eq!(updates(&calls), 2, "the refresh after the run gives the host the new controls");
     assert_eq!(r.run("Window.__vcPaletteEvent(); 'nothing'").unwrap(), JsValue::String("nothing".into()), "no event left: nothing runs");
 }
 
@@ -487,6 +490,73 @@ fn a_palette_list_change_after_its_items_changed_throws() {
     let e = r.run("try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
     assert_eq!(e, JsValue::String(message.into()), "new items with the same texts");
     assert_eq!(r.run("got.join()").unwrap(), JsValue::String("b".into()));
+}
+
+/// A palette list change as the host gives it: the item index, the items the person saw (`a` and
+/// `b`) and the revision of a list made with those two items.
+fn seen_list_change(index: f64) -> Data {
+    let Data::Object(mut fields) = palette_event(1.0, change(1, Data::Number(index))) else { return Data::Null };
+    fields.push(("items".into(), Data::Array(vec![Data::String("a".into()), Data::String("b".into())])));
+    fields.push(("revision".into(), Data::Number(2.0)));
+    Data::Object(fields)
+}
+
+#[test]
+fn a_palette_list_change_after_an_item_s_text_changed_throws() {
+    let (mut r, _) = palette_realm(vec![seen_list_change(1.0)]);
+    r.run("var p = new Window('palette'); var l = p.add('listbox', undefined, ['a', 'b']); var got = []; l.onChange = function () { got.push(String(l.selection)); }; p.show();")
+        .unwrap();
+    r.run("l.items[1].text = 'z';").unwrap();
+    let e = r.run("try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
+    assert_eq!(e, JsValue::String("a palette's list changed before the person's choice was taken".into()), "the same items, one with another text");
+    assert_eq!(r.run("got.join()").unwrap(), JsValue::String("".into()));
+}
+
+#[test]
+fn a_palette_list_change_throws_when_an_item_s_text_getter_replaces_the_items() {
+    let (mut r, _) = palette_realm(vec![seen_list_change(1.0)]);
+    // The event reads the first item's text twice: for the palette's description, then to compare
+    // it with the items the person saw. The second read replaces the items with ones of the same
+    // texts.
+    r.run(
+        "var p = new Window('palette'); var l = p.add('listbox', undefined, ['a', 'b']); var got = []; \
+         l.onChange = function () { got.push(String(l.selection)); }; var reads = -1; \
+         Object.defineProperty(l.items[0], 'text', {get: function () { if (reads >= 0 && ++reads == 2) { l.removeAll(); l.add('item', 'a'); l.add('item', 'b'); } return 'a'; }}); \
+         p.show();",
+    )
+    .unwrap();
+    let e = r.run("reads = 0; try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
+    assert_eq!(e, JsValue::String("a palette's list changed before the person's choice was taken".into()));
+    assert_eq!(r.run("[reads, got.join()].join()").unwrap(), JsValue::String("2,".into()));
+}
+
+#[test]
+fn a_palette_s_visible_follows_hide_and_show() {
+    let (mut r, _) = palette_realm(Vec::new());
+    let v = r
+        .run("var p = new Window('palette'); p.add('button', undefined, 'Go'); p.show(); var a = p.visible; p.hide(); var b = p.visible; p.show(); [a, b, p.visible].join()")
+        .unwrap();
+    assert_eq!(v, JsValue::String("true,false,true".into()));
+}
+
+#[test]
+fn a_close_inside_a_dialog_s_on_close_does_nothing() {
+    let (mut r, seen, _) = realm(vec![close(), click(13)]);
+    let source = format!(
+        "{FORM} var asked = 0; w.onClose = function () {{ asked++; if (asked == 1) {{ w.close(5); return false; }} return true; }}; [w.show(), asked].join()"
+    );
+    assert_eq!(r.run(&source).unwrap(), JsValue::String("2,2".into()), "the dialog waited for the click on Cancel");
+    assert_eq!(seen.borrow().ends, vec![(2.0, true)]);
+}
+
+#[test]
+fn bounds_whose_ends_add_up_past_the_largest_number_stay_finite() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    r.run("var w = new Window('dialog'); var b = w.add('button', undefined, 'Go'); b.bounds = {x: 1e308, y: 0, width: 1e308, height: 20}; w.show()")
+        .unwrap();
+    let described = nodes(&seen.borrow().descriptions[0]);
+    let want = Data::Array(vec![Data::Number(1e308), Data::Number(0.0), Data::Number(f64::MAX), Data::Number(20.0)]);
+    assert_eq!(field(&described[1], "bounds"), &want);
 }
 
 #[test]

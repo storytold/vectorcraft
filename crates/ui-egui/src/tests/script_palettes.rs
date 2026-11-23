@@ -28,10 +28,16 @@ fn run_to_end(app: &mut VectorcraftApp) {
 
 /// One headless frame in which `f` runs. → whether the frame asked for the next one at once.
 fn frame(ctx: &egui::Context, f: impl FnMut(&mut egui::Ui)) -> bool {
+    frame_delay(ctx, f).is_zero()
+}
+
+/// One headless frame in which `f` runs. → how long until the frame asked for the next one;
+/// `Duration::MAX` when it asked for none.
+fn frame_delay(ctx: &egui::Context, f: impl FnMut(&mut egui::Ui)) -> std::time::Duration {
     let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
     let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, f);
     out.textures_delta.clear();
-    out.viewport_output.get(&egui::ViewportId::ROOT).is_some_and(|v| v.repaint_delay.is_zero())
+    out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay)
 }
 
 #[test]
@@ -98,15 +104,15 @@ fn a_click_waiting_for_an_open_undo_group_asks_for_no_frames_and_runs_after_it()
     let ctx = egui::Context::default();
     frame(&ctx, |ui| script_palettes::give(&mut app, ui.ctx(), id, vec![UiEvent::Click(1)]));
     assert_eq!(app.session.script_palette_events_waiting(), 1);
-    let mut asks = true;
+    let mut delay = std::time::Duration::ZERO;
     for _ in 0..5 {
         app.begin_host_iteration();
-        asks = frame(&ctx, |ui| app.tick(ui.ctx()));
-        if !asks {
+        delay = frame_delay(&ctx, |ui| app.tick(ui.ctx()));
+        if delay == std::time::Duration::MAX {
             break;
         }
     }
-    assert!(!asks, "the waiting click asks for no frames while the undo group is open");
+    assert_eq!(delay, std::time::Duration::MAX, "the waiting click asks for no frames, now or later, while the undo group is open");
     assert_eq!(app.session.script_palette_events_waiting(), 1, "the click still waits");
     app.run("edit.undoGroup.end", json!({})).unwrap();
     app.begin_host_iteration();

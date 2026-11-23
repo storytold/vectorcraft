@@ -177,6 +177,7 @@
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` შეიცავს {MAX_ANSWERS}-ზე მეტ პასუხს
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	სკრიპტის პალიტრების {MAX_WAITING} მოვლენა უკვე ელოდება; ეს არ შენარჩუნდა
+@msg	The list's items changed before the choice was taken	სიის ელემენტები შეიცვალა არჩევანის მიღებამდე
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB-ზე დიდია
 @msg	`answers` must be a list of answers	`answers` უნდა იყოს პასუხების სია
 @msg	`artboard` must be the index of an artboard of the document	`artboard` უნდა იყოს დოკუმენტის სამუშაო დაფის ინდექსი

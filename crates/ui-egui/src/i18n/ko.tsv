@@ -8626,6 +8626,7 @@ breakText	Glyphs	글리프
 @msg	`answer` for this {kind} dialog must be one of: {_1}	이 {kind} 대화 상자의 `answer`은(는) 다음 중 하나여야 합니다: {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers`에 응답이 {MAX_ANSWERS}개보다 많습니다
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	스크립트 팔레트 이벤트가 이미 {MAX_WAITING}개 대기 중이므로 이 이벤트는 보관되지 않았습니다
+@msg	The list's items changed before the choice was taken	선택이 적용되기 전에 목록의 항목이 변경되었습니다
 @msg	`answers` is larger than 1 MiB	`answers`이(가) 1 MiB보다 큽니다
 @msg	`answers` must be a list of answers	`answers`은(는) 응답 목록이어야 합니다
 @msg	`artboard` must be the index of an artboard of the document	`artboard`은(는) 문서에 있는 아트보드의 인덱스여야 합니다

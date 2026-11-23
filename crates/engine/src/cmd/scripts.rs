@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Script Palette Event",
             [],
             None,
-            "{palette: an id script.palettes lists, event: click|change|close, control?: a control's index, or its name or text (click and change), value?: an edit field's text, a slider's number, or a list's item index or null (change)} give a shown palette a click, a change or a close, as the person does: it runs as a run of its own in the palette's engine, with its report like script.run's, once no run is going, oldest first; while it waits, another click on the same control, change of it or close of the same palette takes its place with the newer value, and a list's change ends its run with an error when the list holds other items by then; dialogs throw in the handler in the app, and with nobody to ask the run ends at one; a hidden palette, a control that is disabled, hidden or cannot take the event, and a 65th waiting event are refused → in the app {waiting: true, merged: whether it took the place of a waiting event, waitingEvents}, and the report later in ui.inspect's scriptReport; with nobody to ask, the run's report (or its error) once it ends",
+            "{palette: an id script.palettes lists, event: click|change|close, control?: a control's index, or its name or text (click and change), value?: an edit field's text, a slider's number, or a list's item index or null (change)} give a shown palette a click, a change or a close, as the person does: it runs as a run of its own in the palette's engine, with its report like script.run's, once no run is going, oldest first; while it waits, another click on the same control, change of it or close of the same palette takes its place with the newer value, and a list's change ends its run with an error when the list holds other items by then; dialogs throw in the handler in the app, and with nobody to ask the run ends at one; a hidden palette, a control that is disabled, hidden or cannot take the event, and a 65th waiting event are refused, and with nobody to ask so is an event while an undo group is open → in the app {waiting: true, merged: whether it took the place of a waiting event, waitingEvents}, and the report later in ui.inspect's scriptReport; with nobody to ask, the run's report (or its error) once it ends",
             always,
             palette_event
         ),
@@ -281,6 +281,11 @@ fn palette_event(s: &mut Session, p: &Value) -> Result<Value> {
     let Some(event) = p.get("event").and_then(Value::as_str) else { return Err(bad(C, "`event` must be click, change or close")) };
     let Some(palette) = s.script_palettes().iter().find(|q| q.id == id) else { return Err(bad(C, format!("there is no script palette {id}"))) };
     let event = script::palettes::parse_event(&palette.dialog, event, p.get("control"), p.get("value")).map_err(|e| bad(C, e))?;
+    // With nobody to ask, the event runs now or not at all: it is not kept for after an open undo
+    // group, which a run cannot start in.
+    if !s.script_frames && s.undo_group_open() {
+        return Err(EngineError::Other(script::OPEN_EDIT.to_string()));
+    }
     let waiting = s.script_palette_event(id, event).map_err(|e| bad(C, e))?;
     if s.script_frames {
         return Ok(json!({"waiting": true, "merged": waiting == script::Waiting::Merged, "waitingEvents": s.script_palette_events_waiting()}));

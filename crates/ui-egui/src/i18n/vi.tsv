@@ -5576,6 +5576,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`answers` must be a list of answers	`answers` phải là một danh sách câu trả lời
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` có hơn {MAX_ANSWERS} câu trả lời
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	đã có {MAX_WAITING} sự kiện bảng tập lệnh đang chờ; sự kiện này không được giữ lại
+@msg	The list's items changed before the choice was taken	Các mục của danh sách đã thay đổi trước khi lựa chọn được nhận
 @msg	`answers` is larger than 1 MiB	`answers` lớn hơn 1 MiB
 @msg	must be an object with `kind` and `value`	phải là một đối tượng có `kind` và `value`
 @msg	must have exactly `kind` and `value`	phải có đúng `kind` và `value`

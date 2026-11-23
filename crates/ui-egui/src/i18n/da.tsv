@@ -226,6 +226,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`answers` must be a list of answers	`answers` skal være en liste med svar
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har flere end {MAX_ANSWERS} svar
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} hændelser fra scriptpaletter venter allerede; denne blev ikke gemt
+@msg	The list's items changed before the choice was taken	Listens elementer blev ændret, før valget blev modtaget
 @msg	`answers` is larger than 1 MiB	`answers` er større end 1 MiB
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	must be an object with `kind` and `value`	skal være et objekt med `kind` og `value`

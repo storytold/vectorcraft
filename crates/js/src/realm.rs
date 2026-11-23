@@ -512,6 +512,18 @@ impl Realm {
         }
     }
 
+    /// [`Realm::refresh_script_ui`] after a run that failed: what the refresh throws is dropped,
+    /// and the run's error keeps its place ([`Realm::error_source`], [`Realm::error_mark`]) and
+    /// its thrown value.
+    pub fn refresh_script_ui_after_error(&mut self) {
+        let (tag, mark) = (self.interp.error_tag, self.interp.error_mark);
+        let thrown = self.interp.last_thrown.clone();
+        let _ = self.refresh_script_ui();
+        self.interp.error_tag = tag;
+        self.interp.error_mark = mark;
+        self.interp.last_thrown = thrown;
+    }
+
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,

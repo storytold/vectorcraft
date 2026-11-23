@@ -462,6 +462,32 @@ fn a_queued_click_reaches_its_button_after_a_handler_adds_a_control_before_it() 
 }
 
 #[test]
+fn a_queued_list_choice_is_not_given_after_a_handler_changed_the_list() {
+    let mut app = app();
+    start(
+        &mut app,
+        "var w = new Window('dialog'); var l = w.add('listbox', undefined, ['a', 'b']); var swap = w.add('button', undefined, 'Swap'); \
+        w.add('button', undefined, 'OK'); swap.onClick = function () { l.removeAll(); l.add('item', 'x'); l.add('item', 'y'); }; \
+        vc.log([w.show(), String(l.selection)]);",
+    );
+    assert!(until_window(&mut app));
+    // A click on Swap, then a choice in the list as it was before Swap's handler ran, both given
+    // in one frame.
+    let swap = json!({"event": "click", "control": 2, "value": null});
+    let choice = json!({"event": "change", "control": 1, "value": 1, "list": {"items": ["a", "b"], "revision": 2.0}});
+    app.ui.dialog.as_mut().unwrap().fields.insert("queued".into(), json!([swap, choice]));
+    frame(&mut app, Vec::new());
+    assert!(until_window(&mut app), "the script takes the click and waits again");
+    assert_eq!(app.session.script_window().unwrap().nodes[1].items, ["x", "y"]);
+    frame(&mut app, Vec::new());
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("queued"), "the choice left the line");
+    assert!(until_window(&mut app));
+    give(&mut app, json!({"event": "click", "control": "OK"})).unwrap();
+    assert!(!until_window(&mut app));
+    assert_eq!(log(&app), json!([[1, "null"]]), "the choice for the old items was not given");
+}
+
+#[test]
 fn continue_on_the_growth_question_shows_the_dialog_again_with_its_queued_click_and_typed_text() {
     let mut app = app();
     start(

@@ -8854,6 +8854,7 @@ breakText	Glyphs	Glyphes
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pour cette boîte de dialogue {kind} doit valoir l’une de ces valeurs : {_1}
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` contient plus de {MAX_ANSWERS} réponses
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	{MAX_WAITING} événements de palettes de script attendent déjà, celui-ci n’a donc pas été conservé
+@msg	The list's items changed before the choice was taken	Les éléments de la liste ont changé avant que le choix soit pris en compte
 @msg	`answers` is larger than 1 MiB	`answers` dépasse 1 Mio
 @msg	`answers` must be a list of answers	`answers` doit être une liste de réponses
 @msg	`artboard` must be the index of an artboard of the document	`artboard` doit être l’indice d’un plan de travail du document

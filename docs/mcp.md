@@ -2983,7 +2983,8 @@ the same controls, handlers and limits:
   A palette also closes when `script.engine.drop` drops its engine, when its engine ends with an internal error,
   and when the session ends. The palette shows its controls as `show()`, `add()`, each event's handlers and each
   run of its engine leave them; a run that a limit or `script.stop` ended can leave it showing them as they were.
-  A handler's run reads and writes the files the person allowed the script that first showed the palette.
+  A handler's run reads and writes the files the person allowed the script that first showed the palette with
+  Always. A file allowed once stays with the run whose dialog allowed it, as for any later run.
 - Each click, change or close the person gives a palette runs its handler as a run of its own in the palette's
   engine, with its own report and, when it changes a document, its own Run Script undo step. While another run
   goes on, the event waits and runs after it; events run one at a time, oldest first. While an event waits, a
@@ -3006,7 +3007,9 @@ waitingLimit: 64}`. `script.palette.event {palette, event, control?, value?}` gi
 `change` or a `close`, with `control` and `value` as in a `window` answer's step (`control` can also be a control's
 index). In the app it returns `{waiting: true, merged, waitingEvents}`, and the handler's report is later in
 `ui.inspect`'s `scriptReport`. With nobody to ask, it runs the waiting events and returns the report of this one,
-or its error. A hidden palette, a disabled or hidden control, and a control that cannot take the event are errors.
+or its error; an event whose run cannot begin ends it with that error, and the events after it keep waiting. A
+hidden palette, a disabled or hidden control, and a control that cannot take the event are errors, and with nobody
+to ask so is an event while an undo group is open.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "#targetengine tools\nvar p = new Window(\"palette\", \"Tools\"); var go = p.add(\"button\", undefined, \"Add\"); go.onClick = function () { vc.run(\"shape.rectangle\", {x: 0, y: 0, width: 20, height: 20}); }; p.show();"}'

@@ -2345,7 +2345,7 @@ impl Session {
     }
 }
 
-const OPEN_EDIT: &str = "a drag or an undo group is open; finish it before running a script";
+pub(crate) const OPEN_EDIT: &str = "a drag or an undo group is open; finish it before running a script";
 const INVALID_RESULT: &str = "the script left a document that cannot be kept";
 const UNWRITTEN_FILES: &str = "Error: the script left open files that could not be written";
 const JOB_GONE: &str = "the script's run is no longer available";
@@ -2515,9 +2515,10 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
                 // The palettes of a named engine show the controls as the run left them.
                 Ok(Progress::Done(v)) if named => realm.refresh_script_ui().map(|()| Progress::Done(v)),
                 // A failed run keeps its globals, so its palettes show what it left too; a refresh
-                // that fails as well (the fuel is spent, a stop) leaves them as they were.
+                // that fails as well (the fuel is spent, a stop) leaves them as they were, and the
+                // run's error keeps its place.
                 Err(e) if named && e.kind != RunErrorKind::Internal => {
-                    let _ = realm.refresh_script_ui();
+                    realm.refresh_script_ui_after_error();
                     Err(e)
                 }
                 r => r,

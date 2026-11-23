@@ -666,14 +666,15 @@ fn close(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value
     };
     if palette {
         close_palette(i, o)?;
-    } else if classes(i)?.showing == Some(o) {
+    } else if classes(i)?.showing == Some(o) && !slot(i, o, IN_CLOSE)?.truthy() {
         set_slot(i, o, CLOSING, Value::Number(result))?;
     }
     Ok(Value::Undefined)
 }
 
 /// `hide()`: closes the dialog that is showing with the result 0, or hides the palette, which a
-/// later `show()` shows again as it was.
+/// later `show()` shows again as it was. A palette's `visible` is false once the host hid it, and
+/// true again once the host shows it.
 fn hide(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let (o, palette) = window_of(i, &this, "hide")?;
     if !palette {
@@ -682,6 +683,7 @@ fn hide(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     if let Value::Number(id) = slot(i, o, PALETTE_ID)? {
         let f = host_fn(i, "paletteHide")?;
         i.call(&f, &Value::Undefined, &[Value::Number(id)])?;
+        i.put(o, key("visible"), Value::Bool(false), true)?;
     }
     Ok(Value::Undefined)
 }
@@ -698,10 +700,7 @@ fn close_palette(i: &mut Interp, win: ObjId) -> JsResult<()> {
     if slot(i, win, IN_CLOSE)?.truthy() {
         return Ok(());
     }
-    set_slot(i, win, IN_CLOSE, Value::Bool(true))?;
-    let allowed = may_close(i, win);
-    set_slot(i, win, IN_CLOSE, Value::Undefined)?;
-    if !allowed? {
+    if !may_close(i, win)? {
         return Ok(());
     }
     if let Value::Number(id) = slot(i, win, PALETTE_ID)? {
@@ -724,10 +723,16 @@ fn update_palette(i: &mut Interp, win: ObjId) -> JsResult<()> {
 
 /// Gives the host the controls of every palette it shows, after a handler may have changed them.
 fn update_palettes(i: &mut Interp) -> JsResult<()> {
-    for win in classes(i)?.palettes {
-        update_palette(i, win)?;
-    }
-    Ok(())
+    // A getter may close a later palette, which removes it from the rooted list, so the copy is
+    // rooted until the loop ends.
+    let palettes = classes(i)?.palettes;
+    let roots: Vec<Value> = palettes.iter().map(|&win| Value::Object(win)).collect();
+    i.rooted(&roots, |i| {
+        for win in palettes {
+            update_palette(i, win)?;
+        }
+        Ok(())
+    })
 }
 
 /// Gives the host the controls of every palette the realm keeps, as a run left them
@@ -755,15 +760,16 @@ fn palette_shown(i: &mut Interp, keep: &[Value], id: Value) -> JsResult<Value> {
     if !classes(i)?.palettes.contains(&win) {
         set_palettes(i, |p| p.push(win));
     }
+    i.put(win, key("visible"), Value::Bool(true), true)?;
     handler(i, win, "onShow")?;
     update_palette(i, win)?;
     Ok(Value::Undefined)
 }
 
 /// `Window.__vcPaletteEvent()`, which the run of a palette's handler calls: takes the event from the
-/// host's `paletteEvent`, gives it to the palette the way a dialog takes the person's event, and
-/// gives the host every palette's controls afterward. An event for a palette that has closed does
-/// nothing.
+/// host's `paletteEvent` and gives it to the palette the way a dialog takes the person's event. The
+/// host gets every palette's controls once the run ends ([`crate::Realm::refresh_script_ui`]). An
+/// event for a palette that has closed does nothing.
 fn palette_event(i: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let f = host_fn(i, "paletteEvent")?;
     let answer = i.call(&f, &Value::Undefined, &[])?;
@@ -795,7 +801,6 @@ fn palette_event(i: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Val
             }
             take_event(i, win, nodes, ev, &event, None)?;
         }
-        update_palettes(i)?;
         Ok(Value::Undefined)
     })();
     i.temp_roots.truncate(mark);
@@ -866,9 +871,13 @@ fn finish(i: &mut Interp, win: ObjId, result: f64) -> JsResult<Value> {
     Ok(Value::Number(result))
 }
 
-/// Runs `onClose`. → false when it returned `false`.
+/// Runs `onClose`, during which a `close()` of the same window does nothing. → false when it
+/// returned `false`.
 fn may_close(i: &mut Interp, win: ObjId) -> JsResult<bool> {
-    Ok(!matches!(handler(i, win, "onClose")?, Some(Value::Bool(false))))
+    set_slot(i, win, IN_CLOSE, Value::Bool(true))?;
+    let ran = handler(i, win, "onClose");
+    set_slot(i, win, IN_CLOSE, Value::Undefined)?;
+    Ok(!matches!(ran?, Some(Value::Bool(false))))
 }
 
 /// Closes the dialog when a handler asked to, or asks the host's `wait` what happens next.
@@ -1005,12 +1014,14 @@ fn take_event(i: &mut Interp, win: ObjId, nodes: ObjId, ev: ObjId, event: &str, 
                         }
                         // A palette's list may have changed while the event waited: the host gives
                         // the items the person saw and the list's revision then.
+                        // The revision is read after the texts, whose getters may change the list.
                         None => {
+                            let same = same_items(i, c, &slot(i, ev, "items")?)?;
                             let revised = match slot(i, ev, "revision")? {
                                 Value::Number(r) => r != number_slot(i, c, REVISION)?,
                                 _ => false,
                             };
-                            if revised || !same_items(i, c, &slot(i, ev, "items")?)? || (n >= 0.0 && n as usize >= items_of(i, c)?.len()) {
+                            if revised || !same || (n >= 0.0 && n as usize >= items_of(i, c)?.len()) {
                                 return Err(error(i, "a palette's list changed before the person's choice was taken"));
                             }
                         }
@@ -1116,7 +1127,9 @@ fn bounds(i: &mut Interp, v: &Value) -> JsResult<Data> {
             Some(Data::Number(n)) => *n,
             _ => 0.0,
         };
-        return Ok(Data::Array(vec![Data::Number(n(0)), Data::Number(n(1)), Data::Number(n(0) + n(2)), Data::Number(n(1) + n(3))]));
+        // Two finite numbers can add up to infinity; the sum is kept finite.
+        let end = |a: f64, b: f64| (a + b).clamp(-f64::MAX, f64::MAX);
+        return Ok(Data::Array(vec![Data::Number(n(0)), Data::Number(n(1)), Data::Number(end(n(0), n(2))), Data::Number(end(n(1), n(3)))]));
     }
     numbers(i, v, &["left", "top", "right", "bottom"], "bounds")
 }

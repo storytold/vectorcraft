@@ -144,6 +144,15 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
         // The control the event was given to, found again in the dialog as the handlers that ran
         // since left it.
         let at = fields.remove(PLACE_KEY).and_then(|p| serde_json::from_value::<Vec<usize>>(p).ok()).and_then(|p| w.control_at(&p));
+        // A list's choice whose list a handler changed since it was made is not given.
+        if !same_list(&w, at, fields.remove(LIST_KEY).as_ref()) {
+            app.status(LIST_CHANGED);
+            // The events after it are given from the next frame on.
+            if d.fields.contains_key(QUEUE_KEY) {
+                ui.ctx().request_repaint();
+            }
+            return DialogAction::None;
+        }
         if let Some(i) = at {
             fields.insert("control".into(), json!(i));
         }
@@ -151,6 +160,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
     }
     DialogAction::Confirm
 }
+
+/// The field of a queued list change that holds the list's items and revision as the person saw
+/// them ([`UiNode::revision`]).
+const LIST_KEY: &str = "list";
+
+/// The status when a queued list choice is not given because its list changed.
+const LIST_CHANGED: &str = "The list's items changed before the choice was taken";
 
 /// The field of a queued event that holds where its control sits in the dialog
 /// ([`ScriptUiDialog::place_of`]).
@@ -442,7 +458,20 @@ fn event_fields(w: &ScriptUiDialog, event: &UiEvent) -> Value {
     if let Some(i) = control {
         fields[PLACE_KEY] = json!(w.place_of(i));
     }
+    if let UiEvent::Change(i, UiValue::Index(_)) = event
+        && let Some(n) = w.nodes.get(*i)
+    {
+        fields[LIST_KEY] = json!({"items": n.items, "revision": n.revision});
+    }
     fields
+}
+
+/// Whether the list control `at` of `w` still holds the items a queued list change was given for
+/// (its [`LIST_KEY`] field): the same texts and the same revision. True for any other event.
+fn same_list(w: &ScriptUiDialog, at: Option<usize>, seen: Option<&Value>) -> bool {
+    let Some(seen) = seen else { return true };
+    let n = at.and_then(|i| w.nodes.get(i));
+    n.is_some_and(|n| seen["revision"].as_f64() == Some(n.revision) && seen["items"] == json!(n.items))
 }
 
 /// The event in the dialog's fields, for the dialog `w`.

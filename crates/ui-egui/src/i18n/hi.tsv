@@ -7729,6 +7729,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	`answers` must be a list of answers	`answers` उत्तरों की सूची होनी चाहिए
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` में {MAX_ANSWERS} से अधिक उत्तर हैं
 @msg	{MAX_WAITING} script palette events already wait; this one was not kept	स्क्रिप्ट पैलेट की {MAX_WAITING} घटनाएँ पहले से प्रतीक्षा में हैं; यह नहीं रखी गई
+@msg	The list's items changed before the choice was taken	चुनाव लिए जाने से पहले सूची के आइटम बदल गए
 @msg	`answers` is larger than 1 MiB	`answers` 1 MiB से बड़ा है
 @msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
 @msg	must be an object with `kind` and `value`	`kind` और `value` वाला ऑब्जेक्ट होना चाहिए
