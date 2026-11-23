@@ -1251,7 +1251,7 @@ dependencies = [
 [[package]]
 name = "craft-metafile"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=c56fbd8271a42ffcc82b07c8f31d714e345fdcd9#c56fbd8271a42ffcc82b07c8f31d714e345fdcd9"
+source = "git+https://github.com/storytold/craft-libs?rev=8f6ad14b58ca2efee67aac5d0f5573bad6a5ca81#8f6ad14b58ca2efee67aac5d0f5573bad6a5ca81"
 dependencies = [
  "encoding_rs",
  "image",
@@ -7061,7 +7061,6 @@ dependencies = [
 name = "vectorcraft-metafile"
 version = "0.24.1"
 dependencies = [
- "craft-codepage",
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=ba25ccd233934d1b2f74e3c0f235168bf5f13ef3)",
  "craft-metafile",
  "image",

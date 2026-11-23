@@ -1,4 +1,4 @@
-//! App bitmap sizing, read budgets, and raster conversion for imported pictures.
+//! App bitmap sizing and raster conversion for imported pictures.
 
 use craft_metafile::write::Image;
 use vectorcraft_doc::resample::{Resample, resized};
@@ -7,14 +7,6 @@ use vectorcraft_doc::resample::{Resample, resized};
 const MAX_SIDE: u32 = 8192;
 /// Most pixels an image the writers store holds.
 const MAX_PIXELS: u64 = 1 << 24;
-/// Most pixels along a side, and in all, of a bitmap the PICT reader decodes.
-pub(crate) const MAX_READ_SIDE: u32 = 1 << 15;
-pub(crate) const MAX_READ_PIXELS: u64 = 1 << 26;
-/// Most pixels the bitmaps of one file may decode to together (four of the largest one), so a small
-/// file of many image records can't cost minutes of decoding (#3600).
-pub(crate) const MAX_FILE_PIXELS: u64 = 1 << 28;
-/// What [`charge`] says of a bitmap past what is left of the file's budget.
-pub(crate) const OVER_BUDGET: &str = "the bitmaps hold more pixels than one file may";
 
 /// Pixels with straight (not premultiplied) alpha, row by row from the top.
 #[derive(Clone, Debug, PartialEq)]
@@ -51,13 +43,6 @@ impl Rgba {
     }
 }
 
-/// Take a bitmap of `w` × `h` from what is `left` of the file's budget, before it is decoded.
-pub(crate) fn charge(w: u32, h: u32, left: &mut u64) -> Result<(), String> {
-    let n = u64::from(w) * u64::from(h);
-    *left = left.checked_sub(n).ok_or(OVER_BUDGET)?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,16 +51,6 @@ mod tests {
         // 3 × 2: red, green, blue / half-transparent black, transparent, white.
         let pixels = vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 0, 0, 0, 128, 0, 0, 0, 0, 255, 255, 255, 255];
         Image { width: 3, height: 2, rgba: pixels }
-    }
-
-    #[test]
-    fn bitmaps_share_the_file_budget() {
-        // #3600: each bitmap is charged before it is decoded, and one past what is left is refused.
-        let mut left = 6 + 5;
-        assert!(charge(3, 2, &mut left).is_ok());
-        assert_eq!(left, 5);
-        assert_eq!(charge(3, 2, &mut left).unwrap_err(), OVER_BUDGET);
-        assert_eq!(left, 5, "a refused bitmap costs nothing");
     }
 
     #[test]
