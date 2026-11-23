@@ -99,6 +99,7 @@ fn save_as_native_asks_for_its_options_and_writes_every_artboard() {
     assert_eq!(written.borrow().len(), 6);
     // All: every artboard.
     app.run("file.saveAs", Value::Null).unwrap();
+    pass(&mut app);
     assert_eq!(open_dialogs(&app)[0].fields.as_ref().unwrap()["separateArtboards"], json!(true), "the options as last saved");
     answer(&mut app, &[("all", json!("true"))], true);
     assert_eq!(written.borrow().len(), 10);

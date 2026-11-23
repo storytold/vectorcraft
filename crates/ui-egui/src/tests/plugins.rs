@@ -512,9 +512,11 @@ fn an_action_step_cannot_grant_a_plugin_its_permissions() {
     let wasm = wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap();
     let step = json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": ["doc.read"]});
     push_set(&mut app, "Test", vec![action("Install", &[("plugin.install", step)])]);
+    // The set added after the Default Actions.
+    let set = (0..).find(|&i| crate::panels::actions::model::set_name(&app.ui.actions, i).is_none_or(|name| name == "Test")).unwrap_or(0);
     for speed in [PlaybackSpeed::Accelerated, PlaybackSpeed::Step] {
         app.ui.action_playback.speed = speed;
-        let e = play(&mut app, 0, 0).unwrap_err();
+        let e = play(&mut app, set, 0).unwrap_err();
         assert!(e.contains("take effect only in a session started with --allow-plugin-grants"), "{e}");
         assert!(vectorcraft_plugins::registry::get(id).is_none() && vectorcraft_plugins::registry::granted(id).is_none());
     }

@@ -209,8 +209,13 @@ fn script_and_folder_names_are_shown_as_they_are_in_every_language() {
     assert!(crate::i18n::tr(de, "Layers") != "Layers" && crate::i18n::tr(de, "Export") != "Export", "German translates both words");
     crate::i18n::set_current(de);
     menus::model::refresh(&mut app, &ctx());
+    // The bar keeps an item's own label; the row shows its state's title.
+    let shown = |node: &Node| match node {
+        Node::Item(item) => Some(crate::menus::shown_label(&app, &item.command.id, &item.command.params, &item.label)),
+        other => label(other),
+    };
     let labels: Vec<String> =
-        app.menus.bar.menus.iter().find_map(|m| shown_scripts(&m.children)).expect("File › Scripts").iter().filter_map(label).collect();
+        app.menus.bar.menus.iter().find_map(|m| shown_scripts(&m.children)).expect("File › Scripts").iter().filter_map(shown).collect();
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert_eq!(labels[..2], ["Export", "Layers"]);
     assert_ne!(labels[2], "Check Script…", "the fixed items are translated");

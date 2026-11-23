@@ -34,8 +34,8 @@ type Done = (TraceRun, Result<Traced, String>);
 
 /// A trace running.
 pub struct Running {
-    /// The context's time when it started: the progress window's delay counts from it.
-    started: f64,
+    /// [`crate::export_progress::now`] when it started: the progress window's delay counts from it.
+    pub(crate) started: f64,
     /// The document it traces in ([`vectorcraft_engine::DocState::uid`]) and the object.
     doc: u64,
     target: NodeId,
@@ -125,7 +125,7 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
             let _ = tx.send((run, traced));
         })
         .map_err(|e| e.to_string())?;
-    let started = app.ui_ctx.as_ref().map_or(0.0, |ctx| ctx.input(|i| i.time));
+    let started = crate::export_progress::now();
     app.trace_runs.running.push(Running { started, doc, target, token, superseded: false, steps, from_panel, hidden: false, done });
     // This frame may have asked for its next one before the trace started (`tick`): ask now.
     if let Some(ctx) = &app.ui_ctx {

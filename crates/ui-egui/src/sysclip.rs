@@ -372,7 +372,7 @@ impl VectorcraftApp {
     /// text for pastes their text, while the system clipboard still holds them. On the canvas the app does not wait
     /// for them: Paste takes the internal clipboard ([`Self::adopt_system_clipboard`]).
     pub(crate) fn write_formats_before_text_input(&mut self, ctx: &egui::Context) {
-        if !(ctx.egui_wants_keyboard_input() || self.session.tool_wants_text()) {
+        if !self.pastes_into_text(ctx) {
             return;
         }
         // A paste with no text: the clipboard held none when the chord came.
@@ -423,11 +423,19 @@ impl VectorcraftApp {
         });
     }
 
+    /// Whether a paste goes into text: a text field or the Type tool has the keyboard. Keyboard focus on the canvas or on
+    /// a label's selected text (which takes Copy but no paste) is not text input.
+    fn pastes_into_text(&self, ctx: &egui::Context) -> bool {
+        self.session.tool_wants_text()
+            || (ctx.egui_wants_keyboard_input()
+                && craft::ui::runtime::focus::focused_rec(ctx).is_none_or(|rec| rec.stop.keys.edits.contains(craft::behavior::EditCommand::Paste)))
+    }
+
     /// Paste `f`, which the host read from the system clipboard itself (a web page's paste carries
     /// pictures and files, egui's Paste event text only), as the paste chord `held` pastes:
     /// unless a field or the Type tool has the keyboard, as with the paste keys.
     pub fn paste_from_host(&mut self, ctx: &egui::Context, f: Flavour, held: egui::Modifiers) {
-        if ctx.egui_wants_keyboard_input() || self.session.tool_wants_text() {
+        if self.pastes_into_text(ctx) {
             return;
         }
         self.clipboard_in = Some(f);

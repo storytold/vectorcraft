@@ -424,7 +424,11 @@ impl CanvasTool for SessionTool<'_> {
                 !bound
             }
             ToolKey::Delete { forward, .. } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
-            ToolKey::Submit => self.send_key(EngineKey::Enter, held) || self.enter(held),
+            ToolKey::Submit => {
+                // In Presentation Mode Enter opens no dialog: the tool takes none.
+                let presenting = self.app().ui.screen_mode == 3;
+                !presenting && (self.send_key(EngineKey::Enter, held) || self.enter(held))
+            }
             ToolKey::Cancel => {
                 // In Presentation Mode Escape leaves the mode: the tool takes none.
                 if self.app().ui.screen_mode == 3 {

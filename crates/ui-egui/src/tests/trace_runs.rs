@@ -285,6 +285,8 @@ fn the_progress_window_shows_a_trace() {
     let ctx = crate::testing::ui_context();
     crate::menus::invoke(&mut app, "imageTrace.make", json!({"preset": "Default"}));
     assert!(!progress(&mut app, &ctx, 0.0).contains("Tracing the image"), "not before the delay");
+    // The delay counts on the monotonic clock: the trace started that long ago.
+    app.trace_runs.running[0].started -= DELAY;
     progress(&mut app, &ctx, DELAY + 0.05); // a new window measures itself unseen first
     let shown = progress(&mut app, &ctx, DELAY + 0.1);
     assert!(shown.contains("Tracing the image…") && shown.contains("Cancel") && shown.contains("Continue in Background"), "{shown}");

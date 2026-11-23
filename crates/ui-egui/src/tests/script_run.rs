@@ -373,7 +373,8 @@ fn a_scripts_file_dialog_takes_no_paths_from_automation() {
     let p = secret.to_string_lossy().into_owned();
     for (field, value) in [("paths", json!([p])), ("kind", json!("open")), ("prompt", json!("Nothing")), ("canAlways", json!(true))] {
         let e = set(&app, PICKER_KIND, field, value).unwrap_err();
-        assert!(e.contains(&format!("no field `{field}`")), "{field}: {e}");
+        // The dialog host's refusal of a field the dialog does not have.
+        assert!(e.contains(&format!("unknown field `{field}`")), "{field}: {e}");
     }
     assert_eq!(set(&app, PICKER_KIND, "answer", json!("once")).unwrap_err(), BY_PERSON);
     assert_eq!(set(&app, PICKER_KIND, "answer", json!("always")).unwrap_err(), BY_PERSON);

@@ -546,6 +546,8 @@ fn escape_in_a_dialog_or_a_full_screen_mode_keeps_the_rotation() {
     w.after(0.0, vec![]);
     assert!(w.app.any_dialog_open(), "Rotate View asks for an angle");
     w.escape(0.0);
+    // The dialog's Cancel is held: the window's next pass closes it.
+    w.after(0.0, vec![]);
     assert_eq!((!w.app.any_dialog_open(), w.rotation()), (true, 30.0), "Escape closes the dialog");
     w.escape(0.5);
     assert_eq!(w.rotation(), 0.0, "the next Escape");

@@ -21,9 +21,11 @@ fn context() -> egui::Context {
     ctx
 }
 
+/// One frame of `draw` with `events`: the texts it painted and where. The window is wide enough for the Control bar to
+/// keep its inline X/Y/W/H fields beside the align strip.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Vec<(String, Rect)> {
     let raw = egui::RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1700.0, 900.0))),
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(2200.0, 900.0))),
         time: Some(ctx.input(|i| i.time) + 0.05),
         events,
         ..Default::default()

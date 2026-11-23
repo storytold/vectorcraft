@@ -487,6 +487,10 @@ impl VectorcraftApp {
             None if fresh => self.session.select_tool(id, v).map_err(|e| e.to_string()),
             None => self.session.switch_tool(id, v).map_err(|e| e.to_string()),
         };
+        if before != self.session.tool_id() {
+            // A control gesture cannot resume after another tool has owned the pointer.
+            self.control_rotate_press = None;
+        }
         // A newly chosen Artboard tool starts on the active artboard (the view's).
         if before != "artboard"
             && self.session.tool_id() == "artboard"
