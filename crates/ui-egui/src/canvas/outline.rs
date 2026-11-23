@@ -88,7 +88,7 @@ pub(super) fn node_outline(n: &Node, symbols: &SymbolBoxes) -> BezPath {
 }
 
 /// The width of the key object's outline (Align to Key Object), thicker than the selection's.
-pub(super) const KEY_OUTLINE: f32 = 2.5;
+pub(super) const KEY_OUTLINE: f32 = 4.0;
 
 /// The most points ([`overlay_points`]) the selection's outlines and anchors, and the hover
 /// highlight, are drawn for: an Image Trace of a photo selects hundreds of thousands of paths at
