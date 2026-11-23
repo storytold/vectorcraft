@@ -459,6 +459,26 @@ pub(crate) fn hide_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value,
     Ok(result(app, closed))
 }
 
+/// A tab a panel shortcut hid with its group comes back alone when a command shows it: the
+/// workspace would bring back the tabs closed with it, which only the shortcut restores
+/// ([`restore_hidden_group`]).
+fn show_alone(app: &mut VectorcraftApp, panel: &str) {
+    let ws = &app.ui.dock_workspace;
+    let grouped = app.ui.docking_hidden_groups.iter().any(|group| group.iter().any(|p| p == panel));
+    if !grouped || !ws.hidden().iter().any(|(p, place)| p == panel && !place.closed_with.is_empty()) {
+        return;
+    }
+    let hidden = ws.hidden().iter().map(|(p, place)| {
+        let mut place = place.clone();
+        if p == panel {
+            place.closed_with.clear();
+        }
+        (p.clone(), place)
+    });
+    let next = Workspace::from_parts(ws.layout().clone(), hidden.collect(), ws.floated().to_vec());
+    Arc::make_mut(&mut app.ui.dock_workspace).replace(next);
+}
+
 /// Reopens the tabs hidden together with `panel` and brings it to the front.
 fn restore_hidden_group(app: &mut VectorcraftApp, panel: &str) -> Result<Value, String> {
     let members =
@@ -810,6 +830,9 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, extra
         return run(app, vec![action], reveal);
     }
     let panel = p.panel.clone().ok_or("panel is required")?;
+    if !matches!(id, "window.panel.close" | "window.panel.minimize") {
+        show_alone(app, &panel);
+    }
     let space = command_space(app);
     let ws: &Workspace<String> = &app.ui.dock_workspace;
     let shown = ws.layout().contains(&panel);
@@ -944,10 +967,14 @@ fn float_actions(
         DragUnit::Group(_) => Some(DockCommands::FloatGroup),
         _ => None,
     };
-    if let Some(command) = framework.filter(|_| geometry.iter().all(Option::is_none)) {
-        return command_actions(scene, command, panel).map_err(|e| e.to_string());
-    }
     let window = floating_window(layout, panel);
+    // A panel or group floated out of an icon column opens expanded; the dock floats a dragged icon collapsed.
+    let expand = (framework.is_some() && window.is_none() && layout.opens_in_flyout(panel)).then(|| Action::set_iconic(panel.clone(), false));
+    if let Some(command) = framework.filter(|_| geometry.iter().all(Option::is_none)) {
+        let mut actions = command_actions(scene, command, panel).map_err(|e| e.to_string())?;
+        actions.extend(expand);
+        return Ok(actions);
+    }
     let whole = match unit {
         DragUnit::Panel(_) => window.is_some_and(|w| w.panels().count() == 1),
         DragUnit::Group(_) => window.is_some_and(|w| w.groups().len() == 1),
@@ -957,11 +984,12 @@ fn float_actions(
     let base = kept.unwrap_or_else(|| space.place(space.size_of(unit, None)));
     let min = egui::pos2(p.x.unwrap_or(base.min.x), p.y.unwrap_or(base.min.y));
     let rect = egui::Rect::from_min_size(min, egui::vec2(p.width.unwrap_or(base.width()), p.height.unwrap_or(base.height())));
-    Ok(vec![match (kept, unit) {
+    let float = match (kept, unit) {
         (Some(_), _) => Action::move_floating(panel.clone(), rect),
         (None, DragUnit::Panel(_)) => Action::float(panel.clone(), rect),
         (None, _) => unit_action(unit, Target::float(rect)),
-    }])
+    };
+    Ok(std::iter::once(float).chain(expand).collect())
 }
 
 /// Applies `actions` ([`apply`]) and reveals `reveal`, the panel the command showed: the panels
@@ -1139,6 +1167,10 @@ pub(crate) struct Panels<'a> {
 impl DockPanels<String> for Panels<'_> {
     fn body(&mut self, panel: &String, ui: &mut egui::Ui, _cx: &mut BodyCx<'_>) {
         crate::dock::panel_body(self.app, ui, panel);
+        // A floating panel's OS window runs a pass of its own, whose leftover keys the main window's pass never sees.
+        if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+            crate::shortcuts::palette_window_keys(self.app, ui.ctx());
+        }
     }
 
     fn group_view(&mut self, panels: &[String], _active: usize, ui: &mut egui::Ui, at: GroupAt, cx: &mut BodyCx<'_>) -> Option<f32> {
@@ -1176,6 +1208,18 @@ impl DockPanels<String> for Panels<'_> {
 fn window_viewport(app: &VectorcraftApp, panel: &str) -> Option<egui::ViewportId> {
     let first = floating_window(layout_of(&app.ui), panel)?.panels().next()?;
     app.dock_rt.windows.iter().find(|(p, _)| p == first).map(|(_, viewport)| *viewport)
+}
+
+/// Whether the OS window of a floating panel lies at `pos`, a point of the main window: a palette
+/// window stays in front of the main window.
+pub(crate) fn os_window_at(app: &VectorcraftApp, ctx: &egui::Context, pos: egui::Pos2) -> bool {
+    if app.dock_rt.windows.is_empty() {
+        return false;
+    }
+    let origin = ctx.input(|i| i.raw.viewports.get(&i.raw.viewport_id).and_then(|v| v.inner_rect).map(|r| r.min.to_vec2()));
+    let Some(origin) = origin else { return false };
+    let under = craft::ui::runtime::windows::WindowHost::of(ctx).viewports_at(pos + origin);
+    under.iter().any(|viewport| app.dock_rt.windows.iter().any(|(_, shown)| shown == viewport))
 }
 
 /// Brings the OS window of the floating window holding `panel` forward, as it was last drawn.

@@ -109,6 +109,30 @@ fn sync_artboard(app: &mut VectorcraftApp) {
     }
 }
 
+/// Enter that the tool does not claim, while no gesture runs: it takes what the tool asks of the UI (Rotate, Scale,
+/// Reflect and Shear open their dialog), and with a selection tool it opens the Move dialog, as a double-click on the
+/// tool's button does. Taken only when a dialog opened, so that Enter is not also its OK.
+pub(crate) fn tool_enter(app: &mut VectorcraftApp, mods: Mods, view: ViewInfo) -> bool {
+    if app.session.tool_busy() {
+        return false;
+    }
+    let open = |app: &VectorcraftApp| app.dialogs().map_or(0, |d| d.with(|h| h.open_dialogs().len()));
+    let before = open(app);
+    let r = app.session.tool_key(EngineKey::Enter, mods, view);
+    apply_requests(app, r);
+    let tool = app.session.tool_id().to_owned();
+    if open(app) == before && vectorcraft_tools::catalog::is_selection_tool(&tool) {
+        // Nothing selected: it fails and nothing opens (the menu item is disabled then too).
+        let _ = crate::toolbar::open_options(app, &tool);
+    }
+    let opened = open(app) > before;
+    // The dialog uses the tool a held key chose.
+    if opened {
+        crate::shortcuts::note_tool_use(app);
+    }
+    opened
+}
+
 /// The session as a tool for one pass. The host's trait takes `&self` for the cursor and the claims, which the
 /// session answers through `&mut`, so the app sits in a cell.
 struct SessionTool<'a> {
@@ -126,9 +150,10 @@ impl<'a> SessionTool<'a> {
         Self { app: RefCell::new(app), view, carrying: Cell::new(false), ctx: ui.ctx().clone(), layer: ui.layer_id() }
     }
 
-    /// Whether another window covers the canvas at `pointer`, so art moved there leaves the canvas.
+    /// Whether another window covers the canvas at `pointer`, so art moved there leaves the canvas: a floating
+    /// document's or a floating panel's OS window.
     fn covered(&self, pointer: &ToolPointer) -> bool {
-        self.ctx.layer_id_at(pointer.pos).is_some_and(|l| l != self.layer)
+        self.ctx.layer_id_at(pointer.pos).is_some_and(|l| l != self.layer) || crate::panel_docking::os_window_at(&self.app(), &self.ctx, pointer.pos)
     }
 
     fn app(&self) -> RefMut<'_, &'a mut VectorcraftApp> {
@@ -153,29 +178,9 @@ impl<'a> SessionTool<'a> {
         true
     }
 
-    /// Enter that the tool does not claim, while no gesture runs: it takes what the tool asks of the UI (Rotate,
-    /// Scale, Reflect and Shear open their dialog), and with a selection tool it opens the Move dialog, as a
-    /// double-click on the tool's button does. Taken only when a dialog opened, so that Enter is not also its OK.
+    /// [`tool_enter`] in this canvas's view.
     fn enter(&self, mods: Mods) -> bool {
-        let mut app = self.app();
-        if app.session.tool_busy() {
-            return false;
-        }
-        let open = |app: &VectorcraftApp| app.dialogs().map_or(0, |d| d.with(|h| h.open_dialogs().len()));
-        let before = open(&app);
-        let r = app.session.tool_key(EngineKey::Enter, mods, self.view);
-        apply_requests(&mut app, r);
-        let tool = app.session.tool_id().to_owned();
-        if open(&app) == before && vectorcraft_tools::catalog::is_selection_tool(&tool) {
-            // Nothing selected: it fails and nothing opens (the menu item is disabled then too).
-            let _ = crate::toolbar::open_options(&mut app, &tool);
-        }
-        let opened = open(&app) > before;
-        // The dialog uses the tool a held key chose.
-        if opened {
-            crate::shortcuts::note_tool_use(&mut app);
-        }
-        opened
+        tool_enter(&mut self.app(), mods, self.view)
     }
 
     /// A key the tool does not claim while its gesture runs: arrows and digits still reach it, with no modifier (a
@@ -286,7 +291,8 @@ impl CanvasTool for SessionTool<'_> {
             return;
         }
         // Art carried off the canvas waits where it last moved; back on the canvas the move goes on.
-        let carried = super::drops::carry_out(&mut self.app(), cx, pointer, self.covered(pointer));
+        let covered = self.covered(pointer);
+        let carried = super::drops::carry_out(&mut self.app(), cx, pointer, covered);
         if !carried {
             let ev = pointer_event(PointerKind::Drag, pointer, cx);
             dispatch(&mut self.app(), &ev, self.view);
@@ -306,7 +312,8 @@ impl CanvasTool for SessionTool<'_> {
             return;
         }
         drop(app);
-        let carried = super::drops::carried(&self.app(), cx, pointer, self.covered(pointer));
+        let covered = self.covered(pointer);
+        let carried = super::drops::carried(&self.app(), cx, pointer, covered);
         self.app().canvas.panes.released_from = carried.as_ref().map(|art| (art.document, art.revision));
         if cx.over_drop_target() || carried.is_some() {
             // The art goes to the drop target, or nowhere off the canvas: the move is given up where it started.

@@ -101,7 +101,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let held = !carrying && ui.input(|i| i.pointer.primary_down());
     for event in strip.show(ui).events {
-        if matches!(event, DocumentTabsEvent::Reordered { .. } | DocumentTabsEvent::TornOff { .. }) {
+        if matches!(event, DocumentTabsEvent::Reordered { .. } | DocumentTabsEvent::TornOff { .. } | DocumentTabsEvent::DroppedInto { .. }) {
             ui.data_mut(|d| d.remove::<Win>(pressed));
         }
         match event {
@@ -134,13 +134,19 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
             DocumentTabsEvent::DroppedInto { documents, .. } => {
-                for (index, view) in documents {
+                // A tab of this strip dropped back on it past the tabs is already docked.
+                let floating: Vec<Win> = documents.into_iter().filter(|w| doc_windows::floats(app, *w)).collect();
+                for (index, view) in floating {
                     run_reporting(app, "window.arrange.consolidateAllWindows", json!({"index": index, "view": view}));
                 }
             }
             // This strip has no context menu, activation, OS file drop or empty-room double click.
             _ => {}
         }
+    }
+    // A press that moved past a click's reach is a drag, whether or not it reordered the tabs.
+    if held && ui.input(|i| i.pointer.is_decidedly_dragging()) {
+        ui.data_mut(|d| d.remove::<Win>(pressed));
     }
     if !held && let Some(w) = ui.data_mut(|d| d.remove_temp::<Win>(pressed)) {
         doc_windows::show_window(app, w);

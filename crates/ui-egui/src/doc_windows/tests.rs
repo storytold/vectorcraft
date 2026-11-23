@@ -23,19 +23,54 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>
             s => out.push(s),
         }
     }
+    let out = run_frame(app, ctx, events);
+    let mut shapes = vec![];
+    out.shapes.into_iter().for_each(|c| flat(c.shape, &mut shapes));
+    shapes
+}
+
+/// One headless frame of the canvas panel's body and the floating document windows on a 1200 ×
+/// 800 window. The windows' access nodes, by name, are kept for [`window_of`].
+fn run_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
     let raw = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
         max_texture_side: Some(8192),
         events,
         ..Default::default()
     };
+    ctx.enable_accesskit();
     let out = crate::testing::part_frame(app, ctx, raw, |app, ui| {
         app.canvas_area(ui);
         show(app, ui);
     });
-    let mut shapes = vec![];
-    out.shapes.into_iter().for_each(|c| flat(c.shape, &mut shapes));
-    shapes
+    let nodes = out.platform_output.accesskit_update.as_ref().map_or(&[][..], |u| &u.nodes[..]);
+    let named: Vec<Named> = nodes
+        .iter()
+        .filter(|(_, n)| matches!(n.role(), egui::accesskit::Role::Group | egui::accesskit::Role::TabList))
+        .filter_map(|(_, n)| {
+            let b = n.bounds()?;
+            Some((n.role(), n.label()?.to_owned(), egui::Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))))
+        })
+        .collect();
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(NAMED), std::sync::Arc::new(named)));
+    out
+}
+
+/// A group or tab list of the last frame's accessibility tree: its role, name and bounds.
+type Named = (egui::accesskit::Role, String, egui::Rect);
+
+/// Where [`run_frame`] keeps the last frame's [`Named`] nodes.
+const NAMED: &str = "doc-window-tests-named";
+
+/// The last frame's [`Named`] nodes of `role` whose name `matches`.
+fn named(ctx: &egui::Context, role: egui::accesskit::Role, matches: impl Fn(&str) -> bool) -> Option<egui::Rect> {
+    let nodes: std::sync::Arc<Vec<Named>> = ctx.data(|d| d.get_temp(egui::Id::new(NAMED))).unwrap_or_default();
+    nodes.iter().find(|(r, name, _)| *r == role && matches(name)).map(|(_, _, rect)| *rect)
+}
+
+/// The main window's document tab strip, as the last frame drew it.
+fn strip(ctx: &egui::Context) -> egui::Rect {
+    named(ctx, egui::accesskit::Role::TabList, |name| name == "Documents").expect("the tab strip was drawn")
 }
 
 fn button(pos: Pos2, pressed: bool) -> egui::Event {
@@ -61,11 +96,15 @@ fn canvas_rect(app: &VectorcraftApp) -> egui::Rect {
     app.view().unwrap().rect
 }
 
-/// The whole of document `i`'s window, title bar included.
-fn window_of(app: &VectorcraftApp, _ctx: &egui::Context, i: usize) -> egui::Rect {
-    let uid = app.session.documents()[i].uid;
-    // PLAN: the window's bounds come from its access node (canvas-w27's kit driver); the placed rect stands in until then.
-    app.ui.floating.iter().find(|w| w.uid == uid).unwrap().place
+/// The whole of document `i`'s window, title bar included, as the last frame drew it: the bounds
+/// of its access node, named by its title.
+fn window_of(app: &VectorcraftApp, ctx: &egui::Context, i: usize) -> egui::Rect {
+    let title = app.session.documents()[i].title();
+    // The name is the title, a `*` while it has unsaved changes, then the zoom and color mode.
+    let window = |name: &str| {
+        name.strip_prefix(title.as_str()).map(|rest| rest.trim_start_matches('*')).is_some_and(|rest| rest.is_empty() || rest.starts_with(' '))
+    };
+    named(ctx, egui::accesskit::Role::Group, window).unwrap_or_else(|| panic!("document {i}'s window, {title}, was drawn"))
 }
 
 /// Where the last frame drew the tab of the window `window` at the top of its body (the title text
@@ -488,8 +527,8 @@ fn dragging_a_tab_off_the_strip_floats_its_document_at_the_pointer() {
     let tab = tab_at(&shapes, &title);
     // A short drag, and a drag along the strip short of the next tab's middle, leave the tabs as
     // they are.
-    // The strip is 35 points tall: a drag that stays within its height is no tear-off.
-    drag(&mut app, &ctx, tab, tab + vec2(0.0, 35.0 - tab.y));
+    // A drag that stays within the strip's height is no tear-off.
+    drag(&mut app, &ctx, tab, pos2(tab.x, strip(&ctx).bottom()));
     drag(&mut app, &ctx, tab, tab + vec2(40.0, 0.0));
     assert!(app.ui.floating.is_empty(), "the document stays under its tab");
     assert_eq!(app.session.active_index(), Some(2), "a drag is not a click");
@@ -530,7 +569,7 @@ fn a_window_dragged_by_its_tab_onto_the_strip_goes_back_under_the_tabs() {
     assert!(tab_drawn(&shapes, &app.session.documents()[2].title()), "it has its tab again");
     assert!(app.views[2].fitted, "it fits the canvas under the tabs");
     let canvas = canvas_rect(&app);
-    assert!(canvas.top() >= 35.0 && canvas.width() > 1000.0, "the canvas under the tabs shows it: {canvas:?}");
+    assert!(canvas.top() >= strip(&ctx).bottom() && canvas.width() > 1000.0, "the canvas under the tabs shows it: {canvas:?}");
     // Torn off again, it opens where its tab is dropped, not where its last window was.
     let to = pos2(200.0, 300.0);
     let tab = tab_at(&shapes, &app.session.documents()[2].title());
@@ -694,8 +733,9 @@ fn an_os_windows_tab_docks_on_the_strip() {
     };
     // The tab at the top of the window.
     let tab = pos2(20.0, 15.0);
-    // Released over the main window's tab strip (y 0 to 35 on the screen), it docks.
-    os_drag(&mut app, tab, pos2(20.0, -280.0));
+    // Released over the main window's tab strip, it docks.
+    let over_strip = strip(&ctx).center().y - 300.0;
+    os_drag(&mut app, tab, pos2(20.0, over_strip));
     assert!(app.ui.floating.is_empty(), "the document is back under the tabs");
     assert_eq!(docked(&app), [0, 1]);
     assert_eq!(app.session.active_index(), Some(1));
@@ -861,17 +901,7 @@ fn switching_views_targets_the_artboard_the_view_shows() {
 /// ([`crate::canvas::release_over_panel`]), then the tabs and the canvas or panes, then the floating
 /// document windows. → the cursor.
 fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::CursorIcon {
-    let raw = egui::RawInput {
-        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
-        max_texture_side: Some(8192),
-        events,
-        ..Default::default()
-    };
-    let out = crate::testing::part_frame(app, ctx, raw, |app, ui| {
-        app.canvas_area(ui);
-        show(app, ui);
-    });
-    out.platform_output.cursor_icon
+    run_frame(app, ctx, events).platform_output.cursor_icon
 }
 
 /// Two 400 × 300 pt documents on `ctx`: the first, current under its tab, holds a 50 pt square at
