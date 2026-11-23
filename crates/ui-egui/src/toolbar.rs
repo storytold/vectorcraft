@@ -82,6 +82,9 @@ pub(crate) fn shown(ui: &UiState) -> bool {
 
 /// Opens (back where it was) or closes the Tools panel; a refusal goes to the status bar.
 pub(crate) fn set_shown(app: &mut VectorcraftApp, on: bool) {
+    if !on {
+        strips_follow(app, &Owner::Tools, false);
+    }
     let done = if on {
         crate::panel_docking::reveal_panel(app, TOOLS).map(drop)
     } else {
@@ -90,6 +93,33 @@ pub(crate) fn set_shown(app: &mut VectorcraftApp, on: bool) {
     };
     if let Err(e) = done {
         app.status(e);
+    }
+    if on {
+        strips_follow(app, &Owner::Tools, true);
+    }
+}
+
+/// The strips torn off the rail `owner` hide with it, and those come back when it shows again.
+pub(crate) fn strips_follow(app: &mut VectorcraftApp, owner: &Owner, shown: bool) {
+    let rail = owner.panel();
+    if shown {
+        for strip in app.ui.strips_hidden_with.remove(&rail).unwrap_or_default() {
+            // A strip whose group has gone meanwhile stays closed.
+            app.run("window.panel.dock", json!({ "panel": strip })).ok();
+        }
+        return;
+    }
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    let open: Vec<String> = groups_of(app, owner).iter().filter_map(|g| g.first()).map(|first| strip_id(owner, first)).filter(|id| layout.contains(id)).collect();
+    if open.is_empty() {
+        return;
+    }
+    let ctx = app.ui_ctx.clone();
+    match crate::panel_docking::apply(app, ctx.as_ref(), open.iter().cloned().map(Action::close).collect()) {
+        Ok(_) => {
+            app.ui.strips_hidden_with.insert(rail, open);
+        }
+        Err(e) => app.status(e),
     }
 }
 
@@ -345,9 +375,16 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     if editing(app, &owner) {
         rail = rail.editing();
     }
+    let bar = match &owner {
+        Owner::Toolbar(id) => Some(*id),
+        _ => None,
+    };
+    let measured = matches!(at, GroupAt::Measure(_));
     let footer = |ui: &mut Ui, footer: RailFooter| {
         if tools_panel {
             bottom_controls(app, ui, footer);
+        } else if let Some(id) = bar {
+            crate::custom_toolbars::add_menu(app, ui, id, footer, measured);
         }
     };
     let rect = match at {

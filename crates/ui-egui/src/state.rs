@@ -426,6 +426,10 @@ pub struct UiState {
     pub dock_workspace: std::sync::Arc<craft::behavior::dock::Workspace<String>>,
     /// The tool each slot of the Tools panel showed last.
     pub tools_last_used: craft::ui::rails::LastUsed<String>,
+    /// By a tool rail's panel: the strips torn off it that closed when it was hidden, which come
+    /// back when it shows again ([`crate::toolbar::strips_follow`]).
+    #[serde(default)]
+    pub strips_hidden_with: std::collections::BTreeMap<String, Vec<String>>,
     /// The saved workspaces, the current one and the changes made in each since it was saved.
     pub workspaces: crate::workspaces::Workspaces,
     /// The panel fields of files from before the shared dock: read once to build
@@ -1341,6 +1345,7 @@ impl Default for UiState {
             brightness: Brightness::MediumDark,
             dock_workspace: std::sync::Arc::new(crate::panel_docking::default_workspace(&[])),
             tools_last_used: Default::default(),
+            strips_hidden_with: Default::default(),
             workspaces: Default::default(),
             legacy: LegacyDock::default(),
             open_panel: None,

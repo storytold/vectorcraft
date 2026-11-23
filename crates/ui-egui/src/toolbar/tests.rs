@@ -63,14 +63,20 @@ fn named_rect(nodes: &[Node], label: &str) -> egui::Rect {
     nodes.iter().find(|n| n.label() == Some(label)).and_then(bounds).unwrap_or_else(|| panic!("{label} is drawn"))
 }
 
-/// Where the button of `tool` is drawn, found by its tool tip in the window of `ctx`.
-fn tool_rect(ctx: &egui::Context, nodes: &[Node], tool: &str) -> egui::Rect {
-    named_rect(nodes, &tool_info(tool).map(|t| tip(ctx, t)).unwrap_or_default())
+/// The name of `tool`'s button: the rail names a tool by its label (its shortcut is in its tip).
+fn button_name(tool: &ToolInfo) -> String {
+    tl!(tool.label).to_string()
+}
+
+/// Where the button of `tool` is drawn, found by its name among the rail's tool buttons.
+fn tool_rect(nodes: &[Node], tool: &str) -> egui::Rect {
+    let name = tool_info(tool).map(button_name).unwrap_or_default();
+    nodes.iter().find(|n| n.toggled().is_some() && n.label() == Some(name.as_str())).and_then(bounds).unwrap_or_else(|| panic!("{name} is drawn"))
 }
 
 /// The rects of the Tools rail's tool buttons, top to bottom then left to right.
-fn cells(app: &VectorcraftApp, ctx: &egui::Context, nodes: &[Node]) -> Vec<egui::Rect> {
-    let names: Vec<String> = slots(app).iter().flat_map(|(_, tools)| tools.iter()).filter_map(|id| tool_info(id).map(|t| tip(ctx, t))).collect();
+fn cells(app: &VectorcraftApp, nodes: &[Node]) -> Vec<egui::Rect> {
+    let names: Vec<String> = slots(app).iter().flat_map(|(_, tools)| tools.iter()).filter_map(|id| tool_info(id).map(button_name)).collect();
     let mut found: Vec<egui::Rect> = nodes
         .iter()
         .filter(|n| n.role() == Role::Button && n.toggled().is_some() && n.label().is_some_and(|l| names.iter().any(|name| name == l)))
@@ -194,7 +200,7 @@ fn clicking_the_active_blend_tool_button_finishes_the_blend() {
     }
     app.select_tool("blend");
     let ctx = reader();
-    let at = tool_rect(&ctx, &settled(&mut app, &ctx, 0.0, 2000.0), "blend").center();
+    let at = tool_rect(&settled(&mut app, &ctx, 0.0, 2000.0), "blend").center();
     let down = |x, y| vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, x, y);
     let view = app.view_info();
     app.session.pointer(&down(20.0, 20.0), view).unwrap();
@@ -304,7 +310,7 @@ fn the_columns_command_toggles_or_sets_the_toolbar_columns() {
     // 700 pt: too short for the single column, which scrolls instead of turning into two.
     let laid_out = |app: &mut VectorcraftApp, t0: f64| {
         let nodes = settled(app, &ctx, t0, 700.0);
-        cells(app, &ctx, &nodes)
+        cells(app, &nodes)
     };
     assert_eq!(app.run("window.toolbarColumns", json!({})).unwrap(), json!(true));
     let two = laid_out(&mut app, 0.0);
@@ -334,13 +340,13 @@ fn window_float_tools_floats_and_puts_back_a_group() {
     assert_eq!(app.run("window.floatTools", json!({"tool": "star"})).unwrap(), json!(true));
     // The Basic toolbar's Shapes group, named by its first tool.
     let rect = strip_rect(&app, "rectangle").expect("the Shapes strip floats");
-    assert!(is_floating(&app, None, "star") && check(&app) == Some(true));
+    assert!(is_floating(&app, None, "rectangle") && check(&app) == Some(true));
     // Already floating: stays where it is.
     assert_eq!(app.run("window.floatTools", json!({"tool": "rectangle", "floating": true})).unwrap(), json!(true));
     assert_eq!(strip_rect(&app, "rectangle"), Some(rect));
     // Omitted toggles it back.
     assert_eq!(app.run("window.floatTools", json!({"tool": "star"})).unwrap(), json!(false));
-    assert!(!is_floating(&app, None, "star") && check(&app) == Some(false));
+    assert!(!is_floating(&app, None, "rectangle") && check(&app) == Some(false));
     assert_eq!(app.run("window.floatTools", json!({"tool": "pen", "floating": false})).unwrap(), json!(false));
     // A tool alone in its slot, an unknown tool, a missing tool, a bad flag: errors that change nothing.
     assert!(app.run("window.floatTools", json!({"tool": "polygon"})).is_err());

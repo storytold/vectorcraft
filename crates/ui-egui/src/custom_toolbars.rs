@@ -332,7 +332,9 @@ fn set_shown(app: &mut VectorcraftApp, name: &str, show: Option<bool>) -> Result
     if show && !shown {
         // A hidden panel comes back where it was.
         app.run("window.panel.dock", json!({ "panel": panel }))?;
+        crate::toolbar::strips_follow(app, &Owner::Toolbar(id), true);
     } else if !show {
+        crate::toolbar::strips_follow(app, &Owner::Toolbar(id), false);
         close_panels(app, vec![panel]);
         close_drawer(&mut app.ui, &name, None);
     }
@@ -522,11 +524,16 @@ pub(crate) fn shown_tool(bar: &CustomToolbar, active: &'static str, tools: &[&'s
 
 /// Add Tool…, in the footer of the toolbar with id `id`: the + button opens a menu where, under Remove
 /// Tool, a click takes one of the toolbar's tools out; then every tool under the All Tools drawer's
-/// headings, where a click adds one at the end (dimmed: in the toolbar already).
-pub(crate) fn add_menu(app: &VectorcraftApp, ui: &mut egui::Ui, id: u32, _footer: RailFooter) {
+/// headings, where a click adds one at the end (dimmed: in the toolbar already). `measured`: the rail
+/// measures its footer, which draws the button alone.
+pub(crate) fn add_menu(app: &VectorcraftApp, ui: &mut egui::Ui, id: u32, _footer: RailFooter, measured: bool) {
     let Some(bar) = app.ui.custom_toolbars.iter().find(|b| b.id == id) else { return };
     let held: Vec<&'static str> = bar.slots.iter().flatten().filter_map(|id| tool_info(id).map(|t| t.id)).collect();
     let plus = IconButton::new(IconId::new("plus")).label(tl!("Add Tool…")).popup(PopupKind::Menu).show(ui).response;
+    // The rail measures its footer too: the menu opens from the button the rail shows.
+    if measured || craft::ui::runtime::measure::active(ui.ctx()) {
+        return;
+    }
     let command = |verb: &str, tool: &str| CommandRef::with_params(verb, json!({ "tool": tool, "toolbar": bar.name }));
     Menu::new(tl!("Add Tool…")).opened_by(&plus, Trigger::Click).show(ui, |ui, _| {
         if !held.is_empty() {

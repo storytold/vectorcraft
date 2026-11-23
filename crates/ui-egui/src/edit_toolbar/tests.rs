@@ -71,9 +71,9 @@ fn inside(nodes: &Nodes, name: &str, within: Rect) -> Rect {
     named(nodes, name).into_iter().find(|r| within.contains(r.center())).unwrap_or_else(|| panic!("no `{name}` inside {within:?}"))
 }
 
-/// The toolbar button of `tool` in the window of `ctx`: named after its tip.
-fn button_name(ctx: &egui::Context, tool: &str) -> String {
-    crate::toolbar::tip(ctx, tool_info(tool).unwrap())
+/// The toolbar button of `tool`: the rail names a tool by its label (its shortcut is in its tip).
+fn button_name(tool: &str) -> String {
+    tl!(tool_info(tool).unwrap().label).to_string()
 }
 
 fn button(pos: Pos2, pressed: bool) -> Event {
@@ -288,22 +288,22 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
     // Onto the lower third of its tool: a slot of its own after it.
     let nodes = settle(&mut app, &ctx, 4.0);
-    let tool = inside(&nodes, &button_name(&ctx, "ellipse"), one(&nodes, "Mine"));
+    let tool = inside(&nodes, &button_name("ellipse"), one(&nodes, "Mine"));
     drag(&mut app, &ctx, 5.0, one(&nodes, "Artboard Tool").center(), pos2(tool.center().x, tool.top() + 0.85 * tool.height()));
     assert_eq!(held(&app, "Mine"), [["ellipse"], ["artboard"]]);
     // Onto the middle of the first tool: into its group.
     let nodes = settle(&mut app, &ctx, 6.0);
-    let tool = inside(&nodes, &button_name(&ctx, "ellipse"), one(&nodes, "Mine"));
+    let tool = inside(&nodes, &button_name("ellipse"), one(&nodes, "Mine"));
     drag(&mut app, &ctx, 7.0, one(&nodes, "Slice Tool").center(), tool.center());
     assert_eq!(held(&app, "Mine"), [vec!["ellipse", "slice"], vec!["artboard"]]);
     // A click on a tool picks it; the drawer stays open.
     let nodes = settle(&mut app, &ctx, 8.0);
-    let artboard = inside(&nodes, &button_name(&ctx, "artboard"), one(&nodes, "Mine"));
+    let artboard = inside(&nodes, &button_name("artboard"), one(&nodes, "Mine"));
     let nodes = click(&mut app, &ctx, 9.0, artboard.center());
     assert_eq!(app.session.tool_id(), "artboard");
     assert!(app.ui.tools_drawer);
     // Dragged from the toolbar into the drawer, a tool leaves it.
-    let artboard = inside(&nodes, &button_name(&ctx, "artboard"), one(&nodes, "Mine"));
+    let artboard = inside(&nodes, &button_name("artboard"), one(&nodes, "Mine"));
     drag(&mut app, &ctx, 10.0, artboard.center(), one(&nodes, "Ellipse Tool").center());
     assert_eq!(held(&app, "Mine"), [["ellipse", "slice"]]);
     assert_eq!(slots(&app), shipped, "the Tools panel's toolbar is untouched");
