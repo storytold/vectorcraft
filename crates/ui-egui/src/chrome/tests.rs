@@ -1141,10 +1141,12 @@ fn isolation_shown(app: crate::VectorcraftApp) -> Shown {
     })
 }
 
-/// A point on the isolation bar's own surface, right of every control on it.
+/// A point on the isolation bar's own surface: right of its crumbs, at the end of the path, which fills the bar up
+/// to the pattern editing buttons at its right.
 fn isolation_bar_surface(bar: &mut Shown) -> egui::Pos2 {
     let back = bar.named("Back");
-    egui::pos2(1200.0 - 40.0, back.center().y)
+    let path = bar.named("Isolation path");
+    egui::pos2(path.rect.right() - 8.0, back.center().y)
 }
 
 /// #4468: In nested isolation, clicking the back button steps up one level in the hierarchy,
@@ -2235,7 +2237,7 @@ fn the_control_bar_keeps_its_label_and_menu_with_every_group_off() {
     let mut bar = control_shown(app);
     bar.room(egui::vec2(1400.0, 900.0)).settle();
     assert!(bar.shows(&label), "the label stays: {:?}", bar.names());
-    for s in ["Snapping", "Stroke:", "Opacity:", "Style:", "Transform", "X:"] {
+    for s in ["Snapping", "Stroke:", "Opacity:", "Style:", "Transform", BAR_FIELDS[0]] {
         assert!(!bar.shows(s), "{s} is off");
     }
     open_control_bar_menu(&mut bar);
@@ -2326,20 +2328,20 @@ fn the_artboard_tool_s_control_bar_follows_its_two_groups() {
     let freed = (40..=240).map(|w| w as f32 * 10.0).any(|w| {
         bar.room(egui::vec2(w, 300.0));
         options(&mut bar, true);
-        let on = bar.settle().shows("X:");
+        let on = bar.settle().shows(BAR_FIELDS[0]);
         options(&mut bar, false);
-        let off = bar.settle().shows("X:");
+        let off = bar.settle().shows(BAR_FIELDS[0]);
         !on && off
     });
     assert!(freed, "with Artboard Options off the fields find room in a window too narrow for them otherwise");
     options(&mut bar, false);
     bar.room(egui::vec2(2400.0, 300.0)).settle();
     assert!(!bar.shows("Name:") && !bar.shows("Move Artwork with Artboard"), "{:?}", bar.names());
-    assert!(bar.shows("Artboard") && bar.shows("Transform") && bar.shows("X:"), "{:?}", bar.names());
+    assert!(bar.shows("Artboard") && bar.shows("Transform") && bar.shows(BAR_FIELDS[0]), "{:?}", bar.names());
     options(&mut bar, true);
     bar.app().run("window.control.options", json!({"group": "transform", "visible": false})).unwrap();
     bar.settle();
-    assert!(!bar.shows("Transform") && !bar.shows("X:"), "{:?}", bar.names());
+    assert!(!bar.shows("Transform") && !bar.shows(BAR_FIELDS[0]), "{:?}", bar.names());
     assert!(bar.shows("Name:") && bar.shows("Move Artwork with Artboard"), "{:?}", bar.names());
 }
 
@@ -2423,16 +2425,20 @@ fn the_control_bar_leaves_members_out_in_its_priority_order() {
     groups(&mut bar, &ahead, true);
 
     select(&mut bar, json!([rect]));
-    let seen = control_bar_widths(&mut bar, &["Horizontal Align Left", "X:", "Y:", "W:", "H:"]);
+    let [x, y, w, h] = BAR_FIELDS;
+    let seen = control_bar_widths(&mut bar, &["Horizontal Align Left", x, y, w, h]);
     assert!(seen.iter().all(|s| s[2..].iter().all(|f| *f == s[1])), "the four fields show or go together");
     assert!(seen.iter().any(|s| s[0] && s[1]), "a wide bar shows the fields and the Align buttons");
     assert!(seen.iter().any(|s| s[0] && !s[1]), "some width shows the Align buttons without the fields");
 }
 
-/// The caption `name` of a field on the bar: the label, not the field it names.
-fn caption(bar: &Shown, name: &str) -> Option<Target> {
+/// The names of the bar's X, Y, W and H fields, in their order.
+const BAR_FIELDS: [&str; 4] = ["X position", "Y position", "Width", "Height"];
+
+/// The caption of the bar's field named `field`: the link that names it, not the field.
+fn caption(bar: &Shown, field: &str) -> Option<Target> {
     let tree = bar.tree();
-    bar.fixture.by_role(Role::LABEL).into_iter().find(|t| tree.name_of(t.node) == Some(name) || tree.value_of(t.node) == Some(name))
+    bar.fixture.by_role(Role::LINK).into_iter().find(|t| tree.name_of(t.node) == Some(field))
 }
 
 /// The Control bar's labels that open a panel: a click on the Linked File or Embedded label shows the Links panel
@@ -2490,7 +2496,7 @@ fn label_links_open_their_panels() {
     // The Transform panel's Rotate field is not on the bar itself.
     let open = |bar: &Shown| bar.find("Rotate").is_some();
     let before = state(&bar);
-    for name in ["X:", "Y:", "W:", "H:"] {
+    for name in BAR_FIELDS {
         bar.settle();
         assert!(!open(&bar), "{name}: the Transform panel is closed at first");
         let at = caption(&bar, name).unwrap_or_else(|| panic!("no {name} caption: {:?}", bar.names()));
@@ -2704,8 +2710,8 @@ fn the_control_bar_shows_the_global_edit_options() {
     assert_eq!(ge, Some(2), "Start Global Edit takes the two rectangles of the same size");
     let button = bar.named("Global Edit Options");
     assert!(bar.tree().is_disabled_key(button.node), "the options are off while Global Edit is on");
-    assert!(!results(&bar), "Global Edit starting closes the open options");
-    assert!(!results(bar.settle()));
+    // The closed popover's body still runs through its exit fade, so the options are looked for once it ends.
+    assert!(!results(bar.advance(1.0).settle()), "Global Edit starting closes the open options");
     bar.app().run("select.globalEdit", json!({})).unwrap();
     assert!(!results(bar.settle()), "the options stay closed once Global Edit stops");
 }
