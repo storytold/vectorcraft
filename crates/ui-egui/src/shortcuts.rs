@@ -203,6 +203,19 @@ fn menu_target(c: &CommandRef) -> Option<(String, serde_json::Value)> {
     c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target(&c.id)).flatten()
 }
 
+/// What a click on the menu bar's or the canvas menu's row `c` runs ([`crate::menus::click_target`]): a "…" row with
+/// params opens its dialog on them (Clean Up…). `None` for a command that no menu fired.
+fn clicked_row(app: &VectorcraftApp, source: FireSource, c: &CommandRef) -> Option<(String, serde_json::Value)> {
+    if source != FireSource::Menu || c.params.as_object().is_none_or(serde_json::Map::is_empty) {
+        return None;
+    }
+    let row = crate::menus::menu_entries(app)
+        .into_iter()
+        .chain(crate::menus::context_entries(app))
+        .find(|e| e.command.as_deref() == Some(c.id.as_str()) && e.params == c.params)?;
+    Some(crate::menus::click_target(&row.label, &c.id, &c.params))
+}
+
 /// Params used when a shortcut invokes its command. The named panel function keys retain their
 /// toggle action when their bindings are reassigned.
 fn shortcut_params(c: &CommandRef) -> serde_json::Value {
@@ -236,16 +249,3 @@ fn shortcut_params(c: &CommandRef) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests;
-/// What a click on the menu bar's or the canvas menu's row `c` runs ([`crate::menus::click_target`]): a "…" row with
-/// params opens its dialog on them (Clean Up…). `None` for a command that no menu fired.
-fn clicked_row(app: &VectorcraftApp, source: FireSource, c: &CommandRef) -> Option<(String, serde_json::Value)> {
-    if source != FireSource::Menu || c.params.as_object().is_none_or(serde_json::Map::is_empty) {
-        return None;
-    }
-    let row = crate::menus::menu_entries(app)
-        .into_iter()
-        .chain(crate::menus::context_entries(app))
-        .find(|e| e.command.as_deref() == Some(c.id.as_str()) && e.params == c.params)?;
-    Some(crate::menus::click_target(&row.label, &c.id, &c.params))
-}
-

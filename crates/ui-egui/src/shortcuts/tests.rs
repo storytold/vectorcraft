@@ -115,7 +115,6 @@ fn zoom(app: &mut VectorcraftApp) -> f64 {
     app.view_mut().unwrap().zoom
 }
 
-/// The key of the window's top dialog.
 /// The key of the window's top dialog, else the command of what opened in its place: the framework's Find and
 /// Replace dialog, which has no key, or the Smooth or Simplify slider, which the app shows over the canvas.
 fn dialog_kind(app: &VectorcraftApp) -> Option<String> {
