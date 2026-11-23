@@ -43,7 +43,9 @@
 //!   as a selected anchor point, and not the endpoints of selected segments; a path in a selected
 //!   group is not selected as a whole. Direction handles are not selected on their own, so
 //!   `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error that says they are not
-//!   available yet. A clipping path cannot be made a guide.
+//!   available yet. A clipping path cannot be made a guide. Assigning `guides` on a path inside a
+//!   compound path throws an error that says it is not available yet, on a path that cannot be
+//!   edited or selected throws `Cannot edit`, and while guides are locked throws an error.
 //! - The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
 //!   `changeStrokePattern` given as different values throw an error; gradients move with the art,
 //!   so `changeFillGradients` false throws an error that says it is not available yet.
@@ -590,8 +592,13 @@ fn path_guides(h: &super::Host, a: &[Data]) -> Answer {
     read_path(h, item, |_, n, _| Data::Bool(matches!(n.kind, NodeKind::Path { guide: true, .. })))
 }
 
+/// The error of assigning `guides` on a path inside a compound path.
+pub const COMPOUND_MEMBER_GUIDES: &str = "Changing guides on a path inside a compound path is not available yet";
+
 /// `guides = true` makes the path a guide with `view.guides.make`, and `false` makes it a path again
-/// with `view.guides.release`; the selection stays as it was. A clipping path cannot be a guide.
+/// with `view.guides.release`; the selection stays as it was. A clipping path cannot be a guide, a
+/// path inside a compound path throws [`COMPOUND_MEMBER_GUIDES`], and while guides are locked both
+/// values throw an error.
 fn path_set_guides(h: &super::Host, a: &[Data]) -> Answer {
     let on = boolean(arg(a, 1), "guides")?;
     let item = this_path(h, a)?;
@@ -602,8 +609,19 @@ fn path_set_guides(h: &super::Host, a: &[Data]) -> Answer {
     if now == on {
         return Ok(Data::Undefined);
     }
-    if !with_doc(h, item.doc, |_, st| editable(&st.doc, item.id)) {
+    let (member, editable, selectable) = with_doc(h, item.doc, |_, st| {
+        let member = st.doc.parent_of(item.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+        let selectable = crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id);
+        (member, editable(&st.doc, item.id), selectable)
+    });
+    if member {
+        return Err(HostError::Error(COMPOUND_MEMBER_GUIDES.into()));
+    }
+    if !editable || (on && !selectable) {
         return Err(cannot_edit(item.id));
+    }
+    if h.session.borrow().menu.guides_locked {
+        return Err(HostError::Error(format!("Cannot change guides on PathItem {}: guides are locked", item.id.0)));
     }
     if !on {
         edit_path(h, item, "view.guides.release", json!({}))?;

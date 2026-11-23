@@ -2720,7 +2720,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `PathPointSelection.NOSELECTION` otherwise; assigning `ANCHORPOINT` adds the point to the direct-selected anchors and
   `NOSELECTION` removes it, through `select.anchorsMany`, with the other selected objects and anchors kept.
   `selectedPathPoints` lists the points that read `ANCHORPOINT`, in the order of `pathPoints`. `new RGBColor()` (0 to
-  255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100 white, as https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
+  255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100 white, as
+  https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/NoColor/) make plain color objects; assigning a `NoColor` removes
   the fill or stroke. The enumerations `PointType`, `PathPointSelection`, `StrokeCap`, `StrokeJoin`, `PolarityValues`
   and `Transformation` hold strings such as `"StrokeCap.ROUNDENDCAP"`.
@@ -2737,7 +2738,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   when a group that holds it is. Direction handles are not selected on their own, so assigning `LEFTDIRECTION`,
   `RIGHTDIRECTION` or `LEFTRIGHTPOINT` to `selected` throws an error that says it is not available yet, and selecting
   a point of a path that cannot be selected throws `Cannot select`. A clipping path cannot be made a guide, and
-  `guides = true` on one throws an error. Color components left out
+  `guides = true` on one throws an error; assigning `guides` on a path inside a compound path throws an error that says
+  it is not available yet, on a path that is hidden, locked or cannot be selected throws `Cannot edit`, and while
+  guides are locked throws an error for either value. Color components left out
   count as 0, `new
   cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
   range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest

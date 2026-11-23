@@ -939,6 +939,15 @@ fn a_path_selected_as_a_whole_has_every_point_selected() {
 }
 
 #[test]
+fn a_path_in_a_selected_group_is_not_selected_as_a_whole() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let out = log(&mut s, "var ps = app.activeDocument.pathItems; vc.log([ps[0].selectedPathPoints.length, ps[1].selectedPathPoints.length]);");
+    assert_eq!(out, vec![json!([0, 0])]);
+}
+
+#[test]
 fn path_point_selected_refuses_handles_bad_values_and_locked_paths() {
     let (mut s, a, _) = doc();
     let e = failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = PathPointSelection.LEFTDIRECTION;");
@@ -970,12 +979,58 @@ fn assigning_guides_makes_and_releases_a_guide() {
     log(&mut s, "app.activeDocument.pathItems[0].guides = false;");
     assert!(!is_guide(&s, a));
     assert_eq!(s.active().unwrap().selection.objects, vec![b]);
-    let e = failure(&mut s, "app.activeDocument.pathItems[0].guides = 1;");
-    assert!(e.contains("guides"), "{e}");
+    let out = log(&mut s, "try { app.activeDocument.pathItems[0].guides = 1; } catch (e) { vc.log(e.name); }");
+    assert_eq!(out, vec![json!("TypeError")]);
     assert!(!is_guide(&s, a));
-    // A path in a group becomes a guide on its own.
-    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    // A path in a group becomes a guide on its own; the other path in the group stays a path.
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
     s.execute("object.group", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
     log(&mut s, "app.activeDocument.pathItems[1].guides = true;");
-    assert!(is_guide(&s, b) && !is_guide(&s, a));
+    assert!(is_guide(&s, a) != is_guide(&s, b), "only the assigned path in the group is a guide");
+}
+
+#[test]
+fn assigning_guides_refuses_compound_members_clipping_paths_and_paths_that_cannot_be_edited() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let before = art(&s);
+    let e = failure(&mut s, "app.activeDocument.pathItems[0].guides = true;");
+    assert!(e.contains("compound path"), "{e}");
+    assert_eq!((art(&s), is_guide(&s, a), is_guide(&s, b)), (before, false, false), "no member of the compound path changed");
+
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let before = art(&s);
+    let e = failure(&mut s, "var ps = app.activeDocument.pathItems; for (var i = 0; i < ps.length; i++) if (ps[i].clipping) ps[i].guides = true;");
+    assert!(e.contains("clipping path"), "{e}");
+    assert_eq!(art(&s), before);
+
+    for cmd in ["object.lock", "object.hide"] {
+        let (mut s, a, _) = doc();
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        s.execute(cmd, &json!({})).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        let e = failure(&mut s, "app.activeDocument.pathItems[0].guides = true;");
+        assert!(e.contains("Cannot edit"), "{cmd}: {e}");
+        assert!(!is_guide(&s, a), "{cmd}");
+    }
+}
+
+#[test]
+fn assigning_guides_throws_in_both_directions_while_guides_are_locked() {
+    let (mut s, a, b) = doc();
+    log(&mut s, "app.activeDocument.pathItems[0].guides = true;");
+    assert!(is_guide(&s, a));
+    s.set_guides_locked(true);
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.activeDocument.pathItems[0].guides = false;");
+    assert!(e.contains("guides are locked"), "{e}");
+    let e = failure(&mut s, "app.activeDocument.pathItems[1].guides = true;");
+    assert!(e.contains("guides are locked"), "{e}");
+    assert_eq!((is_guide(&s, a), is_guide(&s, b), undo_steps(&s)), (true, false, steps));
 }
