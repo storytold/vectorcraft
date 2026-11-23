@@ -939,12 +939,39 @@ fn a_path_selected_as_a_whole_has_every_point_selected() {
 }
 
 #[test]
-fn a_path_in_a_selected_group_is_not_selected_as_a_whole() {
-    let (mut s, a, b) = doc();
-    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
-    s.execute("object.group", &json!({})).unwrap();
-    let out = log(&mut s, "var ps = app.activeDocument.pathItems; vc.log([ps[0].selectedPathPoints.length, ps[1].selectedPathPoints.length]);");
-    assert_eq!(out, vec![json!([0, 0])]);
+fn a_path_in_a_selected_group_or_compound_path_is_selected_as_a_whole() {
+    for make in ["object.group", "object.compoundPath.make"] {
+        let (mut s, a, b) = doc();
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute(make, &json!({})).unwrap();
+        let sel = format!("{:?}", s.active().unwrap().selection);
+        let steps = undo_steps(&s);
+        let out = log(
+            &mut s,
+            "var ps = app.activeDocument.pathItems; vc.log([ps[0].selectedPathPoints.length, ps[1].selectedPathPoints.length]);\
+             vc.log(ps[0].pathPoints[2].selected); ps[0].pathPoints[2].selected = PathPointSelection.ANCHORPOINT;\
+             try { ps[0].pathPoints[2].selected = PathPointSelection.NOSELECTION; } catch (e) { vc.log(e.message); }",
+        );
+        assert_eq!(out[..2], [json!([4, 4]), json!("PathPointSelection.ANCHORPOINT")], "{make}");
+        assert!(out[2].as_str().is_some_and(|m| m.contains("not available yet")), "{make}: {out:?}");
+        assert_eq!(format!("{:?}", s.active().unwrap().selection), sel, "{make}: the selection stays as it was");
+        assert_eq!(undo_steps(&s), steps, "{make}");
+    }
+}
+
+#[test]
+fn reading_selected_while_moving_points_writes_the_path_once() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = run(
+        &mut s,
+        "var pp = app.activeDocument.pathItems[0].pathPoints;\
+         for (var i = 0; i < pp.length; i++) if (pp[i].selected == PathPointSelection.ANCHORPOINT) pp[i].anchor = [pp[i].anchor[0] + 1, pp[i].anchor[1]];",
+    )
+    .unwrap();
+    let calls: Vec<u64> =
+        r["slowestCommands"].as_array().unwrap().iter().filter(|c| c["id"] == "path.setAnchors").map(|c| c["calls"].as_u64().unwrap()).collect();
+    assert_eq!(calls, vec![1], "{r}");
 }
 
 #[test]
@@ -958,6 +985,60 @@ fn path_point_selected_refuses_handles_bad_values_and_locked_paths() {
     let e = failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = PathPointSelection.ANCHORPOINT;");
     assert!(e.contains("Cannot select"), "{e}");
     assert!(s.active().unwrap().selection.is_empty());
+}
+
+/// The ways an editable path cannot be selected: on a locked artboard, and outside the isolated
+/// object.
+const UNSELECTABLE: [&str; 2] = ["locked artboard", "isolation"];
+
+/// Makes the paths of [`doc`] other than `b` editable but not selectable, as `case` names.
+fn lock_out(s: &mut Session, case: &str, b: NodeId) {
+    if case == "isolation" {
+        s.execute("object.isolate", &json!({"id": b.0})).unwrap();
+    } else {
+        s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    }
+}
+
+#[test]
+fn path_point_selected_refuses_paths_on_locked_artboards_and_outside_isolation() {
+    for case in UNSELECTABLE {
+        let (mut s, a, b) = doc();
+        lock_out(&mut s, case, b);
+        let e = failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = PathPointSelection.ANCHORPOINT;");
+        assert!(e.contains("Cannot select"), "{case}: {e}");
+        assert!(!s.active().unwrap().selection.contains(a), "{case}");
+    }
+}
+
+#[test]
+fn selecting_a_point_of_a_guide_throws_while_guides_are_locked() {
+    let (mut s, a, _) = doc();
+    log(&mut s, "app.activeDocument.pathItems[0].guides = true;");
+    s.set_guides_locked(true);
+    let e = failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].selected = PathPointSelection.ANCHORPOINT;");
+    assert!(e.contains("guides are locked"), "{e}");
+    assert!(!s.active().unwrap().selection.contains(a));
+}
+
+#[test]
+fn assigning_guides_refuses_paths_that_cannot_be_selected() {
+    for case in UNSELECTABLE {
+        let (mut s, a, b) = doc();
+        lock_out(&mut s, case, b);
+        let e = failure(&mut s, "app.activeDocument.pathItems[0].guides = true;");
+        assert!(e.contains("Cannot edit"), "{case}: {e}");
+        assert!(!is_guide(&s, a), "{case}");
+    }
+    // A guide is on no locked artboard, so only isolation keeps a guide from being released.
+    let (mut s, a, b) = doc();
+    log(&mut s, "app.activeDocument.pathItems[0].guides = true;");
+    assert!(is_guide(&s, a));
+    lock_out(&mut s, "isolation", b);
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.activeDocument.pathItems[0].guides = false;");
+    assert!(e.contains("Cannot edit"), "{e}");
+    assert_eq!((is_guide(&s, a), undo_steps(&s)), (true, steps), "the guide stays a guide");
 }
 
 fn is_guide(s: &Session, id: NodeId) -> bool {
@@ -986,8 +1067,11 @@ fn assigning_guides_makes_and_releases_a_guide() {
     s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
     s.execute("object.group", &json!({})).unwrap();
     s.execute("select.none", &json!({})).unwrap();
-    log(&mut s, "app.activeDocument.pathItems[1].guides = true;");
-    assert!(is_guide(&s, a) != is_guide(&s, b), "only the assigned path in the group is a guide");
+    log(&mut s, "var p = app.activeDocument.pathItems[1]; p.name = 'assigned'; p.guides = true;");
+    let (assigned, other) = if node(&s, a).name.as_deref() == Some("assigned") { (a, b) } else { (b, a) };
+    assert_eq!(node(&s, assigned).name.as_deref(), Some("assigned"));
+    assert_eq!((is_guide(&s, assigned), is_guide(&s, other)), (true, false), "only the assigned path in the group is a guide");
+    assert!(s.active().unwrap().selection.is_empty(), "the selection stays as it was");
 }
 
 #[test]

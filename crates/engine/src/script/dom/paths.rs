@@ -41,11 +41,13 @@
 //!   `resize(100, 100)`) checks its arguments and runs no command, on a path with no points too.
 //! - `PathPoint.selected` and `selectedPathPoints` count every point of a path selected as a whole
 //!   as a selected anchor point, and not the endpoints of selected segments; a path in a selected
-//!   group is not selected as a whole. Direction handles are not selected on their own, so
-//!   `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error that says they are not
-//!   available yet. A clipping path cannot be made a guide. Assigning `guides` on a path inside a
-//!   compound path throws an error that says it is not available yet, on a path that cannot be
-//!   edited or selected throws `Cannot edit`, and while guides are locked throws an error.
+//!   group or compound path is selected as a whole. Direction handles are not selected on their
+//!   own, so `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error that says they
+//!   are not available yet, and so does `NOSELECTION` on a point of a path in a selected group or
+//!   compound path. Selecting a point of a guide while guides are locked throws an error. A
+//!   clipping path cannot be made a guide. Assigning `guides` on a path inside a compound path
+//!   throws an error that says it is not available yet, on a path that cannot be edited or
+//!   selected throws `Cannot edit` for both values, and while guides are locked throws an error.
 //! - The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
 //!   `changeStrokePattern` given as different values throw an error; gradients move with the art,
 //!   so `changeFillGradients` false throws an error that says it is not available yet.
@@ -617,7 +619,7 @@ fn path_set_guides(h: &super::Host, a: &[Data]) -> Answer {
     if member {
         return Err(HostError::Error(COMPOUND_MEMBER_GUIDES.into()));
     }
-    if !editable || (on && !selectable) {
+    if !editable || !selectable {
         return Err(cannot_edit(item.id));
     }
     if h.session.borrow().menu.guides_locked {
@@ -1379,10 +1381,20 @@ fn pt_parent(h: &super::Host, a: &[Data]) -> Answer {
     Ok(path_ref(h, item))
 }
 
+/// Whether the path `id` is not selected itself but a group or compound path that holds it is,
+/// which selects the path as a whole.
+fn held_selected(d: &crate::Document, sel: &crate::doc::Selection, id: NodeId) -> bool {
+    !sel.contains(id) && d.ancestry(id).is_some_and(|a| a.iter().any(|i| *i != id && sel.contains(*i) && d.node(*i).is_some_and(|n| !n.is_layer())))
+}
+
 /// The point at index `i` of `subs` is a selected anchor point of the path `id` in `sel`: every
-/// point of a path selected as a whole is, and of a path with direct-selected anchors only those
-/// anchors are. The endpoints of selected segments are not.
-fn anchor_selected(sel: &crate::doc::Selection, id: NodeId, subs: &[SubPath], i: usize) -> bool {
+/// point of a path selected as a whole is (a path is when a group or compound path that holds it
+/// is selected, `held`), and of a path with direct-selected anchors only those anchors are. The
+/// endpoints of selected segments are not.
+fn anchor_selected(sel: &crate::doc::Selection, id: NodeId, held: bool, subs: &[SubPath], i: usize) -> bool {
+    if held {
+        return true;
+    }
     if !sel.contains(id) || sel.segments.contains_key(&id) {
         return false;
     }
@@ -1392,11 +1404,27 @@ fn anchor_selected(sel: &crate::doc::Selection, id: NodeId, subs: &[SubPath], i:
     }
 }
 
+/// Whether the subpaths `a` and `b` have the same number of points in the same subpaths, so that a
+/// point index names the same anchor in both.
+fn same_layout(a: &[SubPath], b: &[SubPath]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.anchors.len() == y.anchors.len())
+}
+
 /// `selected`: `PathPointSelection.ANCHORPOINT` when the point is a selected anchor point
-/// ([`anchor_selected`]), otherwise `PathPointSelection.NOSELECTION`.
+/// ([`anchor_selected`]), otherwise `PathPointSelection.NOSELECTION`. The point changes waiting in
+/// [`super::State`] are written first only when they add or remove points of this path, since
+/// the selection names anchors by their place in the document's path.
 fn pt_selected(h: &super::Host, a: &[Data]) -> Answer {
     let (item, i) = this_point(h, a)?;
-    let on = read_path(h, item, |st, _, pd| anchor_selected(&st.selection, item.id, &pd.subpaths, i))?;
+    let moved = match &*h.dom.pending.borrow() {
+        Some((waiting, subs)) if same_path(*waiting, item) => !read_path(h, item, |_, _, pd| same_layout(subs, &pd.subpaths))?,
+        _ => false,
+    };
+    if moved {
+        super::flush(h)?;
+    }
+    let on =
+        read_path(h, item, |st, _, pd| anchor_selected(&st.selection, item.id, held_selected(&st.doc, &st.selection, item.id), &pd.subpaths, i))?;
     Ok(Data::String(if on { "PathPointSelection.ANCHORPOINT" } else { "PathPointSelection.NOSELECTION" }.into()))
 }
 
@@ -1406,7 +1434,9 @@ const HANDLE_SELECTIONS: &[&str] = &["PathPointSelection.LEFTDIRECTION", "PathPo
 /// `selected = PathPointSelection.ANCHORPOINT` adds the point to the direct-selected anchors, and
 /// `NOSELECTION` removes it, with `select.anchorsMany`; the other selected objects and anchors stay
 /// selected. A value the point has already runs no command. Direction handles cannot be selected,
-/// so `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error.
+/// so `LEFTDIRECTION`, `RIGHTDIRECTION` and `LEFTRIGHTPOINT` throw an error, and so does
+/// `NOSELECTION` on a path selected through a group or compound path that holds it, and
+/// `ANCHORPOINT` on a guide while guides are locked.
 fn pt_set_selected(h: &super::Host, a: &[Data]) -> Answer {
     let on = match arg(a, 1) {
         Data::String(s) if s == "PathPointSelection.ANCHORPOINT" => true,
@@ -1417,17 +1447,29 @@ fn pt_set_selected(h: &super::Host, a: &[Data]) -> Answer {
         _ => return Err(HostError::Type("selected must be a PathPointSelection value".into())),
     };
     let (item, i) = this_point(h, a)?;
-    let (now, at, selectable) = with_doc(h, item.doc, |_, st| {
-        let subs = st.doc.node(item.id).and_then(|n| n.path_data()).map_or(&[][..], |pd| &pd.subpaths[..]);
+    let (now, at, selectable, held, guide) = with_doc(h, item.doc, |_, st| {
+        let node = st.doc.node(item.id);
+        let subs = node.and_then(|n| n.path_data()).map_or(&[][..], |pd| &pd.subpaths[..]);
+        let guide = node.is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: true, .. }));
         let selectable = crate::cmd::select::is_selectable(&st.doc, st.isolation, &st.doc.locked_artboards(), item.id);
-        (anchor_selected(&st.selection, item.id, subs, i), locate(subs, i), selectable)
+        let held = held_selected(&st.doc, &st.selection, item.id);
+        (anchor_selected(&st.selection, item.id, held, subs, i), locate(subs, i), selectable, held, guide)
     });
     if now == on {
         return Ok(Data::Undefined);
     }
     let Some((s, j)) = at else { return Err(HostError::Error(STALE_POINT.into())) };
+    if held {
+        return Err(HostError::Error(format!(
+            "PathPoint.selected = PathPointSelection.NOSELECTION is not available yet on PathItem {}: the group or compound path that holds it is selected",
+            item.id.0
+        )));
+    }
     if on && !selectable {
         return Err(HostError::Error(format!("Cannot select PathItem {}", item.id.0)));
+    }
+    if on && guide && h.session.borrow().menu.guides_locked {
+        return Err(HostError::Error(format!("Cannot select PathItem {}: guides are locked", item.id.0)));
     }
     let params = json!({"items": [{"id": item.id.0, "anchors": [[s, j]]}], "mode": if on { "add" } else { "subtract" }});
     on_doc(h, item.doc.uid, false, |h| command(h, "select.anchorsMany", &params))?;
@@ -1440,14 +1482,15 @@ fn path_selected_points(h: &super::Host, a: &[Data]) -> Answer {
     let item = this_path(h, a)?;
     let picked: Vec<usize> = read_path(h, item, |st, _, pd| {
         let sel = &st.selection;
-        if !sel.contains(item.id) || sel.segments.contains_key(&item.id) {
+        let held = held_selected(&st.doc, sel, item.id);
+        if !held && (!sel.contains(item.id) || sel.segments.contains_key(&item.id)) {
             return Vec::new();
         }
         let mut out = Vec::new();
         let mut first = 0;
         for (s, sp) in pd.subpaths.iter().enumerate() {
             let n = sp.anchors.len();
-            out.extend((0..n).filter(|j| sel.partial(item.id).is_none_or(|p| p.contains(&(s, *j)))).map(|j| first + j));
+            out.extend((0..n).filter(|j| held || sel.partial(item.id).is_none_or(|p| p.contains(&(s, *j)))).map(|j| first + j));
             first += n;
         }
         out
@@ -1555,7 +1598,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
                 ("leftDirection", point_property(l, pt_left, pt_set_left)),
                 ("rightDirection", point_property(l, pt_right, pt_set_right)),
                 ("pointType", point_property(l, pt_type, pt_set_type)),
-                ("selected", property(l, pt_selected, pt_set_selected)),
+                ("selected", HostMember::Property { get: super::point_function(l, pt_selected), set: super::function(l, pt_set_selected) }),
                 ("remove", point_method(l, pt_remove)),
             ]),
             None,
