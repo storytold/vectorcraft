@@ -523,12 +523,20 @@ mod tests {
         commit_sounds(&mut app);
         assert!(app.toasts.list.is_empty());
         assert_eq!(calls.get(), 0);
+        // Isolate overflow from the expired row's small Area/scroll viewport; keep this App and cue counter.
+        let (_, ctx) = self::app();
         for i in 0..MAX_SHOWN + 1 {
             app.session.toast(Toast::new(format!("m{i}"), Level::Info));
         }
         pass(&mut app, &ctx, 0.6, vec![]);
-        pass(&mut app, &ctx, 0.6, vec![]);
+        let texts = pass(&mut app, &ctx, 0.6, vec![]);
         assert_eq!(messages(&app), vec!["m1", "m2", "m3", "m4", "m5"]);
+        for entry in &app.toasts.list {
+            assert!(entry.sound_visible, "{} was not presented", entry.toast.message);
+            assert!(texts.iter().any(|text| text == &entry.toast.message), "{} was not drawn", entry.toast.message);
+            let rect = entry.rect.unwrap();
+            assert!(rect.top() >= MARGIN - 0.5 && rect.bottom() <= 700.0 - MARGIN + 0.5, "{rect:?}");
+        }
         commit_sounds(&mut app);
         assert_eq!(calls.get(), MAX_SHOWN, "the overflowed arrival was not shown");
         app.run("app.toast", json!({"message": "Dismiss before commit"})).unwrap();
