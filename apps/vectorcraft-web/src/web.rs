@@ -5,9 +5,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-// PLAN: assumed `craft::host` re-exports `Files`, `FileError`, `PendingPick`, `PickAnswer`, `PickId`, `PickKind`, `PickRequest`, `Picked`, `Wake`, `AppInfo`, `InlineJobs`; `craft::window` re-exports `SystemWindows`; `craft::ui::runtime` re-exports `PenSource`
 use craft::host::target::ShellInfo;
-use craft::host::{AppInfo, FileError, Files, InlineJobs, PendingPick, PickAnswer, PickId, PickKind, PickRequest, Picked, Wake};
+use craft::host::{AppInfo, InlineJobs};
+use craft::platform::browser_files::BrowserFiles;
 use craft::ui::InstallSpec;
 use craft::ui::shell::embed;
 use craft::window::system::SystemWindows;
@@ -28,7 +28,7 @@ use crate::pencil::SharedPointers;
 pub(crate) type Inbox = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
 /// The files waiting to open, by where they came from (`Services::inbox` and `page_inbox`). The
-/// browser's file chooser answers through [`WebFiles`], not here.
+/// browser's file chooser answers through the host's file service ([`BrowserFiles`]), not here.
 #[derive(Clone, Default)]
 struct OpenInboxes {
     /// Dropped on the page.
@@ -66,6 +66,9 @@ struct Host {
     pasted: Rc<RefCell<Pasted>>,
     /// Pen and finger input read from the page's Pointer Events (`crate::pencil`).
     pointers: SharedPointers,
+    /// The running app's context, for the page's key listener (`crate::keys`), which is installed
+    /// before the first frame; every start after lost graphics fills it again.
+    ctx: crate::keys::ContextSlot,
     /// The page's Web Locks for Data Recovery, started once before the first frame: a graphics
     /// restart keeps them, so the tab stays the owner of its recovery area.
     locks: Option<WebLocks>,
@@ -80,11 +83,6 @@ pub fn start() {
         return;
     };
     detect_language();
-    // The face for a Korean or Hindi browser language (or `?lang=`) starts loading now, beside the
-    // startup fonts, without holding up the start. Text in those scripts painted later (a saved
-    // interface language, another one chosen, a layer or file name) has its face fetched then.
-    // PLAN: the served-face fetcher (B2) replaces `on_missing_glyphs`; its `UiFonts` wiring is shell-w10's (`fonts.rs`).
-    crate::fonts::want_chars(&i18n::system_lang().name().chars().collect::<Vec<_>>());
     wasm_bindgen_futures::spawn_local(async move {
         // Before the first frame, which looks for copies a crash left behind.
         let locks = WebLocks::start(RECOVERY_PREFIX).await;
@@ -98,11 +96,12 @@ pub fn start() {
             drag: DragPos::default(),
             pasted: Rc::default(),
             pointers: SharedPointers::default(),
+            ctx: crate::keys::ContextSlot::default(),
             locks,
             restarts: 0,
         };
         track_paste(&host.pasted);
-        crate::keys::keep_app_keys();
+        crate::keys::keep_app_keys(host.ctx.clone());
         run(host, canvas, None).await;
     });
 }
@@ -138,21 +137,24 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                     rs.device.set_device_lost_callback(move |reason, msg| loss.report(&ctx, format!("{reason:?}: {msg}")));
                 }
                 host.pasted.borrow_mut().ctx = Some(ctx.clone());
+                *host.ctx.borrow_mut() = Some(ctx.clone());
                 // PLAN: assumed `SharedPointers::pen(&self) -> PenSource` (shell-w13's `pencil.rs`), in place of `stylus()`.
                 let pen = host.pointers.borrow().pen();
                 let spec = InstallSpec::new(ShellInfo::current(), Arc::new(SystemWindows)).pen(pen);
-                embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts()).map_err(|e| e.to_string())?;
+                // The interface faces the page serves are fetched by the stack as text needs them.
+                let fonts = vectorcraft_ui_egui::ui_fonts().fetcher(Arc::new(crate::fonts::BrowserFetcher));
+                embed::install(ctx, spec, &fonts).map_err(|e| e.to_string())?;
                 egui_extras::install_image_loaders(ctx);
-                let wake = {
+                let files = {
                     let ctx = ctx.clone();
-                    Wake::new(move || ctx.request_repaint())
+                    BrowserFiles::new(move || ctx.request_repaint())
                 };
                 // The web saves no preferences: the host keeps its default in-memory sections.
                 craft::host::Host::builder(AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") })
                     // PLAN: assumed `vectorcraft_ui_egui::i18n::shared() -> Arc<I18n>`
                     .i18n(i18n::shared())
                     .jobs(Arc::new(InlineJobs))
-                    .files(Arc::new(WebFiles::new(wake)))
+                    .files(Arc::new(files))
                     .install(ctx);
                 let services = services(host.inbox.clone(), host.place_inbox.clone(), host.locks.clone());
                 let mut app = match taken.borrow_mut().take() {
@@ -412,8 +414,6 @@ impl eframe::App for WebShell {
     /// shared input hook before egui runs.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         raw.events.extend(self.host.pointers.borrow_mut().take());
-        // A Cmd+V comes as its key and as a Paste: one paste (#5555).
-        crate::keys::drop_paste_key_presses(&mut raw.events);
         if let Some(app) = &mut self.app {
             embed::before_input(ctx, |out| app.frame_input(out));
         }
@@ -421,10 +421,9 @@ impl eframe::App for WebShell {
 
     /// Read host paste and drop input once in the UI phase, hand files to the app's drop targets, run
     /// the app UI, then poll control replies.
-    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if let Some(app) = &mut self.app {
-            embed::before_ui(&ctx, frame);
             // DOM paste and drop are host input: read them in the UI phase, once per pass, not in
             // `logic` where a hidden tab replays the last shown frame's input.
             let pasted = self.host.pasted.borrow_mut().flavour.take();
@@ -438,14 +437,14 @@ impl eframe::App for WebShell {
                 let (pos, shift) = (at.map(|(x, y, _)| egui::pos2(x / z, y / z)), at.is_some_and(|a| a.2));
                 for f in dropped {
                     let name = f.path().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "dropped".into());
-                    let target = app.drop_target(&name, pos, shift);
+                    let target = app.drop_target(&name, app.drop_spot(pos), shift);
                     let (inbox, place_inbox, repaint) = (self.host.inbox.dropped.clone(), self.host.place_inbox.clone(), ctx.clone());
                     wasm_bindgen_futures::spawn_local(async move {
                         match f.bytes_async().await {
                             Ok(bytes) => {
                                 match target {
                                     DropTarget::Place(d) => {
-                                        place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name, bytes, drop: Some(d) })
+                                        place_inbox.lock().unwrap_or_else(|e| e.into_inner()).push(PlaceArrival { name, bytes, drop: d })
                                     }
                                     DropTarget::Open => inbox.lock().unwrap_or_else(|e| e.into_inner()).push((name, bytes)),
                                 }
@@ -473,128 +472,6 @@ fn services(inbox: OpenInboxes, place_inbox: PlaceInbox, locks: Option<WebLocks>
         // File → Print: the browser's print dialog.
         print: Some(Box::new(BrowserPrint)),
         ..Default::default()
-    }
-}
-
-/// The browser's file chooser behind the host's [`Files`]: an Open pick reads the chosen files and
-/// answers their contents. The web saves by downloading (`io::save`), so Save and Folder picks have
-/// no chooser and answer `Unavailable`.
-#[derive(Clone)]
-struct WebFiles {
-    picks: Arc<Mutex<WebPicks>>,
-    wake: Wake,
-}
-
-/// The picks [`WebFiles`] has asked the browser for and those answered, in order.
-#[derive(Default)]
-struct WebPicks {
-    next: u64,
-    waiting: Vec<(PickId, PickRequest)>,
-    answered: Vec<PickAnswer>,
-}
-
-impl WebFiles {
-    fn new(wake: Wake) -> Self {
-        Self { picks: Arc::default(), wake }
-    }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, WebPicks> {
-        self.picks.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
-    /// Settles pick `id` with `picked`; a pick forgotten meanwhile has no use for it.
-    fn answer(&self, id: PickId, picked: Picked) {
-        {
-            let mut picks = self.lock();
-            let Some(at) = picks.waiting.iter().position(|(waiting, _)| *waiting == id) else { return };
-            let (_, request) = picks.waiting.remove(at);
-            picks.answered.push(PickAnswer { id, request, picked });
-        }
-        self.wake.wake();
-    }
-
-    /// Opens the browser's file chooser for `request`. The browser opens it only from the user's own
-    /// click, which is where an Open pick is asked for.
-    fn choose(&self, id: PickId, request: &PickRequest) -> Result<(), String> {
-        let document = web_sys::window().and_then(|w| w.document()).ok_or("no document")?;
-        let input: web_sys::HtmlInputElement = document.create_element("input").map_err(js_err)?.dyn_into().map_err(|_| "not an input")?;
-        input.set_type("file");
-        input.set_multiple(request.kind == PickKind::OpenMany);
-        let accept: Vec<String> = request.filters.iter().flat_map(|f| f.extensions.iter().map(|e| format!(".{e}"))).collect();
-        if !accept.is_empty() {
-            input.set_accept(&accept.join(","));
-        }
-        let (chosen, source) = (self.clone(), input.clone());
-        let on_change = wasm_bindgen::closure::Closure::once_into_js(move || {
-            let files: Vec<web_sys::File> = source.files().map(|list| (0..list.length()).filter_map(|i| list.get(i)).collect()).unwrap_or_default();
-            wasm_bindgen_futures::spawn_local(async move {
-                let mut read = Vec::new();
-                for file in files {
-                    match wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await {
-                        Ok(buf) => read.push((file.name(), js_sys::Uint8Array::new(&buf).to_vec())),
-                        Err(e) => log::error!("couldn't read the chosen file {}: {}", file.name(), js_err(e)),
-                    }
-                }
-                chosen.answer(id, if read.is_empty() { Picked::Cancelled } else { Picked::Contents(read) });
-            });
-        });
-        let cancelled = self.clone();
-        let on_cancel = wasm_bindgen::closure::Closure::once_into_js(move || cancelled.answer(id, Picked::Cancelled));
-        for (kind, listener) in [("change", &on_change), ("cancel", &on_cancel)] {
-            input.add_event_listener_with_callback(kind, listener.unchecked_ref()).map_err(js_err)?;
-        }
-        input.click();
-        Ok(())
-    }
-}
-
-impl Files for WebFiles {
-    fn pick(&self, request: PickRequest) -> PickId {
-        let id = {
-            let mut picks = self.lock();
-            picks.next += 1;
-            let id = PickId(picks.next);
-            picks.waiting.push((id, request.clone()));
-            id
-        };
-        let picked = if matches!(request.kind, PickKind::Open | PickKind::OpenMany) {
-            match self.choose(id, &request) {
-                Ok(()) => return id,
-                Err(e) => Picked::Unavailable(e),
-            }
-        } else {
-            Picked::Unavailable("the browser downloads what is saved and has no folders".into())
-        };
-        self.answer(id, picked);
-        id
-    }
-
-    fn take_answer(&self, id: PickId) -> Option<Picked> {
-        let mut picks = self.lock();
-        let at = picks.answered.iter().position(|a| a.id == id)?;
-        Some(picks.answered.remove(at).picked)
-    }
-
-    fn forget(&self, id: PickId) {
-        let mut picks = self.lock();
-        picks.waiting.retain(|(waiting, _)| *waiting != id);
-        picks.answered.retain(|a| a.id != id);
-    }
-
-    fn pending_pick(&self) -> Option<PendingPick> {
-        self.lock().waiting.first().map(|(_, request)| PendingPick { request: request.clone(), sheet: false })
-    }
-
-    fn read(&self, _path: &std::path::Path) -> Result<Vec<u8>, FileError> {
-        Err(FileError::Unsupported)
-    }
-
-    fn write(&self, _path: &std::path::Path, _bytes: &[u8]) -> Result<(), FileError> {
-        Err(FileError::Unsupported)
-    }
-
-    fn last_folder(&self, _purpose: &str) -> Option<std::path::PathBuf> {
-        None
     }
 }
 

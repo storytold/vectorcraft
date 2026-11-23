@@ -775,6 +775,19 @@ impl VectorcraftApp {
         };
         DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift })
     }
+
+    /// Where a drop at `pos` on the window lands, for a host that follows its file drags itself (the
+    /// web's): on the active canvas as it last showed, else elsewhere; without a position, unknown.
+    pub fn drop_spot(&self, pos: Option<egui::Pos2>) -> DropSpot {
+        let Some(pos) = pos else { return DropSpot::Unknown };
+        match self.canvas_view() {
+            Some(view) if view.rect.contains(pos) => {
+                let at = view.to_doc(pos);
+                DropSpot::Canvas(Point::new(at.x, at.y))
+            }
+            _ => DropSpot::Elsewhere,
+        }
+    }
 }
 
 /// Files held over, or dropped on, a canvas that would be placed there.
