@@ -220,6 +220,8 @@ pub(crate) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
 
 /// OK: validate and apply every preference in the dialog (nothing changes on error).
 pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // A `prefs.reset` run since the last frame shows in the dialog before OK reads it.
+    apply_prefs_resets(app);
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
@@ -525,6 +527,7 @@ pub(crate) fn apply_prefs_resets(app: &mut VectorcraftApp) -> bool {
         return false;
     }
     let in_reset = |category: &str| resets.iter().any(|r| r.is_none_or(|c| c == category));
+    let prefs = app.session.prefs.to_json();
     for (key, value) in default_ui_fields(&app.ui) {
         let reset = UI_FIELDS.iter().any(|&(k, c, _)| k == key && in_reset(c));
         match key {
@@ -532,6 +535,25 @@ pub(crate) fn apply_prefs_resets(app: &mut VectorcraftApp) -> bool {
             "__snapToGrid" if reset => app.ui.view.snap_to_grid = value,
             "__taskBar" if reset => app.ui.task_bar = value,
             _ => {}
+        }
+        // An open Preferences dialog shows the reset rows, so OK keeps them.
+        if reset && let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "preferences") {
+            d.fields.insert(key.into(), json!(value));
+        }
+    }
+    // And the reset preferences, the groups with a reset of every category; Units › General then
+    // leaves the open document's units alone on OK.
+    use vectorcraft_engine::cmd::prefscmds::{PREF_GROUPS, spec};
+    let every = resets.contains(&None);
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == "preferences") {
+        for (k, v) in prefs.as_object().into_iter().flatten() {
+            let reset = spec(k).map_or(every && PREF_GROUPS.contains(&k.as_str()), |s| in_reset(s.category));
+            if d.fields.contains_key(k) && reset {
+                d.fields.insert(k.clone(), v.clone());
+                if k == "unitsGeneral" {
+                    d.fields.insert(RESET_UNITS.into(), v.clone());
+                }
+            }
         }
     }
     // The Edit Original row shows the app's Edit Original choice.

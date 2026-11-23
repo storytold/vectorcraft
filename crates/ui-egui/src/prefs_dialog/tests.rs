@@ -557,6 +557,48 @@ fn prefs_reset_resets_the_ui_only_rows_of_its_category() {
     assert_eq!(rows(&a), default, "every category");
 }
 
+/// A `prefs.reset` run while Preferences is open shows the reset values in the dialog, for the
+/// categories it reset, so OK keeps the reset; rows of other categories keep the dialog's values.
+#[test]
+fn prefs_reset_while_preferences_is_open_shows_the_reset_values() {
+    let fresh = app();
+    let rows = |a: &VectorcraftApp| (a.ui.view.smart_guides, a.ui.view.snap_to_grid, a.ui.task_bar);
+    let default = rows(&fresh);
+    let mut a = app();
+    (a.ui.view.smart_guides, a.ui.view.snap_to_grid, a.ui.task_bar) = (!default.0, !default.1, !default.2);
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    open(&mut a, Some("General"));
+    a.run("prefs.reset", json!({"category": "General"})).unwrap();
+    let d = a.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["__taskBar"], json!(default.2), "the dialog shows the reset row");
+    assert_eq!(d.fields["__smartGuides"], json!(!default.0), "a row of another category keeps its value");
+    confirm(&mut a).unwrap();
+    assert_eq!(rows(&a), (!default.0, !default.1, default.2), "OK keeps the reset");
+    assert_eq!(a.session.prefs.keyboard_increment, fresh.session.prefs.keyboard_increment, "OK keeps the reset preference");
+
+    // Every category, the preference groups included.
+    let group = fresh.session.prefs.to_json()["pixelSnap"].clone();
+    let mut changed = group.clone();
+    let flag = changed.as_object_mut().and_then(|o| o.values_mut().find(|v| v.is_boolean())).expect("a pixelSnap option is a boolean");
+    *flag = json!(!flag.as_bool().unwrap_or_default());
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    a.run("prefs.set", json!({"key": "pixelSnap", "value": changed})).unwrap();
+    open(&mut a, Some("General"));
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields["pixelSnap"], changed);
+    a.run("prefs.reset", json!({})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(rows(&a), default, "every category");
+    assert_eq!(a.session.prefs.keyboard_increment, fresh.session.prefs.keyboard_increment);
+    assert_eq!(a.session.prefs.to_json()["pixelSnap"], group, "OK keeps the reset group");
+
+    // Run straight on the session, with OK before the next frame.
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    open(&mut a, Some("General"));
+    a.session.execute("prefs.reset", &json!({"category": "General"})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, fresh.session.prefs.keyboard_increment, "OK keeps a reset outside run");
+}
+
 /// Reset Preferences and `prefs.reset` give Enable Contextual Task Bar the value the current
 /// workspace was saved with, which for a workspace saved with the bar off differs from the default.
 #[test]
