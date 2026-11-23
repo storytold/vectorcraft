@@ -318,6 +318,9 @@ impl VectorcraftApp {
             for fired in &out.fired {
                 shortcuts::run_fired(self, &ctx, fired);
             }
+            for fired in &out.dimmed {
+                shortcuts::refuse_dimmed(self, fired);
+            }
             menus::model::refresh(self, &ctx);
         }
         font_menu::end_previews(self, &out.ended_previews);

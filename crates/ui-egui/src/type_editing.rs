@@ -9,8 +9,8 @@
 // the editor input types, so they come through the `craft::behavior` facade.
 use craft::behavior::{EditCommand, EditorInput, Granularity, Metrics, MoveMods, NavMove, PartKey, Sense, SurroundingUnit as ImeUnit, TextPos};
 use craft::ui::contract::{
-    CommandSet, Commands as _, Common, Component, Cx, Focus as _, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Props as _, Remember as _, Role,
-    Show as _,
+    CommandSet, Commands as _, Common, Component, Cx, EditorStep, Focus as _, MeasureCx, NoValue, Outcome, PaintUi, PartsCx, Props as _,
+    Remember as _, Role, Show as _,
 };
 use craft::ui::primitives::{EditorPurpose, EditorState};
 use craft::ui::runtime::focus::{self, FocusTarget, KeyUse};
@@ -291,15 +291,12 @@ impl Component for TypeEditor<'_> {
     }
 
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
-        let inputs: Vec<EditorInput> = cx.editor_input().collect();
+        let steps = cx.editor_steps::<TypeEditorCommand>();
         let pasted = match cx.clipboard().paste() {
             Pending::Ready(content) => content.text.as_deref().map(str::to_owned),
             _ => None,
         };
         let mut fired = Vec::new();
-        while let Some((command, _)) = cx.take_command::<TypeEditorCommand>() {
-            fired.push(command);
-        }
         // Windows' Alt-code entry takes every Alt+digit no focused component claims, top-row digits too; production
         // read codes from the keypad only, so the character commands claim their Alt+digit chords and run them here.
         let digit_chords: Vec<(craft::keymap::Chord, TypeEditorCommand)> = TypeEditorCommand::defs()
@@ -323,11 +320,19 @@ impl Component for TypeEditor<'_> {
             keep_marked_text(self.app);
         }
         let view = self.app.view_info();
-        for input in inputs {
-            self.apply(input, view, pasted.clone());
+        // Inputs and commands in the order they came: once a command (Cmd+Enter) ended the edit, the frame's later
+        // typing is not the edit's, as production read the frame's keys in order.
+        for step in steps {
+            match step {
+                EditorStep::Input(input) if self.app.session.tool_wants_text() => self.apply(input, view, pasted.clone()),
+                EditorStep::Command(command, _) => self.run(command, view),
+                _ => {}
+            }
         }
         for command in fired {
-            self.run(command, view);
+            if self.app.session.tool_wants_text() {
+                self.run(command, view);
+            }
         }
     }
 

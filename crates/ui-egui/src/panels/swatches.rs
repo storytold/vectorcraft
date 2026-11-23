@@ -14,7 +14,7 @@ use craft::color_ui::palette::{SwatchColor, SwatchEntry, SwatchGroup, SwatchKind
 use craft::color_ui::ui::{SwatchKey, SwatchesPanel, SwatchesState};
 use craft::theme::Srgba;
 use craft::ui::choice::SwatchFace;
-use craft::ui::contract::{Bind, DropAt, DropPlace, MemoProps, SelectMode};
+use craft::ui::contract::{Bind, DropAt, DropPlace, ListDrag, MemoProps, SelectMode};
 use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
@@ -408,8 +408,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         lit: highlighted(&st.doc, &base).into_iter().map(str::to_string).collect(),
         doc: Arc::clone(&st.doc),
     };
+    let dragged_doc = Arc::clone(&thumbs.doc);
     let shown_app: &VectorcraftApp = app;
     let out = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
+        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, &drag.grabbed, dragged_rows(drag))))
         .thumb(thumbs, thumb)
         .row_icons(|key| match key {
             SwatchKey::Swatch(name) => row_icons(shown_app, name),
@@ -431,6 +433,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         on_event(app, &shown, event);
     }
     footer(app, ui);
+}
+
+/// The rows `drag` moves: the dragged rows of the grabbed row's kind (colour groups or swatches), in panel order.
+fn dragged_rows(drag: &ListDrag<SwatchKey>) -> Vec<String> {
+    let groups = matches!(drag.grabbed, SwatchKey::Group(_));
+    drag.keys.iter().filter(|k| matches!(k, SwatchKey::Group(_)) == groups).map(|k| name_of(k).to_string()).collect()
 }
 
 /// The rows the browser shows for `groups`, in its order: each group's row, then its swatches.

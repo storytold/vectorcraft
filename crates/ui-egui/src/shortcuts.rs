@@ -91,6 +91,16 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
     }
 }
 
+/// A key pressed for a command that can't run now (`FrameOutput::dimmed`) runs nothing and says why, as the command's
+/// refusal did in production.
+pub(crate) fn refuse_dimmed(app: &mut VectorcraftApp, fired: &Fired) {
+    let id = engine_id(&fired.command.id).map_or_else(|| fired.command.id.to_string(), str::to_string);
+    let command = CommandRef::with_params(id, fired.command.params.clone());
+    if let Some(why) = crate::palette::refusal(app, &command) {
+        app.status(why);
+    }
+}
+
 /// The engine's id of a framework edit command that no focused part took: Select All and Delete. Cut, Copy, Paste,
 /// Undo and Redo have the same id in both.
 pub(crate) fn engine_id(id: &str) -> Option<&'static str> {

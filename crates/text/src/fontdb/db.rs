@@ -1,4 +1,4 @@
-use craft::font_catalog::{Catalog, FontEnv, Os};
+use craft::font_catalog::{Catalog, FontEnv, Limits, Os, Source};
 
 use super::build::make_face;
 use super::cache::{CanonicalNames, GlyphCache};
@@ -49,6 +49,10 @@ impl FontDb {
         // priorities stay ahead of the additional families users can now pick by name.
         let craft = crate::craft_fonts::document_fonts().into_iter().map(|f| f.bytes);
         for data in BUNDLED.iter().copied().chain(craft) {
+            // Font pickers list the catalog's families: the fonts the app carries are in it as bundled faces.
+            if let Err(e) = catalog.add_bytes(data.to_vec(), Source::Bundled, &Limits::default()) {
+                log::warn!("a bundled font is not in the font catalog: {e}");
+            }
             for (i, spec) in enumerate_faces(data) {
                 if let Some(f) = make_face(FontBytes::Static(data), i, spec, None) {
                     faces.push(Arc::new(f));
@@ -357,15 +361,18 @@ impl FontDb {
 
     /// Scan the font folders again (fonts installed or removed since), cataloging the faces
     /// found (native only). Font data is loaded when a cataloged family is first resolved. Faces
-    /// loaded from files the scan no longer finds are dropped. Returns the number of faces
-    /// cataloged.
+    /// loaded from files the scan no longer finds are dropped. Returns the number of installed
+    /// faces cataloged.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load_system_fonts(&self) -> usize {
         // The first scan waits for nothing: a guard is made only for a database already cataloged.
         #[cfg(any(test, feature = "test-fonts"))]
         let _change = self.catalog.is_ready().then(crate::test_fonts::font_change);
-        // The first scan, or a rescan once it is done (never both at once).
-        let n = self.catalog.rescan();
+        // The first scan, or a rescan once it is done (never both at once). The count is of the installed faces: the
+        // catalog's less the bundled faces no installed file also has.
+        let cataloged = self.catalog.rescan();
+        let bundled_only = self.catalog.faces().iter().filter(|f| f.source == Source::Bundled && self.catalog.versions(f).len() == 1).count();
+        let n = cataloged.saturating_sub(bundled_only);
         // Files may have been installed since: other versions are looked for again, in the catalog
         // the rescan published. A version lookup made during the scan read the previous one.
         self.version_scanned.write().unwrap_or_else(|e| e.into_inner()).clear();
