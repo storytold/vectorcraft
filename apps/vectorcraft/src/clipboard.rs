@@ -808,17 +808,24 @@ mod portable {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{BITMAP, ClipboardRead, Flavour, PNG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, takes_files, text_of};
+    use super::{BITMAP, ClipboardRead, Flavour, PNG, SVG, SystemClipboard, TEXT, copied_file, decode_png, png_flavour, takes_files, text_of};
 
     /// What our last write put on the clipboard.
     #[derive(Clone)]
     enum Ours {
         Text(String),
-        Image(usize, usize),
+        /// Width, height, and an [`image_fingerprint`] of the pixels: dimensions alone would
+        /// mistake another app's same-size image for ours.
+        Image(usize, usize, u64),
         /// A Copy through the Wayland core protocol, whose data source tells whether the
         /// clipboard still holds it.
         #[cfg(target_os = "linux")]
         Source,
+        /// Every flavour, written at once by [`super::mac::write`]: the pasteboard's change
+        /// count right after, so [`SystemClipboard::holds_ours`] can tell whether another app
+        /// has copied since ([`super::mac::change_count`]).
+        #[cfg(target_os = "macos")]
+        Native(isize),
     }
 
     /// A read of arboard's clipboard.
@@ -1022,7 +1029,9 @@ mod portable {
             let answer = fresh(self.request);
             let held = match (&answer, ours) {
                 (Answer::Text(Ok(now)), Some(Ours::Text(t))) => now == t,
-                (Answer::Image(Ok(now)), Some(Ours::Image(w, h))) => (now.width, now.height) == (*w, *h),
+                (Answer::Image(Ok(now)), Some(Ours::Image(w, h, fp))) => {
+                    (now.width, now.height) == (*w, *h) && image_fingerprint(&now.bytes) == *fp
+                }
                 _ => false,
             };
             if held {
@@ -1462,10 +1471,51 @@ mod portable {
         }
     }
 
+    /// What [`SystemClipboard::write`] puts on a platform clipboard that holds one format at a
+    /// time (the Linux fallback; macOS instead writes every flavour at once, see
+    /// `mac::write`). Include SVG Code (on by default) writes a shape copy's SVG markup under
+    /// the TEXT mime too, so its TEXT and SVG flavours hold the exact same bytes; real object
+    /// text (a type-only copy) never matches the document's SVG. Picking between them: prefer
+    /// the PNG for a shape copy, so Paste into an app that doesn't read SVG as text (Photoshop,
+    /// Mail, …) still gets a picture instead of nothing (#2282), while a genuine text copy keeps
+    /// pasting as text everywhere, and a shape copy whose PNG can't be made (too large, or the
+    /// encoder failed) keeps pasting its SVG markup as text rather than nothing.
+    /// The third element is the SVG-as-text markup to fall back to if writing the chosen image
+    /// fails: only set alongside an image, and only when that image was preferred over matching
+    /// text (never alongside a genuine text copy, which is the primary choice already).
+    /// A cheap, order-sensitive fingerprint of pixel bytes for [`Ours::Image`]: two images of the
+    /// same dimensions but different content almost never collide, so `holds_ours` and
+    /// [`Unanswered::paste`] don't mistake one for the other.
+    fn image_fingerprint(bytes: &[u8]) -> u64 {
+        let mut fp: u64 = 0;
+        for b in bytes.iter().step_by(997) {
+            fp = fp.rotate_left(5) ^ u64::from(*b);
+        }
+        fp
+    }
+
+    fn pick_one(flavours: &[Flavour]) -> (Option<String>, Option<image::RgbaImage>, Option<String>) {
+        let text = text_of(flavours);
+        let svg_as_text = text.as_deref().is_some_and(|t| flavours.iter().any(|f| f.mime == SVG && f.data == t.as_bytes()));
+        if svg_as_text && let Some(img) = flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)) {
+            return (None, Some(img), text);
+        }
+        let image = match &text {
+            Some(_) => None,
+            None => flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)),
+        };
+        (text, image, None)
+    }
+
     impl SystemClipboard for Clipboard {
         /// arboard takes the text, else the PNG as a bitmap; the Wayland core protocol offers the
         /// SVG, PNG and text together ([`DataClipboard::copy`](super::wayland::DataClipboard::copy)).
         fn write(&mut self, flavours: &[Flavour]) -> Result<(), String> {
+            #[cfg(target_os = "macos")]
+            if let Some(count) = super::mac::write(flavours) {
+                self.ours = Some(Ours::Native(count));
+                return Ok(());
+            }
             let cb = self.cb(Asker::User)?;
             #[cfg(target_os = "linux")]
             if let Backend::Wayland(wl) = cb {
@@ -1475,11 +1525,7 @@ mod portable {
                 self.ours = wl.holds_ours().then_some(Ours::Source);
                 return Ok(());
             }
-            let text = text_of(flavours);
-            let image = match &text {
-                Some(_) => None,
-                None => flavours.iter().find(|f| f.mime == PNG).and_then(|f| decode_png(&f.data)),
-            };
+            let (text, image, fallback_text) = pick_one(flavours);
             let ours = match (text, image) {
                 (Some(t), _) => {
                     cb.set_text(t.as_str())?;
@@ -1487,8 +1533,19 @@ mod portable {
                 }
                 (None, Some(img)) => {
                     let (width, height) = (img.width() as usize, img.height() as usize);
-                    cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) })?;
-                    Some(Ours::Image(width, height))
+                    let fingerprint = image_fingerprint(img.as_raw());
+                    match cb.set_image(arboard::ImageData { width, height, bytes: Cow::Owned(img.into_raw()) }) {
+                        Ok(()) => Some(Ours::Image(width, height, fingerprint)),
+                        // The clipboard may still hold its previous content: fall back to the
+                        // matching SVG markup rather than returning an error with nothing written.
+                        Err(e) => match fallback_text {
+                            Some(t) => {
+                                cb.set_text(t.as_str())?;
+                                Some(Ours::Text(t))
+                            }
+                            None => return Err(e),
+                        },
+                    }
                 }
                 (None, None) => {
                     cb.clear()?;
@@ -1503,12 +1560,20 @@ mod portable {
         }
 
         fn holds_ours(&mut self) -> bool {
+            #[cfg(target_os = "macos")]
+            if let Some(Ours::Native(count)) = &self.ours {
+                return *count == super::mac::change_count();
+            }
             let Some(cb) = self.cb.opened() else { return false };
             match &self.ours {
                 Some(Ours::Text(t)) => cb.get_text().is_ok_and(|now| now == *t),
-                Some(Ours::Image(w, h)) => cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
+                Some(Ours::Image(w, h, fp)) => {
+                    cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h) && image_fingerprint(&now.bytes) == *fp)
+                }
                 #[cfg(target_os = "linux")]
                 Some(Ours::Source) => cb.holds_source(),
+                #[cfg(target_os = "macos")]
+                Some(Ours::Native(_)) => false,
                 None => false,
             }
         }
@@ -1835,7 +1900,8 @@ mod portable {
                 assert!(cb.image_later().is_err());
                 // The paste waits for the check's answer off the UI thread instead.
                 let unanswered = cb.unanswered(&vectorcraft_engine::cmd::clipboard::PASTE_ORDER).expect("the check's read is kept for the paste");
-                let paste = std::thread::spawn(move || unanswered.paste(Some(&Ours::Image(2, 1)), &[BITMAP]));
+                let ours = Ours::Image(2, 1, image_fingerprint(&vec![0u8; 2 * 4]));
+                let paste = std::thread::spawn(move || unanswered.paste(Some(&ours), &[BITMAP]));
                 drop(release);
                 paste.join().ok().flatten()
             };
@@ -2012,6 +2078,61 @@ mod portable {
             assert!(ui.get(Asker::User, clock.now(), fail, name).is_none());
             assert!(LOGGED.load(Ordering::Relaxed));
             assert!(probe.opened().is_none() && ui.opened().is_none());
+        }
+
+        fn one_px_png() -> Vec<u8> {
+            let img = image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255]));
+            let mut data = vec![];
+            img.write_to(&mut std::io::Cursor::new(&mut data), image::ImageFormat::Png).expect("encode");
+            data
+        }
+
+        #[test]
+        fn a_shape_copy_writes_the_picture_not_the_svg_markup_as_text() {
+            // Include SVG Code (on by default) puts the same markup under TEXT and SVG for a
+            // shape copy (#2282: Paste into Photoshop or Mail read neither as a picture).
+            let svg = b"<svg>...</svg>".to_vec();
+            let flavours =
+                vec![Flavour { mime: TEXT, data: svg.clone() }, Flavour { mime: SVG, data: svg }, Flavour { mime: PNG, data: one_px_png() }];
+            let (text, image, fallback) = pick_one(&flavours);
+            assert!(text.is_none(), "the SVG markup is not written as text");
+            assert!(image.is_some(), "the picture is written instead");
+            assert_eq!(fallback.as_deref(), Some("<svg>...</svg>"), "kept, in case writing the picture fails");
+        }
+
+        #[test]
+        fn a_genuine_text_copy_still_writes_as_text() {
+            // A type-only copy's TEXT flavour is the objects' own text, never the SVG markup.
+            let flavours = vec![
+                Flavour { mime: TEXT, data: b"hello".to_vec() },
+                Flavour { mime: SVG, data: b"<svg>...</svg>".to_vec() },
+                Flavour { mime: PNG, data: one_px_png() },
+            ];
+            let (text, image, fallback) = pick_one(&flavours);
+            assert_eq!(text.as_deref(), Some("hello"));
+            assert!(image.is_none(), "text wins over the picture");
+            assert!(fallback.is_none(), "only set when an image was preferred over matching text");
+        }
+
+        #[test]
+        fn a_shape_copy_without_svg_code_falls_back_to_the_picture_as_before() {
+            // No TEXT flavour at all (Include SVG Code off, not a type-only copy): unaffected by
+            // this change, same as before it.
+            let flavours = vec![Flavour { mime: PNG, data: one_px_png() }];
+            let (text, image, fallback) = pick_one(&flavours);
+            assert!(text.is_none());
+            assert!(image.is_some());
+            assert!(fallback.is_none(), "no SVG-as-text match to fall back to");
+        }
+
+        #[test]
+        fn same_size_images_with_different_pixels_fingerprint_differently() {
+            // Width/height alone would mistake another app's same-size image for ours (#6455
+            // follow-up): the fingerprint must tell a red 1×1 pixel apart from a blue one.
+            let red = image_fingerprint(&[0xff, 0, 0, 0xff]);
+            let blue = image_fingerprint(&[0, 0, 0xff, 0xff]);
+            assert_ne!(red, blue);
+            assert_eq!(red, image_fingerprint(&[0xff, 0, 0, 0xff]));
         }
     }
 }
@@ -3214,9 +3335,9 @@ mod wayland {
 mod mac {
     use objc2::rc::autoreleasepool;
     use objc2_app_kit::NSPasteboard;
-    use objc2_foundation::{NSArray, NSString};
+    use objc2_foundation::{NSArray, NSData, NSString};
 
-    use super::{Flavour, MAX_BYTES, copy_within, pasteboard_types};
+    use super::{Flavour, MAX_BYTES, PNG, TEXT, copy_within, pasteboard_types};
 
     /// Does the pasteboard hold one of `mimes` ([`pasteboard_types`])? Asks for its types only.
     pub fn has(mimes: &[&'static str]) -> bool {
@@ -3239,6 +3360,44 @@ mod mac {
                 Some(Flavour { mime, data })
             })
         })
+    }
+
+    /// Writes every flavour under all the pasteboard types apps read for its mime
+    /// ([`pasteboard_types`]), at once: NSPasteboard holds several representations together, so
+    /// (unlike arboard) a shape copy's picture and its SVG-as-text (Include SVG Code) both reach
+    /// the pasteboard, and each app takes the one it reads (#6455). `None` when nothing was
+    /// written (an empty `flavours`, or every write failed); else the new change count, for
+    /// [`change_count`] to tell later whether another app has copied since.
+    pub fn write(flavours: &[Flavour]) -> Option<isize> {
+        autoreleasepool(|_| {
+            let pasteboard = NSPasteboard::generalPasteboard();
+            let count = pasteboard.clearContents();
+            let mut wrote = false;
+            for f in flavours {
+                if f.mime == TEXT {
+                    if let Ok(s) = std::str::from_utf8(&f.data) {
+                        wrote |= pasteboard.setString_forType(&NSString::from_str(s), &NSString::from_str("public.utf8-plain-text"));
+                    }
+                    continue;
+                }
+                // `pasteboard_types` maps the read-side BITMAP mime to both PNG and TIFF types;
+                // a write only ever has PNG bytes, so it names its own type directly instead.
+                let types: &[(&str, &str)] = if f.mime == PNG { &[("public.png", PNG)] } else { pasteboard_types(f.mime) };
+                for &(t, _) in types {
+                    wrote |= pasteboard.setData_forType(Some(&NSData::with_bytes(&f.data)), &NSString::from_str(t));
+                }
+            }
+            // `clearContents()`'s own count is the one this write's ownership acquired: a
+            // `changeCount()` call here instead could race another app's copy landing in
+            // between, and return that app's count as if it were ours.
+            wrote.then_some(count)
+        })
+    }
+
+    /// The pasteboard's current change count ([`write`]): unequal to what it returned means
+    /// another app has copied since.
+    pub fn change_count() -> isize {
+        autoreleasepool(|_| NSPasteboard::generalPasteboard().changeCount())
     }
 }
 
