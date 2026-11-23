@@ -6615,7 +6615,7 @@ and `stroke.widthProfile.reset` removes every saved one. `stroke.set {profile}` 
 ## Arrowheads
 
 `stroke.set {startArrow, endArrow}` takes any of 42 generated heads by name (the params doc lists them; `null` for
-none): arrows (`Arrow`, `NotchedArrow`, `LineArrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`,
+none): arrows (`Arrow`, `NotchedArrow`, `LineArrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`, `HalfArrowRight`,
 `Chevron`, `Feather`, `Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`,
 `Diamond`, `Hexagon`, `Star`, the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`,
 `Bracket`, `Fork`, `Cross`, `Plus`). Each head fits a box about four times its weight long and wide. A head's weight
