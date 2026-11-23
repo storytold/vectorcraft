@@ -50,15 +50,24 @@ impl FileFontGlyphs {
         i
     }
 
-    /// Can `glyphs` all be drawn in font `font`: no character among them has a glyph there, or in
-    /// `glyphs` itself, that differs in outline or advance? A font keeps one glyph per character.
+    /// Can `glyphs` all be drawn in font `font`: no character among them has a glyph there, or
+    /// earlier in `glyphs`, that differs in outline or advance (a font keeps one glyph per
+    /// character), and the font has room for the characters it doesn't have yet? Each glyph is
+    /// compared with the one its character has, once, as PDF import does.
     pub fn fits(&self, font: usize, glyphs: &[FileGlyph]) -> bool {
         let Some(f) = self.fonts.get(font) else { return false };
-        let same = |a: &FileGlyph, b: &FileGlyph| a.outline == b.outline && a.advance == b.advance;
-        glyphs.iter().enumerate().all(|(i, g)| {
-            f.chars.get(&g.ch).and_then(|&k| f.glyphs.get(k)).is_none_or(|kept| same(kept, g))
-                && glyphs.iter().take(i).filter(|e| e.ch == g.ch).all(|e| same(e, g))
-        })
+        let mut new: HashMap<char, &FileGlyph> = HashMap::new();
+        for g in glyphs {
+            let kept = f.chars.get(&g.ch).and_then(|&k| f.glyphs.get(k)).or_else(|| new.get(&g.ch).copied());
+            match kept {
+                Some(k) if k.outline != g.outline || k.advance != g.advance => return false,
+                Some(_) => {}
+                None => {
+                    new.insert(g.ch, g);
+                }
+            }
+        }
+        f.glyphs.len().saturating_add(new.len()) <= MAX_FILE_GLYPHS && self.count.saturating_add(new.len()) <= MAX_GLYPHS
     }
 
     /// Gather `glyph` for font `font`, unless it already has one for its character or is full.
@@ -129,5 +138,43 @@ pub(crate) fn keep_file_fonts(nodes: &mut [Arc<Node>], kept: &HashMap<(String, S
             db.bind_file_fonts(t, |key| images.get(key));
             t.cached_bounds = Some(vectorcraft_text::layout(db, t).bounds);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kurbo::Shape;
+
+    fn glyph(ch: char) -> FileGlyph {
+        FileGlyph { ch, outline: kurbo::Rect::new(0.0, 0.0, 400.0, 500.0).to_path(0.1), advance: 600.0 }
+    }
+
+    /// A font full of glyphs takes no new character, so a string that needs one doesn't fit (it
+    /// comes in as outlines rather than as type the kept font can't draw); its own characters
+    /// still fit.
+    #[test]
+    fn a_full_font_takes_no_new_character() {
+        let mut g = FileFontGlyphs::default();
+        let f = g.font("F", "Regular", FileFontInfo::default);
+        let chars: Vec<char> = (0x10000u32..).filter_map(char::from_u32).take(MAX_FILE_GLYPHS).collect();
+        for &c in &chars {
+            g.add(f, glyph(c));
+        }
+        assert!(g.fits(f, &[glyph(chars[0]), glyph(chars[1])]));
+        assert!(!g.fits(f, &[glyph(chars[0]), glyph('A')]));
+    }
+
+    /// A long string of one character compares each glyph with that character's once, not with
+    /// every one before it: a quarter of a million of them fit at once.
+    #[test]
+    fn a_long_string_of_one_character_fits_in_linear_time() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut g = FileFontGlyphs::default();
+            let f = g.font("F", "Regular", FileFontInfo::default);
+            tx.send(g.fits(f, &vec![glyph('A'); 250_000])).ok();
+        });
+        assert_eq!(rx.recv_timeout(std::time::Duration::from_secs(20)), Ok(true));
     }
 }
