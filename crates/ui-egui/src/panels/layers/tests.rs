@@ -360,8 +360,9 @@ fn cmd_alt_l_opens_new_layer_options() {
     // PLAN: assumed `Chord::parse(&str) -> Option<Chord>` and `Chord::to_egui_shortcut() -> egui::KeyboardShortcut`.
     let press = |app: &mut VectorcraftApp, chord: &str| {
         let shortcut = Chord::parse(chord).unwrap().to_egui_shortcut();
-        let key = egui::Event::Key { key: shortcut.logical_key, physical_key: None, pressed: true, repeat: false, modifiers: shortcut.modifiers };
-        crate::tests::synthetic::key_frame(app, &ctx, vec![key]);
+        let key = |pressed| egui::Event::Key { key: shortcut.logical_key, physical_key: None, pressed, repeat: false, modifiers: shortcut.modifiers };
+        // A keyboard's tap: a second press with no release between is a repeat.
+        crate::tests::synthetic::key_frame(app, &ctx, vec![key(true), key(false)]);
     };
     let open = |app: &VectorcraftApp| app.dialogs().map(|d| d.with(|host| host.open_dialogs())).unwrap_or_default();
     // The window's first frame builds its keymap.

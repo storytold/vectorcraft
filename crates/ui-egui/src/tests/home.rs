@@ -85,8 +85,9 @@ fn cmd_alt_n_makes_a_document_without_the_new_document_dialog() {
         // The first frame of a context builds the keymap the key stage reads.
         crate::tests_synthetic::key_frame(app, &ctx, vec![]);
         let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::ALT;
-        let ev = egui::Event::Key { key: egui::Key::N, physical_key: None, pressed: true, repeat: false, modifiers };
-        crate::tests_synthetic::key_frame(app, &ctx, vec![ev]);
+        let ev = |pressed| egui::Event::Key { key: egui::Key::N, physical_key: None, pressed, repeat: false, modifiers };
+        // A keyboard's tap: a second press with no release between is a repeat.
+        crate::tests_synthetic::key_frame(app, &ctx, vec![ev(true), ev(false)]);
     };
     let made = |app: &VectorcraftApp| {
         let d = &app.session.active().expect("a document").doc;

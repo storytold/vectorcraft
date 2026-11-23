@@ -2299,9 +2299,11 @@ mod tests {
         time: f64,
     }
 
-    /// A press of `key` with no modifiers.
-    fn key(key: egui::Key) -> egui::Event {
-        egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }
+    /// A tap of `key` with no modifiers, its press and its release: a second press with no release
+    /// between is a repeat.
+    fn key(key: egui::Key) -> Vec<egui::Event> {
+        let event = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE };
+        vec![event(true), event(false)]
     }
 
     impl Window {
@@ -2355,9 +2357,9 @@ mod tests {
             self.frame(vec![]);
             self.frame(vec![egui::Event::Text(query.into())]);
             for _ in 0..down {
-                self.frame(vec![key(egui::Key::ArrowDown)]);
+                self.frame(key(egui::Key::ArrowDown));
             }
-            self.frame(vec![key(egui::Key::Enter)]);
+            self.frame(key(egui::Key::Enter));
             self.frame(vec![]);
             self.frame(vec![]);
         }
@@ -2456,7 +2458,7 @@ mod tests {
         seen.push(built(&window));
         window.frame(vec![egui::Event::Text("group".into())]);
         seen.push(built(&window));
-        window.frame(vec![key(egui::Key::Enter)]);
+        window.frame(key(egui::Key::Enter));
         window.frame(vec![]);
         seen.push(built(&window));
         window.app.run("select.none", json!({})).unwrap();
