@@ -5831,7 +5831,9 @@ same extension and bytes as one there, loads as that User Defined library (categ
 is refused before it is read.
 From a document, such as a `.ai` or `.eps` swatch library, it reads the colors, tints, gradients and pattern swatches
 in the document's order and color groups; `swatch.library.add` brings a pattern swatch's pattern, with its tile and
-art, into the document as a pattern swatch under the library swatch's name and in its color group. A global or spot
+art, into the document as a pattern swatch under the library swatch's name and in its color group. A library swatch
+named after its pattern instead takes the name the pattern comes in under, when the pattern comes in under another name
+that no library swatch has and the swatch does not keep a free numbered name as described below. A global or spot
 color the pattern's art links to keeps the library's color: when the document gives its name another color, it comes
 in under a numbered name ("Ink 2") and the pattern links to that. That numbered name, and the numbered names of a
 pattern swatch and of a pattern the art is painted with, skip the names the library gives its other swatches. A swatch
