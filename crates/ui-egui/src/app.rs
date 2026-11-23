@@ -637,6 +637,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
     root.values.set(view::zoom_scheme(prefs, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
+    // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
+    root.tab_toggles_chrome = true;
     root
 }
 

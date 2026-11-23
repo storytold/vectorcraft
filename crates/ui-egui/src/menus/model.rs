@@ -302,7 +302,7 @@ fn catalog_defs(app: &VectorcraftApp, refs: &[(CommandRef, String, bool)], state
 /// The state of the row `command`, named `label` in the catalog: on or dimmed with its reason, checked, and its title
 /// where the app shows another.
 fn row_state(app: &VectorcraftApp, command: &CommandRef, label: &str) -> CommandState {
-    let (enabled, checked) = shown_state(app, &command.id, &command.params).unwrap_or((false, None));
+    let (enabled, checked) = shown_state(app, crate::keymap::state_id(command), &command.params).unwrap_or((false, None));
     let mut state = CommandState::new().enabled(enabled);
     if let Some(on) = checked {
         state = state.checked(on);
@@ -320,7 +320,7 @@ fn row_state(app: &VectorcraftApp, command: &CommandRef, label: &str) -> Command
 /// What the dimmed row `command`, named `label`, says: the engine's reason, the panels' in Presentation Mode, else that
 /// the command is not available right now.
 pub(crate) fn off_reason(app: &VectorcraftApp, command: &CommandRef, label: &str) -> String {
-    why_off(app, &command.id)
+    why_off(app, crate::keymap::state_id(command))
         .flatten()
         .or_else(|| crate::palette::refusal(app, command).filter(|_| command.id == "window.panel"))
         .unwrap_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")))

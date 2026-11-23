@@ -2,7 +2,7 @@
 //! nudges and the window's panel and artboard shortcuts.
 
 use craft::keymap::{CommandRef, Mods};
-use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
+use craft::ui::runtime::commands::{ChromeCommand, CommandSet as _, FirePhase, FireSource, Fired};
 use craft::ui::runtime::keys::{self, Intent};
 use craft::ui::runtime::windows::WindowHost;
 use serde_json::json;
@@ -40,6 +40,13 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
     let picked = fired.source == FireSource::Palette;
     if picked && let Some(why) = crate::palette::refusal(app, command) {
         app.status(why);
+        return;
+    }
+    // Tab's Panels toggle fired from the palette, a menu or automation: the framework toggles the panels itself.
+    if ChromeCommand::from_ref(command).is_some() {
+        if picked {
+            crate::palette::record_pick(app, command);
+        }
         return;
     }
     // While a tool's gesture runs, keys run no command; the active tool's own shortcut, between clicks, chooses it

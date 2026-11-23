@@ -770,6 +770,8 @@ mod tests {
             tab(&mut app, &ctx, 3.0 + k as f64);
             assert!(!panel_docking::panels_shown(&app), "{command}: hidden by Tab");
             app.run(command, params).unwrap();
+            // The shell takes the toggle that shows the panels in its next pass (contract ch.K4).
+            window_frame(&mut app, &ctx, 3.5 + k as f64, 800.0);
             assert!(panel_docking::panels_shown(&app), "{command} ends the hide");
             assert!(shown(&app, "Mine"), "{command}: the other toolbars stay on");
         }

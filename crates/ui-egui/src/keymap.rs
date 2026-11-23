@@ -12,6 +12,7 @@
 use std::sync::RwLock;
 
 use craft::keymap::{Binding, Chord, CommandDef, CommandKind, CommandRef, Key, Mods, Overrides, Platform, Scope};
+use craft::ui::runtime::commands::{ChromeCommand, CommandSet as _};
 use serde_json::{Value, json};
 
 use crate::shortcut_editor::{self, EffectItem, Entry, Snapshot};
@@ -62,7 +63,19 @@ fn command_in(key: &str, effects: &[EffectItem]) -> CommandRef {
     if let Some(id) = key.strip_prefix("plugin:") {
         return CommandRef::with_params("plugin.dialog", json!({ "id": id }));
     }
+    // Tab's panels toggle is the framework's chrome command: only its chord toggles the panels instead of moving focus.
+    if key == DOCK {
+        return ChromeCommand::TogglePanels.into();
+    }
     CommandRef::new(key)
+}
+
+/// The entry key of Tab's Panels toggle (`window.dock`), which runs the framework's `ChromeCommand::TogglePanels`.
+const DOCK: &str = "window.dock";
+
+/// The app command whose state the row of `command` shows: `window.dock` for the framework's Panels toggle.
+pub(crate) fn state_id(command: &CommandRef) -> &str {
+    if ChromeCommand::from_ref(command) == Some(ChromeCommand::TogglePanels) { DOCK } else { &command.id }
 }
 
 /// `overrides` with each Effect menu item's shortcut under the command its item runs while the
@@ -95,13 +108,18 @@ pub fn entry_key(command: &CommandRef) -> String {
         ("plugin.dialog", _) if command.params.get("id").and_then(Value::as_str).is_some() => {
             format!("plugin:{}", command.params.get("id").and_then(Value::as_str).unwrap_or_default())
         }
+        _ if ChromeCommand::from_ref(command) == Some(ChromeCommand::TogglePanels) => DOCK.to_string(),
         _ => command.key(),
     }
 }
 
 /// The [`Overrides`] key of an entry key.
 pub fn stored_key(key: &str) -> String {
-    if key.starts_with("panel:") || key.starts_with("effect:") || key.starts_with("plugin:") { command_of(key).key() } else { key.to_string() }
+    if key.starts_with("panel:") || key.starts_with("effect:") || key.starts_with("plugin:") || key == DOCK {
+        command_of(key).key()
+    } else {
+        key.to_string()
+    }
 }
 
 /// An Effect menu item's [`Overrides`] key under the command its item does not run now
@@ -115,7 +133,9 @@ pub(crate) fn other_stored_key(key: &str) -> Option<String> {
 /// The entry key of an [`Overrides`] key.
 pub fn entry_of_stored(key: &str) -> String {
     CommandRef::parse_key(key)
-        .filter(|c| matches!(c.id.as_str(), "window.panel" | "effect.dialog" | "effect.apply" | "plugin.dialog"))
+        .filter(|c| {
+            matches!(c.id.as_str(), "window.panel" | "effect.dialog" | "effect.apply" | "plugin.dialog") || ChromeCommand::from_ref(c).is_some()
+        })
         .map_or_else(|| key.to_string(), |c| entry_key(&c))
 }
 

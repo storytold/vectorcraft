@@ -571,7 +571,8 @@ fn all_registered_shortcuts_parse() {
     let snapshot = crate::shortcut_editor::snapshot();
     for platform in [craft::keymap::Platform::Windows, craft::keymap::Platform::Mac, craft::keymap::Platform::Linux] {
         let defs = crate::keymap::catalog_defs(platform, &snapshot);
-        let has = |id: &str| defs.iter().any(|d| d.command.id == id);
+        // By entry key: Tab's `window.dock` runs the framework's Panels toggle.
+        let has = |id: &str| defs.iter().any(|d| crate::keymap::entry_key(&d.command) == id);
         for c in vectorcraft_engine::command_specs() {
             if let Some(s) = c.shortcut
                 && !["D", "X", "Shift+X", "/"].contains(&s)
