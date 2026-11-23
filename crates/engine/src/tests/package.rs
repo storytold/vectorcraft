@@ -1019,8 +1019,15 @@ fn package_copies_held_postscript_only_for_a_placed_document_with_a_postscript_n
         im.link.as_mut().unwrap().path = logo_ai.clone();
         im.link.as_mut().unwrap().relative = None;
         let key = im.key.clone();
-        d.images
-            .insert(key, vectorcraft_doc::ImageBlob { mime: "application/postscript".into(), bytes: std::sync::Arc::new(eps.to_vec()), proxy: None });
+        d.images.insert(
+            key,
+            vectorcraft_doc::ImageBlob {
+                mime: "application/postscript".into(),
+                bytes: std::sync::Arc::new(eps.to_vec()),
+                proxy: None,
+                file_font: Default::default(),
+            },
+        );
         Ok(())
     })
     .unwrap();

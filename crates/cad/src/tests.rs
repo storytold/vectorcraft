@@ -880,7 +880,7 @@ fn image_and_fill_doc(fill: Paint) -> Document {
             Node::new(d.alloc_id(), NodeKind::Image(Box::new(im))),
         ]
     });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     d
 }
 
@@ -974,7 +974,10 @@ fn images_can_be_left_out_with_their_files() {
     assert_eq!(out.setting_notes, [IMAGES_OFF]);
     // An image that can't be decoded is not read when images are left out.
     let mut broken = d.clone();
-    broken.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None });
+    broken.images.insert(
+        "raster-1".into(),
+        ImageBlob { mime: "image/png".into(), bytes: Arc::new(b"not a png".to_vec()), proxy: None, file_font: Default::default() },
+    );
     let left_out = export(&broken, &DxfOptions { include_images: false, ..opts(&broken) }).unwrap();
     assert!(left_out.warnings.is_empty(), "{:?}", left_out.warnings);
     assert_eq!(left_out.setting_notes, [IMAGES_OFF]);
@@ -1379,7 +1382,7 @@ fn images_link_png_or_jpeg_files() {
         };
         vec![Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)))]
     });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     let out = export(&d, &opts(&d)).unwrap();
     let e = entities(&out);
     assert_eq!(kind(&e[0]), "IMAGE");
@@ -1422,7 +1425,7 @@ fn images_without_pixels_are_left_out_with_one_note() {
             })
             .collect()
     });
-    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None });
+    d.images.insert("raster-2".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(vec![]), proxy: None, file_font: Default::default() });
     let out = export(&d, &opts(&d)).unwrap();
     assert!(entities(&out).is_empty() && out.images.is_empty());
     assert_eq!(out.warnings, ["an image has no pixels and was left out"]);
@@ -1583,7 +1586,7 @@ fn drawings_doc() -> Document {
     });
     let art = path(&mut d, shapes::rectangle(Rect::new(10.0, 40.0, 30.0, 60.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved_by(art, 20.0)) });
-    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None });
+    d.images.insert("raster-1".into(), ImageBlob { mime: "image/png".into(), bytes: Arc::new(png), proxy: None, file_font: Default::default() });
     d
 }
 
