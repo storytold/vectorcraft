@@ -1,10 +1,18 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+// The save panel's flow is the desktop's (craft-dialogs is native only); the web downloads.
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
 
+#[cfg(not(target_arch = "wasm32"))]
 use craft::dialogs::save::{SAVE_IN_PROGRESS, SaveDocument, SaveFlow, SaveStep, SaveTarget};
-use craft::host::{FileFilter, Files, PickRequest, Picked, Wake};
+#[cfg(not(target_arch = "wasm32"))]
+use craft::host::Files;
+use craft::host::{FileFilter, PickRequest, Picked, Wake};
 use craft::platform::watch::FileWatch;
-use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
+use craft::ui::dialog::DialogId;
+#[cfg(not(target_arch = "wasm32"))]
+use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt};
 
 use super::export::file_url;
 use super::open::note_recent;
@@ -18,6 +26,7 @@ use crate::file_asks::{self, Owner};
 pub(crate) type Done = Box<dyn FnOnce(&mut VectorcraftApp, Result<Value, String>)>;
 
 /// What [`pump`] needs to go on with a document's save once its flow answers.
+#[cfg(not(target_arch = "wasm32"))]
 struct SaveDone {
     mode: SaveMode,
     params: Value,
@@ -31,11 +40,11 @@ struct SaveDone {
     retry: Option<super::read_only_save::Retry>,
     /// The changed-on-disk question, while it is open.
     question: Option<DialogId>,
-    then: Option<Done>,
 }
 
 /// The saves of the app: one [`SaveFlow`] per document, and what the flows need to ask and write.
 pub(crate) struct Saves {
+    #[cfg(not(target_arch = "wasm32"))]
     flows: HashMap<u64, SaveFlow<u64>>,
     /// The version of each document's file the app last read or wrote.
     pub(crate) watch: FileWatch<u64>,
@@ -43,51 +52,66 @@ pub(crate) struct Saves {
     pub(crate) written_beside: HashMap<u64, Vec<String>>,
     /// The files the OK of the replace question allows the save it runs again to replace.
     pub(crate) replace_files_ok: Vec<String>,
+    #[cfg(not(target_arch = "wasm32"))]
     done: HashMap<u64, SaveDone>,
+    /// What each document's save tells once it is written, failed or cancelled ([`save_reporting`]).
+    then: HashMap<u64, Done>,
 }
 
 impl Saves {
     /// No save in progress; `wake` runs a frame when the watcher has news.
     pub(crate) fn new(wake: Wake) -> Self {
         Self {
+            #[cfg(not(target_arch = "wasm32"))]
             flows: HashMap::new(),
             watch: FileWatch::new(wake),
             written_beside: HashMap::new(),
             replace_files_ok: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             done: HashMap::new(),
+            then: HashMap::new(),
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn start(&mut self, files: &dyn Files, document: SaveDocument<u64>, target: SaveTarget) -> SaveStep<u64> {
         let Self { flows, watch, .. } = self;
         flows.entry(document.key).or_default().start(files, watch, document, target)
     }
 
     /// Frees the document's flow after a write that wrote nothing.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn release(&mut self, uid: u64) {
         if let Some(flow) = self.flows.get_mut(&uid) {
             flow.failed(&uid);
+        }
+    }
+
+    /// A write's end on the document's flow: the flow is free again, and the watcher knows the new
+    /// version of a file the document took.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn written(&mut self, uid: u64, retargets: bool, out: &Result<Value, String>) {
+        let written = out.as_ref().ok().filter(|v| v.get("cancelled").is_none() && v.get("pending").is_none());
+        let flow = self.flows.entry(uid).or_default();
+        match written.and_then(|v| v["path"].as_str()) {
+            Some(path) if flow.is_busy() || retargets => flow.written(&mut self.watch, uid, Path::new(path)),
+            _ => flow.failed(&uid),
         }
     }
 }
 
 /// Calls the `then` of the document's save, once.
 fn terminate(app: &mut VectorcraftApp, uid: u64, r: Result<Value, String>) {
-    if let Some(then) = app.saves.done.remove(&uid).and_then(|d| d.then) {
+    #[cfg(not(target_arch = "wasm32"))]
+    app.saves.done.remove(&uid);
+    if let Some(then) = app.saves.then.remove(&uid) {
         then(app, r);
     }
 }
 
-/// A save's end: the flow is free again (and the watcher knows the new version of a file the
-/// document took), and the caller that waits for it is told, unless a question or a fallback
-/// picker goes on with it.
-fn finish(app: &mut VectorcraftApp, uid: u64, retargets: bool, out: &Result<Value, String>) {
-    let written = out.as_ref().ok().filter(|v| v.get("cancelled").is_none() && v.get("pending").is_none());
-    let flow = app.saves.flows.entry(uid).or_default();
-    match written.and_then(|v| v["path"].as_str()) {
-        Some(path) if flow.is_busy() || retargets => flow.written(&mut app.saves.watch, uid, Path::new(path)),
-        _ => flow.failed(&uid),
-    }
+/// A save's end: the caller that waits for it is told, unless a question or a fallback picker
+/// goes on with it.
+fn finish(app: &mut VectorcraftApp, uid: u64, out: &Result<Value, String>) {
     if !matches!(out, Ok(v) if v.get("pending").is_some()) {
         terminate(app, uid, out.clone());
     }
@@ -96,6 +120,7 @@ fn finish(app: &mut VectorcraftApp, uid: u64, retargets: bool, out: &Result<Valu
 /// Cancels the document's save (its picker, a question or an options dialog); the caller that
 /// waits for it is told.
 pub(crate) fn cancel(app: &mut VectorcraftApp, uid: u64) {
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(flow) = app.saves.flows.get_mut(&uid) {
         flow.cancel(app.host.files());
     }
@@ -119,24 +144,14 @@ pub(crate) fn save_reporting(app: &mut VectorcraftApp, mode: SaveMode, p: &Value
     if app.background.busy_with(uid) {
         background::wait_all(app);
     }
+    #[cfg(not(target_arch = "wasm32"))]
     if app.saves.flows.get(&uid).is_some_and(|f| f.is_busy()) {
         return Err(SAVE_IN_PROGRESS.english.into());
     }
-    if let Some(old) = app.saves.done.remove(&uid).and_then(|d| d.then) {
+    if let Some(old) = app.saves.then.remove(&uid) {
         old(app, Err("cancelled".into()));
     }
-    let waiting = SaveDone {
-        mode,
-        params: p.clone(),
-        ask_options: false,
-        suggested: String::new(),
-        filters: Vec::new(),
-        retrying: false,
-        retry: None,
-        question: None,
-        then: Some(done),
-    };
-    app.saves.done.insert(uid, waiting);
+    app.saves.then.insert(uid, done);
     let r = save(app, mode, p, true);
     if r.is_err() {
         terminate(app, uid, r.clone());
@@ -147,7 +162,9 @@ pub(crate) fn save_reporting(app: &mut VectorcraftApp, mode: SaveMode, p: &Value
 /// Takes what the flows and their questions have answered since the last pass: the pick, the
 /// changed-on-disk question's answer. A save whose document closed is cancelled and forgotten.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    #[cfg(not(target_arch = "wasm32"))]
     let busy: Vec<u64> = app.saves.flows.iter().filter(|(_, f)| f.is_busy()).map(|(uid, _)| *uid).collect();
+    #[cfg(not(target_arch = "wasm32"))]
     for uid in busy {
         if !app.session.documents().iter().any(|d| d.uid == uid) {
             terminate(app, uid, Err(file_asks::closed().into()));
@@ -165,10 +182,13 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             app.status(e);
         }
     }
+    #[cfg(target_arch = "wasm32")]
+    let _ = app;
 }
 
 /// The step the document's flow has reached since the last pass: its question's answer, else its
 /// pick.
+#[cfg(not(target_arch = "wasm32"))]
 fn next_step(app: &mut VectorcraftApp, uid: u64) -> Option<SaveStep<u64>> {
     if let Some(id) = app.saves.done.get(&uid).and_then(|d| d.question) {
         let answer = app.dialogs()?.with(|host| host.take_by_id::<StandardPrompt>(id))?;
@@ -186,6 +206,7 @@ fn next_step(app: &mut VectorcraftApp, uid: u64) -> Option<SaveStep<u64>> {
     flows.get_mut(&uid)?.take_pick(app.host.files(), watch)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Runs `step` of the document `uid`'s save; a failure frees the flow and tells the caller.
 fn run_step(app: &mut VectorcraftApp, uid: u64, step: SaveStep<u64>) -> Result<Value, String> {
     let r = proceed(app, step);
@@ -196,6 +217,7 @@ fn run_step(app: &mut VectorcraftApp, uid: u64, step: SaveStep<u64>) -> Result<V
     r
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn proceed(app: &mut VectorcraftApp, step: SaveStep<u64>) -> Result<Value, String> {
     match step {
         SaveStep::Picking => Ok(json!({ "pending": "fileDialog" })),
@@ -217,6 +239,7 @@ fn proceed(app: &mut VectorcraftApp, step: SaveStep<u64>) -> Result<Value, Strin
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The flow's `Write` step for document `uid`: its own file written as it is, or a picked path
 /// made into the file the picked type names, asking before it replaces a file the panel did not
 /// ask about.
@@ -243,6 +266,7 @@ fn write_step(app: &mut VectorcraftApp, uid: u64, path: &str, target: SaveTarget
     replaces_unasked(app, &answered, &path, move |app, path| finish_picked(app, mode, &params, ask, &path, retrying))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// What [`start_flow`] needs besides the plan.
 struct Start<'a> {
     mode: SaveMode,
@@ -255,6 +279,7 @@ struct Start<'a> {
     retrying: bool,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Starts the active document's save on its flow: the picker, or the changed-on-disk check of
 /// its own file, then the write.
 fn start_flow(app: &mut VectorcraftApp, first: &SavePlan, s: Start<'_>) -> Result<Value, String> {
@@ -281,7 +306,6 @@ fn start_flow(app: &mut VectorcraftApp, first: &SavePlan, s: Start<'_>) -> Resul
     if matches!(step, SaveStep::Busy) {
         return Err(SAVE_IN_PROGRESS.english.into());
     }
-    let then = app.saves.done.remove(&uid).and_then(|d| d.then);
     let done = SaveDone {
         mode: s.mode,
         params: s.params.clone(),
@@ -291,7 +315,6 @@ fn start_flow(app: &mut VectorcraftApp, first: &SavePlan, s: Start<'_>) -> Resul
         retrying: s.retrying,
         retry: s.retry,
         question: None,
-        then,
     };
     app.saves.done.insert(uid, done);
     run_step(app, uid, step)
@@ -664,6 +687,7 @@ pub(crate) fn save_current(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
 }
 
 /// The same entry with a resolved Documents folder (also permits deterministic host-free tests).
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, folder: Option<String>) -> Result<Value, String> {
     remember_view(app);
     let first = plan(app, SaveMode::Save, &acknowledged(p))?;
@@ -693,6 +717,12 @@ pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, folder: Optio
         retrying: false,
     };
     start_flow(app, &first, start)
+}
+
+/// The web has no save panel to fall back on: Save downloads as [`save`] does.
+#[cfg(target_arch = "wasm32")]
+pub(super) fn save_current_in(app: &mut VectorcraftApp, p: &Value, _folder: Option<String>) -> Result<Value, String> {
+    save(app, SaveMode::Save, p, true)
 }
 
 /// File → Save, Save As…, Save a Copy…, Save as Template… and the options dialogs' OK. `p` is the
@@ -738,22 +768,24 @@ pub(super) fn save_suggesting(
         return Ok(dialogs::save_options::open(app, mode.command(), first.format, &first.name, true));
     }
     let retrying = suggestion.is_some();
-    let (name, directory) = match suggestion {
-        Some((name, directory)) => (name.to_string(), directory),
-        None => (first.name.clone(), first.folder.clone().map(PathBuf::from)),
-    };
-    // The web downloads under the suggested name: no panel.
-    if is_web(app) {
-        let picked = with_picked_type(&name, &name, None, first.format, mode);
-        return finish_picked(app, mode, p, ask_options, &picked, retrying);
+    let name = suggestion.as_ref().map_or_else(|| first.name.clone(), |(name, _)| (*name).to_string());
+    // The desktop asks with the save panel; the web downloads under the suggested name.
+    #[cfg(not(target_arch = "wasm32"))]
+    if !is_web(app) {
+        let directory = match suggestion {
+            _ if mode == SaveMode::Template => fileio::templates_dialog_folder(&app.session.prefs).map(PathBuf::from),
+            Some((_, directory)) => directory,
+            None => first.folder.clone().map(PathBuf::from),
+        };
+        let target = match mode {
+            SaveMode::Save => SaveTarget::InPlace,
+            SaveMode::SaveAs => SaveTarget::As,
+            SaveMode::Copy | SaveMode::Template => SaveTarget::Copy,
+        };
+        return start_flow(app, &first, Start { mode, params: p, ask_options, target, retry: None, name, directory, retrying });
     }
-    let directory = if mode == SaveMode::Template { fileio::templates_dialog_folder(&app.session.prefs).map(PathBuf::from) } else { directory };
-    let target = match mode {
-        SaveMode::Save => SaveTarget::InPlace,
-        SaveMode::SaveAs => SaveTarget::As,
-        SaveMode::Copy | SaveMode::Template => SaveTarget::Copy,
-    };
-    start_flow(app, &first, Start { mode, params: p, ask_options, target, retry: None, name, directory, retrying })
+    let picked = with_picked_type(&name, &name, None, first.format, mode);
+    finish_picked(app, mode, p, ask_options, &picked, retrying)
 }
 
 /// The rest of a save to the path the save panel's answer was made into: the options dialog of
@@ -845,8 +877,8 @@ pub(super) fn ask_before_losing(app: &mut VectorcraftApp, path: &str, command: &
     let st = app.session.active()?;
     let what = fileio::losses_summary(fileio::overwrite_losses(st, path, params)?);
     // The question's Cancel has no step of the flow to answer: the OK runs the command again.
-    let uid = st.uid;
-    app.saves.release(uid);
+    #[cfg(not(target_arch = "wasm32"))]
+    app.saves.release(st.uid);
     let name = fileio::file_name(path);
     let message = crate::i18n::fmt(tl!("Replace “{name}”, the file this document was opened from?"), &[("name", &name)]);
     let detail = crate::i18n::fmt(
@@ -1130,7 +1162,9 @@ fn write_plan(
     let then = move |app: &mut VectorcraftApp, r: Result<Value, String>| {
         let out = outcome(app, r);
         if !handed.get() {
-            finish(app, uid, retargets, &out);
+            #[cfg(not(target_arch = "wasm32"))]
+            app.saves.written(uid, retargets, &out);
+            finish(app, uid, &out);
         }
         out
     };

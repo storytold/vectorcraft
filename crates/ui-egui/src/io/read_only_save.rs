@@ -4,7 +4,9 @@
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
-use vectorcraft_engine::cmd::fileio::{self, SaveMode, SavePlan};
+use vectorcraft_engine::cmd::fileio::SaveMode;
+#[cfg(not(target_arch = "wasm32"))]
+use vectorcraft_engine::cmd::fileio::{self, SavePlan};
 
 use crate::VectorcraftApp;
 
@@ -16,6 +18,7 @@ pub(super) struct Retry {
 }
 
 impl Retry {
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn new(plan: &SavePlan, folder: Option<String>) -> Self {
         let name = plan.path.as_deref().map(fileio::file_name).unwrap_or_else(|| plan.name.clone());
         let mut params = json!({ "format": plan.format.id, "options": plan.options });
@@ -40,6 +43,7 @@ impl Retry {
         let name = &self.name;
         app.status(format!("Cannot write to the location of “{name}”; choose where to save it"));
         // The failed save is the flow's running write: it ends before the picker opens.
+        #[cfg(not(target_arch = "wasm32"))]
         app.saves.release(uid);
         Some(super::save::save_suggesting(app, SaveMode::SaveAs, &self.params, false, Some((&self.name, self.directory))))
     }

@@ -5,11 +5,13 @@
 
 use std::path::PathBuf;
 
+#[cfg(not(target_arch = "wasm32"))]
 use craft::dialogs::ui::UnavailableWords;
 use craft::host::{FileFilter, Files, Host, PickId, PickKind, PickRequest, Picked};
 use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
 // PLAN: assumed re-export paths for `HostedParamDialog`, `PathRequest` and `Env`.
 use craft::ui::patterns::form_dialogs::HostedParamDialog;
+#[cfg(not(target_arch = "wasm32"))]
 use craft::ui::runtime::env::Env;
 use craft::ui::runtime::requests::PathRequest;
 use serde_json::{Map, Value, json};
@@ -263,7 +265,11 @@ pub(crate) fn poll(app: &mut VectorcraftApp) {
         match &picked {
             Picked::Cancelled => continue,
             Picked::Unavailable(why) => {
+                // The desktop says what gives it a file dialog; the browser has none for this kind of pick.
+                #[cfg(not(target_arch = "wasm32"))]
                 app.status(Env::of_root(&ctx).words::<UnavailableWords>().sentence(why));
+                #[cfg(target_arch = "wasm32")]
+                app.status(why.clone());
                 continue;
             }
             _ => {}
