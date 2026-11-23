@@ -100,10 +100,10 @@ impl Drop for Tick {
         for sound in &self.playing {
             sound.disconnect();
         }
-        if let Some(context) = &self.context {
-            if let Ok(promise) = context.close() {
-                observe(promise);
-            }
+        if let Some(context) = &self.context
+            && let Ok(promise) = context.close()
+        {
+            observe(promise);
         }
     }
 }
