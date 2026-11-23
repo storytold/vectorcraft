@@ -3062,9 +3062,11 @@ a script file, of a path, of both together, or with `all: true` every grant, and
 matched after its links are followed; under automation read roots, a path outside them is matched as given. While a script
 runs it is refused with the busy error, as the run keeps the grants it started with. A grants file that is there but
 cannot be read is left as it is: `script.grants.revoke` fails, and a grant picked with Always is not kept. For such a
-file, and one that is over 4 MiB, is not a version 1 grants file, holds a grant that is not well formed or more than
-4096 grants, or whose lock cannot be taken, `script.grants` gives the reason in `error` and lists the well-formed grants
-it can still read. Preferences › General › Script File Access shows that error. A script cannot run either command.
+file, and one that is over 4 MiB, is not a version 1 grants file, or holds a grant that is not well formed or more than
+4096 grants, `script.grants` gives the reason in `error` and lists the well-formed grants it can still read. When the
+grants file's lock cannot be taken, `script.grants` gives the reason in `error` and does not read the file, so `grants`
+is empty even when the file holds grants. Preferences › General › Script File Access shows that error. A script cannot
+run either command.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.grants.revoke","params":{"all":true}}}

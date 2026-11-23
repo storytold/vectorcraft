@@ -1065,7 +1065,8 @@ fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
 /// its text, the path and whether it may be written (`script.grants`), as [`read_store`] reads
 /// them, and the error when the file is there and [`try_read_store`] refuses it (it cannot be read,
 /// is too large, is not a grants file of this version, or holds a grant that is not well formed or
-/// more grants than may be kept) or its lock cannot be taken, which also refuses a change.
+/// more grants than may be kept) or its lock cannot be taken, which also refuses a change. When the
+/// lock cannot be taken the file is not read, and the list is empty.
 pub(crate) fn stored_grants(data_dir: &Path) -> (Vec<serde_json::Value>, Option<std::io::Error>) {
     let store = data_dir.with_file_name(GRANTS_FILE);
     let _lock = match lock_store(&store) {

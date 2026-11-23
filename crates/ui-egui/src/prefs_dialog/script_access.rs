@@ -41,7 +41,7 @@ const WHOLE: [(&str, &str); 2] = [("script", "wholeScript"), ("path", "wholePath
 /// (`wholeScript` and `wholePath`) for `script.grants.revoke`, and shows them (`script` and `path`)
 /// as `script.grants` names them to the request that opened the dialog ([`as_listed`]). When the
 /// grants file cannot be read or changed, its error goes in the field [`ERROR`], with the rows of the
-/// grants that could still be read.
+/// grants that could still be read (none when its lock cannot be taken).
 pub(super) fn load(app: &mut VectorcraftApp, fields: &mut Map<String, Value>) {
     fields.remove(ERROR);
     match vectorcraft_engine::file_access::unconfined(|| app.session.execute("script.grants", &json!({}))) {
