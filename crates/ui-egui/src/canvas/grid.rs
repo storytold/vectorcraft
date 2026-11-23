@@ -1,47 +1,8 @@
-use craft::color_ui::display::DisplayTransform;
 use craft::ui::canvas_controls::{CanvasGrid, GridLine};
 use craft::ui::style::DataColor;
 use egui::{Color32, Pos2, Shape, pos2};
 
 use super::VectorcraftApp;
-
-/// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), converted
-/// into the display profile `display` when there is one, cached per look, and its cell size in
-/// screen points.
-pub(crate) fn checker_texture(
-    ctx: &egui::Context,
-    setup: &vectorcraft_doc::DocSetup,
-    display: Option<&DisplayTransform>,
-) -> (egui::TextureHandle, f32) {
-    // A tile of its own with a display profile, so a preview drawn in sRGB beside the canvas
-    // doesn't make the canvas's tile again each frame.
-    let id = egui::Id::unique("transparency-grid-tile").with(display.is_some());
-    (checker_tile(ctx, setup.grid_colors, display, id), setup.grid_size.cell())
-}
-
-/// The transparency grid's 2 × 2-cell tile in the colors `grid_colors` (the first in the top-left
-/// and bottom-right cells), converted into the display profile `display` when there is one, and
-/// cached under `id` until the colors change.
-pub(crate) fn checker_tile(
-    ctx: &egui::Context,
-    grid_colors: [vectorcraft_color::Color; 2],
-    display: Option<&DisplayTransform>,
-    id: egui::Id,
-) -> egui::TextureHandle {
-    let colors = grid_colors.map(|c| crate::display_profile::color32(display, crate::panels::c32(&c)));
-    let cached = ctx.data(|d| d.get_temp::<([Color32; 2], egui::TextureHandle)>(id)).filter(|(c, _)| *c == colors);
-    cached.map(|(_, t)| t).unwrap_or_else(|| {
-        let [a, b] = colors;
-        let img = egui::ColorImage::new([2, 2], vec![a, b, b, a]);
-        let opts = egui::TextureOptions { wrap_mode: egui::TextureWrapMode::Repeat, ..egui::TextureOptions::NEAREST };
-        let t = ctx.load_texture(TRANSPARENCY_GRID, img, opts);
-        ctx.data_mut(|d| d.insert_temp(id, (colors, t.clone())));
-        t
-    })
-}
-
-/// Name of the transparency grid's texture.
-pub(crate) const TRANSPARENCY_GRID: &str = "transparency grid";
 
 /// One quad drawn with `tex`: its corners `quad` (from the top left, clockwise) show the texture
 /// from (0, 0) to (`u`, `v`).
@@ -95,25 +56,6 @@ pub(super) fn pixel_grid(app: &VectorcraftApp) -> Option<CanvasGrid> {
 /// A `#rrggbb` colour preference, `fallback` when it doesn't parse.
 pub(super) fn pref_color(hex: &str, fallback: Color32) -> Color32 {
     vectorcraft_color::Color::from_hex(hex).map_or(fallback, |c| crate::panels::c32(&c))
-}
-
-/// The part of the segment from `a` to `b` inside `r`, none when the segment misses it.
-pub(super) fn clip_segment(a: Pos2, b: Pos2, r: egui::Rect) -> Option<(Pos2, Pos2)> {
-    let d = b - a;
-    let (mut t0, mut t1) = (0.0_f32, 1.0_f32);
-    // Each edge as (the run toward it, the room before it).
-    for (run, room) in [(-d.x, a.x - r.left()), (d.x, r.right() - a.x), (-d.y, a.y - r.top()), (d.y, r.bottom() - a.y)] {
-        if run == 0.0 {
-            if room < 0.0 {
-                return None;
-            }
-        } else if run < 0.0 {
-            t0 = t0.max(room / run);
-        } else {
-            t1 = t1.min(room / run);
-        }
-    }
-    (t0 <= t1).then(|| (a + d * t0, a + d * t1))
 }
 
 /// A ruler label for `v` (in the ruler's unit) on a ruler whose labels are `step` apart: whole

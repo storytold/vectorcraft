@@ -95,15 +95,6 @@ fn round(n: f64) -> f64 {
     (n * 10.0).round() / 10.0
 }
 
-/// The effect's lights: each light of its list, or its single light, with the effect's defaults for
-/// the settings a light leaves out or the selected effects hold with different values (null). A 3D
-/// (Classic) effect's lights are white whatever color a list light carries, since it shades
-/// without light color.
-pub(crate) fn lights(fields: &DialogFields) -> Lights {
-    let classic = vectorcraft_effects::is_classic_three_d(fields.text("__effect").unwrap_or_default());
-    lights_for(fields, classic)
-}
-
 /// [`lights`] for a light editor that already knows whether it edits a 3D (Classic) effect.
 fn lights_for(fields: &DialogFields, classic: bool) -> Lights {
     let defaults = vectorcraft_effects::default_params(fields.text("__effect").unwrap_or_default()).unwrap_or(json!({}));

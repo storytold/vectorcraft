@@ -93,15 +93,6 @@ fn finish(app: &mut VectorcraftApp, uid: u64, retargets: bool, out: &Result<Valu
     }
 }
 
-/// Cancels the document's save (its picker, a question or an options dialog); the caller that
-/// waits for it is told.
-pub(crate) fn cancel(app: &mut VectorcraftApp, uid: u64) {
-    if let Some(flow) = app.saves.flows.get_mut(&uid) {
-        flow.cancel(app.host.files());
-    }
-    terminate(app, uid, Err("cancelled".into()));
-}
-
 /// Lets the save that runs again replace `files`, which the OK of the replace question allowed.
 pub(crate) fn allow_replacing(app: &mut VectorcraftApp, files: &[String]) {
     for f in files {
@@ -109,39 +100,6 @@ pub(crate) fn allow_replacing(app: &mut VectorcraftApp, files: &[String]) {
             app.saves.replace_files_ok.push(f.clone());
         }
     }
-}
-
-/// [`save`] that calls `done` once the save is written, failed or cancelled, also after a picker or
-/// a question.
-pub(crate) fn save_reporting(app: &mut VectorcraftApp, mode: SaveMode, p: &Value, done: Done) -> Result<Value, String> {
-    let uid = app.session.active().ok_or("no document")?.uid;
-    // Saves of one document finish in order.
-    if app.background.busy_with(uid) {
-        background::wait_all(app);
-    }
-    if app.saves.flows.get(&uid).is_some_and(|f| f.is_busy()) {
-        return Err(SAVE_IN_PROGRESS.english.into());
-    }
-    if let Some(old) = app.saves.done.remove(&uid).and_then(|d| d.then) {
-        old(app, Err("cancelled".into()));
-    }
-    let waiting = SaveDone {
-        mode,
-        params: p.clone(),
-        ask_options: false,
-        suggested: String::new(),
-        filters: Vec::new(),
-        retrying: false,
-        retry: None,
-        question: None,
-        then: Some(done),
-    };
-    app.saves.done.insert(uid, waiting);
-    let r = save(app, mode, p, true);
-    if r.is_err() {
-        terminate(app, uid, r.clone());
-    }
-    r
 }
 
 /// Takes what the flows and their questions have answered since the last pass: the pick, the

@@ -14,9 +14,6 @@ use crate::doc_windows::Win;
 /// The length on screen, in points, of each arm of an artboard's center mark (a cross), at any zoom.
 const CENTER_MARK_ARM: f32 = 6.0;
 
-/// The fade's color: black at 40% opacity, which shows each channel under it at 60% of its value.
-pub(super) const FADE_OUTSIDE: Color32 = Color32::from_black_alpha(102);
-
 fn closed(r: vectorcraft_geom::Rect) -> BezPath {
     let mut path = BezPath::new();
     path.move_to(Point::new(r.x0, r.y0));

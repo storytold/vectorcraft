@@ -400,14 +400,6 @@ fn caret_kerning(app: &mut VectorcraftApp) -> Option<(f64, bool)> {
     Some((value, true))
 }
 
-/// The check marks of the Kerning menu's Auto and Optical entries for the selection's kerning
-/// `mode` (Optical on, manual value). A manual value checks neither, as it sets the spacing even
-/// with Optical on. A selection that mixes modes checks neither, and the menu still lists both.
-fn kerning_methods(mode: Option<(bool, Option<f64>)>) -> (Option<bool>, Option<bool>) {
-    let (automatic, optical) = mode.map_or((false, false), |(optical, manual)| (!optical && manual.is_none(), optical && manual.is_none()));
-    (Some(automatic), Some(optical))
-}
-
 /// The faces Type › Bold and Type › Italic switch to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Face {

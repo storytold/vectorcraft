@@ -87,11 +87,11 @@ const MODES: [(&str, &str); 3] = [("linear", "Linear"), ("angular", "Angular"), 
 /// Where the floating strip sits from the canvas corner.
 const STRIP_OFFSET: egui::Vec2 = egui::vec2(24.0, 24.0);
 
-/// A number field of the options: its labels, the number it edits and the range and unit it shows.
-#[derive(Clone, Copy)]
 /// The option a number field edits.
 type NumSlot = fn(&mut DimensionOptions) -> &mut f64;
 
+/// A number field of the options: its labels, the number it edits and the range and unit it shows.
+#[derive(Clone, Copy)]
 struct Num {
     /// The label beside the field.
     label: &'static str,

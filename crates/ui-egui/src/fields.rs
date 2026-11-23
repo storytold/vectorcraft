@@ -42,24 +42,9 @@ pub fn blend_entries() -> Vec<Entry<BlendMode>> {
     framework_blend_entries(&entries, |entry| mode_label(entry.key))
 }
 
-/// The blend modes keyed by [`blend_key`], for a form parameter (`Param::blend`).
-pub fn blend_modes() -> Vec<(BlendKeyEntry<String>, Label)> {
-    blend_table().into_iter().map(|(mode, shortcut)| (BlendKeyEntry::new(blend_key(mode), shortcut), mode_label(mode))).collect()
-}
-
 /// `mode`'s name in the interface language.
 fn mode_label(mode: BlendMode) -> Label {
     Label::from(crate::i18n::t(mode.label()))
-}
-
-/// The parameter value naming `mode` (`"multiply"`).
-pub fn blend_key(mode: BlendMode) -> String {
-    mode.label().to_ascii_lowercase()
-}
-
-/// The blend mode an effect parameter names; only a parameter called `mode` is one.
-pub fn blend_of(key: &str, value: &serde_json::Value) -> Option<BlendMode> {
-    value.as_str().filter(|_| key == "mode").and_then(BlendMode::parse)
 }
 
 /// `lengths` with `bare_points` (Numbers Without Units Are Points) applied: a bare number in a picas

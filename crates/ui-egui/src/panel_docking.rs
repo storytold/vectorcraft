@@ -1275,12 +1275,6 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     settle(app);
 }
 
-/// Whether a modal is open: a dialog, the command palette or a native file dialog. Floating panels
-/// in OS windows of their own take no input meanwhile, as the main window behind it takes none.
-pub(crate) fn modal_open(app: &VectorcraftApp) -> bool {
-    app.any_dialog_open() || app.ui.palette_open || app.file_dialog_open()
-}
-
 /// Is a modal window open in this pass: a modal dialog, Preferences, Keyboard Shortcuts or a file
 /// dialog? A popup (a menu, a dropdown, a slider strip) is no window, so it does not close itself;
 /// nor is the open palette's own box, so a modal layer of the last pass counts only while the

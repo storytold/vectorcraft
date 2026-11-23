@@ -28,8 +28,6 @@ pub(crate) mod rank {
     pub const DETAIL: u8 = 3;
     /// Every other member of the bar.
     pub const GROUP: u8 = 4;
-    /// A section's link that stays after its fields leave.
-    pub const LINK: u8 = 6;
 }
 
 /// An anchor button: icon, tooltip, command and the convert command's `to`.

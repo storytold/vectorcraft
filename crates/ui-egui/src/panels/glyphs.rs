@@ -335,12 +335,6 @@ impl VcGlyphs<'static> {
         VcGlyphs { db: FontDb::global(), family, style, face, fit, listing: None, empty }
     }
 
-    /// The source of `face` for the character selected now: the canvas row draws its cells with it.
-    pub(crate) fn for_face(app: &mut VectorcraftApp, face: Arc<FontFace>) -> Self {
-        let fit = Some(Fit::of(app, &face));
-        VcGlyphs { fit, ..Self::bare(face) }
-    }
-
     /// The source of `face` alone: it draws glyphs and describes nothing about the selection.
     fn bare(face: Arc<FontFace>) -> Self {
         VcGlyphs {

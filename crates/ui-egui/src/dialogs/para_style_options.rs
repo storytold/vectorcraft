@@ -772,11 +772,6 @@ impl ParaStyleOptions {
         edited_attrs(self.inner.fields(), &self.opening)
     }
 
-    /// What the dialog opened with.
-    pub(crate) fn opening(&self) -> &Opening {
-        &self.opening
-    }
-
     fn command(&self, attrs: Map<String, Value>) -> Value {
         let to = self.inner.fields().text("name").unwrap_or_default();
         json!({"name": self.opening.style, "to": to, "attrs": attrs})

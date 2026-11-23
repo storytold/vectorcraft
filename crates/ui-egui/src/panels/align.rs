@@ -361,9 +361,6 @@ fn align_to(app: &VectorcraftApp) -> AlignTo {
     if has_key(app) { AlignTo::Key } else { app.ui.align_to }
 }
 
-/// The Align To choices of the Align panel and of the Control bar's Align To menu, in their order.
-const ALIGN_TO: [AlignTo; 3] = [AlignTo::Selection, AlignTo::Key, AlignTo::Artboard];
-
 /// The icon and the translated name of Align To choice `v`; `anchor`: the key is an anchor point
 /// (Direct Selection), and the key choice is named Align to Key Anchor.
 fn align_to_icon_name(v: AlignTo, anchor: bool) -> (&'static str, &'static str) {

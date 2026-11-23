@@ -29,24 +29,6 @@ pub(crate) fn colour_libraries(app: &VectorcraftApp) -> Vec<LibraryRef> {
     library_refs(swatchlib::libraries(&app.session).into_iter().filter(|l| l.category != "gradients" && has_colours(&l.id)).collect())
 }
 
-/// The name of library choice `key` (the document's swatches or a swatch library, as Image
-/// Trace's Document Library and Find Nearest Swatch pick one); a library that is gone shows its key.
-pub(crate) fn library_label(app: &VectorcraftApp, key: &str) -> String {
-    match limit_name(app, key) {
-        Some(_) if key == swatchlib::DOCUMENT_SWATCHES => tl!(DOCUMENT_SWATCHES).to_string(),
-        Some(name) => library_panel::library_name(key, &name).to_string(),
-        None => key.to_string(),
-    }
-}
-
-/// The library choices: the document's swatches, then the colour libraries (`current` checked) →
-/// the key chosen.
-pub(crate) fn library_list(app: &VectorcraftApp, ui: &mut Ui, current: &str) -> Option<String> {
-    let document = item(ui, DOCUMENT_SWATCHES, true, Some(current == swatchlib::DOCUMENT_SWATCHES)).then(|| swatchlib::DOCUMENT_SWATCHES.to_string());
-    ui.separator();
-    library_panel::library_items(ui, &colour_libraries(app), &|id| id == current).or(document)
-}
-
 /// The library choices of a `Select`: the document's swatches, a separator, the colour libraries at
 /// the top level of the library menu, then each submenu's libraries under its heading.
 pub(crate) fn library_entries(app: &VectorcraftApp) -> Vec<Entry<String>> {

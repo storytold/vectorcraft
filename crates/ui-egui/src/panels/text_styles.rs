@@ -39,10 +39,6 @@ impl Kind {
     fn what(self) -> &'static str {
         if self == Kind::Char { "Character" } else { "Paragraph" }
     }
-    /// `what` in the UI language, for text shown to the user.
-    fn what_label(self) -> &'static str {
-        if self == Kind::Char { tl!("Character") } else { tl!("Paragraph") }
-    }
     /// The framework panel's kind.
     fn panel_kind(self) -> TextStyleKind {
         if self == Kind::Char { TextStyleKind::Character } else { TextStyleKind::Paragraph }

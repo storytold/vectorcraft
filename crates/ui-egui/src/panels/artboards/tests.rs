@@ -1031,7 +1031,7 @@ fn the_artboard_tools_menu_publishes_its_cut_and_copy() {
     app.session.set_tool_option("selected", &json!([1]));
     app.view_mut().unwrap().artboard = 1;
     for label in ["Copy", "Cut"] {
-        assert_eq!(app.clipboard.write_text("").unwrap(), craft::craft_platform::clipboard::Written::Written, "{label}: the clipboard is cleared");
+        assert_eq!(app.clipboard.write_text("").unwrap(), craft::platform::clipboard::Written::Written, "{label}: the clipboard is cleared");
         choose(&mut app, label);
         assert!(app.written_clipboard_text().is_some_and(|svg| svg.contains("<svg")), "{label}");
     }

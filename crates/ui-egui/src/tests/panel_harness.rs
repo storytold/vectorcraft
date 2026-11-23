@@ -176,13 +176,6 @@ impl Panel {
         self.after();
     }
 
-    /// Presses on the control named `name`, moves the pointer by `by` and keeps the button down until [`Panel::release`].
-    pub(crate) fn drag_hold(&mut self, name: &str, by: Vec2) {
-        let target = self.find(name);
-        self.fixture.drag_hold_at(target.center(), by);
-        self.after();
-    }
-
     /// [`Panel::drag_hold`] on the control named `name` whose role is `role`, where controls of other roles share
     /// the name (a slider beside its number box).
     pub(crate) fn drag_hold_role(&mut self, name: &str, role: craft::ui::contract::Role, by: Vec2) {

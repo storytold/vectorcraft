@@ -260,11 +260,6 @@ impl PresetManager {
         self.stored = stored;
         self.detail = detail;
     }
-
-    /// Whether the selected preset is a built-in one.
-    fn built_in(&self) -> bool {
-        find(&self.rows, &self.selected).is_none_or(|row| row.built_in)
-    }
 }
 
 impl StackDialog for PresetManager {
