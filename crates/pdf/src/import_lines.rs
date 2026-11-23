@@ -7,14 +7,14 @@
 //! - area type comes as a line of point type per line, each wrapped line ending in a space. Lines
 //!   in a row sharing a left edge, font, size and leading (and paragraph spacing) are one area
 //!   type object again, aligned left or justified, where laying its text out in the frame breaks
-//!   it where the file does: else, as where its font isn't installed, they stay lines.
+//!   it where the file does; otherwise they stay lines. Carried fonts are used for this check.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use kurbo::{Point, Rect, Shape};
 use vectorcraft_color::BlendMode;
-use vectorcraft_doc::{AppearanceItem, CharStyle, Justify, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
+use vectorcraft_doc::{AppearanceItem, CharStyle, FileFont, FileFonts, Justify, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::shapes;
 
 use crate::import_text::{LineFacts, median};
@@ -258,6 +258,30 @@ fn laid_out(texts: &[(&TextObject, &LineFacts)], b: &Block, justify: Justify, wi
     }
     let mut t = (*first).clone();
     t.runs = runs;
+    // The fonts the file carries that draw the lines draw them as one object too.
+    let mut fonts: Vec<FileFont> = vec![];
+    for f in texts.iter().flat_map(|(t, _)| t.file_fonts_in_use()) {
+        if !fonts.contains(f) {
+            fonts.push(f.clone());
+        }
+    }
+    t.file_fonts = (!fonts.is_empty()).then(|| {
+        let resources = fonts
+            .iter()
+            .take(vectorcraft_doc::text::MAX_FILE_FONTS)
+            .filter_map(|font| {
+                texts
+                    .iter()
+                    .find_map(|(line, _)| {
+                        line.file_fonts_in_use().iter().any(|f| f.key == font.key).then(|| line.file_fonts.as_ref()?.face(&font.key)).flatten()
+                    })
+                    .map(|face| (font.key.clone(), face))
+            })
+            .collect();
+        let mut kept = FileFonts::new(fonts, &t.plain_text());
+        kept.bind(resources);
+        Box::new(kept)
+    });
     t.para.justify = justify;
     t.para.space_before = b.space;
     let last = b.ys.last().copied()?;

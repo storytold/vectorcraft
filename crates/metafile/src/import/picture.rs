@@ -44,8 +44,10 @@ use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, PathEl, Point, Rect,
 
 use super::{BAD_IMAGE, FAR_AWAY, HAIRLINE, LIMIT, MAX_NODES, around, rgb, sane};
 use crate::dib::Rgba;
-use crate::wmf::PLACEABLE_KEY;
 use crate::{Imported, Kind};
+
+// The placeable header is interpreted here for VectorCraft’s logical-unit policy.
+const PLACEABLE_KEY: u32 = 0x9AC6_CDD7;
 
 const PATTERNS: &str = "hatched and pattern brushes are filled with their average color";
 const ENDS_EARLY: &str = "the file ends early: what it held was imported";
@@ -1162,46 +1164,6 @@ fn retracked(t: &TextObject, laid: &vectorcraft_text::TextLayout, dx: &[f64]) ->
     Some(out)
 }
 
-/// Does the file stop before its end-of-file record?
-fn ends_early(bytes: &[u8], kind: Kind) -> bool {
-    let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
-    let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_le_bytes([b[0], b[1]]));
-    let mut at = match kind {
-        Kind::Emf => 0,
-        Kind::Wmf => {
-            let start = if u32_at(0) == Some(PLACEABLE_KEY) { 22 } else { 0 };
-            let Some(words) = u16_at(start + 2) else { return true };
-            start + usize::from(words) * 2
-        }
-    };
-    loop {
-        let size = match kind {
-            Kind::Emf => {
-                let (Some(kind), Some(size)) = (u32_at(at), u32_at(at.saturating_add(4))) else { return true };
-                if kind == 14 {
-                    return false;
-                }
-                // Records are a multiple of 4 bytes long; reading stops at one that isn't.
-                if !size.is_multiple_of(4) {
-                    return true;
-                }
-                size as usize
-            }
-            Kind::Wmf => {
-                let (Some(words), Some(function)) = (u32_at(at), u16_at(at.saturating_add(4))) else { return true };
-                if function == 0 {
-                    return false;
-                }
-                (words as usize).saturating_mul(2)
-            }
-        };
-        if size < 6 {
-            return true;
-        }
-        at = at.saturating_add(size);
-    }
-}
-
 /// Read an EMF or WMF file.
 pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
     let kind = crate::sniff(bytes).ok_or("not an EMF or WMF file")?;
@@ -1212,7 +1174,11 @@ pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
     })?;
     let k = unit(bytes, kind);
     let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), k);
-    if ends_early(bytes, kind) {
+    let wire_kind = match kind {
+        Kind::Emf => craft_metafile::Kind::Emf,
+        Kind::Wmf => craft_metafile::Kind::Wmf,
+    };
+    if craft_metafile::ends_early(bytes, wire_kind) {
         m.warn(ENDS_EARLY);
     }
     if pic.truncated {

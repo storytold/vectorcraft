@@ -38,16 +38,17 @@ craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7b
 craft-plotter = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 # WMF, EMF and EMF+ reader (craft-libs#778).
-craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
+craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "c56fbd8271a42ffcc82b07c8f31d714e345fdcd9" }
 craft-xml = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-image-codecs = { git = "https://github.com/storytold/craft-libs", rev = "ba25ccd233934d1b2f74e3c0f235168bf5f13ef3" }
 craft-gif = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-tiff = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-ps = { git = "https://github.com/storytold/craft-libs", rev = "cfcc86242d56fe68117cd5dc2e5dd3b7a0e5b0ec", default-features = false, features = ["read", "write"] }
 craft-psd = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
-craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
+craft-stream-codecs = { git = "https://github.com/storytold/craft-libs", rev = "d20a82481b1f7b1d32c818b19c620338af9755d3" }
 craft-jxl = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0", features = ["egui"] }
+craft-codepage = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
 vectorcraft-color = { path = "crates/color" }
@@ -192,7 +193,7 @@ codegen-units = 1
 [patch.crates-io]
 hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
-hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "d20a82481b1f7b1d32c818b19c620338af9755d3" }
 hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }
 krilla = { git = "https://github.com/storytold/craft-libs", rev = "d7c9632bfb3040cf45db394e7500cc93c81c49e0" }

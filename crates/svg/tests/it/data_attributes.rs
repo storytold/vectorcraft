@@ -32,10 +32,10 @@ fn native_data(raw: &str) -> Document {
 }
 #[test]
 fn imported_decimal_whitespace_references_survive_export() {
-    let doc = import(&svg(r#"<rect id="shape" width="20" height="20" data-value="a&#10;b" data-tab="a&#9;b" data-cr="a&#13;b"/>"#)).unwrap();
+    let doc = import(&svg(r#"<rect id="shape" width="20" height="20" data-value="a&#10;b" data-tab="a&#9;b" data-cr="a&#13;b" data-mixed="a&#9;&quot;&apos;&lt;&gt;&amp;&#13;&#10;雲"/>"#)).unwrap();
     assert_eq!(
         named(&doc, "shape").extras().attrs.as_deref().unwrap().data,
-        [("value".into(), "a\nb".into()), ("tab".into(), "a\tb".into()), ("cr".into(), "a\rb".into())]
+        [("value".into(), "a\nb".into()), ("tab".into(), "a\tb".into()), ("cr".into(), "a\rb".into()), ("mixed".into(), "a\t\"'<>&\r\n雲".into()),]
     );
     for styling in styles() {
         for minify in [false, true] {
@@ -45,6 +45,8 @@ fn imported_decimal_whitespace_references_survive_export() {
             for (key, value) in [("data-value", "a\nb"), ("data-tab", "a\tb"), ("data-cr", "a\rb")] {
                 assert_eq!(n.attribute(key), Some(value));
             }
+            assert_eq!(n.attribute("data-mixed"), Some("a\t\"'<>&\r\n雲"));
+            assert!(text.contains(r#"data-mixed="a&#9;&quot;&apos;&lt;&gt;&amp;&#13;&#10;雲""#));
             let back = import(&text).unwrap();
             assert_eq!(named(&back, "shape").extras().attrs.as_deref().unwrap().data, named(&doc, "shape").extras().attrs.as_deref().unwrap().data);
         }
