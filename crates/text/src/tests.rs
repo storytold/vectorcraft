@@ -1031,6 +1031,65 @@ fn whitespace_the_primary_font_lacks_takes_the_fallback_face() {
     assert!(l.glyphs.iter().all(|g| g.font_id == primary.id()));
 }
 
+/// The characters of a run its font lacks come from one fallback face when one has them all: a ㈱
+/// the first Japanese fallback lacks doesn't leave the kana and kanji next to it in another
+/// design. A run the first fallback covers keeps it. Needs craft-fonts' Japanese faces (skipped
+/// without them, or when the first fallback has ㈱).
+#[test]
+fn a_run_takes_its_fallback_characters_from_one_face() {
+    let primary = db().face("Source Sans 3", "Regular").unwrap();
+    let (Some(kanji), Some(mark)) = (db().fallback_for('試', primary.id()), db().fallback_for('㈱', primary.id())) else {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    };
+    if kanji.id() == mark.id() || !"ロゴ試験".chars().all(|c| mark.covers(c)) {
+        eprintln!("skipped: the first Japanese fallback ({}) has ㈱, or the face that has it lacks kana", kanji.family);
+        return;
+    }
+    let faces = |text: &str| -> Vec<u32> { layout(db(), &point(text, style(20.0))).glyphs.iter().map(|g| g.font_id).collect() };
+    // ABC in the run's own font, the rest from the one face that has ㈱ too.
+    let ids = faces("ABC㈱ロゴ試験");
+    assert_eq!(ids.len(), 8);
+    assert!(ids[..3].iter().all(|&id| id == primary.id()));
+    assert!(
+        ids[3..].iter().all(|&id| id == mark.id()),
+        "{:?}",
+        ids.iter().map(|id| db().face_by_id(*id).map(|f| f.family.clone())).collect::<Vec<_>>()
+    );
+    // Without ㈱: the first fallback, for every character.
+    assert!(faces("ABCロゴ試験")[3..].iter().all(|&id| id == kanji.id()));
+}
+
+/// A cluster that no face covers in full (a letter whose mark no installed font has) keeps the
+/// face of its letter and doesn't stop the run's other fallback characters from coming from one
+/// face: here U+F0001 falls back to the first font and U+F0002 only to the second, which has both.
+#[test]
+fn a_partly_covered_cluster_does_not_keep_a_run_in_several_fallbacks() {
+    use crate::test_fonts::repeat_font;
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(repeat_font("Onefacetest First", &[('\u{F0001}', 'A'), ('\u{F0003}', 'C')]).unwrap());
+    db.add_font(repeat_font("Onefacetest Second", &[('\u{F0001}', 'A'), ('\u{F0002}', 'B')]).unwrap());
+    let first = db.face("Onefacetest First", "Regular").unwrap();
+    let second = db.face("Onefacetest Second", "Regular").unwrap();
+    // A Mende Kikakui combining mark: a nonspacing mark that stays with the letter before it.
+    let mark = '\u{1E8D0}';
+    let primary = db.face("Source Sans 3", "Regular").unwrap();
+    let fallback = |c| db.fallback_for(c, primary.id()).map(|f| f.id());
+    if fallback(mark).is_some() || fallback('\u{F0001}') != Some(first.id()) || fallback('\u{F0003}') != Some(first.id()) {
+        eprintln!(
+            "skipped: a loaded font has the mark, or another font has the private-use characters {:?}",
+            [mark, '\u{F0001}', '\u{F0003}'].map(|c| db.fallback_for(c, primary.id()).map(|f| f.family.clone()))
+        );
+        return;
+    }
+    let faces = |text: &str| -> Vec<u32> { layout(&db, &point(text, style(20.0))).glyphs.iter().map(|g| g.font_id).collect() };
+    let ids = faces("\u{F0001}\u{F0002}\u{F0003}\u{1E8D0}");
+    let names = || ids.iter().map(|id| db.face_by_id(*id).map(|f| f.family.clone())).collect::<Vec<_>>();
+    assert_eq!(ids.first(), Some(&second.id()), "{:?}", names());
+    assert_eq!(ids.get(1), Some(&second.id()), "{:?}", names());
+    assert_eq!(ids.get(2), Some(&first.id()), "the letter of the partly covered cluster keeps its face: {:?}", names());
+}
+
 #[test]
 fn multiple_runs_and_styles() {
     let mut t = point("", style(10.0));

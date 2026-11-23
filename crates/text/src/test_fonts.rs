@@ -688,7 +688,7 @@ pub fn rare_repeat_mark_font() -> Option<Vec<u8>> {
 
 /// A font named `family` over bundled Source Sans 3 whose cmap maps each of `chars` to the glyph of
 /// the Latin capital beside it, and the space to its own glyph.
-fn repeat_font(family: &str, chars: &[(char, char)]) -> Option<Vec<u8>> {
+pub(crate) fn repeat_font(family: &str, chars: &[(char, char)]) -> Option<Vec<u8>> {
     use write_fonts::tables::cmap::Cmap;
 
     const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
