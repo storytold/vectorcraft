@@ -1371,12 +1371,31 @@ fn a_drag_at_a_lower_resolution() {
     assert!(!app.canvas.moved);
     app.canvas.renderer = vectorcraft_render::Renderer::new();
     app.canvas.key = None;
-    assert!(run(&mut app, vec![]) == Some(after.clone()), "the frame after the drag is what a fresh renderer draws");
+    let fresh = run(&mut app, vec![]);
+    assert!(fresh.as_ref() == Some(&after), "the frame after the drag is what a fresh renderer draws: {}", differing(&after, fresh.as_deref()));
     // A dialog's preview: an interaction, and no drag.
     app.session.begin_interaction("Texturizer").unwrap();
     assert!(run(&mut app, vec![]) == Some(after), "a dialog's preview draws the effect at full resolution");
     assert!(app.canvas.key.as_ref().is_some_and(|k| k.interacting && !k.dragging));
     assert_eq!(app.canvas.renderer.stats.previewed, 0);
+}
+
+/// Where frame `b` differs from `a`: how many pixels, the first, and the largest channel difference.
+fn differing(a: &[Color32], b: Option<&[Color32]>) -> String {
+    let Some(b) = b else { return "not rendered".into() };
+    if a.len() != b.len() {
+        return format!("{} pixels against {}", b.len(), a.len());
+    }
+    let diff: Vec<(usize, u8)> = a
+        .iter()
+        .zip(b)
+        .enumerate()
+        .filter(|(_, (p, q))| p != q)
+        .map(|(i, (p, q))| (i, p.to_array().iter().zip(q.to_array()).map(|(x, y)| x.abs_diff(y)).max().unwrap_or(0)))
+        .collect();
+    let first = diff.first().map(|&(i, _)| (i, a[i], b[i]));
+    let most = diff.iter().map(|d| d.1).max().unwrap_or(0);
+    format!("{} of {} pixels, first {first:?}, at most {most} apart", diff.len(), a.len())
 }
 
 /// Dragging a small square over an A4 page filled by a rectangle blurred by 500 pt, at 200%:
