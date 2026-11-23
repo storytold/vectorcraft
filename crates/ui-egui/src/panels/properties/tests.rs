@@ -160,6 +160,23 @@ fn artboard_coordinate_fields_move_art_in_properties_and_transform() {
     }
 }
 
+/// #2401: a percentage typed alone into W in Properties or the Transform panel is that share of the width shown, in a
+/// unit other than the stored points too.
+#[test]
+fn a_lone_percentage_in_w_is_that_share_of_the_width() {
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), super::super::transform::show] {
+        let mut app = new_app();
+        app.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+        let id = rect(&mut app, 10.0, 20.0, 30.0, 40.0);
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let mut panel = Panel::new(app, draw);
+        panel.type_into("Width", "50%");
+        let id = vectorcraft_doc::NodeId(id.as_u64().unwrap());
+        let width = panel.app().session.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().width();
+        assert!((width - 15.0).abs() < 1e-6, "the width is {width}");
+    }
+}
+
 /// Three landscape artboards, with Artboards 1 and 3 selected with the Artboard tool (Artboard
 /// 1 active): 200 × 100, 200 × 100 and 300 × 150.
 fn two_selected_artboards() -> VectorcraftApp {
