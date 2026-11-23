@@ -375,6 +375,29 @@ fn separations_hide_an_overprinting_image_on_plates_without_its_ink() {
     }
 }
 
+/// An overprinting colorized image whose pixels don't take its color (a color preview of its
+/// file) is separated as those pixels on every plate, so it is not hidden on the plates its
+/// color puts no ink on.
+#[test]
+fn separations_show_an_overprinting_image_whose_pixels_refuse_its_color() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    for postscript in [true, false] {
+        let mut d = doc(ColorMode::Cmyk, Some(spot.clone()));
+        let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+        d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+        let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+        let job = plan(&d, &PrintOptions { settings, postscript, ..Default::default() }).unwrap();
+        assert!(job.plates.len() > 1);
+        for p in &job.plates {
+            let n = &p.layers[0].children().unwrap()[0];
+            assert!(n.visible, "postscript {postscript}: the pixels print on every plate");
+            assert!(n.extras().colorize.is_none() && !n.extras().colorize_overprint, "postscript {postscript}: {:?}", n.extras());
+        }
+    }
+}
+
 /// Printed separations separate a colorized image with a color mask as it shows: the pixels the
 /// mask hides print on no plate.
 #[test]

@@ -5082,12 +5082,15 @@ characters too; `item` aims at one appearance item; without `item`, `fill` on a 
 `paint.setFill` sets whether its color overprints) and `attributes.info {ids?}` reads it back (`null` where the
 objects differ). Overprint Preview (`view.overprintPreview`) and Separations Preview show it; rendering approximates
 it by darkening (the stronger ink of each plate wins, so a colour overprinting itself stays that colour). A colorized
-image overprints as a whole: when one of its fills or strokes draws a shape (Convert to Shape or Outline Object) and
-does not overprint, the whole image knocks out in the previews and on printed plates. Older files that listed Overprint Black objects in the document get the flags on load.
+image overprints as a whole: when one of its fills or strokes with an opacity above 0 draws a shape (Convert to Shape
+or Outline Object) and does not overprint, the whole image knocks out in the previews and on printed plates. On
+printed plates an image whose pixels do not take its color (a preview of its file) knocks out and prints as those
+pixels. Older files that listed Overprint Black objects in the document get the flags on load.
 PDF export writes them with `advanced.overprint: "preserve"` (the default): each overprinting fill and stroke sets a
 graphics state with `/OP true /op true /OPM 1` (`/OPM 0` in PDF/A). With `discardWhiteOverprint` (`document.setup`, on by
 default) white ones knock out instead; `"discard"` writes none. EPS export (`overprints: "preserve"`, the default) turns
-overprinting on for a colorized image's color as it does for fills and strokes. PDF export writes an overprinting
+overprinting on for a colorized image's color as it does for fills and strokes, except a white color with
+`discardWhiteOverprint` on, which knocks out. PDF export writes an overprinting
 colorized image in a gray or CMYK color in only the process inks the color puts down, and EPS export does too (one
 DeviceN image at Level 3, one Separation image per ink at Level 2). The previews and printed separations show a
 colorized image knocking out when it has a visible effect of its own other than a warp or a geometry effect (a drop

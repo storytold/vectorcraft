@@ -1236,6 +1236,12 @@ fn an_overprinting_colorized_image_writes_only_its_process_inks() {
         let ps = page_of(&white, &EpsOptions { level, ..opts(&white) });
         assert!(!ps.contains("image"), "{ps}");
     }
+    // With Discard White Overprint on, it knocks out: one CMYK image, drawn without overprinting.
+    white.setup.discard_white_overprint = true;
+    for level in Level::ALL {
+        let ps = text(&export(&white, &EpsOptions { level, ..opts(&white) }, None, None).unwrap());
+        assert!(ps.contains("/DeviceCMYK setcolorspace") && !ps.contains("VCdn") && !ps.contains("true op"), "{ps}");
+    }
 
     // The same image and color placed overprinting and not keeps two encodings.
     let mut both = d.clone();

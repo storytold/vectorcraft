@@ -246,11 +246,12 @@ impl<'a> Separator<'a> {
     /// colorized image that overprints as a whole ([`image_overprints_whole`]) and whose color puts
     /// none of the ink down is hidden on the plate once none of its rows draws there; while a row
     /// draws, the PostScript writer leaves out the image's paper-white pixels and draws the row.
-    /// A colorized image that does not overprint as a whole knocks out on the plate.
+    /// A colorized image that does not overprint as a whole, or whose pixels don't take its color
+    /// ([`refuses_colorize`]) and so print as they are, knocks out on the plate.
     fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: bool) {
         let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !(discard_white && is_white(p)) && self.no_ink(plate, p);
         let n = Arc::make_mut(a);
-        let whole = image_overprints_whole(n, discard_white);
+        let whole = image_overprints_whole(n, discard_white) && !refuses_colorize(n, &self.doc.images);
         if n.colorize_overprints() && !whole {
             n.extras_mut().colorize_overprint = false;
         }
@@ -351,25 +352,42 @@ fn colorized_key(key: &str) -> String {
     format!("{key}\u{0}colorized")
 }
 
+/// Whether `n` is an image with no pixels of its own and a colorize paint.
+fn colorized(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some()
+}
+
+/// The key of the pixels colorized image `n` shows in `images`: its color mask's when the mask
+/// was made for it and is there ([`Document::shown_image`]), else its own. `None` for any other
+/// node.
+fn shown_key(n: &Node, images: &BTreeMap<String, ImageBlob>) -> Option<String> {
+    match &n.kind {
+        NodeKind::Image(im) if colorized(n) => {
+            let mask = Document::color_mask_of(n).filter(|m| m.made_for(im) && images.contains_key(&m.key));
+            Some(mask.map_or(&im.key, |m| &m.key).clone())
+        }
+        _ => None,
+    }
+}
+
+/// Whether colorized image `n` shows pixels in `images` that don't take its colorize paint
+/// ([`ImageBlob::takes_colorize`]), so it is separated as those pixels and not as its color.
+fn refuses_colorize(n: &Node, images: &BTreeMap<String, ImageBlob>) -> bool {
+    shown_key(n, images).and_then(|key| images.get(&key)).is_some_and(|b| !b.takes_colorize())
+}
+
 /// Point the colorized images in `n`'s subtree at [`colorized_key`], collecting their keys in
 /// `keys`. A colorized image with a color mask is separated as it shows: its masked pixels
 /// ([`Document::shown_image`]). An image whose pixels it shows in `images` don't take its colorize
 /// paint ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it
 /// shows.
 fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>, keys: &mut BTreeSet<String>) {
-    let colorized = |n: &Node| matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some();
     if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
         return;
     }
     let node = Arc::make_mut(n);
-    let shown = match &node.kind {
-        NodeKind::Image(im) if colorized(node) => {
-            let mask = Document::color_mask_of(node).filter(|m| m.made_for(im) && images.contains_key(&m.key));
-            Some(mask.map_or(&im.key, |m| &m.key).clone())
-        }
-        _ => None,
-    };
-    if shown.as_ref().and_then(|key| images.get(key)).is_some_and(|b| !b.takes_colorize()) {
+    let shown = shown_key(node, images);
+    if refuses_colorize(node, images) {
         node.extras_mut().colorize = None;
     }
     if let Some(key) = shown.filter(|_| colorized(node)) {

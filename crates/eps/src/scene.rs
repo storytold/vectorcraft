@@ -582,8 +582,11 @@ impl<'a> Scene<'a> {
                             && self.o.overprint == Overprint::Preserve
                             && n.colorize_overprints()
                             && vectorcraft_doc::overprint::is_white(p) => {}
+                    // Off a plate, a white color knocks out with Discard White Overprint (a
+                    // plate's colors come from the separator, which has applied it already).
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
-                        let on = self.overprint_on(n.colorize_overprints());
+                        let discarded = !self.plate && self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(p);
+                        let on = self.overprint_on(n.colorize_overprints() && !discarded);
                         self.colorized_image(im, blob, p, on);
                         self.overprint_off(on);
                     }
@@ -1830,7 +1833,6 @@ impl<'a> Scene<'a> {
         let Paint::Solid { color, swatch, tint } = paint else { return None };
         let c = match self.solid(color, swatch.as_deref(), *tint) {
             Ink::Process(Space::Cmyk, c) => c,
-            // PostScript's gray is lightness.
             // PostScript's gray is lightness.
             Ink::Process(Space::Gray, [lightness, ..]) => [0.0, 0.0, 0.0, unit(1.0 - lightness)],
             _ => return None,

@@ -168,15 +168,15 @@ impl Node {
     }
 }
 
-/// Whether fill or stroke row `i` of an image draws: it is visible, has a paint (a stroke a
-/// width too) and a visible Convert to Shape or Outline Object, which gives a row on an image a
-/// shape of its own ([`crate::Effect::gives_image_shape`]).
+/// Whether fill or stroke row `i` of an image draws: it is visible, has a paint and an opacity
+/// above 0 (a stroke a width too) and a visible Convert to Shape or Outline Object, which gives a
+/// row on an image a shape of its own ([`crate::Effect::gives_image_shape`]).
 pub fn image_row_draws(i: &crate::AppearanceItem) -> bool {
     let width = match i {
         crate::AppearanceItem::Stroke(s) => s.width > 0.0,
         crate::AppearanceItem::Fill(_) => true,
     };
-    i.visible() && !i.paint().is_none() && width && i.effects().iter().any(crate::Effect::gives_image_shape)
+    i.visible() && i.opacity() > 0.0 && !i.paint().is_none() && width && i.effects().iter().any(crate::Effect::gives_image_shape)
 }
 
 /// Whether paint `paint` of blend mode `blend` darkens when `overprint` asks it to: with the
@@ -488,6 +488,33 @@ mod tests {
         assert_eq!(blend(Some((shape, true)), false), BlendMode::Normal, "a knocking-out row drawn by its effect keeps knocking out");
         assert_eq!(blend(Some(("path.outlineObject", true)), false), BlendMode::Normal, "Outline Object gives a row a shape too");
         assert_eq!(blend(Some((shape, true)), true), BlendMode::Darken, "with an overprinting row the whole image overprints");
+    }
+
+    #[test]
+    fn a_colorized_image_darkens_past_a_row_with_no_opacity() {
+        let blend = |stroke: bool, opacity: f32| {
+            let mut n = colorized(cmyk(0.0, 0.0, 0.0, 1.0), Paint::None);
+            let effect = crate::Effect { id: "convertToShape.rectangle".into(), params: serde_json::json!({}), visible: true };
+            if stroke {
+                if let Some(s) = n.appearance.stroke_mut() {
+                    s.paint = cmyk(1.0, 0.0, 0.0, 0.0);
+                    s.width = 1.0;
+                    s.opacity = opacity;
+                    s.effects.push(effect);
+                }
+            } else if let Some(f) = n.appearance.fill_mut() {
+                f.paint = cmyk(1.0, 0.0, 0.0, 0.0);
+                f.opacity = opacity;
+                f.effects.push(effect);
+            }
+            let mut a = Arc::new(n);
+            darken_overprints(&mut a, false);
+            a.blend
+        };
+        assert_eq!(blend(false, 0.0), BlendMode::Darken, "a fill with no opacity paints nothing");
+        assert_eq!(blend(true, 0.0), BlendMode::Darken, "nor a stroke with no opacity");
+        assert_eq!(blend(false, 0.5), BlendMode::Normal, "a fill with some opacity still knocks out");
+        assert_eq!(blend(true, 0.5), BlendMode::Normal, "and so does a stroke");
     }
 
     #[test]
