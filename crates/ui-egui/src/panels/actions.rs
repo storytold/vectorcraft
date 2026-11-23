@@ -416,7 +416,9 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     }
     let mut steps: std::collections::VecDeque<PlayStep> = commands.into();
     let Some(first) = steps.pop_front() else { return Err("the action has no included steps".into()) };
-    let result = play_step(app, &a.name, first)?;
+    let result = play_step(app, &a.name, first).inspect_err(|e| {
+        app.session.toast(Toast::new(tl!(e), Level::Error));
+    })?;
     let pending = steps.len();
     if pending > 0 {
         let hold = options.speed == PlaybackSpeed::Step;
@@ -525,7 +527,15 @@ fn play_with_stops(app: &mut VectorcraftApp, label: String, commands: Vec<PlaySt
     let mut steps: std::collections::VecDeque<PlayStep> = commands.into();
     let run = next_run(&mut steps, options.speed);
     let ran = !run.is_empty();
-    let results = if ran { run_steps(app, &label, run)? } else { vec![] };
+    let results = if ran {
+        run_steps(app, &label, run).inspect_err(|e| {
+            if options.speed != PlaybackSpeed::Accelerated {
+                app.session.toast(Toast::new(tl!(e), Level::Error));
+            }
+        })?
+    } else {
+        vec![]
+    };
     app.ui.action_playing = Some(Playing { label, steps, options, next_at: None, hold: false, doc: None, played_in: None, stop: None });
     after_run(app, ran);
     Ok(playback_result(app, results))
@@ -6471,6 +6481,43 @@ mod tests {
         assert_eq!(frame(&mut app, 0.0), None);
         assert_eq!(x(&app), 1.0, "the step after the failing one does not run");
         assert!(app.session.take_toasts().is_empty(), "later frames do not repeat the failure notification");
+
+        fn check_initial_error(speed: &str, later_stop: bool) -> String {
+            let (mut app, x) = app_with_three_moves();
+            let action = &mut app.ui.action_sets[0].actions[0];
+            action.steps[0] = ("object.align".into(), json!({}));
+            if later_stop {
+                action.steps.push((STOP_STEP.to_string(), json!({"message": "", "allowContinue": true})));
+            }
+            app.run(PLAYBACK_OPTIONS, json!({"speed": speed})).unwrap();
+            assert!(app.session.take_toasts().is_empty());
+            let doc = app.session.doc().unwrap().doc.clone();
+            let position = x(&app);
+            let undo = undo_steps(&app);
+            let error = play(&mut app, 0, 0).unwrap_err();
+            assert_names_step(&error, 1, "object.align");
+            assert!(app.ui.action_playing.is_none(), "{speed}, later stop {later_stop}: the failed initial step leaves no playback");
+            assert!(app.session.doc().unwrap().same_content(&doc), "a failed initial step must not edit the artwork");
+            assert_eq!(x(&app), position, "later moves must not run");
+            assert_eq!(undo_steps(&app), undo, "a failed initial step adds no undo step");
+            let expected = if speed == "accelerated" { vec![] } else { vec![Toast::new(tl!(&error), Level::Error)] };
+            assert_eq!(app.session.take_toasts(), expected, "{speed}, later stop {later_stop}: only paced initial failures raise one error toast");
+            frame(&mut app, 10.0);
+            assert!(app.session.take_toasts().is_empty(), "later frames must not repeat the failure toast");
+            error
+        }
+
+        let mut expected = None;
+        for later_stop in [false, true] {
+            for speed in ["accelerated", "step", "pause"] {
+                let error = check_initial_error(speed, later_stop);
+                if let Some(expected) = &expected {
+                    assert_eq!(&error, expected, "the initial step returns the same error at every speed, with or without a stop");
+                } else {
+                    expected = Some(error);
+                }
+            }
+        }
     }
 
     /// [`app_with_three_moves`] with a stop after the first move.
