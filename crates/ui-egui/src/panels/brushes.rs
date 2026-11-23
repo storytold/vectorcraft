@@ -738,7 +738,10 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     let brushed = selected_brush(app).is_some();
     let targets = !targets(app, &list, current.as_deref()).is_empty();
     let on = |on: bool| CommandState::new().enabled(on);
-    states.set(CommandRef::new("ui.newBrush"), on(document));
+    let new = CommandRef::new("ui.newBrush");
+    // Dimmed with no document, saying why as the menus do.
+    let reason = (!document).then(|| crate::menus::model::off_reason(app, &new, crate::i18n::t("New Brush…")));
+    states.set(new, reason.into_iter().fold(on(document), CommandState::hint));
     for ty in NEW_AT_ONCE {
         states.set(new_brush(ty), on(true));
     }

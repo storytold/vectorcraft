@@ -289,7 +289,7 @@ fn catalog_defs(app: &VectorcraftApp, refs: &[(CommandRef, String, bool)], state
 
 /// What the dimmed row `command`, named `label`, says: the engine's reason, the panels' in Presentation Mode, else that
 /// the command is not available right now.
-fn off_reason(app: &VectorcraftApp, command: &CommandRef, label: &str) -> String {
+pub(crate) fn off_reason(app: &VectorcraftApp, command: &CommandRef, label: &str) -> String {
     why_off(app, &command.id)
         .flatten()
         .or_else(|| crate::palette::refusal(app, command).filter(|_| command.id == "window.panel"))
