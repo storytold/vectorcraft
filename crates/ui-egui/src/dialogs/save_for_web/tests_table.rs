@@ -120,7 +120,6 @@ fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Ev
 /// app opens over the dialog for it.
 fn open_cell(app: &mut VectorcraftApp, ctx: &egui::Context, hex: &str) -> craft::ui::dialog::DialogId {
     let parent = id(app);
-    app_frame(app, ctx, vec![]);
     // The cells are named by their index and colour.
     let find = |app: &mut VectorcraftApp, name: &str| {
         let (find, _) = craft::automation::ControlRequest::new("ui.find", json!({"name": name}));
@@ -131,7 +130,17 @@ fn open_cell(app: &mut VectorcraftApp, ctx: &egui::Context, hex: &str) -> craft:
             _ => None,
         }
     };
-    let rect = (0..256).find_map(|i| find(app, &format!("{i} {hex}"))).unwrap_or_else(|| panic!("the table shows {hex}"));
+    // The dialog centres itself again as its panes and table fill in: the cell is clicked once it stays put.
+    let mut rect = None;
+    for _ in 0..20 {
+        app_frame(app, ctx, vec![]);
+        let now = (0..256).find_map(|i| find(app, &format!("{i} {hex}")));
+        if now.is_some() && now == rect {
+            break;
+        }
+        rect = now;
+    }
+    let rect = rect.unwrap_or_else(|| panic!("the table shows {hex}"));
     let at = egui::pos2((rect[0] + rect[2] / 2.0) as f32, (rect[1] + rect[3] / 2.0) as f32);
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
     for events in [
