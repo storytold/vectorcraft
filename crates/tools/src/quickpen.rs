@@ -682,6 +682,8 @@ impl QuickPenTool {
                 revision: cx.revision,
                 stale: false,
             };
+            // The hover's Smart Guides do not follow a length drag.
+            self.snap.clear();
             self.length = Some(drag);
             return vec![];
         }

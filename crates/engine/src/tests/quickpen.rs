@@ -1062,6 +1062,28 @@ fn a_length_drag_shows_no_next_piece() {
     assert_eq!(only_path(&s).anchors.last().unwrap().p, pt(260.0, 100.0));
 }
 
+/// A press on a length handle clears the Smart Guides of the hover before it, so none show during
+/// the drag.
+#[test]
+fn a_length_drag_shows_no_smart_guide() {
+    let mut s = session();
+    s.execute("shape.line", &json!({"x1": 220, "y1": 100, "x2": 220, "y2": 300})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    let on = ViewInfo { smart_guides: true, ..Default::default() };
+    // The end handle stands on the other line's anchor, so the hover there shows its guide.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 220.0, 100.0), on).unwrap();
+    assert!(!only_points(&mut s, on), "the anchor's guide shows");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 220.0, 100.0), on).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 140.0), on).unwrap();
+    assert!(only_points(&mut s, on), "no guide during the drag: {:?}", s.overlays(on));
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 140.0), on).unwrap();
+    let drawn = paths(&s).into_iter().find(|(_, p)| p.subpaths[0].anchors.first().is_some_and(|a| a.p == pt(100.0, 100.0))).unwrap();
+    assert_eq!(drawn.1.subpaths[0].anchors.last().unwrap().p, pt(260.0, 100.0));
+}
+
 /// A length drag that would take the path past the canvas leaves it where the drag last put it,
 /// and the drawing goes on from there.
 #[test]
