@@ -96,6 +96,12 @@ pub(super) fn release(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &Fir
 /// open, goes back once that ends. Choosing another tool or turning the preference off ends every
 /// hold without going back.
 pub(super) fn follow(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    // The keys go to another window: whatever release comes later, or none, ends this window's holds without going
+    // back.
+    if ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::WindowFocused(false)))) {
+        app.held_tool.retain(|h| h.viewport != ctx.viewport_id());
+        return;
+    }
     // Each step looks at the key held last; one that goes back hands over to the key under it.
     loop {
         let gesture = app.session.tool_busy() || app.session.pointer_held();

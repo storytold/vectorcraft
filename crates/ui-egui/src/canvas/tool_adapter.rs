@@ -162,7 +162,12 @@ impl<'a> SessionTool<'a> {
             // Nothing selected: it fails and nothing opens (the menu item is disabled then too).
             let _ = crate::toolbar::open_options(&mut app, &tool);
         }
-        open(&app) > before
+        let opened = open(&app) > before;
+        // The dialog uses the tool a held key chose.
+        if opened {
+            crate::shortcuts::note_tool_use(&mut app);
+        }
+        opened
     }
 
     /// A key the tool does not claim while its gesture runs: arrows and digits still reach it, with no modifier (a

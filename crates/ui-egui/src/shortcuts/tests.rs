@@ -116,8 +116,21 @@ fn zoom(app: &mut VectorcraftApp) -> f64 {
 }
 
 /// The key of the window's top dialog.
+/// The key of the window's top dialog, else the command of what opened in its place: the framework's Find and
+/// Replace dialog, which has no key, or the Smooth or Simplify slider, which the app shows over the canvas.
 fn dialog_kind(app: &VectorcraftApp) -> Option<String> {
-    crate::tests::picks::open_dialogs(app).pop().and_then(|d| d.key)
+    let find = || app.dialogs().is_some_and(|d| d.with(|h| h.is_open::<craft::text::ui::find::FindReplaceDialog>()));
+    let strip = || {
+        [(crate::dialogs::smooth_slider::showing(app), "object.path.smooth"), (crate::dialogs::simplify_slider::showing(app), "object.path.simplify")]
+            .into_iter()
+            .find_map(|(on, id)| on.then(|| id.to_string()))
+    };
+    match crate::tests::picks::open_dialogs(app).pop() {
+        Some(d) if d.key.is_some() => d.key,
+        Some(_) if find() => Some(crate::dialogs::find_replace::COMMAND.to_string()),
+        Some(_) => None,
+        None => strip(),
+    }
 }
 
 /// The effect of the open Effect dialog, when the window's top dialog is it (its key is `effect`;
@@ -143,9 +156,14 @@ pub(super) fn close_top_dialog(app: &mut VectorcraftApp, ok: bool) {
     // A dialog opened after the window's pass shows in its next one, and only a shown dialog takes an answer.
     key_frame(app, &ctx, vec![]);
     let id = crate::tests::picks::open_dialogs(app).pop().expect("a dialog is open").id;
-    let host = app.dialogs().expect("the window's dialog host");
-    assert!(host.with(|h| if ok { h.confirm_by_id(&ctx, id) } else { h.cancel_by_id(&ctx, id) }), "the dialog stayed open");
-    crate::dialogs::host::pump(app, &ctx);
+    if ok {
+        // A dialog that holds its OK closes once the pump accepted the answer.
+        crate::tests::picks::answer_dialog(app, id, &[], true);
+    } else {
+        app.dialogs().expect("the window's dialog host").with(|h| h.cancel_by_id(&ctx, id));
+        crate::dialogs::host::pump(app, &ctx);
+    }
+    assert!(crate::tests::picks::open_dialogs(app).iter().all(|d| d.id != id), "the dialog stayed open");
 }
 
 /// Sets `field` of the window's top dialog as a person editing it would.
@@ -749,12 +767,13 @@ fn a_key_assigned_to_the_color_picker_opens_it_for_the_proxy_in_front() {
     let ctx = ready(&mut app);
     let key = || tap(Key::F12, cmd() | Modifiers::ALT | Modifiers::SHIFT);
     let opened = |app: &mut VectorcraftApp| {
-        let stroke = (dialog_kind(app).as_deref() == Some("colorPicker")).then(|| dialog_field(app, "stroke") == Some(json!(true)));
+        // The framework's picker is keyed by the paint it edits.
+        let stroke = app.dialogs()?.with(|h| h.get::<craft::color_ui::ui::ColorPickerDialog>().map(|p| p.key() == "stroke"))?;
         close_top_dialog(app, false);
-        stroke
+        Some(stroke)
     };
     key_frame(&mut app, &ctx, key());
-    assert_eq!(opened(&mut app), Some(false), "no document: the fill");
+    assert_eq!(opened(&mut app), Some(false), "no document: the fill; {}", app.ui.status);
     app.run("paint.toggleActive", json!({"fill": false})).unwrap();
     key_frame(&mut app, &ctx, key());
     assert_eq!(opened(&mut app), Some(true), "the Stroke proxy in front: the stroke");

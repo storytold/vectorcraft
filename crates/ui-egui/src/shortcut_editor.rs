@@ -1323,7 +1323,9 @@ fn give_back_function_keys(keymap: &mut Keymap) {
             let primary = Binding::new(primary);
             matches!(texts, [text] if Binding::parse(text).is_ok_and(|b| b == primary))
         });
-        if pinned && keymap.holders(&alias).iter().all(|c| *c == command) {
+        // A component's own F2 (a preset row's Rename) acts only where that component has the keys.
+        let app_holder = |c: &craft::keymap::CommandRef| keymap.bindable(c).is_none_or(|d| d.scope.is_app());
+        if pinned && keymap.holders(&alias).iter().filter(|c| app_holder(c)).all(|c| *c == command) {
             keymap.reset(&command);
         }
     }
@@ -1622,8 +1624,9 @@ mod tests {
     /// one leaves the entry without a shortcut.
     #[test]
     fn saved_modifier_only_overrides_give_the_default_back() {
-        let km = keymap_with(overrides(json!({"tool:groupSelection": "Shift+ShiftLeft", "edit.preferences": ""})));
-        let group = command_of("tool:groupSelection");
+        // The Selection tool has a default key to give back; the Group Selection tool production's test used has none.
+        let km = keymap_with(overrides(json!({"tool:selection": "Shift+ShiftLeft", "edit.preferences": ""})));
+        let group = command_of("tool:selection");
         assert!(!km.default_bindings(&group).is_empty());
         assert_eq!(km.bindings(&group), km.default_bindings(&group));
         assert!(!km.problems().is_empty(), "the text that is no chord is reported");
