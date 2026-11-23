@@ -7734,6 +7734,7 @@ arrowhead	Target	Мішень
 	Triangle to Bar	Трикутник до смуги
 	Oval	Овал
 	Line Arrow	Лінійна стрілка
+	Notched Arrow	Стрілка з виїмкою
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	Інструменти точного редагування контурів
 	Anchor Eraser Brush	Пензель-гумка опорних точок

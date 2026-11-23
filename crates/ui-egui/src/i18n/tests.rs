@@ -831,7 +831,7 @@ fn built_in_library_style_names_are_in_complete_catalogs() {
 fn built_in_arrowhead_names_are_in_complete_catalogs() {
     use vectorcraft_doc::Arrowhead;
     let names = distinct(Arrowhead::ALL.iter().map(|h| h.label().to_string()).collect());
-    assert_eq!(names.len(), 41, "{names:?}");
+    assert_eq!(names.len(), 42, "{names:?}");
     // Spanish's plain Target row names a destination; its arrowhead row names the shape.
     let es = crate::i18n::Lang::from_code("es").expect("es registered");
     assert_eq!(crate::i18n::tr_ctx(es, "arrowhead", "Target"), "Diana");

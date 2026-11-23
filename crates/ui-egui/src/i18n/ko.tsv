@@ -7724,6 +7724,7 @@ arrowhead	Target	과녁
 	Triangle to Bar	삼각형에서 막대
 	Oval	타원
 	Line Arrow	선 화살표
+	Notched Arrow	노치 화살표
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	패스 정밀 도구
 	Anchor Eraser Brush	앵커 포인트 지우개 브러시
