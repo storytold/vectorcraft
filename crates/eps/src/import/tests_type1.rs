@@ -178,6 +178,21 @@ fn embedded_type1_type_draws_with_the_files_glyphs() {
     assert!(t.runs.iter().all(|r| r.style.tracking == 0.0), "{:?}", t.runs);
 }
 
+/// A family whose regular style the file carries but whose bold it only names: the regular is
+/// drawn in the kept font and the bold in the fallback font, and the warning says both.
+#[test]
+fn a_carried_style_leaves_a_named_style_of_its_family_in_the_fallback_warning() {
+    let r = program(OWN, false, "/TestOne findfont 50 scalefont setfont 10 20 moveto (A) show /TestOne-Bold 12 selectfont 10 80 moveto (x) show");
+    assert_eq!(texts(&r).iter().map(|t| t.runs[0].style.font_style.as_str()).collect::<Vec<_>>(), ["Regular", "Bold"]);
+    assert_eq!(
+        r.warnings,
+        [
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): Test One",
+            "fonts that aren't available show in the fallback font until they are: Test One",
+        ]
+    );
+}
+
 /// Type in a font the file only names keeps the fallback font, and the spacing set for it, also
 /// when its family and style are those of a font the file carries (`TestOne-Roman` beside the
 /// embedded `TestOne`): only type shown in the carried font gets the font kept from it.
