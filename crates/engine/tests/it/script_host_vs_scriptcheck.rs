@@ -44,8 +44,8 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// change anything outside it.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder Window alert confirm localize prompt toSource"),
-    ("Window.", "length prototype"),
-    ("Window.prototype.", "add center close constructor findElement hide show"),
+    ("Window.", "alert confirm length prompt prototype"),
+    ("Window.prototype.", "add addEventListener center close constructor findElement hide remove removeEventListener show"),
     ("Object.prototype.", "toSource"),
     ("localize.", "length"),
     ("toSource.", "length"),

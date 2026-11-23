@@ -9,8 +9,21 @@
 //! `checkbox`, `radiobutton`, `dropdownlist`, `listbox` (whose third argument is an array of item
 //! texts), `slider` (third to fifth: value, minimum, maximum) and `progressbar` (value, maximum).
 //! The other documented control types throw an `Error` that says they are not available yet. A
-//! list's `add("item", text)` adds an item; its `selection` is an item or `null`, and takes an
-//! item, an index or `null`.
+//! group takes its creation properties as the third argument, and a list takes them there in place
+//! of its items, with the items in `properties.items`. A list's `add("item", text)` adds an item,
+//! `find(text)` finds one and `remove(what)` removes one; its `selection` is an item or `null`, and
+//! takes an item, an index or `null`. A container's `remove(what)` removes a control. Each element
+//! starts with `preferredSize`, `size`, `minimumSize` and `maximumSize` objects whose `width` and
+//! `height` are -1, which leaves the size to the layout. Setting a radio button's `value` to true
+//! sets the other radio buttons next to it in its container to false, as a click does.
+//!
+//! `addEventListener(type, handler[, capture])` and `removeEventListener` register handlers for
+//! the events `show()` runs: `click`, `change`, `changing` and `show`. A handler gets an event
+//! object, in the capture phase on the containers above the control, then on the control after its
+//! `onClick`, `onChange` or `onChanging`, then in the bubbling phase on the containers again, until
+//! one calls `stopPropagation()`. `notify(event)` runs the same handlers, and `notify("onClick")`
+//! turns a check box over and turns a radio button on first. `Window.alert`, `Window.confirm` and
+//! `Window.prompt` are the global functions of those names, when the host defines them.
 //!
 //! `show()` gives the host's `open` the dialog's description and runs `onShow`. Then, until the
 //! dialog closes, it gives the host's `wait` the description again, and `wait` gives back what the
@@ -33,8 +46,8 @@
 //! and a list that changes again throws an `Error`.
 
 use crate::HostItem;
-use crate::builtins::{arg, constructor, method, native, pausable_method};
-use crate::heap::{Class, ENUMERABLE, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, key};
+use crate::builtins::{arg, constructor, data, method, native, pausable_method};
+use crate::heap::{Class, ENUMERABLE, HIDDEN, NativeKind, OBJECT_BYTES, OPEN, ObjId, Object, PROP_BYTES, Prop, key};
 use crate::host::Data;
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult, Pause};
 use crate::value::{Value, index_key};
@@ -66,6 +79,32 @@ const CLOSING: &str = "__vcClosing";
 const ITEMS: &str = "__vcItems";
 const SELECTION: &str = "__vcSelection";
 const LIST: &str = "__vcList";
+const VALUE: &str = "__vcValue";
+const LISTENERS: &str = "__vcListeners";
+const STOPPED: &str = "__vcStopped";
+const PREVENTED: &str = "__vcPrevented";
+
+/// The size properties every element starts with, as objects with `width` and `height`.
+const SIZES: [&str; 4] = ["preferredSize", "size", "minimumSize", "maximumSize"];
+/// The events `addEventListener` takes, which `show()` and `notify` run.
+const EVENTS: [&str; 4] = ["click", "change", "changing", "show"];
+/// The other documented events, which nothing runs yet.
+const EVENTS_LATER: [&str; 14] = [
+    "move",
+    "moving",
+    "resize",
+    "resizing",
+    "enterKey",
+    "focus",
+    "blur",
+    "mousedown",
+    "mouseup",
+    "mousemove",
+    "mouseover",
+    "mouseout",
+    "keyup",
+    "keydown",
+];
 
 /// The objects of `Window`, kept by the realm, and the dialog that is showing.
 #[derive(Clone, Debug)]
@@ -73,17 +112,31 @@ pub(crate) struct Classes {
     window_proto: ObjId,
     control_proto: ObjId,
     item_proto: ObjId,
+    event_proto: ObjId,
     layout: ObjId,
     host: ObjId,
     selection_get: ObjId,
     selection_set: ObjId,
+    radio_get: ObjId,
+    radio_set: ObjId,
     showing: Option<ObjId>,
 }
 
 impl Classes {
     /// The objects a collection keeps.
     pub(crate) fn objects(&self) -> Vec<ObjId> {
-        let mut all = vec![self.window_proto, self.control_proto, self.item_proto, self.layout, self.host, self.selection_get, self.selection_set];
+        let mut all = vec![
+            self.window_proto,
+            self.control_proto,
+            self.item_proto,
+            self.event_proto,
+            self.layout,
+            self.host,
+            self.selection_get,
+            self.selection_set,
+            self.radio_get,
+            self.radio_set,
+        ];
         all.extend(self.showing);
         all
     }
@@ -254,7 +307,12 @@ fn new_element(
         set_open(i, o, "bounds", bounds.clone())?;
     }
     set_open(i, o, "layout", Value::Object(layout))?;
-    if matches!(kind, "dialog" | "group" | "panel") {
+    for name in SIZES {
+        let d = dimension(i, -1.0, -1.0)?;
+        set_open(i, o, name, d)?;
+    }
+    let container = matches!(kind, "dialog" | "group" | "panel");
+    if container {
         let kids = list(i, &[], false)?;
         set_slot(i, o, KIDS, Value::Object(kids))?;
         let children = list(i, &[], true)?;
@@ -264,7 +322,26 @@ fn new_element(
         set_open(i, o, "spacing", Value::Number(10.0))?;
         set_open(i, o, "margins", Value::Number(if kind == "group" { 0.0 } else { 15.0 }))?;
     }
+    // Layout properties given with the creation properties start the element with those values.
+    let layout_names: &[&str] = if container { &["alignment", "orientation", "alignChildren", "spacing", "margins"] } else { &["alignment"] };
+    for name in layout_names {
+        let v = i.get_value(&props, &key(name))?;
+        if !matches!(v, Value::Undefined) {
+            set_open(i, o, name, v)?;
+        }
+    }
     Ok(o)
+}
+
+/// A new size object with `width` and `height`.
+fn dimension(i: &mut Interp, width: f64, height: f64) -> JsResult<Value> {
+    i.reserve_heap(OBJECT_BYTES.saturating_add(PROP_BYTES.saturating_mul(2)))?;
+    let o = i.new_object();
+    i.rooted(&[Value::Object(o)], |i| {
+        set_open(i, o, "width", Value::Number(width))?;
+        set_open(i, o, "height", Value::Number(height))?;
+        Ok(Value::Object(o))
+    })
 }
 
 /// `new Window(type[, title, bounds, properties])`.
@@ -330,19 +407,44 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
     if count as usize >= MAX_CONTROLS {
         return Err(range(i, &format!("add: a dialog can hold at most {MAX_CONTROLS} controls")));
     }
-    let props = arg(args, 3);
     let list_kind = ty == "dropdownlist" || ty == "listbox";
-    if ty == "listbox" && props.as_object().is_some() && i.get_value(&props, &key("multiselect"))?.truthy() {
-        return Err(error(i, "add: a list box that selects several items is not available yet"));
-    }
+    let third = arg(args, 2);
+    let is_array = |i: &Interp, v: &Value| -> JsResult<bool> {
+        Ok(match v.as_object() {
+            Some(a) => matches!(i.object(a)?.class, Class::Array { .. }),
+            None => false,
+        })
+    };
+    // A group takes its creation properties third, and so may a list in place of its items.
+    let props_third = ty == "group" || (list_kind && third.as_object().is_some() && !is_array(i, &third)?);
+    let props = if props_third { third.clone() } else { arg(args, 3) };
     let proto = classes(i)?.control_proto;
     let mark = i.temp_roots.len();
     let r = (|| {
+        let mut given_items = if list_kind && !props_third { third.clone() } else { Value::Undefined };
+        if list_kind && props.as_object().is_some() {
+            let listed = i.get_value(&props, &key("items"))?;
+            i.temp_roots.push(listed.clone());
+            if !matches!(listed, Value::Undefined | Value::Null) {
+                if !matches!(given_items, Value::Undefined | Value::Null) {
+                    return Err(i.type_error("add: give a list's items as the third argument or in properties.items, not both"));
+                }
+                given_items = listed;
+            }
+        }
+        if ty == "listbox" && props.as_object().is_some() && i.get_value(&props, &key("multiselect"))?.truthy() {
+            return Err(error(i, "add: a list box that selects several items is not available yet"));
+        }
         let creation = if matches!(ty, "slider" | "progressbar") { Value::Undefined } else { props.clone() };
-        let text = if list_kind || matches!(ty, "slider" | "progressbar") { Value::Undefined } else { arg(args, 2) };
+        let text = if list_kind || matches!(ty, "group" | "slider" | "progressbar") { Value::Undefined } else { third.clone() };
         let c = new_element(i, proto, ty, Some(o), Some(win), depth, [&arg(args, 1), &text, &creation])?;
         match ty {
-            "checkbox" | "radiobutton" => set_open(i, c, "value", Value::Bool(false))?,
+            "checkbox" => set_open(i, c, "value", Value::Bool(false))?,
+            "radiobutton" => {
+                set_slot(i, c, VALUE, Value::Bool(false))?;
+                let cl = classes(i)?;
+                i.define(c, key("value"), Prop::Accessor { get: Some(cl.radio_get), set: Some(cl.radio_set), flags: ENUMERABLE })?;
+            }
             "slider" | "progressbar" => {
                 let (value, min, max) =
                     if ty == "slider" { (arg(args, 2), arg(args, 3), arg(args, 4)) } else { (arg(args, 2), Value::Undefined, arg(args, 3)) };
@@ -368,7 +470,7 @@ fn add(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> 
         // A new list's items take their places in the dialog only once the list is added.
         let mut staged = 0usize;
         if list_kind {
-            match arg(args, 2) {
+            match given_items.clone() {
                 Value::Undefined | Value::Null => {}
                 Value::Object(a) if matches!(i.object(a)?.class, Class::Array { .. }) => {
                     let length = match &i.object(a)?.class {
@@ -566,7 +668,202 @@ fn handler(i: &mut Interp, o: ObjId, name: &str) -> JsResult<Option<Value>> {
     i.call(&f, &Value::Object(o), &[]).map(Some)
 }
 
-/// `notify([event])`: runs the control's `onClick`, `onChange` or `onChanging`.
+/// The radio buttons that form a set with `c`: it and the radio buttons next to it in its
+/// container, up to the first control of another kind on each side.
+fn radio_set_of(i: &Interp, c: ObjId) -> JsResult<Vec<ObjId>> {
+    let Some(parent) = object_slot(i, c, PARENT)? else { return Ok(vec![c]) };
+    let kids = kids_of(i, parent)?;
+    let Some(at) = kids.iter().position(|k| same(k, &Value::Object(c))) else { return Ok(vec![c]) };
+    let radio = |v: &Value| -> JsResult<Option<ObjId>> {
+        Ok(match kind_of(i, v)? {
+            Some((o, k)) if k == "radiobutton" => Some(o),
+            _ => None,
+        })
+    };
+    let mut set = vec![c];
+    for k in kids[..at].iter().rev() {
+        let Some(o) = radio(k)? else { break };
+        set.push(o);
+    }
+    for k in &kids[at + 1..] {
+        let Some(o) = radio(k)? else { break };
+        set.push(o);
+    }
+    Ok(set)
+}
+
+fn radio_get(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = element(i, &this, "value")?;
+    Ok(Value::Bool(slot(i, o, VALUE)?.truthy()))
+}
+
+/// A radio button's `value`: true turns the other radio buttons of its set off.
+fn radio_set(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = element(i, &this, "value")?;
+    let on = arg(args, 0).truthy();
+    if on {
+        for other in radio_set_of(i, o)? {
+            if other != o {
+                set_slot(i, other, VALUE, Value::Bool(false))?;
+            }
+        }
+    }
+    set_slot(i, o, VALUE, Value::Bool(on))?;
+    Ok(Value::Undefined)
+}
+
+/// The listeners registered on `o`: each event type, handler and capture flag.
+fn listeners_of(i: &Interp, o: ObjId) -> JsResult<Vec<(Value, Value, bool)>> {
+    let flat = match object_slot(i, o, LISTENERS)? {
+        Some(a) => list_values(i, a)?,
+        None => Vec::new(),
+    };
+    Ok(flat.as_chunks::<3>().0.iter().map(|[t, f, c]| (t.clone(), f.clone(), c.truthy())).collect())
+}
+
+fn set_listeners(i: &mut Interp, o: ObjId, all: &[(Value, Value, bool)]) -> JsResult<()> {
+    let flat: Vec<Value> = all.iter().flat_map(|(t, f, c)| [t.clone(), f.clone(), Value::Bool(*c)]).collect();
+    i.rooted(&flat.clone(), |i| {
+        let kept = list(i, &flat, false)?;
+        set_slot(i, o, LISTENERS, Value::Object(kept))
+    })
+}
+
+/// Is the stored event type `t` the type `ty`?
+fn is_type(t: &Value, ty: &str) -> bool {
+    matches!(t, Value::String(s) if s.to_rust_string() == ty)
+}
+
+/// The event type `addEventListener` and `removeEventListener` were given, checked.
+fn event_type(i: &mut Interp, v: &Value, what: &str) -> JsResult<&'static str> {
+    let text = i.to_str(v)?.to_rust_string();
+    if let Some(name) = EVENTS.iter().find(|e| **e == text) {
+        return Ok(name);
+    }
+    if EVENTS_LATER.contains(&text.as_str()) {
+        return Err(error(i, &format!("{what}: the event {text} is not available yet")));
+    }
+    Err(error(i, &format!("{what}: there is no event {}", text.chars().take(64).collect::<String>())))
+}
+
+/// `addEventListener(type, handler[, capture])`.
+fn add_event_listener(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = element(i, &this, "addEventListener")?;
+    let ty = event_type(i, &arg(args, 0), "addEventListener")?;
+    let f = arg(args, 1);
+    if !i.is_callable(&f) {
+        return Err(i.type_error("addEventListener: give the handler as a function"));
+    }
+    let capture = arg(args, 2).truthy();
+    let mut all = listeners_of(i, o)?;
+    if !all.iter().any(|(t, g, c)| is_type(t, ty) && same(g, &f) && *c == capture) {
+        all.push((Value::str(ty), f, capture));
+        set_listeners(i, o, &all)?;
+    }
+    Ok(Value::Undefined)
+}
+
+/// `removeEventListener(type, handler[, capture])`.
+fn remove_event_listener(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = element(i, &this, "removeEventListener")?;
+    let ty = event_type(i, &arg(args, 0), "removeEventListener")?;
+    let f = arg(args, 1);
+    let capture = arg(args, 2).truthy();
+    let mut all = listeners_of(i, o)?;
+    let before = all.len();
+    all.retain(|(t, g, c)| !(is_type(t, ty) && same(g, &f) && *c == capture));
+    if all.len() != before {
+        set_listeners(i, o, &all)?;
+    }
+    Ok(Value::Undefined)
+}
+
+fn event_stop(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    if let Some(o) = this.as_object() {
+        set_slot(i, o, STOPPED, Value::Bool(true))?;
+    }
+    Ok(Value::Undefined)
+}
+
+fn event_prevent(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    if let Some(o) = this.as_object() {
+        set_slot(i, o, PREVENTED, Value::Bool(true))?;
+    }
+    Ok(Value::Undefined)
+}
+
+/// Runs the listeners for `ty` on `at` (only those for `capture` unless it is `None`), with `event`.
+fn run_listeners(i: &mut Interp, at: ObjId, ty: &str, capture: Option<bool>, event: ObjId, phase: f64) -> JsResult<bool> {
+    let wanted: Vec<Value> =
+        listeners_of(i, at)?.into_iter().filter(|(t, _, c)| is_type(t, ty) && capture.is_none_or(|want| *c == want)).map(|(_, f, _)| f).collect();
+    if wanted.is_empty() {
+        return Ok(false);
+    }
+    i.rooted(&wanted.clone(), |i| {
+        set_open(i, event, "currentTarget", Value::Object(at))?;
+        set_open(i, event, "eventPhase", Value::Number(phase))?;
+        for f in &wanted {
+            i.call(f, &Value::Object(at), &[Value::Object(event)])?;
+        }
+        Ok(true)
+    })
+}
+
+/// Runs the event `ty` on the element `target`: the listeners of the containers above it that
+/// capture, its `callback`, its own listeners, then the listeners of the containers that do not
+/// capture, until one stops it. → whether the element had a callback or a listener for it.
+fn dispatch(i: &mut Interp, target: ObjId, ty: &str, callback: &str) -> JsResult<bool> {
+    let mut above = Vec::new();
+    let mut at = object_slot(i, target, PARENT)?;
+    while let Some(p) = at {
+        i.use_fuel()?;
+        above.push(p);
+        at = object_slot(i, p, PARENT)?;
+    }
+    let proto = classes(i)?.event_proto;
+    i.reserve_heap(OBJECT_BYTES.saturating_add(PROP_BYTES.saturating_mul(10)))?;
+    let event = i.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
+    i.rooted(&[Value::Object(event)], |i| {
+        let bubbles = ty != "show";
+        set_open(i, event, "type", Value::str(ty))?;
+        set_open(i, event, "target", Value::Object(target))?;
+        set_open(i, event, "bubbles", Value::Bool(bubbles))?;
+        set_open(i, event, "cancelable", Value::Bool(false))?;
+        set_open(i, event, "detail", Value::Number(if ty == "click" { 1.0 } else { 0.0 }))?;
+        let stopped = |i: &Interp| -> JsResult<bool> { Ok(slot(i, event, STOPPED)?.truthy()) };
+        for p in above.iter().rev() {
+            run_listeners(i, *p, ty, Some(true), event, 1.0)?;
+            if stopped(i)? {
+                return Ok(false);
+            }
+        }
+        let had = handler(i, target, callback)?.is_some();
+        let heard = run_listeners(i, target, ty, None, event, 2.0)?;
+        if bubbles && !stopped(i)? {
+            for p in &above {
+                run_listeners(i, *p, ty, Some(false), event, 3.0)?;
+                if stopped(i)? {
+                    break;
+                }
+            }
+        }
+        Ok(had || heard)
+    })
+}
+
+/// A click on the control `c` of `kind`: a check box turns over and a radio button turns on, then
+/// the click runs. → whether the control had a callback or a listener for it.
+fn click_control(i: &mut Interp, c: ObjId, kind: &str) -> JsResult<bool> {
+    if kind == "checkbox" {
+        let on = i.get_value(&Value::Object(c), &key("value"))?.truthy();
+        i.put(c, key("value"), Value::Bool(!on), true)?;
+    } else if kind == "radiobutton" {
+        i.put(c, key("value"), Value::Bool(true), true)?;
+    }
+    dispatch(i, c, "click", "onClick")
+}
+
+/// `notify([event])`: simulates the control's `onClick`, `onChange` or `onChanging`.
 fn notify(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let (o, kind) = element(i, &this, "notify")?;
     let event = match arg(args, 0) {
@@ -574,10 +871,112 @@ fn notify(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Valu
         Value::Undefined => "onChange".to_string(),
         v => i.to_str(&v)?.to_rust_string(),
     };
-    if !matches!(event.as_str(), "onClick" | "onChange" | "onChanging") {
-        return Err(error(i, "notify: give onClick, onChange or onChanging"));
+    match event.as_str() {
+        "onClick" => click_control(i, o, &kind)?,
+        "onChange" => dispatch(i, o, "change", "onChange")?,
+        "onChanging" => dispatch(i, o, "changing", "onChanging")?,
+        _ => return Err(error(i, "notify: give onClick, onChange or onChanging")),
+    };
+    Ok(Value::Undefined)
+}
+
+/// The index in `values` that `what` names: an index, one of the values, or a text that an
+/// element's `text` equals. A text is converted before the values are read.
+fn index_named(i: &mut Interp, what: &Value, values: impl Fn(&Interp) -> JsResult<Vec<Value>>) -> JsResult<(Vec<Value>, Option<usize>)> {
+    match what {
+        Value::Number(n) => {
+            let all = values(i)?;
+            let at = (*n >= 0.0 && n.fract() == 0.0 && (*n as usize) < all.len()).then_some(*n as usize);
+            Ok((all, at))
+        }
+        Value::Object(_) => {
+            let all = values(i)?;
+            let at = all.iter().position(|v| same(v, what));
+            Ok((all, at))
+        }
+        v => {
+            let want = i.to_str(v)?;
+            let all = values(i)?;
+            i.rooted(&all.clone(), |i| {
+                for (n, item) in all.iter().enumerate() {
+                    i.use_fuel()?;
+                    let t = i.get_value(item, &key("text"))?;
+                    if matches!(&t, Value::String(s) if *s == want) {
+                        return Ok((all.clone(), Some(n)));
+                    }
+                }
+                Ok((all.clone(), None))
+            })
+        }
     }
-    handler(i, o, &event)?;
+}
+
+/// `list.find(text)`: the first item whose text is `text`, or `null`.
+fn find(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let o = list_of(i, &this, "find")?;
+    let text = Value::String(i.to_str(&arg(args, 0))?);
+    let (items, at) = index_named(i, &text, |i| items_of(i, o))?;
+    Ok(at.and_then(|n| items.get(n).cloned()).unwrap_or(Value::Null))
+}
+
+/// The controls in `c` and in the containers it holds, `c` included, and their list items.
+fn subtree_counts(i: &mut Interp, c: &Value) -> JsResult<(f64, f64)> {
+    let (mut controls, mut items) = (0.0, 0.0);
+    let mut stack = vec![c.clone()];
+    while let Some(v) = stack.pop() {
+        i.use_fuel()?;
+        let Some(o) = v.as_object() else { continue };
+        controls += 1.0;
+        items += items_of(i, o)?.len() as f64;
+        stack.extend(kids_of(i, o)?);
+    }
+    Ok((controls, items))
+}
+
+/// `remove(what)`: removes a list's item, or a container's control, given by its index, the
+/// object itself or its text. Nothing happens when there is no such item or control.
+fn remove(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let (o, kind) = element(i, &this, "remove")?;
+    let what = arg(args, 0);
+    let Some(win) = object_slot(i, o, WINDOW)? else { return Err(Abrupt::Internal("an element without its window".into())) };
+    if kind == "dropdownlist" || kind == "listbox" {
+        let (mut items, at) = index_named(i, &what, |i| items_of(i, o))?;
+        let Some(at) = at else { return Ok(Value::Undefined) };
+        items.remove(at);
+        i.rooted(&items.clone(), |i| {
+            let kept = list(i, &items, false)?;
+            set_slot(i, o, ITEMS, Value::Object(kept))?;
+            let copy = list(i, &items, true)?;
+            set_open(i, o, "items", Value::Object(copy))
+        })?;
+        let count = number_slot(i, win, ITEM_COUNT)?;
+        set_slot(i, win, ITEM_COUNT, Value::Number((count - 1.0).max(0.0)))?;
+        match selection_index(i, o)? {
+            Some(n) if n == at => set_slot(i, o, SELECTION, Value::Number(-1.0))?,
+            Some(n) if n > at => set_slot(i, o, SELECTION, Value::Number((n - 1) as f64))?,
+            _ => {}
+        }
+        return Ok(Value::Undefined);
+    }
+    if !matches!(kind.as_str(), "dialog" | "group" | "panel") {
+        return Err(error(i, &format!("remove: a {kind} holds no controls or items")));
+    }
+    let (mut kids, at) = index_named(i, &what, |i| kids_of(i, o))?;
+    let Some(at) = at else { return Ok(Value::Undefined) };
+    let gone = kids.remove(at);
+    i.rooted(std::slice::from_ref(&gone), |i| {
+        i.rooted(&kids.clone(), |i| {
+            let kept = list(i, &kids, false)?;
+            set_slot(i, o, KIDS, Value::Object(kept))?;
+            let copy = list(i, &kids, true)?;
+            set_open(i, o, "children", Value::Object(copy))
+        })?;
+        let (controls, items) = subtree_counts(i, &gone)?;
+        let count = number_slot(i, win, COUNT)?;
+        set_slot(i, win, COUNT, Value::Number((count - controls).max(0.0)))?;
+        let total = number_slot(i, win, ITEM_COUNT)?;
+        set_slot(i, win, ITEM_COUNT, Value::Number((total - items).max(0.0)))
+    })?;
     Ok(Value::Undefined)
 }
 
@@ -723,7 +1122,7 @@ fn guarded(i: &mut Interp, keep: &[Value], r: impl FnOnce(&mut Interp) -> JsResu
 fn opened(i: &mut Interp, keep: &[Value], _: Value) -> JsResult<Value> {
     guarded(i, keep, |i| {
         let Some(win) = arg(keep, 0).as_object() else { return Err(Abrupt::Internal("show lost its dialog".into())) };
-        handler(i, win, "onShow")?;
+        dispatch(i, win, "show", "onShow")?;
         next(i, win)
     })
 }
@@ -756,22 +1155,7 @@ fn answered(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
         let value = slot(i, ev, "value")?;
         match event.as_str() {
             "click" => {
-                if kind == "checkbox" {
-                    let on = i.get_value(&Value::Object(c), &key("value"))?.truthy();
-                    i.put(c, key("value"), Value::Bool(!on), true)?;
-                } else if kind == "radiobutton" {
-                    let parent = object_slot(i, c, PARENT)?;
-                    for other in parent.map(|p| kids_of(i, p)).transpose()?.unwrap_or_default() {
-                        if !same(&other, &Value::Object(c))
-                            && let Some((o, k)) = kind_of(i, &other)?
-                            && k == "radiobutton"
-                        {
-                            i.put(o, key("value"), Value::Bool(false), true)?;
-                        }
-                    }
-                    i.put(c, key("value"), Value::Bool(true), true)?;
-                }
-                if handler(i, c, "onClick")?.is_none() && kind == "button" {
+                if !click_control(i, c, &kind)? && kind == "button" {
                     let is = |k: usize| matches!(arg(keep, k), Value::Number(n) if n == id as f64);
                     if is(2) {
                         set_slot(i, win, CLOSING, Value::Number(1.0))?;
@@ -784,11 +1168,11 @@ fn answered(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
                 match kind.as_str() {
                     "edittext" => {
                         i.put(c, key("text"), value, true)?;
-                        handler(i, c, "onChanging")?;
+                        dispatch(i, c, "changing", "onChanging")?;
                     }
                     "slider" => {
                         i.put(c, key("value"), value, true)?;
-                        handler(i, c, "onChanging")?;
+                        dispatch(i, c, "changing", "onChanging")?;
                     }
                     _ => {
                         let n = match value {
@@ -806,7 +1190,7 @@ fn answered(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
                         set_slot(i, c, SELECTION, Value::Number(n))?;
                     }
                 }
-                handler(i, c, "onChange")?;
+                dispatch(i, c, "change", "onChange")?;
             }
             _ => return Err(Abrupt::Internal(format!("the host gave show the event {event}"))),
         }
@@ -887,6 +1271,21 @@ fn bounds(i: &mut Interp, v: &Value) -> JsResult<Data> {
         return Ok(Data::Array(vec![Data::Number(n(0)), Data::Number(n(1)), Data::Number(n(0) + n(2)), Data::Number(n(1) + n(3))]));
     }
     numbers(i, v, &["left", "top", "right", "bottom"], "bounds")
+}
+
+/// `base`'s width and height, each replaced by `over`'s when that is above 0.
+fn overridden(base: Data, over: Data) -> Data {
+    let Data::Array(over) = over else { return base };
+    let mut out = match base {
+        Data::Array(b) => b,
+        _ => vec![Data::Number(-1.0), Data::Number(-1.0)],
+    };
+    for (o, v) in out.iter_mut().zip(over) {
+        if matches!(v, Data::Number(n) if n > 0.0) {
+            *o = v;
+        }
+    }
+    Data::Array(out)
 }
 
 fn margins(i: &mut Interp, v: &Value) -> JsResult<Data> {
@@ -977,8 +1376,16 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         // A value a getter gives is kept from collection while its own properties are read.
         let b = get_kept(i, o, "bounds")?;
         d.push(("bounds".into(), bounds(i, &b)?));
-        let size = get_kept(i, o, "preferredSize")?;
-        d.push(("size".into(), numbers(i, &size, &["width", "height"], "preferredSize")?));
+        // `size` set to a positive width or height takes the place of `preferredSize`'s.
+        let preferred = get_kept(i, o, "preferredSize")?;
+        let preferred = numbers(i, &preferred, &["width", "height"], "preferredSize")?;
+        let set = get_kept(i, o, "size")?;
+        let set = numbers(i, &set, &["width", "height"], "size")?;
+        d.push(("size".into(), overridden(preferred, set)));
+        for (name, field) in [("minimumSize", "min"), ("maximumSize", "max")] {
+            let v = get_kept(i, o, name)?;
+            d.push((field.into(), numbers(i, &v, &["width", "height"], name)?));
+        }
         let a = get_kept(i, o, "alignment")?;
         d.push(("alignment".into(), alignment(i, &a)?));
         if matches!(kind.as_str(), "dialog" | "group" | "panel") {
@@ -1066,7 +1473,7 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
     let host = i.host_object("Window", items)?;
     let object_proto = i.intrinsics.object_proto;
     i.rooted(&[Value::Object(host)], |i| {
-        i.reserve_heap(OBJECT_BYTES.saturating_mul(4))?;
+        i.reserve_heap(OBJECT_BYTES.saturating_mul(5))?;
         let window_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
         i.temp_roots.push(Value::Object(window_proto));
         let control_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
@@ -1079,21 +1486,54 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
         i.temp_roots.push(Value::Object(selection_get));
         let selection_set = native(i, "selection", selection_set, 1, NativeKind::Plain, false)?;
         i.temp_roots.push(Value::Object(selection_set));
-        i.script_ui = Some(Classes { window_proto, control_proto, item_proto, layout, host, selection_get, selection_set, showing: None });
+        let event_proto = i.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
+        i.temp_roots.push(Value::Object(event_proto));
+        let radio_get = native(i, "value", radio_get, 0, NativeKind::Plain, false)?;
+        i.temp_roots.push(Value::Object(radio_get));
+        let radio_set = native(i, "value", radio_set, 1, NativeKind::Plain, false)?;
+        i.temp_roots.push(Value::Object(radio_set));
+        i.script_ui = Some(Classes {
+            window_proto,
+            control_proto,
+            item_proto,
+            event_proto,
+            layout,
+            host,
+            selection_get,
+            selection_set,
+            radio_get,
+            radio_set,
+            showing: None,
+        });
         let window = native(i, "Window", window_ctor, 4, NativeKind::Plain, true)?;
         constructor(i, "Window", window, window_proto)?;
-        method(i, window_proto, "add", add, 4)?;
-        method(i, window_proto, "findElement", find_element, 1)?;
+        // `Window.alert`, `Window.confirm` and `Window.prompt` are the host's global functions.
+        let global = i.global;
+        for name in ["alert", "confirm", "prompt"] {
+            if let Some(Prop::Data { value, .. }) = i.get_own_property(global, &key(name))?
+                && i.is_callable(&value)
+            {
+                data(i, window, name, value, HIDDEN)?;
+            }
+        }
+        for proto in [window_proto, control_proto] {
+            method(i, proto, "add", add, 4)?;
+            method(i, proto, "findElement", find_element, 1)?;
+            method(i, proto, "remove", remove, 1)?;
+            method(i, proto, "addEventListener", add_event_listener, 3)?;
+            method(i, proto, "removeEventListener", remove_event_listener, 3)?;
+        }
         method(i, window_proto, "close", close, 1)?;
         method(i, window_proto, "hide", hide, 0)?;
         method(i, window_proto, "center", nothing, 1)?;
         pausable_method(i, window_proto, "show", show, 0)?;
-        method(i, control_proto, "add", add, 4)?;
-        method(i, control_proto, "findElement", find_element, 1)?;
         method(i, control_proto, "removeAll", remove_all, 0)?;
+        method(i, control_proto, "find", find, 1)?;
         method(i, control_proto, "notify", notify, 1)?;
         method(i, control_proto, "show", control_show, 0)?;
         method(i, control_proto, "hide", control_hide, 0)?;
+        method(i, event_proto, "stopPropagation", event_stop, 0)?;
+        method(i, event_proto, "preventDefault", event_prevent, 0)?;
         method(i, item_proto, "toString", item_to_string, 0)?;
         let index = native(i, "index", item_index, 0, NativeKind::Plain, false)?;
         i.define(item_proto, key("index"), Prop::Accessor { get: Some(index), set: None, flags: 0 })?;

@@ -316,6 +316,28 @@ fn sizes_and_places_are_clamped_and_the_layout_follows_the_containers() {
     assert!(w <= MAX_EXTENT && h <= MAX_EXTENT);
 }
 
+#[test]
+fn a_control_s_size_keeps_within_its_minimum_and_maximum() {
+    let dialog = node("dialog", -1.0);
+    let pair = |w: f64, h: f64| Data::Array(vec![Data::Number(w), Data::Number(h)]);
+    let wide = with(with(node("button", 0.0), "size", pair(300.0, -1.0)), "max", pair(120.0, -1.0));
+    let tall = with(with(node("button", 0.0), "size", pair(-1.0, -1.0)), "min", pair(-1.0, 60.0));
+    let d: ScriptUiDialog = scriptui::parse(&description(vec![dialog.clone(), wide, tall])).unwrap();
+    assert_eq!(d.nodes[1].rect.w, 120.0, "the maximum width holds over a larger size");
+    assert_eq!(d.nodes[2].rect.h, 60.0, "the minimum height holds over the estimate");
+    let plain: ScriptUiDialog = scriptui::parse(&description(vec![dialog, node("button", 0.0)])).unwrap();
+    assert!(plain.nodes[1].rect.h < 60.0 && plain.nodes[1].rect.w > 0.0, "a size of -1 leaves the side to the estimate");
+}
+
+#[test]
+fn window_s_alert_confirm_and_prompt_open_the_script_dialogs() {
+    let mut s = one_doc();
+    let answers = json!([{"kind": "alert", "value": "ok"}, {"kind": "confirm", "value": false}, {"kind": "prompt", "value": "typed"}]);
+    let r = headless(&mut s, "vc.log([typeof Window.alert('Hi'), Window.confirm('Go?'), Window.prompt('Name', 'x')]);", answers).unwrap();
+    assert_eq!(r["log"], json!([["undefined", false, "typed"]]), "{r}");
+    assert_eq!(r["dialogCount"], 3);
+}
+
 /// A description of arbitrary kinds, containers in any order, numbers of any size (infinite and
 /// not-a-number ones included) and texts of any length.
 fn any_description() -> impl proptest::strategy::Strategy<Value = Data> {

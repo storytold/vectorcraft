@@ -11,8 +11,9 @@
 //! or progress bar's value to its range.
 //!
 //! The layout follows each container's `orientation` (row, column or stack), `alignChildren`,
-//! `spacing` and `margins`, a control's `alignment`, `preferredSize` and `bounds` (left, top, right
-//! and bottom in its container). A control's size comes from its text, items and kind, by
+//! `spacing` and `margins`, a control's `alignment`, `preferredSize` (or `size`), `minimumSize`,
+//! `maximumSize` and `bounds` (left, top, right and bottom in its container); a width or height of
+//! 0 or less in a size leaves that side to the layout. A control's size comes from its text, items and kind, by
 //! VectorCraft's own estimates of a 7-pixel character and a 16-pixel line. The layout is worked out
 //! with loops over the list, from the last control to the first for sizes and from the first to the
 //! last for places, so a description's nesting takes no native stack.
@@ -145,6 +146,8 @@ pub struct UiNode {
     spacing: f32,
     margins: [f32; 4],
     size: [Option<f32>; 2],
+    min_size: [Option<f32>; 2],
+    max_size: [Option<f32>; 2],
     bounds: Option<UiRect>,
 }
 
@@ -482,7 +485,11 @@ pub fn parse(d: &Data) -> Result<ScriptUiDialog, HostError> {
             let (l, t) = (extent(l), extent(t));
             UiRect { x: l, y: t, w: (extent(r) - l).clamp(0.0, MAX_EXTENT), h: (extent(b) - t).clamp(0.0, MAX_EXTENT) }
         });
-        let size = numbers::<2>(field(f, "size"))?.map_or([None, None], |[w, h]| [(w > 0.0).then(|| extent(w)), (h > 0.0).then(|| extent(h))]);
+        // A width or height of 0 or less leaves that side to the layout.
+        let sides = |name: &str| -> Result<[Option<f32>; 2], HostError> {
+            Ok(numbers::<2>(field(f, name))?.map_or([None, None], |[w, h]| [(w > 0.0).then(|| extent(w)), (h > 0.0).then(|| extent(h))]))
+        };
+        let (size, min_size, max_size) = (sides("size")?, sides("min")?, sides("max")?);
         let margins = numbers::<4>(field(f, "margins"))?.map_or([0.0; 4], |m| m.map(|v| extent(v).max(0.0)));
         nodes.push(UiNode {
             kind,
@@ -506,6 +513,8 @@ pub fn parse(d: &Data) -> Result<ScriptUiDialog, HostError> {
             spacing: number(field(f, "spacing")).map_or(0.0, |s| extent(s).max(0.0)),
             margins,
             size,
+            min_size,
+            max_size,
             bounds,
         });
     }
@@ -577,6 +586,12 @@ fn layout(d: &mut ScriptUiDialog) {
         for axis in 0..2 {
             if let Some(v) = node.size[axis] {
                 s[axis] = v;
+            }
+            if let Some(v) = node.min_size[axis] {
+                s[axis] = s[axis].max(v);
+            }
+            if let Some(v) = node.max_size[axis] {
+                s[axis] = s[axis].min(v);
             }
         }
         if let Some(b) = node.bounds {

@@ -385,3 +385,112 @@ fn findelement_items_and_selection_follow_the_list() {
         .unwrap();
     assert_eq!(v, JsValue::String("true,b,,,0,b".into()));
 }
+
+#[test]
+fn a_new_control_s_sizes_can_be_set_a_side_at_a_time_and_reach_the_description() {
+    let (mut r, seen, _) = realm(vec![click(1)]);
+    let source = "var w = new Window('dialog'); var b = w.add('button', undefined, 'OK'); \
+        b.preferredSize.width = 100; b.minimumSize.height = 30; b.maximumSize.width = 90; w.size.height = 200; w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(1.0));
+    let seen = seen.borrow();
+    let first = nodes(&seen.descriptions[0]);
+    let numbers = |v: &[f64]| Data::Array(v.iter().map(|n| Data::Number(*n)).collect());
+    assert_eq!(field(&first[1], "size"), &numbers(&[100.0, -1.0]), "the side left alone stays to the layout");
+    assert_eq!(field(&first[1], "min"), &numbers(&[-1.0, 30.0]));
+    assert_eq!(field(&first[1], "max"), &numbers(&[90.0, -1.0]));
+    assert_eq!(field(&first[0], "size"), &numbers(&[-1.0, 200.0]), "size takes the place of preferredSize");
+}
+
+#[test]
+fn listeners_run_in_the_capture_target_and_bubbling_phases_until_one_stops() {
+    let (mut r, _, _) = realm(vec![click(2)]);
+    let source = "var w = new Window('dialog'); var g = w.add('group'); var b = g.add('button', undefined, 'Go'); var log = []; \
+        w.addEventListener('click', function (e) { log.push('capture ' + e.eventPhase); }, true); \
+        b.onClick = function () { log.push('onClick'); }; \
+        b.addEventListener('click', function (e) { log.push(e.type + ' ' + (e.target === b) + ' ' + (this === b)); }); \
+        g.addEventListener('click', function (e) { log.push('group ' + (e.currentTarget === g)); }); \
+        w.addEventListener('click', function () { log.push('dialog'); w.close(3); }); \
+        [w.show(), log.join()].join('|')";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("3|capture 1,onClick,click true true,group true,dialog".into()));
+    let (mut r, _, _) = realm(vec![click(1), close(), click(1), close()]);
+    let source = "var w = new Window('dialog'); var b = w.add('button', undefined, 'OK'); var log = []; \
+        function count() { log.push('count'); } b.addEventListener('click', count); b.addEventListener('click', count); \
+        b.addEventListener('click', function (e) { e.stopPropagation(); }); \
+        w.addEventListener('click', function () { log.push('dialog'); }); \
+        w.addEventListener('show', function (e) { log.push('show ' + e.bubbles); }); \
+        var first = w.show(); b.removeEventListener('click', count); var second = w.show(); [first, second, log.join()].join('|')";
+    assert_eq!(
+        r.run(source).unwrap(),
+        JsValue::String("0|0|show false,count,show false".into()),
+        "a button with a click listener does not close the dialog by itself, and the same listener is added once"
+    );
+    for (source, want) in [
+        ("new Window('dialog').addEventListener('mouseover', function () {})", "addEventListener: the event mouseover is not available yet"),
+        ("new Window('dialog').addEventListener('wobble', function () {})", "addEventListener: there is no event wobble"),
+        ("new Window('dialog').addEventListener('click', 'code')", "addEventListener: give the handler as a function"),
+    ] {
+        let (mut r, _, _) = realm(Vec::new());
+        let e = r.run(&format!("try {{ {source}; 'added' }} catch (e) {{ e.message }}")).unwrap();
+        assert_eq!(e, JsValue::String(want.into()), "{source}");
+    }
+}
+
+#[test]
+fn lists_find_and_remove_items_and_take_their_items_in_the_creation_properties() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var d = w.add('dropdownlist', undefined, undefined, {items: ['a', 'b', 'c']}); \
+             var x = w.add('listbox', undefined, {items: ['x'], name: 'xs'}); \
+             d.selection = 2; var b = d.find('b'); d.remove('b'); d.remove(0); d.remove('zzz'); d.remove(7); \
+             [d.items.length, d.items[0].text, d.selection.text, b.index, d.find('q'), x.items[0].text, x.name].join()",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("1,c,c,-1,,x,xs".into()));
+    let both = r.run("try { new Window('dialog').add('listbox', undefined, ['a'], {items: ['b']}); 'made' } catch (e) { e.name }").unwrap();
+    assert_eq!(both, JsValue::String("TypeError".into()));
+    let freed = r
+        .run(
+            "var w = new Window('dialog'); var l = w.add('listbox'); for (var n = 0; n < 1024; n++) l.add('item', 'i'); \
+             l.remove(0); l.add('item', 'again'); var g = w.add('group'); g.add('button', undefined, 'A'); g.add('button', undefined, 'B'); \
+             g.remove('A'); g.remove(g.children[0]); w.remove(l); var m = w.add('listbox'); \
+             for (var k = 0; k < 1024; k++) m.add('item', 'j'); for (var i = 0; i < 510; i++) w.add('button'); \
+             [g.children.length, w.children.length, m.items.length].join()",
+        )
+        .unwrap();
+    assert_eq!(freed, JsValue::String("0,512,1024".into()), "a removed item or control frees its place");
+}
+
+#[test]
+fn a_group_takes_its_creation_properties_third() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var g = w.add('group', undefined, {orientation: 'column', alignChildren: 'left', name: 'g'}); \
+             var p = w.add('panel', undefined, 'Title', {margins: 4}); w.show(); [g.orientation, g.alignChildren, g.name, g.text, p.text, p.margins].join()",
+        )
+        .unwrap();
+    assert_eq!(v, JsValue::String("column,left,g,,Title,4".into()));
+    let seen = seen.borrow();
+    assert_eq!(field(&nodes(&seen.descriptions[0])[1], "orientation"), &Data::String("column".into()));
+}
+
+#[test]
+fn a_radio_button_turned_on_turns_off_the_others_of_its_set() {
+    let (mut r, _, _) = realm(Vec::new());
+    let v = r
+        .run(
+            "var w = new Window('dialog'); var r1 = w.add('radiobutton', undefined, 'A'); var r2 = w.add('radiobutton', undefined, 'B'); \
+             var r3 = w.add('radiobutton', undefined, 'C'); w.add('statictext', undefined, 'Other'); var r4 = w.add('radiobutton', undefined, 'D'); \
+             var c = w.add('checkbox', undefined, 'E'); var clicks = 0; r3.onClick = function () { clicks++; }; \
+             r1.value = true; r2.value = true; var set = [r1.value, r2.value, r3.value]; r4.value = true; \
+             r3.notify('onClick'); r3.notify(); c.notify('onClick'); \
+             set.concat([r1.value, r2.value, r3.value, r4.value, c.value, clicks]).join()",
+        )
+        .unwrap();
+    assert_eq!(
+        v,
+        JsValue::String("false,true,false,false,false,true,true,true,2".into()),
+        "a radio button after another kind of control starts a new set"
+    );
+}

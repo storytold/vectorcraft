@@ -2908,26 +2908,52 @@ controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and s
   types are `group`, `panel`, `statictext`, `edittext`, `button`, `checkbox`, `radiobutton`, `dropdownlist`,
   `listbox`, `slider` and `progressbar`. After `bounds`, a text control takes its text and `properties` (`name`,
   and `multiline` and `readonly` for `edittext`), a list takes an array of item texts, a `slider` takes its value,
-  minimum and maximum (0 and 100 when left out), and a `progressbar` its value and maximum. A `listbox` with
-  `multiselect` and the other control types (`tabbedpanel`, `tab`, `scrollbar`, `image`, `iconbutton`, `treeview`
-  and the rest) throw that they are not available yet, and an unknown type throws too.
-- A list's `add("item", text)` adds an item, `removeAll()` removes them, `items` lists them and `selection` is the
-  selected item or `null`; setting it to an item or an index selects it. An item has `text`, `index` and
-  `selected`.
-- A control has `text`, `value`, `enabled`, `visible`, `name`, `bounds`, `preferredSize`, `alignment`, `parent`,
-  `window`, `show()` and `hide()`. A container also has `children`, `orientation` (`row`, `column` or `stack`; a
-  group starts as a row and the dialog and a panel as a column), `alignChildren`, `spacing` (10 to start), `margins`
-  (15 to start, 0 for a group) and `findElement(name)`. The dialog has `defaultElement`, `cancelElement`,
-  `close([result])` and `hide()`. `center()`, `layout.layout()` and `layout.resize()` do nothing.
+  minimum and maximum (0 and 100 when left out), and a `progressbar` its value and maximum. A `group` takes
+  `properties` right after `bounds`, and a list may take `properties` there in place of its items, with the item
+  texts in `properties.items`; a list given items both ways throws a `TypeError`. The `alignment` in `properties`,
+  and a container's `orientation`, `alignChildren`, `spacing` and `margins` there, are the control's first values
+  (VectorCraft's own rule). A `listbox` with `multiselect` and the other control types (`tabbedpanel`, `tab`,
+  `scrollbar`, `image`, `iconbutton`, `treeview` and the rest) throw that they are not available yet, and an
+  unknown type throws too.
+- A list's `add("item", text)` adds an item, `find(text)` gives the first item with that text or `null`,
+  `remove(what)` removes the item given by its index, the item itself or its text, `removeAll()` removes them all,
+  `items` lists them and `selection` is the selected item or `null`; setting it to an item or an index selects it.
+  An item has `text`, `index` and `selected`.
+- A control has `text`, `value`, `enabled`, `visible`, `name`, `bounds`, `preferredSize`, `size`, `minimumSize`,
+  `maximumSize`, `alignment`, `parent`, `window`, `show()`, `hide()` and `notify([event])`. Each size starts as an
+  object whose `width` and `height` are -1, so a script can set one side, as in `preferredSize.width = 100`; a side
+  of 0 or less is left to the layout (VectorCraft's own starting values). A container also has `children`,
+  `orientation` (`row`, `column` or `stack`; a group starts as a row and the dialog and a panel as a column),
+  `alignChildren`, `spacing` (10 to start), `margins` (15 to start, 0 for a group), `findElement(name)` and
+  `remove(what)`, which removes the control given by its index, the control itself or its text. Removing an item
+  or a control that is not there does nothing. The dialog has `defaultElement`, `cancelElement`, `close([result])`
+  and `hide()`. `center()`, `layout.layout()` and `layout.resize()` do nothing.
+- Radio buttons added one after another in a container form a set: setting one's `value` to true, or clicking it,
+  sets the others in the set to false. A control of another kind between two radio buttons starts a new set, as
+  the JavaScript Tools Guide describes radio buttons
+  (https://raw.githubusercontent.com/Adobe-CEP/CEP-Resources/master/ExtendScript-Toolkit/Guides/JavaScript%20Tools%20Guide%20CC.pdf).
+- `notify("onClick")`, `notify("onChange")` and `notify("onChanging")` act as the person's click or change would:
+  a click turns a check box over and turns a radio button on, then runs `onClick` and the `click` listeners.
+  `notify()` gives a click for a button, a check box and a radio button, and a change for the others.
+- `addEventListener(type, handler[, capture])` registers a function for `click`, `change`, `changing` or `show`,
+  and `removeEventListener` with the same arguments removes it; a function registered twice for the same type and
+  phase runs once. A handler gets an event with `type`, `target`, `currentTarget`, `eventPhase`, `bubbles`,
+  `detail` (1 for a click), `stopPropagation()` and `preventDefault()`. The containers above the control run their
+  `capture` handlers first, then the control runs its `onClick`, `onChange` or `onChanging` and its own handlers,
+  then the containers run their other handlers, from the nearest out, until a handler calls `stopPropagation()`;
+  `show` runs only on the dialog. The other documented event types (`focus`, `mouseover`, `keydown` and the rest)
+  throw that they are not available yet, and a handler that is not a function throws a `TypeError`.
+- `Window.alert`, `Window.confirm` and `Window.prompt` open the same dialogs as `alert`, `confirm` and `prompt`.
 
-`show()` opens the dialog, runs `onShow`, and waits for the person. A click runs the control's `onClick`; a check
-box turns its value over first, and a radio button turns on and the other radio buttons in its container off. An
+`show()` opens the dialog, runs `onShow` and the `show` handlers, and waits for the person. A click runs the
+control's `onClick` and `click` handlers; a check box turns its value over first, and a radio button turns on and
+the other radio buttons of its set off. An
 edit field gives its text when it loses the keyboard focus, at Enter in a one-line field, or before a click on another
 control, and a slider gives its
 value when it is let go: each runs `onChanging` and then `onChange`. A list's new selection runs `onChange`.
 Handlers run in the run's instructions, and a handler that does not end stops the run at its limit. `show()`
 returns the number given to `close(result)` (0 when left out), 1 when the default button is clicked and 2 when the
-cancel button is clicked, while they have no `onClick`, and 0 for the close box. `onClose` runs before the dialog
+cancel button is clicked, while they have no `onClick` and no `click` handler of their own, and 0 for the close box. `onClose` runs before the dialog
 closes, and returning `false` keeps it open. The default button is `defaultElement`, else a button named or titled
 OK, and the cancel button is `cancelElement`, else a button named or titled Cancel, in any case. A `show()` inside
 a handler, or of a dialog that is showing, throws an `Error`, and so does one inside a callback of a built-in
@@ -2937,8 +2963,9 @@ function. A shown dialog can be shown again after it closes.
 text a control, past which it throws a `RangeError`, a size or a place that is not a finite number, which throws
 too, and a slider's minimum above its maximum. When a getter changes a list's items after the list was read, it
 reads the dialog again, and throws an `Error` when a list changes again. It lays the controls out from each container's `orientation`,
-`alignChildren`, `spacing` and `margins` and each control's `alignment`, `preferredSize` and `bounds`, which places
-it in its container. Sizes and places are kept within 8,192 pixels. These limits are VectorCraft's own.
+`alignChildren`, `spacing` and `margins` and each control's `alignment`, `preferredSize` (each side of `size` that
+is above 0 takes the place of `preferredSize`'s), `minimumSize`, `maximumSize` and `bounds`, which places it in its
+container. Sizes and places are kept within 8,192 pixels. These limits are VectorCraft's own.
 
 In the app, the dialog (kind `scriptWindow`) draws the controls where they were laid out and has a Stop button,
 which ends the run as `script.stop` does. It stays open while one of its handlers runs and closes when `show()`
