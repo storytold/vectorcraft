@@ -670,6 +670,19 @@ fn mates(layout: &Layout<String>, panel: &str) -> Vec<String> {
     }
 }
 
+/// The icon column among `columns`: the iconic column holding the most panels of the icon groups.
+fn icon_column(columns: &[Column<String>]) -> Option<usize> {
+    let in_rows = |p: &&String| ICON_PANEL_GROUPS.iter().any(|row| row.contains(&p.as_str()));
+    columns
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.iconic)
+        .map(|(k, c)| (c.groups.iter().flat_map(|g| &g.panels).filter(in_rows).count(), k))
+        .filter(|(count, _)| *count > 0)
+        .max()
+        .map(|(_, k)| k)
+}
+
 /// The action that moves `unit` to `to`.
 fn unit_action(unit: &DragUnit<String>, to: Target<String>) -> Action<String> {
     match unit {
@@ -705,7 +718,7 @@ impl Legacy {
             Self::Icons => {
                 let columns = edge_columns(layout, DockEdge::End);
                 let moving = if group { mates } else { vec![id.clone()] };
-                if let Some(column) = columns.iter().rev().find(|c| c.iconic) {
+                if let Some(column) = icon_column(columns).and_then(|k| columns.get(k)) {
                     if column.panels().any(|p| p == panel) {
                         return Ok(Vec::new());
                     }
@@ -736,7 +749,7 @@ impl Legacy {
                 let staying: Vec<(usize, &String)> =
                     columns.iter().enumerate().filter_map(|(k, c)| c.panels().find(|p| !moving.contains(p)).map(|p| (k, p))).collect();
                 // Place 1 is next to the icon column, inwards; without one, next to the outer column.
-                let base = match columns.iter().rposition(|c| c.iconic) {
+                let base = match icon_column(columns) {
                     Some(icons) => staying.iter().filter(|(k, _)| *k <= icons).count(),
                     None => staying.len().min(1),
                 };
@@ -756,12 +769,14 @@ impl Legacy {
                         Target::at((*anchor).clone(), DockPlacement::column(true))
                     }
                 };
+                // Taken out of an icon column, the new column keeps that column's icons: it opens expanded.
+                let expand = layout.opens_in_flyout(&id).then(|| Action::set_iconic(id.clone(), false));
                 let unit = match window {
                     Some(_) if whole => DragUnit::Window(id),
                     _ if whole => DragUnit::Group(id),
                     _ => DragUnit::Panel(id),
                 };
-                Ok(vec![unit_action(&unit, to)])
+                Ok(std::iter::once(unit_action(&unit, to)).chain(expand).collect())
             }
         }
     }
@@ -992,7 +1007,20 @@ fn float_actions(
         (None, DragUnit::Panel(_)) => Action::float(panel.clone(), rect),
         (None, _) => unit_action(unit, Target::float(rect)),
     };
-    Ok(std::iter::once(float).chain(expand).collect())
+    let native = window.filter(|_| kept.is_some()).and_then(|w| native_moved(ctx, w, rect));
+    Ok(std::iter::once(float).chain(native).chain(expand).collect())
+}
+
+/// The record of where the OS window of `window` (on `ctx`) is, moved to `rect` in the main window's points: an open OS
+/// window stays where the dock recorded it, so a command that moves the window moves the record with it.
+fn native_moved(ctx: Option<&egui::Context>, window: &Floating<String>, rect: egui::Rect) -> Option<Action<String>> {
+    let mut native = window.native.clone()?;
+    let main = craft::ui::runtime::windows::WindowHost::of(ctx?).facts(egui::ViewportId::ROOT)?;
+    let at = rect.min + main.inner.min.to_vec2();
+    native.normal.pos = at.into();
+    native.normal.size = rect.size().into();
+    native.position_px = Some([(at.x * native.scale).round() as i32, (at.y * native.scale).round() as i32]);
+    Some(Action::set_native(window.panels().next()?.clone(), Some(native)))
 }
 
 /// Where floating `window` is, in the main window's points: where the OS put its own window when it has one (on `ctx`),
@@ -1264,6 +1292,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
     // The area shares the workspace's `Arc`, so panel bodies that read the layout in the pass
     // (`visible`, `showing`) see it; their changes go through `apply`.
     let mut workspace = Arc::clone(&app.ui.dock_workspace);
+    let revision = workspace.revision();
     let flyout_before = app.ui.open_panel.clone();
     let presenting = app.ui.screen_mode >= 3;
     // Shift+Tab, from its key, a menu or automation, closes a panel popped out of the icon column.
@@ -1293,9 +1322,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
     };
     app.dock_rt.specs = specs;
     app.dock_rt.rails = rails;
-    // A workspace a command switched to in this pass (`Workspace::replace`) stays; the pass's edits
-    // were to the one it replaced.
-    if app.ui.dock_workspace.revision() == workspace.revision() {
+    // A workspace a command switched to or changed in this pass (`Workspace::replace`) stays; the
+    // pass's edits were to the one it replaced.
+    if app.ui.dock_workspace.revision() == revision {
         app.ui.dock_workspace = workspace;
     }
     // A command of this pass that opened or closed a flyout wins over the area's own change.

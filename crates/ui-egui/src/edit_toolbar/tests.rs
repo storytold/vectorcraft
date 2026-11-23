@@ -315,7 +315,10 @@ fn a_new_toolbar_fills_from_the_drawer_beside_it() {
     // The Tools panel's ••• button takes the drawer back beside its toolbar.
     let nodes = settle(&mut app, &ctx, 11.0);
     let bar = one(&nodes, "Mine");
-    let main_edit = named(&nodes, EDIT).into_iter().find(|r| !bar.contains(r.center())).expect("the Tools panel's ••• button");
+    // The drawer and its title are named like the ••• buttons: the button is in neither Mine nor the drawer.
+    let open = drawer(&nodes);
+    let main_edit =
+        named(&nodes, EDIT).into_iter().find(|r| !bar.contains(r.center()) && !open.contains(r.center())).expect("the Tools panel's ••• button");
     click(&mut app, &ctx, 12.0, main_edit.center());
     assert!(app.ui.tools_drawer && crate::custom_toolbars::drawer_target(&app.ui).is_none());
 }

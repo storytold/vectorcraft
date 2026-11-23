@@ -142,6 +142,20 @@ fn end_columns(layout: &Layout<String>) -> &[Column<String>] {
     edge_columns(layout, DockEdge::End)
 }
 
+/// The columns of the end dock, to set a layout no command makes.
+fn end_dock_mut(layout: &mut Layout<String>) -> Option<&mut Vec<Column<String>>> {
+    let path = layout.dock_path(DockEdge::End)?;
+    let mut node = layout.root.as_mut()?;
+    for second_child in path {
+        let Node::Split { first, second, .. } = node else { return None };
+        node = if second_child { second } else { first };
+    }
+    match node {
+        Node::Dock { columns, .. } => Some(columns),
+        _ => None,
+    }
+}
+
 /// The panels of the group holding `panel`, docked or floating.
 fn group_of(layout: &Layout<String>, panel: &String) -> Vec<String> {
     layout.place(panel).and_then(|place| layout.group(&place)).map(|group| group.panels.clone()).unwrap_or_default()
@@ -150,19 +164,6 @@ fn group_of(layout: &Layout<String>, panel: &String) -> Vec<String> {
 /// Is `panel` in a column collapsed to icons?
 fn in_iconic_column(layout: &Layout<String>, panel: &str) -> bool {
     layout.opens_in_flyout(&panel.to_owned())
-}
-
-/// The icon column among `columns`: the iconic column holding the most panels of the icon groups.
-fn icon_column(columns: &[Column<String>]) -> Option<usize> {
-    let in_rows = |p: &&String| ICON_PANEL_GROUPS.iter().any(|row| row.contains(&p.as_str()));
-    columns
-        .iter()
-        .enumerate()
-        .filter(|(_, c)| c.iconic)
-        .map(|(k, c)| (c.groups.iter().flat_map(|g| &g.panels).filter(in_rows).count(), k))
-        .filter(|(count, _)| *count > 0)
-        .max()
-        .map(|(_, k)| k)
 }
 
 /// Answers the topmost open dialog with OK or Cancel, then runs the frame's dialog pump. A held OK is answered
@@ -363,9 +364,8 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
             // A layout converted from an old dock split side by side, with the dock collapsed: two
             // collapsed tree columns before the icon column. No command makes it, so it is set directly.
             let mut layout = h.layout();
-            if let Some(Node::Split { second, .. }) = layout.root.as_mut()
-                && let Node::Dock { columns, .. } = second.as_mut()
             {
+                let columns = end_dock_mut(&mut layout).expect("the layout has an end dock");
                 let libraries = columns[0].groups[0].panels.pop().unwrap();
                 assert_eq!(libraries, "libraries");
                 columns.insert(1, Column::new(vec![Group::new(vec![libraries], 0)]).with_iconic(true));
@@ -383,9 +383,8 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
 
             // No icon column: `icon` makes one.
             let mut layout = h.layout();
-            if let Some(Node::Split { second, .. }) = layout.root.as_mut()
-                && let Node::Dock { columns, .. } = second.as_mut()
             {
+                let columns = end_dock_mut(&mut layout).expect("the layout has an end dock");
                 columns.remove(2);
             }
             h.set_layout(layout);
@@ -812,11 +811,21 @@ fn other_function_keys_and_keyboard_guards_keep_their_routes() {
     assert!(showing(&h.app.ui, "layers"), "F7 does nothing while a dialog is open");
     answer(&mut h.app, false);
 
-    let field = egui::Id::unique("panel-shortcut-text-focus");
-    h.ctx.memory_mut(|m| m.request_focus(field));
+    // The Layers panel's search field, clicked once the dialog has gone: it has the keys until a click on the canvas
+    // takes them.
+    h.frames(2);
+    let field = h
+        .nodes
+        .iter()
+        .filter(|(_, n)| n.role() == egui::accesskit::Role::TextInput && n.label() == Some("Search layers"))
+        .find_map(|(_, n)| n.bounds())
+        .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
+        .expect("the Layers panel's search field");
+    h.click(field);
     h.f7();
     assert!(showing(&h.app.ui, "layers"), "F7 does nothing while a text field has focus");
-    h.ctx.memory_mut(|m| m.surrender_focus(field));
+    let canvas = h.canvas();
+    h.click(canvas.right_bottom() - vec2(20.0, 20.0));
     h.f7();
     assert!(!showing(&h.app.ui, "layers"), "F7 toggles when the field releases focus");
 

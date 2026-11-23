@@ -21,6 +21,8 @@ struct Window {
     /// Desktop rect of its content.
     rect: Rect,
     events: Vec<Event>,
+    /// The OS files held over it, as the OS sends them before a drop.
+    hovered: Vec<egui::HoveredFile>,
     dropped: Vec<egui::DroppedFileHandle>,
     frames: usize,
     /// The texts its last frame drew, with their rects in the window.
@@ -68,7 +70,14 @@ impl Host {
             let mut host = host.borrow_mut();
             let builder = &viewport.builder;
             let rect = Rect::from_min_size(builder.position.unwrap_or_default(), builder.inner_size.unwrap_or(vec2(300.0, 200.0)));
-            host.windows.entry(id).or_insert_with(|| Window { rect, events: Vec::new(), dropped: Vec::new(), frames: 0, texts: Vec::new() });
+            host.windows.entry(id).or_insert_with(|| Window {
+                rect,
+                events: Vec::new(),
+                hovered: Vec::new(),
+                dropped: Vec::new(),
+                frames: 0,
+                texts: Vec::new(),
+            });
             let viewports = host.infos();
             let (time, focused) = (host.time, host.focus == id);
             let Some(window) = host.windows.get_mut(&id) else { return };
@@ -78,6 +87,7 @@ impl Host {
                 viewports,
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, window.rect.size())),
                 events: std::mem::take(&mut window.events),
+                hovered_files: std::mem::take(&mut window.hovered),
                 dropped_files: std::mem::take(&mut window.dropped),
                 focused,
                 time: Some(time),
@@ -286,6 +296,11 @@ fn a_file_dropped_on_a_native_window_opens() {
     let viewport = h.float("layers");
     let documents = h.app.session.documents().len();
     let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="10" height="10"/></svg>"#;
+    // The OS holds the file over the window first, then drops it.
+    if let Some(window) = h.host.borrow_mut().windows.get_mut(&viewport) {
+        window.hovered.push(egui::HoveredFile::default());
+    }
+    h.frame(vec![]);
     if let Some(window) = h.host.borrow_mut().windows.get_mut(&viewport) {
         window.dropped.push(Arc::new(MockDrop(svg.to_vec())));
     }
