@@ -130,7 +130,8 @@ fn picker_rgb_fields_show_working_values() {
     }
 }
 
-/// A panel slider click changes one native component and makes one undo step.
+/// A panel slider click changes one native component and makes one undo step. The click lands mid-track, where the
+/// thumb of a red of 0.5 would sit and move nothing, so the red starts elsewhere.
 #[test]
 fn color_panel_slider_preserves_native_channels_and_undo() {
     use egui_kittest::kittest::Queryable;
@@ -139,15 +140,15 @@ fn color_panel_slider_preserves_native_channels_and_undo() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
-    app.run("paint.setFill", json!({"color": [0.5, 0.3, 0.2]})).unwrap();
+    app.run("paint.setFill", json!({"color": [0.4, 0.3, 0.2]})).unwrap();
     let mut harness = harness(egui::vec2(320.0, 400.0), app, |ui, app| show(app, ui));
     frames(&mut harness, 3);
     harness.get_by_role_and_label(egui::accesskit::Role::Slider, "Red").click();
     frames(&mut harness, 3);
     let color = harness.state().session.proxy_paints().0.color().unwrap();
     let Color::Rgb { r, .. } = color else { panic!("expected RGB") };
-    assert_ne!(r, 0.5, "the slider was edited");
+    assert_ne!(r, 0.4, "the slider was edited");
     native(color, [r, 0.3, 0.2]);
     harness.state_mut().run("edit.undo", json!({})).unwrap();
-    native(harness.state().session.proxy_paints().0.color().unwrap(), [0.5, 0.3, 0.2]);
+    native(harness.state().session.proxy_paints().0.color().unwrap(), [0.4, 0.3, 0.2]);
 }

@@ -20,7 +20,7 @@ use craft::color_ui::ui::{
 };
 use craft::color_ui::web_safe;
 use craft::keymap::CommandRef;
-use craft::theme::{ModelValues, Srgba};
+use craft::theme::{Channel, ColorModel, DefaultOn, MAX_CHANNELS, ModelValues, RgbModel, Srgba};
 use craft::ui::contract::{Bind, CommandSet};
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::CommandStates;
@@ -99,6 +99,33 @@ pub(crate) fn working_rgb(c: &Color) -> [f32; 3] {
 fn srgba(c: &Color) -> Srgba {
     let [r, g, b] = c.to_rgb();
     Srgba::rgb(r, g, b)
+}
+
+/// RGB in the active working space, 0 to 255: the panel's RGB rows show and edit the stored components, so a wide
+/// working space shows its own numbers rather than sRGB's.
+struct WorkingRgb;
+
+impl ColorModel for WorkingRgb {
+    fn id(&self) -> &'static str {
+        RgbModel.id()
+    }
+    fn name(&self) -> &'static str {
+        RgbModel.name()
+    }
+    fn channels(&self) -> &[Channel] {
+        static RGB: RgbModel = RgbModel;
+        RGB.channels()
+    }
+    fn from_srgb(&self, c: Srgba) -> ModelValues {
+        let [r, g, b] = cms::active().srgb_to_rgb([c.r, c.g, c.b]);
+        model_values(&Color::rgb(r, g, b))
+    }
+    fn to_srgb(&self, v: &[f32; MAX_CHANNELS]) -> Srgba {
+        srgba(&Color::rgb(v[0] / 255.0, v[1] / 255.0, v[2] / 255.0))
+    }
+    fn default_on(&self) -> DefaultOn {
+        RgbModel.default_on()
+    }
 }
 
 /// The colour's values in its own model (working RGB 0 to 255, CMYK %, K %, Lab L*a*b*), which the
@@ -537,6 +564,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // The drag keeps a recent colour's own model for the Swatches panel.
         .recent_payload(move |i| stored.get(i).copied())
         .gamut(printable)
+        .working_rgb(&WorkingRgb)
         .show(ui);
     // PLAN: a click on a recent chip reports only its sRGB, so a CMYK recent colour paints as RGB; co.K18 needs the edit to name the chip.
     apply_with(app, &tgt, &out);
