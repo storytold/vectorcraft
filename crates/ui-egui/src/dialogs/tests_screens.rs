@@ -221,6 +221,8 @@ fn opens_with_the_rows_selected_in_the_artboards_panel_else_on_the_saved_choice(
         let at = screen_text_at(&rows, label);
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
         panel(&mut app, time, vec![egui::Event::ModifiersChanged(modifiers), egui::Event::PointerMoved(at), button(true), button(false)]);
+        // The frame after the click, as the hosts draw it: the list reports a Shift-click's range there.
+        panel(&mut app, time + 0.1, vec![]);
     }
     assert_eq!(crate::panels::artboards::picked(&app, 4), [1, 2], "the panel highlights rows 2 and 3");
     open(&mut app);
