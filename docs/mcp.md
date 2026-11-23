@@ -3084,7 +3084,9 @@ rules for these objects:
   the script may not write throws `Script file access denied`; other files open read only with that flag.
   After `putXMP`, `closeFile()` writes the packet in
   UTF-8 through a temporary file in the same folder when the script may write there, otherwise straight to the file;
-  when no temporary name is free, nothing is written. With `XMPConst.CLOSE_UPDATE_SAFELY`, `closeFile()` writes only
+  when no temporary name is free, nothing is written. On Unix the replacement keeps the file's permission bits, group
+  and (on Linux) access ACL, as a saved document does, and is readable by its owner alone where the group or the ACL
+  cannot be kept. With `XMPConst.CLOSE_UPDATE_SAFELY`, `closeFile()` writes only
   through a temporary file, and where the script may not make one it throws `Script file could not be written` and
   leaves the file as it is. A failed write throws and keeps the file open with its packet. While an open `File` of the same file holds changes it has not written, `closeFile()` throws
   `Script file could not be written` and the `File` keeps its changes. `getXMP`, `getPacketInfo`, `getFileInfo` and `canPutXMP` are available. An `XMPFile` is open only in the

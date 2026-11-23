@@ -1999,16 +1999,16 @@ fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
         };
         let r = write_temp();
         drop(out);
-        // The replacement keeps the sidecar's permission bits. On Windows the only permission is the
-        // read-only attribute, and a read-only temporary file could not be removed after a failed
-        // rename.
-        let permissions = if cfg!(unix) { std::fs::metadata(&target).map(|m| m.permissions()).ok() } else { None };
-        let r = r
-            .and_then(|()| permissions.map_or(Ok(()), |p| std::fs::set_permissions(&temp, p)))
-            .and_then(|()| std::fs::rename(&temp, &target))
-            .inspect_err(|_| {
-                let _ = std::fs::remove_file(&temp);
-            });
+        // The replacement keeps the sidecar's permission bits, group and (Linux) access ACL, or is
+        // readable by its owner alone, as a saved document is (`vectorcraft_format::keep_permissions`).
+        // On Windows the only permission is the read-only attribute, and a read-only temporary file
+        // could not be removed after a failed rename. The web build has no such files. Permission
+        // bits that cannot be set fail the write, and the sidecar stays as it was.
+        #[cfg(not(target_arch = "wasm32"))]
+        let r = r.and_then(|()| vectorcraft_format::keep_permissions(&target, &temp));
+        let r = r.and_then(|()| std::fs::rename(&temp, &target)).inspect_err(|_| {
+            let _ = std::fs::remove_file(&temp);
+        });
         let changed = r.is_ok();
         (r, changed)
     } else {

@@ -583,6 +583,37 @@ fn a_temporary_file_starts_private() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A replaced sidecar that had no access ACL takes none from its folder's default ACL, whose named
+/// users the sidecar's group bits would let in. (Skipped where `setfacl` or ACLs are missing.)
+#[cfg(target_os = "linux")]
+#[test]
+fn a_replaced_sidecar_takes_no_inherited_acl() {
+    let base = folder("acl");
+    let mut s = with_data(&base);
+    let log = logged(
+        &mut s,
+        &base,
+        &format!("var p = Folder.userData.fsName + '/a.xmp'; var f = new File(p); f.open('w'); f.write({PACKET:?}); f.close(); vc.log(p);"),
+    );
+    let path = PathBuf::from(log[0].as_str().unwrap());
+    let set = std::process::Command::new("setfacl").args(["-d", "-m", "u:nobody:rw"]).arg(path.parent().unwrap()).status();
+    if !set.is_ok_and(|s| s.success()) {
+        let _ = std::fs::remove_dir_all(base);
+        return;
+    }
+    logged(
+        &mut s,
+        &base,
+        "var x = new XMPFile(Folder.userData.fsName + '/a.xmp', XMPConst.FILE_UNKNOWN, XMPConst.OPEN_FOR_UPDATE);\n\
+         var m = x.getXMP(); m.setProperty(XMPConst.NS_DC, 'format', 'changed'); x.putXMP(m); x.closeFile();",
+    );
+    assert!(std::fs::read_to_string(&path).unwrap().contains("<dc:format>changed</dc:format>"));
+    let acl = std::process::Command::new("getfacl").args(["--omit-header", "--absolute-names"]).arg(&path).output().unwrap();
+    let acl = String::from_utf8_lossy(&acl.stdout);
+    assert!(!acl.contains("nobody"), "the replacement takes no ACL entry the sidecar lacked: {acl}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A packet argument whose conversion closes the `XMPFile` leaves it closed: `canPutXMP` and
 /// `putXMP` throw that the file is closed, and nothing is written.
 #[test]
