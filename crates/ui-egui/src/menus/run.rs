@@ -632,7 +632,10 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Ok(json!(on))
             })
         }
-        "window.toolbarAdvanced" => flag(&mut app.ui.toolbar_advanced),
+        "window.toolbarAdvanced" => opt_bool(p, "advanced").and_then(|advanced| match advanced {
+            Some(advanced) => crate::edit_toolbar::pick_layout(app, advanced).map(|()| json!(advanced)),
+            None => flag(&mut app.ui.toolbar_advanced),
+        }),
         "imageTrace.preview" => opt_bool(p, "on").map(|on| {
             let on = on.unwrap_or(!app.ui.image_trace_preview);
             app.ui.image_trace_preview = on;

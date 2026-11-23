@@ -570,7 +570,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{double?: bool, toolbar?: name} show the toolbar's tools (with `toolbar`, that toolbar made with New Toolbar's) in two columns (true), one (false) or toggle (omitted), as the double arrow at the top of the toolbar does; returns the new state",
     ),
-    ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
+    (
+        "window.toolbarAdvanced",
+        "Toolbar: Advanced / Basic",
+        "",
+        "{advanced?: bool} give the Tools panel the Advanced toolbar (true) or the Basic one (false), as the All Tools drawer's menu does, which then edits the Tools panel's toolbar also when it was editing one made with New Toolbar; omitted, toggle between them; returns the new state",
+    ),
     (
         "window.toolbarCompact",
         "Compact Tools",

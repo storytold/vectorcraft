@@ -400,7 +400,7 @@ fn basic_or_advanced_takes_the_drawer_to_the_tools_panel() {
     app.run("window.toolbar", json!({})).unwrap();
     for advanced in [false, true] {
         app.run("window.editToolbar", json!({"toolbar": "Mine", "open": true})).unwrap();
-        pick_layout(&mut app, advanced).unwrap();
+        crate::menus::invoke(&mut app, "window.toolbarAdvanced", json!({ "advanced": advanced }));
         assert!(app.ui.tools_drawer && crate::custom_toolbars::drawer_target(&app.ui).is_none(), "{advanced}");
         assert_eq!(app.ui.toolbar_advanced, advanced);
         assert!(crate::toolbar::shown(&app.ui), "the Tools panel shows beside the drawer");
