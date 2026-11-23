@@ -627,6 +627,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` kræver et gradientstop, der er knyttet til en spotfarveprøve
 @msg	the output	outputtet
 @msg	the path has no anchor points	kurven har ingen ankerpunkter
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	den sammensatte kurve {id} har et skjult, låst eller hjælpelinjemedlem, så dens medlemmer kan ikke erstattes
 @msg	too many anchor points (limit {MAX_ANCHORS})	for mange ankerpunkter (grænse {MAX_ANCHORS})
 @msg	true or false	true eller false
 @msg	a number >= {_1}	et tal >= {_1}

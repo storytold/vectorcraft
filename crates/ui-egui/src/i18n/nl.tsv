@@ -473,6 +473,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vereist een verloopstop die aan een steunkleurstaal is gekoppeld
 @msg	the output	de uitvoer
 @msg	the path has no anchor points	het pad heeft geen ankerpunten
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	het samengestelde pad {id} heeft een verborgen, vergrendeld of hulplijnlid, dus de leden kunnen niet worden vervangen
 @msg	too many anchor points (limit {MAX_ANCHORS})	te veel ankerpunten (limiet {MAX_ANCHORS})
 @msg	true or false	true of false
 @msg	a number >= {_1}	een getal >= {_1}

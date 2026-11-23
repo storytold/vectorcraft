@@ -7295,6 +7295,7 @@ axis	Y Axis	Eixo Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` requer uma parada vinculada a uma amostra de cor spot
 @msg	the output	a saída
 @msg	the path has no anchor points	o caminho não tem pontos de ancoragem
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	o caminho composto {id} tem um membro oculto, bloqueado ou guia, por isso seus membros não podem ser substituídos
 @msg	too many anchor points (limit {MAX_ANCHORS})	pontos de ancoragem demais (limite {MAX_ANCHORS})
 @msg	true or false	true ou false
 @msg	a number >= {_1}	um número >= {_1}

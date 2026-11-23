@@ -776,6 +776,14 @@ For an **object filter**, the output is the new state of the input objects:
   the run locked or made guides are left out of the selection that follows. Hosts from before these keys ignore them.
 - A `path` returned as it was keeps a live shape live (a rectangle keeps its corner widgets); a changed one makes it a
   plain path.
+- A compound path whose `path` is returned as it was, or left out, keeps its members as they are, hidden and locked
+  ones included; a changed `path` replaces its members with one plain member per subpath. The host refuses a `path`
+  with no anchor points, so return a compound path that has none without `path`. While a member is hidden, locked or a
+  guide, the host refuses a changed `path` and `type: "path"` for it (a guide member is allowed when the output also
+  sets `guide`).
+- The host compares a returned `path` with the input coordinate by coordinate, exactly. A JSON parser that does not
+  read numbers back exactly as they were written (in Rust, `serde_json` without its `float_roundtrip` feature) can
+  change the last digit of a coordinate, so leave `path` out when the geometry does not change.
 
 The host validates everything before the document changes: coordinates must be finite and within ±4,000,000 pt, at
 most 100,000 objects and 4,000,000 anchors, 256 fills, strokes or gradient stops; colours, opacities and offsets are

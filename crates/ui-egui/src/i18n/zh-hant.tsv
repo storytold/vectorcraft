@@ -7049,6 +7049,7 @@ axis	Y Axis	Y 軸
 @msg	`plates` requires a stop linked to a spot swatch	`plates` 需要連結到特別色色票的漸層色標
 @msg	the output	輸出
 @msg	the path has no anchor points	路徑沒有錨點
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	複合路徑 {id} 有隱藏、鎖定或參考線成員，因此無法取代其成員
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
 @msg	a number >= {_1}	大於或等於 {_1} 的數字

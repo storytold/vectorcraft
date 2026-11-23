@@ -7381,6 +7381,7 @@ axis	Y Axis	Y tengely
 @msg	`plates` requires a stop linked to a spot swatch	a `plates` direktszín-színmintához kapcsolt színátmenet-pontot igényel
 @msg	the output	a kimenet
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	a(z) {id} összetett útvonalnak van rejtett, zárolt vagy segédvonal tagja, ezért a tagjai nem cserélhetők le
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
 @msg	true or false	true vagy false
 @msg	a number >= {_1}	szám >= {_1}

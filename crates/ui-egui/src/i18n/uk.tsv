@@ -7000,6 +7000,7 @@ axis	Y Axis	Вісь Y
 @msg	`plates` requires a stop linked to a spot swatch	для `plates` потрібна точка переходу, пов’язана зі зразком плашкового кольору
 @msg	the output	виведення
 @msg	the path has no anchor points	контур не має опорних точок
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	складений контур {id} має прихований, заблокований або напрямний елемент, тому його елементи не можна замінити
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
 @msg	true or false	true або false
 @msg	a number >= {_1}	число >= {_1}

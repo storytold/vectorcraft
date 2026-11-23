@@ -7093,6 +7093,7 @@ axis	Y Axis	Y 軸
 @msg	`plates` requires a stop linked to a spot swatch	`plates` には特色スウォッチにリンクされた分岐点が必要です
 @msg	the output	出力
 @msg	the path has no anchor points	パスにアンカーポイントがありません
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	複合パス {id} に非表示、ロック、またはガイドのメンバーがあるため、メンバーを置き換えられません
 @msg	too many anchor points (limit {MAX_ANCHORS})	アンカーポイントが多すぎます (上限 {MAX_ANCHORS})
 @msg	true or false	true または false
 @msg	a number >= {_1}	{_1} 以上の数値

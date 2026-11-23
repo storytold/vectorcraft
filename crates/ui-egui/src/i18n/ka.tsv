@@ -9499,6 +9499,7 @@ axis	Y Axis	Y ღერძი
 @msg	`plates` requires a stop linked to a spot swatch	`plates` მოითხოვს გადასვლის წერტილს, რომელიც სპოტ-ფერის ნიმუშთანაა დაკავშირებული
 @msg	the output	გამოტანა
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	შედგენილ ტრაექტორიას {id} აქვს დამალული, ჩაკეტილი ან დამხმარე ხაზის წევრი, ამიტომ მისი წევრების ჩანაცვლება შეუძლებელია
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})
 @msg	true or false	true ან false
 @msg	a number >= {_1}	რიცხვი >= {_1}

@@ -7468,6 +7468,7 @@ axis	Y Axis	Y ekseni
 @msg	`plates` requires a stop linked to a spot swatch	`plates`, nokta rengi örneğine bağlı bir degrade durağı gerektirir
 @msg	the output	çıktı
 @msg	the path has no anchor points	yolun bağlantı noktası yok
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	{id} bileşik yolunun gizli, kilitli veya kılavuz olan bir üyesi var, bu yüzden üyeleri değiştirilemez
 @msg	too many anchor points (limit {MAX_ANCHORS})	çok fazla bağlantı noktası (sınır {MAX_ANCHORS})
 @msg	true or false	true veya false
 @msg	a number >= {_1}	bir sayı >= {_1}
