@@ -797,6 +797,94 @@ fn renaming_a_layer_commits_on_enter_and_escape_cancels() {
     assert_eq!(name(&app), "Sky", "Escape cancels");
 }
 
+/// Tab in the name field renames the row it was in and opens the next row's field, Shift+Tab the
+/// previous one; both wrap around the listed nameable rows.
+#[test]
+fn tab_and_shift_tab_move_the_rename_field_through_the_rows() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+    run(&mut app, "layer.new", json!({}));
+    run(&mut app, "layer.new", json!({}));
+    let ctx = egui::Context::default();
+    let ids: Vec<NodeId> = {
+        let st = app.session.doc().unwrap();
+        list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default())
+            .iter()
+            .filter(|r| r.guide.is_none() && !r.spine)
+            .map(|r| r.node.id)
+            .collect()
+    };
+    assert!(ids.len() >= 3, "{ids:?}");
+    let name = |app: &VectorcraftApp, id: NodeId| app.session.doc().unwrap().doc.node(id).unwrap().display_name();
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    let field = rename_id().with("field");
+    ctx.data_mut(|d| d.insert_temp(rename_id(), (ids[0].0, name(&app, ids[0]))));
+    frame(&mut app, &ctx, vec![], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert!(ctx.memory(|m| m.has_focus(field)), "the first field has the focus");
+    frame(
+        &mut app,
+        &ctx,
+        vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text("Sky".into()), key(egui::Key::Tab, egui::Modifiers::NONE)],
+        false,
+    );
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(name(&app, ids[0]), "Sky", "Tab commits the row it leaves");
+    assert_eq!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).map(|(id, _)| id), Some(ids[1].0), "and opens the next row");
+    assert!(ctx.memory(|m| m.has_focus(field)), "the field keeps the keyboard");
+    frame(&mut app, &ctx, vec![key(egui::Key::Tab, egui::Modifiers::SHIFT)], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).map(|(id, _)| id), Some(ids[0].0), "Shift+Tab goes back");
+    frame(&mut app, &ctx, vec![key(egui::Key::Tab, egui::Modifiers::SHIFT)], false);
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(
+        ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).map(|(id, _)| id),
+        Some(ids[ids.len() - 1].0),
+        "Shift+Tab wraps from the first row to the last"
+    );
+    assert!(ctx.memory(|m| m.has_focus(field)), "and the field still has the keyboard");
+}
+
+/// A layer's Tab goes to the next layer, skipping the object rows it holds.
+#[test]
+fn tab_from_a_layer_skips_the_object_rows() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+    let top = NodeId(run(&mut app, "layer.new", json!({}))["id"].as_u64().unwrap());
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    app.session.active_mut().unwrap().layers_open.set(top, true);
+    let ctx = egui::Context::default();
+    let rows = {
+        let st = app.session.doc().unwrap();
+        list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default())
+    };
+    assert!(rows.iter().any(|r| !r.node.is_layer()), "the object has a row");
+    let layers: Vec<NodeId> = rows.iter().filter(|r| r.node.is_layer()).map(|r| r.node.id).collect();
+    assert_eq!(layers.len(), 2, "{layers:?}");
+    assert_eq!(layers[0], top, "the top layer is listed first");
+    let open = |app: &mut VectorcraftApp, ctx: &egui::Context| {
+        let name = app.session.doc().unwrap().doc.node(top).unwrap().display_name();
+        ctx.data_mut(|d| d.insert_temp(rename_id(), (top.0, name)));
+        frame(app, ctx, vec![], false);
+        frame(app, ctx, vec![], false);
+    };
+    open(&mut app, &ctx);
+    frame(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+        false,
+    );
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(
+        ctx.data(|d| d.get_temp::<(u64, String)>(rename_id())).map(|(id, _)| id),
+        Some(layers[1].0),
+        "Tab lands on the next layer, not the object below it"
+    );
+}
+
 /// Shift+Enter in the name field renames the layer and keeps the field open, the new name
 /// selected; Enter then renames it again and closes the field.
 #[test]

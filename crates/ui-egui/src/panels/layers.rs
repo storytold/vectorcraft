@@ -169,6 +169,9 @@ struct View<'a> {
     target: Option<NodeId>,
     current: Option<NodeId>,
     rows: Vec<NodeId>,
+    /// The ids of the listed rows that can be renamed, in display order: the name field's Tab
+    /// moves through these.
+    row_ids: Vec<NodeId>,
     opts: PanelOptions,
     t: Tokens,
     h: f32,
@@ -320,6 +323,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let reveal = renamed.or(located).or(reveal);
     let Some(st) = app.session.active() else { return };
     let list = rows_of_doc(ui, st, &app.ui.layers_panel, &query, &app.ui.layers_filter);
+    let row_ids = list.iter().filter(|r| r.guide.is_none() && !r.spine).map(|r| r.node.id).collect();
     let view = View {
         doc: &doc,
         thumbs: ThumbSource::of(app, st, &doc),
@@ -329,6 +333,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         target: st.selection.target,
         current: st.current_layer(),
         rows,
+        row_ids,
         opts: app.ui.layers_panel.clone(),
         t,
         h: app.ui.layers_panel.row(),

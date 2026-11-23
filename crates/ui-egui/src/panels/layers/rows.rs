@@ -416,34 +416,97 @@ fn disclosure(ui: &Ui, view: &View, n: &Node, (r, x): (egui::Rect, f32), open: b
     }
 }
 
+/// The name a row's field opens with: its stored name, or the opacity-mask placeholder.
+fn row_label(doc: &Document, n: &Node, xml_id: bool) -> String {
+    if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.identify_label(xml_id) }
+}
+
 /// The row's name label or inline rename field. Returns (name_end, name_rect).
 fn row_name(ui: &mut Ui, view: &View, item: &Row, r: egui::Rect, x: f32, out: &mut Out) -> (f32, egui::Rect) {
     let n = &*item.node;
     let doc = view.doc;
     let t = &view.t;
     let xml_id = view.identify_xml_id;
-    let name = if doc.mask_edit.is_some_and(|m| m.layer == n.id) { "<Opacity Mask>".to_string() } else { n.identify_label(xml_id) };
+    let name = row_label(doc, n, xml_id);
     let font = egui::FontId::proportional(13.0);
     let renaming: Option<(u64, String)> = ui.data(|d| d.get_temp(rename_id()));
     let name_rect = egui::Rect::from_min_max(egui::pos2(x - 2.0, r.center().y - 10.0), egui::pos2(r.right() - 44.0, r.center().y + 10.0));
     let name_end = match renaming {
         Some((rid, mut buf)) if rid == n.id.0 => {
             let field = rename_id().with("field");
+            // Tab moves the rename to the next nameable row, Shift+Tab to the previous one, and
+            // both wrap: the event is consumed here so the text field does not end the rename.
+            let tab = if ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab)) {
+                Some(true)
+            } else if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
+                Some(false)
+            } else {
+                None
+            };
             let kept = crate::widgets::own_field_shift_enter(ui, field, &mut buf, &name);
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(name_rect));
             let te = child
                 .add(egui::TextEdit::singleline(&mut buf).id(field).align(egui::Align2::LEFT_CENTER).desired_width(name_rect.width()).font(font));
             // Focus the field as it opens. Asking every frame took the focus back from Enter,
             // Escape or a click elsewhere, so the rename never ended.
+            let focus_state = ui.data(|d| d.get_temp::<(NodeId, u8)>(key("rename-focus")));
+            let force = focus_state.is_some_and(|(id, _)| id == n.id);
+            if force {
+                if te.has_focus() && !te.lost_focus() {
+                    // Keep the request through this frame: the shared field id can report the
+                    // focus for a frame before Tab's focus change takes it away.
+                    match focus_state.map(|(_, frames)| frames) {
+                        Some(frames) if frames >= 1 => {
+                            ui.data_mut(|d| d.remove::<(NodeId, u8)>(key("rename-focus")));
+                        }
+                        Some(frames) => {
+                            ui.data_mut(|d| d.insert_temp(key("rename-focus"), (n.id, frames + 1)));
+                        }
+                        None => {}
+                    }
+                } else {
+                    te.request_focus();
+                }
+            }
             if !te.has_focus() && !te.lost_focus() {
                 te.request_focus();
             }
-            if te.lost_focus() {
+            let mut moved = false;
+            if let Some(back) = tab {
+                if buf != name {
+                    out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf})));
+                }
+                // A layer's Tab goes to the next layer, not into the objects it holds; an object's
+                // goes to the next object or group row.
+                let layers = n.is_layer();
+                let candidates: Vec<NodeId> =
+                    view.row_ids.iter().copied().filter(|id| view.doc.node(*id).is_some_and(|node| node.is_layer() == layers)).collect();
+                if let Some(pos) = candidates.iter().position(|id| *id == n.id)
+                    && candidates.len() > 1
+                {
+                    let next =
+                        if back { candidates[(pos + candidates.len() - 1) % candidates.len()] } else { candidates[(pos + 1) % candidates.len()] };
+                    if next != n.id
+                        && let Some(node) = view.doc.node(next)
+                    {
+                        let next_name = row_label(view.doc, node, xml_id);
+                        ui.data_mut(|d| {
+                            d.insert_temp(rename_id(), (next.0, next_name));
+                            d.insert_temp(key("rename-reveal"), next);
+                            d.insert_temp(key("rename-focus"), (next, 0u8));
+                        });
+                        ui.ctx().memory_mut(|m| m.request_focus(field));
+                        ui.ctx().request_repaint();
+                        moved = true;
+                    }
+                }
+            }
+            if te.lost_focus() && !moved && !force {
                 ui.data_mut(|d| d.remove::<(u64, String)>(rename_id()));
                 if child.input(|i| !i.key_pressed(egui::Key::Escape)) && buf != name {
                     out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf})));
                 }
-            } else {
+            } else if !moved {
                 // Shift+Enter renames it and keeps the field open.
                 if kept && buf != name {
                     out.actions.push(("layer.setProps".into(), json!({"ids": [n.id.0], "name": buf.clone()})));
