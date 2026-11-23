@@ -19,6 +19,56 @@ fn texts(app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Ve
 }
 
 #[test]
+fn page_size_is_the_axis_aligned_size_of_the_turned_box() {
+    let upright = OrientedBox { angle: 0.0, rect: Rect::new(0.0, 0.0, 100.0, 50.0) };
+    assert_eq!(page_size(&upright), (100.0, 50.0));
+    let quarter = OrientedBox { angle: 90.0, rect: Rect::new(0.0, 0.0, 100.0, 50.0) };
+    let (w, h) = page_size(&quarter);
+    assert!((w - 50.0).abs() < 1e-9 && (h - 100.0).abs() < 1e-9, "{w} x {h}");
+    let diagonal = OrientedBox { angle: 45.0, rect: Rect::new(0.0, 0.0, 100.0, 50.0) };
+    let (w, h) = page_size(&diagonal);
+    assert!((w - 106.066_017_177_664_07).abs() < 1e-9 && (h - w).abs() < 1e-9, "{w} x {h}");
+}
+
+/// The fields' edits land on the page-axis size they show: a quarter turn's W changes the own
+/// height, and the page height keeps the own width.
+#[test]
+fn page_size_edits_land_on_the_page_size_the_fields_show() {
+    for (angle, target) in [(90.0, 200.0), (45.0, 200.0), (0.0, 200.0)] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+        app.run("object.rotate", json!({"angle": angle, "absolute": true})).unwrap();
+        let bx = app.selection_box().unwrap();
+        let p = page_size_params(&bx, target, true, false).expect("a width edit");
+        app.run("object.setBounds", p).unwrap();
+        let after = page_size(&app.selection_box().unwrap());
+        assert!((after.0 - target).abs() < 1e-6, "{angle}°: page width {} for {target}", after.0);
+    }
+    // A target below what the other own side already covers on the page has no one-side solution:
+    // the fallback scales both own sides so the page width still lands where it was typed.
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    app.run("object.rotate", json!({"angle": 45, "absolute": true})).unwrap();
+    let bx = app.selection_box().unwrap();
+    let p = page_size_params(&bx, 20.0, true, false).expect("a shrinking width edit");
+    app.run("object.setBounds", p).unwrap();
+    let after = page_size(&app.selection_box().unwrap());
+    assert!((after.0 - 20.0).abs() < 1e-6, "page width {} after shrinking to 20", after.0);
+    // With the link on, the page height scales too.
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    app.run("object.rotate", json!({"angle": 90, "absolute": true})).unwrap();
+    let bx = app.selection_box().unwrap();
+    let p = page_size_params(&bx, 200.0, true, true).expect("a linked width edit");
+    app.run("object.setBounds", p).unwrap();
+    let after = page_size(&app.selection_box().unwrap());
+    assert!((after.0 - 200.0).abs() < 1e-6 && (after.1 - 400.0).abs() < 1e-6, "{after:?}");
+}
+
+#[test]
 fn use_preview_bounds_shows_the_visual_size_and_checks_the_align_flyout() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
@@ -74,12 +124,26 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
     app.run("object.rotate", json!({"angle": 45, "absolute": true})).unwrap();
     let shown = texts(&mut app, show);
-    // The angle stays, and W/H are the rectangle's own sides.
+    // The angle stays, and W/H are the width and height the turned box covers on the page.
     assert!(shown.iter().any(|t| t == "45°"), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "100 pt") && shown.iter().any(|t| t == "50 pt"), "{shown:?}");
+    assert_eq!(shown.iter().filter(|t| t.as_str() == "106.066 pt").count(), 2, "{shown:?}");
     app.run("object.resetBoundingBox", json!({})).unwrap();
     let shown = texts(&mut app, show);
     assert!(shown.iter().any(|t| t == "0°") && !shown.iter().any(|t| t == "100 pt"), "{shown:?}");
+}
+
+/// #6438/#8259: a quarter turn exchanges the width and height the Transform panel and the
+/// Properties panel show, as the reference app's page-axis measurements do.
+#[test]
+fn a_quarter_turn_exchanges_the_shown_width_and_height() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    app.run("object.rotate", json!({"angle": 90, "absolute": true})).unwrap();
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        assert_eq!(field_text(&mut app, draw, "W:"), "50 pt");
+        assert_eq!(field_text(&mut app, draw, "H:"), "100 pt");
+    }
 }
 
 /// Object › Transform › Rotate Bounding Box… asks for an angle and turns the box, not the art, in

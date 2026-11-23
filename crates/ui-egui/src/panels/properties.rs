@@ -850,12 +850,13 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     let units = app.session.general_unit();
     let origin = app.ruler_origin();
-    // The bounding box, rotated with rotated objects (as in the Transform panel).
+    // The bounding box, rotated with rotated objects (as in the Transform panel): W/H are the
+    // width and height it covers on the page.
     let Some(bx) = app.selection_box() else {
         dim_label(ui, tl!("No Selection"));
         return;
     };
-    let b = bx.rect;
+    let (page_w, page_h) = super::transform::page_size(&bx);
     // The reference point, or a symbol instance's registration point: X/Y are read and set there
     // and the rotation and flips turn and mirror the selection about it, as in the Transform panel.
     let reference = super::transform::panel_reference(app, ui, &bx);
@@ -879,8 +880,12 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 );
             }
             dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(b.width()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy}));
+            if let Some(v) = widgets::size_field_named(ui, "tw", Some(tl!("W:")), Some(page_w), units, fw)
+                && let Some(mut p) = super::transform::page_size_params(&bx, v, true, link)
+            {
+                p["reference"] = json!(refi);
+                p["copy"] = json!(copy);
+                super::transform::run_transform(app, "object.setBounds", p);
             }
             ui.end_row();
             dim_label(ui, "Y:");
@@ -892,8 +897,12 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
                 );
             }
             dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(b.height()), units, fw) {
-                super::transform::run_transform(app, "object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy}));
+            if let Some(v) = widgets::size_field_named(ui, "th", Some(tl!("H:")), Some(page_h), units, fw)
+                && let Some(mut p) = super::transform::page_size_params(&bx, v, false, link)
+            {
+                p["reference"] = json!(refi);
+                p["copy"] = json!(copy);
+                super::transform::run_transform(app, "object.setBounds", p);
             }
             ui.end_row();
         });

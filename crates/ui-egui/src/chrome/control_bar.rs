@@ -247,15 +247,17 @@ fn inline_transform_width(ui: &Ui, t: &Tokens) -> f32 {
 
 /// The Control bar's inline X/Y/W/H fields for the selection's box `b`, rotated with rotated
 /// objects: X/Y are its reference point on the page (or a symbol instance's registration point),
-/// shared with the Transform panel, and W/H its own sides. Edits keep or move that point, and the
-/// Transform panel's menu choice of objects, patterns or both applies to them.
+/// shared with the Transform panel, and W/H the width and height it covers on the page. Edits keep
+/// or move that point, and the Transform panel's menu choice of objects, patterns or both applies
+/// to them.
 fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, units: vectorcraft_doc::Unit, b: &vectorcraft_doc::OrientedBox) {
     let reference = crate::panels::transform::panel_reference(app, ui, b);
     let (refi, rp) = (reference.index, reference.point);
     let origin = app.ruler_origin();
     let link = crate::panels::transform::proportional(app, ui);
     let copy = crate::panels::transform::alt_enter_copies(app, ui);
-    let values = [(rp.x, origin.x), (rp.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+    let (page_w, page_h) = crate::panels::transform::page_size(b);
+    let values = [(rp.x, origin.x), (rp.y, origin.y), (page_w, 0.0), (page_h, 0.0)];
     // The W/H link sits between W and H, but is made after H so Tab goes from W
     // straight to H and finds the link after it.
     let mut link_room = None;
@@ -277,7 +279,12 @@ fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, un
             let params = match k {
                 "x" => json!({"x": reference.bounds_xy(nv + offset, 0.0).0, "reference": refi, "copy": copy}),
                 "y" => json!({"y": reference.bounds_xy(0.0, nv + offset).1, "reference": refi, "copy": copy}),
-                _ => json!({k: nv, "reference": refi, "proportional": link, "copy": copy}),
+                _ => {
+                    let Some(mut p) = crate::panels::transform::page_size_params(b, nv, k == "width", link) else { continue };
+                    p["reference"] = json!(refi);
+                    p["copy"] = json!(copy);
+                    p
+                }
             };
             crate::panels::transform::run_transform(app, "object.setBounds", params);
         }
