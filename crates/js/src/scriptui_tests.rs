@@ -380,6 +380,12 @@ type Calls = Rc<RefCell<Vec<(String, f64)>>>;
 /// A realm with palette host functions: `paletteShow` gives ids from 1, and `paletteEvent` gives
 /// the events in `events`, in order, then `null`.
 fn palette_realm(events: Vec<Data>) -> (Realm, Calls) {
+    palette_realm_with(events, Vec::new(), Vec::new())
+}
+
+/// [`palette_realm`], whose `paletteTake` also gives the events in `taken`, in order, then `null`,
+/// and whose `paletteDraw` gives the answers in `draws`, in order, then `false`.
+fn palette_realm_with(events: Vec<Data>, taken: Vec<Data>, draws: Vec<bool>) -> (Realm, Calls) {
     let mut r = Realm::new();
     r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
     let calls: Calls = Rc::default();
@@ -403,6 +409,18 @@ fn palette_realm(events: Vec<Data>) -> (Realm, Calls) {
         Ok(Data::Number(id))
     });
     let event: HostFunction = Rc::new(move |_| Ok(events.borrow_mut().pop_front().unwrap_or(Data::Null)));
+    let taken = RefCell::new(VecDeque::from(taken));
+    let c = calls.clone();
+    let take: HostFunction = Rc::new(move |_| {
+        c.borrow_mut().push(("paletteTake".into(), 0.0));
+        Ok(taken.borrow_mut().pop_front().unwrap_or(Data::Null))
+    });
+    let draws = RefCell::new(VecDeque::from(draws));
+    let c = calls.clone();
+    let draw: HostFunction = Rc::new(move |_| {
+        c.borrow_mut().push(("paletteDraw".into(), 0.0));
+        Ok(Data::Bool(draws.borrow_mut().pop_front().unwrap_or(false)))
+    });
     let none: HostFunction = Rc::new(|_| Err(HostError::Error("no dialog here".into())));
     let items = vec![
         ("open".into(), HostItem::Function(none.clone())),
@@ -414,6 +432,8 @@ fn palette_realm(events: Vec<Data>) -> (Realm, Calls) {
         ("paletteHide".into(), HostItem::Function(record("paletteHide", 0))),
         ("paletteClose".into(), HostItem::Function(record("paletteClose", 0))),
         ("paletteEvent".into(), HostItem::Function(event)),
+        ("paletteTake".into(), HostItem::Function(take)),
+        ("paletteDraw".into(), HostItem::Function(draw)),
     ];
     r.define_script_ui(items).unwrap();
     (r, calls)
@@ -465,6 +485,103 @@ fn closing_a_palette_runs_on_close_which_can_keep_it_open() {
     assert_eq!(r.run("[asked, clicks].join()").unwrap(), JsValue::String("2,0".into()), "a close inside onClose does not run it again");
     assert_eq!(calls.borrow().iter().filter(|(n, _)| n == "paletteClose").count(), 1);
     assert!(calls.borrow().contains(&("paletteClose".into(), 1.0)));
+}
+
+fn count(calls: &Calls, name: &str) -> usize {
+    calls.borrow().iter().filter(|(n, _)| n == name).count()
+}
+
+#[test]
+fn update_in_the_script_s_own_code_gives_the_controls_only_when_the_host_draws_the_palette() {
+    let (mut r, calls) = palette_realm_with(Vec::new(), Vec::new(), vec![true, false, false, true]);
+    r.start(
+        "var p = new Window('palette'); var bar = p.add('progressbar', undefined, 0, 4); p.show(); \
+         for (var k = 1; k <= 4; k++) { bar.value = k; p.update(); }",
+    )
+    .unwrap();
+    while r.advance(1_000_000).unwrap() == Progress::Paused {}
+    assert_eq!(count(&calls, "paletteDraw"), 4, "each update() asks whether the palette is drawn");
+    assert_eq!(count(&calls, "paletteUpdate"), 1 + 2, "show(), then only the update() calls the host draws");
+}
+
+#[test]
+fn update_in_a_handler_neither_asks_to_draw_the_palette_nor_gives_its_controls() {
+    let (mut r, calls) = palette_realm_with(vec![palette_event(1.0, click(2))], Vec::new(), vec![true; 3]);
+    r.run(
+        "var p = new Window('palette'); var bar = p.add('progressbar', undefined, 0, 3); var b = p.add('button', undefined, 'Go'); \
+         b.onClick = function () { for (var k = 1; k <= 3; k++) { bar.value = k; p.update(); } }; p.show();",
+    )
+    .unwrap();
+    let before = count(&calls, "paletteUpdate");
+    r.start("Window.__vcPaletteEvent();").unwrap();
+    while r.advance(1_000_000).unwrap() == Progress::Paused {}
+    assert_eq!(count(&calls, "paletteDraw"), 0, "a handler cannot pause, so its update() is not drawn");
+    assert_eq!(count(&calls, "paletteUpdate"), before, "the handler's update() calls give the host no controls");
+    r.refresh_script_ui().unwrap();
+    assert_eq!(count(&calls, "paletteUpdate") - before, 1, "the controls go to the host once the run ends");
+}
+
+#[test]
+fn update_hands_a_waiting_click_to_the_palette_so_a_cancel_button_stops_a_loop() {
+    let (mut r, calls) = palette_realm_with(Vec::new(), vec![palette_event(1.0, click(2))], Vec::new());
+    let done = r
+        .run(
+            "var p = new Window('palette'); var bar = p.add('progressbar', undefined, 0, 100); \
+             var cancel = p.add('button', undefined, 'Cancel'); var stopped = false; \
+             cancel.onClick = function () { stopped = true; }; p.show(); \
+             var k = 0; while (!stopped && k < 100) { k++; bar.value = k; p.update(); } k + ':' + stopped",
+        )
+        .unwrap();
+    assert_eq!(done, JsValue::String("1:true".into()), "the first update() runs the click's onClick");
+    assert!(count(&calls, "paletteTake") >= 2, "update() takes events until none waits");
+}
+
+#[test]
+fn update_throws_for_a_window_that_is_not_showing() {
+    let (mut r, _, _) = realm(vec![click(12)]);
+    let source = format!(
+        "{FORM} var before = 'none'; try {{ w.update(); }} catch (e) {{ before = e.message; }} var during = 'none'; \
+         ok.onClick = function () {{ w.update(); during = 'ran'; w.close(1); }}; [w.show(), before, during].join('|')"
+    );
+    assert_eq!(r.run(&source).unwrap(), JsValue::String("1|update: the window is not showing|ran".into()));
+    let (mut r, _) = palette_realm(Vec::new());
+    let hidden = r
+        .run(
+            "var p = new Window('palette'); var log = []; try { p.update(); } catch (e) { log.push('before show'); } \
+             p.show(); p.update(); p.hide(); try { p.update(); } catch (e) { log.push('hidden'); } log.join()",
+        )
+        .unwrap();
+    assert_eq!(hidden, JsValue::String("before show,hidden".into()));
+}
+
+#[test]
+fn update_on_a_showing_dialog_its_group_or_its_panel_runs_in_a_handler() {
+    let (mut r, _, _) = realm(vec![click(12)]);
+    let source = format!(
+        "{FORM} var done = 'none'; ok.onClick = function () {{ bar.value = 7; w.update(); g.update(); p.update(); done = 'ran'; w.close(1); }}; \
+         [w.show(), done].join('|')"
+    );
+    assert_eq!(r.run(&source).unwrap(), JsValue::String("1|ran".into()));
+}
+
+#[test]
+fn update_follows_whether_the_host_shows_a_palette_not_its_visible_property() {
+    let (mut r, calls) = palette_realm_with(Vec::new(), Vec::new(), vec![true; 4]);
+    r.run("var p = new Window('palette'); var g = p.add('group'); var b = g.add('button', undefined, 'Go'); p.show();").unwrap();
+    let before = count(&calls, "paletteUpdate");
+    r.start(
+        "var log = []; p.visible = false; p.update(); g.update(); log.push('shown'); \
+         p.hide(); p.visible = true; try { p.update(); } catch (e) { log.push('hidden'); } \
+         try { b.update(); } catch (e) { log.push(e.name); } log.join()",
+    )
+    .unwrap();
+    let log = loop {
+        if let Progress::Done(v) = r.advance(1_000_000).unwrap() {
+            break v;
+        }
+    };
+    assert_eq!(log, JsValue::String("shown,hidden,TypeError".into()));
+    assert_eq!(count(&calls, "paletteUpdate") - before, 2, "the palette and its group each give the host the controls while it shows");
 }
 
 #[test]

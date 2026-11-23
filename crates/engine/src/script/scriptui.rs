@@ -38,6 +38,7 @@ use vectorcraft_js::{Data, HostError, HostItem, Realm, RunError};
 pub use vectorcraft_js::scriptui::{MAX_CONTROLS, MAX_DEPTH, MAX_ITEMS, MAX_TEXT_BYTES};
 
 use super::Host;
+use super::palettes::Queued;
 
 /// The largest size or place, in pixels, of a dialog or a control in it.
 pub const MAX_EXTENT: f32 = 8192.0;
@@ -712,6 +713,8 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         ("paletteHide".into(), function(link, palette_hide)),
         ("paletteClose".into(), function(link, palette_close)),
         ("paletteEvent".into(), function(link, palette_event)),
+        ("paletteTake".into(), function(link, palette_take)),
+        ("paletteDraw".into(), function(link, palette_draw)),
     ])
 }
 
@@ -747,7 +750,7 @@ fn palette_show(host: &Host, args: &[Data]) -> Result<Data, HostError> {
     shown.map(|id| Data::Number(id as f64)).map_err(HostError::Range)
 }
 
-/// The palette `id`'s controls as a handler or `add()` left them.
+/// The palette `id`'s controls as a handler, `add()` or `update()` left them.
 fn palette_update(host: &Host, args: &[Data]) -> Result<Data, HostError> {
     let engine = palette_engine(host)?.to_string();
     let dialog = described(host, args)?;
@@ -755,6 +758,22 @@ fn palette_update(host: &Host, args: &[Data]) -> Result<Data, HostError> {
         host.session.borrow_mut().script_palettes.update(id, &engine, dialog);
     }
     Ok(Data::Undefined)
+}
+
+/// A palette's `update()` in the script's own code asks whether the app draws the palette now
+/// ([`Host::update_drawn`]). → `true` when it does, and the script then gives the palette's
+/// controls through `paletteUpdate`.
+fn palette_draw(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    palette_engine(host)?;
+    Ok(Data::Bool(host.update_drawn()))
+}
+
+/// A palette's `update()` takes the oldest event the person gave a palette of the run's engine,
+/// which no run has handled yet, as `paletteEvent` gives it; `null` when none waits.
+fn palette_take(host: &Host, _: &[Data]) -> Result<Data, HostError> {
+    let engine = palette_engine(host)?.to_string();
+    let taken = host.session.borrow_mut().script_palettes.take_for(&engine);
+    Ok(taken.map_or(Data::Null, event_data))
 }
 
 fn palette_hide(host: &Host, args: &[Data]) -> Result<Data, HostError> {
@@ -779,7 +798,12 @@ fn palette_close(host: &Host, args: &[Data]) -> Result<Data, HostError> {
 /// list's change the items the palette showed; `null` for any other run, and after the first call.
 fn palette_event(host: &Host, _: &[Data]) -> Result<Data, HostError> {
     let Some(queued) = host.palette_event.borrow_mut().take() else { return Ok(Data::Null) };
-    let Data::Object(mut fields) = queued.event.data() else { return Ok(Data::Null) };
+    Ok(event_data(queued))
+}
+
+/// The waiting event `queued` as a script takes it ([`palette_event`]).
+fn event_data(queued: Queued) -> Data {
+    let Data::Object(mut fields) = queued.event.data() else { return Data::Null };
     fields.push(("palette".into(), Data::Number(queued.palette as f64)));
     if !queued.place.is_empty() {
         fields.push(("place".into(), Data::Array(queued.place.iter().map(|&k| Data::Number(k as f64)).collect())));
@@ -788,7 +812,7 @@ fn palette_event(host: &Host, _: &[Data]) -> Result<Data, HostError> {
         fields.push(("items".into(), Data::Array(items.into_iter().map(Data::String).collect())));
         fields.push(("revision".into(), Data::Number(revision)));
     }
-    Ok(Data::Object(fields))
+    Data::Object(fields)
 }
 
 fn described(host: &Host, args: &[Data]) -> Result<ScriptUiDialog, HostError> {

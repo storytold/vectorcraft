@@ -108,6 +108,9 @@ pub const MAX_LOG_LINES: usize = 10_000;
 pub const MAX_LOG_BYTES: usize = 4 << 20;
 /// The most bytes of `args` given to one run, as JSON.
 pub const MAX_ARGS_BYTES: usize = 1 << 20;
+/// The shortest run time between two ScriptUI `update()` calls that each end the slice, so the app
+/// draws the window (VectorCraft's own value, about one frame).
+const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16);
 /// The `vc.run` calls one slice makes before the interface draws again.
 const SLICE_HOST_CALLS: u32 = 256;
 /// The bytes that may cross between a script and the host in one run.
@@ -799,6 +802,8 @@ struct Host {
     started: Option<std::time::Instant>,
     /// The time since [`Host::started`] at which a `$.sleep` ends.
     wake_at: Cell<Option<std::time::Duration>>,
+    /// The time since [`Host::started`] at which a ScriptUI `update()` last ended the slice.
+    drawn_at: Cell<Option<std::time::Duration>>,
     /// Set while a host function runs where the run can stop at the call ([`Realm::wait_flag`]).
     can_wait: Rc<Cell<bool>>,
     /// What the last `#strict` line of the file `$.evalFile` last gave set (`None` without one).
@@ -995,6 +1000,24 @@ impl Host {
             self.pause.set(true);
         }
         Ok(())
+    }
+
+    /// A palette's `update()` in the script's own code: in the app, ends the slice so the palette is
+    /// drawn as the script left it, at most once per [`UPDATE_INTERVAL`] of the run's time. →
+    /// whether it does, and the palette's controls are to be given now. Without a clock (the web
+    /// build), and in a run with nobody to draw for, the palette is drawn when the slice or the run
+    /// ends for another reason.
+    fn update_drawn(&self) -> bool {
+        if !self.framed {
+            return false;
+        }
+        let Some(now) = self.elapsed() else { return false };
+        if self.drawn_at.get().is_some_and(|t| now.saturating_sub(t) < UPDATE_INTERVAL) {
+            return false;
+        }
+        self.drawn_at.set(Some(now));
+        self.pause.set(true);
+        true
     }
 
     /// The time left of a `$.sleep`, or none when the run is not asleep.
@@ -2081,6 +2104,7 @@ impl Session {
             kept_maps,
             started: clock(),
             wake_at: Cell::new(None),
+            drawn_at: Cell::new(None),
             can_wait: realm.wait_flag(),
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),

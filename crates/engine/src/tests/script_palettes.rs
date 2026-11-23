@@ -2,11 +2,13 @@
 //! and run one at a time after it, the events that take a waiting one's place, `close()` and the
 //! close box, the engine's end, and the limits.
 
+use std::time::Duration;
+
 use serde_json::{Value, json};
 
 use crate::script::palettes::{MAX_PALETTES, MAX_WAITING};
 use crate::script::scriptui::PALETTE_NEEDS_ENGINE;
-use crate::script::{DialogAnswer, UiEvent, Waiting};
+use crate::script::{DialogAnswer, TEST_ELAPSED, UiEvent, Waiting};
 use crate::*;
 
 /// One open document with one rectangle.
@@ -70,6 +72,107 @@ fn show_returns_at_once_and_the_palette_stays_after_the_run() {
     assert_eq!(s.documents()[0].history.undo.last().unwrap().label, "Run Script", "a handler's run is one undo step");
     let changed = s.execute("script.palette.event", &json!({"palette": id, "event": "change", "control": 2, "value": "abc"})).unwrap();
     assert_eq!(changed["log"], json!(["change abc"]));
+}
+
+#[test]
+fn update_in_a_palette_s_handler_runs_and_the_palette_shows_the_last_value() {
+    let mut s = one_doc();
+    run(
+        &mut s,
+        "#targetengine progress\nvar p = new Window('palette'); var bar = p.add('progressbar', undefined, 0, 10); \
+         var go = p.add('button', undefined, 'Go'); \
+         go.onClick = function () { for (var k = 1; k <= 10; k++) { bar.value = k; p.update(); } vc.log('done'); }; p.show();",
+    )
+    .unwrap();
+    let id = only_palette(&s);
+    let clicked = s.execute("script.palette.event", &json!({"palette": id, "event": "click", "control": "Go"})).unwrap();
+    assert_eq!(clicked["log"], json!(["done"]), "update() in the handler does not throw");
+    let listed = s.execute("script.palettes", &json!({})).unwrap();
+    assert_eq!(listed["palettes"][0]["controls"][0]["value"].as_f64(), Some(10.0), "{listed}");
+}
+
+#[test]
+fn update_outside_a_handler_pauses_the_run_so_the_app_draws_the_palette_at_most_once_per_interval() {
+    TEST_ELAPSED.set(Some(Duration::ZERO));
+    let mut s = one_doc();
+    s.script_frames = true;
+    let source = "#targetengine progress\nvar p = new Window('palette'); var bar = p.add('progressbar', undefined, 0, 3); p.show(); \
+                  for (var k = 1; k <= 3; k++) { bar.value = k; p.update(); }";
+    assert_eq!(run(&mut s, source).unwrap()["running"], true);
+    let value = |s: &Session| s.script_palettes().first().map_or(0.0, |p| p.dialog.nodes[1].value);
+    for _ in 0..100 {
+        assert!(s.script_pump().is_none(), "the run pauses at the first update()");
+        if value(&s) > 0.0 {
+            break;
+        }
+    }
+    let first = value(&s);
+    assert!(first > 0.0);
+    TEST_ELAPSED.set(Some(Duration::from_millis(16)));
+    assert!(s.script_pump().is_none(), "an update() a frame later pauses the run too");
+    let second = value(&s);
+    assert!(second > first, "the palette shows the second update()");
+    assert!(s.script_pump().expect("an update() within the same frame does not pause the run").is_ok());
+    assert!(value(&s) > second);
+    TEST_ELAPSED.set(None);
+}
+
+#[test]
+fn update_hands_a_click_given_during_the_run_to_its_handler_so_cancel_stops_the_loop() {
+    TEST_ELAPSED.set(Some(Duration::ZERO));
+    let mut s = one_doc();
+    s.script_frames = true;
+    let source = "#targetengine progress\nvar p = new Window('palette'); var bar = p.add('progressbar', undefined, 0, 100000); \
+                  var cancel = p.add('button', undefined, 'Cancel'); var stopped = false; cancel.onClick = function () { stopped = true; }; \
+                  p.show(); var k = 0; while (!stopped && k < 100000) { k++; bar.value = k; p.update(); } vc.log(stopped ? 'canceled' : 'ran out');";
+    assert_eq!(run(&mut s, source).unwrap()["running"], true);
+    for _ in 0..100 {
+        if !s.script_palettes().is_empty() {
+            break;
+        }
+        assert!(s.script_pump().is_none(), "the run pauses at the first update()");
+    }
+    let id = only_palette(&s);
+    assert_eq!(s.script_palette_event(id, UiEvent::Click(2)), Ok(Waiting::Added));
+    let report = pump(&mut s).expect("the run ended").unwrap();
+    assert_eq!(report["log"], json!(["canceled"]), "{report}");
+    assert_eq!(s.script_palette_events_waiting(), 0, "the click was handled in the run, not left for a run of its own");
+    TEST_ELAPSED.set(None);
+}
+
+#[test]
+fn update_in_a_handler_does_not_pause_the_run() {
+    TEST_ELAPSED.set(Some(Duration::ZERO));
+    let mut s = one_doc();
+    run_in_app(
+        &mut s,
+        "#targetengine progress\nvar p = new Window('palette'); var bar = p.add('progressbar', undefined, 0, 3); \
+         var go = p.add('button', undefined, 'Go'); \
+         go.onClick = function () { for (var k = 1; k <= 3; k++) { bar.value = k; p.update(); } vc.log('done'); }; p.show();",
+    );
+    let id = only_palette(&s);
+    assert_eq!(s.script_palette_event(id, UiEvent::Click(2)), Ok(Waiting::Added));
+    assert!(s.script_palette_start().expect("the click starts its run").is_ok());
+    let report = s.script_pump().expect("the handler's run ends without a pause after the handler").unwrap();
+    assert_eq!(report["log"], json!(["done"]));
+    TEST_ELAPSED.set(None);
+}
+
+#[test]
+fn many_update_calls_within_one_interval_give_the_controls_once() {
+    TEST_ELAPSED.set(Some(Duration::ZERO));
+    let mut s = one_doc();
+    let report = run_in_app(
+        &mut s,
+        "#targetengine progress\nvar names = []; for (var n = 0; n < 500; n++) { names.push('a long list item name ' + n); } \
+         var p = new Window('palette'); var list = p.add('listbox', undefined, names); var bar = p.add('progressbar', undefined, 0, 1000); \
+         p.show(); for (var k = 1; k <= 1000; k++) { bar.value = k; p.update(); }",
+    );
+    let calls = report["hostCalls"].as_u64().unwrap();
+    assert!(calls < 1000, "an update() the app does not draw costs no host call: {calls}");
+    let bar = s.script_palettes()[0].dialog.nodes[2].value;
+    assert_eq!(bar, 1000.0, "the palette shows the last value once the run ends");
+    TEST_ELAPSED.set(None);
 }
 
 #[test]

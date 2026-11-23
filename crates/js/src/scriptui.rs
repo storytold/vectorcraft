@@ -33,6 +33,14 @@
 //! host's `paletteEvent` (`{palette, event, id, value}`, or `null`), gives it to that palette as a
 //! dialog takes one, and then gives `paletteUpdate` each palette's description; `add()` on a shown
 //! palette does the same for that palette, so the host's list of its controls stays in step.
+//! `update()` on a shown palette, or on a `group` or a `panel` in one, takes each event that waits
+//! for a palette of the run's engine from the host's `paletteTake` (as `paletteEvent` gives it, or
+//! `null`) and gives it to its palette. Then, called from the script's own code (not from a
+//! handler, a callback of a built-in function, a getter or a conversion), it asks the host's
+//! `paletteDraw` whether the palette is drawn now, and when it is, gives `paletteUpdate` the
+//! palette's description. On the showing dialog, or a group or panel in it, `update()` does
+//! nothing more, and on a window that is not showing it throws an `Error`. A dialog takes the
+//! person's events once the running handler returns.
 //!
 //! An element keeps its kind, its container, its controls and a list's items in properties that a
 //! script cannot change. The description lists the dialog first and every control after the
@@ -77,6 +85,7 @@ const ITEMS: &str = "__vcItems";
 const SELECTION: &str = "__vcSelection";
 const LIST: &str = "__vcList";
 const PALETTE_ID: &str = "__vcPaletteId";
+const SHOWN: &str = "__vcShown";
 const IN_CLOSE: &str = "__vcInClose";
 /// How many times a list's items were added or removed: a palette's waiting change of the list is
 /// for the items it had then.
@@ -683,9 +692,74 @@ fn hide(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     if let Value::Number(id) = slot(i, o, PALETTE_ID)? {
         let f = host_fn(i, "paletteHide")?;
         i.call(&f, &Value::Undefined, &[Value::Number(id)])?;
+        set_slot(i, o, SHOWN, Value::Bool(false))?;
         i.put(o, key("visible"), Value::Bool(false), true)?;
     }
     Ok(Value::Undefined)
+}
+
+/// `update()` on a window: [`update_window`].
+fn update(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let own = own_code(i);
+    let (o, palette) = window_of(i, &this, "update")?;
+    update_window(i, o, palette, own)?;
+    Ok(Value::Undefined)
+}
+
+/// Whether the native running now was called from the script's own code in a run that can pause,
+/// as the host's functions find whether a run can wait.
+fn own_code(i: &Interp) -> bool {
+    i.in_slice && i.reentry == 0
+}
+
+/// `update()` on a `group` or a `panel`: [`update_window`] for the window that holds it.
+fn control_update(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let own = own_code(i);
+    let (o, kind) = element(i, &this, "update")?;
+    if !is_container(&kind) {
+        return Err(i.type_error("update: this is not a ScriptUI window or container"));
+    }
+    let Some(win) = object_slot(i, o, WINDOW)? else { return Err(Abrupt::Internal("a container without its window".into())) };
+    let palette = matches!(slot(i, win, KIND)?, Value::String(s) if s.to_rust_string() == "palette");
+    update_window(i, win, palette, own)?;
+    Ok(Value::Undefined)
+}
+
+/// `update()` on the window `win`. On a shown palette: hands each event that waits for a palette of
+/// the run's engine to its palette ([`take_waiting`]), and then, from the script's own code (`own`),
+/// gives the host the palette's controls when the host draws it now (`paletteDraw`). The showing
+/// dialog's controls go to the host when its handler returns, since a handler runs to its end in
+/// one slice. Whether a palette shows is the host's, not its `visible` property. A window that is
+/// not showing throws.
+fn update_window(i: &mut Interp, win: ObjId, palette: bool, own: bool) -> JsResult<()> {
+    let showing = if palette { slot(i, win, SHOWN)?.truthy() } else { classes(i)?.showing == Some(win) };
+    if !showing {
+        return Err(error(i, "update: the window is not showing"));
+    }
+    if !palette {
+        return Ok(());
+    }
+    take_waiting(i)?;
+    if !own || !slot(i, win, SHOWN)?.truthy() {
+        return Ok(());
+    }
+    let f = host_fn(i, "paletteDraw")?;
+    if i.call(&f, &Value::Undefined, &[])?.truthy() {
+        update_palette(i, win)?;
+    }
+    Ok(())
+}
+
+/// Hands each event the host's `paletteTake` gives, oldest first, to its palette, until none waits.
+fn take_waiting(i: &mut Interp) -> JsResult<()> {
+    let f = host_fn(i, "paletteTake")?;
+    loop {
+        let answer = i.call(&f, &Value::Undefined, &[])?;
+        if answer.as_object().is_none() {
+            return Ok(());
+        }
+        deliver(i, answer)?;
+    }
 }
 
 fn set_palettes(i: &mut Interp, f: impl FnOnce(&mut Vec<ObjId>)) {
@@ -705,6 +779,7 @@ fn close_palette(i: &mut Interp, win: ObjId) -> JsResult<()> {
     }
     if let Value::Number(id) = slot(i, win, PALETTE_ID)? {
         set_slot(i, win, PALETTE_ID, Value::Undefined)?;
+        set_slot(i, win, SHOWN, Value::Bool(false))?;
         set_palettes(i, |p| p.retain(|o| *o != win));
         let f = host_fn(i, "paletteClose")?;
         i.call(&f, &Value::Undefined, &[Value::Number(id)])?;
@@ -760,6 +835,7 @@ fn palette_shown(i: &mut Interp, keep: &[Value], id: Value) -> JsResult<Value> {
     if !classes(i)?.palettes.contains(&win) {
         set_palettes(i, |p| p.push(win));
     }
+    set_slot(i, win, SHOWN, Value::Bool(true))?;
     i.put(win, key("visible"), Value::Bool(true), true)?;
     handler(i, win, "onShow")?;
     update_palette(i, win)?;
@@ -773,6 +849,14 @@ fn palette_shown(i: &mut Interp, keep: &[Value], id: Value) -> JsResult<Value> {
 fn palette_event(i: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let f = host_fn(i, "paletteEvent")?;
     let answer = i.call(&f, &Value::Undefined, &[])?;
+    deliver(i, answer)?;
+    Ok(Value::Undefined)
+}
+
+/// Gives the host's event `answer` (`{palette, event, id, value, place}`, or anything else for
+/// none) to its palette the way a dialog takes the person's event. An event for a palette that has
+/// closed does nothing.
+fn deliver(i: &mut Interp, answer: Value) -> JsResult<Value> {
     let Some(ev) = answer.as_object() else { return Ok(Value::Undefined) };
     let mark = i.temp_roots.len();
     i.temp_roots.push(answer.clone());
@@ -1422,6 +1506,7 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
         method(i, window_proto, "close", close, 1)?;
         method(i, window_proto, "hide", hide, 0)?;
         method(i, window_proto, "center", nothing, 1)?;
+        method(i, window_proto, "update", update, 0)?;
         pausable_method(i, window_proto, "show", show, 0)?;
         method(i, control_proto, "add", add, 4)?;
         method(i, control_proto, "findElement", find_element, 1)?;
@@ -1429,6 +1514,7 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
         method(i, control_proto, "notify", notify, 1)?;
         method(i, control_proto, "show", control_show, 0)?;
         method(i, control_proto, "hide", control_hide, 0)?;
+        method(i, control_proto, "update", control_update, 0)?;
         method(i, item_proto, "toString", item_to_string, 0)?;
         let index = native(i, "index", item_index, 0, NativeKind::Plain, false)?;
         i.define(item_proto, key("index"), Prop::Accessor { get: Some(index), set: None, flags: 0 })?;

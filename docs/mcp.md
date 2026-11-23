@@ -2918,8 +2918,15 @@ controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and s
 - A control has `text`, `value`, `enabled`, `visible`, `name`, `bounds`, `preferredSize`, `alignment`, `parent`,
   `window`, `show()` and `hide()`. A container also has `children`, `orientation` (`row`, `column` or `stack`; a
   group starts as a row and the dialog and a panel as a column), `alignChildren`, `spacing` (10 to start), `margins`
-  (15 to start, 0 for a group) and `findElement(name)`. The dialog has `defaultElement`, `cancelElement`,
-  `close([result])` and `hide()`. `center()`, `layout.layout()` and `layout.resize()` do nothing.
+  (15 to start, 0 for a group), `findElement(name)` and `update()`. The dialog has `defaultElement`,
+  `cancelElement`, `close([result])`, `hide()` and `update()`. `center()`, `layout.layout()` and
+  `layout.resize()` do nothing.
+- `update()` on the showing dialog, or on a group or panel in it, runs without an error and does nothing more: a handler
+  runs to its end before the app draws again, so the dialog shows the handler's changes when the handler
+  returns, and a progress bar that a handler moves shows only its last value. On a window that is not showing
+  it throws an `Error`, and on a control that is not a container it throws a `TypeError`. It does not take the
+  person's clicks or changes: the dialog takes them once the running handler returns, so a loop that waits for
+  a Cancel button's `onClick` to set a flag does not see the click.
 
 `show()` opens the dialog, runs `onShow`, and waits for the person. A click runs the control's `onClick`; a check
 box turns its value over first, and a radio button turns on and the other radio buttons in its container off. An
@@ -2983,6 +2990,17 @@ the same controls, handlers and limits:
   A palette also closes when `script.engine.drop` drops its engine, when its engine ends with an internal error,
   and when the session ends. The palette shows its controls as `show()`, `add()`, each event's handlers and each
   run of its engine leave them; a run that a limit or `script.stop` ended can leave it showing them as they were.
+  `update()` on the palette, or on a group or panel in it, first runs the handlers of the clicks, changes and
+  closes that wait for the palettes of the run's engine, oldest first, so a Cancel button's `onClick` can stop
+  a loop that calls `update()` (https://extendscript.docsforadobe.dev/user-interface-tools/window-object/).
+  Those events do not wait for runs of their own. In the app, an `update()` in the script's own code then
+  pauses the run so the app draws the palette as it is, at most once every 16 ms of the run's time
+  (VectorCraft's own interval); an `update()` within the same 16 ms does not pause the run, and the app draws
+  its changes at the next pause or when the run ends. An `update()` in a handler, in a callback of a built-in
+  function such as `forEach`, in a getter or in a conversion does not pause the run, since the run cannot
+  pause there, and on the web `update()` does not pause the run; the app draws those changes when the run ends.
+  On a palette that `hide()` hid, or that is not shown, it throws an `Error`; setting the palette's `visible`
+  does not change this.
   A handler's run reads and writes the files the person allowed the script that first showed the palette with
   Always. A file allowed once stays with the run whose dialog allowed it, as for any later run.
 - Each click, change or close the person gives a palette runs its handler as a run of its own in the palette's

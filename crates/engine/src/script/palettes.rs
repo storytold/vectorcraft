@@ -8,7 +8,9 @@
 //! own in the palette's engine, which takes the mutation lease like any other run: one event at a
 //! time, oldest first, each starting only once no run is going. While an event waits, another click
 //! on the same control, another change of it or another close of the same palette takes its place
-//! in line, with the newer value, instead of waiting as well.
+//! in line, with the newer value, instead of waiting as well. A palette's `update()` in a run of the
+//! palette's engine takes the events that wait for that engine's palettes and runs their handlers in
+//! that run instead ([`Palettes::take_for`]).
 //!
 //! A palette closes when its script calls `close()` or the person closes it, unless `onClose`
 //! returns `false`; when its engine is dropped or ends with an internal error; and with the session.
@@ -188,32 +190,55 @@ impl Palettes {
     /// no longer has, or that the control can no longer take ([`scriptui::check_event`]), for
     /// example because a handler disabled or hid it, is dropped.
     fn next(&mut self) -> Option<(ScriptPalette, Queued)> {
-        while let Some(mut q) = self.waiting.pop_front() {
-            let Some(p) = self.list.iter().find(|p| p.id == q.palette && p.visible) else { continue };
-            if let Some(c) = control_of(&mut q.event) {
-                let Some(at) = p.dialog.control_at(&q.place) else { continue };
-                *c = at;
+        while let Some(q) = self.waiting.pop_front() {
+            if let Some(taken) = self.checked(q) {
+                return Some(taken);
             }
-            // A list's change whose list a run changed since goes to its run, which ends with the
-            // error that says so, when the list can still take a change: the choice is checked
-            // without its item, which the list may no longer have.
-            let list_changed = match (&q.event, &q.list) {
-                (UiEvent::Change(c, UiValue::Index(_)), Some((_, revision))) => {
-                    p.dialog.nodes.get(*c).is_some_and(|n| n.revision != *revision).then_some(*c)
-                }
-                _ => None,
-            };
-            if let Some(c) = list_changed {
-                if scriptui::check_event(&p.dialog, UiEvent::Change(c, UiValue::Index(None))).is_err() {
-                    continue;
-                }
-            } else {
-                let Ok(event) = scriptui::check_event(&p.dialog, q.event) else { continue };
-                q.event = event;
-            }
-            return Some((p.clone(), q));
         }
         None
+    }
+
+    /// As [`Palettes::next`], for the palettes of the engine `engine` only: the events of other
+    /// engines' palettes keep their places in line.
+    fn next_of(&mut self, engine: &str) -> Option<(ScriptPalette, Queued)> {
+        loop {
+            let list = &self.list;
+            let at = self.waiting.iter().position(|q| list.iter().any(|p| p.id == q.palette && p.engine == engine))?;
+            let q = self.waiting.remove(at)?;
+            if let Some(taken) = self.checked(q) {
+                return Some(taken);
+            }
+        }
+    }
+
+    /// The taken event `q` given to the control at its place in its palette, and that palette, or
+    /// `None` when it is dropped ([`Palettes::next`]).
+    fn checked(&self, mut q: Queued) -> Option<(ScriptPalette, Queued)> {
+        let p = self.list.iter().find(|p| p.id == q.palette && p.visible)?;
+        if let Some(c) = control_of(&mut q.event) {
+            *c = p.dialog.control_at(&q.place)?;
+        }
+        // A list's change whose list a run changed since goes to its run, which ends with the
+        // error that says so, when the list can still take a change: the choice is checked
+        // without its item, which the list may no longer have.
+        let list_changed = match (&q.event, &q.list) {
+            (UiEvent::Change(c, UiValue::Index(_)), Some((_, revision))) => {
+                p.dialog.nodes.get(*c).is_some_and(|n| n.revision != *revision).then_some(*c)
+            }
+            _ => None,
+        };
+        if let Some(c) = list_changed {
+            scriptui::check_event(&p.dialog, UiEvent::Change(c, UiValue::Index(None))).ok()?;
+        } else {
+            q.event = scriptui::check_event(&p.dialog, q.event).ok()?;
+        }
+        Some((p.clone(), q))
+    }
+
+    /// The oldest waiting event for a palette of the engine `engine`, which a palette's `update()`
+    /// in a run of that engine takes and hands to the palette at once ([`Palettes::next_of`]).
+    pub(crate) fn take_for(&mut self, engine: &str) -> Option<Queued> {
+        self.next_of(engine).map(|(_, q)| q)
     }
 }
 
