@@ -2285,13 +2285,15 @@ impl Interp {
         let (code, params) = (frame.code.clone(), frame.env);
         // The parameters' values may have filled the room the call reserved, so the body's
         // environment and declarations are checked against the heap again.
-        self.reserve_heap(declaration_bytes(&code).saturating_add(ENV_BYTES))?;
+        self.reserve_heap(ENV_BYTES)?;
         // Each new environment is in the frame, where the collector finds it, before the next
         // allocation.
         let var_env = self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(params) });
         self.frame_mut()?.var_env = var_env;
         let lex = self.top_env(&code, var_env)?;
         self.frame_mut()?.env = lex;
+        // The declarations are checked after the `let` and `const` environment has taken its room.
+        self.reserve_heap(declaration_bytes(&code))?;
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
@@ -2432,16 +2434,23 @@ impl Interp {
     }
 
     /// Whether reading the elements of `o` by index can run code: `o` or an object it inherits
-    /// from has an accessor property with an index name. Each object takes a unit of fuel.
+    /// from has an accessor property with a getter and an index name. Each object, and each
+    /// property inspected, takes a unit of fuel.
     fn has_index_getter(&mut self, o: ObjId) -> JsResult<bool> {
         let mut cur = Some(o);
         while let Some(id) = cur {
-            self.use_fuel()?;
+            // The scan stops where the fuel would run out.
+            let budget = usize::try_from(self.fuel).unwrap_or(usize::MAX);
             let object = self.object(id)?;
-            if object.props.iter().any(|(k, p)| matches!(p, Prop::Accessor { .. }) && array_index(k).is_some()) {
+            let found =
+                object.props.iter().take(budget).position(|(k, p)| matches!(p, Prop::Accessor { get: Some(_), .. }) && array_index(k).is_some());
+            let inspected = found.map_or(object.props.len(), |i| i + 1);
+            let proto = object.proto;
+            crate::regexp_vm::use_fuel_n(self, (inspected as u64).saturating_add(1))?;
+            if found.is_some() {
                 return Ok(true);
             }
-            cur = object.proto;
+            cur = proto;
         }
         Ok(false)
     }
@@ -2921,6 +2930,9 @@ impl Interp {
         let has = |interp: &Self, name: &[u16]| matches!(interp.heap.env(env), Some(Env::Decl { bindings, .. }) if bindings.contains(name));
         let lex = self.top_env(code, env)?;
         self.temp_envs.push(lex);
+        // The call reserved room for the declarations before the `let` and `const` environment
+        // took some of it.
+        self.reserve_heap(declaration_bytes(code))?;
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
@@ -3343,6 +3355,12 @@ impl Interp {
             Some(i) => self.block_env(code, i, env)?,
             None => env,
         };
+        // The caller reserved room for the declarations before the `let` and `const` names took
+        // some of it. Their environment stays reachable if the check collects.
+        self.temp_envs.push(lex);
+        let r = self.reserve_heap(declaration_bytes(code));
+        self.temp_envs.pop();
+        r?;
         // Functions close over the code's own environment with ES2015's scoping, and over its
         // variable environment otherwise (ECMA-262 5.1 section 13). When that is the global
         // object's, they close over the global scope inside it, which also holds the scripts'
