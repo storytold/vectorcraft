@@ -187,3 +187,24 @@ fn a_scrub_closes_its_group_in_its_own_document_after_a_switch() {
     assert_eq!(second.history.undo.len(), undo + 1, "one undo step for the drag");
     assert!(app.session.documents()[0].undo_group.is_some(), "the active document's group stays open");
 }
+
+/// With the Artboard tool, a scrub of the W label resizes the active artboard live, runs to its release as one undo
+/// step, and Escape takes it back without a step.
+#[test]
+fn scrubbing_an_artboards_w_is_one_undo_step() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.select_tool("artboard");
+    let ctx = crate::testing::ui_context();
+    let board = |app: &VectorcraftApp| app.session.doc().unwrap().doc.artboards[0].rect.width();
+    let undo = undo_len(&app);
+    drag_w(&mut app, &ctx, 40.0, false);
+    assert!(board(&app) > 400.0, "the release keeps the scrub: {}", board(&app));
+    assert_eq!(undo_len(&app), undo + 1, "one undo step for the drag");
+    app.run("edit.undo", json!({})).unwrap();
+    assert!((board(&app) - 400.0).abs() < 1e-6);
+
+    drag_w(&mut app, &ctx, 40.0, true);
+    assert!((board(&app) - 400.0).abs() < 1e-6, "Escape: {}", board(&app));
+    assert_eq!(undo_len(&app), undo, "no step");
+}
