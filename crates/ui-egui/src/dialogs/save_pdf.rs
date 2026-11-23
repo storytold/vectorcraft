@@ -311,11 +311,8 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
             Some(job) => write(app, job, &answer),
             None => save_preset(app, &open.editing, &answer),
         };
-        // PLAN: a write that asked a question (replace the file the document was opened from?) leaves OK waiting; its
-        // continuation must answer the dialog, which needs a hook in io.
-        if reply.as_ref().is_ok_and(|r| r.get("pending").is_some()) {
-            return false;
-        }
+        // A write that asks first (the save panel, or whether to replace the file the document was opened from) closes
+        // the dialog as a written one does; the question stays open, as in production.
         let answer = reply.map(|_| ()).map_err(|e| Label::from(crate::i18n::message(crate::i18n::current(), &e)));
         dialogs.with(|host| {
             if let Some(d) = host.get_mut_by_id::<HostedPdfExport>(id) {

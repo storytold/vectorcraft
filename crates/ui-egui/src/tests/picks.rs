@@ -486,20 +486,26 @@ fn keyboard_shortcuts_import_opens_a_text_set_over_the_dialog() {
     let set = dir.join("Mine.kys");
     std::fs::write(&set, "/Menus {\n /Acme\\ Undo { /Modifiers 11 /Key 902 }\n}\n").unwrap();
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
-    app_frame(&app.ui_ctx.clone().unwrap(), &mut app, false);
+    let ctx = app.ui_ctx.clone().unwrap();
+    app_frame(&ctx, &mut app, false);
     app.run("edit.keyboardShortcuts", json!({})).unwrap();
-    let shortcuts = top(&app);
-    asks(&mut app, "shortcuts.import");
+    app_frame(&ctx, &mut app, false);
+    // Keyboard Shortcuts is the framework's dialog, not one of the dialog host's: the review is its own page over it.
+    let review = |app: &VectorcraftApp| app.shortcuts_dialog.as_ref().and_then(|d| d.state.snapshot(d.keymap.as_ref()?)?.review.map(|r| r.name));
+    assert!(app.shortcuts_dialog.as_ref().is_some_and(|d| d.state.is_open()), "Keyboard Shortcuts opens");
+    click(&mut app, "Import…", |app, ui| app.ui(ui));
+    assert_eq!(picker.requests().iter().map(|r| r.kind).collect::<Vec<_>>(), [PickKind::Open], "Import… asks for the file");
     picker.answer(&[&set.to_string_lossy()]);
     settle(&mut app);
-    // PLAN: assumed the review is a dialog of its own over Keyboard Shortcuts (shortcuts-w8).
-    let open = open_dialogs(&app);
-    assert_eq!(open.len(), 2, "{}", app.ui.status);
-    assert_eq!(open[0].id, shortcuts);
-    let ctx = app.ui_ctx.clone().unwrap();
-    let review = top(&app);
-    app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, review));
-    assert_eq!(top(&app), shortcuts);
+    app_frame(&ctx, &mut app, false);
+    assert_eq!(review(&app).as_deref(), Some("Mine"), "{}", app.ui.status);
+    // Escape, the review's Cancel Import.
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0))), events: vec![escape], ..Default::default() };
+    crate::testing::part_frame(&mut app, &ctx, raw, |app, ui| app.ui(ui));
+    app_frame(&ctx, &mut app, false);
+    assert_eq!(review(&app), None, "the review closes");
+    assert!(app.shortcuts_dialog.as_ref().is_some_and(|d| d.state.is_open()), "Keyboard Shortcuts shows again");
     let _ = std::fs::remove_dir_all(dir);
 }
 

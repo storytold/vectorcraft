@@ -21,6 +21,10 @@ struct App {
     /// The accessibility nodes of the latest frame, and the one with the keyboard.
     nodes: Vec<(NodeId, Node)>,
     focus: NodeId,
+    /// The text on the platform's clipboard, which the host sends as a paste event in the frame after the app asks for
+    /// it (`ViewportCommand::RequestPaste`), as egui-winit does.
+    paste: Option<String>,
+    asked_paste: bool,
 }
 
 impl App {
@@ -46,13 +50,18 @@ impl App {
     fn bare(app: VectorcraftApp) -> Self {
         let ctx = crate::testing::ui_context();
         ctx.enable_accesskit();
-        Self { app, ctx, time: 0.0, focused: true, nodes: Vec::new(), focus: NodeId(0) }
+        Self { app, ctx, time: 0.0, focused: true, nodes: Vec::new(), focus: NodeId(0), paste: None, asked_paste: false }
     }
 
     /// One whole app frame with `events`, as the hosts run it; `menu`: a system menu item chosen first, as the macOS
     /// host dispatches it before the app's logic.
-    fn frame_with(&mut self, events: Vec<Event>, menu: Option<&str>) -> egui::FullOutput {
+    fn frame_with(&mut self, mut events: Vec<Event>, menu: Option<&str>) -> egui::FullOutput {
         self.time += 0.1;
+        if std::mem::take(&mut self.asked_paste)
+            && let Some(text) = &self.paste
+        {
+            events.insert(0, Event::Paste(text.clone()));
+        }
         let raw = egui::RawInput {
             events,
             time: Some(self.time),
@@ -71,6 +80,7 @@ impl App {
             self.focus = update.focus;
             self.nodes = update.nodes;
         }
+        self.asked_paste = out.viewport_output.values().any(|v| v.commands.contains(&egui::ViewportCommand::RequestPaste));
         out
     }
 
@@ -472,6 +482,7 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     let mut a = App::over(app);
     // Text on the system clipboard.
     super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"42 pt".to_vec())]);
+    a.paste = Some("42 pt".into());
     let (id, rect) = a.field("37");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);
@@ -496,7 +507,8 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     a.app.run("edit.copy", json!({})).unwrap();
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
     menu(&mut a, edit, "Paste");
-    assert_eq!(a.field_text(id), Some("42 pt"), "Paste pasted into the field");
+    // The field holds the pasted text, its unit painted after it.
+    assert!(a.field_text(id).is_some_and(|v| v.starts_with("42 pt")), "Paste pasted into the field: {:?}", a.field_text(id));
     assert_eq!(a.selected(), 1, "nothing pasted on the canvas");
     // With no field focused, the menu's Select All selects the art.
     a.frame(vec![press(Key::Escape, Modifiers::NONE)]);

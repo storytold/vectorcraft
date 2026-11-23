@@ -287,6 +287,8 @@ fn a_click_goes_to_the_next_artboard_in_presentation_mode() {
     }
     let left = |pos, pressed| button(egui::PointerButton::Primary, pos, pressed);
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(middle), left(middle, true), left(middle, false)]);
+    // The framework reports a release that came in the press's frame in the pass after it, which it asks the host for.
+    frame(&mut app, &ctx, vec![]);
     assert_eq!(view(&app).0, 2, "a click with the Rectangle tool, pressed and released in one frame");
     assert!(!app.any_dialog_open(), "opens no Rectangle dialog");
     settle(&mut app, &ctx);

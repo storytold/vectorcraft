@@ -581,11 +581,16 @@ fn the_control_bar_label_follows_edits_undo_documents_and_selection() {
     assert!(!rect.contains("Linked File") && !rect.contains("Embedded"), "{rect}");
 }
 
+/// Where the Control bar draws `label`; menu items are drawn after the space a check mark takes.
+fn label_at(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) -> egui::Pos2 {
+    let texts = crate::tests_removeanchors::control_frame(app, ctx, vec![]);
+    texts.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+}
+
 /// Click the Control bar's `label`.
 fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
-    use crate::tests_removeanchors::{at, click_control, control_frame};
-    let p = at(&control_frame(app, ctx, vec![]), label);
-    click_control(app, ctx, p);
+    let p = label_at(app, ctx, label);
+    crate::tests_removeanchors::click_control(app, ctx, p);
 }
 
 /// The Control bar's file name opens the link menu: Replace… puts the picked file in the image's
@@ -593,12 +598,8 @@ fn click_label(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
 /// old bounds; Placement Options… opens its dialog.
 #[test]
 fn the_control_bars_file_name_relinks_the_image() {
-    use crate::tests_removeanchors::{click_control, control_frame};
-    // Menu items are drawn after the space a check mark takes.
-    let item = |app: &mut VectorcraftApp, ctx: &egui::Context, label: &str| {
-        let texts = control_frame(app, ctx, vec![]);
-        texts.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
-    };
+    use crate::tests_removeanchors::click_control;
+    let item = label_at;
     let mut app = app();
     let data = vectorcraft_format::base64_encode(&png(30, 30, 72.0));
     app.run("file.place", json!({"name": "red.png", "dataBase64": data, "link": false})).unwrap();

@@ -47,15 +47,19 @@ pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canva
     let key = (uid, end.is_some());
     let mut local = app.ui.quick_pen_bar_place.for_key(key);
     let before = local;
-    let rtl = Env::of(ui).view().direction() == Direction::Rtl;
-    // Beside the end, on the side the path arrives from (a path of one point: right and below); the
-    // bar's sides are reading-order ones, so a rightward arrival is `End` under LTR and `Start` under RTL.
+    let env = Env::of(ui);
+    let rtl = env.view().direction() == Direction::Rtl;
+    // Beside the end, on the side the path arrives from (a path of one point: right and below), a gap off it
+    // both ways, as production's corner did; the bar's sides are reading-order ones, so a rightward arrival is
+    // `End` under LTR and `Start` under RTL. The anchor moves the gap down (or up), the side adds it across.
     let (anchor, side, align) = match end {
         Some((p, dir)) => {
             let heading = dir.map(|d| space.view.to_screen(p + d) - space.view.to_screen(p));
             let right = heading.is_none_or(|d| d.x >= 0.0);
             let down = heading.is_none_or(|d| d.y >= 0.0);
-            (vec![p], if right != rtl { Side::End } else { Side::Start }, if down { Align::Start } else { Align::End })
+            let gap = env.tokens.space.gap.section;
+            let off = space.view.to_doc(space.view.to_screen(p) + egui::vec2(0.0, if down { gap } else { -gap }));
+            (vec![off], if right != rtl { Side::End } else { Side::Start }, if down { Align::Start } else { Align::End })
         }
         None => (vec![space.view.to_doc(space.view.rect.center_bottom())], Side::Above, Align::Center),
     };
