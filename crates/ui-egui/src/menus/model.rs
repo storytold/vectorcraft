@@ -271,25 +271,37 @@ fn catalog_defs(app: &VectorcraftApp, refs: &[(CommandRef, String, bool)], state
         defs.push(if *checkable { def.toggle() } else { def });
     }
     for d in &defs {
-        if states.get(&d.command).is_some() {
-            continue;
+        if states.get(&d.command).is_none() {
+            states.set(d.command.clone(), row_state(app, &d.command, &d.label));
         }
-        let (id, params) = (&d.command.id, &d.command.params);
-        let (enabled, checked) = shown_state(app, id, params).unwrap_or((false, None));
-        let mut state = CommandState::new().enabled(enabled);
-        if let Some(on) = checked {
-            state = state.checked(on);
+    }
+    // The engine commands the palette lists and no row names (Asset Export's Remove and Rename) are dimmed there and say
+    // why, as the rows are.
+    for c in crate::palette::listed_engine_commands().filter(|c| !known.contains(c.id)) {
+        let command = CommandRef::new(c.id);
+        if states.get(&command).is_none() {
+            states.set(command.clone(), row_state(app, &command, c.label));
         }
-        let shown = display_label(app, id, &d.label);
-        if shown != d.label {
-            state = state.title(shown.clone());
-        }
-        if let Some(reason) = Some(enabled).filter(|e| !e).map(|_| off_reason(app, &d.command, &shown)) {
-            state = state.hint(reason);
-        }
-        states.set(d.command.clone(), state);
     }
     defs
+}
+
+/// The state of the row `command`, named `label` in the catalog: on or dimmed with its reason, checked, and its title
+/// where the app shows another.
+fn row_state(app: &VectorcraftApp, command: &CommandRef, label: &str) -> CommandState {
+    let (enabled, checked) = shown_state(app, &command.id, &command.params).unwrap_or((false, None));
+    let mut state = CommandState::new().enabled(enabled);
+    if let Some(on) = checked {
+        state = state.checked(on);
+    }
+    let shown = display_label(app, &command.id, label);
+    if shown != label {
+        state = state.title(shown.clone());
+    }
+    if !enabled {
+        state = state.hint(off_reason(app, command, &shown));
+    }
+    state
 }
 
 /// What the dimmed row `command`, named `label`, says: the engine's reason, the panels' in Presentation Mode, else that

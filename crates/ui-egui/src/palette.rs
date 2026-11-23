@@ -137,24 +137,26 @@ impl Draft {
     }
 }
 
-/// The palette's results before their names are made distinct: every listed engine command and
-/// plug-in command, UI command, tool, panel and Effect menu item.
-fn drafts() -> Vec<Draft> {
-    let mut out = vec![];
-    // Aliases kept for older scripts run a command that is listed already, a wrapped engine
-    // command is listed as its UI command, and an engine command with a UI command of the same id
-    // (Place…, Print…) is listed once, as the UI command. An engine command that needs a value a
-    // pick doesn't give, or a query whose answer a pick drops ([`crate::shortcut_editor::needs_a_value`]),
-    // is left out unless it does something besides answering ([`PICK_RUNS`]).
-    let plugin_commands = vectorcraft_engine::cmd::plugin::command_specs();
+/// The engine commands the palette lists. Aliases kept for older scripts run a command that is listed already, a wrapped
+/// engine command is listed as its UI command, and an engine command with a UI command of the same id (Place…, Print…)
+/// is listed once, as the UI command. An engine command that needs a value a pick doesn't give, or a query whose
+/// answer a pick drops ([`crate::shortcut_editor::needs_a_value`]), is left out unless it does something besides
+/// answering ([`PICK_RUNS`]).
+pub(crate) fn listed_engine_commands() -> impl Iterator<Item = &'static vectorcraft_engine::CommandSpec> {
     let ui_ids: std::collections::HashSet<&str> = menus::UI_COMMANDS.iter().map(|c| c.0).collect();
-    let listed = |c: &vectorcraft_engine::CommandSpec| {
+    vectorcraft_engine::command_specs().iter().filter(move |c| {
         !vectorcraft_engine::cmd::is_alias(c.id)
             && !WRAPPED.iter().any(|(engine, _)| *engine == c.id)
             && !ui_ids.contains(c.id)
             && (!crate::shortcut_editor::needs_a_value(c.id) || PICK_RUNS.contains(&c.id))
-    };
-    for c in vectorcraft_engine::command_specs().iter().filter(|c| listed(c)).chain(plugin_commands) {
+    })
+}
+
+/// The palette's results before their names are made distinct: every listed engine command and
+/// plug-in command, UI command, tool, panel and Effect menu item.
+fn drafts() -> Vec<Draft> {
+    let mut out = vec![];
+    for c in listed_engine_commands().chain(vectorcraft_engine::cmd::plugin::command_specs()) {
         out.push(Draft::new(&c.menu.join(" › "), c.label, c.id.to_string()));
     }
     // `plugin.dialog` runs nothing without an id: [`named_drafts`] lists each filter instead. A
