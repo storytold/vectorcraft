@@ -705,6 +705,48 @@ fn declarations_are_checked_after_the_let_and_const_names_take_their_room() {
 }
 
 #[test]
+fn the_arguments_object_is_checked_after_the_let_and_const_names_take_their_room() {
+    // The `let` names and the `arguments` object of 1,000 arguments each fit in the heap, but not
+    // always together. Each run stops for lack of fuel at a different point while the variables
+    // after the object are made, before a collection could correct the estimate, and the
+    // estimate is within the limit at every one of them.
+    let names = |prefix: &str, n: usize| (0..n).map(|i| format!("{prefix}{i:0>60}")).collect::<Vec<_>>().join(", ");
+    let (lets, vars) = (names("l", 300), names("v", 100));
+    let zeros = vec!["0"; 1000].join(", ");
+    let setup = format!("function f() {{ let {lets}; var {vars}; return arguments.length; }} function g() {{ return f({zeros}); }} 0");
+    let call = "g()";
+    let mut measure = Realm::with_options(es_options(), Limits::default());
+    assert_eq!(measure.run(&setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let base = measure.interp().heap.bytes;
+    assert_eq!(measure.run(call), Ok(JsValue::Number(1000.0)));
+    let fuel = Limits::default().fuel - measure.interp().fuel;
+    let mut stopped = 0;
+    for extra in (0..150).map(|k| k * 2048) {
+        let heap_bytes = base + extra;
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+        if realm.run(&setup).is_err() {
+            continue;
+        }
+        // The variables are made before the body runs its 300 `let` declarations, which take
+        // about 700 units of fuel, so every third stop in the last 800 units finds them.
+        for f in (fuel.saturating_sub(800).max(1)..=fuel).step_by(3) {
+            realm.interp().collect_garbage();
+            realm.set_limits(Limits { heap_bytes, fuel: f, ..Limits::default() });
+            match realm.run(call) {
+                Ok(v) => assert_eq!(v, JsValue::Number(1000.0), "{heap_bytes}, {f}"),
+                Err(e) => {
+                    assert!(matches!(e.kind, RunErrorKind::Limit(LimitKind::Heap | LimitKind::Fuel)), "{heap_bytes}, {f}: {e:?}");
+                    stopped += usize::from(e.kind == RunErrorKind::Limit(LimitKind::Heap));
+                }
+            }
+            assert!(realm.interp().heap.bytes <= heap_bytes, "{heap_bytes}, {f}: {}", realm.interp().heap.bytes);
+        }
+    }
+    assert!(stopped > 0, "no run reached the heap limit");
+}
+
+#[test]
 fn new_scopes_survive_collections_while_they_are_made() {
     // Heaps just big enough make the collector run while function bodies and blocks set up their
     // scopes; each run gives the right total or stops at the heap limit.

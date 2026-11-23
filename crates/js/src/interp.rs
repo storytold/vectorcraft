@@ -463,6 +463,12 @@ fn declaration_bytes(code: &Code) -> usize {
     code.vars.iter().fold(funs, |total, v| total.saturating_add(binding_bytes(v.len())))
 }
 
+/// At least the bytes that the `arguments` object of a call with `args` arguments adds to the
+/// heap: the object, an element for each argument and its other properties.
+fn arguments_bytes(args: usize) -> usize {
+    OBJECT_BYTES.saturating_add(args.saturating_add(4).saturating_mul(binding_bytes(10)))
+}
+
 /// A call to a function written in JavaScript, ready to enter.
 struct Entry {
     callee: ObjId,
@@ -2818,8 +2824,7 @@ impl Interp {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
         let params = code.params.iter().fold(0usize, |total, p| total.saturating_add(binding_bytes(p.len())));
-        let arguments =
-            if code.uses_arguments { OBJECT_BYTES.saturating_add(args.len().saturating_add(4).saturating_mul(binding_bytes(10))) } else { 0 };
+        let arguments = if code.uses_arguments { arguments_bytes(args.len()) } else { 0 };
         // The array a rest parameter gets: its binding and one property for each extra argument.
         let rest = match &code.rest {
             Some(name) => {
@@ -2930,9 +2935,10 @@ impl Interp {
         let has = |interp: &Self, name: &[u16]| matches!(interp.heap.env(env), Some(Env::Decl { bindings, .. }) if bindings.contains(name));
         let lex = self.top_env(code, env)?;
         self.temp_envs.push(lex);
-        // The call reserved room for the declarations before the `let` and `const` environment
-        // took some of it.
-        self.reserve_heap(declaration_bytes(code))?;
+        // The call reserved room for the declarations and the `arguments` object before the `let`
+        // and `const` environment took some of it.
+        let arguments = if needs_arguments && !has(self, &key("arguments")) { arguments_bytes(args.len()) } else { 0 };
+        self.reserve_heap(declaration_bytes(code).saturating_add(arguments))?;
         for (name, fi) in &code.fun_decls {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
