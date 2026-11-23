@@ -92,10 +92,10 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
 }
 
 /// A key bound only to commands that can't run now (`FrameOutput::dimmed`) does what production's key did, its menu
-/// item's action, which says why it can't run or does nothing; nothing while the gate holds the commands (a file dialog,
-/// a shortcut being recorded, Presentation Mode).
+/// item's action, which says why it can't run or does nothing; nothing while a dialog or a text field has the keys or the
+/// gate holds the commands (a file dialog, a shortcut being recorded, Presentation Mode).
 pub(crate) fn run_dimmed(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &Fired) {
-    if crate::menus::model::gate_lets(app, &fired.command) {
+    if !app.any_dialog_open() && !ctx.egui_wants_keyboard_input() && crate::menus::model::gate_lets(app, &fired.command) {
         run_fired(app, ctx, fired);
     }
 }
@@ -158,6 +158,17 @@ pub(crate) fn escape(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     escape_ends_one_thing(app, ctx);
+}
+
+/// In a floating panel's OS window, the keys none of its controls took, which production's palette windows passed
+/// on to the main window: Escape ends one thing as there ([`escape`]), and Enter is the canvas's tool's (in
+/// Presentation Mode it opens nothing).
+pub(crate) fn palette_window_keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    escape(app, ctx);
+    if keys::with_window_intents(ctx, false, |window| window.take(Intent::Submit)) && app.ui.screen_mode != 3 {
+        let view = app.view_info();
+        crate::canvas::tool_enter(app, vectorcraft_tools::Mods::default(), view);
+    }
 }
 
 /// An Escape that nothing else took ends the first of these that is on.

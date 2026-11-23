@@ -15,7 +15,7 @@ use craft::draw::ui::transform::{
 use craft::keymap::CommandRef;
 use craft::ui::buttons::{IconButton, Link};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Props, Show, ShowContainer, SideLabel};
+use craft::ui::contract::{Bind, Entry, LabelPress, Props, Show, ShowContainer, SideLabel};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -23,6 +23,7 @@ use craft::ui::menu::PanelRow;
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
 use craft::ui::popover::Popover;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::text::{NumberField, NumberOutput, NumberPick, StepArrows};
 use egui::Ui;
 use serde_json::{Value, json};
@@ -65,6 +66,9 @@ pub struct TransformUi {
     pub reference_point: usize,
     /// Whether the Transform popover under the Control bar's link is open.
     pub popover: bool,
+    /// The popover closed at the press of the click still running: a click on an X:, Y:, W: or H: caption that
+    /// closed it at its press leaves it closed.
+    closed_by_press: bool,
     /// The point a field's running gesture turns or shears about ([`gesture_origin`]).
     gesture_origin: Value,
     /// The artboards' rectangles when a field's running gesture began ([`live_artboard`]).
@@ -75,7 +79,14 @@ pub struct TransformUi {
 
 impl Default for TransformUi {
     fn default() -> Self {
-        TransformUi { reference_point: 4, popover: false, gesture_origin: Value::Null, gesture_boards: Vec::new(), gesture_start: Rect::ZERO }
+        TransformUi {
+            reference_point: 4,
+            popover: false,
+            closed_by_press: false,
+            gesture_origin: Value::Null,
+            gesture_boards: Vec::new(),
+            gesture_start: Rect::ZERO,
+        }
     }
 }
 
@@ -422,8 +433,13 @@ pub(crate) fn object_bar_fields(app: &mut VectorcraftApp, ui: &mut Ui) -> Option
     let bx = app.selection_box()?;
     let state = box_state(app, &bx);
     let start = gesture_start(app, bx.rect);
-    let out = fields(app, Some(state), start, panel_groups(), true).show(ui);
+    let out = fields(app, Some(state), start, panel_groups(), true).caption_press(LabelPress::Link).show(ui);
     apply_fields(app, &out, EditPath::Preview, set_object_bounds);
+    // A click on a caption opens the Transform popover as the Transform link does, or closes it.
+    if out.link.is_some() {
+        let panel = &mut app.ui.transform_panel;
+        panel.popover = !panel.closed_by_press;
+    }
     Some(out)
 }
 
@@ -684,8 +700,11 @@ pub(crate) fn popover(app: &mut VectorcraftApp, ui: &mut Ui, opener: &egui::Resp
     if opener.clicked() {
         open = !open;
     }
-    Popover::new(tl!("Transform"), Bind::bound(&mut open)).opened_by(opener).show(ui, |ui, _| show(app, ui));
-    app.ui.transform_panel.popover = open;
+    let shown = Popover::new(tl!("Transform"), Bind::bound(&mut open)).opened_by(opener).show(ui, |ui, _| show(app, ui));
+    let clicking = ui.input(|i| i.pointer.any_down() || i.pointer.any_released());
+    let panel = &mut app.ui.transform_panel;
+    panel.closed_by_press = shown.output.closed == Some(CloseReason::Outside) || (panel.closed_by_press && clicking);
+    panel.popover = open;
 }
 
 /// Set a boolean preference (through `prefs.set`, as agents do) and return the command's result.

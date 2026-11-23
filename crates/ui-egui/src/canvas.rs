@@ -52,7 +52,7 @@ pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 pub(crate) use rulers::{general_lengths, stroke_lengths};
 pub(crate) use task_bar::{TASK_BAR_ACTIONS, TASK_BAR_CHIPS, has_colors, is_task_bar_action, read_hidden_task_bar_actions};
 pub use tool_adapter::{apply_requests, dispatch, mods};
-pub(crate) use tool_adapter::{busy_tool, in_gesture, pose_on_page};
+pub(crate) use tool_adapter::{busy_tool, in_gesture, pose_on_page, tool_enter};
 
 /// Which body a document's canvas runs: the current window's interactive one, or a display-only
 /// pane of a tiled or floating window.

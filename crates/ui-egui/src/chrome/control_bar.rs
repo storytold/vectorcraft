@@ -26,10 +26,13 @@ pub(crate) mod rank {
     /// The parts of a group that its other members work without: the width profile, Recolor Artwork, Global Edit
     /// Options, Document Setup, an image's Edit Original.
     pub const DETAIL: u8 = 3;
+    /// The Opacity link and field: they leave before the groups, so the narrower Style link and picker after them
+    /// can show without them.
+    pub const OPACITY: u8 = 4;
     /// Every other member of the bar.
-    pub const GROUP: u8 = 4;
+    pub const GROUP: u8 = 5;
     /// A section's link that stays after its fields leave.
-    pub const LINK: u8 = 6;
+    pub const LINK: u8 = 7;
 }
 
 /// An anchor button: icon, tooltip, command and the convert command's `to`.
@@ -300,7 +303,7 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn opacity_field(app: &mut VectorcraftApp, ui: &mut Ui, opacity: f32, selected: bool) {
     let label = tl!("Opacity:");
     let (mut link, mut typed) = (false, None);
-    group(ui, rank::GROUP, |ui| {
+    group(ui, rank::OPACITY, |ui| {
         Field::new(label).side(SideLabel::new().link().scrub(true)).show(ui, |ui, _| {
             let number =
                 NumberField::new(label, Bind::given(Some(f64::from(opacity) * 100.0))).range(0.0..=100.0).unit("%").scrub_by_label().show(ui);

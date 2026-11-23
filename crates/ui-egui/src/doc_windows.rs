@@ -348,6 +348,8 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         for w in wins {
             if let Some(v) = view_mut(app, w) {
                 v.fitted = false;
+                // The area it last showed its art in is the main window's: it fits its window's.
+                v.rect = egui::Rect::NOTHING;
             }
         }
     }
@@ -381,21 +383,24 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let window = DocumentWindow::new(title).id_salt((w.uid, w.number, w.generation)).first_placed(w.place.translate(origin));
         let window = if raise == Some((w.uid, w.view)) { window.raise() } else { window };
         let out = window.show(ui, |ui, _| {
+            // A press anywhere on the window, its title bar and tab included, makes its document current.
+            pressed = pressed_on_layer(ui);
             crate::chrome::window_tab(app, ui, win);
-            let rect = ui.available_rect_before_wrap();
-            crate::canvas::panes::refit_resized(app, &[(win, rect)]);
+            let areas = [(win, ui.available_rect_before_wrap())];
+            let unfitted = crate::canvas::panes::refit_resized(app, &areas);
             if live {
                 show_document(app, ui, win, BodyKind::Live);
             } else {
-                pressed = crate::canvas::pane(app, ui, win, rect);
+                pressed |= crate::canvas::pane(app, ui, win, areas[0].1);
             }
+            crate::canvas::panes::note_fits(app, &areas, &unfitted);
         });
         if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == w.uid && x.view == w.view) {
             x.focused = out.focused;
         }
         if out.close_requested.is_some() {
             close = Some(win);
-        } else if (out.focus_gained || pressed) && !is_current {
+        } else if (out.focus_gained || pressed) && !is_current && !app.any_dialog_open() {
             activate = Some(win);
         }
     }
@@ -411,6 +416,12 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         show_window(app, win);
         app.canvas.windows.current = views::current(app).and_then(|w| key(app, w));
     }
+}
+
+/// Whether the primary button went down over `ui`'s layer in this pass.
+fn pressed_on_layer(ui: &egui::Ui) -> bool {
+    let at = ui.ctx().input(|i| i.pointer.primary_pressed().then_some(i.pointer.interact_pos()).flatten());
+    at.is_some_and(|at| ui.ctx().layer_id_at(at) == Some(ui.layer_id()))
 }
 
 #[cfg(test)]

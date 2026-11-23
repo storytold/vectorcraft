@@ -152,9 +152,13 @@ fn help_f1_opens_discover_without_a_document() {
 /// shows, marks nothing and the status bar says why.
 #[test]
 fn discover_says_why_a_tool_cannot_be_marked() {
-    fn texts(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    fn pass(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::panels::discover::show(app, ui));
         out.textures_delta.clear();
+        out
+    }
+    fn texts(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        let out = pass(ctx, app, events);
         fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
             match s {
                 egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
@@ -172,10 +176,22 @@ fn discover_says_why_a_tool_cannot_be_marked() {
         texts(ctx, app, vec![]);
         let drawn = texts(ctx, app, vec![]);
         let pos = drawn.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("`{label}` not drawn: {drawn:?}")).1.center();
+        press_at(ctx, app, pos);
+    }
+    fn press_at(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2) {
         let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
-            texts(ctx, app, vec![e]);
+            pass(ctx, app, vec![e]);
         }
+    }
+    // A step's tool name is a link inside its sentence: the Link node named by its words.
+    fn click_link(ctx: &egui::Context, app: &mut VectorcraftApp, name: &str) {
+        ctx.enable_accesskit();
+        pass(ctx, app, vec![]);
+        let nodes = pass(ctx, app, vec![]).platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let link = nodes.iter().map(|(_, n)| n).find(|n| n.role() == egui::accesskit::Role::Link && n.label().is_some_and(|l| l == name));
+        let b = link.and_then(|n| n.bounds()).unwrap_or_else(|| panic!("no link `{name}`"));
+        press_at(ctx, app, egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32));
     }
     crate::i18n::set_current(crate::i18n::Lang::EN);
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -195,16 +211,16 @@ fn discover_says_why_a_tool_cannot_be_marked() {
     assert!(app.ui.learn_locate.is_none());
     assert_eq!(app.ui.status, reason);
 
-    let (tutorial, tool) = crate::panels::learn::catalog::SKILLS
+    let (tutorial, link) = crate::panels::learn::catalog::SKILLS
         .iter()
         .flat_map(|skill| skill.tutorials.iter())
-        .find_map(|t| t.steps.iter().find_map(|s| s.tool).map(|tool| (t, tool)))
+        .find_map(|t| t.steps.iter().find_map(|s| s.tool_name()).map(|(_, name, _)| (t, name)))
         .unwrap();
     let found = app.run("help.discover.search", json!({"query": tutorial.title})).unwrap();
     let index = found["results"].as_array().unwrap().iter().position(|hit| hit["kind"] == "tutorial" && hit["id"] == tutorial.id).unwrap();
     app.run("help.discover.choose", json!({"index": index})).unwrap();
     app.status("");
-    click(&ctx, &mut app, vectorcraft_tools::tool_info(tool).unwrap().label);
+    click_link(&ctx, &mut app, link);
     assert!(app.ui.learn_locate.is_none());
     assert_eq!(app.ui.status, reason);
 }

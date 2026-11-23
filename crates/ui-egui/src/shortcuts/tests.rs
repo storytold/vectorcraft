@@ -1463,7 +1463,6 @@ fn enter_after_a_drag_repeats_its_offset() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 800, "height": 300})).unwrap();
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
-    let ctx = ready(&mut app);
     let enter = || tap(Key::Enter, Modifiers::NONE);
     let lefts = |app: &VectorcraftApp| {
         let kids = app.session.doc().unwrap().doc.layers[0].children().unwrap();
@@ -1479,7 +1478,9 @@ fn enter_after_a_drag_repeats_its_offset() {
     let [moved] = lefts(&app)[..] else { panic!("one rectangle") };
     let step = moved - 10.0;
     assert!(step > 0.0);
-    key_frame(&mut app, &ctx, vec![]);
+    // The window's first frame comes after the drag, which the view before it measures: one fitted to the window
+    // would put the press on a corner handle.
+    let ctx = ready(&mut app);
     key_frame(&mut app, &ctx, enter());
     assert_eq!(dialog_kind(&app).as_deref(), Some("object.move"), "Enter opens Move");
     assert_eq!(dialog_field(&app, "dx").and_then(|v| v.as_f64()).map(f64::round), Some(step));
