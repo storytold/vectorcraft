@@ -38,6 +38,7 @@ const FINGER_DEVICE: TouchDeviceId = TouchDeviceId(2);
 const ERASER_BUTTON: i16 = 5;
 
 /// The pen and finger contacts followed, and the egui events they made since the last frame.
+#[derive(Default)]
 pub struct Pointers {
     events: Vec<Event>,
     /// The pen pressing, by pointer id.
@@ -52,12 +53,6 @@ pub struct Pointers {
     /// The pen's pressure and end for the canvas, the source the install reads.
     // PLAN: named `source`, not `pen`: `pen` is the pressing pen's pointer id above.
     source: PenSource,
-}
-
-impl Default for Pointers {
-    fn default() -> Self {
-        Self { events: vec![], pen: None, fingers: vec![], primary: None, button: None, eraser: false, source: PenSource::default() }
-    }
 }
 
 #[cfg(target_arch = "wasm32")]

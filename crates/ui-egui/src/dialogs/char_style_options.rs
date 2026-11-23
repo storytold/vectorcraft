@@ -249,7 +249,7 @@ fn tri_box(ui: &mut egui::Ui, current: Option<bool>, label: Option<Label>, salt:
         check = check.label(label);
     }
     let out = check.show(ui);
-    let next = out.value().is_some().then(|| match current {
+    let next = out.value().is_some().then_some(match current {
         None => Some(true),
         Some(true) => Some(false),
         Some(false) => None,

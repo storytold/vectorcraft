@@ -271,7 +271,7 @@ fn rectangular_grid_cancel_discards_edits_and_reopens_from_saved_values() {
     click(&mut app, Point::new(111.0, 147.0));
     values(&mut app, json!(18), json!(30), json!(9), json!(1));
     cancel_of(&mut app, KIND);
-    assert!(!is_open(&mut app, KIND));
+    assert!(!is_open(&app, KIND));
     before.assert_unchanged(&app);
     click(&mut app, Point::new(209.0, 173.0));
     assert_eq!((field(&mut app, "x"), field(&mut app, "y")), (json!(209.0), json!(173.0)));
@@ -331,7 +331,7 @@ fn rectangular_grid_failed_creation_does_not_save_counts() {
     click(&mut app, Point::new(30.0, 40.0));
     values(&mut app, json!(120), json!(60), json!(7), json!(8));
     assert!(try_confirm(&mut app, KIND).is_err());
-    assert!(is_open(&mut app, KIND), "a refusal keeps the dialog open");
+    assert!(is_open(&app, KIND), "a refusal keeps the dialog open");
     assert_eq!(app.session.tool_options_of(KIND), before.options);
     assert_eq!(app.session.doc().unwrap().history.undo.len(), before.undo);
 }
@@ -346,7 +346,7 @@ fn rectangular_grid_tool_options_with_a_refused_width_stay_open() {
     set(&mut app, "width", json!(0));
     let e = try_confirm(&mut app, KIND).unwrap_err();
     assert!(e.contains("`width`"), "{e}");
-    assert!(is_open(&mut app, KIND));
+    assert!(is_open(&app, KIND));
     assert_eq!(app.session.tool_options_of(KIND), before);
 }
 
@@ -390,10 +390,10 @@ fn a_grid_dialog_sends_its_skews_switch_and_fill() {
             click(&mut app, at);
         } else {
             super::shapes::open(&mut app, kind, Some(super::shapes::Click { at, alt: false }));
-            assert!(is_open(&mut app, kind));
+            assert!(is_open(&app, kind));
         }
         for (key, value) in initial {
-            assert_eq!(field_of(&mut app, kind, key), value, "{kind} {key}");
+            assert_eq!(field_of(&app, kind, key), value, "{kind} {key}");
         }
         for (key, value) in edits {
             set_of(&mut app, kind, key, value).unwrap();

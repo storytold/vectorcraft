@@ -10,7 +10,7 @@ use craft::host::PickKind;
 
 /// Whether the newest pick asked for is a folder.
 fn asked_for_folder(picker: &crate::tests::picks::Picker) -> bool {
-    picker.requests().last().map(|r| r.kind.clone()) == Some(PickKind::Folder)
+    picker.requests().last().map(|r| r.kind) == Some(PickKind::Folder)
 }
 
 /// A new, empty folder of its own for test `name`.

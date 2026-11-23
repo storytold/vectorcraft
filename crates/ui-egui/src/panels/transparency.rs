@@ -319,7 +319,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             Some(Knockout::Off) => Mixed::Same(false),
             _ => Mixed::Mixed,
         };
-        let group_before = group.clone();
+        let group_before = group;
         Checkbox::new(Bind::bound(&mut isolated)).label(tl!("Isolate Blending")).enabled(enabled).show(ui);
         Checkbox::new(Bind::bound_mixed(&mut group)).label(tl!("Knockout Group")).enabled(enabled).show(ui);
         Checkbox::new(Bind::bound(&mut shape)).label(tl!("Opacity & Mask Define Knockout Shape")).enabled(enabled).show(ui);

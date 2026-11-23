@@ -359,7 +359,7 @@ fn mark_line(image: &mut vectorcraft_render::Rendered, y: f32, thickness: usize,
     for row in first..first.saturating_add(thickness).min(height) {
         let start = row.saturating_mul(width).saturating_mul(4);
         if let Some(line) = image.pixels.get_mut(start..start.saturating_add(width.saturating_mul(4))) {
-            for pixel in line.chunks_exact_mut(4) {
+            for pixel in line.as_chunks_mut::<4>().0 {
                 pixel.copy_from_slice(&color.to_array());
             }
         }

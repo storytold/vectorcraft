@@ -387,11 +387,11 @@ fn panel_commands_give_the_placement_the_old_tests_checked() {
                 columns.remove(2);
             }
             h.set_layout(layout);
-            assert_eq!(icon_column(&end_columns(&h.layout())), None);
+            assert_eq!(icon_column(end_columns(&h.layout())), None);
             h.app.run("window.panel.dock", json!({"panel": "properties", "icon": true})).unwrap();
             let layout = h.layout();
             assert!(in_iconic_column(&layout, "properties"));
-            assert!(icon_column(&end_columns(&layout)).is_none_or(|k| column_panels(&layout)[k].contains(&"properties".to_string())));
+            assert!(icon_column(end_columns(&layout)).is_none_or(|k| column_panels(&layout)[k].contains(&"properties".to_string())));
         }),
         ("F7 hides and restores the expanded Layers tab", |h| {
             h.f7();

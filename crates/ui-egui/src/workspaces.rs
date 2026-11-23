@@ -672,7 +672,7 @@ mod tests {
     /// Whether `panel` is the one its group shows.
     fn front(ui: &UiState, panel: &str) -> bool {
         let layout = crate::panel_docking::layout_of(ui);
-        crate::panel_docking::column_of(&layout, panel)
+        crate::panel_docking::column_of(layout, panel)
             .is_some_and(|(_, column)| column.groups.iter().any(|g| g.panels.get(g.active).is_some_and(|p| p == panel)))
     }
 

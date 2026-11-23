@@ -1079,8 +1079,14 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resul
                 app.ui.links.options.thumb = *size;
             }
         }),
-        "ui.links.linkInfo" => Ok(app.ui.links.options.info = !app.ui.links.options.info),
-        "ui.links.dcs" => Ok(app.ui.links.options.dcs = !app.ui.links.options.dcs),
+        "ui.links.linkInfo" => {
+            let _: () = app.ui.links.options.info = !app.ui.links.options.info;
+            Ok(())
+        }
+        "ui.links.dcs" => {
+            let _: () = app.ui.links.options.dcs = !app.ui.links.options.dcs;
+            Ok(())
+        }
         _ => return None,
     };
     Some(done.map(|()| Value::Null))

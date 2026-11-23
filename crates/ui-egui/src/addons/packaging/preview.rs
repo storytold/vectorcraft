@@ -106,7 +106,7 @@ impl FoldPreviewWords {
             "bottom" => &self.bottom,
             _ => &self.three_quarter,
         };
-        Label::from(word.clone())
+        word.clone()
     }
 }
 

@@ -169,7 +169,7 @@ impl Component for ToolMarks<'_> {
     fn paint(&mut self, ui: &mut PaintUi<'_>, cx: &Cx<'_, Self>) {
         let Some(space) = canvas_space(&cx.env) else { return };
         let _painter = ui.content_painter(cx);
-        paint(&ui.draw(), &space.view, self.overlays, &self.options, &cx.style);
+        paint(&ui.draw(), &space.view, self.overlays, &self.options, cx.style);
         for o in self.overlays {
             if let Overlay::SelectionMarquee { enclosed, pointer, .. } = o {
                 let (current, other) = badge_rule(*enclosed);

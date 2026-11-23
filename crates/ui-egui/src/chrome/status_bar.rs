@@ -22,11 +22,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let nab = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
     let cur = crate::panels::artboards::selected(app, nab);
     // PLAN: assumed Artboard::rect has `width()` and `height()`.
-    let document = app
-        .session
-        .active()
-        .and_then(|d| d.doc.artboards.get(cur))
-        .map_or(Size::new(1.0, 1.0), |a| Size::new(f64::from(a.rect.width()), f64::from(a.rect.height())));
+    let document =
+        app.session.active().and_then(|d| d.doc.artboards.get(cur)).map_or(Size::new(1.0, 1.0), |a| Size::new(a.rect.width(), a.rect.height()));
     let boards: Vec<Entry<usize>> = app
         .session
         .active()

@@ -187,7 +187,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let (size, original) = match render_for(app, &natural) {
         Ok((key, r)) => {
             let texture = original_texture(&ctx, &key, &r);
-            app.web_export.original = Some(texture.clone());
+            app.web_export.original = Some(texture);
             (PixelSize::new(r.width, r.height), texture)
         }
         // The panes show why the rendering failed; the Original pane has nothing to show.
@@ -503,7 +503,7 @@ fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::
         _ => None,
     };
     if let Some(texture) = fresh {
-        app.web_export.original = Some(texture.clone());
+        app.web_export.original = Some(texture);
         on_dialog(host, |d| d.set_original(texture));
     }
     on_dialog(host, |d| answers.into_iter().for_each(|v| d.set_variant(v)));

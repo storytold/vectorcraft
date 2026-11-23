@@ -558,13 +558,13 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
     }
     let mut view = response.view.or(pass.view).or_else(|| pass.space.map(|s| s.view));
     let mut scrolled = false;
-    if let (Some(v), Some(step)) = (view.as_mut(), response.scroll) {
-        if Autoscroll::scroll(v, step, super::document_size(app.content_bounds())).is_some() {
-            ui.ctx().request_repaint();
-            // The body takes the reply's view as the one the canvas showed.
-            response.view = Some(*v);
-            scrolled = true;
-        }
+    if let (Some(v), Some(step)) = (view.as_mut(), response.scroll)
+        && Autoscroll::scroll(v, step, super::document_size(app.content_bounds())).is_some()
+    {
+        ui.ctx().request_repaint();
+        // The body takes the reply's view as the one the canvas showed.
+        response.view = Some(*v);
+        scrolled = true;
     }
     let scaling = app.ui_scaling();
     if let (Some(v), Some(view)) = (app.view_mut(), view.as_ref()) {

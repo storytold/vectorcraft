@@ -348,7 +348,7 @@ fn alternates_are_found_once_per_revision() {
     let key = |app: &mut VectorcraftApp| {
         listed(app, "Alternates for Selection");
         // PLAN: assumed `FoundKey: Clone + PartialEq + Debug`.
-        app.canvas.glyphs_found.as_ref().map(|(k, _)| k.clone()).expect("the alternates were found")
+        app.canvas.glyphs_found.as_ref().map(|(k, _)| *k).expect("the alternates were found")
     };
     let first = key(&mut app);
     assert_eq!(marked_cell(&mut app), listed(&mut app, "Alternates for Selection").first().copied(), "the default glyph is drawn");

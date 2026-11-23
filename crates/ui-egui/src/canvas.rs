@@ -137,7 +137,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     // Presentation Mode shows the active artboard on the whole screen: it fits again when the screen changes.
     let refit = !view.fitted || (presenting && view.rect != area);
     let (request, moved) = if measuring {
-        (view.request.clone(), view.moved)
+        (view.request, view.moved)
     } else {
         view.rect = area;
         (view.request.take(), view.moved.take())

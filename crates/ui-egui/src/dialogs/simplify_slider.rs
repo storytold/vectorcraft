@@ -243,7 +243,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, view: &CanvasVie
         }
         None if auto_clicked => {
             app.object_dialogs.strip = Some(strip);
-            auto_of(app, kind).map(|v| v)
+            auto_of(app, kind)
         }
         None => {
             let params = strip.params();

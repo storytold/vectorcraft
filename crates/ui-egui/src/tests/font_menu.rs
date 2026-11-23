@@ -38,12 +38,12 @@ fn recent_fonts_follow_committed_choices_and_the_count_preference() {
     app.run("text.setStyle", json!({"font": "Inter"})).unwrap();
     app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 6, "font": "Source Serif 4"})).unwrap();
     assert_eq!(app.recent_fonts(), ["Source Serif 4", "Inter"]);
-    assert_eq!(picker_settings(&mut app).recent, ["Source Serif 4", "Inter"]);
+    assert_eq!(picker_settings(&app).recent, ["Source Serif 4", "Inter"]);
     // A failed command must leave history alone.
     assert!(app.run("text.setRangeStyle", json!({"id": 999999, "font": "Missing"})).is_err());
     assert_eq!(app.recent_fonts(), ["Source Serif 4", "Inter"]);
     app.run("prefs.set", json!({"values": {"recentFontsCount": 1}})).unwrap();
-    assert_eq!(picker_settings(&mut app).recent, ["Source Serif 4"]);
+    assert_eq!(picker_settings(&app).recent, ["Source Serif 4"]);
     let restored: crate::state::UiState = serde_json::from_str(&serde_json::to_string(&app.ui).unwrap()).unwrap();
     assert_eq!(restored.recent_fonts, ["Source Serif 4", "Inter"]);
 }
@@ -82,7 +82,7 @@ fn preview_changes_the_text_live_and_only_a_choice_is_a_step() {
     let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "Gagaku", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
     app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
     let steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-    assert_eq!(sample_text(&mut app).as_deref(), Some("Gagaku"));
+    assert_eq!(sample_text(&app).as_deref(), Some("Gagaku"));
     let before = steps(&app);
     apply_preview(&mut app, owner(), Preview::Shows("Source Serif 4".into()));
     assert_eq!(font_of(&app, id), "Source Serif 4", "previewed on the text");
@@ -220,11 +220,11 @@ fn menus_that_only_pick_a_font_leave_the_document_alone() {
 #[test]
 fn show_samples_on_white_is_a_saved_preference_the_menus_follow() {
     let mut app = VectorcraftApp::new(Session::new(), crate::Services::default());
-    assert!(!picker_settings(&mut app).samples_on_white, "off by default");
+    assert!(!picker_settings(&app).samples_on_white, "off by default");
     assert!(app.run("prefs.set", json!({"key": "fontSamplesOnWhite", "value": 1})).is_err(), "a value that is not a boolean is refused");
     assert!(!app.session.prefs.font_samples_on_white);
     app.run("prefs.set", json!({"key": "fontSamplesOnWhite", "value": true})).unwrap();
-    assert!(picker_settings(&mut app).samples_on_white);
+    assert!(picker_settings(&app).samples_on_white);
     let saved: vectorcraft_engine::Prefs = serde_json::from_str(&serde_json::to_string(&app.session.prefs).unwrap()).unwrap();
     assert!(saved.font_samples_on_white, "saved and read back");
     let older: vectorcraft_engine::Prefs = serde_json::from_str("{}").unwrap();

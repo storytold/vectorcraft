@@ -347,7 +347,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     });
     let Some((action, selected, editing, code)) = taken.filter(|(action, ..)| !action.is_empty()) else { return };
     let result: Result<(), String> = match action.as_str() {
-        "new" => Ok(set(app, &[(EDITING, json!("new")), (CODE, json!(""))])),
+        "new" => {
+            set(app, &[(EDITING, json!("new")), (CODE, json!(""))]);
+            Ok(())
+        }
         "edit" => {
             if let Some(f) = filters(app).0.iter().map(|f| &f.filter).find(|f| f.name == selected) {
                 let (name, xml) = (f.name.clone(), f.xml.clone());
@@ -363,7 +366,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             }
             app.run("svgFilter.define", p).map(|r| set(app, &[(SELECTED, r["name"].clone()), (EDITING, json!("")), (CODE, json!(""))]))
         }
-        "discard" => Ok(set(app, &[(EDITING, json!("")), (CODE, json!(""))])),
+        "discard" => {
+            set(app, &[(EDITING, json!("")), (CODE, json!(""))]);
+            Ok(())
+        }
         "import" => {
             ask_import(app);
             Ok(())

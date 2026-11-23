@@ -471,7 +471,7 @@ fn cmd_with_another_tool_drags_with_the_selection_tool_used_last() {
     assert_eq!(cmd_drag(&mut app, inside, inside), "selection");
 }
 
-//// #6369: only the selection box remains over the temporary halftone, and the original
+/// #6369: only the selection box remains over the temporary halftone, and the original
 /// selection's outlines come back when Preview is turned off or the dialog is cancelled.
 #[test]
 fn halftone_preview_hides_dot_outlines_and_keeps_selection_bounds() {
@@ -2505,7 +2505,7 @@ fn old_outline_preference_loads_but_does_not_restore_outline() {
     assert!(!app.outline_view(), "a new document is in Preview");
 }
 
-//// The kinds of `marks` other than spaces and line ends, in order.
+/// The kinds of `marks` other than spaces and line ends, in order.
 fn char_marks(marks: &[PlacedMark]) -> Vec<HiddenMark> {
     use HiddenMark::{LineBreak, ParagraphEnd, Space, StoryEnd};
     marks.iter().map(|m| m.mark).filter(|k| !matches!(k, Space | LineBreak | ParagraphEnd | StoryEnd)).collect()
@@ -2639,7 +2639,7 @@ fn view_actual_size_follows_display_print_size() {
     // Frames as the hosts run them: the zoom stops come from the preferences through the app's frame input.
     let frame = |app: &mut VectorcraftApp, ctx: &egui::Context, _: Vec<egui::Event>| {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
-        crate::testing::part_frame(app, ctx, raw, |app, ui| show(app, ui));
+        crate::testing::part_frame(app, ctx, raw, show);
     };
     frame(&mut app, &ctx, vec![]);
     // The view's zoom after Actual Size from 250%, and the percent the app's zoom scheme reads it as.

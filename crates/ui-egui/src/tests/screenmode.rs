@@ -11,8 +11,8 @@ use crate::VectorcraftApp;
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
     let raw =
         egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), events, ..Default::default() };
-    let out = crate::testing::app_frame(app, &ctx, raw);
-    out
+
+    crate::testing::app_frame(app, ctx, raw)
 }
 
 fn escape() -> Vec<egui::Event> {

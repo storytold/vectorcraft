@@ -284,10 +284,11 @@ impl StackDialog for MissingFontsDialog {
                             *search_folder = next.clone();
                             act = Some(Act::Search);
                         }
-                        if *can_pick && clicked(&Button::new(tl!("Find in Folder…")).id_salt("pick").enabled(!searching).show(ui)) {
-                            if let Some(host) = form.env.host().cloned() {
-                                *ticket = Some(host.files().pick(PickRequest::folder("fonts")));
-                            }
+                        if *can_pick
+                            && clicked(&Button::new(tl!("Find in Folder…")).id_salt("pick").enabled(!searching).show(ui))
+                            && let Some(host) = form.env.host().cloned()
+                        {
+                            *ticket = Some(host.files().pick(PickRequest::folder("fonts")));
                         }
                         if searching && clicked(&Button::new(tl!("Stop")).id_salt("stop").show(ui)) {
                             act = Some(Act::Stop);

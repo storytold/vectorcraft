@@ -384,7 +384,7 @@ fn flat_view(ui: &mut Ui, fields: &mut DialogFields, flat: &Flat) -> Response {
     let (width, height) = (flat.width.max(1e-6), flat.height.max(1e-6));
     let margin = f64::from(ui.spacing().item_spacing.x) * 2.0;
     let zoom = ((f64::from(room.width()) - margin) / width).min((f64::from(room.height()) - margin) / height).max(1e-6);
-    let view = CanvasView::new(room.into(), Point::ZERO, zoom);
+    let view = CanvasView::new(room, Point::ZERO, zoom);
     let rect = flat.art.map(art_rect);
     let mut edited = map.clone();
     Canvas::new(tl!("Surface")).view(view).show_at(ui, room, |ui, body| {
@@ -535,7 +535,7 @@ pub(crate) fn show_outline(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canvas
         path.line_to((b.x, b.y));
     }
     let paths = [path];
-    SelectionOutline::solid(tl!("Map Art surface"), &paths).color(DataColor::new(Color32::RED)).show_at(ui, space.view.rect.into());
+    SelectionOutline::solid(tl!("Map Art surface"), &paths).color(DataColor::new(Color32::RED)).show_at(ui, space.view.rect);
 }
 
 #[cfg(test)]

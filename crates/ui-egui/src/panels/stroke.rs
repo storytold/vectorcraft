@@ -434,10 +434,10 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
     if let Some(on) = out.link.landed() {
         app.ui.stroke_panel.scale_linked = *on;
     }
-    if let Some([a, b]) = out.edit.events.landed().map(|p| p.clone().map(|m| m.same().copied().flatten())) {
+    if let Some([a, b]) = out.edit.events.landed().map(|p| (*p).map(|m| m.same().copied().flatten())) {
         app.run("stroke.setAdvanced", json!({"arrowScale": [a.unwrap_or(scale.0), b.unwrap_or(scale.1)]})).ok();
     }
-    let aligns: Vec<Entry<ArrowAlign>> = ARROW_ALIGN.iter().map(|(v, _, icon, tip)| Entry::new(*v, *tip).icon(IconId::new(*icon))).collect();
+    let aligns: Vec<Entry<ArrowAlign>> = ARROW_ALIGN.iter().map(|(v, _, icon, tip)| Entry::new(*v, *tip).icon(IconId::new(icon))).collect();
     let out = Segmented::new(tl!("Align"), Bind::given(arrow_align), &aligns).enabled(has_head).show(ui);
     if let Some(v) = out.events.landed()
         && let Some((_, name, _, _)) = ARROW_ALIGN.iter().find(|(a, ..)| a == v)

@@ -240,7 +240,7 @@ fn a_rectangle_and_an_ellipse_show_their_angle() {
         p.app().run("select.set", json!({"ids": [ids[0]]})).unwrap();
         p.frame();
         assert_eq!((degrees(&p, "Rotate"), degrees(&p, "Angle")), (Some(0.0), Some(30.0)), "{shape}");
-        let key = p.app().canvas.shape_angle.clone();
+        let key = p.app().canvas.shape_angle;
         assert!(key.is_some(), "{shape}: the angle is kept");
         p.frame();
         assert_eq!(p.app().canvas.shape_angle, key, "{shape}: not measured again");
@@ -889,7 +889,7 @@ fn app_without_transform_panel() -> VectorcraftApp {
 #[test]
 fn show_on_shape_creation_shows_the_transform_panel_after_a_shape() {
     let ctx = crate::testing::ui_context();
-    let visible = |app: &VectorcraftApp| crate::panel_docking::visible(&app, "transform");
+    let visible = |app: &VectorcraftApp| crate::panel_docking::visible(app, "transform");
     let rect = json!({"x": 10, "y": 10, "width": 40, "height": 30});
 
     let mut app = app_without_transform_panel();

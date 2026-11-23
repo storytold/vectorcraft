@@ -100,31 +100,31 @@ fn items(app: &VectorcraftApp) -> Vec<Item> {
     };
     let export_ok = !targets.is_empty() || has_sel;
     let mut items = vec![
-        command("ui.newLayer", json!({}), &tl!("New Layer…"), new_layer_ok),
-        command("ui.newLayer", json!({"sublayer": true}), &tl!("New Sublayer…"), current.is_some() && new_sublayer_ok),
+        command("ui.newLayer", json!({}), tl!("New Layer…"), new_layer_ok),
+        command("ui.newLayer", json!({"sublayer": true}), tl!("New Sublayer…"), current.is_some() && new_sublayer_ok),
         // The rows listed, so no highlighted row outside the isolated art is copied.
-        command("layer.duplicate", json!({ "ids": ids }), &tl!("Duplicate Selection"), duplicate_ok),
-        command("ui.layerDelete", json!({}), &tl!("Delete Selection"), !targets.is_empty()),
-        command("ui.layerOptions", json!({}), &tl!("Options for Selection…"), !targets.is_empty()),
+        command("layer.duplicate", json!({ "ids": ids }), tl!("Duplicate Selection"), duplicate_ok),
+        command("ui.layerDelete", json!({}), tl!("Delete Selection"), !targets.is_empty()),
+        command("ui.layerOptions", json!({}), tl!("Options for Selection…"), !targets.is_empty()),
         Item::Separator,
-        command("layer.clippingMask.toggle", json!({}), &tl!("Make/Release Clipping Mask"), true),
+        command("layer.clippingMask.toggle", json!({}), tl!("Make/Release Clipping Mask"), true),
         Item::Separator,
         if isolated {
-            command("object.exitIsolation", json!({}), &tl!("Exit Isolation Mode"), true)
+            command("object.exitIsolation", json!({}), tl!("Exit Isolation Mode"), true)
         } else {
-            command("object.isolate", json!({ "id": targets.first().map(|i| i.0) }), &tl!("Enter Isolation Mode"), one_container)
+            command("object.isolate", json!({ "id": targets.first().map(|i| i.0) }), tl!("Enter Isolation Mode"), one_container)
         },
         Item::Separator,
         if layers_only {
-            command("layer.locate", json!({"layersOnly": true}), &tl!("Locate Layer"), has_sel && super::rows::locate_layer_listed(doc, st.isolation))
+            command("layer.locate", json!({"layersOnly": true}), tl!("Locate Layer"), has_sel && super::rows::locate_layer_listed(doc, st.isolation))
         } else {
-            command("layer.locate", json!({}), &tl!("Locate Object"), has_sel)
+            command("layer.locate", json!({}), tl!("Locate Object"), has_sel)
         },
         save_selection(app),
         Item::Separator,
-        command("layer.merge", json!({}), &tl!("Merge Selected"), rows.len() >= 2),
-        command("layer.flatten", json!({}), &tl!("Flatten Artwork"), true),
-        command("layer.collectInNew", json!({}), &tl!("Collect in New Layer"), !rows.is_empty() || has_sel),
+        command("layer.merge", json!({}), tl!("Merge Selected"), rows.len() >= 2),
+        command("layer.flatten", json!({}), tl!("Flatten Artwork"), true),
+        command("layer.collectInNew", json!({}), tl!("Collect in New Layer"), !rows.is_empty() || has_sel),
         Item::Submenu(
             tl!("Collect for Export").to_string(),
             vec![
@@ -132,9 +132,9 @@ fn items(app: &VectorcraftApp) -> Vec<Item> {
                 command("assets.add", export(true), "As Multiple Assets", export_ok),
             ],
         ),
-        command("layer.releaseToLayers", json!({}), &tl!("Release to Layers (Sequence)"), one_container),
-        command("layer.releaseToLayersBuild", json!({}), &tl!("Release to Layers (Build)"), one_container),
-        command("layer.reverse", json!({}), &tl!("Reverse Order"), rows.len() >= 2),
+        command("layer.releaseToLayers", json!({}), tl!("Release to Layers (Sequence)"), one_container),
+        command("layer.releaseToLayersBuild", json!({}), tl!("Release to Layers (Build)"), one_container),
+        command("layer.reverse", json!({}), tl!("Reverse Order"), rows.len() >= 2),
         Item::Separator,
         toggle_or_enabled_template(!layers_in.is_empty(), template),
     ];
@@ -143,26 +143,26 @@ fn items(app: &VectorcraftApp) -> Vec<Item> {
     let any_other = |f: &dyn Fn(&Node) -> bool| others.iter().any(|l| f(l));
     let outlined = |l: &Node| matches!(l.kind, NodeKind::Layer { preview: false, .. });
     items.push(if any_other(&|l| l.visible) {
-        command("layer.hideOthers", json!({}), &tl!("Hide Others"), !isolated)
+        command("layer.hideOthers", json!({}), tl!("Hide Others"), !isolated)
     } else {
-        command("layer.showAll", json!({}), &tl!("Show All Layers"), !isolated && all_layers.iter().any(|l| !l.visible))
+        command("layer.showAll", json!({}), tl!("Show All Layers"), !isolated && all_layers.iter().any(|l| !l.visible))
     });
     items.push(if any_other(&|l| !outlined(l)) {
-        command("layer.outlineOthers", json!({}), &tl!("Outline Others"), !isolated)
+        command("layer.outlineOthers", json!({}), tl!("Outline Others"), !isolated)
     } else {
-        command("layer.previewAll", json!({}), &tl!("Preview All Layers"), !isolated && all_layers.iter().any(|l| outlined(l)))
+        command("layer.previewAll", json!({}), tl!("Preview All Layers"), !isolated && all_layers.iter().any(|l| outlined(l)))
     });
     items.push(if any_other(&|l| !l.locked) {
-        command("layer.lockOthers", json!({}), &tl!("Lock Others"), !isolated)
+        command("layer.lockOthers", json!({}), tl!("Lock Others"), !isolated)
     } else {
-        command("layer.unlockAll", json!({}), &tl!("Unlock All Layers"), !isolated && all_layers.iter().any(|l| l.locked))
+        command("layer.unlockAll", json!({}), tl!("Unlock All Layers"), !isolated && all_layers.iter().any(|l| l.locked))
     });
     let remembers = doc.paste_remembers_layers;
     items.extend([
         Item::Separator,
-        toggle("layer.pasteRemembersLayers", json!({"on": !remembers}), &tl!("Paste Remembers Layers"), remembers),
+        toggle("layer.pasteRemembersLayers", json!({"on": !remembers}), tl!("Paste Remembers Layers"), remembers),
         Item::Separator,
-        command("ui.layersPanelOptions", json!({}), &tl!("Panel Options…"), true),
+        command("ui.layersPanelOptions", json!({}), tl!("Panel Options…"), true),
     ]);
     items
 }

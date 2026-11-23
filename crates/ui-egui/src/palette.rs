@@ -1912,11 +1912,11 @@ mod tests {
         let mut window = Window::on(Session::new());
         let app = &mut window.app;
         let home = |app: &VectorcraftApp, id: &str| home_of(app, id);
-        assert_eq!(home(&app, "tool:groupSelection"), "Toolbar, in the Direct Selection Tool group");
-        assert_eq!(home(&app, "tool:directSelection"), "Toolbar");
+        assert_eq!(home(app, "tool:groupSelection"), "Toolbar, in the Direct Selection Tool group");
+        assert_eq!(home(app, "tool:directSelection"), "Toolbar");
         app.select_tool("groupSelection");
-        assert_eq!(home(&app, "tool:groupSelection"), "Toolbar");
-        assert_eq!(home(&app, "tool:directSelection"), "Toolbar, in the Group Selection Tool group");
+        assert_eq!(home(app, "tool:groupSelection"), "Toolbar");
+        assert_eq!(home(app, "tool:directSelection"), "Toolbar, in the Group Selection Tool group");
         // A toolbar made with New Toolbar holding the tools of `slot`; a hidden one has its panel closed.
         let bar = |app: &mut VectorcraftApp, name: &str, slot: &[&str], shown: bool| {
             crate::custom_toolbars::create(app, name).unwrap();
@@ -1930,12 +1930,12 @@ mod tests {
         // Window › Tools hides the Tools panel while a toolbar made with New Toolbar holds the Pen
         // Tool: the row names that toolbar.
         crate::toolbar::set_shown(app, false);
-        assert_eq!(home(&app, "tool:pen"), "Toolbar");
+        assert_eq!(home(app, "tool:pen"), "Toolbar");
         bar(app, "Drawing", &["pen", "curvature"], true);
-        assert_eq!(home(&app, "tool:pen"), "Drawing");
-        assert_eq!(home(&app, "tool:curvature"), "Drawing, in the Pen Tool group");
+        assert_eq!(home(app, "tool:pen"), "Drawing");
+        assert_eq!(home(app, "tool:curvature"), "Drawing, in the Pen Tool group");
         app.ui.custom_toolbars[0].name = "{tool}".into();
-        assert_eq!(home(&app, "tool:curvature"), "{tool}, in the Pen Tool group");
+        assert_eq!(home(app, "tool:curvature"), "{tool}, in the Pen Tool group");
         app.ui.custom_toolbars[0].name = "Drawing".into();
         // Tab hides the toolbars made with New Toolbar too: the hidden Tools panel comes first.
         request_chrome_toggle(&window.ctx, egui::ViewportId::ROOT, ChromeToggle::Panels);
@@ -1946,19 +1946,19 @@ mod tests {
         let app = &mut window.app;
         // The Tools panel shown again comes first.
         crate::toolbar::set_shown(app, true);
-        assert_eq!(home(&app, "tool:pen"), "Toolbar");
+        assert_eq!(home(app, "tool:pen"), "Toolbar");
         // In Presentation Mode no toolbar shows; the tool still lives on the Tools panel.
         app.ui.screen_mode = 3;
-        assert_eq!(home(&app, "tool:pen"), "Toolbar");
+        assert_eq!(home(app, "tool:pen"), "Toolbar");
         app.ui.screen_mode = 0;
         // A tool that only a hidden toolbar made with New Toolbar holds is named on it, and one no
         // toolbar holds is in All Tools.
-        let on_tools: Vec<&str> = crate::toolbar::slots(&app).into_iter().flat_map(|(_, s)| s).collect();
+        let on_tools: Vec<&str> = crate::toolbar::slots(app).into_iter().flat_map(|(_, s)| s).collect();
         let loose = vectorcraft_tools::catalog::all_tools().map(|t| t.id).find(|t| !on_tools.contains(t)).expect("a tool not on the Tools panel");
         let id = format!("tool:{loose}");
-        assert_eq!(home(&app, &id), "All Tools");
+        assert_eq!(home(app, &id), "All Tools");
         bar(app, "Cutting", &[loose], false);
-        assert_eq!(home(&app, &id), "Cutting");
+        assert_eq!(home(app, &id), "Cutting");
     }
 
     /// Why Object › Ungroup can't run in `session`: the engine's reason.

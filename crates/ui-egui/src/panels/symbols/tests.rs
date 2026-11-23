@@ -1463,7 +1463,7 @@ fn reset_transformation_is_enabled_for_a_transformed_instance_and_resets_it() {
     p.frame();
     assert!(p.enabled("Reset"));
     p.click("Reset");
-    assert!(close(xf(&*p.app()), master), "the Control bar's Reset resets the instance: {:?} vs {master:?}", xf(&*p.app()));
+    assert!(close(xf(&p.app()), master), "the Control bar's Reset resets the instance: {:?} vs {master:?}", xf(&p.app()));
 }
 
 /// The current symbol as `symbol.list` answers it, read by running the command.

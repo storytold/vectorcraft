@@ -134,8 +134,8 @@ fn step(app: VectorcraftApp, show: Show, room: egui::Vec2, part: PartKey) -> f64
     let mut panel = Panel::new(app, show);
     panel.room(room).frame();
     panel.click_part("Weight", part, Modifiers::NONE);
-    let w = panel.app().session.shown_stroke().unwrap().width;
-    w
+
+    panel.app().session.shown_stroke().unwrap().width
 }
 
 /// The weight spinner in the Stroke panel, the Control bar and the Properties panel steps from a

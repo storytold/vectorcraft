@@ -247,7 +247,7 @@ fn object_rows(data: &Data, rows: &Rows, effect: &str, place: Place) -> Vec<Para
         CLASSIC_REVOLVE => return super::three_d_classic::revolve_params(data, &DialogFields::new(), effect),
         _ => {}
     }
-    let solid = vec![Value::Bool(true), Value::Bool(false)];
+    let solid = [Value::Bool(true), Value::Bool(false)];
     let cap = select_row("cap", c3("Cap"), vec![(solid[0].clone(), c3("Solid").into()), (solid[1].clone(), c3("Hollow").into())], json!(true));
     let mut out = vec![
         Param::section(tl!("Object")),

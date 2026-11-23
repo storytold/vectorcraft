@@ -189,7 +189,7 @@ fn raw_input(events: Vec<egui::Event>, hovered_files: Vec<egui::HoveredFile>, dr
 }
 
 fn pass(app: &mut VectorcraftApp, ctx: &egui::Context, raw: egui::RawInput) {
-    crate::testing::app_frame(app, &ctx, raw);
+    crate::testing::app_frame(app, ctx, raw);
 }
 
 fn selected_image(app: &VectorcraftApp) -> vectorcraft_doc::Node {
@@ -956,7 +956,7 @@ fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> std::ti
     // simulated seconds rather than the real monotonic clock, as the window loop would.
     app.now_override = Some(time);
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), time: Some(time), ..Default::default() };
-    let out = crate::testing::app_frame(app, &ctx, raw);
+    let out = crate::testing::app_frame(app, ctx, raw);
     out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay)
 }
 

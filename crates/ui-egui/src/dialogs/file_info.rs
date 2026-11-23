@@ -426,7 +426,7 @@ impl StackDialog for FileInfoDialog {
             true
         });
         match answered {
-            Some(true) => ask_import(templates, import, *import_mode),
+            Some(true) => ask_import(templates, import, import_mode),
             Some(false) => *import = None,
             None => {}
         }

@@ -297,7 +297,7 @@ impl Component for LightSphere<'_> {
             let level = u8::from(index == self.selected);
             cx.part(LIGHT.at(index as u64), HitShape::circle(center + light.offset() * radius, SUN + 4.0))
                 .sense(Sense::DRAG | Sense::CLICK)
-                .priority(HitPriority::new(HitLevel::Handle, level.into()))
+                .priority(HitPriority::new(HitLevel::Handle, level))
                 .cursor(CursorIcon::Grab)
                 .drag_cursor(CursorIcon::Grabbing)
                 .tooltip(tl!("Drag a light to move it. The arrow keys move the focused light; Shift steps 15°."))

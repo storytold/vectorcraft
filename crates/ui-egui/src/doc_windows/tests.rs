@@ -77,7 +77,7 @@ fn window_tab_at(shapes: &[Shape], title: &str, window: egui::Rect) -> Pos2 {
             Shape::Text(t) if t.pos.y >= 35.0 && window.contains(t.pos) && t.galley.text().contains(title) => Some(t.pos + vec2(4.0, 4.0)),
             _ => None,
         })
-        .last()
+        .next_back()
         .unwrap()
 }
 

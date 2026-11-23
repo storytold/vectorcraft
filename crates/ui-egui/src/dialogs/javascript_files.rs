@@ -258,7 +258,7 @@ mod tests {
 
     fn set_field(panel: &Panel, field: &str, value: &str) {
         let dialogs = panel.app().dialogs().unwrap();
-        dialogs.with(|host| host.set_json_field(&panel.ctx(), dialog_id(KEY), field, json!(value))).unwrap();
+        dialogs.with(|host| host.set_json_field(panel.ctx(), dialog_id(KEY), field, json!(value))).unwrap();
     }
 
     fn json_selected(panel: &Panel) -> Value {

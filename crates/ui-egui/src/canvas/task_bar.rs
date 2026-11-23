@@ -470,7 +470,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                             run = Some(("tool.setOption", json!({"tool": "smooth", "values": {"fidelity": x}})));
                         }
                     }
-                } else if Button::new(*label).icon(IconSpec::svg(IconId::new(*icon))).variant(Variant::GHOST).show(ui).clicked() {
+                } else if Button::new(*label).icon(IconSpec::svg(IconId::new(icon))).variant(Variant::GHOST).show(ui).clicked() {
                     run = Some((*cmd, params.clone()));
                 }
             }

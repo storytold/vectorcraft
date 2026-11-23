@@ -145,7 +145,7 @@ fn float_new(app: &mut VectorcraftApp, id: u32, from: [f32; 2], first: u32, widt
     let at = |n: u32| pos2(from[0] + 16.0 * n as f32, from[1] + 24.0 * n as f32);
     let sits = |p: egui::Pos2| {
         let others = app.ui.custom_toolbars.iter().filter(|b| b.id != id);
-        others.filter_map(|b| panel_docking::floating_window(&layout, &panel_id(b.id))).any(|w| w.rect.min.distance(p) < 0.5)
+        others.filter_map(|b| panel_docking::floating_window(layout, &panel_id(b.id))).any(|w| w.rect.min.distance(p) < 0.5)
     };
     let n = (first..=first + MAX as u32).find(|&n| !sits(at(n))).unwrap_or(first);
     panel_docking::place_floating(app, &panel_id(id), at(n), width)?;
@@ -244,7 +244,7 @@ pub(crate) fn duplicate(app: &mut VectorcraftApp, name: Option<&str>) -> Result<
     let base = format!("{} Copy", stem.trim_end());
     let ui = &app.ui;
     copy.name = std::iter::once(base.clone()).chain((2..).map(|i| format!("{base} {i}"))).find(|n| find(ui, n).is_none()).unwrap_or_default();
-    let source = panel_docking::floating_window(&panel_docking::layout_of(&app.ui), &panel_id(copy.id)).map(|w| w.rect);
+    let source = panel_docking::floating_window(panel_docking::layout_of(&app.ui), &panel_id(copy.id)).map(|w| w.rect);
     copy.id = next_id(&app.ui.custom_toolbars);
     let (id, name) = (copy.id, copy.name.clone());
     app.ui.custom_toolbars.push(copy);
@@ -471,7 +471,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                     .iter()
                     .map(|b| {
                         let panel = panel_id(b.id);
-                        let place = panel_docking::column_of(&layout, &panel);
+                        let place = panel_docking::column_of(layout, &panel);
                         let docked = place.as_ref().and_then(|(at, _)| at.as_ref());
                         let side = if matches!(docked, Some((DockEdge::End, _))) { "right" } else { "left" };
                         let double = place.as_ref().is_some_and(|(_, column)| column.steps == Some(2));
@@ -583,7 +583,7 @@ mod tests {
     fn window_frame_with(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, height: f32, events: Vec<egui::Event>) {
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
         let raw = egui::RawInput { time: Some(time), screen_rect: Some(screen), events, ..Default::default() };
-        crate::testing::app_frame(app, &ctx, raw);
+        crate::testing::app_frame(app, ctx, raw);
     }
 
     /// One frame of the whole window, `height` points tall.
@@ -874,7 +874,7 @@ mod tests {
         let copy = find(&app.ui, "Pens Copy").unwrap();
         assert!(shown(&app, "Pens Copy") && copy.slots == [["pen"]]);
         let layout = panel_docking::layout_of(&app.ui);
-        let window = |name: &str| panel_docking::floating_window(&layout, &panel_id(find(&app.ui, name).unwrap().id)).map(|w| w.rect.min);
+        let window = |name: &str| panel_docking::floating_window(layout, &panel_id(find(&app.ui, name).unwrap().id)).map(|w| w.rect.min);
         assert!(window("Pens Copy").is_some(), "a copy floats");
         assert_ne!(window("Pens Copy"), window("Pens"), "not on top of the toolbar it copies");
         assert_ne!(window("Pens Copy"), window("Pens Copy 2"), "nor on top of an earlier copy");

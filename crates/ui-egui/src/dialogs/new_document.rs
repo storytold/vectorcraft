@@ -309,7 +309,7 @@ impl DocumentSettings for VcNewDocument {
                 }
             });
         });
-        if let Some(o) = picked.clone()
+        if let Some(o) = picked
             && o != current
         {
             std::mem::swap(&mut s.width, &mut s.height);

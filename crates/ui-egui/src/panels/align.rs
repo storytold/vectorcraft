@@ -262,13 +262,13 @@ fn command_id(b: Button) -> Option<&'static str> {
 fn align_icons() -> impl Iterator<Item = (&'static str, Button)> {
     ALIGN.iter().enumerate().flat_map(|(i, (icon, _, axis, v))| {
         let centers = (i == 3).then_some(("dc-al-center", Button::AlignCenters));
-        centers.into_iter().chain([(*icon, Button::Align(*axis, *v))])
+        centers.into_iter().chain([(*icon, Button::Align(axis, v))])
     })
 }
 
 /// The Distribute Objects buttons in the panel's order: (icon, button).
 fn distribute_icons() -> impl Iterator<Item = (&'static str, Button)> {
-    DISTRIBUTE.iter().map(|(icon, _, axis, v)| (*icon, Button::Distribute(*axis, *v)))
+    DISTRIBUTE.iter().map(|(icon, _, axis, v)| (*icon, Button::Distribute(axis, v)))
 }
 
 /// An icon button that runs the command of `b`; its label, state and click come from the command.

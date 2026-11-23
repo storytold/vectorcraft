@@ -163,7 +163,7 @@ pub(crate) fn default_workspace(fronts: &[&str]) -> Workspace<String> {
     };
     let main: Vec<&str> = DockTab::ALL.iter().map(|tab| tab.info().0).collect();
     let mut columns: Vec<Column<String>> = group(main.as_slice()).into_iter().map(|g| Column::new(vec![g])).collect();
-    let icons: Vec<Group<String>> = ICON_PANEL_GROUPS.iter().filter_map(|row| group(*row)).collect();
+    let icons: Vec<Group<String>> = ICON_PANEL_GROUPS.iter().filter_map(|row| group(row)).collect();
     if !icons.is_empty() {
         columns.push(Column::new(icons).with_iconic(true));
     }

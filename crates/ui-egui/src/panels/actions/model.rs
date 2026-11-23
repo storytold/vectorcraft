@@ -51,7 +51,7 @@ pub fn place(list: &ActionList, index: usize) -> Option<(usize, usize)> {
 /// `name`, else `name 2`, `name 3` … : the first that no set has.
 pub fn free_set_name(list: &ActionList, name: &str) -> String {
     let sets = list.sets();
-    let taken = |n: &str| sets.iter().any(|s| *s == n);
+    let taken = |n: &str| sets.contains(&n);
     if !taken(name) {
         return name.to_string();
     }
@@ -389,7 +389,7 @@ pub mod prefs {
 
     /// Button Mode alone is saved, as the bool it always was.
     pub mod button_mode {
-        use super::*;
+        use super::{ActionsPanelState, Deserialize, Deserializer, Serializer, Value};
 
         /// Writes `settings.button_mode`.
         pub fn serialize<S: Serializer>(panel: &ActionsPanelState, s: S) -> Result<S::Ok, S::Error> {

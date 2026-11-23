@@ -25,7 +25,7 @@ fn reader() -> egui::Context {
 /// One whole app frame in a window 1200 points wide and `height` tall; returns the screen-reader nodes.
 fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64, events: Vec<Event>, height: f32) -> Vec<Node> {
     let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, height)));
-    let mut out = crate::testing::app_frame(app, &ctx, egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() });
+    let mut out = crate::testing::app_frame(app, ctx, egui::RawInput { time: Some(time), events, screen_rect, ..Default::default() });
     out.platform_output.accesskit_update.take().map(|update| update.nodes.into_iter().map(|(_, node)| node).collect()).unwrap_or_default()
 }
 
@@ -226,8 +226,8 @@ fn polygon_and_star_canvas_counts_persist_without_new_toolbar_dialogs() {
         let objects =
             |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.children().map_or(0, |c| c.len())).sum::<usize>();
         crate::dialogs::open_tool_dialog(&mut app, tool, json!({"x":120,"y":130}));
-        assert!(field(&mut app, if tool == "polygon" { "radius" } else { "radius1" }).is_some());
-        set_field(&mut app, key, json!(count));
+        assert!(field(&app, if tool == "polygon" { "radius" } else { "radius1" }).is_some());
+        set_field(&app, key, json!(count));
         answer(&mut app, true);
         assert_eq!(objects(&app), 1, "deliberate exact-size placement");
         assert_eq!(app.session.tool_options()[key], count);
@@ -250,8 +250,8 @@ fn polygon_and_star_canvas_counts_persist_without_new_toolbar_dialogs() {
             assert_eq!(node.path_data().unwrap().anchor_count(), if tool == "polygon" { 3 } else { 14 });
         }
         crate::dialogs::open_tool_dialog(&mut app, tool, json!({"x":140,"y":150}));
-        assert_eq!(field(&mut app, key), Some(json!(count)), "reopening uses the chosen count");
-        set_field(&mut app, key, json!(9));
+        assert_eq!(field(&app, key), Some(json!(count)), "reopening uses the chosen count");
+        set_field(&app, key, json!(9));
         answer(&mut app, false);
         assert_eq!(objects(&app), 4);
         assert_eq!(app.session.tool_options()[key], count, "Cancel keeps the count");

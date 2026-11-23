@@ -17,7 +17,7 @@ pub(super) fn fields(app: &VectorcraftApp) -> DialogFields {
                 host.get_by_id::<HostedParamDialog>(id).map(|d| d.fields().clone())
             })
         })
-        .unwrap_or_else(DialogFields::new)
+        .unwrap_or_default()
 }
 
 /// A JPEG's SOF marker and component count.

@@ -518,9 +518,9 @@ fn a_change_runs_its_commands_with_the_panels_params() {
         }),
         ("AntiAlias(Crisp)", CharacterChange::AntiAlias(TextAntiAlias::Crisp), |v| matches!(v.anti_alias, Some(TextAntiAlias::Crisp))),
         ("Kerning(Optical)", CharacterChange::Kerning(Kerning::Optical), |v| matches!(v.kerning, Some(Kerning::Optical))),
-        ("AkiLeft past the maximum", CharacterChange::AkiLeft(2000.0), |v| near(v.aki_left, f64::from(MAX_AKI))),
-        ("Tsume past the maximum", CharacterChange::Tsume(500.0), |v| near(v.tsume, f64::from(MAX_TSUME))),
-        ("DiacriticX past the maximum", CharacterChange::DiacriticX(5000.0), |v| near(v.diacritic_x, f64::from(MAX_DIACRITIC_POSITION))),
+        ("AkiLeft past the maximum", CharacterChange::AkiLeft(2000.0), |v| near(v.aki_left, MAX_AKI)),
+        ("Tsume past the maximum", CharacterChange::Tsume(500.0), |v| near(v.tsume, MAX_TSUME)),
+        ("DiacriticX past the maximum", CharacterChange::DiacriticX(5000.0), |v| near(v.diacritic_x, MAX_DIACRITIC_POSITION)),
     ];
     let new_app = || {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());

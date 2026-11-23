@@ -907,7 +907,7 @@ mod tests {
         let before = app.session.doc().unwrap().doc.swatches.len();
         let cells = &[(0, 0), (1, 4), (0, 8)].to_vec();
         let undo = app.session.doc().unwrap().history.undo.len();
-        save_selected(&mut app, &cells);
+        save_selected(&mut app, cells);
         let st = app.session.doc().unwrap();
         assert_eq!(st.doc.swatches.len(), before + 3);
         assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
@@ -924,7 +924,7 @@ mod tests {
         let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let cells = &[(0, 0), (0, 6)].to_vec();
-        save_selected(&mut app, &cells);
+        save_selected(&mut app, cells);
         let g = guide_of(&app);
         assert!(matches!(g.grid[0][6], Color::Rgb { .. }), "{:?}", g.grid[0][6]);
         let sw = &app.session.doc().unwrap().doc.swatches;
@@ -948,7 +948,7 @@ mod tests {
         let st = app.session.doc().unwrap();
         let (groups, swatches, undo) = (st.doc.swatch_groups.len(), st.doc.swatches.len(), st.history.undo.len());
         let cells = &[(0, 0), (0, 8), (1, 4)].to_vec();
-        save_group(&mut app, &cells);
+        save_group(&mut app, cells);
         let g = guide_of(&app);
         let st = app.session.doc().unwrap();
         assert_eq!(st.doc.swatch_groups.len(), groups + 1, "one new group");
@@ -1475,7 +1475,7 @@ mod tests {
         let c = g.centre();
         let undo = app.session.doc().unwrap().history.undo.len();
         let cells = &[(0, c + 1), (0, c - 1), (0, c + 3)].to_vec();
-        save_selected(&mut app, &cells);
+        save_selected(&mut app, cells);
         let st = app.session.doc().unwrap();
         assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
         let made: Vec<_> = st.doc.swatches[st.doc.swatches.len() - 3..].to_vec();
@@ -1487,7 +1487,7 @@ mod tests {
         assert!(made[0].name.starts_with("Ink ") && made[0].name.ends_with('%'), "{}", made[0].name);
         // A group of the selected cells, in grid order.
         let cells = &[(0, c + 2), (1, c + 1)].to_vec();
-        save_group(&mut app, &cells);
+        save_group(&mut app, cells);
         let group = app.session.doc().unwrap().doc.swatch_groups.last().cloned().unwrap();
         assert_eq!(group.swatches.len(), 2);
         assert_eq!(tint(&group.swatches[0]).map(|(b, _)| b).as_deref(), Some("Ink"), "the base row's tint");

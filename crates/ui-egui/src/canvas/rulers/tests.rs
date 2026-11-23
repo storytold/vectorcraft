@@ -142,7 +142,7 @@ fn ruler_guide_shift_origin_preview_release_and_history() {
     let (mut app, ctx) = (app(), crate::testing::ui_context());
     let (before, undo) = (app.session.active().unwrap().doc.clone(), undo_len(&app));
     let to = Point::new(125.25, 90.5);
-    zero(&mut app, &ctx, |app, ui| zero_begin(app, ui));
+    zero(&mut app, &ctx, zero_begin);
     zero(&mut app, &ctx, |app, ui| {
         zero_update(app, ui, to);
     });
@@ -158,11 +158,11 @@ fn ruler_guide_shift_origin_cancel_preserves_redo() {
     app.session.execute("shape.rectangle", &json!({"x": 40, "y": 50, "width": 20, "height": 30})).unwrap();
     app.session.execute("edit.undo", &json!({})).unwrap();
     let before = app.session.active().unwrap().doc.clone();
-    zero(&mut app, &ctx, |app, ui| zero_begin(app, ui));
+    zero(&mut app, &ctx, zero_begin);
     zero(&mut app, &ctx, |app, ui| {
         zero_update(app, ui, Point::new(50.0, 60.0));
     });
-    zero(&mut app, &ctx, |app, ui| zero_cancel(app, ui));
+    zero(&mut app, &ctx, zero_cancel);
     assert_eq!(&*app.session.active().unwrap().doc, &*before);
     assert_eq!(app.session.active().unwrap().history.redo.len(), 1);
 }
@@ -210,7 +210,7 @@ fn a_ruler_drag_trim_view_cancelled_stays_cancelled_until_released() {
 fn trim_view_toggled_during_a_ruler_origin_drag_cancels_it() {
     let (mut app, ctx) = (app(), crate::testing::ui_context());
     let (before, undo) = (app.session.active().unwrap().doc.clone(), undo_len(&app));
-    zero(&mut app, &ctx, |app, ui| zero_begin(app, ui));
+    zero(&mut app, &ctx, zero_begin);
     app.ui.view.trim_view = true;
     zero(&mut app, &ctx, |app, ui| {
         zero_update(app, ui, Point::new(50.0, 60.0));
