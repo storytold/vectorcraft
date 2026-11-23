@@ -135,6 +135,23 @@ fn accessors_take_the_right_number_of_parameters() {
 }
 
 #[test]
+fn a_comma_may_end_arguments_and_parameters() {
+    let p = ok("f(1,);");
+    assert!(matches!(expr(&p, first_expr(&p)), Expr::Call { args, .. } if args.len() == 1));
+    let p = ok("new F(1, 2,);");
+    assert!(matches!(expr(&p, first_expr(&p)), Expr::New { args, .. } if args.len() == 2));
+    let p = ok("function g(a, b,) {}");
+    let Stmt::FunctionDecl(g) = stmt(&p, p.body[0]) else { panic!() };
+    assert_eq!(p.ast.function(*g).unwrap().params.len(), 2);
+    for src in ["(function (a,) {});", "({get a() {}, m: function (x,) {}});", "f(g(1,),);", "'use strict'; function h(a,) {}"] {
+        ok(src);
+    }
+    for src in ["f(,);", "f(1,,);", "f(, 1);", "function g(,) {}", "function g(a,,) {}", "new F(,);", "({set a(v,) {}});"] {
+        err(src);
+    }
+}
+
+#[test]
 fn property_names_may_repeat() {
     for src in ["({a: 1, a: 2});", "({a: 1, 'a': 2});", "({get a() {}, set a(v) {}});", "({a: 1, get a() {}});", "({get a() {}, get a() {}});"] {
         ok(src);

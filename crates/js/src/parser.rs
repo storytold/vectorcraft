@@ -766,7 +766,9 @@ impl<'s> Parser<'s> {
             loop {
                 let (param, token) = self.function_name_or_param()?;
                 params.push((param, token));
-                if !self.eat(Punct::Comma)? {
+                // A comma may follow the last parameter (ECMAScript 2017, section 14.1), except in
+                // a setter, which takes one parameter and no comma (section 14.3).
+                if !self.eat(Punct::Comma)? || (kind != FunctionKind::Setter && self.at(Punct::RParen)) {
                     break;
                 }
             }
@@ -1030,7 +1032,8 @@ impl<'s> Parser<'s> {
         if !self.at(Punct::RParen) {
             loop {
                 args.push(self.parse_assignment(false)?);
-                if !self.eat(Punct::Comma)? {
+                // A comma may follow the last argument (ECMAScript 2017, section 12.3).
+                if !self.eat(Punct::Comma)? || self.at(Punct::RParen) {
                     break;
                 }
             }
