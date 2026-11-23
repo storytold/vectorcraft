@@ -119,6 +119,28 @@ fn answer(app: &mut VectorcraftApp, ok: bool) {
     assert!(tool_dialog(app).is_none_or(|(open, _)| open != id), "the dialog took the answer");
 }
 
+/// Shift+Tab hides the panels and leaves the Tools panel, and a second Shift+Tab shows them again.
+#[test]
+fn shift_tab_hides_the_panels_and_keeps_the_tools() {
+    let mut app = app_with(300, 200);
+    let ctx = reader();
+    let properties = |nodes: &[Node]| nodes.iter().any(|n| n.role() == Role::Tab && n.label().is_some_and(|l| l.eq_ignore_ascii_case("properties")));
+    let shift = egui::Modifiers::SHIFT;
+    let key = |pressed| Event::Key { key: egui::Key::Tab, physical_key: None, pressed, repeat: false, modifiers: shift };
+    let nodes = settled(&mut app, &ctx, 0.0, 800.0);
+    assert!(properties(&nodes), "the Properties panel shows at first");
+    for (k, hidden) in [true, false].into_iter().enumerate() {
+        let t = 1.0 + k as f64;
+        frame(&mut app, &ctx, t, vec![Event::ModifiersChanged(shift), key(true)], 800.0);
+        frame(&mut app, &ctx, t + 0.05, vec![key(false), Event::ModifiersChanged(egui::Modifiers::NONE)], 800.0);
+        let nodes = settled(&mut app, &ctx, t + 0.1, 800.0);
+        assert_eq!(properties(&nodes), !hidden, "Shift+Tab {}", if hidden { "hides the panels" } else { "shows them again" });
+        assert_eq!(crate::panel_docking::panels_shown(&app), !hidden);
+        assert!(!crate::panel_docking::tab_hidden(&app), "Shift+Tab is not Tab's hide");
+        tool_rect(&nodes, "selection");
+    }
+}
+
 /// A double-click on a tool's button opens what `open_options` opens: the artboard's, a graph's and the tools' dialogs
 /// (each with what it needs selected), the view fits for Hand and Zoom, and a tool without options refuses.
 #[test]

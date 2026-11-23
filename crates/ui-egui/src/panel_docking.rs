@@ -1251,8 +1251,9 @@ pub(crate) fn continue_move(app: &mut VectorcraftApp, panel: &str, grab: egui::V
 
 /// Draw the canvas, the tool rails and the panels below the bars, and apply what the user did to
 /// them. Tab and Shift+Tab hide the panels through the window's shell; Shift+Tab keeps the rails.
-/// Presentation Mode hides every panel and rail; the canvas stays.
-pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+/// Presentation Mode hides every panel and rail; the canvas stays. `keeps_tools`: the shell around the dock hides the
+/// panels and keeps the tools (Shift+Tab), as its `ShellCx` says; [`chrome_state`] is for code outside its pass.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: bool) {
     let ctx = ui.ctx().clone();
     if let Some(panel) = app.dock_rt.raise.take() {
         raise(app, &ctx, &panel);
@@ -1262,8 +1263,9 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // (`visible`, `showing`) see it; their changes go through `apply`.
     let mut workspace = Arc::clone(&app.ui.dock_workspace);
     let flyout_before = app.ui.open_panel.clone();
-    let mut flyout = flyout_before.clone();
     let presenting = app.ui.screen_mode >= 3;
+    // Shift+Tab, from its key, a menu or automation, closes a panel popped out of the icon column.
+    let mut flyout = flyout_before.clone().filter(|_| !keeps_tools);
     let auto_collapse = app.session.prefs.auto_collapse_icon_panels;
     // The specs and rails leave the app for the pass, which lends the app to the panel bodies.
     let specs = std::mem::take(&mut app.dock_rt.specs);
@@ -1271,7 +1273,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // The rails are what Shift+Tab keeps; while the panels show, the area hides none.
     let hide = if presenting {
         HidePanels::All
-    } else if chrome_state(&ctx, ctx.viewport_id()).panels_hidden {
+    } else if keeps_tools {
         HidePanels::Except(&rails)
     } else {
         HidePanels::None

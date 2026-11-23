@@ -591,8 +591,8 @@ impl VectorcraftApp {
             .window_title(window_title)
             .screen_mode(Bind::given(given))
             .allow_reveal(!self.ui.presenting())
-            .body(|ui, _cx, app: &mut VectorcraftApp| {
-                panel_docking::show(app, ui);
+            .body(|ui, cx, app: &mut VectorcraftApp| {
+                panel_docking::show(app, ui, cx.shell().is_some_and(|shell| shell.panels_hidden()));
                 crate::place::window_files(app, ui);
             })
             .show(ui, self);
