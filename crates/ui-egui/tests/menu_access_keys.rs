@@ -1148,3 +1148,140 @@ fn menu_access_review_fresh_alt_reselects_root_from_open_submenu() {
         assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
     }
 }
+
+#[test]
+fn menu_access_menu_opened_with_a_click_shows_cues_only_while_alt_is_held() {
+    let _global = GlobalState::new();
+    let mut s = Scene::new();
+    s.click(s.point("Object", false));
+    assert!(egui::Popup::is_any_open(&s.ctx), "a click on Object opens its menu");
+    let cues = s.cues();
+    assert!(cues.is_empty(), "a menu opened with a click shows no access-key underlines: {cues:?}");
+
+    // Holding Alt shows them in the open menu and on the bar.
+    s.frame(vec![Event::ModifiersChanged(Modifiers::ALT)]);
+    let held = s.cues();
+    assert!(held.iter().any(|c| c.popup), "holding Alt shows the open menu's underlines: {held:?}");
+    assert!(held.iter().any(|c| !c.popup && c.label == "Object"), "holding Alt shows the bar's underlines: {held:?}");
+    let row = s.point("Group", true);
+    s.frame(vec![Event::PointerMoved(row)]);
+    let moved = s.cues();
+    assert!(moved.iter().any(|c| c.popup), "moving the pointer while Alt is held keeps the underlines: {moved:?}");
+    s.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
+    s.settle();
+    assert!(egui::Popup::is_any_open(&s.ctx), "releasing Alt after a pointer move keeps the menu open");
+    let released = s.cues();
+    assert!(released.is_empty(), "releasing Alt hides the underlines: {released:?}");
+
+    // Keyboard navigation in the clicked menu still moves focus, and from then on shows the underlines.
+    let before = s.ctx.memory(|m| m.focused());
+    s.arrow(Key::ArrowDown);
+    s.settle();
+    let after = s.ctx.memory(|m| m.focused());
+    assert!(after.is_some() && after != before, "Down moves focus in a menu opened with a click");
+    assert!(egui::Popup::is_any_open(&s.ctx));
+    let navigated = s.cues();
+    assert!(navigated.iter().any(|c| c.popup), "a key used in a clicked menu shows its underlines: {navigated:?}");
+
+    // The same menu opened from the keyboard shows them without Alt held.
+    s.end_access();
+    s.root("Object");
+    let keyboard = s.cues();
+    assert!(keyboard.iter().any(|c| c.popup), "a menu opened with Alt+O shows its underlines: {keyboard:?}");
+    s.end_access();
+    s.bare_alt();
+    let tapped = s.cues();
+    assert!(tapped.iter().any(|c| !c.popup && c.label == "File"), "an Alt tap shows the bar's underlines: {tapped:?}");
+    let title = s.ctx.memory(|m| m.focused()).expect("an Alt tap focuses the File title");
+    s.end_access();
+
+    // Enter on a focused title opens its menu from the keyboard, so the underlines show.
+    s.frame(vec![Event::PointerGone]);
+    s.ctx.memory_mut(|m| m.request_focus(title));
+    s.settle();
+    assert!(!egui::Popup::is_any_open(&s.ctx));
+    assert!(s.cues().is_empty());
+    s.arrow(Key::Enter);
+    s.settle();
+    assert!(egui::Popup::is_any_open(&s.ctx), "Enter on the focused File title opens its menu");
+    let entered = s.cues();
+    assert!(entered.iter().any(|c| c.popup), "a menu opened with Enter on its title shows its underlines: {entered:?}");
+    s.end_access();
+
+    // A click on a title after an Alt tap opens the menu with the pointer: no underlines.
+    s.bare_alt();
+    assert!(s.cues().iter().any(|c| !c.popup && c.label == "File"));
+    s.click(s.point("Object", false));
+    assert!(egui::Popup::is_any_open(&s.ctx), "a click on Object opens its menu");
+    let clicked = s.cues();
+    assert!(clicked.is_empty(), "a click after an Alt tap shows no underlines: {clicked:?}");
+
+    // A letter that arrives as text alone counts as keyboard use too.
+    s.frame(vec![Event::Text("p".into())]);
+    s.settle();
+    assert!(egui::Popup::is_any_open(&s.ctx));
+    let typed = s.cues();
+    assert!(typed.iter().any(|c| c.popup), "a letter typed in a clicked menu shows its underlines: {typed:?}");
+    s.end_access();
+}
+
+#[test]
+fn menu_access_alt_released_in_a_dialog_shows_no_cues_in_the_next_clicked_menu() {
+    let _global = GlobalState::new();
+    let mut s = Scene::new();
+    s.click(s.point("Object", false));
+    let path = s.point("Path", true);
+    s.frame(vec![Event::PointerMoved(path)]);
+    s.settle();
+    let row = s.point("Offset Path\u{2026}", true);
+    s.frame(vec![Event::PointerMoved(row)]);
+    s.frame(vec![Event::ModifiersChanged(Modifiers::ALT)]);
+    s.frame(vec![Event::PointerButton { pos: row, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT }]);
+    s.frame(vec![Event::PointerButton { pos: row, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::ALT }]);
+    s.settle();
+    s.assert_offset_dialog();
+    // Alt goes up while the dialog owns input.
+    s.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
+    s.settle();
+    vectorcraft_ui_egui::dialogs::cancel(&mut s.app);
+    s.settle();
+    assert!(s.app.ui.dialog.is_none());
+    // The click carries no modifier change: the release was the last one sent.
+    let object = s.point("Object", false);
+    s.frame(vec![Event::PointerMoved(object)]);
+    s.frame(vec![Event::PointerButton { pos: object, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+    s.frame(vec![Event::PointerButton { pos: object, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE }]);
+    s.settle();
+    assert!(egui::Popup::is_any_open(&s.ctx), "a click on Object opens its menu");
+    let cues = s.cues();
+    assert!(cues.is_empty(), "Alt released in the dialog leaves no underlines in a clicked menu: {cues:?}");
+}
+
+#[test]
+fn menu_access_alt_released_in_a_context_menu_shows_no_cues_in_the_next_clicked_menu() {
+    let _global = GlobalState::new();
+    let mut s = Scene::new();
+    let canvas = Pos2::new(700.0, 600.0);
+    s.frame(vec![Event::PointerMoved(canvas)]);
+    s.settle();
+    s.frame(vec![Event::ModifiersChanged(Modifiers::ALT)]);
+    s.frame(vec![Event::PointerButton { pos: canvas, button: PointerButton::Secondary, pressed: true, modifiers: Modifiers::ALT }]);
+    s.frame(vec![Event::PointerButton { pos: canvas, button: PointerButton::Secondary, pressed: false, modifiers: Modifiers::ALT }]);
+    s.settle();
+    assert!(egui::Popup::is_any_open(&s.ctx), "a right-click on the canvas opens its context menu");
+    // Alt goes up while the context menu owns input.
+    s.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
+    s.settle();
+    s.arrow(Key::Escape);
+    s.settle();
+    assert!(!egui::Popup::is_any_open(&s.ctx), "Escape closes the context menu");
+    // The click carries no modifier change: the release was the last one sent.
+    let object = s.point("Object", false);
+    s.frame(vec![Event::PointerMoved(object)]);
+    s.frame(vec![Event::PointerButton { pos: object, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE }]);
+    s.frame(vec![Event::PointerButton { pos: object, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE }]);
+    s.settle();
+    assert!(egui::Popup::is_any_open(&s.ctx), "a click on Object opens its menu");
+    let cues = s.cues();
+    assert!(cues.is_empty(), "Alt released in a context menu leaves no underlines in a clicked menu: {cues:?}");
+}

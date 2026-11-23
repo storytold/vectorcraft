@@ -61,6 +61,12 @@ type Field = (Id, egui::text_edit::TextEditState);
 #[derive(Clone, Default)]
 struct State {
     active: bool,
+    // Access mode began from the keyboard (Alt, Alt+letter, Enter or Space on a title),
+    // or a key was used in a menu opened with the pointer.
+    from_keyboard: bool,
+    // The last click on a menu title came from Enter or Space on the focused title,
+    // not the pointer. Read once by the next frame's input pass.
+    title_key_click: bool,
     root: Option<String>,
     open: bool,
     path: Vec<SubKey>,
@@ -168,6 +174,8 @@ fn cancel(ctx: &Context, state: &mut State, restore: bool) {
         egui::Popup::close_id(ctx, *popup);
     }
     state.active = false;
+    state.from_keyboard = false;
+    state.title_key_click = false;
     state.open = false;
     state.root_request = false;
     state.focus_request = None;
@@ -201,6 +209,7 @@ fn enter(app: &VectorcraftApp, ctx: &Context, state: &mut State) {
         state.origin = ctx.memory(|m| m.focused());
         state.document = app.session.active().map(|d| d.uid);
         state.active = true;
+        state.from_keyboard = true;
     }
     state.keyboard_pointer = true;
 }
@@ -413,6 +422,7 @@ fn letter(app: &VectorcraftApp, ctx: &Context, state: &mut State, text: &str, fa
     if root_chord || !state.active || !state.open {
         if let Some(target) = matches.first() {
             choose_root(app, ctx, state, target.path.root.clone(), true);
+            state.from_keyboard = true;
         }
         return true;
     }
@@ -496,21 +506,27 @@ fn update_composition(ctx: &Context, state: &mut State, events: &[Event]) -> boo
 
 fn prepare_input(app: &VectorcraftApp, ctx: &Context, state: &mut State, events: &[Event]) -> Option<bool> {
     let ime = update_composition(ctx, state, events);
+    let title_key_click = std::mem::take(&mut state.title_key_click);
     if ime || owner_blocks(app, ctx, state) {
         if state.active {
             cancel(ctx, state, ime && app.ui.dialog.is_none());
         }
         state.alt_armed = false;
+        // Another owner takes the modifier events; follow the key so that
+        // a release there is not missed.
+        state.alt_down = ctx.input(|i| i.modifiers.alt);
         return None;
     }
     if !state.active && egui::Popup::is_any_open(ctx) {
         if let Some((source, _, _)) = state.titles.iter().find(|(_, _, id)| egui::Popup::is_id_open(ctx, *id)).cloned() {
             enter(app, ctx, state);
+            state.from_keyboard = title_key_click;
             state.root = Some(source);
             state.open = true;
             state.keyboard_pointer = false;
         } else {
             state.alt_armed = false;
+            state.alt_down = ctx.input(|i| i.modifiers.alt);
             return None; // context menu/popover owns its own keys
         }
     }
@@ -683,6 +699,7 @@ fn pressed_key(app: &VectorcraftApp, ctx: &Context, state: &mut State, events: &
     }
     if state.active {
         state.keyboard_pointer = true;
+        state.from_keyboard = true;
         if matches!(key, Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight) {
             state.invalidated = false;
         }
@@ -722,6 +739,9 @@ fn text_event(app: &VectorcraftApp, ctx: &Context, state: &mut State, text: &str
         *owned = false;
         // AltGr/Ctrl text belongs downstream, even without a Key event.
     } else if state.active || state.alt_down && state.alt_armed {
+        if state.active {
+            state.from_keyboard = true;
+        }
         let root_chord = state.alt_down && !state.alt_used;
         state.alt_used = true;
         state.alt_armed = false;
@@ -787,7 +807,7 @@ pub(super) fn begin_bar(ctx: &Context) {
 }
 
 pub(super) fn cues(ctx: &Context) -> bool {
-    supported(ctx) && with_state(ctx, |state| state.active || state.alt_down && state.alt_armed)
+    supported(ctx) && with_state(ctx, |state| state.active && (state.from_keyboard || state.alt_down) || state.alt_down && state.alt_armed)
 }
 
 pub(super) fn suppress_stationary_hover(ctx: &Context) -> bool {
@@ -797,7 +817,14 @@ pub(super) fn suppress_stationary_hover(ctx: &Context) -> bool {
 
 pub(super) fn bind_root(ctx: &Context, source: &str, response: &Response) {
     let popup = egui::Popup::default_response_id(response);
+    let key_click = response.clicked().then(|| !response.clicked_by(egui::PointerButton::Primary));
     let requested = with_state(ctx, |state| {
+        if let Some(key_click) = key_click {
+            state.title_key_click = key_click;
+            if state.active {
+                state.from_keyboard = key_click;
+            }
+        }
         if let Some(root) = state.titles.iter_mut().find(|(name, _, _)| name == source) {
             *root = (source.into(), response.id, popup);
         } else {
