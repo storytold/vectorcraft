@@ -360,12 +360,50 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Opt
             })
         }
         "ui.dock.reset" => app.run("window.workspace.reset", json!({})),
+        "ui.dock" => ui_dock(app, params),
         "window.panel.float" | "window.panel.dock" => float_or_dock(app, id, params),
         "window.panel.layout" | "window.panel.move" | "window.panel.activate" | "window.panel.close" | "window.panel.minimize" => {
             shared_command(app, id, params)
         }
         _ => return None,
     })
+}
+
+/// `ui.dock`, the other shape of the docking commands: `{action}` is `window.panel.layout`, and
+/// `{operation, …}` runs the `window.panel` command the operation names. `move` puts the panel in
+/// `target`'s `zone` (center when none), as a tab before `before` when one is given; `float` and
+/// `moveFloating` take `rect`, `[x, y, width, height]`; `setStackOpen` restores or minimizes.
+fn ui_dock(app: &mut VectorcraftApp, params: &Value) -> Result<Value, String> {
+    if params.get("action").is_some() {
+        return shared_command(app, "window.panel.layout", params);
+    }
+    let panel = params.get("panel").cloned().unwrap_or(Value::Null);
+    let operation = params.get("operation").and_then(Value::as_str).unwrap_or_default();
+    match operation {
+        "open" | "activate" => shared_command(app, "window.panel.activate", &json!({"panel": panel})),
+        "close" => shared_command(app, "window.panel.close", &json!({"panel": panel})),
+        "move" => {
+            let before = params.get("before");
+            let zone = params.get("zone").and_then(Value::as_str);
+            let zone = match (zone, before) {
+                (None | Some("center" | "Center" | "tab"), Some(_)) => "tab",
+                (zone, _) => zone.unwrap_or("center"),
+            };
+            let move_params = json!({"panel": panel, "anchor": params.get("target"), "zone": zone, "before": before});
+            shared_command(app, "window.panel.move", &move_params)
+        }
+        "float" | "moveFloating" => {
+            let [x, y, width, height]: [f32; 4] = serde_json::from_value(params.get("rect").cloned().unwrap_or_default())
+                .map_err(|e| format!("rect must be [x, y, width, height]: {e}"))?;
+            float_or_dock(app, "window.panel.float", &json!({"panel": panel, "x": x, "y": y, "width": width, "height": height}))
+        }
+        "setStackOpen" => {
+            let open = params.get("open").and_then(Value::as_bool).ok_or("open must be true or false")?;
+            shared_command(app, "window.panel.minimize", &json!({"panel": panel, "minimized": !open}))
+        }
+        "resizeStack" | "resizeSplit" => Err(format!("ui.dock `{operation}` is not available in VectorCraft")),
+        other => Err(format!("unknown ui.dock operation `{other}`")),
+    }
 }
 
 /// `window.panel {panel}`: show a panel. One in an icon column opens (or puts away) its flyout;
