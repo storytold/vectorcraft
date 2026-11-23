@@ -11,20 +11,21 @@
 //! one after others are added, moved or removed, and throws once it is gone.
 //!
 //! VectorCraft's own rules, which the help pages do not state:
-//! - `layers` lists layers top first, as the Layers panel shows them; `groupItems`,
-//!   `compoundPathItems` and a layer's or group's `pageItems` list art in paint order, bottom first,
-//!   as `pageItems` does. The document's `groupItems` and `compoundPathItems` hold every group or
-//!   compound path at any depth; a layer's or group's hold the ones directly in it.
+//! - `layers` lists layers top first, as the Layers panel shows them. A layer's or group's
+//!   `pageItems`, `groupItems` and `compoundPathItems`, and a compound path's `pathItems`, list the
+//!   objects directly in it, topmost first. The document's `groupItems` and `compoundPathItems` hold every group or compound path at
+//!   any depth, in the order of the document's `pageItems`.
 //! - `layers.add()` on the document makes a layer above every top-level layer; on a layer it makes
 //!   a sublayer on top of that layer's contents. The new layer becomes the current one.
 //! - `locked` true means the layer is locked.
 //! - `clipped = true` makes the group's topmost object, which must be a path, a compound path or
 //!   type, its clipping path, as the Layers panel's clipping mask button does; `false` releases it.
 //! - A layer's `color` is an object `{red, green, blue}` with values from 0 to 255.
-//! - `CompoundPathItems.add()` throws: a compound path holds at least one path.
+//! - `CompoundPathItems.add()` makes an empty compound path. The first path a script moves into it
+//!   gives it its paint, as Make Compound Path takes the paint of a path it joins.
 //! - `artboards.add` and `artboards.insert` stop at [`super::MAX_ARTBOARDS`] artboards in a
-//!   document, the limit `Documents.add` uses. Artboard names are unique: a name another artboard
-//!   has throws.
+//!   document, the limit `Documents.add` uses. Two artboards may have the same name.
+//! - A layer's or artboard's `name` takes a number or a boolean as `String()` writes it.
 //! - `Artboard.rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down; with global
 //!   rulers, setting it moves the document's zero point.
 //! - `setActiveArtboardIndex` changes the view's active artboard: no undo step, and the run's report
@@ -41,7 +42,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_
 use super::{
     Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, ON_LOCKED_ARTBOARD, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg,
     boolean, command, command_value, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later,
-    method, named, num, number, on_doc, page_items, placement_of, property, text, typename, whole, with_doc,
+    method, named, num, number, on_doc, on_doc_layer, page_items, placement_of, property, text, typename, whole, with_doc,
 };
 use crate::script::{Host, Link};
 use crate::{DocState, Document, NodeId, NodeKind};
@@ -153,15 +154,26 @@ fn layer_name(h: &Host, a: &[Data]) -> Answer {
     read_layer(h, a, |_, n| Ok(text(n.name.clone().unwrap_or_default())))
 }
 
+/// A name a script assigns: a string, or a number or boolean as `String()` writes it.
+fn name_text(d: &Data) -> Result<String> {
+    match d {
+        Data::String(s) => Ok(s.clone()),
+        Data::Number(n) => Ok(vectorcraft_js::number_to_string(*n)),
+        Data::Bool(b) => Ok(b.to_string()),
+        _ => Err(HostError::Type("name must be a string".into())),
+    }
+}
+
 fn layer_set_name(h: &Host, a: &[Data]) -> Answer {
-    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("name must be a string".into())) };
+    let name = name_text(arg(a, 1))?;
     if name.trim().is_empty() {
         return Err(HostError::Range("a layer's name cannot be empty".into()));
     }
     if name.chars().count() > MAX_LAYER_NAME {
         return Err(HostError::Range(format!("a layer's name has at most {MAX_LAYER_NAME} characters")));
     }
-    set_layer(h, a, "layer.setProps", |n| n.name.as_deref() == Some(name.as_str()), json!({"name": name}))
+    let params = json!({"name": &name});
+    set_layer(h, a, "layer.setProps", |n| n.name.as_deref() == Some(name.as_str()), params)
 }
 
 fn layer_visible(h: &Host, a: &[Data]) -> Answer {
@@ -522,7 +534,7 @@ fn layers_add(h: &Host, a: &[Data]) -> Answer {
             return Err(HostError::Error("the layer is hidden or locked".into()));
         }
     }
-    let (_, r) = on_doc(h, doc.uid, true, |h| match parent {
+    let (_, r) = on_doc_layer(h, doc.uid, true, false, |h| match parent {
         None => command_value(h, "layer.new", &json!({"top": true})),
         Some(p) => command_value(h, "layer.newSublayer", &json!({"parent": p.0})),
     })?;
@@ -574,8 +586,8 @@ pub(super) type ArtList = (u64, Arc<Document>, u8, Option<NodeId>, Rc<Vec<NodeId
 /// How many lists of art [`super::State`] keeps at once.
 pub(super) const ART_LISTS: usize = 4;
 
-/// The objects of `kind` in `container` (directly), or in the whole document at any depth, in
-/// paint order. The last [`ART_LISTS`] lists are kept while their documents are unchanged, so a
+/// The objects of `kind` in `container` (directly), topmost first, or in the whole document at any
+/// depth, in the order of the document's `pageItems`. The last [`ART_LISTS`] lists are kept while their documents are unchanged, so a
 /// loop over groups that reads each group's `pageItems` builds each list once. Each new list is
 /// charged by the objects it looks at.
 fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> Result<Rc<Vec<NodeId>>> {
@@ -598,7 +610,7 @@ fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> R
         Some(c) => {
             let children: &[Arc<crate::doc::Node>] = st.doc.node(c).and_then(|n| n.children()).map_or(&[], Vec::as_slice);
             h.charge_call(children.len() as u64)?;
-            children.iter().filter(|n| kind.holds(n)).map(|n| n.id).collect()
+            children.iter().rev().filter(|n| kind.holds(n)).map(|n| n.id).collect()
         }
     };
     let ids = Rc::new(ids);
@@ -771,26 +783,36 @@ fn compounds_typename(h: &Host, a: &[Data]) -> Answer {
     art_typename(h, a, Kind::Compound)
 }
 
-/// `groupItems.add()`: an empty group on top of the layer's or group's contents (the document's:
-/// the current layer's), with `object.newGroup`. → the group.
-fn groups_add(h: &Host, a: &[Data]) -> Answer {
-    let (doc, c) = art_scope(h, arg(a, 0), "GroupItems")?;
+/// `groupItems.add()` and `compoundPathItems.add()`: an empty group or compound path on top of the
+/// layer's or group's contents (the document's: the current layer's), with `object.newGroup`.
+/// → the new object.
+fn container_add(h: &Host, a: &[Data], kind: Kind) -> Answer {
+    let (doc, c) = art_scope(h, arg(a, 0), kind.class())?;
     if let Some(c) = c {
         let compound = with_doc(h, doc, |_, st| st.doc.node(c).is_some_and(|n| matches!(n.kind, NodeKind::Compound { .. })));
         if compound {
             return Err(HostError::Error("a compound path holds only paths".into()));
         }
     }
-    let params = c.map_or_else(|| json!({}), |c| json!({"parent": c.0}));
+    let mut params = c.map_or_else(|| json!({}), |c| json!({"parent": c.0}));
+    if kind == Kind::Compound
+        && let Some(o) = params.as_object_mut()
+    {
+        o.insert("compound".into(), json!(true));
+    }
     let (_, r) = on_doc(h, doc.uid, true, |h| command_value(h, "object.newGroup", &params))?;
-    let id = result_id(&r, "id").ok_or_else(|| HostError::Error("the group was not made".into()))?;
+    let id = result_id(&r, "id").ok_or_else(|| HostError::Error("the object was not made".into()))?;
     let s = h.session.borrow();
     let st = s.documents().iter().find(|d| d.uid == doc.uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
     Ok(item_ref(h, st, NodeId(id)))
 }
 
-fn compounds_add(_: &Host, _: &[Data]) -> Answer {
-    Err(HostError::Error("CompoundPathItems.add cannot make an empty compound path: a compound path holds at least one path".into()))
+fn groups_add(h: &Host, a: &[Data]) -> Answer {
+    container_add(h, a, Kind::Group)
+}
+
+fn compounds_add(h: &Host, a: &[Data]) -> Answer {
+    container_add(h, a, Kind::Compound)
 }
 
 // ---- The art collections of a document, a layer, a group and a compound path ----
@@ -905,7 +927,7 @@ fn doc_set_active_layer(h: &Host, a: &[Data]) -> Answer {
     }
     let now = with_doc(h, doc, |_, st| st.current_layer());
     if now != Some(id) {
-        on_doc(h, doc.uid, true, |h| command(h, "layer.setCurrent", &json!({"id": id.0})))?;
+        on_doc_layer(h, doc.uid, true, false, |h| command(h, "layer.setCurrent", &json!({"id": id.0})))?;
     }
     Ok(Data::Undefined)
 }
@@ -1026,10 +1048,11 @@ fn board_name(h: &Host, a: &[Data]) -> Answer {
     read_board(h, a, |_, ab, _| Ok(text(ab.name.clone())))
 }
 
-/// A new artboard name: not empty, at most [`MAX_TEXT_BYTES`] bytes, and no other artboard's
-/// (`except`: the artboard being renamed). → the name, trimmed as `artboard.rename` trims it.
-fn board_name_arg(st: &DocState, d: &Data, except: Option<usize>) -> Result<String> {
-    let Data::String(name) = d else { return Err(HostError::Type("name must be a string".into())) };
+/// A new artboard name: not empty and at most [`MAX_TEXT_BYTES`] bytes; a number or boolean as
+/// `String()` writes it. Another artboard may have the same name. → the name, trimmed as
+/// `artboard.rename` trims it.
+fn board_name_arg(d: &Data) -> Result<String> {
+    let name = name_text(d)?;
     if name.len() > MAX_TEXT_BYTES {
         return Err(HostError::Range("the name is too long".into()));
     }
@@ -1037,16 +1060,12 @@ fn board_name_arg(st: &DocState, d: &Data, except: Option<usize>) -> Result<Stri
     if name.is_empty() {
         return Err(HostError::Range("an artboard's name cannot be empty".into()));
     }
-    if st.doc.artboards.iter().enumerate().any(|(i, ab)| Some(i) != except && ab.name == name) {
-        return Err(HostError::Error(format!("another artboard is named {name}")));
-    }
     Ok(name.to_string())
 }
 
 fn board_set_name(h: &Host, a: &[Data]) -> Answer {
-    let (b, i) = this_board(h, a)?;
-    let name = with_doc(h, b.doc, |_, st| board_name_arg(st, arg(a, 1), Some(i)))?;
-    set_board(h, a, |ab| ab.name == name, json!({"name": name}))
+    let name = board_name_arg(arg(a, 1))?;
+    set_board(h, a, |ab| ab.name == name, json!({"name": &name}))
 }
 
 fn board_parent(h: &Host, a: &[Data]) -> Answer {
@@ -1189,7 +1208,7 @@ fn add_board(h: &Host, a: &[Data], at: Option<&Data>) -> Answer {
     let (r, len, name) = with_doc(h, doc, |_, st| {
         let boards = &st.doc.artboards;
         h.charge_call(boards.len() as u64)?;
-        // The first "Artboard N" from one past the count that no artboard has, so names stay unique.
+        // The first "Artboard N" from one past the count that no artboard has.
         let name = (boards.len() + 1..).map(|n| format!("Artboard {n}")).find(|n| !boards.iter().any(|ab| ab.name == *n)).unwrap_or_default();
         Ok::<_, HostError>((rect_arg(h, st, arg(a, 1), "artboardRect")?, boards.len(), name))
     })?;

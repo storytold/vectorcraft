@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also in a shown, unlocked compound path, and an empty compound path takes the paint of the first path that goes in; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
             has_doc,
             move_node
         ),
@@ -919,9 +919,19 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     let index = p.get("index").and_then(Value::as_u64).map_or(usize::MAX, index);
     let d = &s.doc()?.doc;
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
-    if !accepts(d, parent, n) {
+    let compound = parent.and_then(|p| d.node(p)).filter(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    if let Some(c) = compound {
+        if !matches!(n.kind, NodeKind::Path { guide: false, .. }) {
+            return Err(bad(C, "a compound path holds only paths"));
+        }
+        if !d.is_editable(c.id) {
+            return Err(bad(C, "the compound path is hidden or locked"));
+        }
+    } else if !accepts(d, parent, n) {
         return Err(bad(C, "layers go only at the top level or in layers, objects in layers and groups"));
     }
+    // An empty compound path takes the paint of the first path that goes into it.
+    let paint = compound.filter(|c| c.children().is_some_and(Vec::is_empty)).map(|c| (c.id, n.appearance.clone()));
     if let Some(what) = super::intertwine::refused_in(d, parent, n) {
         return Err(bad(C, format!("{what} can't be intertwined")));
     }
@@ -931,6 +941,11 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     let left = super::intertwine::groups_of(d, &[id]);
     s.edit(label, |d, sel| {
         d.move_node(id, parent, index)?;
+        if let Some((c, appearance)) = paint
+            && let Some(n) = d.node_mut(c)
+        {
+            n.appearance = appearance;
+        }
         super::intertwine::settle_members(d, &[(id, from)], &left)?;
         live_paint.finish(d, sel, &[id])?;
         sel.prune(d);

@@ -105,10 +105,15 @@ pub(super) fn group(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "id": gid.0 }))
 }
 
-/// `object.newGroup`: an empty group in a layer or a group (default: the current layer), on top
-/// of its contents or at `index` (0 = bottom). The selection stays as it is.
+/// `object.newGroup`: an empty group, or with `compound` an empty compound path, in a layer or a
+/// group (default: the current layer), on top of its contents or at `index` (0 = bottom). The
+/// selection stays as it is.
 pub(super) fn new_group(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.newGroup";
+    let compound = match p.get("compound") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or_else(|| bad(C, "compound must be true or false"))?,
+    };
     let st = s.doc()?;
     let parent = match p.get("parent") {
         None | Some(Value::Null) => st.current_layer().or_else(|| st.doc.default_layer()).ok_or_else(|| bad(C, "the document has no layer"))?,
@@ -126,11 +131,17 @@ pub(super) fn new_group(s: &mut Session, p: &Value) -> Result<Value> {
     if !d.is_editable(parent) {
         return Err(bad(C, "the layer or group is hidden or locked"));
     }
-    let gid = s.edit("Group", |d, _| {
+    let name = if compound { "Compound Path" } else { "Group" };
+    let gid = s.edit(name, |d, _| {
         let gid = d.alloc_id();
         let clips = d.node(parent).is_some_and(Node::clips);
         let index = if clips { index.max(1) } else { index };
-        d.insert(Some(parent), index, Node::group(gid, Vec::new()))?;
+        let node = if compound {
+            Node::new(gid, NodeKind::Compound { children: Vec::new(), rule: vectorcraft_geom::FillRule::NonZero })
+        } else {
+            Node::group(gid, Vec::new())
+        };
+        d.insert(Some(parent), index, node)?;
         Ok(gid)
     })?;
     Ok(json!({ "id": gid.0 }))

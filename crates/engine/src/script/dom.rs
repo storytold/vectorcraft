@@ -638,6 +638,18 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
+    on_doc_layer(h, uid, keep_selection, true, f)
+}
+
+/// [`on_doc`], with `keep_layer` false for `f`s that choose the current layer (`layers.add()`,
+/// `activeLayer = layer`): the selection is put back, and the layer `f` left current stays current.
+fn on_doc_layer<T>(
+    h: &Host,
+    uid: u64,
+    keep_selection: bool,
+    keep_layer: bool,
+    f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
+) -> std::result::Result<T, HostError> {
     let (index, active, before, layer) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
@@ -649,6 +661,12 @@ fn on_doc<T>(
         command(h, "document.activate", &json!({"index": index}))?;
     }
     let r = f(h);
+    let layer = if keep_layer {
+        layer
+    } else {
+        let s = h.session.borrow();
+        s.active().filter(|st| st.uid == uid).map_or(layer, |st| (st.active_layer, st.highlighted_rows()))
+    };
     let mut restored = Ok(());
     if keep_selection {
         let doc = {
@@ -1754,7 +1772,11 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data, copy: bool) -> s
         }
         let (parent, beside) = match how {
             Placement::Top | Placement::Bottom => {
-                if !matches!(t.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
+                if matches!(t.kind, NodeKind::Compound { .. }) {
+                    if !d.node(item.id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })) {
+                        return Err(HostError::Error("a compound path holds only paths".into()));
+                    }
+                } else if !matches!(t.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
                     return Err(HostError::Error(format!("{} cannot hold objects", typename(t).unwrap_or("Layer"))));
                 }
                 (target, None)

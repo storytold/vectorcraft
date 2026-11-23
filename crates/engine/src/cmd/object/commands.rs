@@ -142,7 +142,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Group",
             [],
             None,
-            "{parent?: layer or group id (default: the current layer), index?: n (0 = bottom, or directly above the clipping path in a clipping layer or group; default: on top)} → {id}: an empty group in a shown, unlocked layer or group; the selection stays as it is",
+            "{parent?: layer or group id (default: the current layer), index?: n (0 = bottom, or directly above the clipping path in a clipping layer or group; default: on top), compound?: bool (default false; true: an empty compound path instead of a group)} → {id}: an empty group or compound path in a shown, unlocked layer or group; the selection stays as it is",
             has_doc,
             new_group
         ),
