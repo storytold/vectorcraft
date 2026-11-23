@@ -247,9 +247,7 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
             let strip = crate::dialogs::simplify_slider::showing(app) || crate::dialogs::smooth_slider::showing(app);
             // The bars give way to a drag, not to a click.
             let dragging = in_gesture(app, ui.ctx()) && ui.input(|i| i.pointer.is_decidedly_dragging());
-            let task_bar = (app.ui.task_bar && !revolve_editing(app) && !strip && !dragging)
-                .then(|| task_bar::task_bar(app, ui, space))
-                .flatten();
+            let task_bar = (app.ui.task_bar && !revolve_editing(app) && !strip && !dragging).then(|| task_bar::task_bar(app, ui, space)).flatten();
             quick_pen_bar::quick_pen_bar(app, ui, space);
             contour_bar::contour_bar(app, ui, space);
             // After the task bar, which the row of character alternates keeps clear of.

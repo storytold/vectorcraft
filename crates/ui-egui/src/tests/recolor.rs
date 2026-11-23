@@ -940,7 +940,7 @@ fn color_bars_select_edit_and_reorder_the_rows() {
         let first = rect(&r, "Color 1");
         let last = rect(&r, "Color 4");
         // The List's rows touch: a row below another starts where the one above ends.
-    assert!(r.by_label("Color 3").is_some_and(|t| t.rect.top() >= first.bottom() && t.rect.bottom() <= last.top()), "in row order");
+        assert!(r.by_label("Color 3").is_some_and(|t| t.rect.top() >= first.bottom() && t.rect.bottom() <= last.top()), "in row order");
         click(&mut r, last.center());
         assert_eq!(field(&r, "__sel"), json!([3]), "a click selects the bar's row");
         let unedited = field(&r, "rows");

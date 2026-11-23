@@ -111,7 +111,8 @@ pub(crate) fn strips_follow(app: &mut VectorcraftApp, owner: &Owner, shown: bool
         return;
     }
     let layout = crate::panel_docking::layout_of(&app.ui);
-    let open: Vec<String> = groups_of(app, owner).iter().filter_map(|g| g.first()).map(|first| strip_id(owner, first)).filter(|id| layout.contains(id)).collect();
+    let open: Vec<String> =
+        groups_of(app, owner).iter().filter_map(|g| g.first()).map(|first| strip_id(owner, first)).filter(|id| layout.contains(id)).collect();
     if open.is_empty() {
         return;
     }
