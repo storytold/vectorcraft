@@ -117,6 +117,8 @@ fn dialog_lengths_show_in_the_general_unit() {
     // their fields as the dialogs do, so the dialog shows its length where nothing selected shows the same one.
     run(&mut window.app(), "select.set", json!({"ids": []}));
     crate::dialogs::open_tool_dialog(&mut window.app(), "rectangle", json!({"x": 0, "y": 0}));
+    // The held dialog shows from the frame after the one it opened in.
+    window.frame();
     window.frame();
     let shows_mm = |window: &Panel, pt: f64| window.shows_value_with(|v| reads(Some(v.to_owned()), Unit::Millimeters, pt));
     assert!(shows_mm(&window, 100.0), "Rectangle");
