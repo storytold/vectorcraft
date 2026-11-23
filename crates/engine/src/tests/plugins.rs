@@ -5441,6 +5441,30 @@ fn a_plugin_command_run_made_away_from_the_session_applies_through_the_command()
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// The output of a plug-in command's held run does not apply once another session has installed
+/// another module with the plug-in's id: the command is refused, and the run still holds the
+/// documents until it ends, changing nothing.
+#[test]
+fn a_held_plugin_command_run_does_not_apply_after_its_plugin_is_replaced() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.heldreplaced";
+    let mut s = session();
+    install_echo_calling(&mut s, id, r#"[{"id":"same","label":"Same"}]"#);
+    let cmd = format!("plugin.{id}.same");
+    let a = rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let job = FilterRun::begin_calls(&mut s, &cmd, &json!({})).unwrap();
+    let output = run_job_away(&mut s, &job);
+    install_echo_calling(&mut session(), id, r#"[{"id":"same","label":"Same"}]"#);
+    s.hand_in_plugin_calls(output);
+    assert!(s.execute(&cmd, &json!({})).is_err(), "the plug-in was replaced");
+    assert!(s.plugin_calls_open());
+    s.end_plugin_calls();
+    assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before);
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A module that a load in another place checked installs from its bytes and the manifest that
 /// load read, without running any of its code: a start function that would spend its whole budget
 /// doesn't run.

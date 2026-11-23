@@ -477,12 +477,14 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
 /// Ends the run that holds the documents ([`FilterRun::begin_calls`]) when command `c` (with params
 /// `p`, the params the run was started with) is the one that applies its output and `handed` is
 /// that output: applied in the run's own undo step, to the objects the run was given → the
-/// command's result. Any other command, or other params, is refused while a run holds them.
-/// `None`: no run holds them.
+/// command's result. Any other command, or other params, is refused while a run holds them, and so
+/// is the output once the plug-in is no longer installed as the run had it. `None`: no run holds
+/// them.
 fn end_held(s: &mut Session, c: &str, p: &Value, handed: &mut Option<HandedIn>) -> Option<Result<Value>> {
     let held = s.plugin_calling.take()?;
     let serial = held.run.plugin.serial();
-    let same = held.cmd == c && *p == held.params && (c != "plugin.run" || plugin_by_id(c, p).is_ok_and(|plugin| plugin.serial() == serial));
+    let installed = registry::get(held.run.plugin.id()).is_some_and(|plugin| plugin.serial() == serial);
+    let same = held.cmd == c && *p == held.params && installed;
     let mine = handed.take().filter(|h| same && (h.serial, &h.input, &h.params) == (serial, &held.run.input, &held.run.params));
     let Some(h) = mine else {
         s.plugin_calling = Some(held);
