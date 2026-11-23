@@ -314,7 +314,7 @@ fn hand_wmf(w: i16, h: i16, records: &[(u16, Vec<u8>)]) -> Vec<u8> {
     }
     o.u16(1440);
     o.u32(0);
-    let sum = crate::wmf::checksum(&o.0);
+    let sum = o.0.as_chunks::<2>().0.iter().fold(0, |acc, pair| acc ^ u16::from_le_bytes(*pair));
     o.u16(sum);
     o.bytes(&[1, 0, 9, 0, 0, 3]);
     o.bytes(&[0; 12]);

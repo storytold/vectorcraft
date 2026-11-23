@@ -651,8 +651,8 @@ mod tests {
         let s = read(concat!(r"{\rtf1\ansi\uc1 caf\u233?\uc2 \u", "8364", r"\'80\'80 \uc1\u-10179?\u-8704? end\'93q\'94}"));
         assert_eq!(text_of(&s), "café€ 😀 end“q”");
         assert_eq!(text_of(&read(r"{\rtf1\uc1\u233\bin1 ?X}")), "éX", "binary data is one fallback character");
-        let mac = read(r"{\rtf1\mac \'8e\'a5}");
-        assert_eq!(text_of(&mac), "é•", "Mac Roman");
+        let mac = read(r"{\rtf1\mac \'8e\'ca\'a5\'db\'de}");
+        assert_eq!(text_of(&mac), "é\u{a0}•€ﬁ", "Mac Roman");
     }
 
     #[test]
