@@ -53,11 +53,6 @@ fn bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     transform::object_bar_fields(app, ui);
 }
 
-/// The 100 pt square of [`app_with_rect`] in millimetres.
-fn side_mm() -> String {
-    Unit::Millimeters.format(100.0)
-}
-
 /// Whether a length field's `value` reads `pt` points in `unit`, to the decimals it shows: a length field's value is
 /// its number and the unit's suffix painted after it, as [`Unit::format`] writes them.
 pub(crate) fn reads(value: Option<String>, unit: Unit, pt: f64) -> bool {
