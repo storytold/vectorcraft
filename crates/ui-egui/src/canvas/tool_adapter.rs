@@ -171,16 +171,15 @@ impl<'a> SessionTool<'a> {
     }
 
     /// A key the tool does not claim while its gesture runs: arrows and digits still reach it, with no modifier (a
-    /// grid's rows and columns, the Perspective Selection tool's planes); other keys do nothing then.
+    /// grid's rows and columns, the Perspective Selection tool's planes) → whether it took the key; other keys are
+    /// [`Self::again`]'s.
     fn busy_key(&self, key: EngineKey) -> bool {
         let mut app = self.app();
-        if !busy_tool(&app) {
+        if !busy_tool(&app) || !matches!(key, EngineKey::Left | EngineKey::Right | EngineKey::Up | EngineKey::Down | EngineKey::Digit(_)) {
             return false;
         }
-        if matches!(key, EngineKey::Left | EngineKey::Right | EngineKey::Up | EngineKey::Down | EngineKey::Digit(_)) {
-            let r = app.session.tool_key(key, Mods::default(), self.view);
-            apply_requests(&mut app, r);
-        }
+        let r = app.session.tool_key(key, Mods::default(), self.view);
+        apply_requests(&mut app, r);
         true
     }
 
