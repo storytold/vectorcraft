@@ -653,6 +653,26 @@ fn capture_to_a_templates_relative_link_writes_nothing() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Two images that share a stale path and a content but keep different relative paths are each
+/// looked for at their own relative path, so a capture over either one's file is refused.
+#[test]
+fn capture_over_either_relative_path_of_one_linked_content_writes_nothing() {
+    let base = folder("two-relatives");
+    let (mut s, dir) = capture_doc(&base);
+    s.active_mut().unwrap().path = Some(dir.join("doc.vectorcraft").to_string_lossy().into_owned());
+    let stale = base.join("outside/gone/pic.png").to_string_lossy().into_owned();
+    for relative in ["a.png", "b.png"] {
+        place_linked(&mut s, "pic", vectorcraft_doc::LinkInfo { path: stale.clone(), relative: Some(relative.into()), ..Default::default() });
+    }
+    for name in ["a.png", "b.png"] {
+        let target = dir.join(name);
+        let e = file_failure(&mut s, &base, &format!("app.activeDocument.imageCapture(new File({}), [0, 300, 50, 250]);", quoted(&target)));
+        assert!(e.contains("cannot write over an open document"), "{name}: {e}");
+        assert!(!target.exists(), "{name}: nothing written");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A DCS image whose stored path is stale reads its plate files beside the main file its relative
 /// path finds, so a capture over one of those is refused.
 #[test]

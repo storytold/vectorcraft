@@ -873,6 +873,23 @@ fn document_preset_settings_are_limited_in_bytes() {
     assert_eq!(out[3], json!(1_572_864), "replacing a setting frees what it held");
 }
 
+/// A new `DocumentPreset`'s default settings count toward the 4 MB, so one that would pass the
+/// limit is refused and leaves the count as it was.
+#[test]
+fn a_new_document_preset_is_refused_past_the_byte_limit() {
+    let mut s = Session::new();
+    // The six defaults hold 74 bytes; the two strings leave 10 bytes of the 4 MB free.
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.title = new Array(2097153).join('a'); p.units = new Array(2097065).join('b');\
+         try { new DocumentPreset(); vc.log('made'); } catch (e) { vc.log([e.name, e.message]); }\
+         p.colorMode = 1; vc.log(p.colorMode); p.title = 'x'; vc.log(new DocumentPreset().width);",
+    );
+    assert_eq!(out[0], json!(["RangeError", "the DocumentPresets of a script can hold at most 4 MB of settings"]));
+    assert_eq!(out[1], json!(1), "a refused preset adds nothing to the count");
+    assert_eq!(out[2], json!(612), "a preset below the limit is still made");
+}
+
 #[test]
 fn headless_add_document_dialog_fails_without_creating() {
     let mut s = Session::new();

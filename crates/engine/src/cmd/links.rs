@@ -165,6 +165,9 @@ struct Group {
     document: Option<Shown>,
     /// An image placed from a DCS file: the plate files of their own its plates were read from.
     plate_files: Vec<vectorcraft_doc::separated::PlateFile>,
+    /// The stored relative paths of the group's objects other than `link`'s, each once: objects
+    /// with the same path and content can each keep a relative path of its own.
+    other_relatives: Vec<String>,
 }
 
 /// What a placed document shows: whether the art's bounds (not the artboard or page) are shown,
@@ -198,17 +201,22 @@ pub(crate) fn linked_groups(d: &Document) -> Vec<(String, Vec<u64>)> {
 /// from, wherever it is stored, brush art included, whether or not a file is there: each place
 /// [`locate`] looks at, and beside each one the plate files of an image placed from a DCS file,
 /// as its plate-change check finds them. A link's absolute stored and relative paths are listed
-/// as they are too.
+/// as they are too, for the relative path of every object in a group.
 pub(crate) fn link_read_places(d: &Document, base: LinkBase) -> Vec<String> {
     let mut out = vec![];
     for g in groups(d, None) {
-        let link = &g.link;
-        let mut mains: Vec<String> =
-            std::iter::once(link.path.as_str()).chain(link.relative.as_deref()).filter(|p| Path::new(p).is_absolute()).map(str::to_string).collect();
-        mains.extend(places(link, base));
-        for main in mains {
-            out.extend(g.plate_files.iter().filter_map(|f| super::place::dcs::plate_file_path(&main, &f.name)));
-            out.push(main);
+        let others = g.other_relatives.iter().map(|r| LinkInfo { relative: Some(r.clone()), ..g.link.clone() });
+        for link in std::iter::once(g.link.clone()).chain(others) {
+            let mut mains: Vec<String> = std::iter::once(link.path.as_str())
+                .chain(link.relative.as_deref())
+                .filter(|p| Path::new(p).is_absolute())
+                .map(str::to_string)
+                .collect();
+            mains.extend(places(&link, base));
+            for main in mains {
+                out.extend(g.plate_files.iter().filter_map(|f| super::place::dcs::plate_file_path(&main, &f.name)));
+                out.push(main);
+            }
         }
     }
     out
@@ -231,10 +239,17 @@ fn groups(d: &Document, ids: Option<&[NodeId]>) -> Vec<Group> {
                 None => d.images.get(key).map(ImageBlob::plate_files).unwrap_or_default(),
                 Some(_) => vec![],
             };
-            out.push(Group { link: link.clone(), key: key.to_string(), ids: vec![], document, plate_files });
+            out.push(Group { link: link.clone(), key: key.to_string(), ids: vec![], document, plate_files, other_relatives: vec![] });
             out.len() - 1
         });
-        if let (Some(id), Some(g)) = (id, out.get_mut(i)) {
+        let Some(g) = out.get_mut(i) else { return };
+        if let Some(r) = &link.relative
+            && g.link.relative.as_ref() != Some(r)
+            && !g.other_relatives.contains(r)
+        {
+            g.other_relatives.push(r.clone());
+        }
+        if let Some(id) = id {
             g.ids.push(id);
         }
     };

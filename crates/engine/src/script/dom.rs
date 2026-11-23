@@ -967,7 +967,12 @@ fn new_preset(h: &Host) -> Answer {
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
     ];
-    h.dom.preset_bytes.set(h.dom.preset_bytes.get().saturating_add(fields.iter().map(|(_, v)| data_size(v)).sum::<u64>()));
+    // The defaults count toward MAX_PRESET_BYTES as the setter counts a value.
+    let kept = h.dom.preset_bytes.get().saturating_add(fields.iter().map(|(_, v)| data_size(v)).sum::<u64>());
+    if kept > MAX_PRESET_BYTES {
+        return Err(HostError::Range(format!("the DocumentPresets of a script can hold at most {} MB of settings", MAX_PRESET_BYTES >> 20)));
+    }
+    h.dom.preset_bytes.set(kept);
     presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
 }
