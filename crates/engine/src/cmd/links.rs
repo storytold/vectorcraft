@@ -168,6 +168,8 @@ struct Group {
     /// The stored relative paths of the group's objects other than `link`'s, each once: objects
     /// with the same path and content can each keep a relative path of its own.
     other_relatives: Vec<String>,
+    /// `other_relatives` as a set, looked up for every object added to the group.
+    relatives_seen: std::collections::HashSet<String>,
 }
 
 /// What a placed document shows: whether the art's bounds (not the artboard or page) are shown,
@@ -239,14 +241,23 @@ fn groups(d: &Document, ids: Option<&[NodeId]>) -> Vec<Group> {
                 None => d.images.get(key).map(ImageBlob::plate_files).unwrap_or_default(),
                 Some(_) => vec![],
             };
-            out.push(Group { link: link.clone(), key: key.to_string(), ids: vec![], document, plate_files, other_relatives: vec![] });
+            out.push(Group {
+                link: link.clone(),
+                key: key.to_string(),
+                ids: vec![],
+                document,
+                plate_files,
+                other_relatives: vec![],
+                relatives_seen: Default::default(),
+            });
             out.len() - 1
         });
         let Some(g) = out.get_mut(i) else { return };
         if let Some(r) = &link.relative
             && g.link.relative.as_ref() != Some(r)
-            && !g.other_relatives.contains(r)
+            && !g.relatives_seen.contains(r)
         {
+            g.relatives_seen.insert(r.clone());
             g.other_relatives.push(r.clone());
         }
         if let Some(id) = id {
@@ -3220,6 +3231,43 @@ mod tests {
         write(&path, &png(40, 20, [1, 2, 3]));
         let c = read();
         assert!(!Arc::ptr_eq(&a.blob.bytes, &c.blob.bytes));
+    }
+
+    /// Many objects of one file and content that each keep a relative path of their own make one
+    /// group, which lists every other relative path once, in the order the objects are stored.
+    #[test]
+    fn a_group_lists_each_other_relative_path_once_in_stored_order() {
+        let mut d = Document::new(612.0, 792.0);
+        let layer = d.default_layer();
+        let relatives: Vec<String> = (0..2_000).map(|i| format!("art/{}/pic.png", i % 1_000)).collect();
+        for r in &relatives {
+            let link = LinkInfo { relative: Some(r.clone()), ..LinkInfo::new("/art/pic.png") };
+            let im = ImageObject {
+                key: "pic".into(),
+                width: 1,
+                height: 1,
+                xf: Affine::IDENTITY,
+                link: Some(link),
+                placement: Default::default(),
+                pixels: None,
+            };
+            let id = d.alloc_id();
+            d.insert(layer, 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+        }
+        let groups = groups(&d, None);
+        assert_eq!(groups.len(), 1);
+        let g = &groups[0];
+        assert_eq!(g.ids.len(), 2_000);
+        // Objects inserted at index 0 are stored last to first.
+        let first = g.link.relative.clone().unwrap();
+        let mut expected: Vec<String> = vec![];
+        for r in relatives.iter().rev() {
+            if *r != first && !expected.contains(r) {
+                expected.push(r.clone());
+            }
+        }
+        assert_eq!(expected.len(), 999);
+        assert_eq!(g.other_relatives, expected);
     }
 
     #[test]
