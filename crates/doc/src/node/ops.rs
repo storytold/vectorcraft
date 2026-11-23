@@ -361,8 +361,7 @@ impl Node {
     }
 
     /// Children that contribute to a container's editing bounds and selection highlights. A live trace retains a
-    /// hidden bitmap for re-tracing/release; only source-image views measure that bitmap. The canvas's selection
-    /// highlights also leave out hidden members, except a compound path's paths.
+    /// hidden bitmap for re-tracing/release; only source-image views measure that bitmap.
     pub fn editing_children(&self) -> &[Arc<Node>] {
         let children = self.children().map(Vec::as_slice).unwrap_or_default();
         let trace_source = self.extras().trace.is_some()

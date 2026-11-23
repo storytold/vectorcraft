@@ -968,6 +968,36 @@ fn other_panes_cross_a_selected_linked_image() {
     assert_eq!(linked, embedded + 2, "the outline of a linked image and its two crossing lines; an embedded image's outline alone");
 }
 
+/// Another pane outlines a selected group's visible members only: hiding a member draws the same
+/// outlines as deleting it.
+#[test]
+fn other_panes_leave_out_a_selected_groups_hidden_members() {
+    let mut app = app_with(2);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let shown = in_first(&mut app, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 80}))["id"].clone();
+    let hidden = in_first(&mut app, "shape.ellipse", json!({"x": 200, "y": 100, "width": 90, "height": 60}))["id"].clone();
+    in_first(&mut app, "select.set", json!({"ids": [shown, hidden]}));
+    let group = in_first(&mut app, "object.group", json!({}))["id"].clone();
+    let outlines = |app: &mut VectorcraftApp| {
+        in_first(app, "select.set", json!({"ids": [group]}));
+        frame(app, &ctx, vec![]);
+        let drawn = frame(app, &ctx, vec![]);
+        kept_outlines(app, &ctx, &drawn).to_vec()
+    };
+    let both = outlines(&mut app);
+    in_first(&mut app, "select.set", json!({"ids": [hidden]}));
+    in_first(&mut app, "edit.clear", json!({}));
+    let without = outlines(&mut app);
+    in_first(&mut app, "edit.undo", json!({}));
+    in_first(&mut app, "select.set", json!({"ids": [hidden]}));
+    in_first(&mut app, "object.hide", json!({}));
+    let with_hidden = outlines(&mut app);
+    assert_ne!(both, without, "the outlines show both members");
+    assert_eq!(with_hidden, without, "a hidden member is not outlined");
+}
+
 #[test]
 fn other_panes_keep_their_selected_outlines_until_the_document_selection_or_view_changes() {
     let mut app = app_with(2);

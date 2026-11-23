@@ -754,6 +754,31 @@ fn a_selected_group_leaves_its_hidden_members_unmarked() {
     let [tl, tr, br, bl] = sides(hidden);
     assert!(![tl, tr, br, bl, tl.midpoint(tr), tr.midpoint(br), br.midpoint(bl), bl.midpoint(tl)].into_iter().any(drawn), "a hidden member");
     assert_matches_plain(&ctx, &mut SelectionMarks::default(), &app, &view, 1.0, "a group with hidden members");
+    // The hover highlight of the group outlines its visible members only.
+    let (left_sides, right_sides, hidden_sides, image) =
+        (sides(left), sides(right), sides(hidden), doc.node(linked).unwrap().image_corners().unwrap());
+    app.run("select.set", json!({"ids": []})).unwrap();
+    app.hover_doc = Some(left_sides[0].midpoint(left_sides[2]));
+    let hovered = picture(&ctx, 1.0, |p| super::super::overlays::hover_highlight(&app, p, &view));
+    let lit = |q: Point| {
+        let s = view.to_screen(q);
+        (-1..=1).any(|dy| {
+            (-1..=1).any(|dx| {
+                let (x, y) = ((s.x.round() as i64 + dx) as usize, (s.y.round() as i64 + dy) as usize);
+                hovered.pixels[y * hovered.size.0 + x][3] > 0.0
+            })
+        })
+    };
+    for [tl, tr, br, bl] in [left_sides, right_sides] {
+        assert!([tl.midpoint(tr), br.midpoint(bl)].into_iter().all(lit), "the hover highlight outlines a visible member");
+    }
+    let [tl, tr, br, bl] = hidden_sides;
+    assert!(![tl.midpoint(tr), tr.midpoint(br), br.midpoint(bl), bl.midpoint(tl)].into_iter().any(lit), "the hover highlight of a hidden member");
+    let [tl, tr, br, bl] = image;
+    assert!(
+        ![tl.midpoint(tr), tr.midpoint(br), tl.lerp(br, 0.25), tr.lerp(bl, 0.25)].into_iter().any(lit),
+        "the hover highlight of a linked image in a hidden group"
+    );
 }
 
 /// A frame of the whole canvas keeps entries for the selected objects only.

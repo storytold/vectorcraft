@@ -817,6 +817,7 @@ fn the_overlay_limit_leaves_out_hidden_members() {
         vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0)),
         Appearance::default(),
     ));
+    let mut wrong = vec![];
     for visible in [true, false] {
         let mut member = (*many).clone();
         member.visible = visible;
@@ -831,10 +832,12 @@ fn the_overlay_limit_leaves_out_hidden_members() {
             children.extend([Arc::new(sublayer), few.clone()]);
         }
         for (n, what) in [(&group, "a group"), (&layer, "a layer")] {
-            assert_eq!(too_many_anchors([n]), visible, "{what}, member visible: {visible}");
-            assert_eq!(too_many_marks([n]), visible, "{what}, member visible: {visible}");
+            if too_many_anchors([n]) != visible || too_many_marks([n]) != visible {
+                wrong.push(format!("{what}, member visible: {visible}"));
+            }
         }
     }
+    assert!(wrong.is_empty(), "the limit is crossed only by visible points: {wrong:?}");
 }
 
 /// View › Hide Edges hides the lines across a selected linked image along with its outline
@@ -13517,8 +13520,9 @@ fn live_trace_selection_highlight_excludes_the_retained_source_rectangle() {
 }
 
 /// A compound path draws every path it holds, hidden ones included, so its highlight outlines them
-/// all; a group, a blend, an intertwine and a layer leave out a hidden member, and a layer the art
-/// of a hidden sublayer.
+/// all; a group, a blend, a repeat, an intertwine and a layer leave out a hidden member, and a
+/// layer the art of a hidden sublayer. A clip group shows its clipping path whether or not it is
+/// hidden, and a hidden object on its own keeps its outline.
 #[test]
 fn a_compound_path_outlines_its_hidden_paths_and_a_group_does_not() {
     use std::sync::Arc;
@@ -13539,6 +13543,22 @@ fn a_compound_path_outlines_its_hidden_paths_and_a_group_does_not() {
     assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Blend { children: children(), spec: Default::default() })), 1, "a blend");
     assert_eq!(contours(&Node::group(NodeId(1), children())), 1, "a group");
     assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Intertwine { children: children() })), 1, "an intertwine");
+    let repeat = |source: Vec<Arc<Node>>| contours(&Node::new(NodeId(1), NodeKind::Repeat(vectorcraft_doc::RepeatSpec::grid(source, 0.0, 0.0))));
+    let visible = children().into_iter().take(1).collect();
+    assert_eq!(repeat(children()), repeat(visible), "a repeat");
+    // A clip group shows its clipping path, hidden or not, and none of the art it clips.
+    let clip = |visible: bool| {
+        let mut members = children();
+        members.insert(0, rect(6, vectorcraft_geom::Rect::new(10.0, 10.0, 90.0, 90.0), visible));
+        let mut n = Node::group(NodeId(1), members);
+        if let NodeKind::Group { clip, .. } = &mut n.kind {
+            *clip = true;
+        }
+        contours(&n)
+    };
+    assert_eq!((clip(true), clip(false)), (1, 1), "a clip group");
+    // A hidden object that is itself selected keeps its outline.
+    assert_eq!(contours(&rect(7, vectorcraft_geom::Rect::new(0.0, 0.0, 10.0, 10.0), false)), 1, "a hidden object");
     let mut layer = Node::layer(NodeId(1), "Layer", LayerColor::Preset(0));
     let mut sublayer = Node::layer(NodeId(4), "Sublayer", LayerColor::Preset(1));
     sublayer.visible = false;
