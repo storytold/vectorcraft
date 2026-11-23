@@ -851,7 +851,6 @@ pub(crate) fn os_drop(app: &mut VectorcraftApp, files: Vec<OsFile>, spot: DropSp
     let files = files
         .into_iter()
         .filter_map(|f| {
-            let target = app.drop_target(&f.name, spot, shift);
             let path = f.path.map(|p| p.to_string_lossy().into_owned());
             // A file the platform gave neither a path nor bytes for (the web reads them after the drop) has nothing to
             // open or place.
@@ -860,7 +859,18 @@ pub(crate) fn os_drop(app: &mut VectorcraftApp, files: Vec<OsFile>, spot: DropSp
                 (None, None) => return None,
                 (Some(_), _) => vec![],
             };
-            Some((target, (f.name, path, bytes)))
+            // Bytes with no name, as a backend may give them: their format decides, so an SVG opens as a document and
+            // a raster image is placed.
+            if f.name.is_empty() {
+                let name = "dropped".to_owned();
+                let target = if fileio::detect(&name, &bytes).is_none_or(|format| !format.raster) {
+                    DropTarget::Open
+                } else {
+                    app.drop_target(&name, spot, shift)
+                };
+                return Some((target, (name, path, bytes)));
+            }
+            Some((app.drop_target(&f.name, spot, shift), (f.name, path, bytes)))
         })
         .collect();
     drop_files(app, files);
