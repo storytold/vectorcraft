@@ -236,17 +236,23 @@ fn patterns_fill_with_their_average_color() {
 
 #[test]
 fn text_comes_in_as_point_type_in_the_named_font() {
-    let name = [be(&[9, 300]), vec![6], b"Geneva".to_vec()].concat();
+    let name = [be(&[9, 300]), vec![6], b"Gen\x8Eva".to_vec()].concat();
     let bytes = v2(
         [0, 0, 100, 200],
-        &[(0x2C, name), (0x03, be(&[300])), (0x0D, be(&[18])), (0x04, vec![1]), (0x28, [be(&[50, 10]), vec![4], b"Caf\x8E".to_vec()].concat())],
+        &[
+            (0x2C, name),
+            (0x03, be(&[300])),
+            (0x0D, be(&[18])),
+            (0x04, vec![1]),
+            (0x28, [be(&[50, 10]), vec![8], b"Caf\x8E\xCA\xDB\xDE\xF0".to_vec()].concat()),
+        ],
     );
     let p = import_pict(&bytes).unwrap();
     let texts: Vec<_> = all(&p.document).into_iter().filter(|n| matches!(n.kind, NodeKind::Text(_))).collect();
     let NodeKind::Text(t) = &texts[0].kind else { panic!("text") };
-    assert_eq!(t.plain_text(), "Café");
+    assert_eq!(t.plain_text(), "Café\u{a0}€ﬁ\u{f8ff}");
     let st = &t.runs[0].style;
-    assert_eq!((st.font_family.as_str(), st.font_style.as_str(), st.size), ("Geneva", "Bold", 18.0));
+    assert_eq!((st.font_family.as_str(), st.font_style.as_str(), st.size), ("Genéva", "Bold", 18.0));
     // The text location is the baseline's start.
     assert_eq!(t.xf.translation(), Point::new(10.0, 50.0).to_vec2());
 }

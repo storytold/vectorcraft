@@ -47,6 +47,10 @@ pub struct LoadOptions {
     /// A `.ai` opens from its editing copy even where that draws differently from its PDF part
     /// (which can be older than it), with a warning, instead of from the PDF part.
     pub trust_editing_data: bool,
+    /// A PDF's type in a font it embeds and this machine lacks is drawn in the file's own glyphs
+    /// (default; the `embeddedFonts` param, and Preferences › File Handling › Use fonts embedded in
+    /// imported PDFs for opens and places that give none).
+    pub embedded_fonts: bool,
     /// The encoding names in a `.ai` or EPS's editing data are read in when they aren't UTF-8
     /// (`legacyNameEncoding`).
     pub legacy_names: vectorcraft_eps::NameEncoding,
@@ -74,6 +78,7 @@ impl Default for LoadOptions {
             editing_data: true,
             trust_editing_data: false,
             legacy_names: vectorcraft_eps::NameEncoding::default(),
+            embedded_fonts: true,
             native: true,
             link_pages: false,
         }
@@ -84,7 +89,7 @@ impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
     /// `textAs` (`text` | `outlines`), `layers` (true | false), `hiddenLayers` (true | false),
-    /// `importSlices` (true | false), `editingData` (true | false | `always`),
+    /// `importSlices` (true | false), `editingData` (true | false | `always`), `embeddedFonts` (true | false),
     /// `legacyNameEncoding` (one of [`vectorcraft_eps::NameEncoding::LABELS`]), `linkPages` (true |
     /// false) and `dxf` (the DXF import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
@@ -135,6 +140,10 @@ impl LoadOptions {
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "linkPages must be true or false"))?,
         };
         let dxf = super::dxfimport::options(cmd, p.get("dxf"))?;
+        let embedded_fonts = match p.get("embeddedFonts").filter(|v| !v.is_null()) {
+            None => true,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "embeddedFonts must be true or false"))?,
+        };
         Ok(Self {
             pages,
             crop,
@@ -148,6 +157,7 @@ impl LoadOptions {
             dxf,
             editing_data,
             trust_editing_data,
+            embedded_fonts,
             legacy_names,
             native: true,
             link_pages,
@@ -177,6 +187,7 @@ impl LoadOptions {
             text_as: self.text_as,
             layers: self.layers,
             uncalibrated_rgb: editor_document,
+            embedded_fonts: self.embedded_fonts,
             ..Default::default()
         })
     }
@@ -219,7 +230,15 @@ pub(crate) fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opene
 
 /// The import options of [`page_document`].
 fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
-    ImportOptions { pages: Some(vec![page]), crop: o.crop, password: o.password.clone(), text_as: o.text_as, layers: false, ..Default::default() }
+    ImportOptions {
+        pages: Some(vec![page]),
+        crop: o.crop,
+        password: o.password.clone(),
+        text_as: o.text_as,
+        layers: false,
+        embedded_fonts: o.embedded_fonts,
+        ..Default::default()
+    }
 }
 
 /// Whether `document.open`'s `linkPages` takes the file `name` holding `bytes`: a PDF or a

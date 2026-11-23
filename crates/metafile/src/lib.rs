@@ -136,8 +136,8 @@ pub struct Picture {
     pub warnings: Vec<String>,
 }
 
-/// Do `bytes` hold a version 2 QuickDraw picture, after a PICT file's 512 bytes of application
-/// data or on their own? A version 1 picture is known by its file's name.
+/// Do `bytes` hold a QuickDraw picture (version 1 or 2), after a PICT file's 512 bytes of
+/// application data or on their own?
 pub fn is_pict(bytes: &[u8]) -> bool {
     craft_metafile::is_pict(bytes)
 }

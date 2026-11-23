@@ -213,6 +213,9 @@ pub fn layout_with(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLay
     // The sizes the fits step and limit are the ones the Character panel shows (`shown`), whatever
     // em size a font height reference sets them at.
     let shown = t;
+    // Keep the verified faces alive throughout fitting and resolve their height references too.
+    let file = in_file_fonts(db, t);
+    let t = file.as_ref().map_or(t, |(text, _)| text);
     let resolved = db.font_heights_resolved(t);
     let t = &*resolved;
     let first = layout_once(db, t, opts);
@@ -373,6 +376,24 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
         }
     }
     s
+}
+
+/// `t` with the runs a font its file carried draws ([`FontDb::file_faces`]) set in that font;
+/// `None` when none is.
+fn in_file_fonts(db: &FontDb, t: &TextObject) -> Option<(TextObject, Vec<Option<std::sync::Arc<crate::FontFace>>>)> {
+    let faces = db.file_faces(t);
+    if faces.is_empty() {
+        return None;
+    }
+    let mut out = t.clone();
+    for (r, face) in out.runs.iter_mut().zip(&faces) {
+        let Some(face) = face else { continue };
+        r.style.file_font_id = Some(face.id());
+        r.style.font_style = face.style.clone();
+        r.style.font_version = None;
+        r.style.font_axes.clear();
+    }
+    Some((out, faces))
 }
 
 /// `t` in the styles its layout draws it in: [`scaled`] by the layout's

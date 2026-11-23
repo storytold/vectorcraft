@@ -3,7 +3,7 @@ name = "vectorcraft-metafile"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "VectorCraft metafiles: hand-written EMF and WMF writers, and EMF, EMF+, WMF and QuickDraw PICT import through craft-metafile"
+description = "VectorCraft metafiles: EMF and WMF export and EMF, EMF+, WMF and QuickDraw PICT import through craft-metafile"
 
 [lints]
 workspace = true
