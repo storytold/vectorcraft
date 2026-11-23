@@ -150,9 +150,9 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         queued.push(ViewRequest::Place(ViewCommands::FitArtboard));
     }
     let mut cv = view.canvas(scaling, area);
-    let (x, y, mut zero) = rulers::texts(app, win);
+    let (x, y, zero) = rulers::texts(app, win);
     let strips = if app.ui.view.rulers && !presenting {
-        Some(rulers::strips(&mut zero, kind))
+        Some(rulers::strips(zero, kind))
     } else {
         rulers::hidden(app);
         None
