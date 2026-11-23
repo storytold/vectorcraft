@@ -427,8 +427,13 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         .show(ui);
     app.ui.swatches_panel = model;
     let shown = shown_keys(&data);
-    // PLAN: assumed `events` carries `Select` too: `used` holds colour swatches only, and a gradient, pattern or None
-    // swatch also applies on a click.
+    // PLAN: the panel reports a click only as `used`, for colour swatches: a gradient, pattern or None swatch applies on
+    // no click (production applied every swatch).
+    if let Some((at, _, alt)) = out.used
+        && let Some(entry) = data.get(at.group).and_then(|g| g.entries.get(at.index))
+    {
+        apply(app, &entry.name, alt);
+    }
     for event in out.events {
         on_event(app, &shown, event);
     }

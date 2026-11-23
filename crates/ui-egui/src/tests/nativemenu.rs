@@ -131,10 +131,18 @@ impl Mac {
         out
     }
 
-    /// AppKit chose an item by its key equivalent `sc`.
+    /// AppKit chose an item by its key equivalent `sc`. A paste the menu asks the host for
+    /// (`ViewportCommand::RequestPaste`) comes in the next frame, as egui-winit sends it for a
+    /// clipboard that holds a picture and no text.
     fn key_equivalent(&mut self, sc: &str) -> egui::FullOutput {
         self.fake.report(MenuEvent::Key(Chord::parse(sc).unwrap()));
-        self.frame(vec![])
+        let out = self.frame(vec![]);
+        let asked = out.viewport_output.values().any(|v| v.commands.contains(&egui::ViewportCommand::RequestPaste));
+        if !asked {
+            return out;
+        }
+        let picture = std::sync::Arc::new(egui::ColorImage::filled([1, 1], egui::Color32::BLUE));
+        self.frame(vec![Event::PasteImage(picture)])
     }
 
     /// Where the document's point (`x`, `y`) is on the screen.
@@ -307,6 +315,8 @@ fn applying_a_dialog_preview_reads_the_menus() {
         let read = m.angles(4);
         let synced = m.fake.synced();
         crate::tests_synthetic::control(&mut m.app, &m.ctx, "ui.dialog.confirm", json!({}));
+        // OK applies in the dialog's pass, and its layer is gone from the next one.
+        m.frame(vec![]);
         m.frame(vec![]);
         (read, synced, !m.app.session.in_interaction() && !m.app.any_dialog_open(), m.fake.synced())
     });

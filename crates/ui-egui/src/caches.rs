@@ -99,6 +99,9 @@ pub struct CanvasCache {
     /// Escape cancelled the tool's press while the button is still down: its release still sends the tool its Up,
     /// which gives back a selection tool Cmd lent.
     pub escaped_press: bool,
+    /// A press on the canvas committed a panel field's running preview before the tool took the press, as the field's
+    /// commit came first in production: the field's own commit later in the pass has nothing left to run.
+    pub committed_preview: bool,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
     /// Window › Arrange › Float in Window: what the floating document windows keep between frames.

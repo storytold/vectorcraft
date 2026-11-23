@@ -27,6 +27,21 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
         craft::ui::runtime::commands::fire(ctx, CommandRef::new("edit.select_all"), FireSource::Menu);
         return;
     }
+    // A menu's Cut, Copy or Paste that no framework part took, while an egui text field has the keys, goes to that
+    // field as its clipboard event, as its keys would; Paste pastes the text of a Copy's formats, written first.
+    if fired.source == FireSource::Menu
+        && let Some(field) = ctx.memory(|m| m.focused()).filter(|&id| egui::TextEdit::load_state(ctx, id).is_some())
+        && let Some(event) = match fired.command.id.as_str() {
+            "edit.copy" => Some(egui::Event::Copy),
+            "edit.cut" => Some(egui::Event::Cut),
+            "edit.paste" | "edit.pasteWithoutFormatting" => app.written_clipboard_text().map(egui::Event::Paste),
+            _ => None,
+        }
+    {
+        ctx.memory_mut(|m| m.request_focus(field));
+        ctx.input_mut(|i| i.events.push(event));
+        return;
+    }
     let renamed;
     let command = match engine_id(&fired.command.id) {
         Some(id) => {

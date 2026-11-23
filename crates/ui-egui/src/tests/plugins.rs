@@ -129,9 +129,17 @@ fn set_field(h: &mut Window, field: &str, value: Value) -> Result<(), String> {
 fn answer(h: &mut Window, ok: bool) {
     let (ctx, id) = (h.ctx.clone(), top(h.state()).expect("a dialog is open"));
     let host = h.state().dialogs().expect("the dialog host");
-    let done = host.with(|host| if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) });
+    // A held OK (the effect dialog's) is filed for the app, which applies it and then closes the dialog.
+    let done = host.with(|host| if ok { host.confirm_by_id(&ctx, id) || host.held_state(id).is_some() } else { host.cancel_by_id(&ctx, id) });
     assert!(done, "the dialog took the answer");
     step(h);
+    for _ in 0..2 {
+        if top(h.state()) != Some(id) {
+            return;
+        }
+        step(h);
+    }
+    assert_ne!(top(h.state()), Some(id), "the answered dialog closed");
 }
 
 fn red_rect(app: &mut VectorcraftApp) -> vectorcraft_doc::NodeId {

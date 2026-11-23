@@ -150,6 +150,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         queued.push(ViewRequest::Place(ViewCommands::FitArtboard));
     }
     let mut cv = view.canvas(scaling, area);
+    let given = cv;
     let (x, y, zero) = rulers::texts(app, win);
     let strips = if app.ui.view.rulers && !presenting {
         Some(rulers::strips(zero, kind))
@@ -197,7 +198,9 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
     let Body { reply, context_at, edited } = body;
     let request = reply.as_ref().and_then(|r| r.context.as_ref()).map(|c| c.at).or(context_at);
     let jumped = edited.is_some();
-    let view_now = edited.or(reply.and_then(|r| r.view)).or(output.view).unwrap_or(cv);
+    // Presentation Mode keeps its view through a drag of the middle button, which the canvas pans on its own.
+    let view_now =
+        if presenting && ui.input(|i| i.pointer.middle_down()) { given } else { edited.or(reply.and_then(|r| r.view)).or(output.view).unwrap_or(cv) };
     if let Some(view) = doc_windows::view_mut(app, win) {
         view.set_canvas(&view_now, scaling);
         // Fitted once, the view stays where it is moved.
