@@ -1148,7 +1148,7 @@ const MAX_SPAN_FALLBACKS: usize = 8;
 /// text mixed designs: a ㈱ or ⑩ that the first Japanese fallback (Shippori Mincho) lacks came from
 /// BIZ UDMincho while the kana and kanji round it stayed in Shippori Mincho. The faces tried are the
 /// ones the clusters fall back to, in the span's order (so a span its first fallback covers keeps
-/// it). Clusters no font covers don't count; with no face covering the others, each keeps its own.
+/// it). Clusters no font covers in full don't count; with no face covering the others, each keeps its own.
 fn one_fallback_face<'t>(
     db: &FontDb,
     primary: &Arc<FontFace>,
@@ -1160,10 +1160,12 @@ fn one_fallback_face<'t>(
     if pmap.is_none() {
         return;
     }
-    // The clusters that fall back, in order, once each.
+    // The clusters that fall back, in order, once each (`seen`: a span can hold thousands of
+    // distinct ideographs, so membership is not a scan of `falling`).
     let mut falling: Vec<&'t str> = vec![];
+    let mut seen: std::collections::HashSet<&'t str> = std::collections::HashSet::new();
     for cluster in text.graphemes(true) {
-        if falling.contains(&cluster) || drawn_chars(cluster, digits).all(|c| in_face(pmap, c)) {
+        if !seen.insert(cluster) || drawn_chars(cluster, digits).all(|c| in_face(pmap, c)) {
             continue;
         }
         let f = match cache.get(cluster) {
@@ -1174,7 +1176,9 @@ fn one_fallback_face<'t>(
                 f
             }
         };
-        if f.id() != primary.id() {
+        // A cluster its face covers only in part (a letter whose mark no font has) keeps that
+        // face: no face covers it all, so counting it would keep every other cluster in its own.
+        if f.id() != primary.id() && drawn_chars(cluster, digits).all(|c| f.covers(c)) {
             falling.push(cluster);
         }
     }
