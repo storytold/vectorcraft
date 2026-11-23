@@ -1349,7 +1349,7 @@ fn locate_layer_highlights_the_layer_holding_the_object() {
 }
 
 /// The session asks the Layers panel to reveal what a top-level command changed: isolation, then
-/// the highlighted rows, the current layer and the last selected object. An open interaction asks
+/// the highlighted rows, the last selected object and the current layer. An open interaction asks
 /// for nothing, and a failed command changes nothing.
 #[test]
 fn the_layers_panel_is_asked_to_reveal_what_a_command_changed() {
@@ -1362,10 +1362,17 @@ fn the_layers_panel_is_asked_to_reveal_what_a_command_changed() {
     take(&mut s);
     run(&mut s, "layer.highlight", highlight_params([g], "set"));
     assert_eq!(take(&mut s), Some(Row(g)), "a highlighted row");
-    // The current layer changes with the selection of art in another layer.
+    // The current layer changes with the selection of art in another layer: the new selection asks
+    // for its object, and the panel falls back to the current layer when it does not locate it.
     s.doc_mut().unwrap().active_layer = Some(sub);
     run(&mut s, "select.set", json!({"ids": [c.0]}));
-    assert_eq!(take(&mut s), Some(Current(layer)), "a new current layer wins over the selected object");
+    assert_eq!(take(&mut s), Some(Selected(c)), "a new selection wins over a new current layer");
+    // A new current layer alone asks for it: the highlighted row made current again.
+    run(&mut s, "layer.highlight", highlight_params([c], "set"));
+    take(&mut s);
+    s.doc_mut().unwrap().active_layer = Some(sub);
+    run(&mut s, "layer.setCurrent", json!({"id": c.0}));
+    assert_eq!(take(&mut s), Some(Current(layer)), "a new current layer alone");
     // Within the current layer only the last selected object changes.
     s.doc_mut().unwrap().active_layer = Some(sub);
     run(&mut s, "select.set", json!({"ids": [b.0]}));
