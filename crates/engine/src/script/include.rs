@@ -234,6 +234,8 @@ pub(crate) struct Files {
     module_dirs: HashMap<String, Vec<String>>,
     /// The key of each module path read, below the script's folder.
     module_paths: HashMap<String, String>,
+    /// The key [`Files::module_entry`] gave the script, in a module run.
+    entry_key: Option<String>,
 }
 
 /// A script at `path` runs with [`vectorcraft_js::Options::es2015`] when its file name ends in
@@ -383,6 +385,7 @@ impl Files {
             es2015: es2015_script(path),
             module_dirs: HashMap::new(),
             module_paths: HashMap::new(),
+            entry_key: None,
         }
     }
 
@@ -397,6 +400,7 @@ impl Files {
         let shown = self.frames.first().map(|f| f.shown.clone()).unwrap_or_else(|| Arc::from(""));
         let key = self.chain.first().map(|real| module_key(real)).unwrap_or_default();
         self.module_dirs.insert(key.clone(), Vec::new());
+        self.entry_key = Some(key.clone());
         let map = SourceMap { files: vec![shown], segments: vec![Segment { out_line: 1, file: 0, line: 1, shift: 0 }] };
         Ok((key, Expanded { source: text.to_string(), map, name: None, strict: None, engine: None }))
     }
@@ -507,6 +511,12 @@ impl Files {
         let names = self.module_dirs.get(key)?;
         let root = self.frames.first().and_then(|f| f.dir.clone())?;
         Some(names.iter().fold(root, |p, name| p.join(name)))
+    }
+
+    /// The script's folder when the run is a module run ([`Files::module_entry`] read the script),
+    /// or `None` for a script run.
+    pub(crate) fn entry_module_dir(&self) -> Option<PathBuf> {
+        self.module_dir(self.entry_key.as_deref()?)
     }
 
     /// The file `path` names for `$.evalFile`, relative to the file being run now, or to the folder

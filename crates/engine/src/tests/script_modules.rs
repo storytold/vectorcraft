@@ -300,3 +300,16 @@ fn script_module_eval_file_reads_beside_the_module_that_calls_it() {
     assert_eq!(r["log"], json!([["sub", "top"]]));
     let _ = std::fs::remove_dir_all(base);
 }
+
+#[test]
+fn script_module_function_of_the_script_reads_beside_the_script_when_another_file_calls_it() {
+    let base = folder("evalfile-entry");
+    write(&base.join("main/helper.jsx"), "'top'");
+    write(&base.join("main/sub/helper.jsx"), "'sub'");
+    // The file in `sub` calls the script's function while it is the file being run.
+    write(&base.join("main/sub/caller.jsx"), "$.global.load()");
+    let text = "$.global.load = function () { return $.evalFile('helper.jsx'); };\nvc.log($.evalFile('sub/caller.jsx'));";
+    let r = run(&base, text).unwrap();
+    assert_eq!(r["log"], json!(["top"]));
+    let _ = std::fs::remove_dir_all(base);
+}

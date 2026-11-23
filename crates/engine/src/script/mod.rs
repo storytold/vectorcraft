@@ -937,14 +937,18 @@ impl Host {
         }
     }
 
-    /// The folder of the module whose source has `tag`, when it is a module the script imported
-    /// (not the script itself, a file `$.evalFile` gave, or code from another run).
+    /// The folder of the module whose source has `tag`, when it is a module of a module run: the
+    /// script itself or a module it imported (not a file `$.evalFile` gave, or code from another
+    /// run).
     fn module_dir_at(&self, tag: u32) -> Option<std::path::PathBuf> {
         let script = self.script_tag.get();
         if tag == vectorcraft_js::UNKNOWN_SOURCE || script == vectorcraft_js::UNKNOWN_SOURCE {
             return None;
         }
-        let n = tag.checked_sub(script).filter(|n| *n > 0)?;
+        let n = tag.checked_sub(script)?;
+        if n == 0 {
+            return self.files.borrow().entry_module_dir();
+        }
         let key = self.module_maps.borrow().get(&(n as usize - 1)).cloned()?;
         self.files.borrow().module_dir(&key)
     }
