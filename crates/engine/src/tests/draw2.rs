@@ -6615,11 +6615,11 @@ fn a_stroke_leaving_an_open_path_across_it_drops_the_side_it_is_near() {
     assert!(ends_at(sp, Point::new(100.0, 100.0), Point::new(290.0, 50.0), 0.5), "the long side stays: {sp:?}");
 }
 
-/// A stroke drawn over an open shape's open ends, from near one end to near the other, redraws
-/// those ends along the stroke and closes the shape, whichever way it is drawn; the shape's body
-/// between stays.
+/// A stroke drawn across an open shape's opening, from near one end to near the other, redraws the
+/// part between where it starts and ends, whichever way it is drawn: the ends stay and the shape
+/// stays open. Only a stroke that starts at one end and finishes on the other closes it.
 #[test]
-fn a_stroke_over_an_open_shapes_ends_closes_it_along_the_stroke() {
+fn a_stroke_across_an_open_shapes_opening_redraws_the_part_between_and_leaves_it_open() {
     for reversed in [false, true] {
         let mut s = session();
         // A C open on the right: from the top right round the left to the bottom right.
@@ -6643,19 +6643,16 @@ fn a_stroke_over_an_open_shapes_ends_closes_it_along_the_stroke() {
         s.execute("path.freehand", &json!({"points": stroke, "redraw": {"id": id.0, "within": 4}})).unwrap();
         assert_eq!(paths(&s).len(), 1, "reversed {reversed}: no new path");
         let sp = &path(&s, id).subpaths[0];
-        assert!(sp.closed, "reversed {reversed}: the shape closed");
+        assert!(!sp.closed, "reversed {reversed}: still open");
+        let (e1, e2) = (on(40.0), on(320.0));
+        assert!(ends_at(sp, Point::new(e1.0, e1.1), Point::new(e2.0, e2.1), 1.0), "reversed {reversed}: both ends stay: {sp:?}");
         let bb = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath());
-        assert!(bb.x1 > 310.0 && bb.x0 < 105.0, "reversed {reversed}: closed along the stroke, the body kept: {bb:?}");
-        // The old ends (at 40° and 320°) are gone.
-        for deg in [40.0, 320.0] {
-            let e = on(deg);
-            assert!(!sp.anchors.iter().any(|q| q.p.distance(Point::new(e.0, e.1)) < 1.0), "reversed {reversed}: the end at {deg}° is redrawn");
-        }
+        assert!(bb.x1 > 310.0 && bb.x0 > 200.0, "reversed {reversed}: the stroke in place of the C's body: {bb:?}");
     }
 }
 
 /// A tall bump redrawn over most of an open line replaces that part: the ends beyond it stay and
-/// the line stays open, as there is no opening for the stroke to close.
+/// the line stays open.
 #[test]
 fn a_tall_redraw_over_most_of_an_open_line_keeps_its_ends() {
     for reversed in [false, true] {

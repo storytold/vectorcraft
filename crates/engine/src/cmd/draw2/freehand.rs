@@ -250,83 +250,6 @@ fn redraw_loop(mut sp: SubPath, k: usize, pts: &[Point], tol: Option<f64>, withi
     Some(sp)
 }
 
-/// How far, on average, the run of `sp`'s segments from anchor `i` forward to anchor `j` lies from
-/// stroke `pts` (sampled along both; the stroke thinned to at most 200 points).
-fn run_distance(sp: &SubPath, i: usize, j: usize, pts: &[Point]) -> f64 {
-    let (sum, count) = run_distance_sum(sp, i, j, pts);
-    if count == 0 { f64::INFINITY } else { sum / count as f64 }
-}
-
-/// [`run_distance`]'s sum of the samples' distances and their count.
-fn run_distance_sum(sp: &SubPath, i: usize, j: usize, pts: &[Point]) -> (f64, usize) {
-    use kurbo::ParamCurve;
-    let n = sp.anchors.len();
-    if n == 0 || pts.is_empty() {
-        return (0.0, 0);
-    }
-    let line = thinned(pts);
-    let to_line = |q: Point| {
-        line.iter()
-            .zip(line.iter().skip(1))
-            .map(|(&a, &b)| straight_distance(q, a, b))
-            .fold(line.first().map_or(f64::INFINITY, |a| q.distance(*a)), f64::min)
-    };
-    let segs = (j + n - i) % n;
-    let (mut sum, mut count) = (0.0, 0usize);
-    for k in 0..segs {
-        let c = sp.segment((i + k) % n);
-        for m in 1..=8 {
-            sum += to_line(c.eval(f64::from(m) / 8.0));
-            count += 1;
-        }
-    }
-    (sum, count)
-}
-
-/// Stroke `pts` thinned to at most about 200 points, its last kept, to measure it by.
-fn thinned(pts: &[Point]) -> Vec<Point> {
-    let step = pts.len().div_ceil(200).max(1);
-    pts.iter().step_by(step).chain(pts.last()).copied().collect()
-}
-
-/// How far `q` lies from the straight piece from `a` to `b`.
-fn straight_distance(q: Point, a: Point, b: Point) -> f64 {
-    let ab = b - a;
-    let t = if ab.hypot2() > 1e-18 { ((q - a).dot(ab) / ab.hypot2()).clamp(0.0, 1.0) } else { 0.0 };
-    q.distance(a + ab * t)
-}
-
-/// Is there an opening in open subpath `sp` for stroke `pts`, from anchor `lo` to anchor `hi` of
-/// it, to close? Only when the opening between the subpath's ends is smaller than the part the
-/// stroke would replace, and the stroke runs nearer the opening (straight from `lo` to `hi`) than
-/// that part. Without this, a tall bump redrawn over most of a line deletes the line's ends and
-/// closes it: the ends lie nearer such a stroke than the part under the bump does.
-fn closes_opening(sp: &SubPath, lo: usize, hi: usize, pts: &[Point]) -> bool {
-    use kurbo::ParamCurveArclen;
-    let Some(last) = sp.anchors.len().checked_sub(1) else { return false };
-    let (Some(head), Some(tail), Some(a), Some(b)) = (sp.anchors.first(), sp.anchors.get(last), sp.anchors.get(lo), sp.anchors.get(hi)) else {
-        return false;
-    };
-    // Lengths are measured to 0.01: a straight line's opening is as long as the whole line.
-    let replaced: f64 = (lo..hi).map(|k| sp.segment(k).arclen(0.01)).sum();
-    if head.p.distance(tail.p) + 0.01 >= replaced {
-        return false;
-    }
-    let Some(run) = sp.anchors.get_range(lo..=hi) else { return false };
-    let run = PathData::single(SubPath::new(run, false));
-    let line = thinned(pts);
-    // Weighted by length, so where the hand slowed down doesn't count for more.
-    let (mut to_opening, mut to_run, mut total) = (0.0, 0.0, 0.0);
-    for (&p, &q) in line.iter().zip(line.iter().skip(1)) {
-        let (len, mid) = (p.distance(q), p.midpoint(q));
-        let Some(on_run) = run.nearest(mid) else { return false };
-        to_opening += len * straight_distance(mid, a.p, b.p);
-        to_run += len * on_run.4;
-        total += len;
-    }
-    to_opening + 1e-6 * total < to_run
-}
-
 /// The area closed subpath `sp` would have with `stroke` (running from anchor `start` to anchor
 /// `end`) in place of its run from `start` forward to `end`.
 fn redrawn_area(sp: &SubPath, start: usize, end: usize, stroke: impl Iterator<Item = Point>) -> f64 {
@@ -342,36 +265,13 @@ fn redrawn_area(sp: &SubPath, start: usize, end: usize, stroke: impl Iterator<It
     area.abs()
 }
 
-/// An open subpath `sp` redrawn by a stroke from anchor `from` to anchor `to` across its open
-/// ends: the part between them stays, the ends beyond them go, and the stroke closes the path.
-fn redraw_across_gap(sp: &SubPath, from: usize, to: usize, pts: &[Point], tol: Option<f64>, within: f64) -> Option<SubPath> {
-    let (lo, hi) = (from.min(to), from.max(to));
-    let (a_lo, a_hi) = (*sp.anchors.get(lo)?, *sp.anchors.get(hi)?);
-    // The path runs lo → hi, then the stroke from hi back to lo.
-    let mut stroke = pts.to_vec();
-    if from == lo {
-        stroke.reverse();
-    }
-    bend_ends(&mut stroke, Some(a_hi.p), Some(a_lo.p), within);
-    let fit = stroke_subpath(&stroke, tol, false).anchors.into_vec();
-    let (Some(f0), Some(fl)) = (fit.first().copied(), fit.last().copied()) else { return None };
-    let mut anchors = sp.anchors.get_range(lo..=hi)?;
-    if let Some(a) = anchors.first_mut() {
-        *a = Anchor::with_handles(a.p, fl.h_in, a.h_out);
-    }
-    if let Some(a) = anchors.last_mut() {
-        *a = Anchor::with_handles(a.p, a.h_in, f0.h_out);
-    }
-    anchors.extend_from_slice(fit.get(1..fit.len().saturating_sub(1)).unwrap_or_default());
-    Some(SubPath::new(anchors, true))
-}
-
 /// Pencil's Edit Selected Paths in the middle of a path: a stroke that starts and ends within
 /// `within` of a subpath of `pd` replaces the section between with the stroke fitted at `tol` (with
 /// no `tol`, unfitted), its ends bent onto the path ([`bend_ends`]). On a closed subpath that is the
-/// way round that leaves the bigger shape. An open one closes only over an opening
-/// ([`closes_opening`]). The subpath's index and its new shape; None when the stroke doesn't start
-/// and end on the same subpath.
+/// way round that leaves the bigger shape. On an open one it is the part between, and the path
+/// stays open: it closes only from a stroke that starts at one of its ends and finishes on the
+/// other. The subpath's index and its new shape; None when the stroke doesn't start and end on the
+/// same subpath.
 fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -> Option<(usize, SubPath)> {
     let (first, last) = (*pts.first()?, *pts.last()?);
     let (si, _, _, _, d_a) = pd.nearest(first)?;
@@ -395,19 +295,6 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -
         return redraw_loop(sp, from, pts, tol, within).map(|sp| (si, sp));
     }
     let n = sp.anchors.len();
-    // On an open subpath the stroke replaces the part it lies along: the run between where it
-    // starts and ends, or the ends beyond them and the gap between, which closes the path.
-    if !sp.closed {
-        let (lo, hi) = (from.min(to), from.max(to));
-        let inner = run_distance(&sp, lo, hi, pts);
-        let (s1, c1) = run_distance_sum(&sp, 0, lo, pts);
-        let (s2, c2) = run_distance_sum(&sp, hi, n - 1, pts);
-        // Both ends taken: the stroke only spans the gap.
-        let outer = if c1 + c2 == 0 { 0.0 } else { (s1 + s2) / (c1 + c2) as f64 };
-        if outer < inner && closes_opening(&sp, lo, hi, pts) {
-            return redraw_across_gap(&sp, from, to, pts, tol, within).map(|sp| (si, sp));
-        }
-    }
     // The stroke goes from `start` to `end` and replaces the run between them; `kept` runs from
     // `end` round to `start`, then the stroke's inner anchors follow.
     let (start, end, reversed) = if sp.closed {
