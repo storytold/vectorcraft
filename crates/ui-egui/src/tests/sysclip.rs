@@ -19,6 +19,8 @@ use crate::{Services, VectorcraftApp, background};
 #[derive(Default)]
 pub(super) struct Board {
     flavours: Vec<Flavour>,
+    /// The app wrote what the clipboard holds (the platform's owner marker): nothing was copied since.
+    ours: bool,
     /// How many times the app wrote it.
     writes: usize,
     /// Another app has the clipboard open: the app's writes fail and change nothing, and reads
@@ -79,13 +81,14 @@ impl ClipboardBackend for Fake {
             if b.race_with_our_formats {
                 b.flavours.extend(ours.into_iter().filter(|f| f.mime != TEXT));
             }
+            b.ours = false;
             return Err(ClipboardError::Other("another app has the clipboard open".into()));
         }
         if b.partial {
             b.flavours = if b.partial_keeps_others { ours.into_iter().filter(|f| f.mime != TEXT).collect() } else { vec![] };
             return Err(ClipboardError::Other("a format could not be written".into()));
         }
-        *b = Board { flavours: ours, writes: b.writes + 1, ..std::mem::take(&mut *b) };
+        *b = Board { flavours: ours, ours: true, writes: b.writes + 1, ..std::mem::take(&mut *b) };
         Ok(0)
     }
 
@@ -107,6 +110,10 @@ impl ClipboardBackend for Fake {
 
     fn read_files(&mut self, _limit: usize) -> Result<Option<Vec<std::path::PathBuf>>, ClipboardError> {
         Ok(None)
+    }
+
+    fn owns(&mut self) -> Option<bool> {
+        Some(self.board().ours)
     }
 
     fn has(&mut self, mimes: &[&str]) -> bool {
@@ -145,7 +152,7 @@ pub(super) fn app() -> (VectorcraftApp, Arc<Mutex<Board>>) {
 pub(super) fn copy_elsewhere(board: &Arc<Mutex<Board>>, flavours: Vec<(&'static str, Vec<u8>)>) {
     let flavours = flavours.into_iter().map(|(mime, data)| Flavour { mime, data }).collect();
     let mut b = board.lock().unwrap();
-    *b = Board { flavours, ..std::mem::take(&mut *b) };
+    *b = Board { flavours, ours: false, ..std::mem::take(&mut *b) };
 }
 
 /// Another app opens the clipboard (`true`) or closes it.
