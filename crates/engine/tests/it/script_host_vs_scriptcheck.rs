@@ -151,19 +151,21 @@ const INSIDE: &[(&str, &str)] = &[
         "TextRange.prototype.",
         "autoLeading autoLeading= baselineShift baselineShift= changeCaseTo changeCaseTo= characterAttributes characterOffset \
          characterOffset= characterStyles characterStyles= characters constructor contents contents= deSelect deSelect= \
-         duplicate duplicate= end end= getLocalCharOverridesJSON getLocalCharOverridesJSON= getLocalParaOverridesJSON \
-         getLocalParaOverridesJSON= getParagraphLength getTextRunLength horizontalScale horizontalScale= insertionPoints \
-         insertionPoints= kerning kerning= leading leading= length length= lines lines= move move= paragraphAttributes \
-         paragraphStyles paragraphStyles= paragraphs parent remove rotation rotation= select select= size size= start start= \
-         story story= strikeThrough strikeThrough= textFont textFont= textRanges textRanges= textSelection textSelection= \
-         tracking tracking= typename underline underline= verticalScale verticalScale= words",
+         duplicate duplicate= end end= firstLineIndent firstLineIndent= getLocalCharOverridesJSON getLocalCharOverridesJSON= \
+         getLocalParaOverridesJSON getLocalParaOverridesJSON= getParagraphLength getTextRunLength horizontalScale \
+         horizontalScale= insertionPoints insertionPoints= justification justification= kerning kerning= leading leading= \
+         leftIndent leftIndent= length length= lines lines= move move= paragraphAttributes paragraphStyles paragraphStyles= \
+         paragraphs parent remove rightIndent rightIndent= rotation rotation= select select= size size= spaceAfter spaceAfter= \
+         spaceBefore spaceBefore= start start= story story= strikeThrough strikeThrough= textFont textFont= textRanges \
+         textRanges= textSelection textSelection= tracking tracking= typename underline underline= verticalScale \
+         verticalScale= words",
     ),
     ("Characters.", "prototype"),
-    ("Characters.prototype.", "constructor length parent typename"),
+    ("Characters.prototype.", "add addBefore constructor length parent typename"),
     ("Words.", "prototype"),
-    ("Words.prototype.", "constructor length parent typename"),
+    ("Words.prototype.", "add addBefore constructor length parent typename"),
     ("Paragraphs.", "prototype"),
-    ("Paragraphs.prototype.", "constructor length parent typename"),
+    ("Paragraphs.prototype.", "add addBefore constructor length parent typename"),
     ("CharacterAttributes.", "prototype"),
     (
         "CharacterAttributes.prototype.",
