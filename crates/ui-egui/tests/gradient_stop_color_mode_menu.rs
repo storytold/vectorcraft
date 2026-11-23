@@ -110,7 +110,9 @@ impl Scene {
         self.buttons.clear();
         let update = output.platform_output.accesskit_update.as_ref().expect("AccessKit enabled");
         for (_, node) in &update.nodes {
-            if let Some((label, bounds)) = node.label().zip(node.bounds()) {
+            if node.role() == egui::accesskit::Role::Button
+                && let Some((label, bounds)) = node.label().zip(node.bounds())
+            {
                 self.buttons
                     .push((label.to_owned(), Rect::from_min_max(pos2(bounds.x0 as f32, bounds.y0 as f32), pos2(bounds.x1 as f32, bounds.y1 as f32))));
             }
