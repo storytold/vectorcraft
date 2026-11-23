@@ -10,7 +10,8 @@
 //! Components are checked when a color is assigned to an object, and a value out of range throws a
 //! `RangeError` with nothing changed.
 //!
-//! VectorCraft's own rules, which the help pages do not state: components left out count as 0;
+//! VectorCraft's own rules, which the help pages do not state: components left out count as 0,
+//! and `new SpotColor()` starts with a `tint` of 100;
 //! `new cmykColor()` is the same as `new CMYKColor()`; `LabColor.l` is 0 to 100 and `a` and `b`
 //! are -128 to 128. `GrayColor.gray` runs from 0 (black) to 100 (white), as the GrayColor page
 //! says. A `SpotColor` (<https://ai-scripting.docsforadobe.dev/jsobjref/SpotColor/>) can be

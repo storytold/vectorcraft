@@ -2729,8 +2729,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   was. Reading `fillColor` or `strokeColor` gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
   global or spot swatch reads as a `SpotColor` with its `tint`, and with its `spot` when the swatch is a spot color or
   Registration). Assigning a `SpotColor` (https://ai-scripting.docsforadobe.dev/jsobjref/SpotColor/) links the fill or
-  stroke to its `spot`, a `Spot` of the path's document, at its `tint` (0 to 100, 0 when left out), with `paint.setFill`
-  or `paint.setStroke`; assigning a `GradientColor` or `PatternColor` throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
+  stroke to its `spot`, a `Spot` of the path's document, at its `tint` (0 to 100; VectorCraft's own defaults are 100
+  for `new SpotColor()` and 0 for a color object without a `tint`), with `paint.setFill` or `paint.setStroke`. A `SpotColor` read from a color linked to a global process
+  swatch has no `spot` and does not name the swatch, so assigning it throws an error that says it is not available yet,
+  and the path keeps its paint. Assigning a `GradientColor` or `PatternColor` throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
   art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
   stroke; a new-art gradient goes on the bounds of the path, or of the compound path or compound shape whose paint
   it shows, and a new-art pattern with a placement of its own, or one missing from the document, throws an error.
@@ -2776,8 +2778,11 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   and `removeAll()` keeps them; the Default Graphic Style cannot be renamed or removed, and
   `graphicStyles.removeAll()` keeps it. A color group takes solid
   colors only; `SwatchGroup.remove()` deletes the group with its swatches, and its `removeAll()` deletes the swatches
-  and keeps the group. `spots` lists Registration and the spot colors. `Spot.color` takes an `RGBColor`, a `CMYKColor`
-  or a `LabColor` in a document of either color space, and the spot keeps that color space. A spot's `colorType` reads
+  and keeps the group. `spots` lists Registration and the spot colors. A spot's color, set through `Spot.color` or
+  `Swatch.color`, takes an `RGBColor`, a `CMYKColor` or a `LabColor` in a document of either color space, and the spot
+  keeps that color space. This is VectorCraft's own rule: the Spot page says a color in another space than the
+  document's gives an error, and `spots.add()` follows the page by converting the fill. A process swatch's
+  `Swatch.color` stores an `RGBColor` in a CMYK document as CMYK. A spot's `colorType` reads
   and takes only `ColorModel.SPOT` (`ColorModel.REGISTRATION` for Registration), a gray spot's `spotKind` is
   `SpotColorKind.SPOTCMYK`, and `getInternalColor()` gives the
   components on the color classes' scales. `symbols.add` leaves the source art as it is, and removing a symbol turns

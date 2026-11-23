@@ -361,6 +361,68 @@ fn a_spot_color_paints_its_spot_at_its_tint() {
 }
 
 #[test]
+fn a_spot_color_left_without_a_tint_paints_at_its_default() {
+    let (mut s, a) = doc_with_paints();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pathItems[0], c = new SpotColor(); c.spot = d.spots.getByName('Ink');\
+         p.fillColor = c; vc.log([p.fillColor.spot.name, p.fillColor.tint]);\
+         p.strokeColor = {typename: 'SpotColor', spot: d.spots.getByName('Ink')}; vc.log([p.strokeColor.spot.name, p.strokeColor.tint]);",
+    );
+    assert_eq!(rounded(&Value::Array(out)), json!([["Ink", 100], ["Ink", 0]]), "new SpotColor() starts at 100, a color without a tint is 0");
+    let n = node(&s, a);
+    for (paint, want) in [(n.appearance.fill_paint(), 1.0), (n.appearance.stroke_paint(), 0.0)] {
+        match paint {
+            Paint::Solid { swatch: Some(name), tint, .. } => assert!(name == "Ink" && (tint - want).abs() < 1e-6, "{name} at {tint}"),
+            p => panic!("the paint is {p:?}"),
+        }
+    }
+}
+
+#[test]
+fn a_global_process_link_read_as_a_spot_color_is_not_assigned() {
+    let (mut s, a) = doc_with_paints();
+    s.execute("swatch.new", &json!({"name": "Leaf", "color": "#3a9a40", "global": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Moss", "color": "#405a20", "global": true})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [a.0], "swatch": "Leaf", "tint": 60})).unwrap();
+    let b = rect(&mut s, 30.0, 30.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [b.0], "swatch": "Moss", "tint": 60})).unwrap();
+    let c = rect(&mut s, 60.0, 60.0, 10.0, 10.0);
+    s.execute("paint.setFill", &json!({"ids": [c.0], "color": "#ff0000"})).unwrap();
+    let paints = |s: &Session| [a, b, c].map(|id| node(s, id).appearance.fill_paint());
+    let before = paints(&s);
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var q = app.activeDocument.pathItems; vc.log([q[0].fillColor.typename, q[0].fillColor.spot === undefined, q[2].fillColor.typename, q[3].fillColor.typename]);",
+    );
+    // `pathItems` holds a (Leaf), the document's second rectangle, b (Moss) and c (unlinked).
+    assert_eq!(out, vec![json!(["SpotColor", true, "SpotColor", "RGBColor"])]);
+    for script in [
+        "var q = app.activeDocument.pathItems; q[0].fillColor = q[0].fillColor;",
+        "var q = app.activeDocument.pathItems; q[2].fillColor = q[0].fillColor;",
+        "var q = app.activeDocument.pathItems; q[3].fillColor = q[0].fillColor;",
+    ] {
+        let e = failure(&mut s, script);
+        assert!(e.contains("without a spot is not available yet"), "{script}: {e}");
+        assert_eq!(paints(&s), before, "{script}");
+        assert_eq!(undo_steps(&s), steps, "{script}");
+    }
+}
+
+#[test]
+fn a_path_painted_with_registration_reads_and_takes_its_spot() {
+    let (mut s, a) = doc_with_paints();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pathItems[0], c = new SpotColor(); c.spot = d.spots.getByName('[Registration]'); c.tint = 100;\
+         p.strokeColor = c; vc.log([p.strokeColor.typename, p.strokeColor.spot.name, p.strokeColor.tint]);",
+    );
+    assert_eq!(rounded(&out[0]), json!(["SpotColor", "[Registration]", 100]));
+    assert!(node(&s, a).appearance.stroke_paint().is_registration(), "the stroke is linked to Registration");
+}
+
+#[test]
 fn a_spot_color_without_a_spot_of_the_document_is_refused() {
     let (mut s, _) = doc_with_paints();
     s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
@@ -369,7 +431,8 @@ fn a_spot_color_without_a_spot_of_the_document_is_refused() {
     let before = layers(&s);
     let steps = undo_steps(&s);
     for (source, part) in [
-        ("app.documents[0].pathItems[0].fillColor = new SpotColor();", "SpotColor.spot must be a Spot"),
+        ("app.documents[0].pathItems[0].fillColor = new SpotColor();", "without a spot is not available yet"),
+        ("var c = new SpotColor(); c.spot = 5; app.documents[0].pathItems[0].fillColor = c;", "SpotColor.spot must be a Spot"),
         ("var a = app.documents[0], c = new SpotColor(); c.spot = a.swatches.getByName('Ink'); a.pathItems[0].fillColor = c;", "must be a Spot"),
         (
             "var a = app.documents[0], c = new SpotColor(); c.spot = a.spots.getByName('Ink'); c.tint = 101; a.pathItems[0].fillColor = c;",
@@ -765,7 +828,7 @@ fn bad_color_components_throw_and_change_nothing() {
         ("app.activeDocument.pathItems[0].fillColor = {typename: 'Foo'};", "color object"),
         ("app.activeDocument.pathItems[0].fillColor = 5;", "color object"),
         ("app.activeDocument.pathItems[0].fillColor = new GradientColor();", "not available yet"),
-        ("app.activeDocument.pathItems[0].strokeColor = new SpotColor();", "SpotColor.spot must be a Spot"),
+        ("app.activeDocument.pathItems[0].strokeColor = new SpotColor();", "without a spot is not available yet"),
     ] {
         let e = failure(&mut s, source);
         assert!(e.contains(part), "{source}: {e}");

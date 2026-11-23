@@ -35,13 +35,20 @@
 //!   `graphicStyles.removeAll()` keeps it.
 //! - `SwatchGroup.remove()` deletes the group and its swatches; `removeAll()` deletes its swatches
 //!   and keeps the group. A group holds solid colors only.
-//! - `Spot.color` takes an RGB, CMYK or Lab color in a document of either color space, and the
-//!   spot keeps that color space. `colorType` reads `ColorModel.SPOT`, or
+//! - A spot's color, set through `Spot.color` or `Swatch.color`, takes an RGB, CMYK or Lab color
+//!   in a document of either color space, and the spot keeps that color space. The Spot page says
+//!   a color in another space than the document's gives an error; `spots.add()` follows it, and a
+//!   spot's color does not. A process swatch's `Swatch.color` stores an RGB color in a CMYK
+//!   document as CMYK. `colorType` reads `ColorModel.SPOT`, or
 //!   `ColorModel.REGISTRATION` for Registration, and takes only that value. `spotKind` reads
 //!   `SpotColorKind.SPOTCMYK` for a gray spot. `getInternalColor()` gives the components on the
 //!   scale of the color classes (0 to 255 for RGB, 0 to 100 for CMYK and gray, L*a*b* as is).
 //! - A `SpotColor` assigned to a path's `fillColor` or `strokeColor` links the paint to its `spot`,
-//!   a Spot of the path's document, at its `tint`; reading the paint back gives that `spot`.
+//!   a Spot of the path's document, at its `tint` (VectorCraft's own defaults: 100 from
+//!   `new SpotColor()`, 0 for a color object without a `tint`);
+//!   reading the paint back gives that `spot`. A paint linked to a global process swatch reads as
+//!   a `SpotColor` without a `spot`, which does not name the swatch, so assigning it throws an
+//!   error that says it is not available yet, with nothing changed.
 //! - `symbols.add(art)` keeps the art where it is and does not make it an instance.
 //!   `Symbol.remove()` and `symbols.removeAll()` turn the instances into plain art.
 //! - `applyTo` and `mergeTo` take one page item of the same document that can be edited;
@@ -649,8 +656,8 @@ fn res_remove(h: &Host, kind: Kind, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// `Swatch.color`: a new color object. A spot swatch gives a `SpotColor` of the spot at 100%, and
-/// a tint of a spot a `SpotColor` of that spot at the tint.
+/// `Swatch.color`: a new color object. A spot swatch or Registration gives a `SpotColor` of that
+/// Spot at 100%, and a tint of a spot a `SpotColor` of that spot at the tint.
 fn swatch_color(h: &Host, kind: Kind, a: &[Data]) -> Answer {
     let r = this_res(h, a, kind)?;
     let w = swatch_now(h, &r, kind)?;
@@ -666,7 +673,7 @@ fn swatch_color(h: &Host, kind: Kind, a: &[Data]) -> Answer {
 pub(super) fn paint_color(h: &Host, doc: Doc, paint: &Paint) -> Answer {
     let color = colors::of_paint(paint);
     let base = match paint {
-        Paint::Solid { swatch: Some(base), .. } => with_doc(h, doc, |_, st| exists(&st.doc, Kind::Spot, base)).then(|| base.clone()),
+        Paint::Solid { swatch: Some(base), .. } => is_spot_of(h, doc, base).then(|| base.clone()),
         _ => None,
     };
     match (color, base) {
@@ -676,6 +683,11 @@ pub(super) fn paint_color(h: &Host, doc: Doc, paint: &Paint) -> Answer {
         }
         (color, _) => Ok(color),
     }
+}
+
+/// Whether the document `doc` has a Spot named `name`.
+pub(super) fn is_spot_of(h: &Host, doc: Doc, name: &str) -> bool {
+    with_doc(h, doc, |_, st| exists(&st.doc, Kind::Spot, name))
 }
 
 /// The name of the Spot that the `spot` of a `SpotColor` assigned to a page item of the document
@@ -714,11 +726,31 @@ fn set_swatch_color(h: &Host, kind: Kind, a: &[Data]) -> Answer {
     if w.spot && matches!(color, Color::Gray { .. }) {
         return Err(HostError::Error("a spot's color must be an RGBColor, a CMYKColor or a LabColor".into()));
     }
-    if now == color {
+    // A spot keeps the color space it is given; a process swatch stores an RGB color in a CMYK
+    // document as CMYK, as `swatch.edit` does without `keepModel`.
+    let stored = if w.spot { color } else { stored_in(h, r.doc, color) };
+    if now == stored {
         return Ok(Data::Undefined);
     }
-    run_on(h, r.doc, "swatch.edit", &json!({"name": r.name, "color": colors::param(&color)}))?;
+    let mut params = json!({"name": r.name, "color": colors::param(&color)});
+    if w.spot {
+        params["keepModel"] = json!(true);
+    }
+    run_on(h, r.doc, "swatch.edit", &params)?;
     Ok(Data::Undefined)
+}
+
+/// `color` as `swatch.edit` stores it in the document `doc` without `keepModel`: an RGB color in a
+/// CMYK document becomes CMYK through the color settings.
+fn stored_in(h: &Host, doc: Doc, color: Color) -> Color {
+    let mode = with_doc(h, doc, |_, st| st.doc.color_mode);
+    match color {
+        Color::Rgb { .. } if mode != crate::doc::ColorMode::Rgb => {
+            let cms = vectorcraft_color::cms::active();
+            cms.convert(&color, mode.model(), cms.settings().intent)
+        }
+        _ => color,
+    }
 }
 
 /// The `ColorModel` of the Spot `name`: Registration's own, or `SPOT`.

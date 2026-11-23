@@ -748,12 +748,17 @@ fn path_stroke_color(h: &super::Host, a: &[Data]) -> Answer {
 }
 
 /// Links the fill (`fill`) or the stroke to the Spot `spot` at `tint` (0 to 100), unless it is
-/// linked to it at that tint already.
+/// linked to it at that tint already. A `SpotColor` without a `spot`, as a color linked to a global
+/// process swatch reads, throws: it does not name the swatch it was read from.
 fn set_spot_color(h: &super::Host, a: &[Data], fill: bool, spot: &Data, tint: f64) -> Answer {
+    if matches!(spot, Data::Undefined) {
+        return Err(HostError::Error("assigning a SpotColor without a spot is not available yet".into()));
+    }
     let (item, look) = this_look(h, a)?;
-    let name = super::resources::assigned_spot(h, spot, item.doc)?;
     let now = if fill { &look.fill } else { &look.stroke };
-    let same = matches!(now, Paint::Solid { swatch: Some(n), tint: t, .. } if *n == name && *t == colors::unit(tint, 100.0));
+    let at_tint = |t: &f32| *t == colors::unit(tint, 100.0);
+    let name = super::resources::assigned_spot(h, spot, item.doc)?;
+    let same = matches!(now, Paint::Solid { swatch: Some(n), tint: t, .. } if *n == name && at_tint(t));
     if !same {
         edit_path(h, item, if fill { "paint.setFill" } else { "paint.setStroke" }, json!({"swatch": name, "tint": tint}))?;
     }

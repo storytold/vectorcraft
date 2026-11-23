@@ -222,6 +222,40 @@ fn a_spot_takes_a_cmyk_color_in_an_rgb_document() {
 }
 
 #[test]
+fn a_spot_keeps_an_rgb_color_in_a_cmyk_document() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300, "colorMode": "cmyk"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": {"c": 80, "m": 40, "y": 0, "k": 0}, "spot": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Leaf", "color": {"c": 60, "m": 0, "y": 90, "k": 10}})).unwrap();
+    let rgb = |s: &Session, name: &str| {
+        matches!(
+            s.active().unwrap().doc.swatch(name).map(|w| &w.paint),
+            Some(vectorcraft_color::Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, .. })
+        )
+    };
+    let assign = |what: &str| format!("var c = new RGBColor(); c.red = 200; c.green = 60; c.blue = 20; {what}.color = c;");
+    for (what, name) in [("app.activeDocument.spots.getByName('Pea')", "Pea"), ("app.activeDocument.swatches.getByName('Ink')", "Ink")] {
+        if name == "Pea" {
+            log(&mut s, "app.activeDocument.spots.add().name = 'Pea';");
+        }
+        let out = log(&mut s, &format!("{} var q = app.activeDocument.spots.getByName('{name}').color; vc.log([q.typename, q.red]);", assign(what)));
+        assert_eq!(out, vec![json!(["RGBColor", 200])], "{what}");
+        assert!(rgb(&s, name), "{name} keeps its RGB color in the CMYK document");
+        let kind = log(&mut s, &format!("vc.log(app.activeDocument.spots.getByName('{name}').spotKind);"));
+        assert_eq!(kind, vec![json!("SpotColorKind.SPOTRGB")], "{name}");
+        let steps = undo_steps(&s);
+        log(&mut s, &assign(what));
+        assert_eq!(undo_steps(&s), steps, "assigning {name} the color it has records no step");
+    }
+    let what = "app.activeDocument.swatches.getByName('Leaf')";
+    log(&mut s, &assign(what));
+    assert!(!rgb(&s, "Leaf"), "a process swatch stores the RGB color as CMYK in the CMYK document");
+    let steps = undo_steps(&s);
+    log(&mut s, &assign(what));
+    assert_eq!(undo_steps(&s), steps, "assigning Leaf the RGB color it was given records no step");
+}
+
+#[test]
 fn spots_list_registration_and_keep_it() {
     let (mut s, _) = doc();
     let out = log(
