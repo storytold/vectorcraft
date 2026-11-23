@@ -436,7 +436,11 @@ impl VectorcraftApp {
         // them, even if the worker below finishes them during this same tick.
         ctx.data_mut(|d| d.insert_temp(egui::Id::unique("clipboard.pending-at-tick"), self.clipboard_publishing.is_pending()));
         screen_color::tick(self, ctx);
-        self.poll_finished_work();
+        // Once a frame: work that finishes during a frame's first pass is applied in the next frame, not in a second
+        // pass of this one.
+        if ctx.current_pass_index() == 0 {
+            self.poll_finished_work();
+        }
         crate::script_runs::poll(self);
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
