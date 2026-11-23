@@ -108,16 +108,15 @@ struct Edits {
 impl Edits {
     fn parse(p: &Value) -> Result<Self> {
         const C: &str = "attributes.set";
-        let text = |k: &str| -> Result<Option<String>> {
-            p.get(k).map(|v| v.as_str().map(|s| s.trim().to_string()).ok_or_else(|| bad(C, format!("`{k}` must be a string")))).transpose()
-        };
+        let text =
+            |k: &str| -> Result<Option<&str>> { p.get(k).map(|v| v.as_str().ok_or_else(|| bad(C, format!("`{k}` must be a string")))).transpose() };
         Ok(Self {
             show_center: p.get("showCenter").map(|v| v.as_bool().ok_or_else(|| bad(C, "`showCenter` must be true or false"))).transpose()?,
             image_map: text("imageMap")?
-                .map(|s| ImageMap::parse(&s).ok_or_else(|| bad(C, "`imageMap` must be none, rectangle or polygon")))
+                .map(|s| ImageMap::parse(s.trim()).ok_or_else(|| bad(C, "`imageMap` must be none, rectangle or polygon")))
                 .transpose()?,
-            url: text("url")?,
-            note: text("note")?,
+            url: text("url")?.map(|s| s.trim().to_string()),
+            note: text("note")?.map(str::to_string),
         })
     }
 
@@ -193,4 +192,19 @@ fn set_fill_rule(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(todo.len())
     })?;
     Ok(json!({ "changed": changed }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn note_preserves_whitespace_in_attribute_edits() {
+        let note = "  first line\n\nsecond line  ";
+        let edits = Edits::parse(&json!({"note": note, "url": " https://example.com ", "imageMap": " polygon "})).unwrap();
+        assert_eq!(edits.note.as_deref(), Some(note));
+        assert_eq!(edits.url.as_deref(), Some("https://example.com"));
+        assert!(edits.image_map.is_some());
+        assert_eq!(Edits::parse(&json!({"note": ""})).unwrap().note.as_deref(), Some(""));
+    }
 }

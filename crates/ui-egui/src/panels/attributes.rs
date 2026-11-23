@@ -182,7 +182,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::divider(ui);
         widgets::subheader(ui, tl!("Note:"));
         ui.add_enabled_ui(has, |ui| {
-            if let Some(n) = widgets::text_field_named(ui, "attr-note", Some(tl!("Note:")), info.note.as_deref(), ui.available_width(), 3) {
+            let value = info.note.as_deref().unwrap_or_default();
+            if let Some(n) = widgets::exact_text_area_named(ui, "attr-note", Some(tl!("Note:")), value, ui.available_width(), 3) {
                 set(app, json!({ "note": n }));
             }
         });

@@ -342,9 +342,14 @@ pub fn exact_text_field(ui: &mut Ui, id: impl std::hash::Hash, value: &str, widt
 
 /// [`exact_text_field`] for a row named explicitly instead of by an adjacent label widget.
 pub fn exact_text_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: &str, width: f32) -> Option<String> {
+    exact_text_area_named(ui, id, name, value, width, 1)
+}
+
+/// A text area that preserves whitespace when a change is committed.
+pub fn exact_text_area_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: &str, width: f32, rows: usize) -> Option<String> {
     let label = take_previous_label(ui);
     let id = id_with(ui.scope_id(), id);
-    let (buf, commit, _, _) = recessed_text(ui, id, value, width, 1, label, name);
+    let (buf, commit, _, _) = recessed_text(ui, id, value, width, rows, label, name);
     (commit && buf != value).then_some(buf)
 }
 
