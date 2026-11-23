@@ -313,6 +313,24 @@ fn read_command_line(
     Ok(CommandLine { files, in_window_menus, new_instance, safe_mode })
 }
 
+/// Whether the window opens through XWayland, for Linux Display Server `pref` (`main`).
+#[cfg(target_os = "linux")]
+fn opens_through_xwayland(pref: Option<&str>) -> bool {
+    if !xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
+        return false;
+    }
+    if !xwayland::x11_libraries_found() {
+        log::warn!("Linux Display Server is X11, but the X11 libraries aren't all installed: opening the window on Wayland");
+        return false;
+    }
+    if pref != Some("x11") {
+        log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
+    } else {
+        log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
+    }
+    true
+}
+
 fn main() -> std::process::ExitCode {
     // Windows: the update helper is a copy of this program started with `--finish-update`.
     #[cfg(windows)]
@@ -463,24 +481,7 @@ fn main() -> std::process::ExitCode {
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
     // and the other choices do so when a pen is attached, where the pen draws (#2028, #4967).
     #[cfg(target_os = "linux")]
-    let mut forced_to_x11 = false;
-    #[cfg(target_os = "linux")]
-    {
-        let pref_value = engine_pref("linuxDisplayServer");
-        let pref = pref_value.as_ref().and_then(serde_json::Value::as_str);
-        if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
-            if xwayland::x11_libraries_found() {
-                forced_to_x11 = true;
-                if pref != Some("x11") {
-                    log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
-                } else {
-                    log::info!("opening the window through XWayland (Preferences › Performance › Linux Display Server)");
-                }
-            } else {
-                log::warn!("Linux Display Server is X11, but the X11 libraries aren't all installed: opening the window on Wayland");
-            }
-        }
-    }
+    let forced_to_x11 = opens_through_xwayland(engine_pref("linuxDisplayServer").as_ref().and_then(serde_json::Value::as_str));
     #[cfg(not(target_os = "linux"))]
     let forced_to_x11 = false;
     // A window forced onto XWayland runs on X11, whose window manager draws the frame: the
@@ -825,18 +826,9 @@ fn main() -> std::process::ExitCode {
 /// this process has open, until it runs that program. A file lock held through such a copy outlives
 /// its own handle, so a GPU start test that released the start file and opened it again found it
 /// still locked, as if another copy of the app were running, and failed. A test that starts a
-/// program holds [`spawning`]; a test that depends on the start file's lock holds [`no_spawns`].
-#[cfg(all(
-    test,
-    any(feature = "wgpu", any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))
-))]
+/// program holds its write side; a test that depends on the start file's lock holds [`no_spawns`].
+#[cfg(all(test, feature = "wgpu"))]
 static CHILD_SPAWN: std::sync::RwLock<()> = std::sync::RwLock::new(());
-
-/// Held while a test starts another program (see [`CHILD_SPAWN`]).
-#[cfg(all(test, any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd")))]
-fn spawning() -> std::sync::RwLockWriteGuard<'static, ()> {
-    CHILD_SPAWN.write().unwrap_or_else(std::sync::PoisonError::into_inner)
-}
 
 /// Held by a test that releases a locked file and opens it again (see [`CHILD_SPAWN`]).
 #[cfg(all(test, feature = "wgpu"))]

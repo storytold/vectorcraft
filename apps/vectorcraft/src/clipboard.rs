@@ -892,8 +892,7 @@ mod portable {
 
     /// What our last write put on the clipboard, for a read answered late ([`Unanswered::paste`]): a
     /// paste does not take what this app copied. Whether the clipboard still holds a copy is
-    /// `Clipboard::holds_ours` of the platform clipboard.
-    // PLAN: kept: the late-answer paste and its tests (a_bitmap_paste_waits_for_the_owner_off_the_ui_thread, a_late_answer_to_an_ownership_check_is_pasted_only_while_it_is_awaited) still name it.
+    /// [`Clipboard::owns`](ClipboardBackend::owns).
     #[derive(Clone)]
     enum Ours {
         Text(String),
@@ -1632,6 +1631,22 @@ mod portable {
                 return wl.has(&mimes);
             }
             arboard_has(&mimes, cb, Backend::get_text, Backend::file_list)
+        }
+
+        /// Whether arboard's clipboard still holds the Copy made here, by its text or its bitmap's
+        /// size read with [`Backend::image_now`]'s wait, so the check on the UI thread waits no
+        /// longer than a text read. `None` (the platform clipboard compares what it reads) before a
+        /// handle is open and on the Wayland core protocol.
+        fn owns(&mut self) -> Option<bool> {
+            let cb = self.cb.opened()?;
+            #[cfg(target_os = "linux")]
+            if matches!(cb, Backend::Wayland(_)) {
+                return None;
+            }
+            Some(match self.ours.as_ref()? {
+                Ours::Text(t) => cb.get_text().is_ok_and(|now| now == *t),
+                Ours::Image(w, h) => cb.image_now().is_ok_and(|now| (now.width, now.height) == (*w, *h)),
+            })
         }
     }
 
