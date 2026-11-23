@@ -296,7 +296,10 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         ("stylize.outerGlow", json!({"mode": "Normal"})),
         // A `color` is also taken as [r, g, b] 0..1 or a color object, as the effects draw it.
         ("stylize.dropShadow", json!({"color": [1.0, 0.0, 0.0]})),
+        ("stylize.dropShadow", json!({"color": [1, 0, 0]})),
         ("stylize.outerGlow", json!({"color": {"model": "gray", "k": 0.5}})),
+        ("stylize.innerGlow", json!({"color": {"model": "cmyk", "c": 0, "m": 1, "y": 0, "k": 0}})),
+        ("stylize.innerGlow", json!({"color": {"model": "lab", "l": 100, "a": -128, "b": 127}})),
     ] {
         assert_eq!(check(&e(id, params.clone()), false), Ok(()), "{id} {params}");
     }
@@ -334,6 +337,12 @@ fn returned_effects_are_built_in_effects_with_their_own_parameters() {
         ("stylize.dropShadow", json!({"color": [1.0, "0", 0.0]}), "color"),
         ("stylize.innerGlow", json!({"color": {"model": "rgb"}}), "color"),
         ("stylize.outerGlow", json!({"color": true}), "color"),
+        // Color components are from 0 to 1, Lab's lightness from 0 to 100.
+        ("stylize.dropShadow", json!({"color": [2, -1, 0]}), "color"),
+        ("stylize.dropShadow", json!({"color": [0.5, 0.5, 1.01]}), "color"),
+        ("stylize.outerGlow", json!({"color": {"model": "rgb", "r": 2.0, "g": 0.0, "b": 0.0}}), "color"),
+        ("stylize.innerGlow", json!({"color": {"model": "gray", "k": -0.5}}), "color"),
+        ("stylize.innerGlow", json!({"color": {"model": "lab", "l": 101, "a": 0, "b": 0}}), "color"),
         ("adjust.levels", json!({"channel": "cyan"}), "channel"),
         ("blur.radial", json!({"centerX": 1.5}), "centerX"),
         ("blur.gaussian", json!({"linear": 1}), "linear"),

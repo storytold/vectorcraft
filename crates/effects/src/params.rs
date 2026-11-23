@@ -219,7 +219,7 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
     }
     let takes_color = catalog_index().get(id).is_some_and(|info| info.defaults.get("color").is_some_and(Value::is_string));
     if takes_color && given.get("color").is_some_and(|v| !is_color(v)) {
-        return Err("`color` must be a #rrggbb color".into());
+        return Err("`color` must be a #rrggbb color, [r, g, b] from 0 to 1 or a color object".into());
     }
     let takes_blend_mode = catalog_index().get(id).is_some_and(|info| info.params.contains("mode: blend mode"));
     if takes_blend_mode && given.get("mode").is_some_and(|v| v.as_str().and_then(crate::raster::named_blend_mode).is_none()) {
@@ -250,15 +250,23 @@ fn check_returned_values(id: &str, given: &Map<String, Value>) -> Result<(), Str
 }
 
 /// Can an effect read `v` as its `color`: a hex color or name [`Color::from_hex`] reads, `[r, g, b]`
-/// with three numbers first, or a color object?
+/// with three numbers from 0 to 1 first, or a color object with its components from 0 to 1 (a Lab
+/// color's lightness from 0 to 100, and finite a and b)?
 ///
 /// [`Color::from_hex`]: vectorcraft_doc::color::Color::from_hex
 fn is_color(v: &Value) -> bool {
     use vectorcraft_doc::color::Color;
+    let unit = |x: f32| (0.0..=1.0).contains(&x);
     match v {
         Value::String(s) => Color::from_hex(s).is_some(),
-        Value::Array(a) => a.len() >= 3 && a.iter().take(3).all(Value::is_number),
-        Value::Object(_) => serde_json::from_value::<Color>(v.clone()).is_ok(),
+        Value::Array(a) => a.len() >= 3 && a.iter().take(3).all(|c| c.as_f64().is_some_and(|c| (0.0..=1.0).contains(&c))),
+        Value::Object(_) => match serde_json::from_value::<Color>(v.clone()) {
+            Ok(Color::Rgb { r, g, b }) => [r, g, b].into_iter().all(unit),
+            Ok(Color::Cmyk { c, m, y, k }) => [c, m, y, k].into_iter().all(unit),
+            Ok(Color::Gray { k }) => unit(k),
+            Ok(Color::Lab { l, a, b }) => (0.0..=100.0).contains(&l) && a.is_finite() && b.is_finite(),
+            Err(_) => false,
+        },
         _ => false,
     }
 }
