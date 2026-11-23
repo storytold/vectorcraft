@@ -186,9 +186,11 @@ fn hash_listed_names(ui: &UiState, h: &mut DefaultHasher) {
 
 /// The prefixes of linked command sets made for other apps, which VectorCraft does not route: their keys (Shift+=
 /// and Alt+Shift+letters for blend modes, Cmd+[ and Cmd+] for layer order, Cmd+G and F3 for a find bar, Insert for
-/// warp pins, a rich text editor's Cmd+Enter and Cmd+Shift+B, which the Type tool's editor has) are VectorCraft's own
-/// commands' keys, so the catalog drops them.
-const UNROUTED_SETS: [&str; 6] = ["blendMode.", "layersPanel.", "find.", "pinWarp.", "perspectiveWarp.", "textEditor."];
+/// warp pins, a rich text editor's Cmd+Enter and Cmd+Shift+B, which the Type tool's editor has, digits and Shift+digits
+/// for a painting tool's opacity, the shell's F and Shift+F screen-mode cycle, which `view.screenMode` is) are
+/// VectorCraft's own commands' keys, so the catalog drops them.
+const UNROUTED_SETS: [&str; 8] =
+    ["blendMode.", "layersPanel.", "find.", "pinWarp.", "perspectiveWarp.", "textEditor.", "toolOpacity.", "screenMode."];
 
 /// The commands of [`UNROUTED_SETS`] that come with default keys.
 static UNROUTED: std::sync::LazyLock<Vec<String>> = std::sync::LazyLock::new(|| {
