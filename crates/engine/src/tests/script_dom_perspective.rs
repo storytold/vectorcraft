@@ -287,9 +287,14 @@ fn startup_presets_list_names_presets_add_document_takes() {
          var d = app.documents.addDocument(n); vc.log([n, d.width === p.width && d.documentColorSpace === p.colorMode]); }",
     );
     let names: Vec<&str> = out[0].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-    // The New Document profiles in the dialog's order, then the Basic presets.
-    let listed: Vec<&str> = crate::cmd::newdoc::profile_names().chain(["Basic CMYK", "Basic RGB"]).collect();
-    assert_eq!(names, listed);
+    // Scripts take `startupPresetsList[0]` as the print preset.
+    assert_eq!(names.first(), Some(&"Print"));
+    // Every New Document profile and both Basic presets, each once.
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    let mut listed: Vec<&str> = crate::cmd::newdoc::profile_names().chain(["Basic CMYK", "Basic RGB"]).collect();
+    listed.sort_unstable();
+    assert_eq!(sorted, listed);
     assert_eq!(out[1..3], [json!(true), json!(true)]);
     assert_eq!(out.len(), 3 + names.len());
     for (name, made) in names.iter().zip(&out[3..]) {

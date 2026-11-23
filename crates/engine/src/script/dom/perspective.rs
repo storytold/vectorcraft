@@ -27,9 +27,9 @@
 //!   same. Changing the result changes nothing else. Each result counts toward the run's limit
 //!   of `DocumentPreset` objects, as `new DocumentPreset()` does.
 //! - `startupPresetsList` is an array of the startup preset names, each of which
-//!   `documents.addDocument` and `getPresetSettings` take: the New Document profiles in the order
-//!   the New Document dialog lists them, then `Basic CMYK` and `Basic RGB`. Each read gives a new
-//!   array, so changing it changes nothing else.
+//!   `documents.addDocument` and `getPresetSettings` take: `Print` first, then the other New
+//!   Document profiles, then `Basic CMYK` and `Basic RGB`. Each read gives a new
+//!   array; a script that changes that array does not change the list a later read gives.
 //! - The workspace methods, `loadColorSettings`, `showPresets` and the perspective grid preset
 //!   files are not available yet.
 
@@ -238,12 +238,13 @@ fn preset_settings(h: &Host, a: &[Data]) -> Answer {
     super::add_preset(h, out)
 }
 
-/// The startup presets besides the New Document profiles, which give a document of one color mode.
-const BASIC_PRESETS: [&str; 2] = ["Basic CMYK", "Basic RGB"];
+/// The startup presets in the order `app.startupPresetsList` gives them: `Print` first, then the
+/// other New Document profiles, then the presets that give a document of one color mode.
+const STARTUP_PRESETS: [&str; 9] = ["Print", "Web", "Mobile", "Film & Video", "Art & Illustration", "Branding", "Social", "Basic CMYK", "Basic RGB"];
 
 /// `app.startupPresetsList`: the names of the startup presets, as a new array.
 fn startup_presets(_: &Host, _: &[Data]) -> Answer {
-    Ok(Data::Array(crate::cmd::newdoc::profile_names().chain(BASIC_PRESETS).map(text).collect()))
+    Ok(Data::Array(STARTUP_PRESETS.into_iter().map(text).collect()))
 }
 
 /// The members this module adds to `Document`'s.
