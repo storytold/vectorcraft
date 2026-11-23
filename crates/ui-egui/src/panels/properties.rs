@@ -27,7 +27,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Ruler guides selected on their own (a click on one): their position.
     let guides = super::transform::selected_guides(app);
     let label = heading(first.as_deref(), n_sel, editing_artboards, guides.is_some());
-    ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(label).size(11.5).color(t.text_dim));
+        // One selected object: its frame id, the id commands, MCP and the control channel take,
+        // selectable so it can be copied.
+        if n_sel == 1
+            && !editing_artboards
+            && let Some(n) = first.as_deref()
+        {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add(egui::Label::new(egui::RichText::new(format!("ID {}", n.id.0)).size(11.5).color(t.text_dim)).selectable(true))
+                    .on_hover_text(tl!("Frame ID"));
+            });
+        }
+    });
     ui.add_space(4.0);
     if editing_artboards {
         artboard_sections(app, ui);

@@ -126,6 +126,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 - 2026-11-18: Built-in symbol library Media Controls: adds a seventh procedural symbol library (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu) containing six original vector symbols (Play, Pause, Stop, Skip Next, Shuffle, Repeat) generated in code without default 9-slice guides (part of Gap 5). Headline numbers unchanged.
 
+- 2026-11-01: Export As Text can join lines of point type into paragraphs (Join Lines into Paragraphs: one font family and size, a shared left edge, evenly spaced baselines, columns read left to right), as a PDF's lines come in, with LF, CRLF or a space between a paragraph's lines; Write Paragraph IDs starts each paragraph with `[#id]`, and File › Import Text Paragraphs… puts edited or translated paragraphs back by them, a paragraph of lines becoming wrapping area type threaded across its columns, in one undo step (`paragraphs`, `lineBreaks`, `ids`, `text.importParagraphs`).
 - 2026-11-14: Built-in symbol library Weather Icons: adds a sixth procedural symbol library (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu) containing six original vector symbols (Sun, Moon, Cloud, Rain, Thunder, Snow) generated in code without default 9-slice guides (part of Gap 5). Headline numbers unchanged.
 - 2026-11-14: Built-in Tech Circuit brush library: Circuit Trace (chamfered art with 45-degree elbows and terminal pads), Bus Lines (parallel conductor pattern) and Terminal Nodes (repeating solder pads, test points and leads), all original geometry generated in code. Ten built-in brush libraries; G5 remaining estimate 3–13 h (estimated), headline numbers unchanged.
 - 2026-11-18: Built-in Paint brush library: Flat Sweep, Dry Drag, Loaded Stroke and Fan Sweep, original art brushes generated in code that take the stroke color as tints. Thirteen built-in brush libraries; headline numbers unchanged.
@@ -249,6 +250,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-01 | minor | Progress log row for text export paragraphs, paragraph ids and Import Text Paragraphs; headline numbers unchanged. |
 | 2026-11-15 | minor | Graphic Styles: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h). |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
 | 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |

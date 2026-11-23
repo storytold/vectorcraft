@@ -48,6 +48,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Revert", "file.revert"),
                 Sep,
                 c("Place…", "file.place"),
+                c("Import Text Paragraphs…", "text.importParagraphs"),
                 Sep,
                 sub(
                     "Export",

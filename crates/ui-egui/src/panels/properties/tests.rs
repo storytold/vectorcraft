@@ -64,7 +64,8 @@ fn one_clip_group_has_edit_clipping_path_and_edit_contents_at_the_top() {
     let shown = labels(&texts);
     let at = |label: &str| shown.iter().position(|t| t == label).unwrap_or_else(|| panic!("{label} in {shown:?}"));
     assert_eq!(at("Clip Group"), 0, "{shown:?}");
-    assert!(at("Edit Clipping Path") == 1 && at("Edit Contents") == 2, "{shown:?}");
+    assert_eq!(at(&format!("ID {group}")), 1, "the frame id beside the heading: {shown:?}");
+    assert!(at("Edit Clipping Path") == 2 && at("Edit Contents") == 3, "{shown:?}");
     click(&mut app, &ctx, &texts, "Edit Contents");
     assert_eq!(selected(&app), std::slice::from_ref(&art), "Edit Contents selects the clipped art");
     app.run("select.set", json!({"ids": [group]})).unwrap();
@@ -94,7 +95,7 @@ fn one_clip_group_has_edit_clipping_path_and_edit_contents_at_the_top() {
     app.run("select.set", json!({"ids": [group]})).unwrap();
     let texts = frame(&mut app, &ctx, vec![]);
     let shown = labels(&texts);
-    assert_eq!(shown.iter().position(|t| t == "Edit Clipping Path"), Some(1), "{shown:?}");
+    assert_eq!(shown.iter().position(|t| t == "Edit Clipping Path"), Some(2), "{shown:?}");
     assert!(!shown.iter().any(|t| t == "Edit Contents"), "nothing to edit: {shown:?}");
     click(&mut app, &ctx, &texts, "Edit Clipping Path");
     assert_eq!(selected(&app), std::slice::from_ref(&mask), "Edit Clipping Path selects the clipping path");
@@ -224,6 +225,26 @@ fn the_flip_buttons_keep_the_reference_properties_names() {
     for old in ["Flip Horizontal", "Flip Vertical"] {
         assert!(!names.contains(&old), "{old} in {names:?}");
     }
+}
+
+/// One selected object shows its frame id beside the heading; two selected, or none, show none.
+#[test]
+fn one_selected_object_shows_its_frame_id() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 120, "height": 80})).unwrap()["id"].clone();
+    let b = app.run("shape.ellipse", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].clone();
+    let ctx = egui::Context::default();
+    let ids =
+        |app: &mut VectorcraftApp| -> Vec<String> { frame(app, &ctx, vec![]).into_iter().map(|(t, _)| t).filter(|t| t.starts_with("ID ")).collect() };
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(ids(&mut app), [format!("ID {a}")]);
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    assert_eq!(ids(&mut app), [format!("ID {b}")]);
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert!(ids(&mut app).is_empty(), "two objects");
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert!(ids(&mut app).is_empty(), "nothing selected");
 }
 
 /// #3451: the Properties panel Transform section shows ellipse pie angles and Invert Pie.

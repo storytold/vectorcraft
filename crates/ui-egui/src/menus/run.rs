@@ -239,6 +239,15 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "file.recentFiles" => Ok(json!(io::recent_files(app).iter().filter(|path| recent_readable(path)).collect::<Vec<_>>())),
         "file.place" => crate::place::run(app, p),
         "file.place.queue" => crate::place::queue(app, p),
+        // Without a file: pick the text file the paragraphs come back from.
+        "text.importParagraphs" if ["path", "data", "dataBase64"].iter().all(|k| p.get(k).is_none()) => {
+            let pick =
+                crate::FilePick { filters: vec![crate::FilePick::filter("Text", vectorcraft_engine::cmd::fileio::TEXT_EXTS)], ..Default::default() };
+            match crate::picks::open(app, &pick) {
+                Some(path) => app.run("text.importParagraphs", json!({ "path": path })),
+                None => Err("cancelled".into()),
+            }
+        }
         "file.export.svg" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::svg_options::open(app, crate::dialogs::svg_options::Mode::Export, None);
             Ok(Value::Null)

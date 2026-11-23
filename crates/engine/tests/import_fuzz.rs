@@ -12,7 +12,8 @@
 //! nor `.cmx` files (mutated, cut short and garbage after the header, opened and placed),
 //! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
-//! generated script text and mutated scripts).
+//! generated script text and mutated scripts), nor text paragraphs put back by id
+//! (`text.importParagraphs`).
 //!
 //! `PROPTEST_CASES=20000 cargo test -p vectorcraft-engine --test import_fuzz` runs a deeper search.
 // Integration tests: unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
@@ -8469,6 +8470,37 @@ proptest! {
 
 proptest! {
     #![proptest_config(config())]
+
+    /// Text paragraphs put back by id (`text.importParagraphs`): ids the document has, ids it
+    /// hasn't, story paragraphs past the last, junk lines and bytes. An error or an edit, never a
+    /// panic, and the document still exports.
+    #[test]
+    fn text_paragraph_imports_never_panic(
+        parts in prop::collection::vec((0usize..8, 0usize..4, any::<bool>(), "[^#]{0,40}"), 0..12),
+        junk in prop::collection::vec(any::<u8>(), 0..64),
+    ) {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let mut ids = vec![];
+        for k in 0..4 {
+            let line = json!({"x": 10 + 200 * (k / 2), "y": 50 + 12 * (k % 2), "size": 9, "text": format!("line {k} of some text")});
+            ids.push(s.execute("text.create", &line).unwrap()["id"].as_u64().unwrap());
+        }
+        let story = json!({"x": 10, "y": 200, "text": "one\ntwo", "area": {"width": 100, "height": 40}});
+        ids.push(s.execute("text.create", &story).unwrap()["id"].as_u64().unwrap());
+        let mut text = String::new();
+        for (pick, k, in_story, body) in parts {
+            let id = ids.get(pick).copied().unwrap_or(999_999);
+            text.push_str(&if in_story { format!("[#{id}.{k}] {body}\r\n") } else { format!("[#{id}] {body}\n{body}\r\n") });
+        }
+        let mut bytes = text.into_bytes();
+        bytes.extend(junk);
+        let r = catch_quiet(|| s.execute("text.importParagraphs", &json!({ "dataBase64": vectorcraft_format::base64_encode(&bytes) })));
+        prop_assert!(r.is_ok(), "text.importParagraphs panicked");
+        prop_assert!(!matches!(r, Ok(Err(vectorcraft_engine::EngineError::Internal { .. }))), "internal error: {r:?}");
+        let exported = s.execute("document.export", &json!({"format": "txt", "ids": true}));
+        prop_assert!(exported.is_ok(), "{exported:?}");
+    }
 
     /// A stroke's arrowheads (#8188): its arrowhead entries with any scale of any kind, naming a
     /// symbol the file defines, one it doesn't or one named in Chinese, the symbol's art any run of

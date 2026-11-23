@@ -1,5 +1,6 @@
 //! Export As → Text and Export Selection to `.txt`: the Text Export Options (encoding, line
-//! endings, selection only) for a picked `.txt` path. Fields are `document.export` params
+//! endings, lines joined into paragraphs, the line breaks between them and paragraph ids,
+//! selection only) for a picked `.txt` path. Fields are `document.export` params
 //! (`format`, `path`…).
 
 use serde_json::{Value, json};
@@ -19,12 +20,17 @@ const ENCODINGS: [&str; 2] = ["utf8", "utf16"];
 const ENCODING_LABELS: [&str; 2] = ["UTF-8", "UTF-16 (Unicode)"];
 const LINE_ENDINGS: [&str; 2] = ["lf", "crlf"];
 const LINE_ENDING_LABELS: [&str; 2] = ["LF (macOS, Linux)", "CRLF (Windows)"];
+const LINE_BREAKS: [&str; 3] = ["lf", "crlf", "space"];
+const LINE_BREAK_LABELS: [&str; 3] = ["LF", "CRLF", "Space"];
 
 /// Open the options for exporting the document's text to `path`.
 pub fn open(app: &mut VectorcraftApp, path: &str) {
     // The platform's own line endings by default.
     let eol = if cfg!(windows) { LINE_ENDINGS[1] } else { LINE_ENDINGS[0] };
-    let fields = json!({"format": "txt", "path": path, "encoding": ENCODINGS[0], "lineEndings": eol, "selectionOnly": false});
+    let fields = json!({
+        "format": "txt", "path": path, "encoding": ENCODINGS[0], "lineEndings": eol,
+        "paragraphs": false, "lineBreaks": LINE_BREAKS[0], "ids": false, "selectionOnly": false,
+    });
     app.ui.dialog = Some(Dialog::new(KIND, fields));
 }
 
@@ -38,6 +44,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         label(ui, tl!("Line Endings:"));
         choice(ui, d, "lineEndings", &LINE_ENDINGS, &LINE_ENDING_LABELS);
         ui.end_row();
+    });
+    ui.add_space(8.0);
+    // Lines of point type that belong together (a PDF's) as paragraphs, their lines separated by
+    // the line breaks and each paragraph ended by the line ending.
+    form::check(ui, d, "paragraphs", tl!("Join Lines into Paragraphs"));
+    let paragraphs = d.bool("paragraphs");
+    ui.add_enabled_ui(paragraphs, |ui| {
+        egui::Grid::new("text-export-paragraphs").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
+            label(ui, tl!("Line Breaks in Paragraphs:"));
+            choice(ui, d, "lineBreaks", &LINE_BREAKS, &LINE_BREAK_LABELS);
+            ui.end_row();
+        });
+        // Ids Import Text Paragraphs puts edited or translated paragraphs back by.
+        form::check(ui, d, "ids", tl!("Write Paragraph IDs"));
     });
     ui.add_space(8.0);
     // Export Selection keeps Selection Only on.

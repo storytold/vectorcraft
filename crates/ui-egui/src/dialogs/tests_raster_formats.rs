@@ -104,6 +104,43 @@ fn text_export_options_write_the_stories() {
 /// WebP Options: Lossless by default, with the Quality slider disabled; Lossy enables it, and OK
 /// writes a lossy file at that quality, without a note.
 #[test]
+fn text_export_options_join_lines_into_paragraphs() {
+    let (mut app, written) = app(1);
+    app.run("text.create", json!({"x": 5, "y": 30, "text": "one"})).unwrap();
+    app.run("text.create", json!({"x": 5, "y": 42, "text": "two"})).unwrap();
+    app.run("file.exportAs", json!({"format": "txt"})).unwrap();
+    confirm(&mut app).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.bool("paragraphs"), d.str("lineBreaks")), (false, "lf".into()), "off, with LF between a paragraph's lines");
+    frame(&mut app);
+    set(&mut app, "paragraphs", json!(true));
+    set(&mut app, "lineEndings", json!("crlf"));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let (_, bytes) = written.borrow().last().cloned().unwrap();
+    assert_eq!(bytes.as_slice(), &b"one\ntwo\r\n"[..], "the two lines are one paragraph");
+}
+
+#[test]
+fn text_export_options_write_paragraph_ids_that_import_reads_back() {
+    let (mut app, written) = app(1);
+    let id = app.run("text.create", json!({"x": 5, "y": 30, "text": "one"})).unwrap()["id"].as_u64().unwrap();
+    app.run("file.exportAs", json!({"format": "txt"})).unwrap();
+    confirm(&mut app).unwrap();
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("ids"), "off by default");
+    frame(&mut app);
+    set(&mut app, "paragraphs", json!(true));
+    set(&mut app, "ids", json!(true));
+    set(&mut app, "lineEndings", json!("lf"));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let (_, bytes) = written.borrow().last().cloned().unwrap();
+    assert_eq!(String::from_utf8(bytes).unwrap(), format!("[#{id}] one\n"));
+    let r = app.run("text.importParagraphs", json!({ "data": format!("[#{id}] eins\n") })).unwrap();
+    assert_eq!(r["replaced"], 1, "{r}");
+}
+
+#[test]
 fn webp_options_choose_lossless_or_lossy_at_a_quality() {
     use crate::widgets::accessibility_tests::tree;
     use egui::accesskit::Role;
