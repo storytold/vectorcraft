@@ -142,7 +142,9 @@ fn tools_open_their_options() {
         assert_eq!(open_options(&mut app, tool), Err("nothing selected".into()), "{tool}");
     }
     assert!(open_options(&mut app, "lasso").is_err(), "a tool without options");
-    // Hand fits the artboard in the window, Zoom goes to 100%.
+    // Hand fits the active artboard in the window, Zoom goes to 100%. The Artboard tool made the second active above:
+    // the first is the active one again.
+    crate::panels::artboards::select(&mut app, 0);
     app.view_mut().unwrap().rect = egui::Rect::from_min_size(Pos2::ZERO, egui::vec2(660.0, 460.0));
     app.run("view.setZoom", json!({"zoom": 333, "center": [10, 10]})).unwrap();
     open_options(&mut app, "hand").unwrap();

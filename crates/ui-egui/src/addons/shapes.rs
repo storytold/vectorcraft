@@ -6,7 +6,6 @@
 use std::ops::RangeInclusive;
 
 use craft::behavior::{IconId, NumberCodec};
-use craft::keymap::CommandRef;
 use craft::menu::Node;
 use craft::ui::buttons::{Button, ToggleButton};
 use craft::ui::choice::Segmented;
@@ -67,10 +66,13 @@ pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     // The tools with live shape widgets: Hide/Show Shape Widgets first, so a narrow bar leaves out
     // the shape's fields before it.
     if vectorcraft_tools::shape::shows_shape_widgets(&tool) {
-        // The command's own title is the label, and a click runs the command.
-        member(ui, |ui| {
-            Button::command(CommandRef::new("view.shapeWidgets")).show(ui);
-        });
+        // The command is in no menu, so the button names it: Hide, or Show while the widgets are hidden.
+        let label = if app.ui.view.shape_widgets { tl!("Hide Shape Widgets") } else { tl!("Show Shape Widgets") };
+        let mut clicked = false;
+        member(ui, |ui| clicked |= Button::new(label.to_string()).show(ui).clicked());
+        if clicked {
+            crate::menus::invoke(app, "view.shapeWidgets", json!({}));
+        }
         divider(ui);
     }
 

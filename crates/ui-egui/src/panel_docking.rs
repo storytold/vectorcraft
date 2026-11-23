@@ -816,7 +816,8 @@ fn shared_command_with(app: &mut VectorcraftApp, id: &str, params: &Value, extra
     let mut actions = match id {
         _ if shown => Vec::new(),
         "window.panel.close" | "window.panel.minimize" => Vec::new(),
-        _ => show_actions(ws, &space, &panel, id != "window.panel.float"),
+        // Only Dock and Move put a panel with no place in the dock; showing it (`window.panel.activate`) floats it.
+        _ => show_actions(ws, &space, &panel, matches!(id, "window.panel.dock" | "window.panel.move")),
     };
     // The command's own actions read the layout with the panel shown.
     let trial = if actions.is_empty() {

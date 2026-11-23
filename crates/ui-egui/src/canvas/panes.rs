@@ -377,10 +377,7 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
             let mut catcher = ui.new_child(egui::UiBuilder::new().id_salt(("pane-drops", w)).max_rect(area));
             super::drops::show(app, &mut catcher, w, BodyKind::Pane);
         }
-        app.canvas.panes.released_from = None;
-        if let Some((w, drop)) = app.canvas.panes.released.take() {
-            super::drops::drop_on_pane(app, w, &drop);
-        }
+        drop_released(app);
         // Note the fits this frame made, for `refit_resized`.
         for ((w, area), was_unfitted) in areas.iter().zip(unfitted) {
             if let (true, Some(v), Some(s)) = (was_unfitted, crate::doc_windows::view(app, *w).filter(|v| v.fitted).copied(), slot(app, *w)) {
@@ -395,6 +392,15 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         crate::doc_windows::show_window(app, w);
     }
     true
+}
+
+/// Drops the art released over a pane in the frame the pointer reached it ([`super::drops::released_on_pane`]), once
+/// the panes that could have taken it as a drop have drawn.
+pub(crate) fn drop_released(app: &mut VectorcraftApp) {
+    app.canvas.panes.released_from = None;
+    if let Some((w, drop)) = app.canvas.panes.released.take() {
+        super::drops::drop_on_pane(app, w, &drop);
+    }
 }
 
 /// Window `w`'s [`Slot`].

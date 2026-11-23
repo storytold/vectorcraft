@@ -190,11 +190,13 @@ impl Component for CanvasDrops<'_> {
 /// the carry it catches: the pane's area is noted instead.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKind) {
     let rect = ui.max_rect();
-    if kind == BodyKind::Pane
-        && let Some(later) = &mut app.canvas.panes.drops
-    {
-        later.push((win, rect));
-        return;
+    if kind == BodyKind::Pane {
+        if let Some(later) = &mut app.canvas.panes.drops {
+            later.push((win, rect));
+            return;
+        }
+        // A pane outside Tile (a floating window's, the main window's while the current window floats).
+        app.canvas.windows.noted.push((win, rect));
     }
     let view = match kind {
         BodyKind::Live => app.canvas_view(),
@@ -248,28 +250,31 @@ pub(crate) fn drop_on_pane(app: &mut VectorcraftApp, win: Win, drop: &Dropped) {
     }
 }
 
-/// Art carried off the canvas and released at `at` (screen) over a pane this pass noted, in the frame the pointer
-/// reached it, before the pane could take it as a drop: the pane's window and the drop there.
+/// Art carried off the canvas and released at `at` (screen) over a pane this pass noted, or a pane outside Tile the
+/// last frame drew (the front one first), in the frame the pointer reached it, before the pane could take it as a drop:
+/// the pane's window and the drop there.
 pub(crate) fn released_on_pane(app: &VectorcraftApp, art: CarriedArt, at: Pos2, op: DropOperation) -> Option<(Win, Dropped)> {
-    let (win, rect) = app.canvas.panes.drops.as_ref()?.iter().rev().copied().find(|(_, rect)| rect.contains(at))?;
+    let outside = app.canvas.windows.last_noted.iter().rev();
+    let (win, rect) = outside.chain(app.canvas.panes.drops.iter().flatten().rev()).copied().find(|(_, rect)| rect.contains(at))?;
     let view = pane_view(app, win, rect)?;
     Some((win, Dropped { payload: Payload::Art(art), at: view.to_doc(at), zoom: view.zoom, op }))
 }
 
 /// Starts carrying the art of a Selection, Direct Selection or Group Selection move that left the canvas, handing it
-/// to the drag session. Moves of anchors or segments stay reshapes. → whether a carry runs.
-pub(crate) fn carry_out(app: &mut VectorcraftApp, cx: &mut ToolContext<'_>, pointer: &ToolPointer) -> bool {
-    let Some(art) = carried(app, cx, pointer) else { return false };
+/// to the drag session. Moves of anchors or segments stay reshapes. `covered`: another window is over the canvas at the
+/// pointer. → whether a carry runs.
+pub(crate) fn carry_out(app: &mut VectorcraftApp, cx: &mut ToolContext<'_>, pointer: &ToolPointer, covered: bool) -> bool {
+    let Some(art) = carried(app, cx, pointer, covered) else { return false };
     let panel = PanelDrag::Art { document: art.document, ids: art.ids.clone() };
     cx.start_drag_also(art, Arc::new(panel), DragPreview::None);
     true
 }
 
 /// The art a Selection, Direct Selection or Group Selection move carries with the pointer at `pointer`, off the
-/// canvas; `None` on the canvas or for any other gesture.
-pub(crate) fn carried(app: &VectorcraftApp, cx: &ToolContext<'_>, pointer: &ToolPointer) -> Option<CarriedArt> {
+/// canvas or where another window (`covered`) is over it; `None` on the canvas or for any other gesture.
+pub(crate) fn carried(app: &VectorcraftApp, cx: &ToolContext<'_>, pointer: &ToolPointer, covered: bool) -> Option<CarriedArt> {
     let tool = app.session.tool_id();
-    if !matches!(tool, "selection" | "directSelection" | "groupSelection") || cx.rect.contains(pointer.pos) {
+    if !matches!(tool, "selection" | "directSelection" | "groupSelection") || (cx.rect.contains(pointer.pos) && !covered) {
         return None;
     }
     let st = app.session.active()?;

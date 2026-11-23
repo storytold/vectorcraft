@@ -52,7 +52,9 @@ impl Harness {
     /// The rect of the node of `role` named like `panel` (its title, ignoring case and spaces) in the last frame.
     // PLAN: assumed the dock names a tab and an icon by the panel's title, with the roles Tab and Button.
     fn named(&self, panel: &str, role: egui::accesskit::Role) -> Option<Rect> {
-        let wanted = panel.to_lowercase().replace(' ', "");
+        // A library panel's title is its library's name.
+        let title = crate::panels::library_panel::tab_label(&self.app, panel).unwrap_or_else(|| panel.to_owned());
+        let wanted = title.to_lowercase().replace(' ', "");
         self.nodes
             .iter()
             .filter(|(_, node)| node.role() == role && node.label().is_some_and(|l| l.to_lowercase().replace(' ', "") == wanted))
@@ -163,15 +165,19 @@ fn icon_column(columns: &[Column<String>]) -> Option<usize> {
         .map(|(_, k)| k)
 }
 
-/// Answers the topmost open dialog with OK or Cancel, then runs the frame's dialog pump.
+/// Answers the topmost open dialog with OK or Cancel, then runs the frame's dialog pump. A held OK is answered
+/// through the pump.
 fn answer(app: &mut VectorcraftApp, ok: bool) {
     let ctx = app.ui_ctx.clone().expect("a frame ran");
-    let answered = app.dialogs().expect("a window").with(|host| {
-        let id = host.open_dialogs().last().map(|d| d.id).expect("a dialog is open");
-        if ok { host.confirm_by_id(&ctx, id) } else { host.cancel_by_id(&ctx, id) }
-    });
-    assert!(answered, "the dialog took the answer");
-    crate::dialogs::host::pump(app, &ctx);
+    let id = app.dialogs().expect("a window").with(|host| host.open_dialogs().last().map(|d| d.id)).expect("a dialog is open");
+    if ok {
+        crate::tests::picks::answer_dialog(app, id, &[], true);
+    } else {
+        assert!(app.dialogs().expect("a window").with(|host| host.cancel_by_id(&ctx, id)), "the dialog took the answer");
+        crate::dialogs::host::pump(app, &ctx);
+    }
+    let still = app.dialogs().expect("a window").with(|host| host.open_dialogs().iter().any(|d| d.id == id));
+    assert!(!still, "the dialog took the answer");
 }
 
 fn first_column_iconic(h: &Harness) -> bool {

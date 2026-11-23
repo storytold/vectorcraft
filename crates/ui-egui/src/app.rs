@@ -487,6 +487,7 @@ impl VectorcraftApp {
                 let Ok(mut app) = app.try_borrow_mut() else { return };
                 let app: &mut VectorcraftApp = &mut app;
                 app.canvas.windows.area = Some(ui.available_rect_before_wrap());
+                app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
                 let floats = crate::doc_windows::current_floats(app);
                 if !canvas::tiled_area(app, ui) {
                     if floats {

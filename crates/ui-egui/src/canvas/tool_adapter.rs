@@ -116,11 +116,19 @@ struct SessionTool<'a> {
     view: ViewInfo,
     /// The art of this gesture goes to a drag session (another tab or a panel): the view stays.
     carrying: Cell<bool>,
+    /// The canvas's context and layer: a window over the canvas (a floating document's) hides it from the pointer.
+    ctx: egui::Context,
+    layer: egui::LayerId,
 }
 
 impl<'a> SessionTool<'a> {
-    fn new(app: &'a mut VectorcraftApp, view: ViewInfo) -> Self {
-        Self { app: RefCell::new(app), view, carrying: Cell::new(false) }
+    fn new(app: &'a mut VectorcraftApp, view: ViewInfo, ui: &Ui) -> Self {
+        Self { app: RefCell::new(app), view, carrying: Cell::new(false), ctx: ui.ctx().clone(), layer: ui.layer_id() }
+    }
+
+    /// Whether another window covers the canvas at `pointer`, so art moved there leaves the canvas.
+    fn covered(&self, pointer: &ToolPointer) -> bool {
+        self.ctx.layer_id_at(pointer.pos).is_some_and(|l| l != self.layer)
     }
 
     fn app(&self) -> RefMut<'_, &'a mut VectorcraftApp> {
@@ -278,7 +286,7 @@ impl CanvasTool for SessionTool<'_> {
             return;
         }
         // Art carried off the canvas waits where it last moved; back on the canvas the move goes on.
-        let carried = super::drops::carry_out(&mut self.app(), cx, pointer);
+        let carried = super::drops::carry_out(&mut self.app(), cx, pointer, self.covered(pointer));
         if !carried {
             let ev = pointer_event(PointerKind::Drag, pointer, cx);
             dispatch(&mut self.app(), &ev, self.view);
@@ -298,7 +306,7 @@ impl CanvasTool for SessionTool<'_> {
             return;
         }
         drop(app);
-        let carried = super::drops::carried(&self.app(), cx, pointer);
+        let carried = super::drops::carried(&self.app(), cx, pointer, self.covered(pointer));
         self.app().canvas.panes.released_from = carried.as_ref().map(|art| (art.document, art.revision));
         if cx.over_drop_target() || carried.is_some() {
             // The art goes to the drop target, or nowhere off the canvas: the move is given up where it started.
@@ -529,7 +537,7 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
     let mut response = if crate::dialogs::recolor::edit_tab::with_theme_pick(app, |app, tool| picked = host_run(app, ui, pass, tool)) {
         picked
     } else {
-        let mut tool = SessionTool::new(app, view_info);
+        let mut tool = SessionTool::new(app, view_info, ui);
         let response = host_run_session(&mut tool, ui, pass);
         drop(tool);
         response

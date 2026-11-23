@@ -81,6 +81,10 @@ pub struct Windows {
     known: Vec<u64>,
     /// The documents' views beyond the one each shows ([`views`]).
     pub(crate) views: Views,
+    /// The panes drawn outside Tile in this frame so far (the floating windows', the main window's while the current
+    /// window floats), back to front, with the art area each takes drops in; and those of the last frame.
+    pub(crate) noted: Vec<(Win, egui::Rect)>,
+    pub(crate) last_noted: Vec<(Win, egui::Rect)>,
 }
 
 impl Windows {
@@ -311,8 +315,14 @@ pub(crate) fn focus_main_window(app: &VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// Draw the floating document windows, after the main window's canvas. Call once per frame from
-/// the main window.
+/// the main window. Art released over a pane in the frame the pointer reached it drops there then.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    show_windows(app, ui);
+    crate::canvas::panes::drop_released(app);
+}
+
+/// [`show`]'s windows.
+fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let live: Vec<(u64, u32)> = windows(app).into_iter().filter_map(|w| key(app, w)).collect();
     app.ui.floating.retain(|w| live.contains(&(w.uid, w.view)));
     let current = current(app).and_then(|w| key(app, w));
