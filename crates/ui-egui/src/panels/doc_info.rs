@@ -52,7 +52,9 @@ fn set_selection_only(ctx: &egui::Context, on: bool) {
     set_pstate(ctx, SELECTION_ONLY_LEGACY, on);
 }
 
-fn no_selection(app: &VectorcraftApp) -> bool {
+/// Whether no artwork is selected. Artboards the Artboard tool has selected are not artwork:
+/// `document.info` lists them under Document whatever this says.
+fn no_artwork_selected(app: &VectorcraftApp) -> bool {
     match app.session.active() {
         Some(st) => st.selection.objects.is_empty(),
         None => true,
@@ -82,8 +84,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
-        if sel_only && no_selection(app) {
-            widgets::dim_label(ui, tl!("(No selection)"));
+        if sel_only && no_artwork_selected(app) {
+            widgets::dim_label(ui, tl!("(No artwork selected)"));
         }
         let sections = i["sections"].as_array().map_or(&[][..], Vec::as_slice);
         let shown = sections.iter().filter(|s| category.is_empty() || s["id"] == category.as_str());
@@ -783,7 +785,7 @@ mod tests {
         app.session.execute("select.none", &json!({})).unwrap();
         let text = objects_panel(&mut app, false);
         assert!(text.contains("Paths\n2\n") && text.contains("Text Objects\n1\n"), "{text}");
-        assert!(!text.contains("(No selection)"), "{text}");
+        assert!(!text.contains("(No artwork selected)"), "{text}");
     }
 
     /// Selection Only counts the selected object and what it holds, and an empty selection says so.
@@ -801,7 +803,28 @@ mod tests {
         assert!(path_only.contains("Paths\n1\n") && !path_only.contains("Text Objects\n"), "the selected path only: {path_only}");
         app.session.execute("select.none", &json!({})).unwrap();
         let empty = objects_panel(&mut app, true);
-        assert!(empty.contains("(No selection)") && !empty.contains("Paths\n") && !empty.contains("Text Objects\n"), "{empty}");
+        assert!(empty.contains("(No artwork selected)") && !empty.contains("Paths\n") && !empty.contains("Text Objects\n"), "{empty}");
+    }
+
+    /// With Selection Only on, an artboard the Artboard tool has selected still shows under
+    /// Document when no artwork is selected, and the empty-state message speaks of artwork only.
+    #[test]
+    fn test_doc_info_selection_only_keeps_selected_artboard() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("artboard.new", &json!({"x": 150, "y": 40, "width": 60, "height": 80})).unwrap();
+        app.session.execute("artboard.setProps", &json!({"index": 1, "name": "Back"})).unwrap();
+        app.session.execute("select.none", &json!({})).unwrap();
+        app.select_tool("artboard");
+        app.session.set_tool_option("selected", &json!([1]));
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| {
+            set_selection_only(ui.ctx(), true);
+            set_pstate(ui.ctx(), "docinfo-category", "document".to_string());
+            show(app, ui);
+        });
+        assert!(text.contains("Back"), "the selected artboard: {text}");
+        assert!(!text.contains("(No selection)"), "no generic empty state: {text}");
+        assert!(text.contains("(No artwork selected)"), "{text}");
     }
 
     /// The panel menu's Selection Only item stores `docinfo-selection-only` and checks itself.
