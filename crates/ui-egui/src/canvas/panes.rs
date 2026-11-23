@@ -95,9 +95,10 @@ pub struct Panes {
     fits: HashMap<Slot, (egui::Vec2, f64, Point)>,
     /// Where the dividers between the tiled panes lie.
     at: SplitAt,
-    /// While the tiled panes draw, the art areas of the panes drawn so far, by window: their drop catchers show after
-    /// the current window's body ([`super::drops::show`]).
-    pub(crate) drops: Option<Vec<(Win, egui::Rect)>>,
+    /// While the tiled panes draw, or the main window's pane while the current window floats: the art areas of the
+    /// panes drawn so far, by window, with their layers. Their drop catchers show after the current window's body
+    /// ([`super::drops::show`]).
+    pub(crate) drops: Option<Vec<(Win, egui::Rect, egui::LayerId)>>,
     /// Art released over a pane in the frame the pointer reached it, applied after the current window's body.
     pub(crate) released: Option<(Win, super::drops::Dropped)>,
     /// The `(uid, revision)` of the document whose carried art was released this pass, before the release gave up its
@@ -373,10 +374,7 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         if let Some((w, cell)) = cells.iter().copied().find(|(w, _)| Some(*w) == active) {
             show_body(app, ui, w, cell, BodyKind::Live);
         }
-        for (w, area) in app.canvas.panes.drops.take().unwrap_or_default() {
-            let mut catcher = ui.new_child(egui::UiBuilder::new().id_salt(("pane-drops", w)).max_rect(area));
-            super::drops::show(app, &mut catcher, w, BodyKind::Pane);
-        }
+        catch_waiting(app, ui);
         drop_released(app);
         note_fits(app, &areas, &unfitted);
     });
@@ -395,6 +393,15 @@ pub(crate) fn drop_released(app: &mut VectorcraftApp) {
     app.canvas.panes.released_from = None;
     if let Some((w, drop)) = app.canvas.panes.released.take() {
         super::drops::drop_on_pane(app, w, &drop);
+    }
+}
+
+/// Shows the drop catchers of the panes that waited ([`super::drops::show`]) for the current window's body, whose tool
+/// may start the carry they catch.
+pub(crate) fn catch_waiting(app: &mut VectorcraftApp, ui: &mut Ui) {
+    for (w, area, layer) in app.canvas.panes.drops.take().unwrap_or_default() {
+        let mut catcher = ui.new_child(egui::UiBuilder::new().id_salt(("pane-drops", w)).layer_id(layer).max_rect(area));
+        super::drops::show(app, &mut catcher, w, BodyKind::Pane);
     }
 }
 

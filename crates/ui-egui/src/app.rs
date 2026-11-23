@@ -512,6 +512,9 @@ impl VectorcraftApp {
                 app.canvas.windows.area = Some(ui.available_rect_before_wrap());
                 app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
                 let floats = crate::doc_windows::current_floats(app);
+                // The current window's body is in its floating window, drawn after this pane: the pane's drop catcher
+                // waits for it ([`crate::doc_windows::show`]).
+                app.canvas.panes.drops = floats.then(Vec::new);
                 if !canvas::tiled_area(app, ui) {
                     if floats {
                         let rect = ui.available_rect_before_wrap();
