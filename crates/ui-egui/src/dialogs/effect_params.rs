@@ -114,6 +114,13 @@ pub(super) fn generic(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
     defaults.into_iter().filter_map(|(key, default)| generic_row(cx, key, default, relative)).collect()
 }
 
+/// One row per stored value of an effect that has no rows of its own (a plug-in no longer
+/// installed): the JSON type of each value decides the kind, as for [`generic`].
+pub(crate) fn stored_params(cx: &EffectCx, values: &Map<String, Value>) -> Vec<Param> {
+    let relative = values.get("relative").and_then(Value::as_bool).unwrap_or(false);
+    values.iter().filter_map(|(key, value)| generic_row(cx, key, value, relative)).collect()
+}
+
 /// The row of parameter `key` whose default is `default`; none for a value no control edits.
 fn generic_row(cx: &EffectCx, key: &str, default: &Value, relative: bool) -> Option<Param> {
     let id = cx.id.as_str();

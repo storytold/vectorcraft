@@ -18,10 +18,27 @@ use super::*;
 
 /// One pass of the panel in a 300 × 800 window, one second after the previous one.
 fn pass(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    pass_then(app, ctx, |_| ());
+}
+
+/// [`pass`], then `read` at the end of the pass: what it returns.
+fn pass_then<T>(app: &mut VectorcraftApp, ctx: &egui::Context, read: impl FnOnce(&egui::Context) -> T) -> T {
     let time = ctx.input(|i| i.time) + 1.0;
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 800.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), ..Default::default() }, |ui| show(app, ui));
+    let mut read = Some(read);
+    let mut got = None;
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), ..Default::default() }, |ui| {
+        show(app, ui);
+        got = read.take().map(|read| read(ui.ctx()));
+    });
     out.textures_delta.clear();
+    got.expect("the pass ran")
+}
+
+/// The uploads of document `uid`'s Layers thumbnails in one [`pass`]. The store counts the uploads of the frame that
+/// runs, so they are read at the end of the pass, before the next frame starts.
+fn pass_uploads(app: &mut VectorcraftApp, ctx: &egui::Context, uid: u64) -> usize {
+    pass_then(app, ctx, |ctx| stored(ctx, uid).1)
 }
 
 /// The active document's pending reveal request.
@@ -156,7 +173,7 @@ fn footer_locate(app: &mut VectorcraftApp) {
     app.run(&id, params).unwrap();
 }
 
-/// What a document's Layers thumbnail store holds and what it uploaded in the last frame: `(entries, uploads)`. It
+/// What a document's Layers thumbnail store holds and what it uploaded in the running frame: `(entries, uploads)`. It
 /// reads the store's statistics, which neither render nor queue a picture.
 fn stored(ctx: &egui::Context, uid: u64) -> (usize, usize) {
     // PLAN: assumed `thumbs::layer_thumbnails(&Context, u64)` returns the `Thumbnails` of that document
@@ -202,18 +219,12 @@ fn row_thumbnails_wait_for_the_end_of_a_drag() {
     app.session.begin_interaction("Move").unwrap();
     for i in 1..=10 {
         app.session.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, i, 0]})).unwrap();
-        pass(&mut app, &ctx);
-        assert_eq!(stored(&ctx, uid).1, 0, "no picture is replaced while the drag lasts");
+        assert_eq!(pass_uploads(&mut app, &ctx, uid), 0, "no picture is replaced while the drag lasts");
     }
     app.session.commit_interaction().unwrap();
-    let mut uploads = 0;
-    for _ in 0..4 {
-        pass(&mut app, &ctx);
-        uploads += stored(&ctx, uid).1;
-    }
+    let uploads: usize = (0..4).map(|_| pass_uploads(&mut app, &ctx, uid)).sum();
     assert!(uploads > 0, "the moved rows render after it");
-    pass(&mut app, &ctx);
-    assert_eq!(stored(&ctx, uid).1, 0, "once");
+    assert_eq!(pass_uploads(&mut app, &ctx, uid), 0, "once");
 }
 
 /// Rename (`ui.rename`) opens the name field on the selected object's row: the panel takes the request in one pass and
@@ -663,9 +674,9 @@ fn with_the_option_the_panels_own_clicks_locate_nothing() {
     assert_eq!(listed_ids(&app).len(), 3, "Layer 1, Sub (closed) and c");
     select_rows(&mut app, &[layer, sub, c]);
     assert_eq!(rows_of(&app), [layer, sub, c]);
-    // Shift-clicks on c's target circle, then Sub's, as the panel's pass runs them: Sub's and c's art is selected.
-    unrevealed(&mut app, |app| app.run("layer.target", json!({"id": c.0})).unwrap());
-    unrevealed(&mut app, |app| app.run("layer.target", json!({"range": [sub.0, c.0]})).unwrap());
+    // Shift-clicks on c's selection square, then Sub's, as the panel's pass runs them: Sub's and c's art is selected.
+    unrevealed(&mut app, |app| app.run("layer.selectAll", json!({"id": c.0, "add": true})).unwrap());
+    unrevealed(&mut app, |app| app.run("layer.selectAll", json!({"id": sub.0, "add": true})).unwrap());
     let st = app.session.active().unwrap();
     assert!(st.selection.objects.len() >= 3 && st.selection.objects.contains(&c), "c and Sub's art are selected");
     assert_eq!(reveal_of(&app), None, "a selection made in the panel asks for no reveal");

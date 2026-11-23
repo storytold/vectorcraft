@@ -52,7 +52,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId
 
 use super::stroke::{self, WeightTarget};
 // PLAN: hub-w2 declares `mod effect_params` private to `dialogs`; Appearance's inline editor (ef.C3: "built one way for the dialog, the gallery catalog and Appearance A3") needs `pub(crate) mod effect_params`.
-use crate::dialogs::effect_params::{EffectCx, effect_params};
+use crate::dialogs::effect_params::{EffectCx, effect_params, stored_params};
 use crate::dialogs::form::{fields_of, json_of};
 use crate::panel_drag::PanelDrag;
 use crate::{VectorcraftApp, paint_preview};
@@ -939,7 +939,11 @@ fn effect_editor<'r>(app: &VectorcraftApp, pass: &'r RefCell<Pass>, item: Option
         // shows them.
         let effect = EffectCx::new(app, &e.id, true);
         let opening = fields_of(&effect_params(&effect, &DialogFields::new()), &values);
-        effect_params(&effect, &opening)
+        let mut rows = effect_params(&effect, &opening);
+        // Load Texture… loads its file in the effect's dialog: the editor shows the parameters.
+        rows.retain(|row| row.key != "texturePath");
+        // An effect with no rows of its own (a plug-in since removed) shows its values as they are.
+        if rows.is_empty() { stored_params(&effect, &values) } else { rows }
     };
     let fields = fields_of(&params, &values);
     let (name, id) = (effect_label(&e.id), e.id.clone());
