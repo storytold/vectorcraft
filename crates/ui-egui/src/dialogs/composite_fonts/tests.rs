@@ -179,7 +179,10 @@ fn composite_fonts_go_through_files() {
     request(&mut app, PresetCommands::Save, Some("UI Composite IO"));
     picker.answer_saved(&file, None);
     poll(&mut app, &ctx);
-    assert!(std::fs::read_to_string(&file).unwrap().contains("UI Composite IO"));
+    let saved = picker.file(&file).unwrap();
+    assert!(String::from_utf8_lossy(&saved).contains("UI Composite IO"));
+    // The file service holds what it saved; Load… reads the file from disk.
+    std::fs::write(&file, &saved).unwrap();
     // Load: the same name is replaced, not added.
     dialog(&mut app, |d| d.fonts[0].parts.roman.baseline = 0.0);
     request(&mut app, PresetCommands::Load, None);

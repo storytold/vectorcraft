@@ -44,6 +44,10 @@ impl Picker {
     pub(crate) fn cancel(&self) {
         self.files.answer(Picked::Cancelled);
     }
+    /// The bytes a save through the service (`Files::save`) wrote to `path`.
+    pub(crate) fn file(&self, path: &str) -> Option<Vec<u8>> {
+        self.files.file(std::path::Path::new(path))
+    }
     /// The paths files were written to.
     pub(crate) fn written(&self) -> Vec<String> {
         self.written.borrow().clone()

@@ -60,7 +60,7 @@ use vectorcraft_engine::cmd::compositefonts::{EXTS, file_bytes};
 use vectorcraft_text::FontDb;
 
 use crate::VectorcraftApp;
-use crate::file_asks::{Owner, ask, open_params};
+use crate::file_asks::{Owner, ask, open_params, save};
 use crate::font_menu::{PickerHold, family_picker, family_sets};
 
 mod sample;
@@ -871,7 +871,7 @@ fn ask_file(app: &mut VectorcraftApp, request: PresetFileRequest) {
             if let Some(ext) = exts.first() {
                 pick = pick.suggested_extension(*ext);
             }
-            ask(app, pick, Owner::Free, move |app, picked| save_file(app, &request, &bytes, picked));
+            save(app, pick, bytes, Owner::Free, move |app, picked| saved(app, &request, picked));
         }
         _ => {}
     }
@@ -893,20 +893,18 @@ fn load_file(app: &mut VectorcraftApp, request: &PresetFileRequest, replace: boo
     Ok(Value::Null)
 }
 
-/// Writes `bytes` to the path picked (Save…); the file service has already asked about replacing a file.
-fn save_file(app: &mut VectorcraftApp, request: &PresetFileRequest, bytes: &[u8], picked: Picked) -> Result<Value, String> {
-    let Picked::Saved { path, .. } = picked else { return Ok(Value::Null) };
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let event = match vectorcraft_format::write_atomic(&path, bytes) {
-        Ok(()) => request.saved(name),
-        Err(e) => {
-            let failure = match e.kind() {
-                std::io::ErrorKind::NotFound => PresetFileFailure::NotFound,
-                std::io::ErrorKind::PermissionDenied => PresetFileFailure::Denied,
-                _ => PresetFileFailure::Other,
-            };
-            Some(request.failed(name, failure))
+/// Reports the save Save… asked for: the file service wrote it where the user picked, asking first about
+/// replacing a file, or the browser took it (its save picker or a download).
+fn saved(app: &mut VectorcraftApp, request: &PresetFileRequest, picked: Picked) -> Result<Value, String> {
+    let event = match picked {
+        Picked::Saved { path, .. } => request.saved(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()),
+        Picked::Downloaded(name) => request.saved(name),
+        // The service's message is the system's; the words give the reason.
+        Picked::Failed(_) => {
+            let PresetFileRequest::Save { file_name, .. } = request else { return Ok(Value::Null) };
+            Some(request.failed(file_name.clone(), PresetFileFailure::Other))
         }
+        _ => return Ok(Value::Null),
     };
     if let Some(event) = event {
         report(app, event);

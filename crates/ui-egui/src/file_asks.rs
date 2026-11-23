@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use craft::dialogs::ui::UnavailableWords;
-use craft::host::{FileFilter, Host, PickId, PickKind, PickRequest, Picked};
+use craft::host::{FileFilter, Files, Host, PickId, PickKind, PickRequest, Picked};
 use craft::ui::dialog::{DialogId, DialogResult, PromptChoice, StandardPrompt};
 // PLAN: assumed re-export paths for `HostedParamDialog`, `PathRequest` and `Env`.
 use craft::ui::patterns::form_dialogs::HostedParamDialog;
@@ -104,8 +104,31 @@ pub(crate) fn ask(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
+    start(app, owner, |files| files.pick(request), then)
+}
+
+/// Save `bytes` as the file service saves them (`Files::save`: the desktop asks where with `request` and
+/// writes the file, the browser opens its save picker or downloads them) and run `then` with the answer.
+/// Returns as [`ask`] does.
+pub(crate) fn save(
+    app: &mut VectorcraftApp,
+    request: PickRequest,
+    bytes: Vec<u8>,
+    owner: Owner,
+    then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
+) -> Value {
+    start(app, owner, |files| files.save(request, bytes), then)
+}
+
+/// Asks the file service with `ask` and files `then` for its answer.
+fn start(
+    app: &mut VectorcraftApp,
+    owner: Owner,
+    ask: impl FnOnce(&dyn Files) -> PickId,
+    then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
+) -> Value {
     let Some(host) = app.ui_ctx.as_ref().and_then(Host::try_of_ctx) else { return Value::Null };
-    let ticket = host.files().pick(request);
+    let ticket = ask(host.files());
     let doc = match owner {
         Owner::Document => app.session.active().map(|d| d.uid),
         Owner::Free => None,
