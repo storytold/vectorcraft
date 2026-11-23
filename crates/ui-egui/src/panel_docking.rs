@@ -22,8 +22,8 @@ use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
 use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, Tracked};
 use craft::ui::docking::{
-    DockCommands, DockConfig, DockEvent, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelKey, PanelSpec,
-    PanelSpecs, actions as command_actions, move_actions, request_actions,
+    DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels, PanelKey,
+    PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
 };
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::dock::DockArea;
@@ -1033,9 +1033,9 @@ pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, pos: egui::P
 }
 
 /// What the dock reads of the app's panels besides their fixed names and icons: the language the
-/// names are in, the names of the toolbars made with New Toolbar and the titles of the library
-/// panels in the layout. Plain data, edited only when one of them changes ([`refresh_specs`]), so
-/// the dock reads no spec in a pass where none changed.
+/// names are in, the names of the toolbars made with New Toolbar, the titles of the library
+/// panels in the layout and the grids of its tool rails. Plain data, edited only when one of them
+/// changes ([`refresh_specs`]), so the dock reads no spec in a pass where none changed.
 #[derive(Clone, Debug, Default, PartialEq, PlainData)]
 pub(crate) struct Specs {
     /// The UI language's code.
@@ -1044,6 +1044,9 @@ pub(crate) struct Specs {
     toolbars: Vec<(u32, String)>,
     /// Each library panel of the layout: its id and tab text.
     libraries: Vec<(String, String)>,
+    /// Each tool rail of the layout: its id and the grid its column steps in ([`crate::toolbar::dock_grid`]).
+    #[plain_data(assume = "a dock grid is plain numbers")]
+    grids: Vec<(String, DockGrid)>,
 }
 
 impl Specs {
@@ -1054,10 +1057,16 @@ impl Specs {
             .into_iter()
             .filter_map(|panel| crate::panels::library_panel::tab_label(app, panel).map(|label| (panel.clone(), label)))
             .collect();
+        let grids = layout_of(&app.ui)
+            .panels()
+            .into_iter()
+            .filter_map(|panel| rail_owner(&app.ui, panel).map(|owner| (panel.clone(), crate::toolbar::dock_grid(app, &owner, app.ui_ctx.as_ref()))))
+            .collect();
         Specs {
             lang: crate::i18n::current().code(),
             toolbars: app.ui.custom_toolbars.iter().map(|bar| (bar.id, bar.name.clone())).collect(),
             libraries,
+            grids,
         }
     }
 
@@ -1091,7 +1100,10 @@ impl PanelSpecs<String> for Specs {
         if panel == CANVAS {
             return spec.canvas();
         }
-        // PLAN: a rail's spec needs `.grid(ToolRail::dock_grid(..))` over its cells; the cell count and density scope are chrome-w10's (`toolbar.rs`), which exposes no grid helper.
+        let spec = match self.grids.iter().find(|(rail, _)| rail == panel) {
+            Some((_, grid)) => spec.grid(*grid),
+            None => spec,
+        };
         let icon = crate::state::rail_panel(panel).map(|p| p.2).or_else(|| crate::panels::library_panel::parse(panel).map(|_| "library"));
         match icon {
             Some(icon) => spec.icon(IconSpec::svg(IconId::new(icon))),

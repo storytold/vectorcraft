@@ -14,17 +14,18 @@ use craft::behavior::overlay::Side;
 use craft::behavior::{EditEvent, IconId, Mixed};
 use craft::color_ui::ui::PaintChip;
 use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, TransformGroups, TransformRow, TransformSource};
-use craft::theme::Size;
+use craft::theme::{ControlSize, Size};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, BodyCx, Entry, Props as _, Show as _, ShowContainer as _, ThemeScope, Tracked};
 use craft::ui::display::Divider;
-use craft::ui::docking::GroupAt;
+use craft::ui::docking::{DockGrid, DockSizes, GroupAt};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::{Anchor9, ReferencePointLook, Select};
 use craft::ui::rails::{LastUsed, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
 use craft::ui::runtime::commands::{self, CommandRef};
+use craft::ui::style::StyleCx;
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, Vec2};
 use serde_json::{Value, json};
@@ -246,6 +247,35 @@ fn groups_of(app: &VectorcraftApp, owner: &Owner) -> Vec<Vec<&'static str>> {
     }
 }
 
+/// The tools of the group of `parent` whose first tool is `first`, a strip's; none once the group has gone.
+fn strip_tools(app: &VectorcraftApp, parent: &Owner, first: &str) -> Vec<&'static str> {
+    groups_of(app, parent).into_iter().find(|g| g.first().is_some_and(|f| *f == first)).unwrap_or_default()
+}
+
+/// The density the rail of `owner` draws at. The app's chrome is at the compact density: the Tools panel steps up to
+/// the comfortable one unless its own compact setting is on, as production's larger Tools cells did; named toolbars
+/// and strips keep the chrome's.
+fn rail_scope(app: &VectorcraftApp, owner: &Owner) -> ThemeScope {
+    match owner {
+        Owner::Tools => ThemeScope::new().density(if app.ui.toolbar_compact { Size::Compact } else { Size::Comfortable }),
+        _ => ThemeScope::new(),
+    }
+}
+
+/// The dock grid of the rail panel `owner`: a cell for each of its slots and its Edit Toolbar button, in the density
+/// its rail draws at, so the dock column's steps fit its buttons. Without `ctx` the dock resolves it in its own.
+pub(crate) fn dock_grid(app: &VectorcraftApp, owner: &Owner, ctx: Option<&egui::Context>) -> DockGrid {
+    let cells = match owner {
+        Owner::Strip(parent, first) => strip_tools(app, parent, first).len(),
+        _ => groups_of(app, owner).len() + 1,
+    };
+    let grid = DockGrid::rail(cells);
+    match ctx {
+        Some(ctx) => grid.resolved(&StyleCx::with_root_scoped(ctx, &rail_scope(app, owner), DockSizes::style)),
+        None => grid,
+    }
+}
+
 /// The groups of several tools of the Tools panel's toolbar (`toolbar` none) or of the toolbar made
 /// with New Toolbar called `toolbar` that float as their own panel.
 pub(crate) fn strips(app: &VectorcraftApp, toolbar: Option<&str>) -> Vec<Vec<&'static str>> {
@@ -353,7 +383,7 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
         // One slot per tool, so a strip has no flyouts. A group no longer in the toolbar draws
         // nothing; `keep_strips` closes its panel.
         Owner::Strip(parent, first) => {
-            let tools = groups_of(app, parent).into_iter().find(|g| g.first().is_some_and(|f| f == first)).unwrap_or_default();
+            let tools = strip_tools(app, parent, first);
             (tools.iter().map(|tool| ToolSlot::new(slot_id(tool), vec![rail_tool(tool)])).collect(), Default::default())
         }
     };
@@ -364,7 +394,7 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     let tools_panel = owner == Owner::Tools;
     let own_bar = !matches!(owner, Owner::Strip(..));
     let opens = opens(app, &owner);
-    let scope = if tools_panel && app.ui.toolbar_compact { ThemeScope::new().density(Size::Compact) } else { ThemeScope::new() };
+    let scope = rail_scope(app, &owner);
     let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).theme(scope).tips(&cards);
     if app.session.prefs.tool_group_labels {
         rail = rail.captions();
@@ -659,15 +689,16 @@ fn quad_bounds(quad: &[Point; 4]) -> vectorcraft_geom::Rect {
 }
 
 /// The Fill/Stroke proxy, Color/Gradient/None, the drawing modes and screen mode under the rail's
-/// tools: in two columns the three drawing modes show side by side, in one only the current one,
-/// which cycles them. The All Tools drawer's Show section hides any of them.
+/// tools: in two columns the three drawing modes show, in one only the current one, which cycles
+/// them. A row the rail is too narrow for goes on in the next line. The All Tools drawer's Show
+/// section hides any of them.
 fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
     let two = footer.columns > 1;
     let show = app.ui.toolbar_show;
     if show.fill_stroke {
         crate::panels::proxy(app, ui);
     }
-    // Color (the last solid colour), Gradient (the last gradient) and None, as commands.
+    // Color (the last solid colour), Gradient (the last gradient) and None, as commands, in small chips.
     if show.coloring {
         let chips = [
             (tl!("Color (, or Shift+,)"), "paint.lastColor", Paint::solid(app.session.last_solid)),
@@ -676,10 +707,10 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         ];
         let fallback = crate::panels::srgba(&app.session.last_solid);
         let mut clicked = None;
-        Row::new().show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             for (label, cmd, paint) in &chips {
                 let shown = Mixed::Same(well_paint(paint, &|_| None));
-                let out = PaintChip::new(*label, Bind::given(shown), fallback).popover(false).tooltip(*label).show(ui);
+                let out = PaintChip::new(*label, Bind::given(shown), fallback).popover(false).size(ControlSize::Sm).tooltip(*label).show(ui);
                 if let Some(mods) = out.clicked {
                     clicked = Some((*cmd, mods.cmd));
                 }
@@ -704,7 +735,7 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip).selected(on).show(ui).clicked()
     };
     let mut run = None;
-    Row::new().show(ui, |ui, _| {
+    Row::new().wrap(true).show(ui, |ui, _| {
         if show.draw_mode {
             if two {
                 // Side by side, each one a click away.

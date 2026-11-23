@@ -252,8 +252,9 @@ fn strip_key(value: &mut Value, key: &str) {
     }
 }
 
-/// A saved workspace carries the density and the columns; switching to it restores both without choosing another tool,
-/// and a workspace saved before the option restores the Comfortable default and keeps the columns.
+/// A saved workspace carries the density and the columns; going back to it as saved restores both without choosing another
+/// tool, and a workspace saved before the option restores the Comfortable default and keeps the columns. (Switching to the
+/// workspace already current would keep its changes, as production's switch did.)
 #[test]
 fn compact_tools_workspace_roundtrip_restores_density_and_legacy_defaults() {
     let _case = CASE.lock().unwrap_or_else(|e| e.into_inner());
@@ -268,11 +269,11 @@ fn compact_tools_workspace_roundtrip_restores_density_and_legacy_defaults() {
 
     app.run("window.toolbarCompact", json!({"on": false})).unwrap();
     app.run("window.toolbarColumns", json!({"double": false})).unwrap();
-    workspaces::switch(&mut app, "Compact drawing").unwrap();
+    workspaces::reset(&mut app);
     let mut frames = ToolbarFrames::new(app, 1600.0);
     let restored = frames.settled();
     assert_smaller(&restored, &regular);
-    assert!(restored.column_pitch.is_some(), "switching restores both layout choices");
+    assert!(restored.column_pitch.is_some(), "the saved workspace restores both layout choices");
     assert_eq!(frames.app.session.tool_id(), "pen", "workspace layout does not select another tool");
 
     // The same workspace as an older file wrote it, without the density key.
@@ -280,7 +281,7 @@ fn compact_tools_workspace_roundtrip_restores_density_and_legacy_defaults() {
     let mut app = frames.app;
     app.ui = serde_json::from_value::<UiState>(legacy_state).unwrap();
     app.run("window.toolbarCompact", json!({"on": true})).unwrap();
-    workspaces::switch(&mut app, "Compact drawing").unwrap();
+    workspaces::reset(&mut app);
     let mut frames = ToolbarFrames::new(app, 1600.0);
     let legacy = frames.settled();
     assert_same(&legacy, &regular);
