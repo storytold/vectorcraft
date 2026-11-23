@@ -136,17 +136,16 @@ pub struct Picture {
     pub warnings: Vec<String>,
 }
 
-/// Do `bytes` hold a version 2 QuickDraw picture, after a PICT file's 512 bytes of application
-/// data or on their own? A version 1 picture is known by its file's name.
+/// Do `bytes` hold a QuickDraw picture (version 1 or 2), after a PICT file's 512 bytes of
+/// application data or on their own?
 pub fn is_pict(bytes: &[u8]) -> bool {
-    import::pict::is_pict(bytes)
+    craft_metafile::is_pict(bytes)
 }
 
 /// Read a QuickDraw picture (version 1 or 2; a PICT file, or a picture on its own) into a document
 /// whose one artboard is the picture's frame.
 pub fn import_pict(bytes: &[u8]) -> Result<Picture, String> {
-    let i = import::pict::play(bytes)?;
-    let mut p = Picture { document: i.document, warnings: i.warnings };
+    let mut p = import::import_pict(bytes)?;
     p.document.limit_depth_noting(&mut p.warnings);
     Ok(p)
 }

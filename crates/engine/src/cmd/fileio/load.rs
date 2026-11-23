@@ -140,9 +140,8 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
         return Some(f);
     }
-    // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
-    // file or byte 10 of a bare picture (version 1 by its file's name), so a format whose
-    // signature starts the file is checked first.
+    // A PICT is known by its version opcodes after the picture's frame, at byte 522 of a file or
+    // byte 10 of a bare picture, so a format whose signature starts the file is checked first.
     if vectorcraft_metafile::is_pict(bytes) {
         return format("pict");
     }
