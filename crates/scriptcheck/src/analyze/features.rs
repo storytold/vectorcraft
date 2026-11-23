@@ -344,12 +344,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     }
 
     /// What [`Self::file_receiver`] finds: `Some(true)` for a Folder object whatever the path names
-    /// ([`Sig::folder`], [`Analyzer::folder`]), `Some(false)` for an object that may be a File object,
-    /// and `None` for anything else.
+    /// ([`Sig::folder`], [`Analyzer::folder`]), unless the file gives names values the analysis
+    /// doesn't read ([`Analyzer::unsure`]), `Some(false)` for an object that may be a File object, and
+    /// `None` for anything else.
     fn held_file(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> Option<bool> {
         let r = receiver?;
         if r.file {
-            Some(r.folder)
+            Some(r.folder && !self.unsure)
         } else if r.kind == T::Ident && !member_mark(before) && self.alias(&r) {
             Some(self.folder(r.text))
         } else {
