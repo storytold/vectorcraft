@@ -180,7 +180,9 @@ fn the_exporter_is_given_its_parameters_and_the_file_it_writes() {
     let path = dir.join("Poster.tsq");
     let r = s.execute("document.export", &json!({"path": path_of(&path), "params": {"density": 12, "mode": "fine"}})).unwrap();
     assert_eq!(r["format"], "plugin.test.params");
-    let written: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let mut written: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert!(written["_context"]["fuel"].as_u64().is_some_and(|f| f > 0), "{written}");
+    written["_context"].as_object_mut().unwrap().remove("fuel");
     assert_eq!(written, json!({"density": 10.0, "mode": "fine", "_context": {"mode": "export", "extension": "tsq", "name": "Poster"}}));
 
     // Bad parameters fail before the plug-in runs, and nothing is written.

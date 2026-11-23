@@ -393,8 +393,32 @@ fn the_echo_exporter_writes_what_it_is_given() {
     for doc in ["{}", r#"{"a":1}"#, r#"{"ab":12}"#, r#"{"format":"vectorcraft","é":"\u0000"}"#] {
         assert_eq!(decoded(export::run(&input, doc.as_bytes(), &Value::Null, target).unwrap()), doc);
     }
-    let sent: Value = serde_json::from_str(&decoded(export::run(&params, b"{}", &Value::Null, target).unwrap())).unwrap();
+    let mut sent: Value = serde_json::from_str(&decoded(export::run(&params, b"{}", &Value::Null, target).unwrap())).unwrap();
+    assert!(sent["_context"]["fuel"].as_u64().is_some_and(|f| f > 0), "{sent}");
+    sent["_context"].as_object_mut().unwrap().remove("fuel");
     assert_eq!(sent, json!({"_context": {"mode": "export", "extension": "txt", "name": "a"}}));
+}
+
+/// An export's `_context.fuel` is the instructions the run gets: an export that needs more than it
+/// is told is stopped, one that needs less finishes, and a longer document is told more.
+#[test]
+fn an_export_is_told_the_instructions_it_may_run() {
+    use vectorcraft_plugins::export::{self, Target};
+    let target = Target { extension: "tst", name: "a" };
+    let limits = Limits { export_fuel: 500_000, fuel_per_byte: 1_000, ..Limits::default() };
+    let manifest = tpl::exporter("test.export.fuel", r#"["tst"]"#, "{}");
+    let echo = Plugin::load(&build(&tpl::echo_exporter(&manifest, tpl::Echo::Params)), limits.clone()).unwrap();
+    let told = |doc: &[u8]| -> u64 {
+        let out = export::run(&echo, doc, &Value::Null, target).unwrap();
+        let sent: Value = serde_json::from_slice(&base64_decode(&out.data_base64)).unwrap();
+        sent["_context"]["fuel"].as_u64().unwrap()
+    };
+    let (short, long) = (told(b"{}"), told(br#"{"objects":[1,2,3,4,5,6,7,8,9]}"#));
+    assert!(long > short, "{long} {short}");
+    // A run of more steps than it is told instructions is stopped; one of a fiftieth of them finishes.
+    let spin = |steps: u64| Plugin::load(&build(&tpl::spinning(&manifest, steps, r#"{"dataBase64":""}"#)), limits.clone()).unwrap();
+    assert_eq!(export::run(&spin(short), b"{}", &Value::Null, target).map(|_| ()), Err(Error::Limit("instruction budget".into())));
+    assert!(export::run(&spin(short / 50), b"{}", &Value::Null, target).is_ok());
 }
 
 /// Standard base64 (RFC 4648, padded), decoded here so the test needs no other crate.

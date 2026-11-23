@@ -79,14 +79,18 @@ pub fn limits(plugin: &Plugin) -> Limits {
 }
 
 /// Runs exporter `plugin` on `document`, the native file's JSON, with `params` (checked against
-/// its manifest: missing ones take their defaults) for the file `target`.
+/// its manifest: missing ones take their defaults) for the file `target`. Its `_context` names the
+/// file and the instructions the run gets (`fuel`, [`Limits::run_fuel`]), so an exporter that can
+/// estimate its own work declines with a message of its own before it starts, instead of being
+/// stopped part way.
 pub fn run(plugin: &Plugin, document: &[u8], params: &Value, target: Target) -> Result<Exported> {
     let m = plugin.manifest();
     if m.kind != Kind::Exporter {
         return Err(Error::Params(format!("`{}` is a plug-in of kind `{}`, not an exporter", m.id, m.kind.name())));
     }
     let mut params = Value::Object(m.resolve_params(params)?);
-    params["_context"] = json!({"mode": "export", "extension": target.extension, "name": target.name});
+    params["_context"] =
+        json!({"mode": "export", "extension": target.extension, "name": target.name, "fuel": limits(plugin).run_fuel(document.len())});
     let params = serde_json::to_vec(&params).map_err(|e| Error::Params(e.to_string()))?;
     decode(&plugin.run_limited(document, &params, &limits(plugin))?)
 }
