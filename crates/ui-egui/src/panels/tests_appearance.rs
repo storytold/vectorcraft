@@ -435,7 +435,7 @@ fn effect_rows_dropped_on_delete_or_duplicate() {
 }
 
 /// The Contents row can be neither copied nor removed: dropped on either button it changes nothing.
-/// A row dropped on something that is not a button changes nothing either, and the next drop still works.
+/// A row released outside the panel changes nothing either, and the next drop still works.
 #[test]
 fn contents_rows_and_drops_elsewhere_change_nothing() {
     let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
@@ -451,7 +451,9 @@ fn contents_rows_and_drops_elsewhere_change_nothing() {
         panel.drag("Contents", button, egui::Modifiers::NONE);
         assert_eq!(first_selected(&panel.app()).unwrap().appearance, before, "{button}");
     }
-    drag_row(&mut panel, "Fill:", "Contents", egui::Modifiers::NONE);
+    // Released far below the panel: nothing happens.
+    let fill = row_spot(&mut panel, "Fill:");
+    panel.drag_between(fill, egui::pos2(fill.x, 9000.0), egui::Modifiers::NONE);
     assert_eq!(first_selected(&panel.app()).unwrap().appearance, before);
     drag_row(&mut panel, "Fill:", DELETE, egui::Modifiers::NONE);
     assert!(first_selected(&panel.app()).unwrap().appearance.items.is_empty());
