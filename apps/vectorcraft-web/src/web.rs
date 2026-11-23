@@ -462,6 +462,7 @@ fn services(
     let screen_color = eye_dropper(ctx.clone());
     let (script_picked, script_ctx) = (script_inbox.clone(), ctx.clone());
     Services {
+        notification_sound: Some(crate::notification_audio::start()),
         // File › Scripts › Other Script…: the picked file goes to the warning before it runs.
         script_async: Some(Box::new(move || {
             let inbox = script_picked.clone();

@@ -29,6 +29,8 @@ mod fonts;
 mod keys;
 #[cfg(any(target_arch = "wasm32", test))]
 mod locks;
+#[cfg(target_arch = "wasm32")]
+mod notification_audio;
 #[cfg(any(target_arch = "wasm32", test))]
 mod pencil;
 #[cfg(any(target_arch = "wasm32", test))]

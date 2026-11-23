@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
+use vectorcraft_engine::cmd::toast::{Level, Toast};
 
 use super::{pstate, set_pstate};
 use crate::theme::Tokens;
@@ -787,6 +788,7 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     }
     if playing.doc != doc {
         app.ui.action_playing = None;
+        app.session.toast(Toast::new(tl!("the action stopped playing: its document is no longer active"), Level::Warning));
         app.status("the action stopped playing: its document is no longer active");
         return None;
     }
@@ -800,6 +802,7 @@ pub fn tick_playback(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     }
     if let Err(e) = play_step(app, &label, step) {
         app.ui.action_playing = None;
+        app.session.toast(Toast::new(tl!(&e), Level::Error));
         app.status(e);
         return None;
     }
@@ -6165,6 +6168,7 @@ mod tests {
         assert_eq!(x(&app), 7.0);
         assert_eq!(undo_steps(&app), before + 3, "each step is its own undo step");
         assert_eq!(app.session.active().unwrap().history.undo.last().unwrap().label, "Three Moves");
+        assert!(app.session.take_toasts().is_empty(), "normal steps do not raise a terminal notification");
     }
 
     #[test]
@@ -6248,6 +6252,7 @@ mod tests {
         assert_eq!(tick_playback(&mut app, 14.0), None);
         assert_eq!(x(&app), 7.0, "the third step runs 2 s after the second");
         assert!(app.ui.action_playing.is_none());
+        assert!(app.session.take_toasts().is_empty(), "normal paused playback does not raise a terminal notification");
     }
 
     #[test]
@@ -6279,6 +6284,7 @@ mod tests {
         assert_eq!(app.run(STOP_RECORDING, json!({})).unwrap(), json!({"stopped": false}));
         play(&mut app, 0, 0).unwrap();
         assert_eq!(x(&app), 2.0, "an action plays again after Stop");
+        assert!(app.session.take_toasts().is_empty(), "explicit Stop and starting again do not raise a terminal notification");
     }
 
     #[test]
@@ -6382,6 +6388,7 @@ mod tests {
         assert_eq!(tick_playback(&mut app, 6.0), None, "the playback ends");
         assert!(app.ui.action_playing.is_none());
         assert_eq!(app.ui.status, "the action stopped playing: its document is no longer active");
+        assert_eq!(app.session.take_toasts(), vec![Toast::new(tl!("the action stopped playing: its document is no longer active"), Level::Warning)]);
         assert!(std::sync::Arc::ptr_eq(&app.session.active().unwrap().doc, &other), "no step ran in the other document");
         app.run("document.activate", json!({"index": 0})).unwrap();
         assert_eq!(tick_playback(&mut app, 10.0), None);
@@ -6396,6 +6403,7 @@ mod tests {
         play_out(&mut app);
         assert_ne!(app.ui.status, "the action stopped playing: its document is no longer active");
         assert_eq!(x(&app), 10.0, "the moves after the step ran in the document it made active");
+        assert!(app.session.take_toasts().is_empty(), "later frames do not repeat the notification, and a document-switching step is valid");
     }
 
     #[test]
@@ -6448,8 +6456,11 @@ mod tests {
         assert_eq!(frame(&mut app, 0.0), None);
         assert!(app.ui.action_playing.is_none());
         assert!(!app.ui.status.is_empty(), "the step's error shows");
+        let message = tl!(&app.ui.status);
+        assert_eq!(app.session.take_toasts(), vec![Toast::new(message, Level::Error)]);
         assert_eq!(frame(&mut app, 0.0), None);
         assert_eq!(x(&app), 1.0, "the step after the failing one does not run");
+        assert!(app.session.take_toasts().is_empty(), "later frames do not repeat the failure notification");
     }
 
     /// [`app_with_three_moves`] with a stop after the first move.
@@ -8647,6 +8658,7 @@ mod tests {
                 assert_eq!(frame(&mut app, now + 1000.0), None, "{speed}");
                 assert_eq!(x(&app), 1.0, "{speed}: no later step runs while the action waits");
             }
+            assert!(app.session.take_toasts().is_empty(), "{speed}: waiting at a stop is not a terminal notification");
             let r = app.run(CONTINUE_PLAYBACK, json!({})).unwrap();
             assert_eq!(r["pending"], json!(1), "{speed}: Play runs the next step, and the last stays for its turn");
             assert_eq!(x(&app), 3.0, "{speed}");
@@ -8659,6 +8671,7 @@ mod tests {
             }
             assert_eq!(x(&app), 7.0, "{speed}: the paced playback goes on to the end");
             assert!(app.ui.action_playing.is_none(), "{speed}");
+            assert!(app.session.take_toasts().is_empty(), "{speed}: Continue and successful completion do not raise a terminal notification");
         }
     }
 

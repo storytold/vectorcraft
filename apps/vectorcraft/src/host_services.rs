@@ -410,6 +410,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
     #[cfg(target_os = "linux")]
     let sampled_parent = p1.clone();
     Services {
+        notification_sound: crate::notification_audio::start(),
         pick_open: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::Open(pick.clone()), &p1).into_iter().next())),
         pick_open_multi: Some(Box::new(move || pick_now(PickRequest::OpenMany, &p2))),
         pick_open_files: Some(Box::new(move |pick: &FilePick| pick_now(PickRequest::OpenFiles(pick.clone()), &p6))),

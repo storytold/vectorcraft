@@ -677,6 +677,9 @@ impl VectorcraftApp {
         // frame-time sample, and it must not issue a capture of what it drew.
         if !ctx.will_discard() {
             self.perf.frame_ms = now_ms() - t0;
+            if !self.viewport_hidden(&ctx) {
+                crate::toasts::commit_sounds(self);
+            }
             self.issue_screenshots(&ctx);
             // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
             if step_held && !self.viewport_hidden(&ctx) {

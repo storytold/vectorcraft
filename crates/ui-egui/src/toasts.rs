@@ -11,6 +11,24 @@ use vectorcraft_engine::cmd::toast::{Level, Toast};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
 
+/// The frequency and envelope of the original quiet notification tick.
+pub const TICK_HZ: f64 = 2_000.0;
+pub const TICK_DURATION: f64 = 0.018;
+pub const TICK_ATTACK: f64 = 0.002;
+pub const TICK_GAIN: f64 = 0.04;
+pub const TICK_SAMPLE_RATE: u32 = 48_000;
+
+/// The desktop host's original mono PCM tick. Browser synthesis uses the same envelope constants.
+pub fn tick_samples() -> Vec<f32> {
+    (0..864)
+        .map(|i| {
+            let time = f64::from(i) / f64::from(TICK_SAMPLE_RATE);
+            let envelope = if time < TICK_ATTACK { time / TICK_ATTACK } else { (TICK_DURATION - time) / (TICK_DURATION - TICK_ATTACK) };
+            (TICK_GAIN * envelope * (std::f64::consts::TAU * TICK_HZ * time).sin()) as f32
+        })
+        .collect()
+}
+
 /// The most messages shown at once.
 pub const MAX_SHOWN: usize = 5;
 
@@ -36,6 +54,10 @@ pub(crate) struct Entry {
     id: u64,
     /// Where the last pass drew it.
     pub(crate) rect: Option<egui::Rect>,
+    /// Not handled by an accepted pass yet.
+    sound_pending: bool,
+    /// A non-sizing pass drew part of this entry inside its clip.
+    sound_visible: bool,
 }
 
 /// The messages shown, oldest first.
@@ -50,7 +72,7 @@ impl Shown {
     fn add(&mut self, new: Vec<Toast>, now: f64) {
         for toast in new {
             let until = now + toast.seconds;
-            self.list.push(Entry { toast, until, id: self.next_id, rect: None });
+            self.list.push(Entry { toast, until, id: self.next_id, rect: None, sound_pending: true, sound_visible: false });
             self.next_id = self.next_id.wrapping_add(1);
         }
         let over = self.list.len().saturating_sub(MAX_SHOWN);
@@ -61,6 +83,25 @@ impl Shown {
     fn expire(&mut self, now: f64) -> Option<f64> {
         self.list.retain(|e| e.until > now);
         self.list.iter().map(|e| e.until - now).reduce(f64::min)
+    }
+}
+
+/// Commit cues only after the app knows this pass will be presented.
+/// No callback consumes pending cues too: adding sound later must not replay old messages.
+pub(crate) fn commit_sounds(app: &mut VectorcraftApp) {
+    let Some(sound) = app.services.notification_sound.as_mut() else {
+        for entry in &mut app.toasts.list {
+            entry.sound_pending = false;
+            entry.sound_visible = false;
+        }
+        return;
+    };
+    for entry in &mut app.toasts.list {
+        let visible = std::mem::take(&mut entry.sound_visible);
+        if entry.sound_pending && visible {
+            entry.sound_pending = false;
+            sound();
+        }
     }
 }
 
@@ -83,6 +124,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
 pub(crate) fn show_at(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
     // Messages whose time is up go before new ones count toward the limit.
     app.toasts.expire(now);
+    for entry in &mut app.toasts.list {
+        entry.sound_visible = false;
+    }
     let new = app.session.take_toasts();
     app.toasts.add(new, now);
     let Some(left) = app.toasts.expire(now) else {
@@ -121,6 +165,7 @@ fn stack(ui: &mut egui::Ui, list: &mut [Entry], t: &Tokens, width: f32) -> Optio
             clicked = Some(e.id);
         }
         e.rect = Some(r.rect);
+        e.sound_visible = !ui.is_sizing_pass() && ui.is_rect_visible(r.rect) && r.rect.intersect(ui.clip_rect()).is_positive();
         ui.add_space(6.0);
     }
     clicked
@@ -352,5 +397,168 @@ mod tests {
     fn no_message_draws_nothing() {
         let (mut app, ctx) = app();
         assert!(pass(&mut app, &ctx, 0.0, vec![]).is_empty());
+    }
+
+    fn count_sounds(app: &mut VectorcraftApp) -> std::rc::Rc<std::cell::Cell<usize>> {
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0));
+        let counted = calls.clone();
+        app.services.notification_sound = Some(Box::new(move || counted.set(counted.get() + 1)));
+        calls
+    }
+
+    /// The ordinary host path, including the App's accepted-pass sound commit.
+    fn app_ui_pass(app: &mut VectorcraftApp, ctx: &egui::Context, discard: bool, calls: &std::cell::Cell<usize>) -> Vec<String> {
+        app.begin_host_iteration();
+        app.tick(ctx);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 700.0))),
+            focused: true,
+            ..Default::default()
+        };
+        let mut discard = discard;
+        let cues_before = calls.get();
+        let mut output = ctx.run_ui(input, |ui| {
+            if std::mem::take(&mut discard) {
+                ui.ctx().request_discard("a discarded toast pass must not commit a sound");
+            }
+            app.ui(ui);
+            if ui.ctx().will_discard() {
+                assert_eq!(calls.get(), cues_before, "a discarded pass cannot request a cue before its accepted retry");
+            }
+        });
+        output.textures_delta.clear();
+        output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::epaint::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn app_ui_commits_each_visible_toast_sound_once_without_editing_art() {
+        let (mut app, ctx) = app();
+        let calls = count_sounds(&mut app);
+        app.run("file.new", json!({"width": 400, "height": 300, "profile": null})).unwrap();
+        app.run("shape.rectangle", json!({"x": 40, "y": 50, "width": 80, "height": 60})).unwrap();
+        for _ in 0..3 {
+            app_ui_pass(&mut app, &ctx, false, &calls);
+        }
+        let doc = app.session.doc().unwrap().doc.clone();
+        let selection = json!(app.session.doc().unwrap().selection);
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let redo = app.session.doc().unwrap().history.redo.len();
+        let status = app.ui.status.clone();
+        let result = app.run("app.toast", json!({"message": "A working copy is ready"})).unwrap();
+        assert_eq!(result, json!({"message": "A working copy is ready", "level": "info", "seconds": 4.0}));
+        assert_eq!(calls.get(), 0, "queuing a message is not a visible admission");
+        let mut shown = false;
+        for _ in 0..4 {
+            shown |= app_ui_pass(&mut app, &ctx, false, &calls).iter().any(|t| t == "A working copy is ready");
+        }
+        assert!(shown, "the current toast must actually be drawn");
+        assert!(app.ui.dialog.is_none(), "feedback must not require acknowledgement");
+        assert_eq!(app.ui.status, status);
+        let state = app.session.doc().unwrap();
+        assert!(state.same_content(&doc));
+        assert_eq!(json!(state.selection), selection);
+        assert_eq!((state.history.undo.len(), state.history.redo.len()), (undo, redo));
+        app.run("document.info", json!({})).unwrap();
+        assert_eq!(calls.get(), 1, "the accepted App.ui pass must request one cue");
+        // Equal messages are distinct arrivals; a discarded pass and repeated paints are not.
+        app.run("app.toast", json!({"message": "A working copy is ready"})).unwrap();
+        app_ui_pass(&mut app, &ctx, true, &calls);
+        for _ in 0..3 {
+            app_ui_pass(&mut app, &ctx, false, &calls);
+        }
+        assert_eq!(calls.get(), 2);
+        for _ in 0..3 {
+            app_ui_pass(&mut app, &ctx, false, &calls);
+        }
+        assert_eq!(calls.get(), 2, "repainting cannot request the cues again");
+    }
+
+    #[test]
+    fn sizing_and_clipped_rows_wait_until_the_message_is_drawn() {
+        let (mut app, ctx) = app();
+        let calls = count_sounds(&mut app);
+        app.run("app.toast", json!({"message": "A visible row"})).unwrap();
+        pass(&mut app, &ctx, 0.0, vec![]);
+        pass(&mut app, &ctx, 0.0, vec![]);
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            let tokens = Tokens::get(ui.ctx());
+            ui.scope_builder(egui::UiBuilder::new().sizing_pass(), |ui| {
+                stack(ui, &mut app.toasts.list, &tokens, WIDTH);
+            });
+        });
+        output.textures_delta.clear();
+        commit_sounds(&mut app);
+        assert_eq!(calls.get(), 0, "measurement is not presentation");
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            let tokens = Tokens::get(ui.ctx());
+            ui.set_clip_rect(egui::Rect::from_min_size(egui::pos2(10_000.0, 10_000.0), egui::vec2(10.0, 10.0)));
+            stack(ui, &mut app.toasts.list, &tokens, WIDTH);
+        });
+        output.textures_delta.clear();
+        commit_sounds(&mut app);
+        assert_eq!(calls.get(), 0, "a fully clipped row must not request sound");
+        pass(&mut app, &ctx, 0.1, vec![]);
+        let text = pass(&mut app, &ctx, 0.1, vec![]);
+        assert!(text.iter().any(|s| s == "A visible row"));
+        commit_sounds(&mut app);
+        commit_sounds(&mut app);
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn expired_overflowed_and_dismissed_entries_have_no_late_cue() {
+        let (mut app, ctx) = app();
+        let calls = count_sounds(&mut app);
+        app.run("app.toast", json!({"message": "Expired before commit", "seconds": 0.5})).unwrap();
+        pass(&mut app, &ctx, 0.0, vec![]);
+        pass(&mut app, &ctx, 0.0, vec![]);
+        pass(&mut app, &ctx, 0.5, vec![]);
+        commit_sounds(&mut app);
+        assert!(app.toasts.list.is_empty());
+        assert_eq!(calls.get(), 0);
+        for i in 0..MAX_SHOWN + 1 {
+            app.session.toast(Toast::new(format!("m{i}"), Level::Info));
+        }
+        pass(&mut app, &ctx, 0.6, vec![]);
+        pass(&mut app, &ctx, 0.6, vec![]);
+        assert_eq!(messages(&app), vec!["m1", "m2", "m3", "m4", "m5"]);
+        commit_sounds(&mut app);
+        assert_eq!(calls.get(), MAX_SHOWN, "the overflowed arrival was not shown");
+        app.run("app.toast", json!({"message": "Dismiss before commit"})).unwrap();
+        pass(&mut app, &ctx, 0.7, vec![]);
+        pass(&mut app, &ctx, 0.7, vec![]);
+        let at = app.toasts.list.last().unwrap().rect.unwrap().center();
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        pass(&mut app, &ctx, 0.8, vec![egui::Event::PointerMoved(at)]);
+        pass(&mut app, &ctx, 0.9, vec![press(true)]);
+        pass(&mut app, &ctx, 1.0, vec![press(false)]);
+        assert!(!messages(&app).contains(&"Dismiss before commit"));
+        commit_sounds(&mut app);
+        assert_eq!(calls.get(), MAX_SHOWN);
+    }
+
+    #[test]
+    fn absent_sound_does_not_hide_messages_or_replay_them_when_added() {
+        let (mut app, ctx) = app();
+        app.run("app.toast", json!({"message": "No audio device is required"})).unwrap();
+        pass(&mut app, &ctx, 0.0, vec![]);
+        assert!(pass(&mut app, &ctx, 0.0, vec![]).iter().any(|s| s == "No audio device is required"));
+        commit_sounds(&mut app);
+        let calls = count_sounds(&mut app);
+        pass(&mut app, &ctx, 0.1, vec![]);
+        commit_sounds(&mut app);
+        assert_eq!(calls.get(), 0, "installing sound cannot replay an old message");
+        app.run("app.toast", json!({"message": "A later arrival"})).unwrap();
+        pass(&mut app, &ctx, 0.2, vec![]);
+        pass(&mut app, &ctx, 0.2, vec![]);
+        commit_sounds(&mut app);
+        assert_eq!(calls.get(), 1);
     }
 }

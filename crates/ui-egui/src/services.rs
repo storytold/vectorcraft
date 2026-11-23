@@ -91,9 +91,15 @@ pub type RevealFn = Box<dyn FnMut(&str) -> Result<(), String>>;
 /// Opens a file in a fixed app; `Ok(false)` when that app isn't installed.
 pub type OpenInFn = Box<dyn FnMut(&str) -> Result<bool, String>>;
 
+/// Request the original notification sound without blocking the UI.
+pub type NotificationSound = Box<dyn FnMut()>;
+
 /// Platform services injected by the host app (desktop or web).
 #[derive(Default)]
 pub struct Services {
+    /// Request a quiet tick once for a message actually shown in an accepted UI pass.
+    /// Missing or unavailable sound leaves the message working normally.
+    pub notification_sound: Option<NotificationSound>,
     /// Show an open dialog; returns a path.
     pub pick_open: Option<PickOpen>,
     /// Show a save dialog (suggested name, folder, file types); returns a path.

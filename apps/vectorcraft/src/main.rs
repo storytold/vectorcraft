@@ -91,6 +91,7 @@ use vectorcraft_ui_egui::{ClipboardProbeFactory, FilePick, Services, Vectorcraft
 
 mod app;
 mod host_services;
+mod notification_audio;
 mod prefs;
 mod titlebar;
 
