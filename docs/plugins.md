@@ -556,7 +556,8 @@ or the document's contents.
   and dialogs have run, so a burst of selection changes in one frame is one `selection.changed` and an idle window does
   not hold an event back. Requests through the control channel, and through MCP in remote mode, run in the desktop app
   and are delivered by the frame too, and several of them can run in one frame. `vectorcraft-cli` and headless MCP
-  deliver after each request. Opens and saves are each their own event, in order, and are delivered even when the
+  deliver after each request, also one that fails: a save in a `command.batch` whose later step fails still gives its
+  `document.saved`. Opens and saves are each their own event, in order, and are delivered even when the
   document closed before the delivery. At most 32 events wait; past that the oldest is dropped.
 - A handler only reads. VectorCraft applies nothing it returns, and it is outside any undo step. With `commands` and a
   `commandAllowlist`, it may [call](#command-calls) these commands, when the allowlist also names them, on the active

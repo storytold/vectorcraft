@@ -1073,7 +1073,9 @@ fn vc_event_is_given_the_event_and_its_code_is_checked() {
 }
 
 /// The start function, `vc_alloc` and `vc_event` share one event budget: work that fits it in the
-/// handler alone fits it no longer when the start function has done as much first.
+/// handler alone fits it no longer when the start function has done as much first. The budget is
+/// 200,000 instructions, which run in far less than the 200 ms an event is given, so the run that
+/// fails is stopped by its instruction budget.
 #[test]
 fn a_handler_and_its_start_function_share_the_event_budget() {
     let manifest = reacting_manifest("test.events.shared", r#"["layer.changed"]"#);
@@ -1084,18 +1086,23 @@ fn a_handler_and_its_start_function_share_the_event_budget() {
     let plugin = |start: u32, handler: u32| {
         let imports = format!("{} {burn} (func $s (call $burn (i32.const {start}))) (start $s)", tpl::HOST_IMPORTS);
         let body = format!("(call $burn (i32.const {handler})) (i32.const 0)");
-        Plugin::load(&build(&tpl::reacting(&manifest, &imports, &body)), Limits::default()).unwrap()
+        Plugin::load(&build(&tpl::reacting(&manifest, &imports, &body)), Limits { fuel_base: 200_000, ..Limits::default() }).unwrap()
     };
     let event = br#"{"type":"layer.changed","document":1}"#;
-    // The most loop turns, doubling, that fit the budget in the handler alone: twice as many don't.
-    let mut k = 1u32 << 16;
-    while plugin(0, k * 2).run_event(event, None).0.is_ok() {
-        k *= 2;
+    // The most loop turns, doubling, that fit the budget in the handler alone: twice as many run out
+    // of instructions.
+    let mut k = 1u32 << 8;
+    let e = loop {
+        match plugin(0, k * 2).run_event(event, None).0 {
+            Ok(()) => k *= 2,
+            Err(e) => break e.to_string(),
+        }
         assert!(k < 1 << 30, "a handler that never runs out of its budget");
-    }
+    };
+    assert!(e.contains("instruction budget"), "{e}");
     assert!(plugin(0, k).run_event(event, None).0.is_ok());
     let e = plugin(k, k).run_event(event, None).0.unwrap_err().to_string();
-    assert!(e.contains("budget"), "{e}");
+    assert!(e.contains("instruction budget"), "{e}");
 }
 
 /// A heavy filter installs once the user agrees, which loading a folder doesn't ask: it is skipped

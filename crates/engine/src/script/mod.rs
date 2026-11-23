@@ -642,6 +642,8 @@ pub(crate) struct Savepoint {
     pending_paint: Option<crate::Paint>,
     choices: Choices,
     journal: usize,
+    /// The plug-in events queued before the command ([`Session::plugin_events_mark`]).
+    plugin_events: u64,
 }
 
 impl Savepoint {
@@ -676,6 +678,7 @@ impl Savepoint {
             pending_paint: s.pending_paint.clone(),
             choices: Choices::of(s),
             journal: s.journal.len(),
+            plugin_events: s.plugin_events_mark(),
         }
     }
 
@@ -728,6 +731,8 @@ impl Savepoint {
         s.pending_paint = self.pending_paint;
         self.choices.put(s);
         s.journal.truncate(self.journal);
+        // The documents the command opened are closed again: plug-ins are not told of them.
+        s.forget_plugin_opens_since(self.plugin_events);
         s.sync_front_profiles();
         exact
     }

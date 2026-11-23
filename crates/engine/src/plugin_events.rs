@@ -7,9 +7,10 @@
 //! - A check runs after each top-level command, or when a frontend that sets
 //!   [`Session::plugin_event_frames`] delivers ([`Session::deliver_plugin_events`]), by the frame.
 //!   Changes between two checks are one event: a burst of selection changes is one
-//!   `selection.changed` with the final selection. No check runs while an interaction is open (a
-//!   drag being previewed). A document opened or created since the last check is compared with how
-//!   it was when the command that added it ended ([`Session::plugin_events_see_new_documents`]).
+//!   `selection.changed` with the final selection. No check or delivery runs while an interaction
+//!   is open (a drag being previewed); waiting events wait for it to end. A document opened or
+//!   created since the last check is compared with how it was when the command that added it ended
+//!   ([`Session::plugin_events_see_new_documents`]).
 //! - At most [`MAX_PENDING`] events wait; past that the oldest is dropped. An event raised while a
 //!   handler runs waits for the next delivery: handlers never run inside one another.
 //! - A handler only reads. The host applies nothing it returns, and it may call only the commands
@@ -48,22 +49,36 @@ struct Seen {
     layer: Option<NodeId>,
 }
 
-/// A plug-in an event is for: its id and the hash of its module.
-type Recipient = (String, String);
+/// A plug-in an event is for: its id, the hash of its module and its installation
+/// ([`Plugin::serial`]), so a module removed and installed again is another recipient.
+type Recipient = (String, String, u64);
 
 /// The recipient `p` is.
 fn recipient(p: &Plugin) -> Recipient {
-    (p.id().to_string(), p.hash().to_string())
+    (p.id().to_string(), p.hash().to_string(), p.serial())
 }
 
-/// An event waiting for delivery: what changed, in which document, for `layer.changed` why, and
-/// the plug-ins it is for: those installed when it happened.
+/// An event waiting for delivery: what changed, in which document, and the plug-ins it is for
+/// (those installed when it happened), each with the reasons of a `layer.changed` it was given.
 #[derive(Clone, Debug, PartialEq)]
 struct Pending {
     event: Event,
     document: u64,
-    reasons: Vec<&'static str>,
-    to: Vec<Recipient>,
+    to: Vec<(Recipient, Vec<&'static str>)>,
+    /// When it was queued ([`PluginEvents::queued`] then).
+    seq: u64,
+}
+
+impl Pending {
+    /// Whether this event is for `r`.
+    fn is_for(&self, r: &Recipient) -> bool {
+        self.to.iter().any(|(x, _)| x == r)
+    }
+
+    /// The reasons of a `layer.changed` that `r` is given.
+    fn reasons_for(&self, r: &Recipient) -> &[&'static str] {
+        self.to.iter().find(|(x, _)| x == r).map_or(&[], |(_, reasons)| reasons.as_slice())
+    }
 }
 
 /// One plug-in's failed handlers in a row, for the module with `hash`.
@@ -95,6 +110,8 @@ pub struct PluginEvents {
     /// The plug-ins that reacted to events when `seen` was taken.
     seen_by: Vec<Recipient>,
     pending: VecDeque<Pending>,
+    /// How many events have been queued as their own entry.
+    queued: u64,
     dispatching: bool,
     failures: BTreeMap<String, Failures>,
     notices: VecDeque<Notice>,
@@ -119,24 +136,30 @@ impl PluginEvents {
         subs
     }
 
-    /// Queues `event` for document `uid`, for the plug-ins `to`. A `selection.changed` or
-    /// `layer.changed` already waiting for that document takes it in (a layer event adds the new
-    /// reasons to its own, and the new plug-ins to its own); past [`MAX_PENDING`] the oldest event is
-    /// dropped.
+    /// Queues `event` for document `uid`, for the plug-ins `to`, with the reasons of a
+    /// `layer.changed`. A `selection.changed` or `layer.changed` already waiting for that document
+    /// takes it in: each plug-in in `to` is added, or adds the new reasons to the ones it was given,
+    /// so a plug-in is given only the reasons of the changes it was given. Past [`MAX_PENDING`] the
+    /// oldest event is dropped.
     fn queue(&mut self, event: Event, uid: u64, reasons: Vec<&'static str>, to: Vec<Recipient>) {
         if matches!(event, Event::SelectionChanged | Event::LayerChanged)
             && let Some(p) = self.pending.iter_mut().find(|p| p.event == event && p.document == uid)
         {
-            for r in reasons {
-                if !p.reasons.contains(&r) {
-                    p.reasons.push(r);
-                }
-            }
-            p.reasons.sort_by_key(|r| LAYER_REASONS.iter().position(|x| x == r));
             for r in to {
-                if !p.to.contains(&r) {
-                    p.to.push(r);
+                let i = match p.to.iter().position(|(x, _)| *x == r) {
+                    Some(i) => i,
+                    None => {
+                        p.to.push((r, Vec::new()));
+                        p.to.len() - 1
+                    }
+                };
+                let given = &mut p.to[i].1;
+                for reason in &reasons {
+                    if !given.contains(reason) {
+                        given.push(*reason);
+                    }
                 }
+                given.sort_by_key(|r| LAYER_REASONS.iter().position(|x| x == r));
             }
             return;
         }
@@ -145,7 +168,9 @@ impl PluginEvents {
         {
             log::warn!("plug-in events: dropped a waiting {} event, past {MAX_PENDING} waiting", dropped.event.name());
         }
-        self.pending.push_back(Pending { event, document: uid, reasons, to });
+        let to = to.into_iter().map(|r| (r, reasons.clone())).collect();
+        self.pending.push_back(Pending { event, document: uid, to, seq: self.queued });
+        self.queued += 1;
     }
 
     fn notice(&mut self, n: Notice) {
@@ -247,6 +272,18 @@ impl Session {
         self.plugin_events.queue(event, uid, Vec::new(), to);
     }
 
+    /// A mark for [`Session::forget_plugin_opens_since`]: the events queued so far.
+    pub(crate) fn plugin_events_mark(&self) -> u64 {
+        self.plugin_events.queued
+    }
+
+    /// Drops the waiting `document.opened` events queued since `mark`, for opens that a rollback
+    /// undid (a failed `command.batch`, or a failed command of a script or a plug-in call). The
+    /// saves stay, since the files they wrote stay written.
+    pub(crate) fn forget_plugin_opens_since(&mut self, mark: u64) {
+        self.plugin_events.pending.retain(|p| p.event != Event::DocumentOpened || p.seq < mark);
+    }
+
     /// Compares each open document with how the last check saw it and queues the events its changes
     /// give the installed plug-ins: `selection.changed` and `layer.changed`. A document neither the
     /// last check nor [`Session::plugin_events_see_new_documents`] saw gives none, and a plug-in
@@ -264,7 +301,7 @@ impl Session {
         }
         let installed: Vec<Recipient> = subs.iter().map(|p| recipient(p)).collect();
         self.plugin_events.pending.retain_mut(|p| {
-            p.to.retain(|r| installed.contains(r));
+            p.to.retain(|(r, _)| installed.contains(r));
             !p.to.is_empty()
         });
         if self.docs.iter().any(|d| d.interaction.is_some()) {
@@ -300,13 +337,14 @@ impl Session {
 
     /// Checks the open documents for changes ([`Session::check_plugin_events`]) and calls the
     /// handlers of the events waiting, oldest first, one handler at a time. While a handler runs,
-    /// this returns at once: what the handler's calls change waits for the next delivery.
+    /// this returns at once: what the handler's calls change waits for the next delivery. While an
+    /// interaction is open, the events wait for the first delivery after it ends.
     pub fn deliver_plugin_events(&mut self) {
         if self.plugin_events.dispatching {
             return;
         }
         self.check_plugin_events();
-        if self.plugin_events.pending.is_empty() {
+        if self.plugin_events.pending.is_empty() || self.docs.iter().any(|d| d.interaction.is_some()) {
             return;
         }
         let subs = self.plugin_events.subscribers();
@@ -319,7 +357,7 @@ impl Session {
             if !p.event.outlives_document() && !self.docs.iter().any(|d| d.uid == p.document) {
                 continue;
             }
-            for plugin in subs.iter().filter(|s| s.manifest().reacts_to(p.event) && p.to.contains(&recipient(s))) {
+            for plugin in subs.iter().filter(|s| s.manifest().reacts_to(p.event) && p.is_for(&recipient(s))) {
                 if self.plugin_events.failures_of(plugin).disabled {
                     continue;
                 }
@@ -348,7 +386,7 @@ impl Session {
             }
             Event::LayerChanged => {
                 v["layer"] = json!(st.active_layer.map(|l| l.0));
-                v["reasons"] = json!(p.reasons);
+                v["reasons"] = json!(p.reasons_for(&recipient(plugin)));
             }
             Event::DocumentOpened | Event::DocumentSaved => {}
         }
@@ -449,27 +487,33 @@ impl Session {
 mod tests {
     use super::*;
 
+    /// Waiting selection and layer events of a document merge; each plug-in keeps the reasons of
+    /// the changes it was given.
     #[test]
     fn waiting_selection_and_layer_events_of_a_document_merge() {
+        let (a, b): (Recipient, Recipient) = (("a".into(), "1".into(), 1), ("b".into(), "2".into(), 2));
         let mut e = PluginEvents::default();
-        e.queue(Event::SelectionChanged, 1, vec![], vec![]);
-        e.queue(Event::LayerChanged, 1, vec!["options"], vec![]);
-        e.queue(Event::SelectionChanged, 1, vec![], vec![]);
-        e.queue(Event::LayerChanged, 1, vec!["current", "options"], vec![]);
-        e.queue(Event::SelectionChanged, 2, vec![], vec![]);
-        e.queue(Event::DocumentSaved, 1, vec![], vec![]);
-        e.queue(Event::DocumentSaved, 1, vec![], vec![]);
-        let got: Vec<(Event, u64, Vec<&str>)> = e.pending.iter().map(|p| (p.event, p.document, p.reasons.clone())).collect();
+        e.queue(Event::SelectionChanged, 1, vec![], vec![a.clone()]);
+        e.queue(Event::LayerChanged, 1, vec!["options"], vec![a.clone()]);
+        e.queue(Event::SelectionChanged, 1, vec![], vec![a.clone()]);
+        e.queue(Event::LayerChanged, 1, vec!["current", "options"], vec![a.clone()]);
+        e.queue(Event::LayerChanged, 1, vec!["deleted", "current"], vec![a.clone(), b.clone()]);
+        e.queue(Event::SelectionChanged, 2, vec![], vec![a.clone()]);
+        e.queue(Event::DocumentSaved, 1, vec![], vec![a.clone()]);
+        e.queue(Event::DocumentSaved, 1, vec![], vec![a.clone()]);
+        let got: Vec<(Event, u64, Vec<&str>)> = e.pending.iter().map(|p| (p.event, p.document, p.reasons_for(&a).to_vec())).collect();
         assert_eq!(
             got,
             [
                 (Event::SelectionChanged, 1, vec![]),
-                (Event::LayerChanged, 1, vec!["current", "options"]),
+                (Event::LayerChanged, 1, vec!["current", "deleted", "options"]),
                 (Event::SelectionChanged, 2, vec![]),
                 (Event::DocumentSaved, 1, vec![]),
                 (Event::DocumentSaved, 1, vec![]),
             ]
         );
+        assert_eq!(e.pending[1].reasons_for(&b), ["current", "deleted"], "only the change it was given");
+        assert!(!e.pending[0].is_for(&b));
     }
 
     /// While a handler runs, a delivery returns at once; the change waits for the next one, which

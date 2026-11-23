@@ -238,6 +238,96 @@ fn a_module_installed_again_gets_no_event_from_before_its_removal() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A save waiting in one session is not given to the same module that another session removed and
+/// installed again before this session's delivery.
+#[test]
+fn a_module_installed_again_by_another_session_gets_no_earlier_event() {
+    let id = "test.events.again_elsewhere";
+    let mut s = session();
+    s.plugin_event_frames = true;
+    install(&mut s, id, r#"["document.saved"]"#, &[], "", tpl::LOG_EVENT, &[]);
+    let dir = std::env::temp_dir().join(format!("vectorcraft-engine-plugin-events-elsewhere-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    run(&mut s, "document.save", json!({"path": dir.join("elsewhere.vectorcraft").to_string_lossy()}));
+    let mut other = session();
+    run(&mut other, "plugin.remove", json!({"id": id}));
+    install(&mut other, id, r#"["document.saved"]"#, &[], "", tpl::LOG_EVENT, &[]);
+    s.deliver_plugin_events();
+    assert!(given(&mut s, id).is_empty(), "the save came before this install");
+    std::fs::remove_dir_all(&dir).ok();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A plug-in installed between two layer changes waiting for the same delivery is given only the
+/// reason of the change after its install; the plug-in installed before is given both.
+#[test]
+fn a_plugin_installed_between_layer_changes_gets_only_the_later_reason() {
+    let (early, late) = ("test.events.reasons_early", "test.events.reasons_late");
+    let mut s = session();
+    let first = s.doc().unwrap().active_layer.unwrap();
+    let second = NodeId(run(&mut s, "layer.new", json!({"name": "Two"}))["id"].as_u64().unwrap());
+    install(&mut s, early, r#"["layer.changed"]"#, &[], "", tpl::LOG_EVENT, &[]);
+    s.plugin_event_frames = true;
+    run(&mut s, "layer.setProps", json!({"id": second.0, "name": "Notes"}));
+    install(&mut s, late, r#"["layer.changed"]"#, &[], "", tpl::LOG_EVENT, &[]);
+    run(&mut s, "layer.setCurrent", json!({"id": first.0}));
+    s.deliver_plugin_events();
+    let notices = s.take_plugin_event_notices();
+    let reasons = |id: &str| -> Vec<Value> {
+        notices.iter().filter(|n| n.plugin == id).map(|n| serde_json::from_str::<Value>(&n.text).unwrap()["reasons"].clone()).collect()
+    };
+    assert_eq!(reasons(early), [json!(["current", "options"])]);
+    assert_eq!(reasons(late), [json!(["current"])], "the rename came before this install");
+    run(&mut s, "plugin.remove", json!({"id": early}));
+    run(&mut s, "plugin.remove", json!({"id": late}));
+}
+
+/// A save waiting for delivery is held while an interaction is open, and given at the first
+/// delivery after it ends.
+#[test]
+fn waiting_events_are_held_while_an_interaction_is_open() {
+    let id = "test.events.interaction";
+    let mut s = session();
+    let doc = s.doc().unwrap().uid;
+    install(&mut s, id, r#"["document.saved"]"#, &[], "", tpl::LOG_EVENT, &[]);
+    s.plugin_event_frames = true;
+    let dir = std::env::temp_dir().join(format!("vectorcraft-engine-plugin-events-interaction-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    run(&mut s, "document.save", json!({"path": dir.join("interaction.vectorcraft").to_string_lossy()}));
+    s.begin_interaction("Move").unwrap();
+    s.deliver_plugin_events();
+    assert!(given(&mut s, id).is_empty(), "not while the interaction is open");
+    s.cancel_interaction().unwrap();
+    s.deliver_plugin_events();
+    assert_eq!(given(&mut s, id), [json!({"type": "document.saved", "document": doc})]);
+    std::fs::remove_dir_all(&dir).ok();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A save in a batch whose later step fails is still given to the plug-in when the request ends;
+/// an open in that batch, which the rollback closes again, is not.
+#[test]
+fn a_save_before_a_failed_batch_step_is_delivered() {
+    let id = "test.events.failed_batch";
+    let mut s = session();
+    let doc = s.doc().unwrap().uid;
+    install(&mut s, id, r#"["document.saved","document.opened"]"#, &[], "", tpl::LOG_EVENT, &[]);
+    let dir = std::env::temp_dir().join(format!("vectorcraft-engine-plugin-events-failed-batch-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("failed-batch.vectorcraft").to_string_lossy().into_owned();
+    let steps = json!([
+        {"command": "document.save", "params": {"path": path}},
+        {"command": "document.open", "params": {"path": path}},
+        {"command": "no.such.command", "params": {}}
+    ]);
+    assert!(s.execute("command.batch", &json!({"commands": steps})).is_err());
+    assert!(std::path::Path::new(&path).exists(), "the save was written");
+    assert_eq!(s.documents().len(), 1, "the opened document was closed again");
+    assert_eq!(given(&mut s, id), [json!({"type": "document.saved", "document": doc})]);
+    std::fs::remove_dir_all(&dir).ok();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A `selection.changed` event of a plug-in without `doc.read` gives the count and no ids; one
 /// with it lists the selected ids.
 #[test]

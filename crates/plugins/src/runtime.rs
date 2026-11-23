@@ -582,6 +582,8 @@ impl Plugin {
         let out = (|| {
             let alloc: TypedFunc<i32, i32> = live.func("vc_alloc")?;
             let handler: TypedFunc<EventArgs, i32> = live.func("vc_event")?;
+            // The start function may have used the time: neither call runs past it.
+            deadline.check()?;
             let ptr = self.call_budget(&mut live, &alloc, event.len().max(1) as i32, &mut budget, &deadline, None)? as u32 as usize;
             if ptr == 0 {
                 return Err(Error::Failed("vc_alloc returned 0 (out of memory)".into()));
@@ -589,6 +591,7 @@ impl Plugin {
             let outside = || Error::Abi("vc_alloc returned a block outside memory".into());
             let end = ptr.checked_add(event.len()).ok_or_else(outside)?;
             live.memory.data_mut(&mut live.store).get_mut(ptr..end).ok_or_else(outside)?.copy_from_slice(event);
+            deadline.check()?;
             let code = self.call_budget(&mut live, &handler, (ptr as i32, event.len() as i32), &mut budget, &deadline, bridge)?;
             deadline.check()?;
             if code != 0 {

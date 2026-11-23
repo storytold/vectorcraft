@@ -249,10 +249,21 @@ fn finished_background_work_waits_for_the_run_to_end() {
 #[test]
 fn a_finished_run_delivers_its_plugin_events_in_the_frame_it_ends() {
     use vectorcraft_plugins::wat as tpl;
+
+    /// Removes the plug-in when the test ends, failed or not: the registry serves every session in
+    /// the process.
+    struct Remove(&'static str);
+    impl Drop for Remove {
+        fn drop(&mut self) {
+            vectorcraft_plugins::registry::remove(self.0);
+        }
+    }
+
     let mut app = app();
     app.session.prefs.show_external_script_warning = false;
     app.session.allow_plugin_grants_from_requests();
     let id = "test.UI.script_run_events";
+    let _remove = Remove(id);
     let grant = json!(["progress", "events"]);
     let manifest = format!(r#"{{"id":"{id}","name":"Run Events","kind":"filter","api":2,"permissions":{grant},"events":["selection.changed"]}}"#);
     // The handler writes the event it is given as a warning, which the status bar shows.

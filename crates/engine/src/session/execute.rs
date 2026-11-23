@@ -206,6 +206,9 @@ impl Session {
             // A failed or panicked command's documents are put back: type is drawn in their
             // composite fonts again, not in those the command set.
             cmd::compositefonts::sync(self);
+            // Plug-ins still hear of what finished before the failure, such as a save in a batch
+            // whose later step failed.
+            self.plugin_events_after_command();
         }
         let r = r?;
         if self.depth == 0 {
