@@ -21,12 +21,12 @@ craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "d14207f66
 # Native Affinity documents (craft-libs#914).
 craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 # Bounded CDR (v1-v27) and CMX (32-bit) reader (craft-libs#778).
-craft-cdr = { git = "https://github.com/storytold/craft-libs", rev = "9b28b56bc7207ef7ce806f37df72cb94c0ad5c37" }
+craft-cdr = { git = "https://github.com/storytold/craft-libs", rev = "205042e406b630cda653990649264a78fea6296b" }
 # SVG parsing, limits, SVGZ and writer (craft-libs#778).
 craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "d20a82481b1f7b1d32c818b19c620338af9755d3", features = ["tree"] }
 craft-mime = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
-craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "068e079c7be4b100a8a6b305b31ac881e069727e" }
+craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "205042e406b630cda653990649264a78fea6296b" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
 craft-plotter = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
 craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "d14207f668562a08a19a22273ffd0170da1f4b0f" }
