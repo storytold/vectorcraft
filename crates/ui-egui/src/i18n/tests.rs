@@ -751,7 +751,7 @@ fn shape_builder_status_messages_are_in_complete_catalogs() {
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {
     let mut bad = vec![];
-    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+    for lang in library_name_langs() {
         let missing: Vec<&str> =
             vectorcraft_engine::cmd::brushlib::BUILTIN.iter().map(|b| b.name).filter(|l| lang.catalog().plain(l).is_none()).collect();
         if !missing.is_empty() {
@@ -777,7 +777,7 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
     assert_eq!(duplicates, ["Zigzag"], "only the established Pattern Borders / Game Trails name is shared");
     names.dedup();
     let mut bad = vec![];
-    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+    for lang in library_name_langs() {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
         if !missing.is_empty() {
             bad.push(format!("{} is missing {missing:?}", lang.code));
@@ -789,8 +789,17 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
 /// The complete catalogs that lack a row for one of `names`, with the names each lacks; `shown`
 /// tells whether a catalog shows a name translated.
 fn lacking(names: &[String], shown: impl Fn(&Catalog, &str) -> bool) -> Vec<String> {
+    lacking_over(LANGUAGES.iter().filter(|lang| lang.complete_menus), names, shown)
+}
+
+/// [`lacking`] over a chosen set of catalogs.
+fn lacking_over<'a>(
+    langs: impl Iterator<Item = &'a LangInfo>,
+    names: &[String],
+    shown: impl Fn(&Catalog, &str) -> bool,
+) -> Vec<String> {
     let mut bad = vec![];
-    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+    for lang in langs {
         let missing: Vec<&String> = names.iter().filter(|n| !shown(lang.catalog(), n.as_str())).collect();
         if !missing.is_empty() {
             bad.push(format!("{} is missing {missing:?}", lang.code));
@@ -820,7 +829,7 @@ fn built_in_library_style_names_are_in_complete_catalogs() {
             .collect(),
     );
     assert_eq!(names.len(), 92, "{names:?}");
-    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    let bad = lacking_over(library_name_langs(), &names, |c, n| c.plain(n).is_some());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
@@ -853,7 +862,7 @@ fn built_in_library_symbol_names_are_in_complete_catalogs() {
             .collect(),
     );
     assert_eq!(names.len(), 43, "{names:?}");
-    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    let bad = lacking_over(library_name_langs(), &names, |c, n| c.plain(n).is_some());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
@@ -874,7 +883,7 @@ fn built_in_library_swatch_names_are_in_complete_catalogs() {
     let numbered = |c: &Catalog, n: &str| {
         n.rsplit_once(' ').is_some_and(|(head, d)| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()) && c.plain(head).is_some())
     };
-    let bad = lacking(&names, |c, n| c.plain(n).is_some() || numbered(c, n));
+    let bad = lacking_over(library_name_langs(), &names, |c, n| c.plain(n).is_some() || numbered(c, n));
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
@@ -6861,6 +6870,21 @@ const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
     "nl", "da", "id",
 ];
+
+/// Catalogs that deliberately keep the built-in library content names (gradients, swatches,
+/// brushes, graphic styles and symbols) in the source language, because those names are matched
+/// against tutorials and other apps rather than read as prose. Every other complete catalog
+/// translates them. Like [`COMPLETE_MESSAGES`], this is a reviewed list rather than a per-row
+/// exemption, so the library-name tests still fail a catalog that silently drops one.
+const LIBRARY_NAMES_KEPT_IN_ENGLISH: &[&str] = &["nb"];
+
+/// The catalogs the built-in library names are checked in: complete, and not listed in
+/// [`LIBRARY_NAMES_KEPT_IN_ENGLISH`].
+fn library_name_langs() -> impl Iterator<Item = &'static LangInfo> {
+    LANGUAGES
+        .iter()
+        .filter(|lang| lang.complete_menus && !LIBRARY_NAMES_KEPT_IN_ENGLISH.contains(&lang.code))
+}
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
 /// engine and the effects pass on included (effects, swatch libraries, raster sizes and encoders,
