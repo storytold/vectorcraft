@@ -163,6 +163,8 @@ pub(super) fn close_top_dialog(app: &mut VectorcraftApp, ok: bool) {
         crate::dialogs::host::pump(app, &ctx);
     }
     assert!(crate::tests::picks::open_dialogs(app).iter().all(|d| d.id != id), "the dialog stayed open");
+    // The window's next pass draws it gone: until then its layer, last drawn, still holds the keys.
+    key_frame(app, &ctx, vec![]);
 }
 
 /// Sets `field` of the window's top dialog as a person editing it would.

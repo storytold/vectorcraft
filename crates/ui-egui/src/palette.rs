@@ -802,18 +802,17 @@ mod tests {
         fire(app, &ctx, crate::keymap::command_of(id), FireSource::Palette);
     }
 
-    /// Cancels, or confirms, every open dialog.
+    /// Cancels, or confirms, every open dialog; the window's pump runs what the answer does.
     fn close_dialogs(app: &mut VectorcraftApp, confirm: bool) {
         let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) else { return };
-        dialogs.with(|host| {
-            for id in host.open_dialogs().into_iter().map(|d| d.id) {
-                if confirm {
-                    host.confirm_by_id(&ctx, id);
-                } else {
-                    host.cancel_by_id(&ctx, id);
-                }
+        for id in dialogs.with(|host| host.open_dialogs()).into_iter().map(|d| d.id) {
+            if confirm {
+                crate::tests::picks::answer_dialog(app, id, &[], true);
+            } else {
+                dialogs.with(|host| host.cancel_by_id(&ctx, id));
+                crate::dialogs::host::pump(app, &ctx);
             }
-        });
+        }
     }
 
     /// Whether a dialog is open, the active document's undo depth and the status line.
