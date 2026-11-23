@@ -962,7 +962,13 @@ pub(super) fn field_number(buf: &str, suffix: &str, parentheses: bool) -> Option
 pub(super) fn field_text(value: f64, suffix: &str, decimals: usize) -> String {
     let s = format!("{:.*}", decimals, value);
     let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
-    format!("{s}{suffix}")
+    format!("{s}{}", after_number(suffix))
+}
+
+/// `suffix` as a field shows it after its number: a unit that starts with a letter is spaced from
+/// the number ("12 px", "5 s"), and a sign such as % or ° joins it ("50%", "45°").
+pub(super) fn after_number(suffix: &str) -> std::borrow::Cow<'_, str> {
+    if suffix.starts_with(char::is_alphabetic) { format!(" {suffix}").into() } else { suffix.into() }
 }
 
 /// A slider whose rail shows, filled up to the handle: the theme's widget fill matches the panel
@@ -1089,7 +1095,7 @@ pub fn spin_range(
     let label = take_previous_label(ui);
     let places = decimals.min(6) as i32;
     let value = value.map(|v| within(v, &range));
-    let fmt = |v: f64| format!("{v}{suffix}");
+    let fmt = |v: f64| format!("{v}{}", after_number(suffix));
     spin_generic(ui, label, value, None, None, None, None, width, step, *range.start(), &[], &[], &fmt, &mut |ui, fw, label| {
         bounded_field(ui, id, label, None, value, suffix, decimals, fw, &range, None, false, false)
     })
@@ -1186,7 +1192,7 @@ pub fn spin_plain_named(
 ) -> Option<f64> {
     let label = take_previous_label(ui);
     let value = value.into();
-    let fmt = |v: f64| format!("{v}{suffix}");
+    let fmt = |v: f64| format!("{v}{}", after_number(suffix));
     spin_generic(ui, label, value, None, None, None, None, width, step, min, presets, &[], &fmt, &mut |ui, fw, label| {
         bounded_field(ui, id, label, name, value, suffix, decimals, fw, &(min..=f64::INFINITY), None, false, false)
     })

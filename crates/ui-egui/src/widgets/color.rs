@@ -1,5 +1,5 @@
 use super::labels::{label_field, name_field, take_previous_label};
-use super::numeric::{STEP_DECIMALS, STEPS, field_text, round_to, step_to_multiple};
+use super::numeric::{STEP_DECIMALS, STEPS, after_number, field_text, round_to, step_to_multiple};
 use super::text::{after_shift_enter, select_all, select_all_on_focus, shift_enter_keeps_focus};
 use super::{Color, Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, id_with, pos2, vec2};
 
@@ -65,7 +65,13 @@ impl SliderValue {
     /// `decimals` places: the number it shows (`value` rounded) and its text.
     pub fn field(value: f64, range: std::ops::RangeInclusive<f64>, suffix: &str, decimals: usize) -> Self {
         let number = field_text(value, "", decimals);
-        Self { value: number.parse().unwrap_or(value), range, text: Some(format!("{number}{suffix}")), step: None, decimals: Some(decimals) }
+        Self {
+            value: number.parse().unwrap_or(value),
+            range,
+            text: Some(format!("{number}{}", after_number(suffix))),
+            step: None,
+            decimals: Some(decimals),
+        }
     }
 
     /// `value` on a rail over `range`, with `text`, for a field that writes its own text (a length
