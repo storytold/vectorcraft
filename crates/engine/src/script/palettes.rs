@@ -65,7 +65,7 @@ pub(crate) struct Queued {
     /// Where the control of a click or a change sits in the palette ([`ScriptUiDialog::place_of`]),
     /// by which the event finds its control again when a run adds controls before it; empty for a
     /// close.
-    place: Vec<usize>,
+    pub(crate) place: Vec<usize>,
     /// For a list's change, the list's items as the palette showed them when the event was given and
     /// the list's revision then ([`super::scriptui::UiNode::revision`]), which the run checks the list
     /// still has.

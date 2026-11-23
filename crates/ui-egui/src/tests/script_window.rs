@@ -462,6 +462,83 @@ fn a_queued_click_reaches_its_button_after_a_handler_adds_a_control_before_it() 
 }
 
 #[test]
+fn a_run_waiting_at_its_dialog_asks_for_no_frames() {
+    let mut app = app();
+    start(&mut app, &format!("{FORM} vc.log(w.show());"));
+    assert!(until_window(&mut app));
+    let ctx = egui::Context::default();
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+    let mut delay = std::time::Duration::ZERO;
+    for _ in 0..5 {
+        app.begin_host_iteration();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| app.tick(ui.ctx()));
+        out.textures_delta.clear();
+        delay = out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay);
+        if delay == std::time::Duration::MAX {
+            break;
+        }
+    }
+    assert_eq!(delay, std::time::Duration::MAX, "the app idles until the person answers");
+    assert!(app.session.script_window().is_some(), "the run still waits at its dialog");
+}
+
+#[test]
+fn a_control_request_while_a_run_waits_at_its_dialog_asks_for_the_next_frame() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = app().with_control(rx);
+    start(&mut app, &format!("{FORM} vc.log(w.show());"));
+    assert!(until_window(&mut app));
+    let ctx = egui::Context::default();
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+    let drain = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| app.drain_control(ui.ctx()));
+        out.textures_delta.clear();
+        out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay)
+    };
+    // A new context asks for a frame or two of its own first.
+    let mut settled = false;
+    for _ in 0..10 {
+        if !drain(&mut app).is_zero() {
+            settled = true;
+            break;
+        }
+    }
+    assert!(settled, "nothing asks for a frame while the run waits");
+    // What MCP's `answer_dialog` sends, which a later pass gives the run.
+    let (req, _reply) = crate::control::ControlRequest::new("ui.dialog.confirm", json!({}));
+    tx.send(req).unwrap();
+    let delay = drain(&mut app);
+    assert!(delay.is_zero(), "the answer is taken in the next frame: {delay:?}");
+}
+
+#[test]
+fn a_pass_that_gives_the_dialog_s_queued_event_asks_for_the_next_frame() {
+    let mut app = app();
+    start(&mut app, &format!("{FORM} vc.log(w.show());"));
+    assert!(until_window(&mut app));
+    let ctx = CTX.with(Clone::clone);
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+    let pass = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay)
+    };
+    // The focused field's cursor blink asks for a later frame once the dialog has settled.
+    let mut settled = false;
+    for _ in 0..40 {
+        if !pass(&mut app).is_zero() {
+            settled = true;
+            break;
+        }
+    }
+    assert!(settled, "the dialog stops asking for the very next frame while nothing happens in it");
+    // A click on Bold that waited in line behind a typed text.
+    app.ui.dialog.as_mut().unwrap().fields.insert("queued".into(), json!([{"event": "click", "control": 2, "value": null}]));
+    assert!(pass(&mut app).is_zero(), "the run the click let go on asks for its next slice");
+    assert!(app.session.script_window().is_none(), "the run took the click and has not waited again yet");
+}
+
+#[test]
 fn a_queued_list_choice_is_not_given_after_a_handler_changed_the_list() {
     let mut app = app();
     start(

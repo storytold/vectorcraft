@@ -531,6 +531,25 @@ fn a_palette_list_change_throws_when_an_item_s_text_getter_replaces_the_items() 
 }
 
 #[test]
+fn a_palette_event_finds_its_control_by_its_place() {
+    let placed = |id: usize, place: &[f64]| {
+        let Data::Object(mut fields) = palette_event(1.0, click(id)) else { return Data::Null };
+        fields.push(("place".into(), Data::Array(place.iter().map(|&k| Data::Number(k)).collect())));
+        Data::Object(fields)
+    };
+    // The host's index 1 is the group, where a control a getter added would have moved the button;
+    // the place is the button's, the second control of the palette.
+    let (mut r, _) = palette_realm(vec![placed(1, &[1.0]), placed(2, &[2.0])]);
+    r.run("var p = new Window('palette'); var g = p.add('group'); var b = p.add('button', undefined, 'Go'); var clicks = 0; b.onClick = function () { clicks++; }; p.show();")
+        .unwrap();
+    r.run("Window.__vcPaletteEvent();").unwrap();
+    assert_eq!(r.run("clicks").unwrap(), JsValue::Number(1.0), "the click reaches the control at its place");
+    let e = r.run("try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
+    assert_eq!(e, JsValue::String("a palette event names a control the palette no longer holds".into()), "no control at the place");
+    assert_eq!(r.run("clicks").unwrap(), JsValue::Number(1.0));
+}
+
+#[test]
 fn a_palette_s_visible_follows_hide_and_show() {
     let (mut r, _) = palette_realm(Vec::new());
     let v = r

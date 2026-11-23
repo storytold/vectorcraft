@@ -120,6 +120,10 @@ impl VectorcraftApp {
         if handled == control::MAX_CONTROL_REQUESTS_PER_FRAME {
             // Leave later requests on the channel and schedule another frame to serve them.
             ctx.request_repaint();
+        } else if handled > 0 && self.session.script_running() {
+            // A request may have answered the dialog a run waits at, which the app idles for: the
+            // next frame takes the answer and the run's next slice.
+            ctx.request_repaint();
         }
         self.control_rx = Some(rx);
     }

@@ -158,6 +158,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAc
         }
         d.fields.extend(fields);
     }
+    // The event lets the run go on, which the app idles for while it waits: the next frame takes
+    // the run's next slice.
+    ui.ctx().request_repaint();
     DialogAction::Confirm
 }
 

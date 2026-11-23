@@ -795,16 +795,45 @@ fn palette_event(i: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Val
         } else {
             let (_, nodes, ..) = describe(i, win)?;
             i.temp_roots.push(Value::Object(nodes));
-            let count = list_values(i, nodes)?.len();
-            if !matches!(slot(i, ev, "id")?, Value::Number(n) if n >= 1.0 && n.fract() == 0.0 && (n as usize) < count) {
+            let held = list_values(i, nodes)?;
+            // The host gives the control's place, which is found again in the palette as it is now:
+            // a getter read in the description may have added a control before it.
+            let at = match slot(i, ev, "place")? {
+                Value::Object(place) => {
+                    let control = control_at_place(i, win, place)?;
+                    control.and_then(|c| held.iter().position(|v| v.as_object() == Some(c)))
+                }
+                _ => match slot(i, ev, "id")? {
+                    Value::Number(n) if n >= 1.0 && n.fract() == 0.0 => Some(n as usize),
+                    _ => None,
+                },
+            };
+            let Some(at) = at.filter(|&n| n >= 1 && n < held.len()) else {
                 return Err(error(i, "a palette event names a control the palette no longer holds"));
-            }
+            };
+            set_slot(i, ev, "id", Value::Number(at as f64))?;
             take_event(i, win, nodes, ev, &event, None)?;
         }
         Ok(Value::Undefined)
     })();
     i.temp_roots.truncate(mark);
     r
+}
+
+/// The control at `place` in `win` as it is now: the index of each control among its container's
+/// controls, from the window down, as the host counts places. `None` when the palette has no
+/// control there.
+fn control_at_place(i: &Interp, win: ObjId, place: ObjId) -> JsResult<Option<ObjId>> {
+    let mut at = win;
+    for k in list_values(i, place)? {
+        let Value::Number(k) = k else { return Ok(None) };
+        if k < 0.0 || k.fract() != 0.0 {
+            return Ok(None);
+        }
+        let Some(kid) = kids_of(i, at)?.get(k as usize).and_then(Value::as_object) else { return Ok(None) };
+        at = kid;
+    }
+    Ok((at != win).then_some(at))
 }
 
 fn host_fn(i: &mut Interp, name: &str) -> JsResult<Value> {

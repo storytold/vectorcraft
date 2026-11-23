@@ -378,10 +378,12 @@ impl VectorcraftApp {
         if self.session.script_running()
             && !self.session.script_waiting()
             && self.session.script_dialog().is_none()
+            && self.session.script_window().is_none()
             && self.session.script_picker().is_none()
         {
             // A script in `$.sleep` goes on when its time is up; until then the app can idle. A
             // script at a file dialog goes on when the dialog answers, and `picks::poll` looks for that.
+            // A script at its ScriptUI dialog goes on when the dialog gives it an event.
             match self.session.script_sleep_left() {
                 Some(left) => ctx.request_repaint_after(left),
                 None => ctx.request_repaint(),

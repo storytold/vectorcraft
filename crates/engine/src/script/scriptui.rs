@@ -773,13 +773,17 @@ fn palette_close(host: &Host, args: &[Data]) -> Result<Data, HostError> {
     Ok(Data::Undefined)
 }
 
-/// The event a palette handler's run is for, once: `{palette, event, id, value, items}`, as `show()`
-/// takes a dialog's event with the palette's id added, and for a list's change the items the
-/// palette showed; `null` for any other run, and after the first call.
+/// The event a palette handler's run is for, once: `{palette, event, id, value, place, items}`, as
+/// `show()` takes a dialog's event with the palette's id added, the place of a click's or a
+/// change's control ([`ScriptUiDialog::place_of`]), which the run finds the control by, and for a
+/// list's change the items the palette showed; `null` for any other run, and after the first call.
 fn palette_event(host: &Host, _: &[Data]) -> Result<Data, HostError> {
     let Some(queued) = host.palette_event.borrow_mut().take() else { return Ok(Data::Null) };
     let Data::Object(mut fields) = queued.event.data() else { return Ok(Data::Null) };
     fields.push(("palette".into(), Data::Number(queued.palette as f64)));
+    if !queued.place.is_empty() {
+        fields.push(("place".into(), Data::Array(queued.place.iter().map(|&k| Data::Number(k as f64)).collect())));
+    }
     if let Some((items, revision)) = queued.list {
         fields.push(("items".into(), Data::Array(items.into_iter().map(Data::String).collect())));
         fields.push(("revision".into(), Data::Number(revision)));
