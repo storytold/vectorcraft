@@ -8,6 +8,7 @@ use std::rc::Rc;
 use craft::behavior::PartRef;
 use craft::ui::dialog::{DialogHost, DialogId, HeldOk, dialog_id};
 use craft::ui::runtime::access::Role;
+use craft::ui::testing::pointer::part_rect_of_node;
 use craft::ui::testing::{Fixture, Room, Target};
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, Vec2};
 use serde_json::{Value, json};
@@ -143,6 +144,13 @@ impl Recolor {
     pub(crate) fn slider(&self, label: &str) -> Option<Target> {
         let tree = self.fixture.tree();
         self.fixture.by_role(Role::SLIDER).into_iter().find(|t| tree.name_of(t.node) == Some(label))
+    }
+
+    /// Where the thumb of the slider named `label` runs, left to right: its track inset by half the thumb.
+    pub(crate) fn slider_travel(&self, label: &str) -> Option<egui::Rangef> {
+        let rail = self.slider(label)?;
+        let thumb = part_rect_of_node(self.fixture.ctx(), rail.node.into(), craft::behavior::PartKey::new("thumb"))?.width();
+        Some(egui::Rangef::new(rail.rect.left() + thumb / 2.0, rail.rect.right() - thumb / 2.0))
     }
 
     /// The control named `label`; a trial without it fails.

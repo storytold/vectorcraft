@@ -489,8 +489,11 @@ fn chips(ui: &mut Ui, d: &mut Fields, rows: &mut [Value], active: &[usize], base
             .show(ui)
             .clicked();
         for (i, color, hex) in &shown {
-            let chip =
-                Swatch::new(color_name(*i), *color).selected(Some(*i) == sel).tooltip(hex.clone()).marks(CellMarks::default().edge(Some(*i) == base));
+            // Named apart from the colour's bar and marker ("Color N"), which the menus and drags find by that name.
+            let chip = Swatch::new(format!("{} {}", tl!("New Color"), i + 1), *color)
+                .selected(Some(*i) == sel)
+                .tooltip(hex.clone())
+                .marks(CellMarks::default().edge(Some(*i) == base));
             if chip.show(ui).clicked {
                 chosen = Some(*i);
             }

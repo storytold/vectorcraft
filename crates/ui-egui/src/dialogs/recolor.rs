@@ -1996,10 +1996,10 @@ fn toolbar(ui: &mut Ui, d: &mut Fields, feed: &Feed, filed: &mut Filed, (can_und
             }
         }
         toggle_field(ui, d, THEME_PICKER, tl!("Color Theme Picker"), "pipette", true);
-        if IconButton::new(IconId::new("undo-2")).label(tl!("Undo Changes")).enabled(can_undo).show(ui).clicks == 1 {
+        if IconButton::new(IconId::new("undo-2")).label(tl!("Undo Changes")).enabled(can_undo).show(ui).clicked() {
             filed.step = Some(true);
         }
-        if IconButton::new(IconId::new("redo-2")).label(tl!("Redo Changes")).enabled(can_redo).show(ui).clicks == 1 {
+        if IconButton::new(IconId::new("redo-2")).label(tl!("Redo Changes")).enabled(can_redo).show(ui).clicked() {
             filed.step = Some(false);
         }
         toggle_field(ui, d, GROUP_STORAGE, tl!("Show Color Groups"), "library", true);
@@ -2246,7 +2246,7 @@ fn assign_tab(
         for (icon, label, sb) in
             [("arrow-left-right", tl!("Randomly change color order"), false), ("sparkles", tl!("Randomly change saturation and brightness"), true)]
         {
-            if IconButton::new(IconId::new(icon)).label(label).enabled(rows.len() > 1 || sb).show(ui).clicks == 1 {
+            if IconButton::new(IconId::new(icon)).label(label).enabled(rows.len() > 1 || sb).show(ui).clicked() {
                 filed.randomize = Some(sb);
             }
         }

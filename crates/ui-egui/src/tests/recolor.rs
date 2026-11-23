@@ -115,10 +115,11 @@ fn has(r: &Recolor, label: &str) -> bool {
     r.by_label(label).is_some()
 }
 
-/// Clicks the channel rail named `name` at `at` (0 to 1) of its width.
+/// Clicks the channel rail named `name` at `at` (0 to 1) of its thumb's travel.
 fn rail(r: &mut Recolor, name: &str, at: f32) {
-    let rail = r.slider(name).unwrap_or_else(|| panic!("no slider named {name}")).rect;
-    click(r, pos2(rail.left() + at * rail.width(), rail.center().y));
+    let y = r.slider(name).unwrap_or_else(|| panic!("no slider named {name}")).rect.center().y;
+    let travel = r.slider_travel(name).unwrap_or_else(|| panic!("{name}'s rail has no thumb"));
+    click(r, pos2(travel.min + at * travel.span(), y));
 }
 
 /// The wheel's centre and radius. The disc sits inside its control's rect by the theme's padding, so the radius is

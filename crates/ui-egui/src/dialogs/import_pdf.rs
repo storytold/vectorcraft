@@ -243,7 +243,8 @@ impl State {
         fields
     }
 
-    /// Sets the field as the user editing that control would; the `__` fields and the file's name are not editable.
+    /// Sets the field as the user editing that control would, or the file's path as automation does; the `__` fields
+    /// and the file's name are not editable.
     fn set_field(&mut self, field: &str, value: Value) -> Result<(), String> {
         let text = || value.as_str().ok_or_else(|| format!("{field} takes text"));
         match field {
@@ -270,6 +271,8 @@ impl State {
                 self.text_as = text_as_of(id);
             }
             "password" => self.password = text()?.to_string(),
+            // As production's fields took it; OK checks the file against the caller's roots.
+            "path" => self.path = Some(text()?.to_string()),
             _ => return Err(format!("no field {field}")),
         }
         Ok(())
