@@ -130,6 +130,83 @@ fn a_placed_document_draws_exactly_with_its_own_art() {
 }
 
 #[test]
+fn outline_mode_draws_a_placed_document_as_its_box_crossed_unless_the_setup_shows_images() {
+    let outline = |d: &Document| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+        Renderer::new().render(d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let inked = |r: &Rendered, x: u32, y: u32| r.pixel(x, y)[0] < 200;
+    // The box is (10, 10)–(90, 50): (20, 15) is on its diagonal from the top left. The file places
+    // itself again in the box (30, 20)–(70, 40), whose top edge passes (50, 20) and whose diagonal
+    // from the top left passes (35, 22).
+    let mut d = doc_with("outline-cross-1", b"loop");
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "the box is crossed from corner to corner");
+    assert!(!inked(&r, 50, 20), "none of the file's art is drawn");
+    // The file's own setup has Show Images in Outline Mode off; this document's setting applies
+    // to the art inside it.
+    d.setup.outline_images = true;
+    let r = outline(&d);
+    assert!(!inked(&r, 20, 15), "with Show Images in Outline Mode it is not crossed");
+    assert!(inked(&r, 50, 20), "and its art is drawn in outline");
+    assert!(!inked(&r, 35, 22), "nor is the file it places");
+    // A drop shadow does not change what Outline mode shows.
+    let mut d = doc_with("outline-cross-2", b"loop");
+    let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a placed document with a drop shadow is crossed");
+    assert!(!inked(&r, 50, 20), "and none of the file's art is drawn");
+    // The same in a clip group, whose members Outline mode draws one by one.
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut clip = Node::path(NodeId(71), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let group = Node::new(NodeId(70), NodeKind::Group { children: vec![Arc::new(clip), placed], clip: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group).unwrap();
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a clipped placed document with a drop shadow is crossed");
+    assert!(!inked(&r, 50, 20), "and none of its file's art is drawn");
+    // A color adjustment changes no geometry either.
+    let mut d = doc_with("outline-cross-3", b"loop");
+    let params = serde_json::json!({"brightness": 50});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "adjust.brightnessContrast".into(),
+        params,
+        visible: true,
+    });
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a placed document with a color adjustment is crossed");
+    assert!(!inked(&r, 50, 20), "and none of its file's art is drawn");
+    // A Transform effect reshapes the file's art, read when the crossed box was drawn: its rectangle
+    // is drawn moved 40 points down to (10, 50)–(90, 90), its bottom edge at y = 90, with no cross
+    // through it ((20, 55) is on its diagonal) or where the box was.
+    let mut d = doc_with("outline-cross-4", b"loop");
+    assert!(inked(&outline(&d), 20, 15), "first drawn crossed");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the file's art is drawn moved");
+    assert!(!inked(&r, 20, 55), "uncrossed");
+    assert!(!inked(&r, 20, 15), "and nothing is drawn where the box was");
+    // The same when the box was first drawn crossed with a drop shadow.
+    let mut d = doc_with("outline-cross-5", b"loop");
+    let shadow = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: shadow,
+        visible: true,
+    });
+    assert!(inked(&outline(&d), 20, 15), "first drawn crossed with a drop shadow");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the file's art is drawn moved after a drop shadow");
+}
+
+#[test]
 fn an_enveloped_placed_document_shows_its_file_once_read() {
     let mut d = doc("enveloped-1");
     let placed = d.remove(NodeId(50)).unwrap();

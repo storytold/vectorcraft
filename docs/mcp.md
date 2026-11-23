@@ -8859,6 +8859,11 @@ paper colour), the flattener preset and Discard White Overprint (Overprint Previ
 it is on), the type options (language and its quotes, Use Typographer's Quotes for typed straight quotes and a typed `”` where a quote opens, superscript, subscript
 and small caps proportions, SVG text export), the background contents (white: raster exports are white behind the
 art) and Align New Objects to Pixel Grid (see [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
+`outlineImages` is Show Images in Outline Mode. While it is off, Outline mode draws a linked image's frame crossed
+from corner to corner, and a placed document as its box crossed the same way without its art; an embedded image
+shows its frame alone. Not yet: a placed document with an effect that changes geometry, its own or its group's, is
+not crossed and draws its file's art reshaped by the effect. While it is on, images show their pixels in gray and
+placed documents show their art.
 Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
 A file whose bleed (0 to 72 pt a side), superscript and subscript sizes (1 to 500%) and positions (-500 to 500%) or
 small caps size (1 to 200%) lies outside those ranges opens with the nearer end of each range.
