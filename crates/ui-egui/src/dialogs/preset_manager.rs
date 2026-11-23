@@ -56,6 +56,9 @@ impl ManagerRow {
     }
 }
 
+/// Makes detail elements with the words of the drawing `Ui`'s `Env`.
+pub(crate) type LazyDetails = Arc<dyn Fn(&Env) -> Vec<Detail> + Send + Sync>;
+
 /// One element of the detail column.
 pub(crate) enum Detail {
     /// The preset's name, strong.
@@ -71,7 +74,7 @@ pub(crate) enum Detail {
     /// The parameter rows of the preset's options over their values; the flag makes them read only.
     Rows(Vec<Param>, DialogFields, bool),
     /// Elements whose text needs the framework's words, which only the `Env` of the drawing `Ui` gives.
-    Lazy(Arc<dyn Fn(&Env) -> Vec<Detail> + Send + Sync>),
+    Lazy(LazyDetails),
 }
 
 /// A button under the list.

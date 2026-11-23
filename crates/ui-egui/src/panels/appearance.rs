@@ -714,7 +714,7 @@ enum Act {
     /// The row's swatch was clicked, with Shift (the mixer) or without (the swatches).
     Swatch(RowKey, Painted, bool),
     /// The stroke weight field's output.
-    Weight(WeightTarget, NumberOutput),
+    Weight(WeightTarget, Box<NumberOutput>),
     /// The inline editor of effect `k` of list `item` changed these parameters.
     Params(Option<usize>, usize, serde_json::Map<String, Value>),
     /// The inline editor of effect `k` of list `item` asks for the effect's dialog.
@@ -829,7 +829,9 @@ fn item_row<'r>(cx: &'r RowCx<'_>, key: RowKey, i: usize) -> ListRow<'r> {
         }
         let target = if new_art { WeightTarget::Shown } else { WeightTarget::Item(i) };
         let pass = cx.pass;
-        row = row.trailing_field(stroke::weight_number(cx.app, Some(st.width)), move |out| pass.borrow_mut().acts.push(Act::Weight(target, out)));
+        row = row.trailing_field(stroke::weight_number(cx.app, Some(st.width)), move |out| {
+            pass.borrow_mut().acts.push(Act::Weight(target, Box::new(out)))
+        });
     }
     let painted = if new_art { Painted::NewArt { fill } } else { Painted::Item(i) };
     let pass = cx.pass;

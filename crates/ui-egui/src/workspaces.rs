@@ -575,7 +575,7 @@ fn open_new(app: &mut VectorcraftApp) {
     value.name = name;
     let dialog = HostedNewWorkspace::new(&app.ui.workspaces.set).offered(WorkspaceKeeps::NONE).value(value);
     // One already open keeps its input.
-    let _ = dialogs.with(|host| host.open_unless_open(dialog));
+    let _ = dialogs.with(|host| host.open_unless_open(dialog).ok());
 }
 
 /// Run what the workspace dialogs answered since the last pass, and keep Manage Workspaces' rows
@@ -758,7 +758,7 @@ mod tests {
         assert!(!outcome.intact, "the built-in's name was refused");
         assert_eq!(w.set.saved.len(), 1);
         let id = w.set.saved[0].id.clone();
-        assert_eq!(w.edit_order, [id.clone()]);
+        assert_eq!(w.edit_order, std::slice::from_ref(&id));
         assert!(w.edited[&id].control_bar, "the first spelling's layout is the one kept");
         assert_eq!(w.set.current, id);
         assert!(w.records.contains_key(&id));

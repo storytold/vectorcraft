@@ -34,7 +34,8 @@ fn jpeg_frame(file: &[u8]) -> (u8, u8) {
 #[test]
 fn raster_option_rows_reach_the_export_params() {
     type Check = fn(&[u8]);
-    let rows: [(&str, &[(&str, serde_json::Value)], Check); 8] = [
+    type Set<'a> = &'a [(&'a str, serde_json::Value)];
+    let rows: [(&str, Set<'_>, Check); 8] = [
         ("jpg", &[("method", json!("progressive")), ("scans", json!(4)), ("colorModel", json!("cmyk")), ("quality", json!(30))], |file| {
             assert_eq!(jpeg_frame(file), (0xC2, 4), "progressive CMYK");
             assert!(file.windows(12).any(|w| w == b"ICC_PROFILE\0"));

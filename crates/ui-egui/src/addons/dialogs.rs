@@ -24,6 +24,9 @@ pub(crate) enum Confirm {
     Options,
 }
 
+/// Shows a preview run's answer (or its error) in the dialog.
+pub(crate) type Found = fn(&mut HostedParamDialog, Result<&Value, &str>);
+
 /// What one add-on dialog is: the command it answers for and how its values become that command's params.
 pub(crate) struct Spec {
     /// The command id: the dialog's key, the command OK or Preview runs, and the `dialog` of the reply.
@@ -31,7 +34,7 @@ pub(crate) struct Spec {
     /// The command's params from the dialog's values.
     pub params: fn(&DialogFields) -> Value,
     /// Receives the answer of each preview run (or its error), to show it in the dialog.
-    pub found: Option<fn(&mut HostedParamDialog, Result<&Value, &str>)>,
+    pub found: Option<Found>,
     /// What OK does.
     pub confirm: Confirm,
 }

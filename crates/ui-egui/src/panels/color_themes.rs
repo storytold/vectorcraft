@@ -507,7 +507,12 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The theme's colours: click one to select it.
     let chips: Vec<_> = d.colors.iter().map(|c| (Label::from(c.to_hex()), srgba(c))).collect();
     let mut chosen = Selection::single(d.sel);
-    SwatchTable::new(tl!("Theme colors"), &chips).per_row(THEME_SIZE).spacing(SwatchSpacing::Spaced).selection(Bind::bound(&mut chosen)).show_all(ui);
+    // The selection comes back through `chosen`.
+    let _ = SwatchTable::new(tl!("Theme colors"), &chips)
+        .per_row(THEME_SIZE)
+        .spacing(SwatchSpacing::Spaced)
+        .selection(Bind::bound(&mut chosen))
+        .show_all(ui);
     if let Some(&i) = chosen.items.last() {
         d.sel = i;
     }

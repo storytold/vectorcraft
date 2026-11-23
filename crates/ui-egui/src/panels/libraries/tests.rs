@@ -501,7 +501,7 @@ fn libraries_are_exported_and_imported_from_the_panel_menu() {
     assert_eq!(asked, [Some("Brand.vclibrary".to_string())], "the library's name suggested");
     picker.answer_saved(&path, None);
     poll(&mut app, &ctx);
-    assert_eq!(picker.written(), [path.clone()]);
+    assert_eq!(picker.written(), std::slice::from_ref(&path));
     // The file on disk, as the export left it, for Import Library… to read.
     let lib = app.session.libraries.get("Brand").unwrap();
     std::fs::write(&path, serde_json::to_vec(lib).unwrap()).unwrap();

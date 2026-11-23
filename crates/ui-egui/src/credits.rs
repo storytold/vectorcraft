@@ -92,7 +92,7 @@ pub fn open(app: &mut VectorcraftApp) {
     let (Some(host), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) else { return };
     let dialog = HostedAbout::new(about_info(app), credits());
     // An open About stays as it is: a second request has nothing to add.
-    let _ = host.with(|h| h.open_unless_open_in(&ctx, dialog));
+    let _ = host.with(|h| h.open_unless_open_in(&ctx, dialog).ok());
 }
 
 /// Opens the link the user activated in the About dialog, once. Only browsable URLs open.

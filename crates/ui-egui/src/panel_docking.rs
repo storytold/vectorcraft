@@ -274,9 +274,11 @@ fn edge_columns(layout: &Layout<String>, edge: DockEdge) -> &[Column<String>] {
     }
 }
 
-/// The column holding `panel`: a dock column with its dock's window edge and its index from that
-/// edge, or a floating window's column with `None`.
-pub(crate) fn column_of<'a>(layout: &'a Layout<String>, panel: &str) -> Option<(Option<(DockEdge, usize)>, &'a Column<String>)> {
+/// A dock column's window edge and its index from that edge; `None` for a floating window's column.
+pub(crate) type DockSlot = Option<(DockEdge, usize)>;
+
+/// The column holding `panel`, with its [`DockSlot`].
+pub(crate) fn column_of<'a>(layout: &'a Layout<String>, panel: &str) -> Option<(DockSlot, &'a Column<String>)> {
     let place = layout.place(&panel.to_owned())?;
     let column = layout.column(&place)?;
     let edge = match &place {

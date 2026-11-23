@@ -382,7 +382,7 @@ pub(crate) fn open_next(app: &mut VectorcraftApp) {
         let Some(dialog) = dialog_for(app, uid) else { continue };
         let Some(dialogs) = app.dialogs() else { return };
         // One dialog at a time: a document that asks while another's is open waits its turn.
-        if dialogs.with(|h| h.open_unless_open(dialog)).is_err() {
+        if dialogs.with(|h| h.open_unless_open(dialog).is_err()) {
             queue_first(app, uid);
         }
         break;
@@ -488,7 +488,7 @@ fn open_searching(app: &mut VectorcraftApp, uid: u64, folder: &str) -> Result<Va
 fn show_for(app: &mut VectorcraftApp, uid: u64, dialog: MissingFontsDialog) {
     app.ui.pending_fonts.retain(|u| *u != uid);
     let Some(dialogs) = app.dialogs() else { return };
-    if dialogs.with(|h| h.open_unless_open(dialog)).is_err() {
+    if dialogs.with(|h| h.open_unless_open(dialog).is_err()) {
         queue_first(app, uid);
     }
 }

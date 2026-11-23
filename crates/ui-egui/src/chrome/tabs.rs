@@ -93,7 +93,7 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     // The strip selects a tab on the press; the tab is shown once the press ends without moving it, as a drag along
     // the strip or off it is not a switch.
-    let pressed = egui::Id::new("vectorcraft.tabPressed");
+    let pressed = egui::Id::unique("vectorcraft.tabPressed");
     // Art carried off the canvas that rests over a tab shows its document at once, for the art to drop in.
     let carrying = craft::ui::runtime::drag::active::<PanelDrag>(ui.ctx()).is_some_and(|d| matches!(*d, PanelDrag::Art { .. }));
     if !carrying {

@@ -937,9 +937,12 @@ const HEIGHTS: [(vectorcraft_doc::FontHeightReference, HeightReference, &str); 4
     (vectorcraft_doc::FontHeightReference::IcfBox, HeightReference::IcfBox, "icfBox"),
 ];
 
+/// Whether a style has one of the two-state attributes on.
+type IsOn = fn(&CharStyle) -> bool;
+
 /// The two-state style attributes the panel menu toggles, by `text.setFormat` key. A mixed selection
 /// reads as off, so choosing the row turns it on.
-const TOGGLES: [(&str, fn(&CharStyle) -> bool); 10] = [
+const TOGGLES: [(&str, IsOn); 10] = [
     ("allCaps", |s| s.all_caps),
     ("smallCaps", |s| s.small_caps.is_some()),
     ("underline", |s| s.underline),
@@ -990,9 +993,12 @@ pub(crate) fn face_axes(app: &VectorcraftApp) -> Option<(Vec<FontAxis>, Vec<Name
     Some((axes, craft::font_manager::axes::read_named_instances(face.file_data(), face.face_index())))
 }
 
+/// A variation axis's tag and value.
+type AxisSetting = ([u8; 4], f32);
+
 /// The axis settings the selection shares, and the axes whose settings differ. The first is `None`
 /// while the font has no visible axis.
-fn axis_values(app: &VectorcraftApp) -> (Option<Vec<([u8; 4], f32)>>, Vec<[u8; 4]>) {
+fn axis_values(app: &VectorcraftApp) -> (Option<Vec<AxisSetting>>, Vec<[u8; 4]>) {
     let Some((axes, _)) = face_axes(app) else { return (None, Vec::new()) };
     let db = vectorcraft_text::FontDb::global();
     let (mut held, mut mixed) = (Vec::new(), Vec::new());

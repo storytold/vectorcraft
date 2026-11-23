@@ -34,15 +34,18 @@ pub(crate) struct HeldOptions {
     /// The dialog this one opens over; it closes with its parent.
     pub parent: Option<DialogId>,
     /// Runs when the dialog is cancelled (a live preview's rollback).
-    pub cancel: Option<Box<dyn FnOnce(&mut VectorcraftApp)>>,
+    pub cancel: Option<Cancel>,
 }
+
+/// Rolls back what a held dialog did, when it is cancelled.
+pub(crate) type Cancel = Box<dyn FnOnce(&mut VectorcraftApp)>;
 
 /// Runs one held dialog's pass; `Some(cancelled)` once the dialog is gone.
 type Drain = Box<dyn FnMut(&mut VectorcraftApp) -> Option<bool>>;
 
 struct Record {
     drain: Drain,
-    cancel: Option<Box<dyn FnOnce(&mut VectorcraftApp)>>,
+    cancel: Option<Cancel>,
 }
 
 /// The held dialogs of the app: one record each, served by [`pump`].

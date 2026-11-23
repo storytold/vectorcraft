@@ -19,6 +19,8 @@ use crate::VectorcraftApp;
 use crate::dialogs::confirm::{ReplaceFiles, ReplaceFilesPrompt};
 
 type Then = Box<dyn FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String>>;
+/// What proceeding past a replace question runs.
+type Proceed = Box<dyn FnOnce(&mut VectorcraftApp) -> Result<Value, String>>;
 
 /// Whose answer a continuation is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,7 +49,7 @@ struct Waiting {
 /// A replace question on the dialog host, and what proceeding runs.
 struct Replacing {
     dialog: DialogId,
-    then: Box<dyn FnOnce(&mut VectorcraftApp) -> Result<Value, String>>,
+    then: Proceed,
 }
 
 /// The app's pending file asks ([`VectorcraftApp`]'s `file_asks`).

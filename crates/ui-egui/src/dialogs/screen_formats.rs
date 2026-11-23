@@ -355,12 +355,15 @@ pub(crate) fn apply_preset(fields: &mut Map<String, Value>, preset: &Value) {
     fields.insert("exportPreset".into(), json!(preset["name"]));
 }
 
+/// The dialog's format presets menu, drawn in the Formats row over the dialog's fields.
+pub(crate) type FormatMenu<'a> = &'a mut dyn FnMut(&mut Ui, &mut Map<String, Value>);
+
 /// Formats: the iOS and Android buttons (each sets the rows that platform uses), `menu` (the
 /// dialog's format presets), the Format Settings gear (which sets `__settings`), the format rows
 /// (scale, suffix, format) and Add Scale, as wide as `ui` allows: the dialog's and the Asset Export
 /// panel's rows. A row edit makes `preset` "". Nothing is kept between passes: the rows are built
 /// over `fields` each pass.
-pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Option<&mut dyn FnMut(&mut Ui, &mut Map<String, Value>)>) -> Response {
+pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Option<FormatMenu<'_>>) -> Response {
     let mut rows: Vec<Value> = fields.get("formats").and_then(Value::as_array).cloned().unwrap_or_default();
     let preset = text(fields, "preset").to_string();
     let sizes: Vec<Entry<String>> = SIZES.iter().map(|s| Entry::new((*s).to_string(), *s)).collect();

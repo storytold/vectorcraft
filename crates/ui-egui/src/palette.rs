@@ -1295,7 +1295,7 @@ mod tests {
         let clean_up = CommandRef::new("object.path.cleanUp");
         window.pick_typed("object.path.cleanUp", 0);
         assert!(window.app.any_dialog_open(), "{}", window.app.ui.status);
-        assert_eq!(window.app.ui.recent_commands, [clean_up.clone()]);
+        assert_eq!(window.app.ui.recent_commands, std::slice::from_ref(&clean_up));
         assert_eq!(window.app.ui.command_uses.count_of(&clean_up.key_text()), 1);
         // With no document, Find and Replace is refused.
         let mut window = Window::on(Session::new());
@@ -2114,7 +2114,7 @@ mod tests {
         assert!(order.len() > 16, "{query} lists more than 16 results");
         let sixteenth = built.entries[order[15]].command().clone();
         window.pick_typed(query, 15);
-        assert_eq!(window.app.ui.recent_commands, [sixteenth.clone()], "{}", window.app.ui.status);
+        assert_eq!(window.app.ui.recent_commands, std::slice::from_ref(&sixteenth), "{}", window.app.ui.status);
         assert_eq!(window.app.ui.command_uses.count_of(&sixteenth.key_text()), 1);
     }
 

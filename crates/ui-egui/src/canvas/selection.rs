@@ -485,7 +485,8 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
     let marks = anchors(app, st, tool_points);
     if !marks.paths.is_empty() {
         let mut paths = marks.paths;
-        BezierOverlay::new("Anchors", Bind::bound(&mut paths), &marks.selection)
+        // The marks only show the selection: the tools make the edits.
+        let _ = BezierOverlay::new("Anchors", Bind::bound(&mut paths), &marks.selection)
             .tool(BezierTool::Anchors)
             .handles(marks.handles)
             .anchors(marks.shown)

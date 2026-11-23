@@ -377,7 +377,8 @@ enum Gesture {
 
 #[test]
 fn the_view_gestures_change_the_settings() {
-    let rows: [(Gesture, fn(&Settings) -> bool, &str); 7] = [
+    type Check = fn(&Settings) -> bool;
+    let rows: [(Gesture, Check, &str); 7] = [
         (
             Gesture::Drag(vec2(40.0, 20.0)),
             |s| s.rotate_y > 5.0 && s.rotate_y <= 20.0 + 1e-9 && s.rotate_x > 2.0 && s.rotate_x <= 10.0 + 1e-9,

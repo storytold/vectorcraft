@@ -34,6 +34,9 @@ use crate::VectorcraftApp;
 // PLAN: assumed `crate::edits::{apply_edits, EditPath}` (wg.A16).
 use crate::edits::{EditPath, apply_edits};
 
+/// The key of [`StrokePanel::brushed`]: (document uid, revision, active Appearance row).
+type BrushedKey = (u64, u64, Option<usize>);
+
 /// What the Stroke panel remembers between frames; `UiState::stroke_panel` holds it.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct StrokePanel {
@@ -44,7 +47,7 @@ pub(crate) struct StrokePanel {
     /// The two arrowhead scales move together.
     pub scale_linked: bool,
     /// The cache of [`brush_keeps_size`], keyed by (document uid, revision, active Appearance row).
-    pub brushed: Option<((u64, u64, Option<usize>), Option<bool>)>,
+    pub brushed: Option<(BrushedKey, Option<bool>)>,
     /// The Stroke popover of the weight's link label is open.
     pub link_open: bool,
 }
@@ -604,7 +607,8 @@ pub(crate) fn profile_select(app: &mut VectorcraftApp, ui: &mut Ui) {
     let cur = shown.as_ref().and_then(|s| s.profile.as_ref());
     let brushed = brush_keeps_size(app, shown.as_ref());
     let mut entries = vec![];
-    let mut shapes: Vec<(String, Option<Vec<(f64, f64, f64)>>)> = vec![];
+    // Each entry's id and silhouette, as `WidthProfile::points`.
+    let mut shapes: Vec<(String, Option<Vec<_>>)> = vec![];
     let mut picked = String::new();
     let mut divide = true;
     for e in app.session.profile_entries().filter(|e| brushed != Some(true) || e.matches(None)) {

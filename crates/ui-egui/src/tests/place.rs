@@ -258,7 +258,8 @@ fn a_drop_without_a_position_opens_documents_and_places_pictures() {
 fn a_dropped_file_of_each_library_kind_opens_in_its_destination() {
     let set = "/Menus {\n /Acme\\ Undo { /Modifiers 11 /Key 902 }\n}\n";
     let library = json!({"name": "Dropped", "colors": [{"name": "Red", "color": {"model": "rgb", "r": 1, "g": 0, "b": 0}}]}).to_string();
-    let kinds: [(&str, Vec<u8>, fn(&VectorcraftApp, &str) -> bool); 4] = [
+    type Opened = fn(&VectorcraftApp, &str) -> bool;
+    let kinds: [(&str, Vec<u8>, Opened); 4] = [
         ("dropped.gpl", b"GIMP Palette\nName: Dropped\n#\n255   0   0\tRed\n".to_vec(), |app, path| {
             crate::panels::library_panel::last_open(&app.ui).is_some_and(|o| o.id == format!("loaded/{path}"))
         }),

@@ -198,7 +198,7 @@ pub(super) fn apply(app: &mut VectorcraftApp, ui: &Ui, out: &RulersOutput) {
             EditEvent::Begin { .. } => zero_begin(app, ui),
             EditEvent::Update { value, .. } => zero_update(app, ui, *value),
             // A release where it began (a click, or dropped back on the corner) moves nothing.
-            EditEvent::Commit { before, after, .. } if matches!(before, Mixed::Same(start) if start == after) => zero_cancel(app, ui),
+            EditEvent::Commit { before: Mixed::Same(start), after, .. } if start == after => zero_cancel(app, ui),
             EditEvent::Commit { after, .. } => zero_commit(app, ui, *after),
             EditEvent::Cancel { .. } => zero_cancel(app, ui),
             EditEvent::Set { after, .. } => zero_set(app, *after),

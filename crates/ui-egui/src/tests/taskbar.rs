@@ -736,7 +736,8 @@ fn scene(app: &mut VectorcraftApp) -> Scene {
 
 #[test]
 fn tools_offer_their_bar_or_none() {
-    let picks: [(&str, fn(&Scene) -> Vec<u64>); 5] = [
+    type Pick = fn(&Scene) -> Vec<u64>;
+    let picks: [(&str, Pick); 5] = [
         ("nothing", |_| vec![]),
         ("several", |s| vec![s.rect, s.ellipse]),
         ("a group", |s| vec![s.group]),

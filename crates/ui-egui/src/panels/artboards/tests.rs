@@ -1031,7 +1031,7 @@ fn the_artboard_tools_menu_publishes_its_cut_and_copy() {
     app.session.set_tool_option("selected", &json!([1]));
     app.view_mut().unwrap().artboard = 1;
     for label in ["Copy", "Cut"] {
-        app.clipboard.write_text("").unwrap();
+        assert_eq!(app.clipboard.write_text("").unwrap(), craft::craft_platform::clipboard::Written::Written, "{label}: the clipboard is cleared");
         choose(&mut app, label);
         assert!(app.written_clipboard_text().is_some_and(|svg| svg.contains("<svg")), "{label}");
     }
@@ -1067,7 +1067,8 @@ fn the_artboard_tools_menu_deletes_empty_artboards_and_opens_dialogs() {
     let ctx = app.ui_ctx.clone().expect("a window");
     app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
     // PLAN: assumed `crate::dialogs::ExportForScreensDialog` (ex.A8).
-    let opened: [(&str, fn(&VectorcraftApp) -> bool); 4] = [
+    type IsOpen = fn(&VectorcraftApp) -> bool;
+    let opened: [(&str, IsOpen); 4] = [
         ("Rename", |app| open_keys(app).iter().any(|k| k == rename_artboards::CMD)),
         ("Rearrange", is_open::<RearrangeArtboardsDialog>),
         ("Artboard Options", is_open::<ArtboardOptionsDialog>),
