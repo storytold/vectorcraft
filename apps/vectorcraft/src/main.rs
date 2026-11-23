@@ -63,6 +63,7 @@ mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
 mod windows_stylus;
+mod windows_symbol_chars;
 mod xwayland;
 
 use std::sync::{Arc, Mutex};
