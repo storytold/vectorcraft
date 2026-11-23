@@ -120,7 +120,13 @@ fn each_standard_writes_its_header_output_intent_boxes_and_identification() {
         // The metadata agrees with the header; PDF/X-4 names its standard there too.
         let xmp_version = if standard == Standard::PdfX4 { "1.6" } else { "1.3" };
         assert!(t.contains(&format!("<pdf:PDFVersion>{xmp_version}</pdf:PDFVersion>")), "{standard:?}");
-        assert_eq!(t.contains("<pdfxid:GTS_PDFXVersion xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\">PDF/X-4<"), standard == Standard::PdfX4);
+        let xmp = xmp_packet(&r.bytes);
+        let (_, description) = xmp.rsplit_once("<rdf:Description").expect("an XMP description");
+        let (attributes, _) = description.split_once('>').expect("the end of the opening tag");
+        let is_pdfx4 = standard == Standard::PdfX4;
+        // Validators expect the version property to inherit its namespace from the description.
+        assert_eq!(attributes.contains(r#"xmlns:pdfxid="http://www.npes.org/pdfx/ns/id/""#), is_pdfx4, "{standard:?}: {attributes}");
+        assert_eq!(xmp_value(&xmp, "pdfxid:GTS_PDFXVersion"), is_pdfx4.then_some("PDF/X-4"), "{standard:?}");
         assert_eq!(t.contains("<pdf:Trapped>False</pdf:Trapped>"), standard == Standard::PdfX4);
         assert!(!t.contains("/Encrypt"), "{standard:?}");
         // The file reads back.
