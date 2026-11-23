@@ -803,7 +803,8 @@ fn the_overlay_limit_counts_crossing_lines_only_where_they_are_drawn() {
 }
 
 /// The overlay's limit counts the points of the members the highlight outlines: a hidden member of
-/// a group, and the art of a hidden sublayer, do not count toward it.
+/// a group, a blend, a repeat or an intertwine, and the art of a hidden sublayer, do not count
+/// toward it.
 #[test]
 fn the_overlay_limit_leaves_out_hidden_members() {
     use super::outline::{too_many_anchors, too_many_marks};
@@ -821,7 +822,11 @@ fn the_overlay_limit_leaves_out_hidden_members() {
     for visible in [true, false] {
         let mut member = (*many).clone();
         member.visible = visible;
-        let group = Node::group(NodeId(1), vec![Arc::new(member), few.clone()]);
+        let members = || vec![Arc::new(member.clone()), few.clone()];
+        let group = Node::group(NodeId(1), members());
+        let blend = Node::new(NodeId(6), NodeKind::Blend { children: members(), spec: Default::default() });
+        let repeat = Node::new(NodeId(7), NodeKind::Repeat(vectorcraft_doc::RepeatSpec::grid(members(), 0.0, 0.0)));
+        let intertwine = Node::new(NodeId(8), NodeKind::Intertwine { children: members() });
         let mut sublayer = Node::layer(NodeId(5), "Sublayer", LayerColor::Preset(1));
         sublayer.visible = visible;
         if let Some(children) = sublayer.children_mut() {
@@ -831,7 +836,7 @@ fn the_overlay_limit_leaves_out_hidden_members() {
         if let Some(children) = layer.children_mut() {
             children.extend([Arc::new(sublayer), few.clone()]);
         }
-        for (n, what) in [(&group, "a group"), (&layer, "a layer")] {
+        for (n, what) in [(&group, "a group"), (&blend, "a blend"), (&repeat, "a repeat"), (&intertwine, "an intertwine"), (&layer, "a layer")] {
             if too_many_anchors([n]) != visible || too_many_marks([n]) != visible {
                 wrong.push(format!("{what}, member visible: {visible}"));
             }
@@ -13543,9 +13548,7 @@ fn a_compound_path_outlines_its_hidden_paths_and_a_group_does_not() {
     assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Blend { children: children(), spec: Default::default() })), 1, "a blend");
     assert_eq!(contours(&Node::group(NodeId(1), children())), 1, "a group");
     assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Intertwine { children: children() })), 1, "an intertwine");
-    let repeat = |source: Vec<Arc<Node>>| contours(&Node::new(NodeId(1), NodeKind::Repeat(vectorcraft_doc::RepeatSpec::grid(source, 0.0, 0.0))));
-    let visible = children().into_iter().take(1).collect();
-    assert_eq!(repeat(children()), repeat(visible), "a repeat");
+    assert_eq!(contours(&Node::new(NodeId(1), NodeKind::Repeat(vectorcraft_doc::RepeatSpec::grid(children(), 0.0, 0.0)))), 1, "a repeat");
     // A clip group shows its clipping path, hidden or not, and none of the art it clips.
     let clip = |visible: bool| {
         let mut members = children();

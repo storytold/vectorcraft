@@ -360,15 +360,30 @@ impl Node {
         self.geometric(Some(symbols))
     }
 
-    /// Children that contribute to a container's editing bounds and selection highlights. A live trace retains a
-    /// hidden bitmap for re-tracing/release; only source-image views measure that bitmap.
+    /// Children that contribute to a container's editing bounds. A live trace retains a hidden bitmap for
+    /// re-tracing/release; only source-image views measure that bitmap. Selection highlights outline
+    /// [`Node::drawn_children`].
     pub fn editing_children(&self) -> &[Arc<Node>] {
         let children = self.children().map(Vec::as_slice).unwrap_or_default();
-        let trace_source = self.extras().trace.is_some()
-            && !self.trace_view().shows_source()
-            && children.first().is_some_and(|n| !n.visible && matches!(n.kind, NodeKind::Image(_)));
+        let trace_source = !self.trace_view().shows_source() && self.trace_source().is_some_and(|n| !n.visible);
         let skip = usize::from(self.extras().shaper.is_some() || trace_source);
         children.get(skip..).unwrap_or_default()
+    }
+
+    /// The children a selection highlight outlines: [`Node::editing_children`] without the hidden
+    /// members, which the canvas does not draw. An Image Trace object's hidden source image stays
+    /// when the object's view shows it, and every path of a compound path stays, since the compound
+    /// path draws all of them.
+    pub fn drawn_children(&self) -> impl Iterator<Item = &Arc<Node>> {
+        let members = !matches!(self.kind, NodeKind::Compound { .. });
+        let source = self.trace_source().filter(|_| self.trace_view().shows_source());
+        self.editing_children().iter().filter(move |c| !members || c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)))
+    }
+
+    /// The first child of an Image Trace object when it is an image: the bitmap the trace keeps.
+    fn trace_source(&self) -> Option<&Arc<Node>> {
+        self.extras().trace.as_ref()?;
+        self.children()?.first().filter(|n| matches!(n.kind, NodeKind::Image(_)))
     }
 
     /// The box of [`Node::geometric_bounds`], or of [`Node::geometric_bounds_with`] when `symbols`

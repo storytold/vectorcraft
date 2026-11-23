@@ -741,18 +741,25 @@ fn a_selected_group_leaves_its_hidden_members_unmarked() {
         let b = doc.node(id).unwrap().geometric_bounds().unwrap();
         [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)]
     };
+    // Every check runs, and the failures are reported together.
+    let mut wrong = vec![];
     for id in [left, right] {
         let [tl, tr, br, bl] = sides(id);
-        assert!([tl, tr, br, bl, tl.midpoint(tr), br.midpoint(bl)].into_iter().all(drawn), "a visible member is outlined and marked");
+        if ![tl, tr, br, bl, tl.midpoint(tr), br.midpoint(bl)].into_iter().all(drawn) {
+            wrong.push("a visible member is not outlined and marked");
+        }
     }
     let [tl, tr, br, bl] = doc.node(linked).unwrap().image_corners().unwrap();
-    assert!(
-        ![tl.lerp(br, 0.25), tl.lerp(br, 0.75), tr.lerp(bl, 0.25), tr.lerp(bl, 0.75)].into_iter().any(drawn),
-        "the lines across a linked image in a hidden group"
-    );
-    assert!(![tl.midpoint(tr), tr.midpoint(br)].into_iter().any(drawn), "the outline of a linked image in a hidden group");
+    if [tl.lerp(br, 0.25), tl.lerp(br, 0.75), tr.lerp(bl, 0.25), tr.lerp(bl, 0.75)].into_iter().any(drawn) {
+        wrong.push("the lines across a linked image in a hidden group");
+    }
+    if [tl.midpoint(tr), tr.midpoint(br)].into_iter().any(drawn) {
+        wrong.push("the outline of a linked image in a hidden group");
+    }
     let [tl, tr, br, bl] = sides(hidden);
-    assert!(![tl, tr, br, bl, tl.midpoint(tr), tr.midpoint(br), br.midpoint(bl), bl.midpoint(tl)].into_iter().any(drawn), "a hidden member");
+    if [tl, tr, br, bl, tl.midpoint(tr), tr.midpoint(br), br.midpoint(bl), bl.midpoint(tl)].into_iter().any(drawn) {
+        wrong.push("a hidden member");
+    }
     assert_matches_plain(&ctx, &mut SelectionMarks::default(), &app, &view, 1.0, "a group with hidden members");
     // The hover highlight of the group outlines its visible members only.
     let (left_sides, right_sides, hidden_sides, image) =
@@ -770,15 +777,19 @@ fn a_selected_group_leaves_its_hidden_members_unmarked() {
         })
     };
     for [tl, tr, br, bl] in [left_sides, right_sides] {
-        assert!([tl.midpoint(tr), br.midpoint(bl)].into_iter().all(lit), "the hover highlight outlines a visible member");
+        if ![tl.midpoint(tr), br.midpoint(bl)].into_iter().all(lit) {
+            wrong.push("the hover highlight does not outline a visible member");
+        }
     }
     let [tl, tr, br, bl] = hidden_sides;
-    assert!(![tl.midpoint(tr), tr.midpoint(br), br.midpoint(bl), bl.midpoint(tl)].into_iter().any(lit), "the hover highlight of a hidden member");
+    if [tl.midpoint(tr), tr.midpoint(br), br.midpoint(bl), bl.midpoint(tl)].into_iter().any(lit) {
+        wrong.push("the hover highlight of a hidden member");
+    }
     let [tl, tr, br, bl] = image;
-    assert!(
-        ![tl.midpoint(tr), tr.midpoint(br), tl.lerp(br, 0.25), tr.lerp(bl, 0.25)].into_iter().any(lit),
-        "the hover highlight of a linked image in a hidden group"
-    );
+    if [tl.midpoint(tr), tr.midpoint(br), tl.lerp(br, 0.25), tr.lerp(bl, 0.25)].into_iter().any(lit) {
+        wrong.push("the hover highlight of a linked image in a hidden group");
+    }
+    assert!(wrong.is_empty(), "drawn where it should not be, or missing: {wrong:?}");
 }
 
 /// A frame of the whole canvas keeps entries for the selected objects only.
