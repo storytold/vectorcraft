@@ -4802,6 +4802,36 @@ fn a_cmd_double_click_after_a_tool_switch_goes_to_the_new_tool() {
 }
 
 #[test]
+fn a_cmd_double_click_after_switching_away_and_back_goes_to_the_active_tool() {
+    // A Cmd-click with the Selection tool goes to Direct Selection. After a switch to another tool
+    // and back to the Selection tool, or a fresh start of the tool (another view of the document),
+    // the Cmd double-click is the Selection tool's: it isolates the group.
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    let v = view();
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 100.0);
+    let b = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("object.group", &json!({"ids": [a.0, b.0]})).unwrap();
+    for reset in [false, true] {
+        s.execute("select.none", &json!({})).unwrap();
+        s.select_tool("selection", v).unwrap();
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 150.0, 150.0).with_mods(cmd), v).unwrap();
+        }
+        if reset {
+            s.reset_tool();
+        } else {
+            s.select_tool("rectangle", v).unwrap();
+            s.select_tool("selection", v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::DoubleClick, 150.0, 150.0).with_mods(cmd), v).unwrap();
+        assert_eq!(s.tool_id(), "selection");
+        assert!(s.doc().unwrap().isolation.is_some(), "the Selection tool's double-click isolates the group (reset: {reset})");
+        s.execute("object.exitIsolation", &json!({})).unwrap();
+    }
+}
+
+#[test]
 fn a_cmd_press_on_a_selected_object_keeps_select_behind() {
     // Over a selected object, a Cmd-click with the Selection tool selects the object behind it;
     // with Select Behind off, Direct Selection takes the press there too.

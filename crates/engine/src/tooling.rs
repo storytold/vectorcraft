@@ -198,6 +198,9 @@ impl Session {
         if self.tool.id() == id {
             return Ok(());
         }
+        // A double-click or triple-click after the switch is the new tool's, also when the switch
+        // comes back to the tool a Cmd press was lent from.
+        self.press_lent = None;
         // Sampling type keeps its highlighted characters as the target, and a whole story that
         // Select All selected. Capture before the Type tool deactivates (which commits typing and
         // clears its editing state).

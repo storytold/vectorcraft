@@ -209,6 +209,7 @@ impl Session {
             return;
         }
         self.press_type_selection = None;
+        self.press_lent = None;
         let view = self.last_view;
         // The edit the tool computes on another thread and the input held for it belong to the
         // document being left. The switch goes on whatever they did, as for the deactivation.
