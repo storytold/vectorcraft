@@ -129,6 +129,10 @@ fn ok_sets_each_tools_options() {
 #[test]
 fn live_curve_fitting_off_shows_the_points_until_the_release_fits_them() {
     let mut app = app();
+    // The window's first frames fit the view, as the dialog's frames below would: the Pencil's Fidelity is in screen
+    // pixels, so both strokes are drawn at one zoom.
+    crate::dialogs::tests::frame(&mut app, vec![]);
+    crate::dialogs::tests::frame(&mut app, vec![]);
     // The anchors of the newest path while a wave around height `y0` is drawn and after the
     // release, with nothing selected (a stroke starting at the end of a selected path would
     // continue it).
