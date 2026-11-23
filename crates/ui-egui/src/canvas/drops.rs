@@ -118,7 +118,8 @@ pub(crate) struct CanvasDrops<'a> {
     /// `(uid, revision)` of every open document: carried art whose source is not listed unchanged is refused.
     sources: Vec<(u64, u64)>,
     /// Whether the art being carried is taken though its source's revision moved: its move was given up and the source
-    /// has the content the move started from ([`CarriedArt::before`]), and a tab rest showed this canvas's document.
+    /// has the content the move started from ([`CarriedArt::before`]), and the document a tab rest showed is still the
+    /// current one.
     given_up: bool,
     out: &'a RefCell<Option<Dropped>>,
     /// The files from the OS the canvas places, and where their drop goes.
@@ -201,9 +202,11 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
     };
     let (Some(view), Some(document)) = (view, app.session.documents().get(win.0).map(|d| d.uid)) else { return };
     let sources = app.session.documents().iter().map(|d| (d.uid, d.revision)).chain(app.canvas.panes.released_from).collect();
-    // A tab rest leaves the art to the document it showed: a target closed or left by other means takes nothing.
+    // A tab rest leaves the art to the document it showed while that is the current one: any canvas or pane takes it
+    // then, and nothing once that document was closed or left by other means.
+    let current = app.session.active().map(|d| d.uid);
     let given_up = craft::ui::runtime::drag::active::<CarriedArt>(ui.ctx()).is_some_and(|a| {
-        app.canvas.carry_target.is_none_or(|target| target == document)
+        app.canvas.carry_target.is_none_or(|target| Some(target) == current)
             && app.session.documents().iter().any(|d| d.uid == a.document && d.same_content(&a.before))
     });
     let (out, files_out) = (RefCell::new(None), RefCell::new(None));

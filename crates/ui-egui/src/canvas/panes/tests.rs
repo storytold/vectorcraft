@@ -669,13 +669,14 @@ fn art_carried_through_a_tab_drops_into_a_third_documents_pane() {
     timed_frame(&mut app, &ctx, Some(0.1), vec![egui::Event::PointerMoved(p + vec2(20.0, 10.0))]);
     timed_frame(&mut app, &ctx, Some(0.2), vec![egui::Event::PointerMoved(tabs[2].center())]);
     timed_frame(&mut app, &ctx, Some(0.25), vec![]);
-    timed_frame(&mut app, &ctx, Some(0.8), vec![]);
+    // A tab under a drag becomes current after the pointer rests the tooltip delay (cv.F23).
+    timed_frame(&mut app, &ctx, Some(0.3 + craft::ui::contract::tooltip::DELAY), vec![]);
     assert_eq!(app.session.active_index(), Some(2), "holding the art over the third tab makes that document current");
-    timed_frame(&mut app, &ctx, Some(0.85), vec![]);
+    timed_frame(&mut app, &ctx, Some(1.0), vec![]);
     let (drop, _) = in_pane(&app, &ctx, (1, 1), Point::new(150.0, 100.0));
-    timed_frame(&mut app, &ctx, Some(0.9), vec![egui::Event::PointerMoved(drop)]);
-    timed_frame(&mut app, &ctx, Some(1.0), vec![button(drop, false)]);
-    timed_frame(&mut app, &ctx, Some(1.1), vec![]);
+    timed_frame(&mut app, &ctx, Some(1.05), vec![egui::Event::PointerMoved(drop)]);
+    timed_frame(&mut app, &ctx, Some(1.15), vec![button(drop, false)]);
+    timed_frame(&mut app, &ctx, Some(1.25), vec![]);
     assert_eq!(app.session.active_index(), Some(1), "the pane's document is the current one");
     assert_eq!(objects(&app, 1), 2, "the copy joins the second document's square");
     let placed = selected_bounds(&app);

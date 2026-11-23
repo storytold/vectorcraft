@@ -156,9 +156,9 @@ pub(crate) struct TypeEditor<'a> {
 }
 
 impl<'a> TypeEditor<'a> {
-    /// A part for the tool's caret at `caret`.
+    /// A part for the tool's caret at `caret`, the instance of [`TypeEditorCommand`]'s scope while it has the keys.
     fn new(app: &'a mut VectorcraftApp, caret: Rect) -> Self {
-        TypeEditor { common: Common::new(), app, caret }.label("Type")
+        TypeEditor { common: Common::new(), app, caret }.label("Type").command_scope(TYPE_EDITOR_SCOPE)
     }
 
     /// Applies one input of the editor part to the engine tool; a Paste types `pasted`, the text the paste delivered,
@@ -198,6 +198,8 @@ impl<'a> TypeEditor<'a> {
             }
             EditorInput::Newline { shift, .. } => text_key(app, ToolKey::Enter, Mods { shift, ..Mods::default() }),
             EditorInput::Tab => text_key(app, ToolKey::Tab, Mods::default()),
+            // The framework routes Escape to the focused part.
+            EditorInput::Cancel => end_edit(app, ToolKey::Escape, Mods::default(), view),
             EditorInput::Edit(command) => match command {
                 EditCommand::Copy => {
                     text_copy(app, false);
@@ -217,7 +219,7 @@ impl<'a> TypeEditor<'a> {
                 // `EditorState::can_undo` stays false: undo and redo fall through to the app's commands.
                 _ => {}
             },
-            // The press that selects is the tool's (the canvas hosts it), and Escape is the tool's key.
+            // The press that selects is the tool's (the canvas hosts it).
             _ => {}
         }
     }
@@ -231,7 +233,7 @@ impl<'a> TypeEditor<'a> {
             return;
         }
         match command {
-            TypeEditorCommand::Commit => text_key(app, ToolKey::Enter, Mods { cmd: true, ..Mods::default() }),
+            TypeEditorCommand::Commit => end_edit(app, ToolKey::Enter, Mods { cmd: true, ..Mods::default() }, view),
             TypeEditorCommand::Bold | TypeEditorCommand::Italic => {
                 let face = if command == TypeEditorCommand::Bold { Face::Bold } else { Face::Italic };
                 if let Err(e) = toggle_face(app, face) {
@@ -241,6 +243,12 @@ impl<'a> TypeEditor<'a> {
             _ => {}
         }
     }
+}
+
+/// Escape or Cmd+Enter, which end the edit: the tool's requests run, so it goes back to the tool used before.
+fn end_edit(app: &mut VectorcraftApp, key: ToolKey, mods: Mods, view: ViewInfo) {
+    let r = app.session.tool_key(key, mods, view);
+    crate::canvas::apply_requests(app, r);
 }
 
 /// The tool key and modifiers the engine's key handler reads for a logical move: the command modifier is the tool's

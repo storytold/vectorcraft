@@ -117,6 +117,13 @@ pub(crate) fn escape(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let _ = app.run("view.presentation", json!({}));
         return;
     }
+    // An Escape the tool claims (the Type tool ends its edit and goes back to the tool used before) is only the tool's.
+    let view = app.view_info();
+    if app.session.tool_claims_key(ToolKey::Escape, view) {
+        let r = app.session.tool_key(ToolKey::Escape, vectorcraft_tools::Mods::default(), view);
+        crate::canvas::apply_requests(app, r);
+        return;
+    }
     escape_ends_one_thing(app, ctx);
 }
 

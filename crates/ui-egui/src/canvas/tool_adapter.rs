@@ -502,6 +502,17 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
     if ui.ctx().current_pass_index() == 0 && app.canvas.grab.is_none() && ui.input(|i| i.pointer.has_pointer()) {
         crate::stylus::sync_eraser_tool(app);
     }
+    // A press on the canvas that a view tool takes (a middle-button pan, a held Space's Hand) counts as a press
+    // elsewhere for the clicks the tool's double-click or triple-click compares.
+    let over = |at: Option<egui::Pos2>| at.zip(pass.space).is_some_and(|(at, space)| space.view.rect.contains(at));
+    let held = view_tool_held(app);
+    let view_press = ui.input(|i| {
+        let pressed = i.pointer.button_pressed(egui::PointerButton::Middle) || held && i.pointer.primary_pressed();
+        pressed && over(i.pointer.press_origin())
+    });
+    if ui.ctx().current_pass_index() == 0 && view_press {
+        app.session.tool_press_elsewhere();
+    }
     let view_info = app.view_info();
     let mut picked = ToolHostResponse::default();
     let mut response = if crate::dialogs::recolor::edit_tab::with_theme_pick(app, |app, tool| picked = host_run(app, ui, pass, tool)) {

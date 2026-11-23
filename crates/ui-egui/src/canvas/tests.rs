@@ -1503,7 +1503,10 @@ fn canvas_render_jobs_use_renderer_limited_dimensions() {
     let (worker, jobs, _completed) = crate::render_worker::Worker::test_channel();
     app.canvas.worker = Some(worker);
     app.canvas.last_ms = 50.0;
-    for (size, ppp, wide) in [(vec2(70000.25, 32.0), 1.0, true), (vec2(32.0, 70000.25), 1.0, false), (vec2(40000.25, 32.0), 2.0, true)] {
+    // A component past the framework's size guard (`MAX_EXTENT` points) shows nothing, so the windows stay inside it
+    // and their pixel density takes them past the renderer's side.
+    let side = craft::ui::contract::MAX_EXTENT - 0.75;
+    for (size, ppp, wide) in [(vec2(side, 32.0), 2.5, true), (vec2(32.0, side), 2.5, false), (vec2(side, 32.0), 3.0, true)] {
         frame(&mut app, size, ppp);
         let job = jobs.try_recv().expect("oversized viewport queued on controlled worker");
         assert_eq!((job.key.w, job.key.h), (job.w, job.h));
@@ -2842,6 +2845,8 @@ fn double_clicking_type_with_the_selection_tool_puts_the_caret_there() {
     let at = xf.to_screen(b.center());
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+    // The framework holds a frame's second press for the next pass.
+    timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
     // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
     // into the text, not to tool shortcuts (X would swap fill and stroke).
@@ -2983,6 +2988,8 @@ fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
     let at = xf.to_screen(b.center());
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+    // The framework holds a frame's second press for the next pass.
+    timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
     // The Type tool edits the text, with the caret inside it, where it was clicked: typing goes
     // into the text, not to tool shortcuts.
@@ -3040,6 +3047,8 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     let double_click = |app: &mut VectorcraftApp, time: f64| {
         timed(app, time, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        // The framework holds a frame's second press for the next pass.
+        timed(app, time + 0.05, vec![]);
         timed(app, time + 0.1, vec![]);
     };
     let asking = |app: &VectorcraftApp| app.dialogs().unwrap().with(|h| h.is_open::<crate::dialogs::confirm::MissingFontQuestion>());
@@ -3136,12 +3145,15 @@ fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolati
 
     // 1st double-click on group enters isolation mode.
     timed(&mut app, 1.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+    // The framework holds a frame's second press for the next pass.
+    timed(&mut app, 1.05, vec![]);
     timed(&mut app, 1.1, vec![]);
     assert!(app.session.active().unwrap().isolation.is_some(), "should be in isolation mode");
     assert_eq!(app.session.tool_id(), "selection");
 
     // 2nd double-click on the text inside the isolated group enters text editing.
     timed(&mut app, 2.0, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+    timed(&mut app, 2.05, vec![]);
     timed(&mut app, 2.1, vec![]);
     assert_eq!(app.session.tool_id(), "type");
     assert!(app.session.tool_wants_text());
@@ -3469,8 +3481,13 @@ fn cmd_enter_ends_text_editing_and_keeps_the_text() {
     typing_frame(&mut app, &ctx, vec![egui::Event::Text("a".into())]);
     typing_frame(&mut app, &ctx, vec![key(true, false, egui::Modifiers::NONE), key(false, false, egui::Modifiers::NONE)]);
     typing_frame(&mut app, &ctx, vec![key(true, false, egui::Modifiers::SHIFT), key(false, false, egui::Modifiers::SHIFT)]);
-    typing_frame(&mut app, &ctx, vec![key(true, false, mac_ctrl), key(false, false, mac_ctrl)]);
-    assert_eq!(plain(&app, id), "a\n\u{2028}\n");
+    // Off macOS Ctrl is the command key, so a Ctrl-only Enter is Cmd+Enter there.
+    let mac = cfg!(target_os = "macos");
+    if mac {
+        typing_frame(&mut app, &ctx, vec![key(true, false, mac_ctrl), key(false, false, mac_ctrl)]);
+    }
+    let typed = if mac { "a\n\u{2028}\n" } else { "a\n\u{2028}" };
+    assert_eq!(plain(&app, id), typed);
     assert!(app.session.tool_wants_text());
     let held = vec![
         key(true, false, egui::Modifiers::COMMAND),
@@ -3483,12 +3500,12 @@ fn cmd_enter_ends_text_editing_and_keeps_the_text() {
     typing_frame(&mut app, &ctx, held);
     assert!(!app.session.tool_wants_text(), "editing ended");
     assert_eq!(app.session.tool_id(), "selection");
-    assert_eq!(plain(&app, id), "a\n\u{2028}\n", "the text is kept, and nothing after the chord changes it");
+    assert_eq!(plain(&app, id), typed, "the text is kept, and nothing after the chord changes it");
     assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id)], "the type stays selected");
     typing_frame(&mut app, &ctx, vec![key(true, true, egui::Modifiers::COMMAND)]);
     typing_frame(&mut app, &ctx, vec![key(false, false, egui::Modifiers::COMMAND)]);
     assert!(!app.any_dialog_open(), "the repeats of the chord open no dialog");
-    assert_eq!(plain(&app, id), "a\n\u{2028}\n");
+    assert_eq!(plain(&app, id), typed);
 }
 
 /// While the IME composes, Cmd+Enter is the IME's: it does not end editing, drop the marked text or
