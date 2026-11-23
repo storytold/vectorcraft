@@ -15,10 +15,11 @@ use craft::ui::canvas_controls::SelectionOutline;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Picture;
 use craft::ui::list::ThumbAspect;
-use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, Param, ParamKind};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::ContentPainterCx;
 use craft::ui::runtime::env::UnitKind;
+use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::style::DataColor;
 use craft::ui::text::NumberField;
 use craft::ui::value_drag::SliderScale;
@@ -360,6 +361,19 @@ fn map_of_box(state: &BoxState, rect: Rect, base: &SurfaceMap) -> SurfaceMap {
     }
 }
 
+/// The id of Map Art's Done, in the footer as Reset all is on the other pages.
+pub(crate) const MAP_DONE: &str = "mapDone";
+
+/// Map Art's Done, in the footer so it stays in view however long the page; none on the other pages.
+pub(crate) fn map_done_button(fields: &DialogFields) -> Option<(String, FooterButton)> {
+    (fields.text(PAGE) == Some(MAP_PAGE)).then(|| (MAP_DONE.to_owned(), FooterButton::new(tl!("Done"), DialogRole::Other)))
+}
+
+/// Done's press: back to the effect's first page.
+pub(crate) fn map_done(dialog: &mut HostedParamDialog, effect: &str) {
+    dialog.set_field(PAGE, FieldValue::from(if effect == CLASSIC_ROTATE { "rotation" } else { "object" }));
+}
+
 /// The surface laid out flat, as large as fits the row, in a light gray when the viewer sees it and a dark gray when
 /// it is hidden, with the box of the mapped art on it: a free transform box that moves, scales and turns the art.
 fn flat_view(ui: &mut Ui, fields: &mut DialogFields, flat: &Flat) -> Response {
@@ -431,29 +445,21 @@ fn map_actions(flat: Flat, has_map: bool, any_map: bool) -> Param {
         .response
     })
     .full_width()
+    // The page's maps: automation sets them whole, as the rows above edit them one surface at a time.
+    .companions([MAP_ART])
 }
 
 /// Map Art: the surface (first, previous, its number, next, last, and whether the viewer sees it), the symbol mapped
 /// onto it, the surface laid out flat with the art's box to move, scale and rotate, the same values as numbers, Scale
 /// to Fit, Clear, Clear All, Shade Artwork and Invisible Geometry. The rows edit the effect's `mapArt`, `mapShade` and
-/// `mapInvisible`, which the dialog previews and applies with its other settings; Done goes back to the effect's
-/// first page. The number rows list only while the shown surface has a map.
+/// `mapInvisible`, which the dialog previews and applies with its other settings; the footer's Done
+/// ([`map_done_button`]) goes back to the effect's first page. The number rows list only while the shown surface has a
+/// map.
 pub(crate) fn map_art_params(data: &Data, fields: &DialogFields, effect: &str) -> Vec<Param> {
     if !vectorcraft_effects::takes_map_art(effect) {
         return Vec::new();
     }
-    let first_page = if effect == CLASSIC_ROTATE { "rotation" } else { "object" };
-    let mut rows = vec![
-        Param::custom("__mapDone", tl!("Map Art"), move |ui, fields, _| {
-            let done = Button::new(tl!("Done")).show(ui);
-            if done.clicked() {
-                fields.set(PAGE, first_page);
-            }
-            done.response
-        })
-        // The page's maps: automation sets them whole, as the rows below edit them one surface at a time.
-        .companions([MAP_ART]),
-    ];
+    let mut rows = Vec::new();
     let Some(listed) = data.surfaces.as_ref().filter(|s| !s.is_empty()) else { return rows };
     let count = listed.len();
     let current = shown_surface(fields, count);

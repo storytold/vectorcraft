@@ -217,7 +217,8 @@ fn light_rings_adjust_only_their_angle_and_snap_without_rotating_the_object() {
         }
         let other = if axis == 0 { "lightHeight" } else { "lightRotation" };
         assert_eq!(value(&h, other), before.number(other).unwrap());
-        assert_eq!(stored(&h, key), json!(value(&h, key)));
+        // The effect may keep a whole number as an integer.
+        assert_eq!(stored(&h, key).as_f64(), Some(value(&h, key)));
     }
 }
 

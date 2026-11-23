@@ -4,7 +4,7 @@
 //! ([`ask_missing_font_edit`]). Both texts are shown as given: callers translate their template
 //! before filling in a name, so the name is never translated.
 
-use craft::ui::dialog::{Alert, DialogHost, DialogResult, HostedAlert, PromptChoice, StackDialog, StandardPrompt, StartupStage};
+use craft::ui::dialog::{Alert, DialogHost, DialogId, DialogResult, HostedAlert, PromptChoice, StackDialog, StandardPrompt, StartupStage};
 use egui::Context;
 use serde_json::{Value, json};
 
@@ -141,8 +141,22 @@ pub fn tell(app: &mut VectorcraftApp, message: &str, detail: &str) {
         return;
     }
     told.push((message.to_string(), detail.to_string()));
-    let alert = HostedAlert::new(Alert::new(message.to_string(), detail.to_string()).ok_label(tl!("Close")));
-    dialogs.with(|host| open_or_wait(host, Message(alert)));
+    dialogs.with(|host| open_or_wait(host, message_dialog(message, detail)));
+}
+
+/// [`tell`] over the open dialog `parent`, at once: the message shows above it, and `parent` shows again when the
+/// message closes.
+pub(crate) fn tell_over(app: &mut VectorcraftApp, parent: DialogId, message: &str, detail: &str) {
+    let Some(dialogs) = app.dialogs() else {
+        return;
+    };
+    // Shown before the messages waiting their turn, so it is the first the host closes.
+    app.told.0.insert(0, (message.to_string(), detail.to_string()));
+    dialogs.with(|host| host.open_child(message_dialog(message, detail), parent));
+}
+
+fn message_dialog(message: &str, detail: &str) -> Message {
+    Message(HostedAlert::new(Alert::new(message.to_string(), detail.to_string()).ok_label(tl!("Close"))))
 }
 
 /// Opens `dialog` at once when no other dialog is open or waiting, else queues it to open after them.

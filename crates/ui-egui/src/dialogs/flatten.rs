@@ -151,7 +151,7 @@ pub(crate) fn as_written(o: &mut FlattenOptions, overprint: Overprint) {
 }
 
 /// The name of the flattener preset Save PDF `parent` flattens with, as the list names it.
-fn preset_name(parent: &HostedPdfExport) -> String {
+pub(super) fn preset_name(parent: &HostedPdfExport) -> String {
     let name = parent.settings().flattener_preset.trim();
     let name = if name.is_empty() { pdf::DEFAULT_FLATTENER } else { name };
     FlattenOptions::preset_label(&name.to_ascii_lowercase()).unwrap_or(name).to_string()

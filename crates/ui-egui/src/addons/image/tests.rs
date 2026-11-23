@@ -190,6 +190,8 @@ fn color_mask_previews_keeps_its_settings_and_comes_off() {
     let fields = dialog_fields(&app);
     assert_eq!((fields["background"].as_str(), fields["tolerance"].as_f64()), (Some("edges"), Some(10.0)));
     assert!(fields.get("masked").is_none());
+    // The Preview box starts off (#5360).
+    set(&app, "preview", json!(true));
     set(&app, "tolerance", json!(20));
     pump(&mut app);
     assert_eq!(masked_alphas(&app), [0, 0, 255], "the preview hides the white and the ring");

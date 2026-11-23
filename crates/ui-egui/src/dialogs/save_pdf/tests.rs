@@ -78,6 +78,14 @@ fn set_field(app: &VectorcraftApp, name: &str, v: Value) {
     set_at(app, pdf_id(app), name, v).unwrap();
 }
 
+/// Write a field through automation's `ui.dialog.set`, which also takes the Custom… flattener options the app keeps.
+fn dialog_set(app: &mut VectorcraftApp, name: &str, v: Value) {
+    let ctx = app.ui_ctx.clone().expect("a UI context");
+    let (req, _) = craft::automation::ControlRequest::new("ui.dialog.set", json!({"field": name, "value": v}));
+    let craft::automation::Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("ui.dialog.set {name} answered later") };
+    assert_eq!(r["ok"], true, "ui.dialog.set {name}: {r}");
+}
+
 fn with_pdf<R>(app: &VectorcraftApp, f: impl FnOnce(&mut HostedPdfExport) -> R) -> R {
     let id = pdf_id(app);
     host(app, |h, _| h.get_mut_by_id::<HostedPdfExport>(id).map(f)).expect("a Save PDF dialog")
@@ -123,10 +131,14 @@ fn press(app: &mut VectorcraftApp, name: &str) {
     // The click finds the control in the accessibility tree of a frame drawn first, as a user presses what the window shows.
     crate::testing::app_frame(app, &ctx, Default::default());
     let (click, _reply) = craft::automation::ControlRequest::new("ui.click", json!({"control": {"name": name}}));
-    crate::control::handle(app, &ctx, &click);
-    // The click is queued as input: the window's frames after it take it and press the control.
-    for _ in 0..2 {
-        crate::testing::app_frame(app, &ctx, Default::default());
+    match crate::control::handle(app, &ctx, &click) {
+        craft::automation::Reply::Done(r) => assert_eq!(r["ok"], true, "ui.click {name}: {r}"),
+        // The click is queued as input: the window's frames after it take it and press the control.
+        _ => {
+            for _ in 0..2 {
+                crate::testing::app_frame(app, &ctx, Default::default());
+            }
+        }
     }
     pump(app);
 }
@@ -350,6 +362,8 @@ fn the_save_summary_button_writes_the_summary() {
     app.run("file.export.pdf", json!({})).unwrap();
     let untouched = line_count(&summary(&app));
     set_field(&app, "thumbnails", json!(true));
+    // The button is in the Summary section, which the user opens first.
+    set_field(&app, "section", json!("summary"));
     press(&mut app, "Save Summary…");
     let title = app.session.active().unwrap().title();
     let stem = std::path::Path::new(&title).file_stem().unwrap().to_string_lossy().into_owned();
@@ -687,9 +701,9 @@ fn confirming_preserves_passwords_supplied_when_opening_the_dialog() {
         )
         .unwrap();
         assert!(!summary(&app).contains("Password"), "summaries omit passwords");
-        // PLAN: assumed control names of the preset row: Save Preset…, then Create.
-        press(&mut app, "Save Preset…");
-        press(&mut app, "Create");
+        // The preset row's New… opens its name field; OK saves the preset under the suggested name.
+        press(&mut app, "New…");
+        press(&mut app, "OK");
         let saved = &app.session.prefs.pdf_presets[0].settings.security;
         assert!(saved.open_password.is_empty() && saved.permissions_password.is_empty(), "presets forget passwords");
 
@@ -783,8 +797,8 @@ fn summary_warnings_include_flattener_resolutions_when_flattening_transparency()
     assert!(text.contains("1200") && text.contains("300"), "{text}");
 
     // With a custom flattener override, the resolution in the warning reflects the options
-    set_field(&app, "flattener.lineArtPpi", json!(600));
-    set_field(&app, "flattener.gradientPpi", json!(200));
+    dialog_set(&mut app, "flattener.lineArtPpi", json!(600));
+    dialog_set(&mut app, "flattener.gradientPpi", json!(200));
     pump(&mut app);
     let text = summary(&app);
     assert!(text.contains("600") && text.contains("200"), "{text}");

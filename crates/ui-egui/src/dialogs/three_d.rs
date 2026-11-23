@@ -4,6 +4,7 @@
 use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard};
 
 use craft::ui::contract::Bind;
+use craft::ui::contract::overlay::{FloatPlace, Place as OverlayPlace};
 use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog, ParamLayout, ParamResult};
 use craft::ui::runtime::env::Label;
@@ -92,6 +93,7 @@ impl Session {
         for key in super::three_d_classic::MAP_ROWS {
             params.remove(key);
         }
+        revolve::drop_untaken_light_keys(&self.effect, &mut params);
         let (cmd, p) = self.command(&params);
         (cmd, p, params)
     }
@@ -115,13 +117,22 @@ pub(crate) fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     let footer_effect = effect.clone();
     // The canvas of the current window: the gizmo and the droppers work there while the dialog is open.
     let canvas = crate::doc_windows::current(app).map(crate::canvas::canvas_id);
+    // At the window's right edge from the canvas's top, where the 3D panel docks, so the dialog leaves the art the
+    // gizmo turns in view.
+    let beside = app.canvas_view().map(|v| egui::pos2(ctx.content_rect().right(), v.rect.top()));
     let dialog = HostedParamDialog::new(&ctx, "effect.dialog", fields, move |f| {
         let rows = revolve::params(&read(&build_data), f, Place::Dialog);
-        let reset = revolve::reset_all_button(&footer_effect, f);
+        let reset = revolve::reset_all_button(&footer_effect, f).or_else(|| super::three_d_classic::map_done_button(f));
         let hint = hint_for(&footer_effect, f.bool("preview").unwrap_or(false), f);
         let dialog = ParamDialog::new("effect.dialog", title.clone(), rows).values(Bind::bound(f)).previews(true).layout(ParamLayout::Stacked);
         let dialog = match reset {
             Some(reset) => dialog.extra_buttons(vec![reset]).footer_note(hint),
+            None => dialog,
+        };
+        let dialog = match beside {
+            Some(corner) => {
+                dialog.shaped(move |d| d.overlay(|o| o.place(OverlayPlace::Float(FloatPlace::corner_at(corner, egui::Align2::RIGHT_TOP)))))
+            }
             None => dialog,
         };
         match canvas {
@@ -250,8 +261,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut s) = app.three_d_dialog.take() else { return };
     // A dialog that closed is finished by the held drain (OK or Cancel), which owns the session's end.
     let Some((fields, previewing)) = dialog_of(app, s.id, |d| {
-        if d.take_footer_action().as_deref() == Some(revolve::RESET_ALL) {
-            revolve::reset_all(d, &s.effect);
+        match d.take_footer_action().as_deref() {
+            Some(revolve::RESET_ALL) => revolve::reset_all(d, &s.effect),
+            Some(super::three_d_classic::MAP_DONE) => super::three_d_classic::map_done(d, &s.effect),
+            _ => {}
         }
         (d.fields().clone(), d.is_previewing())
     }) else {

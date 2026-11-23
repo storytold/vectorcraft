@@ -306,7 +306,7 @@ fn scroll_bars(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) -> Op
 
 /// The size of the art and the artboards together, and the artboard Fit Artboard shows (the view's,
 /// the first when it has gone).
-fn view_target(app: &VectorcraftApp, win: Win) -> ViewTarget {
+pub(crate) fn view_target(app: &VectorcraftApp, win: Win) -> ViewTarget {
     let (Some(st), Some(view)) = (app.session.documents().get(win.0), doc_windows::view(app, win)) else {
         return ViewTarget::new(Size::new(1.0, 1.0));
     };

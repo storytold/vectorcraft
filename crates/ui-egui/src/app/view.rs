@@ -1,5 +1,5 @@
 use craft::behavior::{CanvasView, ZoomScheme};
-use craft::ui::canvas::{NavigationOptions, ViewRequest};
+use craft::ui::canvas::{NavigationOptions, ViewCommands, ViewRequest};
 use serde_json::Value;
 use vectorcraft_engine::Prefs;
 
@@ -166,6 +166,26 @@ impl VectorcraftApp {
         let scaling = self.ui_scaling();
         if let Some(v) = self.view_mut() {
             v.moved = Some(ViewMove::Ease(before.canvas(scaling, v.rect)));
+        }
+    }
+
+    /// Runs `command` on the active view at once, in the canvas its last pass laid out, and eases the canvas there;
+    /// `bounds` are the layers' bounds for Fit Layers. Without a window, or before the canvas was laid out, the canvas
+    /// runs it in its next pass.
+    pub(crate) fn view_now(&mut self, command: ViewCommands, bounds: Option<vectorcraft_geom::Rect>) {
+        let (Some(ctx), Some(win), Some(_)) = (self.ui_ctx.clone(), crate::doc_windows::current(self), self.canvas_view()) else {
+            return self.request_view(ViewRequest::Command(command), bounds);
+        };
+        let target = crate::canvas::view_target(self, win);
+        let (scaling, ppp) = (self.ui_scaling(), ctx.pixels_per_point());
+        let scheme = zoom_scheme(&self.session.prefs, ppp / ctx.zoom_factor());
+        let Some(v) = self.view_mut() else { return };
+        let before = *v;
+        let mut cv = v.canvas(scaling, v.rect);
+        let layers = move || bounds;
+        if command.apply(&mut cv, &target, Some(&layers), ppp, &scheme) {
+            v.set_canvas(&cv, scaling);
+            self.ease_view(before);
         }
     }
 

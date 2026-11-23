@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_three_d::fold::raster::{Image, MAX_PIXELS, MAX_SIDE};
 
-use super::{PrintKey, Settings, Shown, View, inside_color, show, status, store};
+use super::{PrintKey, Settings, Shown, View, inside_color, show, status};
 use crate::VectorcraftApp;
 
 /// How long a test waits for the print to render.
@@ -473,14 +473,16 @@ fn the_view_is_folded_and_drawn_again_only_when_something_changes() {
     let mut rig = Rig::front();
     let folded = |rig: &Rig| rig.app.borrow().addon_panels.fold_view.folded.as_ref().map(|f| Arc::clone(&f.1)).expect("a fold");
     let image = |rig: &Rig| rig.app.borrow().addon_panels.fold_view.shown.as_ref().map(|s| Arc::clone(&s.image)).expect("an image");
-    // Frames one at a time, as the store counts the uploads of one frame.
+    // Frames one at a time, each counted when it shows a newly drawn image: the store's upload count is of the frame
+    // running, so it reads none between frames.
     let uploads = |rig: &mut Rig| {
         (0..5)
-            .map(|_| {
+            .filter(|_| {
+                let before = image(rig);
                 rig.fx.frame(vec![]);
-                store(rig.fx.ctx()).statistics(rig.fx.ctx()).uploads
+                !Arc::ptr_eq(&before, &image(rig))
             })
-            .sum::<usize>()
+            .count()
     };
     let (fold, img) = (folded(&rig), image(&rig));
     assert_eq!(uploads(&mut rig), 0, "nothing changed: no render");

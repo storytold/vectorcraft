@@ -330,12 +330,22 @@ pub fn hide_saves(app: &mut VectorcraftApp) -> Value {
 /// must not look saved: it stays modified, and what was at `path` is as it was. Not for a request
 /// an agent sent and waits on: the error is its reply.
 pub(crate) fn report_write_error(app: &mut VectorcraftApp, export: bool, path: &str, e: &str) {
+    report_write_error_over(app, None, export, path, e);
+}
+
+/// [`report_write_error`] over the open dialog `over` when there is one, at once: the dialog the write was asked from
+/// shows again when the message closes.
+fn report_write_error_over(app: &mut VectorcraftApp, over: Option<DialogId>, export: bool, path: &str, e: &str) {
     if app.ui.answering_control {
         return;
     }
     let name = fileio::file_name(path);
     let message = if export { tl!("Can't export “{name}”.") } else { tl!("Can't save “{name}”.") };
-    dialogs::confirm::tell(app, &crate::i18n::fmt(message, &[("name", &name)]), &crate::i18n::message(crate::i18n::current(), e));
+    let (message, detail) = (crate::i18n::fmt(message, &[("name", &name)]), crate::i18n::message(crate::i18n::current(), e));
+    match over {
+        Some(parent) => dialogs::confirm::tell_over(app, parent, &message, &detail),
+        None => dialogs::confirm::tell(app, &message, &detail),
+    }
 }
 
 /// [`write_to`], a failure reported ([`report_write_error`]).
@@ -373,10 +383,35 @@ pub(crate) fn write_named(
     write_named_as(app, path, name, file_types(&fileio::extension(name)), bytes, then)
 }
 
+/// [`write_named`] asked from the open dialog `parent`: a failed write is told over it.
+pub(crate) fn write_named_over(
+    app: &mut VectorcraftApp,
+    parent: DialogId,
+    path: Option<String>,
+    name: &str,
+    bytes: Vec<u8>,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    write_named_in(app, Some(parent), path, name, file_types(&fileio::extension(name)), bytes, then)
+}
+
 /// [`write_named`] with a save panel that shows `filters`, for a file whose extension names no one
 /// type (`.json` holds shortcut sets as well as preferences).
 pub(crate) fn write_named_as(
     app: &mut VectorcraftApp,
+    path: Option<String>,
+    name: &str,
+    filters: Vec<FileFilter>,
+    bytes: Vec<u8>,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    write_named_in(app, None, path, name, filters, bytes, then)
+}
+
+/// [`write_named_as`], a failed write told over the dialog `over` when there is one.
+fn write_named_in(
+    app: &mut VectorcraftApp,
+    over: Option<DialogId>,
     path: Option<String>,
     name: &str,
     filters: Vec<FileFilter>,
@@ -394,7 +429,7 @@ pub(crate) fn write_named_as(
         ext,
         |_| false,
         move |app, path| {
-            write_reporting(app, &path, &bytes)?;
+            write_to(&mut app.services, &path, &bytes).inspect_err(|e| report_write_error_over(app, over, false, &path, e))?;
             then(app, path)
         },
     )

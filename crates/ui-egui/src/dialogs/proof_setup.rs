@@ -455,7 +455,7 @@ pub(crate) fn wait() {
 /// List the folder on the first frame, after `view.proofSetup.save` wrote a setup (from the dialog,
 /// a control client or the command palette), and when the window becomes the active one, so a setup
 /// copied into the folder is listed without a restart; take in the listings that ended. Once no
-/// picker is open, the folder Save… made is removed if it is still empty.
+/// picker is open and its answer was carried out, the folder Save… made is removed if it is still empty.
 fn list_saved(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // A pass applies only its own input: the focus event is in the frame's first pass, so a second
     // pass of the frame does not list again.
@@ -463,7 +463,9 @@ fn list_saved(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let saves = app.session.proof_setup_saves();
     let start = {
         let mut saved = saved();
+        // An answered pick waits for `file_asks::poll` to write into the folder.
         if !app.file_dialog_open()
+            && !app.file_asks.asking()
             && let Some(dir) = saved.made.take()
         {
             // A folder that a setup was saved in is not empty, and stays.
@@ -809,7 +811,8 @@ mod tests {
         refresh_saved(&app);
         wait();
         // Load… puts the file's settings back in the dialog.
-        for (k, v) in [("device", json!(WORKING)), ("intent", json!("perceptual")), ("preserveNumbers", json!(false))] {
+        // Preserve Numbers off first: the intent takes no input while it is on.
+        for (k, v) in [("device", json!(WORKING)), ("preserveNumbers", json!(false)), ("intent", json!("perceptual"))] {
             set(&mut app, &ctx, k, v);
         }
         files.queue(Picked::Paths(vec![file.clone()]));

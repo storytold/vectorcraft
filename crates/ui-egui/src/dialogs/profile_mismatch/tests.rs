@@ -14,9 +14,11 @@ fn host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost) -> R) -> R {
     app.dialogs().expect("a window host").with(f)
 }
 
+/// The frame's dialog pumps, then the paste waiting on a question that was answered, as the frame's tick runs it.
 fn pump(app: &mut VectorcraftApp) {
     let ctx = app.ui_ctx.clone().expect("a window context");
     crate::dialogs::host::pump(app, &ctx);
+    crate::placing::settle_swatch_paste(app);
 }
 
 fn is_open<D: StackDialog>(app: &VectorcraftApp) -> bool {

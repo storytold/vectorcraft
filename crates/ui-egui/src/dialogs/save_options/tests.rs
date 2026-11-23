@@ -330,7 +330,9 @@ fn web_save_as_names_the_file_and_picks_the_format() {
     // OK goes on to the Save PDF dialog, whose OK saves.
     assert!(ok(&mut app));
     assert!(written.borrow().is_empty());
-    assert_eq!(dialog(&mut app).text("path"), Some("Untitled-1.pdf"));
+    assert_eq!(host(&app, |h| h.open_dialogs().last().and_then(|d| d.key.clone())).as_deref(), Some("pdf-export"));
+    let job = app.save_pdf.as_ref().and_then(|o| o.job.as_ref()).and_then(|j| j.path.clone());
+    assert_eq!(job.as_deref(), Some("Untitled-1.pdf"), "Save PDF writes under the name Save As gave");
     assert!(ok(&mut app));
     let (name, bytes) = written.borrow()[0].clone();
     assert_eq!(name, "Untitled-1.pdf");

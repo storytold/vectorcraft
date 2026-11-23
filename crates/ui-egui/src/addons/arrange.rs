@@ -6,7 +6,7 @@
 use std::borrow::Cow;
 
 use craft::menu::Node;
-use craft::ui::canvas::{ViewCommands, ViewRequest};
+use craft::ui::canvas::ViewCommands;
 use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Value, json};
@@ -243,7 +243,8 @@ pub(crate) fn zoom(app: &mut VectorcraftApp) -> Result<Value, String> {
         return Err("nothing selected".into());
     };
     let bounds = st.doc.bounds_of(&st.selection.objects, true);
-    app.request_view(ViewRequest::Command(ViewCommands::FitLayers), bounds);
+    // At once, as production fitted: a dialog's OK that selects and zooms shows the fit without another frame.
+    app.view_now(ViewCommands::FitLayers, bounds);
     Ok(Value::Null)
 }
 

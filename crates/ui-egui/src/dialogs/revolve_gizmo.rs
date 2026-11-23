@@ -760,6 +760,18 @@ fn write(dialog: &mut HostedParamDialog, before: GizmoValues, landed: GizmoValue
     }
 }
 
+/// Puts the keys the gizmo writes back as `start` held them, value for value: Escape restores the fields as they were,
+/// not only their numbers.
+fn restore(dialog: &mut HostedParamDialog, start: &DialogFields) {
+    for key in KEYS.iter().copied().chain(["lights", "lightRotation", "lightHeight"]) {
+        match start.get(key) {
+            Some(value) if dialog.fields().get(key) != Some(value) => dialog.set_field(key, value.clone()),
+            Some(_) => {}
+            None => dialog.clear_field(key),
+        }
+    }
+}
+
 /// The gizmo over the canvas while the 3D effect's dialog shows it, then the Map Art outline: each event's values go
 /// to the dialog's fields, which its preview applies.
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
@@ -768,12 +780,23 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
         && let Some(fields) = three_d::with_fields(app, |dialog| dialog.fields().clone())
         && shown(&fields)
     {
+        // The dialog is modal and keeps the canvas's view open: the gizmo's presses pass its layer as a canvas tool's do.
+        if let Some(canvas) = crate::doc_windows::current(app).map(crate::canvas::canvas_id) {
+            craft::ui::runtime::sampler::pass_tool_gesture(ui.ctx(), canvas, craft::ui::contract::CanvasGesture::PRIMARY);
+        }
         let before = GizmoValues::of(&fields);
         let label = if lighting(&fields) { tl!("Lighting") } else { tl!("Rotation") };
         let subject = Subject { fields, bounds };
         let output = RevolveGizmo::new(label, Bind::given(before), &subject).show_at(ui, space.view.rect);
-        // The last value of the pass's events, a cancel's included: Escape writes the values back.
-        if let Some(landed) = output.edit.events.landed().copied() {
+        // The fields as the gesture found them, for its cancel.
+        let start = egui::Id::unique("revolve-gizmo-start");
+        if output.edit.events.began() {
+            ui.data_mut(|d| d.insert_temp(start, subject.fields.clone()));
+        }
+        let cancelled = output.edit.events.cancel_reason().is_some().then(|| ui.data_mut(|d| d.remove_temp::<DialogFields>(start))).flatten();
+        if let Some(start) = cancelled {
+            three_d::with_fields(app, |dialog| restore(dialog, &start));
+        } else if let Some(landed) = output.edit.events.landed().copied() {
             three_d::with_fields(app, |dialog| write(dialog, before, landed));
         }
     }

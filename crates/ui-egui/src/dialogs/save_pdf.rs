@@ -57,6 +57,8 @@ pub(crate) struct SavePdfOpen {
     editing: String,
     /// The document check, with the key of everything it was computed from.
     checked: Option<(egui::Id, Result<Vec<String>, String>)>,
+    /// The flattener preset the dialog showed at the last pump: choosing another drops the Custom… options.
+    flattener_preset: Option<String>,
 }
 
 /// Open the dialog with `params` (`document.exportPdf` options and `path?`) applied over their
@@ -132,24 +134,31 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
         }
     };
     let settings = pdf::resolve("ui.savePdfDialog", &json!({ "preset": base }), &app.session.prefs.pdf_presets).map_err(|e| e.to_string())?;
-    // A name may not be taken by a built-in preset or by another saved one (case and spaces ignored).
-    let taken: Vec<String> = vectorcraft_pdf::builtin_presets(APP)
+    let taken = taken_names(app, &editing);
+    let dialog = base_dialog(app, settings).preset(base).mode(PdfExportMode::PresetEditor).draft(draft).check_name(move |n| name_error(&taken, n));
+    open_dialog(app, dialog, None, editing)
+}
+
+/// The names a preset other than `editing` (empty: a new one) has: a built-in preset's or another saved one's.
+fn taken_names(app: &VectorcraftApp, editing: &str) -> Vec<String> {
+    vectorcraft_pdf::builtin_presets(APP)
         .into_iter()
         .map(|p| p.name)
         .chain(app.session.prefs.pdf_presets.iter().map(|p| p.name.clone()))
         .filter(|n| editing.is_empty() || !n.eq_ignore_ascii_case(editing.trim()))
-        .collect();
-    let dialog = base_dialog(app, settings).preset(base).mode(PdfExportMode::PresetEditor).draft(draft).check_name(move |n| {
-        let n = n.trim();
-        if n.is_empty() {
-            Some(PresetError::EmptyName)
-        } else if taken.iter().any(|t| t.eq_ignore_ascii_case(n)) {
-            Some(PresetError::NameTaken)
-        } else {
-            None
-        }
-    });
-    open_dialog(app, dialog, None, editing)
+        .collect()
+}
+
+/// Why the preset name `n` can't be used: empty, or one of `taken` (case and spaces ignored).
+fn name_error(taken: &[String], n: &str) -> Option<PresetError> {
+    let n = n.trim();
+    if n.is_empty() {
+        Some(PresetError::EmptyName)
+    } else if taken.iter().any(|t| t.eq_ignore_ascii_case(n)) {
+        Some(PresetError::NameTaken)
+    } else {
+        None
+    }
 }
 
 /// The dialog for `settings` with what the document and the app tell it.
@@ -192,7 +201,7 @@ fn unit_kind(unit: Unit) -> UnitKind {
 fn open_dialog(app: &mut VectorcraftApp, dialog: HostedPdfExport, job: Option<SavePdfJob>, editing: String) -> Result<Value, String> {
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
     let id = dialogs.with(|host| host.open(dialog));
-    app.save_pdf = Some(SavePdfOpen { id, job, editing, checked: None });
+    app.save_pdf = Some(SavePdfOpen { id, job, editing, checked: None, flattener_preset: None });
     Ok(Value::Null)
 }
 
@@ -269,13 +278,23 @@ fn drive(app: &mut VectorcraftApp, ctx: &egui::Context, open: &mut SavePdfOpen) 
             open_held_with(app, child, custom_ok, HeldOptions { parent: Some(id), ..HeldOptions::default() });
         }
     }
+    // A failed write is told over the dialog, which shows again when the message closes.
     if let Some(text) = filed.summary
-        && let Err(e) = write_summary(app, None, &text)
+        && let Err(e) = write_summary(app, Some(id), None, &text)
         && e != "cancelled"
     {
         app.status(e);
     }
-    let warnings = worded(check(app, open, &filed.settings));
+    let preset = filed.settings.get("flattenerPreset").and_then(Value::as_str).map(str::to_owned);
+    if open.flattener_preset.is_some()
+        && open.flattener_preset != preset
+        && let Some(job) = open.job.as_mut()
+    {
+        job.flattener = None;
+    }
+    open.flattener_preset = preset;
+    let settings = with_custom(open, filed.settings);
+    let warnings = worded(check(app, open, &settings));
     let prefs = &app.session.prefs;
     let (presets, names) = (prefs.pdf_presets.clone(), prefs.flattener_presets.iter().map(|p| p.name.clone()).collect::<Vec<_>>());
     let custom = open.job.as_ref().is_some_and(|j| j.flattener.is_some());
@@ -324,8 +343,50 @@ fn custom_ok(app: &mut VectorcraftApp, answer: &ParamResult) -> Result<(), Strin
     if applied? {
         let ctx = app.ui_ctx.clone().ok_or(NOT_OPEN)?;
         dialogs.with(|host| host.set_json_field(&ctx, id, "flattenerPreset", json!("")))?;
+        // The blanked name is no preset choice: the options just set stay.
+        if let Some(open) = app.save_pdf.as_mut() {
+            open.flattener_preset = Some(String::new());
+        }
     }
     Ok(())
+}
+
+/// `ui.dialog.set` of a Custom… option, `flattener.<option>`, on Save PDF: its settings keep only the flattener
+/// preset's name, so the option goes to the job, over the options it flattens with now. `None` for another request.
+// shortcut: one `field` without `action`; a `fields` list goes to the framework, which refuses these names.
+pub(crate) fn dialog_set(app: &mut VectorcraftApp, params: &Value) -> Option<Result<Value, String>> {
+    let field = params.get("field")?.as_str()?;
+    let key = field.strip_prefix("flattener.")?;
+    if params.get("action").is_some() {
+        return None;
+    }
+    let dialogs = app.dialogs()?;
+    let saved = app.session.prefs.flattener_presets.clone();
+    let open = app.save_pdf.as_mut()?;
+    let id = open.id;
+    let (top, name) =
+        dialogs.with(|host| (host.open_dialogs().last().map(|d| d.id), host.get_by_id::<HostedPdfExport>(id).map(super::flatten::preset_name)));
+    let named = (params["dialog"] == "top" && top == Some(id)) || params["dialog"] == id.value().to_string();
+    let (true, Some(name), Some(job)) = (named, name, open.job.as_mut()) else { return None };
+    let custom = job.flattener.as_ref().and_then(|f| serde_json::to_value(f).ok());
+    let set = FlattenOptions::for_export(Some(&name), custom.as_ref(), &saved).and_then(|now| {
+        let mut options = serde_json::to_value(now).map_err(|e| e.to_string())?;
+        *options.get_mut(key).ok_or_else(|| format!("unknown field `{field}`"))? = params.get("value").cloned().unwrap_or(Value::Null);
+        FlattenOptions::for_export(None, Some(&options), &[]).map_err(|e| format!("{field}: {e}"))
+    });
+    Some(set.map(|options| {
+        job.flattener = Some(options);
+        let shown = dialogs.with(|host| craft::automation::dialogs::inspect(host));
+        shown.as_array().and_then(|list| list.iter().find(|d| d["id"] == id.value().to_string())).cloned().unwrap_or(Value::Null)
+    }))
+}
+
+/// The dialog's `settings` with the job's Custom… flattener options, as the export gets them.
+fn with_custom(open: &SavePdfOpen, mut settings: Value) -> Value {
+    if let Some(options) = open.job.as_ref().and_then(|job| job.flattener.as_ref()).and_then(|f| serde_json::to_value(f).ok()) {
+        settings["flattener"] = options;
+    }
+    settings
 }
 
 /// Carry out a change the dialog made to the saved presets.
@@ -348,6 +409,12 @@ fn preset_event(app: &mut VectorcraftApp, event: PdfPresetEvent) -> Result<(), S
 /// The preset editor's OK: `pdf.preset.save`, then back to Edit → PDF Presets on it.
 fn save_preset(app: &mut VectorcraftApp, editing: &str, answer: &PdfExportAnswer) -> Result<Value, String> {
     let draft = answer.draft.as_ref().ok_or("the preset editor gave no name")?;
+    // The editor's OK is off on such a name; an OK by automation is refused here.
+    match name_error(&taken_names(app, editing), &draft.name) {
+        Some(PresetError::NameTaken) => return Err("A preset with this name already exists.".into()),
+        Some(_) => return Err("This name can't be used.".into()),
+        None => {}
+    }
     let mut p = settings_json(&answer.result.options);
     p.insert("description".into(), json!(draft.description));
     if editing.is_empty() {
@@ -472,7 +539,7 @@ pub(crate) fn save_summary(app: &mut VectorcraftApp, p: &Value) -> Result<Value,
     if app.save_pdf.is_none() {
         app.save_pdf = Some(open);
     }
-    write_summary(app, path, &text?)
+    write_summary(app, None, path, &text?)
 }
 
 /// The Summary text of the open dialog `open`, after the document check.
@@ -482,6 +549,7 @@ fn summary_of(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> Result<String
     let not_open = || NOT_OPEN.to_string();
     let settings =
         dialogs.with(|host| host.get_mut_by_id::<HostedPdfExport>(id).map(|d| Value::Object(settings_json(d.settings())))).ok_or_else(not_open)?;
+    let settings = with_custom(open, settings);
     let checked = check(app, open, &settings);
     if let Err(e) = checked {
         return Err(e.clone());
@@ -499,15 +567,19 @@ fn summary_of(app: &mut VectorcraftApp, open: &mut SavePdfOpen) -> Result<String
 }
 
 /// Write the Summary's `text` (UTF-8) to `path`, else to a picked `<document> PDF Summary.txt`
-/// next to the document → `{path, bytes}`.
-fn write_summary(app: &mut VectorcraftApp, path: Option<String>, text: &str) -> Result<Value, String> {
+/// next to the document → `{path, bytes}`; a failed write is told over the dialog `over`, the one it was asked from.
+fn write_summary(app: &mut VectorcraftApp, over: Option<DialogId>, path: Option<String>, text: &str) -> Result<Value, String> {
     let title = app.session.active().map(|d| d.title()).unwrap_or_default();
     let stem = std::path::Path::new(&title).file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned());
-    let bytes = text.len();
-    io::write_named(app, path, &format!("{stem} PDF Summary.txt"), text.as_bytes().to_vec(), move |app, path| {
+    let (name, bytes) = (format!("{stem} PDF Summary.txt"), text.len());
+    let saved = move |app: &mut VectorcraftApp, path: String| {
         app.status(format!("Saved {path}"));
         Ok(json!({ "path": path, "bytes": bytes }))
-    })
+    };
+    match over {
+        Some(parent) => io::write_named_over(app, parent, path, &name, text.as_bytes().to_vec(), saved),
+        None => io::write_named(app, path, &name, text.as_bytes().to_vec(), saved),
+    }
 }
 
 #[cfg(test)]

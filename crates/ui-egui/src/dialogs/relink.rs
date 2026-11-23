@@ -372,7 +372,8 @@ mod tests {
         let ctx = ctx(app);
         let dialogs = app.dialogs().expect("a window");
         for _ in 0..2 {
-            ctx.run_ui(egui::RawInput::default(), |ui| dialogs.with(|host| host.run(ui))).textures_delta.clear();
+            // With the app's frame input, as the hosts give it: the dialog takes its pick's answer from the host there.
+            crate::testing::part_frame(app, &ctx, egui::RawInput::default(), |_, ui| dialogs.with(|host| host.run(ui)));
             crate::dialogs::host::pump(app, &ctx);
         }
     }

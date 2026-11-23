@@ -1444,6 +1444,12 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
             if params.get("dialog").is_none_or(Value::is_null) {
                 params["dialog"] = json!("top");
             }
+            // Save PDF's Custom… options are the app's, not the dialog's settings.
+            if method == "ui.dialog.set"
+                && let Some(r) = crate::dialogs::save_pdf::dialog_set(app, &params)
+            {
+                return wrap(r);
+            }
             // `ui.dialog.set {action}` answers the dialog after setting its fields: the app's own key, which the
             // framework's method does not take.
             let action = if method == "ui.dialog.set" { params.as_object_mut().and_then(|o| o.remove("action")) } else { None };

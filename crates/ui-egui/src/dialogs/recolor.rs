@@ -377,9 +377,7 @@ fn sync(app: &mut VectorcraftApp, d: &mut Fields) {
         Ok(r) => {
             let mut rows = r["map"].as_array().cloned().unwrap_or_default();
             let assign = d.fields.get("__assign").and_then(Value::as_array).cloned().unwrap_or_default();
-            for (row, to) in rows.iter_mut().zip(assign) {
-                row["to"] = to;
-            }
+            assign_colors(&mut rows, assign);
             number_slots(&mut rows);
             snap(app, d, &mut rows);
             d.fields.insert("rows".into(), Value::Array(rows));
@@ -397,6 +395,26 @@ fn sync(app: &mut VectorcraftApp, d: &mut Fields) {
     // Weights given for the old rows don't apply to the new ones.
     d.fields.insert(WEIGHTS.into(), Value::Null);
     d.fields.remove(WEIGHED);
+}
+
+/// Gives `rows` the new colors `assign`: a row that lists one of them takes it, so art in the group's own colors (art
+/// linked to its swatches) keeps them; the others go to the other rows in order.
+fn assign_colors(rows: &mut [Value], assign: Vec<Value>) {
+    let mut given = vec![false; rows.len()];
+    let mut rest = Vec::new();
+    for to in assign {
+        let own = row_listing(rows, &to).and_then(|r| rows.iter().position(|x| std::ptr::eq(x, r))).filter(|&i| !given[i]);
+        match own {
+            Some(i) => {
+                rows[i]["to"] = to;
+                given[i] = true;
+            }
+            None => rest.push(to),
+        }
+    }
+    for (row, to) in rows.iter_mut().zip(given).filter_map(|(row, given)| (!given).then_some(row)).zip(rest) {
+        row["to"] = to;
+    }
 }
 
 /// The fields of Prominent Colors: the weights the rows are to take (`recolor.weigh`'s `weights`,

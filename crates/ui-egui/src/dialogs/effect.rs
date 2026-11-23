@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use craft::host::{PickRequest, Picked};
 use craft::ui::contract::Bind;
 use craft::ui::dialog::{DialogId, PromptChoice, StandardPrompt};
-use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, ParamDialog, ParamResult};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamResult};
 use craft::ui::runtime::memory::{Lifetime, SaveKey};
 use serde_json::{Map, Value, json};
 
@@ -189,7 +189,8 @@ fn defaults_of(id: &str) -> Map<String, Value> {
 }
 
 /// `values` as the dialog's rows show them: in the effect's current form, a Pathfinder effect's
-/// options filled in, Duotone's tones padded and Radial Blur's centre within its bounds.
+/// options filled in, Duotone's tones padded, Radial Blur's centre within its bounds and Rasterize's
+/// resolution as its preset.
 fn normalized(app: &VectorcraftApp, id: &str, values: Map<String, Value>, fresh: bool) -> Map<String, Value> {
     let mut values = match vectorcraft_effects::upgrade_params(id, &Value::Object(values)) {
         Value::Object(m) => m,
@@ -200,8 +201,19 @@ fn normalized(app: &VectorcraftApp, id: &str, values: Map<String, Value>, fresh:
         super::duotone::pad_tones(&mut values);
     } else if id == super::effect_params::RADIAL_BLUR {
         super::effect_rows::clamp_blur_center(&mut values);
+    } else if id == vectorcraft_effects::RASTERIZE {
+        super::raster_effects::preset_of(&mut values);
     }
     values
+}
+
+/// The params `rows` show for `fields`, as the effect `id` takes them: Rasterize's preset back to its resolution.
+fn params_of_rows(id: &str, rows: &[Param], fields: &DialogFields) -> Map<String, Value> {
+    let mut params = form::json_of(rows, fields);
+    if id == vectorcraft_effects::RASTERIZE {
+        super::raster_effects::resolution_of(&mut params);
+    }
+    params
 }
 
 /// Asks whether to edit the applied effect or add another one; [`pump`] reads the answer.
@@ -244,7 +256,7 @@ fn launch(app: &mut VectorcraftApp, mut open: Open, baseline: Map<String, Value>
     }
     let (baseline, shown) = (normalized(app, &id, baseline, fresh), normalized(app, &id, shown, fresh));
     let rows = effect_params(&open.cx, &DialogFields::new());
-    open.opened = form::json_of(&rows, &form::fields_of(&rows, &baseline));
+    open.opened = params_of_rows(&id, &rows, &form::fields_of(&rows, &baseline));
     let fields = form::fields_of(&rows, &shown);
 
     let (cx, title) = (open.cx.clone(), heading(&open.cx));
@@ -308,7 +320,7 @@ fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -
 /// effect, with the rows whose value differs from the opening values.
 fn command(open: &Open, fields: &DialogFields) -> (&'static str, Value) {
     let rows = effect_params(&open.cx, fields);
-    let mut params = form::json_of(&rows, fields);
+    let mut params = params_of_rows(&open.cx.id, &rows, fields);
     params.retain(|k, v| open.opened.get(k) != Some(v));
     // The Style row's companion says the user chose a style: the other targets keep their own
     // Warp ids otherwise.

@@ -68,8 +68,8 @@ fn zoom_to_selection_fits_the_selection_in_the_view() {
     app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(560.0, 460.0));
     app.run("select.set", json!({"ids": [b.0]})).unwrap();
     assert!(menus::enabled(&app, ZOOM));
+    // The view fits at once, in the canvas it was laid out in.
     app.run(ZOOM, json!({})).unwrap();
-    host::frame(&mut app);
     let (canvas, view) = (app.view().unwrap().rect, app.canvas_view().unwrap());
     let selected = bounds(&app, b);
     let (min, max) = (

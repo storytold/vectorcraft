@@ -186,8 +186,9 @@ impl StackDialog for SwatchConflictDialog {
         self.answer()
     }
 
+    /// The choice, Apply to All when it takes input, and the conflicts asked about, which automation reads only.
     fn json_fields(&self) -> Option<Value> {
-        let mut fields = json!({ "choice": self.choice.id() });
+        let mut fields = json!({ "choice": self.choice.id(), "conflicts": self.conflicts });
         if self.offers_apply_to_all() {
             fields["applyToAll"] = Value::Bool(self.apply_to_all);
         }

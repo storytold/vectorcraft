@@ -39,7 +39,7 @@ pub use save::{
     SAVE_CANCELED, ask_format_options, ask_pdf_options, cancel_saves, hide_saves, remember_active_artboard, remember_view, save, save_pdf,
 };
 pub(crate) use save::{
-    clear_notes_left, export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to,
+    clear_notes_left, export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_named_over, write_reporting, write_to,
 };
 #[cfg(test)]
 pub(crate) use save::{report_write_error, saved_status};

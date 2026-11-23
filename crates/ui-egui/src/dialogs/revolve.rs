@@ -577,6 +577,23 @@ pub(crate) fn reset_all(dialog: &mut HostedParamDialog, effect: &str) {
     }
 }
 
+/// Drops from `params` the light settings `effect` doesn't take: the light editor lists all six, and the classic effects
+/// take neither a colour nor a softness.
+pub(super) fn drop_untaken_light_keys(effect: &str, params: &mut serde_json::Map<String, Value>) {
+    for (_, key) in LIGHT_KEYS {
+        if let Some(value) = params.get(key)
+            && vectorcraft_engine::cmd::params::check_effect_params(
+                "effect.apply",
+                effect,
+                &Value::Object([(key.to_owned(), value.clone())].into_iter().collect()),
+            )
+            .is_err()
+        {
+            params.remove(key);
+        }
+    }
+}
+
 const LIGHT_KEYS: [(&str, &str); 6] = [
     ("color", "lightColor"),
     ("intensity", "lightIntensity"),
