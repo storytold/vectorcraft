@@ -355,6 +355,12 @@ fn reflect_construct_reads_new_target_prototype_after_number_and_string_convert(
          try { Reflect.construct(String, [bad], nt); } catch (e) { thrown++; }
          thrown === 2 && log.length === 0",
     );
+    // `Proxy` does not read `newTarget.prototype`.
+    truth(
+        "var nt = new Proxy(function () {}, { get: function (t, k) { if (k === 'prototype') throw new Error('read'); return t[k]; } });
+         var p = Reflect.construct(Proxy, [{ a: 1 }, {}], nt);
+         p.a === 1",
+    );
 }
 
 /// Runs `src` with a collection at every heap reservation, and checks that it gives `true`.
@@ -476,7 +482,7 @@ fn for_in_reads_ordinary_and_proxy_names_by_the_same_rules() {
 }
 
 #[test]
-fn spread_lets_a_proxy_on_the_prototype_chain_shrink_a_long_array() {
+fn spread_lets_a_proxy_shrink_the_array_it_reads() {
     // A proxy's `get` trap answers for the indices the array does not hold, so the length is not
     // refused before the elements are read.
     truth(
@@ -484,6 +490,18 @@ fn spread_lets_a_proxy_on_the_prototype_chain_shrink_a_long_array() {
          Reflect.setPrototypeOf(a, new Proxy({}, { get: function (t, k) { if (k === '0') a.length = 1; return 'v'; } }));
          var r = [...a];
          r.length === 1 && r[0] === 'v'",
+    );
+    // A proxy of an array is spread as an array: its length is read again before each element.
+    truth(
+        "var t = [1, 2, 3];
+         var p = new Proxy(t, { get: function (o, k) { if (k === '0') t.length = 1; return o[k]; } });
+         var r = [...p];
+         r.length === 1 && r[0] === 1",
+    );
+    // A proxy that its `length` read revokes spreads as the empty array that length gives.
+    truth(
+        "var made = Proxy.revocable([], { get: function (t, k) { if (k === 'length') { made.revoke(); return 0; } return t[k]; } });
+         [...made.proxy].length === 0",
     );
     // Without a proxy or a getter, the length is refused at once.
     let src = "var a = []; a.length = 4294967295; [...a]";

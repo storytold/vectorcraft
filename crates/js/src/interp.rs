@@ -2473,14 +2473,16 @@ impl Interp {
             }
             Value::Object(o) if self.has_property(*o, &key("length"))? => {
                 let o = *o;
+                // Tested before any trap reads `length`, which may revoke the proxy.
+                let array = self.is_array(&Value::Object(o))?;
                 let len = self.get_from(o, &key("length"), &v)?;
                 // ToLength (ECMA-262 2015 section 7.1.15): a negative or NaN length reads nothing.
                 let n = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);
                 // An array's iterator reads its length again before each element (ECMA-262 2015
                 // section 22.1.5.2.1), so a getter that shrinks or grows the array changes the count,
-                // and the room is checked as each element is read. Any other object, and an array
+                // and the room is checked as each element is read. A proxy of an array is read
+                // the same way, its `length` through its traps. Any other object, and an array
                 // whose elements no getter reads, is checked against the length it has now.
-                let array = matches!(self.object(o)?.class, Class::Array { .. });
                 if n >= f64::from(room) && !(array && self.has_index_getter(o)?) {
                     return Err(self.throw(ErrorType::Range, "array literal too long"));
                 }
@@ -2492,8 +2494,17 @@ impl Interp {
                 let mut read = || -> JsResult<()> {
                     let mut i = 0;
                     loop {
-                        let end = match &self.object(o)?.class {
-                            Class::Array { length, .. } if array => *length,
+                        let stored = match &self.object(o)?.class {
+                            Class::Array { length, .. } => Some(*length),
+                            _ => None,
+                        };
+                        let end = match stored {
+                            Some(length) if array => length,
+                            None if array && i > 0 => {
+                                let len = self.get_from(o, &key("length"), &v)?;
+                                let len = crate::string_builtins::to_integer(self.to_number(&len)?).max(0.0);
+                                if len >= f64::from(u32::MAX) { u32::MAX } else { len as u32 }
+                            }
                             _ => n,
                         };
                         if i >= end {
@@ -3042,15 +3053,16 @@ impl Interp {
                     let obj = self.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
                     return Ok(Prepared::Closure(Entry { callee, code, env, this: Value::Object(obj), args }));
                 }
-                Some(Func::Native { f: native, constructor: true, .. }) => {
+                Some(Func::Native { f: native, constructor: true, name, .. }) => {
                     // With a different `newTarget` (`Reflect.construct`), the new object takes
                     // its `prototype` when that is an object (ECMA-262 2020 section 9.1.14). An
                     // argument given back and a proxy keep their own. `Object` makes a new object
                     // instead of converting its argument (section 19.1.1.1). `Number`, `String`,
                     // `Date` and `Function` convert their arguments before `prototype` is read
                     // (sections 20.1.1.1, 21.1.1.1, 20.4.2 and 19.2.1.1.1), so a conversion that
-                    // throws reads nothing from `newTarget`.
-                    let other_target = !same_value(&f, &new_target);
+                    // throws reads nothing from `newTarget`. `Proxy` does not read it (section
+                    // 26.2.1.1).
+                    let other_target = !same_value(&f, &new_target) && name != "Proxy";
                     let converts_first = other_target && {
                         let i = &self.intrinsics;
                         let own = [i.number_proto, i.string_proto, i.date_proto, i.function_proto];
