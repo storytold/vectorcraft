@@ -20,6 +20,7 @@ mod dashalign;
 mod diamond;
 mod editing;
 mod encrypt;
+mod file_fonts;
 mod file_info;
 mod focal;
 mod fx;
