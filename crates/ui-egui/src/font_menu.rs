@@ -367,14 +367,18 @@ pub(crate) fn paint_family_sample(cx: &ContentPainterCx, rect: Rect, family: &st
     let loaded = db.face(family, style);
     let state = match catalog.resolve(family, style) {
         Some((face, _)) => cx.document_face(&format!("font-sample/{}/{}", face.family, face.style), || {
-            let data = catalog.load(&face).ok()?;
-            Some(FaceBytes::new(data.bytes, data.index).coords(face.variations.iter().copied()))
+            let catalog = Arc::clone(catalog);
+            move || {
+                let data = catalog.load(&face).ok()?;
+                Some(FaceBytes::new(data.bytes, data.index).coords(face.variations.iter().copied()))
+            }
         }),
         // The catalog finds the installed fonts only: a bundled family is drawn from the database's own face.
         None => {
             let Some(face) = loaded.as_ref() else { return };
             cx.document_face(&format!("font-sample/{}/{}", face.family, face.style), || {
-                Some(FaceBytes::new(Arc::from(face.file_data()), face.face_index()).coords(face.variations().iter().copied()))
+                let face = Arc::clone(face);
+                move || Some(FaceBytes::new(Arc::from(face.file_data()), face.face_index()).coords(face.variations().iter().copied()))
             })
         }
     };

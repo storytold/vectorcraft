@@ -397,6 +397,10 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         });
         if let Some(x) = app.ui.floating.iter_mut().find(|x| x.uid == w.uid && x.view == w.view) {
             x.focused = out.focused;
+            // A move or resize of the fallback layer is where the window opens from now on.
+            if let Some(placed) = out.placed {
+                x.place = placed.translate(-origin);
+            }
         }
         if out.close_requested.is_some() {
             close = Some(win);

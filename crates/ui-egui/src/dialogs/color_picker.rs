@@ -28,7 +28,7 @@ use vectorcraft_engine::cmd::color_value;
 use vectorcraft_engine::cmd::swatchlib;
 
 use super::preview::LivePreview;
-use crate::panels::color::{color_of_values, gamut, model_values};
+use crate::panels::color::{WorkingRgb, color_of_values, gamut, model_values};
 use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries};
 use crate::panels::{color_json, srgba};
 use crate::{VectorcraftApp, screen_color};
@@ -163,6 +163,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     .eyedropper(true)
     .add_to_swatches(false)
     .gamut(gamut(app))
+    .working_rgb(WorkingRgb)
     .swatch_view(swatch_view(app));
     if app.session.active().is_some_and(|s| s.doc.color_mode == ColorMode::Cmyk)
         && let Some(converter) = working_cmyk()
@@ -202,7 +203,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     while let Some((parent, request)) = dialogs.with(|h| h.take_color_request()) {
         let start = request.color.unwrap_or(Srgba { r: 1.0, g: 1.0, b: 1.0, a: 1.0 });
         let key = request.key.clone();
-        let child = ColorPickerDialog::from_request(request).eyedropper(true).add_to_swatches(false).gamut(gamut(app));
+        let child = ColorPickerDialog::from_request(request).eyedropper(true).add_to_swatches(false).gamut(gamut(app)).working_rgb(WorkingRgb);
         let id = dialogs.with(|h| h.open_child(child, parent));
         app.color_dialogs.pickers.push(Open { id, target: Target::Answer { parent, key }, start, keep: false, preview: LivePreview::default() });
     }

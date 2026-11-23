@@ -52,7 +52,7 @@ fn run_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Ev
             Some((n.role(), n.label()?.to_owned(), egui::Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))))
         })
         .collect();
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(NAMED), std::sync::Arc::new(named)));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(NAMED), std::sync::Arc::new(named)));
     out
 }
 
@@ -64,7 +64,7 @@ const NAMED: &str = "doc-window-tests-named";
 
 /// The last frame's [`Named`] nodes of `role` whose name `matches`.
 fn named(ctx: &egui::Context, role: egui::accesskit::Role, matches: impl Fn(&str) -> bool) -> Option<egui::Rect> {
-    let nodes: std::sync::Arc<Vec<Named>> = ctx.data(|d| d.get_temp(egui::Id::new(NAMED))).unwrap_or_default();
+    let nodes: std::sync::Arc<Vec<Named>> = ctx.data(|d| d.get_temp(egui::Id::unique(NAMED))).unwrap_or_default();
     nodes.iter().find(|(r, name, _)| *r == role && matches(name)).map(|(_, _, rect)| *rect)
 }
 

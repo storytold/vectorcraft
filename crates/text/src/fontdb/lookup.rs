@@ -62,7 +62,7 @@ impl FontDb {
     /// of its face nearest an upright Regular ([`regular_rank`]), read from the tables of that
     /// face's file as the face's own when loaded, without loading it. `None` when it isn't
     /// installed, and on wasm.
-    // PLAN: decision q358 C reads these from the catalog's `FaceInfo::traits`, but `FaceTraits` (font-catalog scan.rs:115) carries no `FontClass`, whose name rule is `FontTraits::of` in traits.rs (outside this set); with the class in `FaceTraits` (type-w2) or a shared classifier, this reads `FaceInfo` and the file read goes.
+    // PLAN: decision q358 C reads these from the catalog's scan records. `FaceInfo::family_class` and `panose` give the class's OS/2 inputs, but not the names, Unicode ranges and Thai characters `FontTraits::of` (traits.rs) also reads, nor the x-height, cap height, average width and italic angle of `FontLikeness`; once the records carry those, this reads `FaceInfo` and the file read goes.
     fn installed_traits(&self, family: &str) -> Option<FontTraits> {
         #[cfg(target_arch = "wasm32")]
         {
