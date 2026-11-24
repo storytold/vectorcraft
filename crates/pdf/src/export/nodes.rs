@@ -373,13 +373,11 @@ impl Exporter<'_> {
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         let (mut pushes, isolated_children) = transparency(s, n, page, container, knockout);
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
+        // A distorted image's art, when its masked image needs the size its pieces share.
+        let mut expanded = None;
         let alpha = match (&n.kind, mask) {
             // The mask's image shares the pixel grid only when it has the same corners (or none).
-            // A color-masked image keeps the colors it hides hidden.
-            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => {
-                let shown = self.doc.shown_image(n, im);
-                self.masked_image(im, &shown, m, !n.extras().pixelated)
-            }
+            (NodeKind::Image(im), Some(m)) if n.image_quad() == m.art.image_quad() => self.node_masked_image(n, im, m, &mut expanded),
             _ => None,
         };
         if let Some(m) = mask
@@ -506,7 +504,7 @@ impl Exporter<'_> {
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. }
             | NodeKind::Image(_) => {
-                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                let g = expanded.unwrap_or_else(|| vectorcraft_effects::expand_live_deep(Some(self.doc), n));
                 // The pieces draw the image as it is shown, under its color mask's key.
                 let piece = match (&n.kind, &alpha) {
                     (NodeKind::Image(im), Some(img)) => Some((self.doc.shown_image(n, im).key.clone(), img.clone())),

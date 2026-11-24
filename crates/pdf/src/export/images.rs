@@ -246,6 +246,34 @@ impl Exporter<'_> {
         img
     }
 
+    /// [`Self::masked_image`] of image `im` of node `n`. A distorted image's is resampled for the
+    /// size every piece of its mesh shares ([`Self::warp_image_size`]), since each piece draws this
+    /// one image; its expanded art, whose pieces were measured, is left in `expanded` for drawing.
+    pub(super) fn node_masked_image(
+        &mut self,
+        n: &Node,
+        im: &vectorcraft_doc::ImageObject,
+        m: &vectorcraft_doc::OpacityMask,
+        expanded: &mut Option<Node>,
+    ) -> Option<Image> {
+        let interpolate = !n.extras().pixelated;
+        // A color-masked image keeps the colors it hides hidden.
+        let shown = self.doc.shown_image(n, im);
+        if !n.is_distorted_image() {
+            return self.masked_image(im, &shown, m, interpolate);
+        }
+        let g = expanded.insert(vectorcraft_effects::expand_live_deep(Some(self.doc), n));
+        let pieces = g.children().and_then(|c| c.first()).map_or(&[][..], |art| vectorcraft_doc::image_quad::distorted_pieces(art));
+        let shared =
+            self.warp_image_size(pieces).map(|s| SharedSize { key: shown.key.clone(), width: shown.width, height: shown.height, size: s.size });
+        let outer = shared.map(|w| self.warp_size.replace(w));
+        let img = self.masked_image(im, &shown, m, interpolate);
+        if let Some(outer) = outer {
+            self.warp_size = outer;
+        }
+        img
+    }
+
     /// Draw image `im`: `img` when given (its pixels already written), else as it is loaded; with
     /// `pixelated` ([`vectorcraft_doc::NodeExtras::pixelated`]) viewers are asked not to smooth it.
     pub(super) fn image(&mut self, s: &mut Surface, im: &vectorcraft_doc::ImageObject, img: Option<Image>, pixelated: bool) {
