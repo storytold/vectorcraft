@@ -22,6 +22,7 @@
 	Quit VectorCraft	VectorCraft afsluiten
 # Artwork drag between document tabs.
 	Drop Artwork	Illustratie neerzetten
+@id	language.name	Nederlands
 @msg	{key} must be [x, y] with finite coordinates	{key} moet [x, y] met eindige coördinaten zijn
 @msg	ids must contain 1–10000 object ids	ids moet 1–10000 object-id’s bevatten
 
@@ -399,7 +400,7 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	module is {_1} bytes (limit {_2})	de module telt {_1} bytes (limiet {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	goedkeuring nodig: de plug-in vraagt om {0}, wat de gebruiker toestaat wanneer hij die afzonderlijk installeert
 @msg	not JSON: {e}	geen JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	geen WebAssembly-binair bestand (de header \0asm ontbreekt)
+@msg	not a WebAssembly binary (missing \\0asm header)	geen WebAssembly-binair bestand (de header \\0asm ontbreekt)
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parameters moeten een JSON-object zijn
