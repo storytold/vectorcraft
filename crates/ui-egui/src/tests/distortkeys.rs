@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_tools::{PointerEvent, PointerKind};
 
+use super::synthetic::key_frame;
 use crate::VectorcraftApp;
 
 /// A 300×300 document with a selected 10 pt line from (100, 200) to (300, 200) → its id.
@@ -20,12 +21,12 @@ fn app_with_line() -> (VectorcraftApp, u64) {
     (app, id)
 }
 
-/// One frame pressing `key` through the shortcut handler.
+/// One app frame pressing `key`, after an empty frame that builds the board's keymap.
 fn press(app: &mut VectorcraftApp, key: Key) {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
+    key_frame(app, &ctx, vec![]);
     let ev = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
-    let mut out = ctx.run_ui(egui::RawInput { events: vec![ev], ..Default::default() }, |ui| crate::shortcuts::handle(app, ui.ctx()));
-    out.textures_delta.clear();
+    key_frame(app, &ctx, vec![ev]);
 }
 
 #[test]
@@ -216,23 +217,17 @@ fn protected_artboard_key(key: Key) {
 }
 
 #[test]
-fn artboard_keys_delete_keeps_first_of_all_selected_boards() {
-    delete_artboards_with_key(Key::Delete, true);
+fn artboard_keys_keep_first_of_all_selected_boards() {
+    for key in [Key::Delete, Key::Backspace] {
+        delete_artboards_with_key(key, true);
+    }
 }
 
 #[test]
-fn artboard_keys_backspace_keeps_first_of_all_selected_boards() {
-    delete_artboards_with_key(Key::Backspace, true);
-}
-
-#[test]
-fn artboard_keys_delete_protects_last_board_and_art() {
-    protected_artboard_key(Key::Delete);
-}
-
-#[test]
-fn artboard_keys_backspace_protects_last_board_and_art() {
-    protected_artboard_key(Key::Backspace);
+fn artboard_keys_protect_last_board_and_art() {
+    for key in [Key::Delete, Key::Backspace] {
+        protected_artboard_key(key);
+    }
 }
 
 fn delete_artboards_with_key(key: Key, select_all: bool) {
@@ -272,13 +267,10 @@ fn delete_artboards_with_key(key: Key, select_all: bool) {
 }
 
 #[test]
-fn artboard_keys_delete_removes_partial_selection_in_one_step() {
-    delete_artboards_with_key(Key::Delete, false);
-}
-
-#[test]
-fn artboard_keys_backspace_removes_partial_selection_in_one_step() {
-    delete_artboards_with_key(Key::Backspace, false);
+fn artboard_keys_remove_partial_selection_in_one_step() {
+    for key in [Key::Delete, Key::Backspace] {
+        delete_artboards_with_key(key, false);
+    }
 }
 
 /// Keyboard-only history sequences must not need a canvas event to align the navigator and tool.

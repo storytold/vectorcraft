@@ -352,7 +352,7 @@ impl FontDb {
             }
             // Each lent font is the database's; with as many, none it holds is left out.
             same &= lent.len() == map.len();
-            self.generation.load(Ordering::Relaxed)
+            self.own_generation()
         };
         let number = NEXT_LOAN.fetch_add(1, Ordering::Relaxed);
         let loan = Loan { db: self.id, number, fonts: lent, same_at: same.then_some(generation), print: h.finish() };

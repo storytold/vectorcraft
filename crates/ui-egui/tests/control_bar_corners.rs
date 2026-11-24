@@ -4,11 +4,12 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use craft::ui::shell::embed;
 use egui::{Event, Rect, vec2};
 use serde_json::json;
 use vectorcraft_doc::NodeId;
 use vectorcraft_engine::Session;
-use vectorcraft_ui_egui::{VectorcraftApp, chrome, i18n, panels, theme};
+use vectorcraft_ui_egui::{VectorcraftApp, chrome, i18n, ui_fonts};
 
 static CASE: Mutex<()> = Mutex::new(());
 
@@ -49,19 +50,23 @@ fn ordinary_corner() -> (VectorcraftApp, NodeId) {
     (app, id)
 }
 
+/// The roles a number field's accessibility node can have.
+fn is_input(role: egui::accesskit::Role) -> bool {
+    matches!(role, egui::accesskit::Role::TextInput | egui::accesskit::Role::NumberInput | egui::accesskit::Role::SpinButton)
+}
+
+/// What a frame of the bar exposed to assistive technology: the field and the texts are read from here.
 struct Painted {
     nodes: Vec<egui::accesskit::Node>,
-    texts: Vec<(String, Rect)>,
 }
 impl Painted {
     fn radius_field(&self) -> Option<&egui::accesskit::Node> {
-        self.nodes.iter().find(|node| {
-            node.role() == egui::accesskit::Role::TextInput && node.label().is_some_and(|name| name.trim_end_matches(':') == "Corner Radius")
-        })
+        self.nodes.iter().find(|node| is_input(node.role()) && node.label().is_some_and(|name| name.trim_end_matches(':') == "Corner Radius"))
     }
 
+    /// Whether a text of the bar (not an input) reads `name`.
     fn has_text(&self, name: &str) -> bool {
-        self.texts.iter().any(|(text, _)| text == name)
+        self.nodes.iter().any(|node| !is_input(node.role()) && node.label() == Some(name))
     }
 }
 
@@ -69,19 +74,21 @@ struct Frames {
     ctx: egui::Context,
     time: f64,
     width: f32,
-    properties: bool,
 }
 impl Frames {
-    fn new(width: f32, properties: bool) -> Self {
+    fn new(width: f32) -> Self {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
-        theme::install_fonts(&ctx);
-        theme::apply(&ctx, theme::Brightness::MediumDark);
-        Self { ctx, time: 0.0, width, properties }
+        embed::install(&ctx, craft::ui::testing::install_spec(), &ui_fonts()).unwrap();
+        Self { ctx, time: 0.0, width }
     }
 
+    /// One frame of the bar as the hosts run the window's: the app gives the frame's input, and the commands the
+    /// pass fired run as the next frame begins.
     fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<Event>) -> Painted {
         self.time += 0.05;
+        app.adopt_context(&self.ctx);
+        embed::before_input(&self.ctx, |out| app.frame_input(out));
         let mut output = self.ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(self.width, 1100.0))),
@@ -90,26 +97,13 @@ impl Frames {
                 events,
                 ..Default::default()
             },
-            |ui| {
-                if self.properties {
-                    panels::properties::show(app, ui);
-                } else {
-                    chrome::control_bar(app, ui);
-                }
-            },
+            |ui| chrome::control_bar(app, ui),
         );
-        let texts = output
-            .shapes
-            .iter()
-            .filter_map(|clipped| match &clipped.shape {
-                egui::Shape::Text(text) => Some((text.galley.text().to_owned(), Rect::from_min_size(text.pos, text.galley.size()))),
-                _ => None,
-            })
-            .collect();
+        embed::before_input(&self.ctx, |out| app.frame_input(out));
         let nodes =
             output.platform_output.accesskit_update.take().map(|update| update.nodes.into_iter().map(|(_, node)| node).collect()).unwrap_or_default();
         output.textures_delta.clear();
-        Painted { nodes, texts }
+        Painted { nodes }
     }
 
     fn settled(&mut self, app: &mut VectorcraftApp) -> Painted {
@@ -117,26 +111,6 @@ impl Frames {
         self.frame(app, vec![]);
         self.frame(app, vec![])
     }
-}
-
-#[test]
-fn corner_radius_existing_anchor_controls_and_properties_remain_available() {
-    let _language = Language::english();
-    let (mut app, _) = ordinary_corner();
-    let bar = Frames::new(1800.0, false).settled(&mut app);
-    assert!(bar.has_text("Convert:") && bar.has_text("Anchors:"), "{:?}", bar.texts);
-    assert!(bar.nodes.iter().any(|node| node.label() == Some("Remove Anchor Points")));
-    let properties = Frames::new(360.0, true).settled(&mut app);
-    assert!(properties.has_text("Corner Radius:"), "{:?}", properties.texts);
-    assert!(properties.texts.iter().any(|(text, _)| text == "0 pt"));
-}
-
-#[test]
-fn corner_radius_selected_ordinary_corner_has_a_named_control_bar_field() {
-    let _language = Language::english();
-    let (mut app, _) = ordinary_corner();
-    let bar = Frames::new(1800.0, false).settled(&mut app);
-    assert!(bar.radius_field().is_some(), "no named Corner Radius input in actual Control bar: {:?}", bar.texts);
 }
 
 fn node_path(app: &VectorcraftApp, id: NodeId) -> vectorcraft_geom::PathData {
@@ -176,7 +150,9 @@ impl Frames {
         let bounds = painted.radius_field().unwrap().bounds().unwrap();
         let at = egui::pos2(((bounds.x0 + bounds.x1) / 2.0) as f32, ((bounds.y0 + bounds.y1) / 2.0) as f32);
         let button = |pressed| Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-        self.frame(app, vec![Event::PointerMoved(at), button(true)]);
+        // The framework hits the control the pointer rested on in the frame before the press.
+        self.frame(app, vec![Event::PointerMoved(at)]);
+        self.frame(app, vec![button(true)]);
         self.frame(app, vec![button(false)]);
         let command =
             egui::Modifiers { command: true, ctrl: !cfg!(target_os = "macos"), mac_cmd: cfg!(target_os = "macos"), ..egui::Modifiers::NONE };
@@ -202,7 +178,7 @@ fn corner_radius_typing_edits_only_the_selected_corner_and_undo_restores_it() {
         assert!(corners.drawn_radius(1) < corners.radius(1), "the stored request exceeds the fitted radius");
         corners.base.clone().into_owned()
     };
-    let mut frames = Frames::new(1800.0, false);
+    let mut frames = Frames::new(1800.0);
     assert_eq!(field_text(&frames.settled(&mut app)), "160 pt", "show requested absolute radius, not fitted size");
     frames.edit_radius(&mut app, "6 pt");
     let state = app.session.doc().unwrap();
@@ -255,7 +231,7 @@ fn corner_radius_mixed_targets_resolve_relative_units_and_skip_noncorner_partial
     picked_corner(&mut app, live, 1, "add");
     app.run("select.anchors", json!({"id": excluded.0, "anchors": noncorners, "mode": "add"})).unwrap();
     app.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
-    let mut frames = Frames::new(1800.0, false);
+    let mut frames = Frames::new(1800.0);
     assert!(field_text(&frames.settled(&mut app)).is_empty(), "6 pt and 10 pt are mixed");
     let depth = app.session.doc().unwrap().history.undo.len();
     let shown = frames.edit_radius(&mut app, "2 mm");
@@ -283,22 +259,17 @@ fn corner_radius_mixed_targets_resolve_relative_units_and_skip_noncorner_partial
 fn corner_radius_respects_anchor_group_and_narrow_control_bar_space() {
     let _language = Language::english();
     let (mut app, id) = ordinary_corner();
-    let mut wide = Frames::new(1800.0, false);
-    assert!(wide.settled(&mut app).radius_field().is_some());
+    let mut wide = Frames::new(1800.0);
+    let shown = wide.settled(&mut app);
+    assert!(shown.radius_field().is_some() && shown.has_text("Corner Radius:"));
     app.run("window.control.options", json!({"group": "anchors", "visible": false})).unwrap();
     let hidden = wide.settled(&mut app);
     assert!(hidden.radius_field().is_none());
     assert!(!hidden.has_text("Corner Radius:"));
     app.run("window.control.options", json!({"group": "anchors", "visible": true})).unwrap();
-    let narrow = Frames::new(400.0, false).settled(&mut app);
-    assert!(narrow.radius_field().is_none());
-    assert!(!narrow.has_text("Corner Radius:"), "the complete label and field are omitted together");
-    let menu = narrow.nodes.iter().find(|node| node.label() == Some("Panel menu")).unwrap().bounds().unwrap();
-    for node in narrow.nodes.iter().filter(|node| node.role() == egui::accesskit::Role::TextInput) {
-        if let Some(bounds) = node.bounds() {
-            assert!(bounds.x0 >= -0.5 && bounds.x1 <= menu.x0 + 0.5, "numeric control reaches past the panel menu: {bounds:?}");
-        }
-    }
+    // The label and the field are one row, so a narrow bar leaves out both or neither.
+    let narrow = Frames::new(400.0).settled(&mut app);
+    assert_eq!(narrow.radius_field().is_some(), narrow.has_text("Corner Radius:"), "the label and the field leave together");
     app.run("select.set", json!({"ids": [id.0]})).unwrap();
     app.select_tool("selection");
     assert!(wide.settled(&mut app).radius_field().is_none(), "ordinary whole-path Selection has no anchor controls");

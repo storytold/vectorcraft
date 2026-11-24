@@ -25,10 +25,11 @@ pub struct DocState {
     /// Panel state, not art selection: not saved, not undoable (`layer.setCurrent`,
     /// `layer.highlight`).
     pub layer_rows: Vec<NodeId>,
-    /// The row the last Locate Object or Locate Layer (`layer.locate`) highlighted, until the
-    /// Layers panel takes it: the panel opens the layers around that row and scrolls to it, also
-    /// when the row was already highlighted. Panel state: not saved, not undoable.
-    pub locate_reveal: Option<NodeId>,
+    /// What the Layers panel reveals at its next pass, until the panel takes it: the panel opens
+    /// the layers around the row and scrolls to it, also when the row was already highlighted.
+    /// Set by `layer.locate` and, for what a top-level command, an interaction's commit or a
+    /// selection changed, by [`DocState::request_reveal`]. Panel state: not saved, not undoable.
+    pub layers_reveal: Option<LayersReveal>,
     /// The variable highlighted in the Variables panel: what its Delete, Options… and Select
     /// Bound Object act on. Panel state, not art selection: not saved, not undoable
     /// (`variable.highlight`). A name, so renaming a variable moves the highlight with it.
@@ -179,6 +180,30 @@ thread_local! {
 
 static NEXT_DOC_UID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
+/// What the Layers panel is asked to reveal ([`DocState::layers_reveal`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayersReveal {
+    /// Open the layers around this row and scroll to it: it was highlighted, located or isolated.
+    Row(NodeId),
+    /// The current layer changed with no row highlighted: reveal that layer.
+    Current(NodeId),
+    /// The last selected object changed: reveal its row when Panel Options › Locate Selected
+    /// Objects is on.
+    Selected(NodeId),
+}
+
+/// What decides a [`LayersReveal`], as of one moment: the isolation, the highlighted rows, the
+/// current layer and the last selected object of one document, with the request pending then.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LayersView {
+    uid: u64,
+    isolation: Option<NodeId>,
+    rows: Vec<NodeId>,
+    active_layer: Option<NodeId>,
+    last_selected: Option<NodeId>,
+    reveal: Option<LayersReveal>,
+}
+
 /// The rows open in the Layers panel: the layers, sublayers and groups that show what they hold.
 /// A document opens with the ones it was saved with ([`Document::layers_open`]), else with only
 /// its top-level layers open (a `.ai` another app wrote opens with none open).
@@ -326,7 +351,7 @@ impl DocState {
             revision: 1,
             active_layer,
             layer_rows: vec![],
-            locate_reveal: None,
+            layers_reveal: None,
             variables_highlight: None,
             variables_sort: Default::default(),
             isolation: None,
@@ -656,6 +681,74 @@ impl DocState {
     /// remembered row must still be in the document).
     pub fn highlighted_rows(&self) -> Vec<NodeId> {
         self.layer_rows.iter().copied().filter(|id| self.doc.node(*id).is_some()).collect()
+    }
+    /// What decides the Layers panel's reveal request now.
+    pub(crate) fn layers_view(&self) -> LayersView {
+        LayersView {
+            uid: self.uid,
+            isolation: self.isolation,
+            rows: self.layer_rows.clone(),
+            active_layer: self.active_layer,
+            last_selected: self.selection.objects.last().copied(),
+            reveal: self.layers_reveal,
+        }
+    }
+    /// [`DocState::layers_view`] as it was when interaction `it` began: what a commit of the
+    /// interaction changed is compared with that, since the previews changed the state meanwhile.
+    pub(crate) fn layers_view_before(&self, it: &Interaction) -> LayersView {
+        LayersView {
+            uid: self.uid,
+            isolation: it.isolation,
+            rows: it.layer_rows.clone(),
+            active_layer: it.active_layer,
+            last_selected: it.selection.objects.last().copied(),
+            reveal: self.layers_reveal,
+        }
+    }
+    /// Ask the Layers panel to reveal what changed since `before`, in this order: isolation entered
+    /// or left, the highlighted rows, the last selected object, the current layer. A request made
+    /// meanwhile (`layer.locate`) stands, and nothing is asked while an interaction is open, so a
+    /// drag's previews reveal nothing and its commit does.
+    pub(crate) fn request_reveal(&mut self, before: &LayersView) {
+        if self.uid != before.uid || self.layers_reveal != before.reveal || self.interaction.is_some() {
+            return;
+        }
+        let now = self.layers_view();
+        let mut request = None;
+        if now.isolation != before.isolation {
+            request = self.reveal_isolation(now.isolation, before.isolation);
+        }
+        if request.is_none() && now.rows != before.rows {
+            request = self.highlighted_rows().first().copied().map(LayersReveal::Row);
+        }
+        // A new selection asks for its object even when it changed the current layer too: the panel
+        // falls back to the current layer when it does not locate the object.
+        if request.is_none() && now.last_selected != before.last_selected {
+            request = now.last_selected.map(LayersReveal::Selected);
+            // An emptied selection leaves no object to locate.
+            if request.is_none() && matches!(self.layers_reveal, Some(LayersReveal::Selected(_))) {
+                self.layers_reveal = None;
+            }
+        }
+        if request.is_none() && now.active_layer != before.active_layer {
+            request = self.current_layer().map(LayersReveal::Current);
+        }
+        if request.is_some() {
+            self.layers_reveal = request;
+        }
+    }
+    /// The request for isolation moving from `before` to `now`: entering opens the isolated row,
+    /// leaving opens the layers around the row that was isolated.
+    fn reveal_isolation(&mut self, now: Option<NodeId>, before: Option<NodeId>) -> Option<LayersReveal> {
+        if let Some(root) = now.filter(|r| self.doc.node(*r).is_some()) {
+            self.layers_open.set(root, true);
+            return Some(LayersReveal::Row(root));
+        }
+        let former = before?;
+        for around in self.doc.ancestry(former)?.into_iter().filter(|a| *a != former) {
+            self.layers_open.set(around, true);
+        }
+        Some(LayersReveal::Row(former))
     }
     /// The object whose opacity mask View Opacity Mask shows ([`DocState::mask_view`]): only while
     /// its mask is being edited, so leaving editing by any route (undo, deleting the object) ends it.
