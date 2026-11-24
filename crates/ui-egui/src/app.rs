@@ -534,7 +534,10 @@ impl VectorcraftApp {
                 let Ok(mut app) = app.try_borrow_mut() else { return };
                 let app: &mut VectorcraftApp = &mut app;
                 app.canvas.windows.area = Some(ui.available_rect_before_wrap());
-                app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
+                // Only the shown pass starts the frame's panes: a measuring run before it would drop the last frame's.
+                if !craft::ui::runtime::measure::active(ui.ctx()) {
+                    app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
+                }
                 let floats = crate::doc_windows::current_floats(app);
                 // The current window's body is in its floating window, drawn after this pane: the pane's drop catcher
                 // waits for it ([`crate::doc_windows::show`]).
