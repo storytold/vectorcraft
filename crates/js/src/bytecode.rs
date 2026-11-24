@@ -105,6 +105,15 @@ pub(crate) enum Op {
     /// Jumps, keeping the top value, when it is falsy; otherwise pops it.
     JumpIfFalseKeep(u32),
     JumpIfTrueKeep(u32),
+    /// Jumps, keeping the top value, when it is neither `undefined` nor `null`; otherwise pops
+    /// it (`??`).
+    JumpIfNotNullishKeep(u32),
+    /// When the top value is `undefined` or `null`, pops `drop` values (the top one among them)
+    /// and jumps; otherwise goes on with the stack as it was (a step of an optional chain).
+    JumpIfNullish {
+        target: u32,
+        drop: u32,
+    },
     Return,
     /// Returns the value of the last expression statement (script and eval code).
     ReturnCompletion,
@@ -360,7 +369,9 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::PopEnv => e(0, 0),
         Op::Jump(t) => Effect { pops: 0, next: None, jumps: vec![(t, 0)] },
         Op::JumpIfFalse(t) | Op::JumpIfTrue(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 0)] },
-        Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 1)] },
+        Op::JumpIfFalseKeep(t) | Op::JumpIfTrueKeep(t) | Op::JumpIfNotNullishKeep(t) => Effect { pops: 1, next: Some(0), jumps: vec![(t, 1)] },
+        Op::JumpIfNullish { drop: 0, .. } => return Err("a nullish jump that drops no values".into()),
+        Op::JumpIfNullish { target, drop } => Effect { pops: drop, next: Some(drop), jumps: vec![(target, 0)] },
         Op::Return | Op::Throw => end(1),
         Op::ReturnCompletion | Op::ThrowReferenceError(_) => end(0),
         Op::EndFinally(t) => {

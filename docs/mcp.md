@@ -2634,7 +2634,12 @@ before each element, strings and `String` objects by code point, and objects wit
 throws a `TypeError` for any other value; that rule is VectorCraft's own
 until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
 an engine that `#targetengine` keeps reads each run the way that run's script does. A
-`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. The script reaches the
+`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. A `.js` file
+also reads two ECMAScript 2020 forms (https://262.ecma-international.org/11.0/): optional chains (`a?.b`, `a?.[key]`,
+`f?.(args)`), which give `undefined` and skip the rest of the chain when the value before `?.` is `undefined` or
+`null`, and `??`, which evaluates its right side only when its left side is `undefined` or `null`. Mixing `??` with `&&`
+or `||` without parentheses, and assigning to an optional chain, are syntax errors. In a `.jsx` file and a `source`
+string, `?.` and `??` are syntax errors. Which files read these forms is VectorCraft's own rule. The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
