@@ -89,11 +89,13 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
             continue;
         };
         let bounds = doc.node(source).and_then(|n| vectorcraft_render::painted_bounds(&doc, n));
+        // A distorted image is measured at its middle, as Link Info measures it.
+        let xf = doc.node(source).and_then(vectorcraft_doc::image_quad::nearest_affine).unwrap_or(im.xf);
         let ppi = context
             .pages
             .iter()
             .filter(|(area, _)| bounds.is_some_and(|b| area.intersect(b).area() > 0.0))
-            .map(|(_, to_page)| super::place::effective_ppi(*to_page * im.xf))
+            .map(|(_, to_page)| super::place::effective_ppi(*to_page * xf))
             .reduce(|[a, b], [c, d]| [a.min(c), b.min(d)]);
         let Some(ppi) = ppi else {
             resolution_unchecked += 1;

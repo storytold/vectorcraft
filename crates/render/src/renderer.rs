@@ -98,6 +98,8 @@ impl Renderer {
             moved_slices: PtrMap::default(),
             adjusts: HashMap::new(),
             dim_images: None,
+            host_outline_images: None,
+            in_warp_piece: false,
             inline_depth: 0,
             raster: vello_cpu::RasterizerSettings::default(),
             isolation: None,

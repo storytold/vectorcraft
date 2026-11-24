@@ -4,15 +4,15 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use craft_pdf::interpret::font::Glyph;
-use craft_pdf::interpret::hayro_cmap::BfString;
-use craft_pdf::interpret::pattern::{Pattern, TilingPattern};
-use craft_pdf::interpret::{
+use craft::pdf::interpret::font::Glyph;
+use craft::pdf::interpret::hayro_cmap::BfString;
+use craft::pdf::interpret::pattern::{Pattern, TilingPattern};
+use craft::pdf::interpret::{
     CacheKey, ClipPath, Context, Device, GlyphDrawMode, Image, ImageData, InterpreterCache, InterpreterSettings, InterpreterWarning, LumaData,
     MaskType, PathDrawMode, SoftMask, StrokeProps,
 };
-use craft_pdf::syntax::object::Name;
-use craft_pdf::syntax::page::Page;
+use craft::pdf::syntax::object::Name;
+use craft::pdf::syntax::page::Page;
 use kurbo::{Affine, BezPath, PathEl, Rect, Shape};
 use vectorcraft_color::{BlendMode, Color, Paint, Swatch};
 use vectorcraft_doc::{

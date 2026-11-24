@@ -8,9 +8,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use craft_pdf::interpret::hayro_cmap::{BfString, CMap};
-use craft_pdf::syntax::object::{Array, Dict, Name, ObjRef, ObjectIdentifier, Stream};
-use craft_pdf::syntax::page::Resources;
+use craft::pdf::interpret::hayro_cmap::{BfString, CMap};
+use craft::pdf::syntax::object::{Array, Dict, Name, ObjRef, ObjectIdentifier, Stream};
+use craft::pdf::syntax::page::Resources;
 
 use crate::import::replacement;
 use crate::import_scan::{cid_ranges, font_name, without_subset_tag};
@@ -723,7 +723,7 @@ mod tests {
         let props = &pages.iter().next().unwrap().resources().properties;
         let ranges = |key: &str, per: usize| {
             let mut out = vec![];
-            crate::import_scan::cid_ranges(&props.get::<craft_pdf::syntax::object::Array<'_>>(key).unwrap(), per, |cid, v| {
+            crate::import_scan::cid_ranges(&props.get::<craft::pdf::syntax::object::Array<'_>>(key).unwrap(), per, |cid, v| {
                 out.push((cid, v.to_vec()))
             });
             out
