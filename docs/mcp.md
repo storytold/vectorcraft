@@ -6622,13 +6622,14 @@ and `stroke.widthProfile.reset` removes every saved one. `stroke.set {profile}` 
 
 ## Arrowheads
 
-`stroke.set {startArrow, endArrow}` takes any of 41 generated heads by name (the params doc lists them; `null` for
-none): arrows (`Arrow`, `LineArrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`/`Right`, `Chevron`, `Feather`,
-`Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`, `Diamond`, `Hexagon`, `Star`,
-the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`, `Bracket`, `Fork`, `Cross`,
-`Plus`). Each head fits a box about four times its weight long and wide. A head's weight is the stroke weight scaled by
-`arrowScale`, at least 0.25 pt. `LineArrow` has two arms of the head's weight (the line's weight at 100 % for lines of
-0.25 pt or more) at right angles and spreads twice as wide.
+`stroke.set {startArrow, endArrow}` takes any of 42 generated heads by name (the params doc lists them; `null` for
+none): arrows (`Arrow`, `NotchedArrow`, `LineArrow`, `Barbed`, `Concave`, `DoubleArrow`, `HalfArrowLeft`, `HalfArrowRight`,
+`Chevron`, `Feather`, `Swallowtail`…), filled and open shapes (`Triangle`, `Circle`, `Oval`, `Target`, `Tag`,
+`Diamond`, `Hexagon`, `Star`, the `…Open` rings…) and marks (`Bar`, `DoubleBar`, `DotOnBar`, `Slash`, `DoubleSlash`,
+`Bracket`, `Fork`, `Cross`, `Plus`). Each head fits a box about four times its weight long and wide. A head's weight
+is the stroke weight scaled by `arrowScale`, at least 0.25 pt. `LineArrow` has two arms of the head's weight (the
+line's weight at 100 % for lines of 0.25 pt or more) at right angles and spreads twice as wide. `NotchedArrow` is
+slender (2.4 weights across at its barbs), its sides bend in halfway back, and it has a V-shaped notch in its back.
 
 Custom arrowheads come from the arrowheads file, `Arrowheads.vectorcraft` next to the preferences (none on the web or
 in runs with `VECTORCRAFT_NO_PREFS`). `stroke.arrowheads.edit` (Stroke panel menu › Edit Arrowheads…) opens it, and

@@ -7960,6 +7960,7 @@ arrowhead	Feather	羽毛
 	Triangle to Bar	三角至条形
 	Oval	椭圆
 	Line Arrow	线条箭头
+	Notched Arrow	凹口箭头
 # Path Precision Tools add-on (Object › Plug-ins › Path Precision Tools): its tools, Anchor Inspector panel, commands and messages.
 	Path Precision Tools	路径精确工具
 	Anchor Eraser Brush	锚点橡皮擦画笔
