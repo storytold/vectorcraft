@@ -209,6 +209,7 @@
 	Anti-alias Rasters	Lisser les images pixellisées
 	Anti-aliased Artwork	Illustration lissée
 	Anti-aliasing Method	Méthode de lissage
+@id	language.name	Français
 antiAlias	Sharp	Net
 	Crisp	Précis
 	Strong	Fort
@@ -7318,7 +7319,7 @@ axis	Y Axis	Axe Y
 @msg	module is {_1} bytes (limit {_2})	le module fait {_1} octets (limite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	approbation requise : il demande {0}, que l’utilisateur accorde en l’installant seul
 @msg	not JSON: {e}	pas du JSON : {e}
-@msg	not a WebAssembly binary (missing \0asm header)	pas un binaire WebAssembly (en-tête \0asm absent)
+@msg	not a WebAssembly binary (missing \\0asm header)	pas un binaire WebAssembly (en-tête \\0asm absent)
 @msg	parameter `{k}`: {what}	paramètre `{k}` : {what}
 @msg	parameter `{name}`: {what}	paramètre `{name}` : {what}
 @msg	plug-in parameters must be a JSON object	les paramètres du plug-in doivent être un objet JSON
@@ -8847,7 +8848,7 @@ breakText	Glyphs	Glyphes
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Le profil {name} n’a pas pu être lu, le nouveau document a donc les réglages par défaut : {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Recouvrement : plus de {_1} paires d’objets sont assez proches pour un recouvrement, ou trop d’objets partagent une même plage horizontale ; traitez moins d’objets à la fois
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Cadre et lignes d’échenillage : aucune ligne d’échenillage ne tient hors de l’illustration, et le cadre d’échenillage est désactivé
-@msg	\ at end of pattern	\ à la fin du motif
+@msg	\\ at end of pattern	\\ à la fin du motif
 @msg	`alignOn` cannot be empty	`alignOn` ne peut pas être vide
 @msg	`alignOn` must be a string	`alignOn` doit être une chaîne
 @msg	`align` is start, center or end	`align` vaut start, center ou end
@@ -9166,7 +9167,7 @@ breakText	Glyphs	Glyphes
 @msg	a CMap has too many mappings	une CMap contient trop de correspondances
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	un dessin DXF a une seule origine : passez useArtboards: true pour un dessin par plan de travail
 @msg	a PDF presets file with over {_1} presets	un fichier de paramètres prédéfinis PDF de plus de {_1} paramètres
-@msg	a \u escape needs four hexadecimal digits	un échappement \u nécessite quatre chiffres hexadécimaux
+@msg	a \\u escape needs four hexadecimal digits	un échappement \\u nécessite quatre chiffres hexadécimaux
 @msg	a batch preview cannot switch documents	un aperçu de traitement par lots ne peut pas changer de document
 @msg	a brush named `{nn}` exists	une forme nommée `{nn}` existe déjà
 @msg	a comma in an XPath expression must separate function arguments	une virgule dans une expression XPath doit séparer des arguments de fonction
@@ -9890,7 +9891,7 @@ breakText	Glyphs	Glyphes
 @msg	not a regular expression	ce n’est pas une expression régulière
 @msg	not a stored or deflated central record	ce n’est pas un enregistrement central stocké ou compressé
 @msg	not a valid SVGZ file: {e}	ce n’est pas un fichier SVGZ valide : {e}
-@msg	not an RTF file: it doesn't start with {\rtf	ce n’est pas un fichier RTF : il ne commence pas par {\rtf
+@msg	not an RTF file: it doesn't start with {\\rtf	ce n’est pas un fichier RTF : il ne commence pas par {\\rtf
 @msg	not an action set: the text doesn't start with /version and a number	ce n’est pas un ensemble d’actions : le texte ne commence pas par /version et un nombre
 @msg	not an image VectorCraft reads (see document.formats)	ce n’est pas une image que VectorCraft lit (voir document.formats)
 @msg	not area type (text in a frame) outside perspective	ce n’est pas un texte captif (texte dans un cadre) hors perspective

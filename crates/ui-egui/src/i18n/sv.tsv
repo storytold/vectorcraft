@@ -196,6 +196,7 @@
 	Anti-alias Rasters	Kantutjämna rasterbilder
 	Anti-aliased Artwork	Kantutjämnad grafik
 	Anti-aliasing Method	Kantutjämningsmetod
+@id	language.name	Svenska
 antiAlias	Sharp	Skarp
 	Crisp	Klar
 	Strong	Kraftig
@@ -9620,7 +9621,7 @@ digits	Hindi	Hindi
 @msg	not a print presets file: {e}	inte en fil med utskriftsförinställningar: {e}
 @msg	not a stored or deflated central record	inte en central katalogpost av typen stored eller deflated
 @msg	not a valid SVGZ file: {e}	inte en giltig SVGZ-fil: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	inte en WebAssembly-binärfil (huvudet \0asm saknas)
+@msg	not a WebAssembly binary (missing \\0asm header)	inte en WebAssembly-binärfil (huvudet \\0asm saknas)
 @msg	not a Word document: its compound file has no WordDocument stream	inte ett Word-dokument: dess sammansatta fil saknar WordDocument-ström
 @msg	not a Word document: its main part is not a WordprocessingML document	inte ett Word-dokument: dess huvuddel är inte ett WordprocessingML-dokument
 @msg	not a Word document: its package has no main document part	inte ett Word-dokument: dess paket saknar huvuddokumentdel

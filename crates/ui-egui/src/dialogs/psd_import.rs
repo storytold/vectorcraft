@@ -7,33 +7,65 @@
 //! the starting choices, Import Slices applying to both conversions and remembering the choices
 //! are VectorCraft's own.
 //!
-//! Fields: `mode` (`open` | `place`), `name`, `path?`, `width`, `height` (the canvas, px),
-//! `layers`, `hidden` and `slices` (counts, from `document.psdInfo`), `convert` (`objects` |
-//! `flatten`), `hiddenLayers` and `importSlices`. `__place` keeps the other `file.place` params.
-//! The file's bytes stay in [`crate::state::UiState::dialog_file`]. OK opens or places the file
-//! with `layers`, `hiddenLayers` and (for a file with slices) `importSlices`, and remembers the
-//! choices for the next file; errors keep the dialog open.
+//! Fields: `convert` (`objects` | `flatten`), `hiddenLayers` and `importSlices`, and `hasSlices`,
+//! which no row shows and which enables Import Slices. The file, its name and path and the other
+//! `file.place` params stay with the dialog's OK, which opens or places the file with `layers`,
+//! `hiddenLayers` and (for a file with slices) `importSlices`, and remembers the choices for the
+//! next file; errors keep the dialog open.
+//!
+//! PLAN: no `pump`: `open_held`'s `ok` closure runs the import, so fl.A9's `psd_import::pump`
+//! line has no work to call.
 
+use std::sync::Arc;
+
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
 
-use super::DialogSpec;
+use super::host::open_held;
 use super::import_pdf::{DialogFile, other_place_params, place_source, with_file};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, io, widgets};
+use crate::{VectorcraftApp, io};
 
 pub const KIND: &str = "psdImport";
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| if d.str("mode") == "place" { tl!("Place PSD") } else { tl!("PSD Import Options") }.into(),
-    body,
-    confirm,
-    min_width: 380.0,
-    ..DialogSpec::FORM
-};
-
 /// The fewest layers a file has for the dialog to ask.
 const MIN_LAYERS: usize = 2;
+
+/// What the dialog's OK needs besides its values.
+struct Source {
+    /// Whether the file is placed (the `file.place` params in `place`) rather than opened.
+    place: Option<Value>,
+    name: String,
+    path: Option<String>,
+    file: Arc<DialogFile>,
+    has_slices: bool,
+}
+
+/// The rows of the dialog, over the `summary` line of the file's size and layer count.
+fn params(summary: &str) -> Vec<Param> {
+    let option = |id: &str, label: &'static str| (id.to_string(), label.into());
+    vec![
+        Param::read_only_text("summary", "", summary.to_string()).full_width(),
+        Param::new(
+            "convert",
+            tl!("Layers"),
+            ParamKind::radio(
+                vec![option("objects", tl!("Convert Layers to Objects")), option("flatten", tl!("Flatten Layers to a Single Image"))],
+                Some("objects".into()),
+            ),
+        ),
+        Param::new("hiddenLayers", tl!("Import Hidden Layers"), ParamKind::bool(false)).enabled_when("convert", "objects"),
+        // Offered only for a file with slices, with either conversion.
+        Param::new("importSlices", tl!("Import Slices"), ParamKind::bool(true)).enabled_when("hasSlices", true),
+    ]
+}
+
+/// The dialog over its values.
+fn build<'b>(fields: &'b mut DialogFields, placing: bool, summary: &str) -> ParamDialog<'b> {
+    let title = if placing { tl!("Place PSD") } else { tl!("PSD Import Options") };
+    ParamDialog::new(KIND, title, params(summary)).values(Bind::bound(fields))
+}
 
 /// Open `bytes` (or place them with the `file.place` params `place`) through the dialog when they
 /// are a PSD or PSB file with [`MIN_LAYERS`] layers or more, or with slices; false when they aren't
@@ -43,28 +75,25 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
     if info.layers < MIN_LAYERS && info.slices == 0 {
         return false;
     }
-    app.ui.dialog_file = Some(DialogFile::new(bytes.to_vec()));
     let (layers, hidden, slices) = last_choices(app);
-    let mut fields = json!({
-        "mode": if place.is_some() { "place" } else { "open" },
-        "name": name,
-        "width": info.width,
-        "height": info.height,
-        "layers": info.layers,
-        "hidden": info.hidden,
-        "slices": info.slices,
-        "convert": if layers { "objects" } else { "flatten" },
-        "hiddenLayers": hidden,
-        "importSlices": slices,
-    });
-    if let Some(p) = path {
-        fields["path"] = json!(p);
-    }
-    if let Some(p) = place {
-        fields["__place"] = other_place_params(p, &["layers", "hiddenLayers", "importSlices"]);
-    }
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
-    true
+    let has_slices = info.slices > 0;
+    let mut fields = DialogFields::new();
+    fields.set("convert", FieldValue::Text(if layers { "objects" } else { "flatten" }.into()));
+    fields.set("hiddenLayers", FieldValue::Bool(hidden));
+    fields.set("importSlices", FieldValue::Bool(slices));
+    fields.set("hasSlices", FieldValue::Bool(has_slices));
+    let summary = format!("{} × {} px · {} {}", info.width, info.height, crate::i18n::colon(tl!("Layers")), info.layers);
+    let placing = place.is_some();
+    let source = Source {
+        place: place.map(|p| other_place_params(p, &["layers", "hiddenLayers", "importSlices"])),
+        name: name.to_string(),
+        path,
+        file: DialogFile::new(bytes.to_vec()),
+        has_slices,
+    };
+    let ctx = app.ui_ctx.clone().unwrap_or_default();
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| build(fields, placing, &summary)).held_ok();
+    open_held(app, dialog, move |app, result| confirm(app, &source, result)).is_some()
 }
 
 /// `file.place` with params `p` asks first (true) when they embed a PSD or PSB file (`link: false`,
@@ -118,79 +147,41 @@ pub fn last_options(app: &VectorcraftApp, p: &mut Value) {
     }
 }
 
-/// OK: open or place the file with the choices.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let file = app.ui.dialog_file.clone().ok_or("the file is no longer loaded")?;
-    let layers = d.str("convert") != "flatten";
-    let hidden = layers && d.bool("hiddenLayers");
+/// OK: open or place the file with the choices; an error keeps the dialog open.
+fn confirm(app: &mut VectorcraftApp, source: &Source, result: &ParamResult) -> Result<(), String> {
+    let fields = &result.fields;
+    let layers = fields.text("convert") != Some("flatten");
+    let import_hidden = fields.bool("hiddenLayers").unwrap_or(false);
+    let hidden = layers && import_hidden;
     // Import Slices is a choice only for a file with slices; otherwise the one made last stays.
-    let has_slices = d.fields.get("slices").and_then(Value::as_u64).unwrap_or(0) > 0;
-    let slices = if has_slices { d.bool("importSlices") } else { last_choices(app).2 };
-    app.ui.psd_import = json!({ "layers": layers, "hiddenLayers": d.bool("hiddenLayers"), "importSlices": slices });
-    let r = if d.str("mode") == "place" {
-        let mut p = with_file(d.fields.get("__place"), d, &file);
-        p["layers"] = json!(layers);
-        if layers || has_slices {
-            // Layers and slices are always embedded; a file from bytes may carry the Place dialog's
-            // Link.
-            p["link"] = json!(false);
-        }
-        if hidden {
-            p["hiddenLayers"] = json!(true);
-        }
-        if has_slices {
-            p["importSlices"] = json!(slices);
-        }
-        crate::place::run_for_user(app, &p).map(|_| ())
-    } else {
-        let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
-        let mut p = json!({ "layers": layers, "hiddenLayers": hidden });
-        if has_slices {
-            p["importSlices"] = json!(slices);
-        }
-        io::open_document(app, &d.str("name"), &file.bytes, path, &p).map(|_| ())
-    };
-    match r {
-        Ok(()) => {
-            // Placing may have opened another dialog; only this one closes.
-            if app.ui.dialog.as_ref().is_some_and(|x| x.kind == KIND) {
-                app.ui.dialog = None;
+    let has_slices = source.has_slices;
+    let slices = if has_slices { fields.bool("importSlices").unwrap_or(true) } else { last_choices(app).2 };
+    app.ui.psd_import = json!({ "layers": layers, "hiddenLayers": import_hidden, "importSlices": slices });
+    match &source.place {
+        Some(place) => {
+            let mut p = with_file(place, source.path.as_deref(), &source.name, &source.file);
+            p["layers"] = json!(layers);
+            if layers || has_slices {
+                // Layers and slices are always embedded; a file from bytes may carry the Place dialog's
+                // Link.
+                p["link"] = json!(false);
             }
-            Ok(Value::Null)
+            if hidden {
+                p["hiddenLayers"] = json!(true);
+            }
+            if has_slices {
+                p["importSlices"] = json!(slices);
+            }
+            crate::place::run_for_user(app, &p).map(|_| ())
         }
-        Err(e) => {
-            app.ui.dialog = Some(d.clone());
-            Err(e)
+        None => {
+            let mut p = json!({ "layers": layers, "hiddenLayers": hidden });
+            if has_slices {
+                p["importSlices"] = json!(slices);
+            }
+            io::open_document(app, &source.name, &source.file.bytes, source.path.clone(), &p).map(|_| ())
         }
     }
-}
-
-fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let count = |k: &str| d.fields.get(k).and_then(Value::as_u64).unwrap_or(0);
-    widgets::dim_label(ui, &format!("{} × {} px · {} {}", count("width"), count("height"), crate::i18n::colon(tl!("Layers")), count("layers")));
-    // Offered only for a file with slices, with either conversion.
-    let sliced = count("slices") > 0;
-    ui.add_space(8.0);
-    let convert = d.str("convert") != "flatten";
-    if widgets::radio(ui, tl!("Convert Layers to Objects"), convert, true) {
-        d.fields.insert("convert".into(), json!("objects"));
-    }
-    ui.horizontal(|ui| {
-        ui.add_space(22.0);
-        let on = d.bool("hiddenLayers");
-        if widgets::check(ui, tl!("Import Hidden Layers"), on && convert, convert) {
-            d.fields.insert("hiddenLayers".into(), json!(!on));
-        }
-    });
-    if widgets::radio(ui, tl!("Flatten Layers to a Single Image"), !convert, true) {
-        d.fields.insert("convert".into(), json!("flatten"));
-    }
-    ui.add_space(8.0);
-    let on = d.bool("importSlices");
-    if widgets::check(ui, tl!("Import Slices"), on && sliced, sliced) {
-        d.fields.insert("importSlices".into(), json!(!on));
-    }
-    false
 }
 
 #[cfg(test)]
@@ -198,6 +189,7 @@ mod tests {
     use vectorcraft_engine::Session;
     use vectorcraft_engine::doc::NodeKind;
 
+    use super::super::text_import::test_support as host;
     use super::*;
 
     /// A PSD file of three layers, the middle one hidden, written by `document.export`.
@@ -219,64 +211,46 @@ mod tests {
         vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap()
     }
 
-    fn app() -> VectorcraftApp {
-        VectorcraftApp::new(Session::new(), Default::default())
-    }
-
-    fn frame(app: &mut VectorcraftApp) -> String {
-        crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
-    }
-
-    fn set(app: &mut VectorcraftApp, k: &str, v: Value) {
-        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    fn set(app: &VectorcraftApp, k: &str, v: Value) {
+        host::set(app, KIND, k, v);
     }
 
     fn layer_names(app: &VectorcraftApp) -> Vec<(String, bool)> {
         app.session.doc().unwrap().doc.layers.iter().map(|l| (l.name.clone().unwrap_or_default(), l.visible)).collect()
     }
 
+    /// The options of a Place dialog that places without Link or with it.
+    fn place_options(link: bool, show_import_options: bool) -> crate::place::PlaceOptions {
+        crate::place::PlaceOptions { link, template: false, replace: false, show_import_options }
+    }
+
     #[test]
     fn opening_a_layered_file_asks_for_the_import_options() {
         let psd = layered();
-        let mut app = app();
+        let mut app = host::app();
         io::open_bytes(&mut app, "poster.psd", &psd, None).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.kind.as_str(), d.str("mode"), d.str("convert"), d.bool("hiddenLayers")), (KIND, "open".into(), "objects".into(), false));
-        assert_eq!((&d.fields["layers"], &d.fields["hidden"], &d.fields["width"]), (&json!(3), &json!(1), &json!(20)));
+        let f = host::fields(&app, KIND);
+        assert_eq!((&f["convert"], &f["hiddenLayers"], &f["hasSlices"]), (&json!("objects"), &json!(false), &json!(false)));
         assert!(app.session.active().is_none(), "nothing opens before OK");
-        let text = frame(&mut app);
-        for label in [
-            "PSD Import Options",
-            "20 × 20 px",
-            "Layers: 3",
-            "Convert Layers to Objects",
-            "Import Hidden Layers",
-            "Flatten Layers to a Single Image",
-            "OK",
-        ] {
-            assert!(text.contains(label), "{label} in {text}");
-        }
         // Layers as objects, hidden ones left out.
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        host::confirm(&mut app, KIND).unwrap();
+        assert!(!host::is_open(&app, KIND));
         assert_eq!(layer_names(&app), [("Back".to_string(), true), ("Front".to_string(), true)]);
         // With Import Hidden Layers the hidden layer comes in hidden.
         io::open_bytes(&mut app, "poster.psd", &psd, None).unwrap();
-        set(&mut app, "hiddenLayers", json!(true));
-        frame(&mut app);
-        super::super::confirm(&mut app).unwrap();
+        set(&app, "hiddenLayers", json!(true));
+        host::confirm(&mut app, KIND).unwrap();
         assert_eq!(layer_names(&app), [("Back".to_string(), true), ("Middle".to_string(), false), ("Front".to_string(), true)]);
         // Flatten opens one image, and the next file starts from the choices made last.
         io::open_bytes(&mut app, "poster.psd", &psd, None).unwrap();
-        assert!(app.ui.dialog.as_ref().unwrap().bool("hiddenLayers"), "remembered");
-        set(&mut app, "convert", json!("flatten"));
-        frame(&mut app);
-        super::super::confirm(&mut app).unwrap();
+        assert_eq!(host::fields(&app, KIND)["hiddenLayers"], true, "remembered");
+        set(&app, "convert", json!("flatten"));
+        host::confirm(&mut app, KIND).unwrap();
         let st = app.session.doc().unwrap();
         assert_eq!(st.doc.layers.len(), 1);
         assert!(matches!(st.doc.layers[0].children().map(Vec::as_slice), Some([one]) if matches!(one.kind, NodeKind::Image(_))));
         io::open_bytes(&mut app, "poster.psd", &psd, None).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("convert"), "flatten");
+        assert_eq!(host::fields(&app, KIND)["convert"], "flatten");
     }
 
     #[test]
@@ -288,9 +262,9 @@ mod tests {
         let flat = s.execute("document.export", &json!({"format": "psd", "layers": false})).unwrap();
         for r in [one, flat] {
             let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
-            let mut app = app();
+            let mut app = host::app();
             io::open_bytes(&mut app, "one.psd", &bytes, None).unwrap();
-            assert!(app.ui.dialog.is_none());
+            assert!(!host::is_open(&app, KIND));
             assert!(app.session.active().is_some());
         }
     }
@@ -298,15 +272,13 @@ mod tests {
     #[test]
     fn placing_without_link_asks_and_places_the_layers_as_a_group() {
         let b64 = vectorcraft_format::base64_encode(&layered());
-        let mut app = app();
+        let mut app = host::app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         let r = crate::place::run_for_user(&mut app, &json!({"name": "poster.psd", "dataBase64": b64, "at": [50, 50]})).unwrap();
         assert_eq!(r["dialog"], KIND);
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.str("mode"), &d.fields["__place"]), ("place".into(), &json!({"at": [50, 50]})));
-        assert!(frame(&mut app).contains("Place PSD"));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        assert!(host::is_open(&app, KIND));
+        host::confirm(&mut app, KIND).unwrap();
+        assert!(!host::is_open(&app, KIND));
         let st = app.session.doc().unwrap();
         let [id] = st.selection.objects[..] else { panic!("one object is selected") };
         let g = st.doc.node(id).unwrap();
@@ -315,8 +287,8 @@ mod tests {
         assert_eq!(names, ["Back", "Front"]);
         // Flatten places the merged image.
         crate::place::run_for_user(&mut app, &json!({"name": "poster.psd", "dataBase64": b64})).unwrap();
-        set(&mut app, "convert", json!("flatten"));
-        super::super::confirm(&mut app).unwrap();
+        set(&app, "convert", json!("flatten"));
+        host::confirm(&mut app, KIND).unwrap();
         let st = app.session.doc().unwrap();
         let [id] = st.selection.objects[..] else { panic!("one object is selected") };
         assert!(matches!(st.doc.node(id).unwrap().kind, NodeKind::Image(_)));
@@ -329,7 +301,7 @@ mod tests {
     fn a_dropped_files_ok_places_in_the_document_it_was_dropped_on() {
         use crate::place::{DropAt, DropTarget};
         let psd = layered();
-        let mut app = app();
+        let mut app = host::app();
         for _ in 0..2 {
             app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         }
@@ -338,30 +310,29 @@ mod tests {
             let st = app.session.doc().unwrap();
             let target = DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at: vectorcraft_geom::Point::new(50.0, 50.0), embed: true });
             crate::place::drop_files(app, vec![(target, ("poster.psd".into(), None, psd.clone()))]);
-            assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+            assert!(host::is_open(app, KIND));
             // Another document becomes active while the dialog is open.
             app.session.set_active(1);
         };
         let objects =
             |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum::<usize>();
         drop_on_first(&mut app);
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        host::confirm(&mut app, KIND).unwrap();
+        assert!(!host::is_open(&app, KIND));
         assert_eq!((objects(&app, 0), objects(&app, 1)), (1, 0), "placed in the document it was dropped on");
         assert_eq!(app.session.active_index(), Some(0), "which is active again");
         // Reverted meanwhile: the dialog stays open with the reason, and nothing is placed.
         drop_on_first(&mut app);
         let first = app.session.documents()[0].uid;
         app.session.document_mut(first).unwrap().reverts += 1;
-        let e = super::super::confirm(&mut app).unwrap_err();
-        assert!(e.contains("was reverted"), "{e}");
+        assert!(host::confirm(&mut app, KIND).is_err());
+        assert!(host::is_open(&app, KIND));
         assert_eq!((objects(&app, 0), objects(&app, 1)), (1, 0));
         // Closed meanwhile.
-        app.ui.dialog = None;
+        host::cancel(&app, KIND);
         drop_on_first(&mut app);
         app.session.close_document(0);
-        let e = super::super::confirm(&mut app).unwrap_err();
-        assert!(e.contains("was closed"), "{e}");
+        assert!(host::confirm(&mut app, KIND).is_err());
         assert_eq!(objects(&app, 0), 0);
     }
 
@@ -380,9 +351,8 @@ mod tests {
         // Place both through the Place dialog, then click the cursor once for each: what was placed.
         let place_two = |app: &mut VectorcraftApp, link: bool| -> Vec<vectorcraft_engine::doc::Node> {
             let files: Vec<Value> = paths.iter().map(|p| json!({ "path": p })).collect();
-            let d = Dialog::new(crate::dialogs::place::KIND, json!({"files": files, "link": link, "template": false}));
-            crate::place::confirm(app, &d).unwrap();
-            assert!(app.ui.dialog.is_none(), "the cursor loads without asking");
+            crate::place::confirm(app, files, place_options(link, false)).unwrap();
+            assert!(!host::is_open(app, KIND), "the cursor loads without asking");
             let view = vectorcraft_engine::ViewInfo::default();
             (0..2)
                 .map(|_| {
@@ -400,7 +370,7 @@ mod tests {
                 .collect()
         };
         let visible = |n: &vectorcraft_engine::doc::Node| -> Vec<bool> { n.children().unwrap().iter().map(|c| c.visible).collect() };
-        let mut app = app();
+        let mut app = host::app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         // At first, Convert Layers to Objects without hidden layers.
         for n in place_two(&mut app, false) {
@@ -473,39 +443,39 @@ mod tests {
         let r = s.execute("document.export", &json!({"format": "psd"})).unwrap();
         // One layer: without slices it opens at once, with them it asks.
         let psd = sliced(&vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
-        let mut app = app();
+        let mut app = host::app();
         io::open_bytes(&mut app, "one.psd", &psd, None).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.kind.as_str(), &d.fields["slices"], d.bool("importSlices")), (KIND, &json!(1), true));
-        assert!(frame(&mut app).contains("Import Slices"));
-        // Flatten keeps Import Slices: the merged image opens with the slice.
-        set(&mut app, "convert", json!("flatten"));
-        super::super::confirm(&mut app).unwrap();
+        let f = host::fields(&app, KIND);
+        assert_eq!((&f["hasSlices"], &f["importSlices"]), (&json!(true), &json!(true)));
+        // Flatten keeps Import Slices: the choice is offered, and the merged image opens with the slice.
+        set(&app, "convert", json!("flatten"));
+        set(&app, "importSlices", json!(true));
+        host::confirm(&mut app, KIND).unwrap();
         assert_eq!(slice_names(&app), ["cell"]);
         // Left off, the slice stays out, and the next file starts from that choice.
         io::open_bytes(&mut app, "one.psd", &psd, None).unwrap();
-        set(&mut app, "importSlices", json!(false));
-        super::super::confirm(&mut app).unwrap();
+        set(&app, "importSlices", json!(false));
+        host::confirm(&mut app, KIND).unwrap();
         assert!(slice_names(&app).is_empty());
         io::open_bytes(&mut app, "one.psd", &psd, None).unwrap();
-        assert!(!app.ui.dialog.as_ref().unwrap().bool("importSlices"), "remembered");
-        // A layered file without slices keeps the choice made last for the next sliced one.
-        app.ui.dialog = None;
+        assert_eq!(host::fields(&app, KIND)["importSlices"], false, "remembered");
+        // A layered file without slices takes no Import Slices choice and keeps the one made last.
+        host::cancel(&app, KIND);
         io::open_bytes(&mut app, "poster.psd", &layered(), None).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["slices"], json!(0));
-        set(&mut app, "importSlices", json!(true));
-        super::super::confirm(&mut app).unwrap();
+        assert_eq!(host::fields(&app, KIND)["hasSlices"], false);
+        assert!(host::try_set(&app, KIND, "importSlices", json!(true)).is_err(), "the row takes no input");
+        host::confirm(&mut app, KIND).unwrap();
         assert_eq!(app.ui.psd_import["importSlices"], json!(false));
     }
 
     #[test]
     fn placing_a_sliced_file_without_link_brings_its_slices_with_the_art() {
         let b64 = vectorcraft_format::base64_encode(&sliced(&layered()));
-        let mut app = app();
+        let mut app = host::app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         crate::place::run_for_user(&mut app, &json!({"name": "poster.psd", "dataBase64": b64, "at": [50, 50]})).unwrap();
-        assert!(app.ui.dialog.as_ref().unwrap().bool("importSlices"));
-        super::super::confirm(&mut app).unwrap();
+        assert_eq!(host::fields(&app, KIND)["importSlices"], true);
+        host::confirm(&mut app, KIND).unwrap();
         let st = app.session.doc().unwrap();
         assert_eq!(st.doc.slices.len(), 1);
         assert_eq!(st.doc.slices[0].rect, vectorcraft_geom::Rect::new(40.0, 40.0, 50.0, 50.0));
@@ -519,7 +489,7 @@ mod tests {
     #[test]
     fn placing_with_show_import_options_off_takes_the_last_choices() {
         let b64 = vectorcraft_format::base64_encode(&sliced(&layered()));
-        let mut app = app();
+        let mut app = host::app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         // The file's bytes carry the Place dialog's Link, which they have no file for.
         let place = |app: &mut VectorcraftApp, slices: Option<bool>| {
@@ -528,7 +498,7 @@ mod tests {
                 p["importSlices"] = json!(s);
             }
             crate::place::run_for_user(app, &p).unwrap();
-            assert!(app.ui.dialog.is_none(), "placed without asking");
+            assert!(!host::is_open(app, KIND), "placed without asking");
             let st = app.session.doc().unwrap();
             let [id] = st.selection.objects[..] else { panic!("one object is selected") };
             (st.doc.node(id).unwrap().kind.clone(), st.doc.slices.len())
@@ -553,15 +523,14 @@ mod tests {
     #[test]
     fn files_from_bytes_placed_with_link_take_the_last_choices() {
         let files: Vec<Value> = ["a.psd", "b.psd"].iter().map(|n| json!({ "name": n })).collect();
-        let mut app = app();
+        let mut app = host::app();
         for n in ["a.psd", "b.psd"] {
             app.place.picked.push((n.to_string(), sliced(&layered())));
         }
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         // The dialog's Link is on, but files from bytes have no file to link to.
-        let d = Dialog::new(crate::dialogs::place::KIND, json!({"files": files, "link": true, "template": false, "showImportOptions": false}));
-        crate::place::confirm(&mut app, &d).unwrap();
-        assert!(app.ui.dialog.is_none(), "the cursor loads without asking");
+        crate::place::confirm(&mut app, files, place_options(true, false)).unwrap();
+        assert!(!host::is_open(&app, KIND), "the cursor loads without asking");
         let view = vectorcraft_engine::ViewInfo::default();
         for kind in [vectorcraft_tools::PointerKind::Down, vectorcraft_tools::PointerKind::Up] {
             for r in app.session.pointer(&vectorcraft_tools::PointerEvent::new(kind, 10.0, 10.0), view).unwrap() {
@@ -591,13 +560,12 @@ mod tests {
             .collect();
         let files: Vec<Value> = paths.iter().map(|p| json!({ "path": p })).collect();
         let services = crate::Services { read: Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string()))), ..Default::default() };
-        let mut app = VectorcraftApp::new(Session::new(), services);
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         // The choices made last would place the layers without asking with Show Import Options off.
         app.ui.psd_import = json!({"layers": true, "importSlices": true});
-        let d = Dialog::new(crate::dialogs::place::KIND, json!({"files": files, "link": false, "template": false, "showImportOptions": true}));
-        crate::place::confirm(&mut app, &d).unwrap();
-        assert!(app.ui.dialog.is_none(), "the cursor loads without asking");
+        crate::place::confirm(&mut app, files, place_options(false, true)).unwrap();
+        assert!(!host::is_open(&app, KIND), "the cursor loads without asking");
         assert_eq!(app.session.tool_options()["count"], 2);
         // A click on the canvas: the file the cursor's request names asks.
         let view = vectorcraft_engine::ViewInfo::default();
@@ -608,21 +576,21 @@ mod tests {
                 }
             }
         }
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND), "the clicked file asks");
+        assert!(host::is_open(&app, KIND), "the clicked file asks");
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn scripted_places_and_places_that_give_layers_dont_ask() {
         let b64 = vectorcraft_format::base64_encode(&layered());
-        let mut app = app();
+        let mut app = host::app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         // `file.place` run as a command places at once, as before.
         let r = crate::place::run(&mut app, &json!({"name": "poster.psd", "dataBase64": b64})).unwrap();
-        assert!(app.ui.dialog.is_none());
+        assert!(!host::is_open(&app, KIND));
         assert_eq!(r["format"], "psd");
         // The user's place with `layers` given doesn't ask either.
         crate::place::run_for_user(&mut app, &json!({"name": "poster.psd", "dataBase64": b64, "layers": false})).unwrap();
-        assert!(app.ui.dialog.is_none());
+        assert!(!host::is_open(&app, KIND));
     }
 }

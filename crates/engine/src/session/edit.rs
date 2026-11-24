@@ -7,6 +7,10 @@ impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
     /// undo step labelled `label`; inside one it just mutates (the interaction commits later).
     pub fn edit<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
+        self.revealing(|s| s.edit_unwatched(label, f))
+    }
+
+    fn edit_unwatched<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
@@ -197,6 +201,10 @@ impl Session {
 
     /// Change only the selection (not an undo step).
     pub fn select(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
+        self.revealing(|s| s.select_unwatched(f))
+    }
+
+    fn select_unwatched(&mut self, f: impl FnOnce(&Document, &mut Selection)) -> Result<()> {
         self.active_appearance_item = None;
         let menu = self.menu.clone();
         let st = self.doc_mut()?;
@@ -312,6 +320,7 @@ impl Session {
             plane_placed: false,
             copies: None,
             move_box: std::sync::OnceLock::new(),
+            keep_on_switch: false,
         });
         Ok(())
     }
@@ -390,6 +399,17 @@ impl Session {
     }
 
     pub fn commit_interaction(&mut self) -> Result<()> {
+        // The interaction is taken below, so its starting state is read first: the commit is what
+        // the previews that came before it changed.
+        let before = (self.depth == 0).then(|| self.active().and_then(|st| st.interaction.as_ref().map(|it| st.layers_view_before(it)))).flatten();
+        let r = self.commit_interaction_unwatched();
+        if let Some(before) = before {
+            self.reveal_since(&before);
+        }
+        r
+    }
+
+    fn commit_interaction_unwatched(&mut self) -> Result<()> {
         self.clear_deferred_overlay_cache();
         self.decoded_images.empty();
         if let Some(paint) = self.active().and_then(|st| st.interaction.as_ref()).and_then(|it| it.preview_paint.clone()) {

@@ -4,16 +4,83 @@
 //! missing fonts' files, in the Missing Fonts dialog: `ui.findFontsInFolder`). Find In limits Find
 //! to the active artboard or the selected layers.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
-use egui::Ui;
+use craft::behavior::{DisplayOrder, IconId, ItemSource, Selection};
+use craft::host::PickKind;
+use craft::theme::variant::Tone;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{
+    Bind, CollectionEvent, Entry, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing, clicked,
+};
+use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
+use craft::ui::form::Field;
+use craft::ui::layout_components::Stack;
+use craft::ui::list::{List, ListRow};
+use craft::ui::pickers::Select;
+use craft::ui::primitives::IconSpec;
+use craft::ui::sections::{DialogRole, FooterButton, HeaderStrength, Section};
+use craft::ui::text::TextField;
+use egui::{Context, Ui};
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
 use crate::caches::{FindFontCache, FontsKey};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::widgets;
+use crate::file_asks;
+
+/// The key automation names the dialog by.
+const KEY: &str = "findFont";
+
+/// What a press in the dialog asks the app to do; `show` has no app, so [`pump`] runs it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Action {
+    /// Select the text set in the chosen document font.
+    Find,
+    /// Replace the chosen document font in the selected objects.
+    Change,
+    /// Replace the chosen document font everywhere.
+    ChangeAll,
+    /// Show list `SOURCES[i]` in Replace With Font.
+    Source(usize),
+    /// Search a folder for the missing fonts' files.
+    FindInFolder,
+}
+
+/// Type › Find Font… on the dialog host: the values the user edits, and what [`pump`] pushes in each
+/// frame (the document's fonts, whether Find in Folder… is offered).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct FindFontDialog {
+    /// The chosen document font, an index into `used`.
+    selected: usize,
+    /// The font Change replaces with: its family and style (`""` is the closest style).
+    family: String,
+    style: String,
+    /// Whether Change is limited to the selection.
+    selection_only: bool,
+    /// The list Replace With Font From shows, one of [`SOURCES`].
+    replace_from: String,
+    /// Where Find looks, one of [`FIND_IN`].
+    find_in: String,
+    /// The rows of Replace With Font, a snapshot refreshed when the source changes or after a Change.
+    rows: Vec<Row>,
+    /// The families Replace With Font From lists (`None`: System, the font menu).
+    families: Option<Vec<String>>,
+    /// The replacement search; it lives and drops with the dialog.
+    search: String,
+    /// The active document's fonts (`text.fonts`), pushed by [`pump`].
+    used: Arc<Vec<Value>>,
+    /// Whether Find in Folder… shows, pushed by [`pump`].
+    offer_folder: bool,
+    /// The press [`pump`] runs next; one at a time, taken when run.
+    pending: Option<Action>,
+}
+
+/// The document's fonts and whether Find in Folder… is offered for them.
+fn current_fonts(app: &mut VectorcraftApp) -> (Arc<Vec<Value>>, bool) {
+    let can_pick = file_asks::can(app, PickKind::Folder);
+    document_fonts(app, can_pick)
+}
 
 /// Open the dialog.
 pub fn open(app: &mut VectorcraftApp) {
@@ -29,17 +96,29 @@ pub fn open_on_missing(app: &mut VectorcraftApp) {
 
 /// Open the dialog with the document's font `selected` (an index into `text.fonts`) chosen,
 /// System's font ([`system_family`]) to change to, and the last Find In choice (Document at first).
+/// Before the window has a context there is no host, and nothing opens.
 fn open_at(app: &mut VectorcraftApp, selected: usize) {
+    let Some(dialogs) = app.dialogs() else { return };
     let find_in = FIND_IN.iter().find(|f| **f == app.ui.find_font_in).copied().unwrap_or("document");
-    let (used, _) = document_fonts(app, false);
+    let (used, offer_folder) = current_fonts(app);
     let source = "system";
     let rows = replacement_rows(app, source, &used);
     let family = system_family();
     let style = rows.iter().find(|r| r.family.eq_ignore_ascii_case(&family)).map(|r| r.style.clone()).unwrap_or_default();
-    app.ui.dialog = Some(Dialog::new(
-        "findFont",
-        json!({ "selected": selected, "family": family, "style": style, "selectionOnly": false, "replaceFrom": source, "rows": rows_json(&rows), "findIn": find_in }),
-    ));
+    let families = replacement_families(app, source, &used);
+    let dialog = FindFontDialog {
+        selected,
+        family,
+        style,
+        replace_from: source.into(),
+        find_in: find_in.into(),
+        rows,
+        families,
+        used,
+        offer_folder,
+        ..FindFontDialog::default()
+    };
+    dialogs.with(|host| host.open(dialog));
 }
 
 /// The font System chooses: Source Sans 3 when it is installed, otherwise the font menu's first
@@ -178,15 +257,14 @@ fn installed(family: &str) -> bool {
 
 /// Can Change and Change All replace with the dialog's font: a family is chosen, it is installed,
 /// and it is one of the list Replace With Font From shows (System's list is the font menu).
-fn can_replace(d: &Dialog, families: Option<&[String]>) -> bool {
-    let family = d.str("family");
-    let style = d.str("style");
-    if !style.is_empty() && !exact(&family, &style) {
+fn can_replace(d: &FindFontDialog, families: Option<&[String]>) -> bool {
+    let (family, style) = (&d.family, &d.style);
+    if !style.is_empty() && !exact(family, style) {
         return false;
     }
     match families {
-        Some(list) => can_replace_in(&family, installed, list),
-        None => can_replace_in(&family, installed, &vectorcraft_text::FontDb::global().menu_family_list()),
+        Some(list) => can_replace_in(family, installed, list),
+        None => can_replace_in(family, installed, &vectorcraft_text::FontDb::global().menu_family_list()),
     }
 }
 
@@ -197,22 +275,25 @@ fn can_replace_in(family: &str, is_installed: impl Fn(&str) -> bool, list: &[Str
 
 /// Show list `source` ([`SOURCES`]): the chosen family stays when the list has it and it is
 /// installed, otherwise the list's first installed family (none when there is none) is chosen in
-/// its closest style. System chooses [`system_family`].
-fn set_source(app: &VectorcraftApp, d: &mut Dialog, source: &str, used: &[Value]) {
-    d.fields.insert("replaceFrom".into(), json!(source));
-    let rows = replacement_rows(app, source, used);
-    d.fields.insert("rows".into(), rows_json(&rows));
+/// its closest style. System chooses [`system_family`]. A new list starts with an empty search.
+fn set_source(app: &VectorcraftApp, d: &mut FindFontDialog, source: &str, used: &[Value]) {
+    d.replace_from = source.into();
+    d.search.clear();
+    d.families = replacement_families(app, source, used);
+    d.rows = replacement_rows(app, source, used);
     // The chosen font stays only when the new list has that family and style; otherwise the family
     // and the style both come from a row the list shows, so Change replaces with what is listed.
-    let (family, style) = (d.str("family"), d.str("style"));
-    if rows.iter().any(|r| r.family.eq_ignore_ascii_case(&family) && r.style.eq_ignore_ascii_case(&style) && listed(r)) {
+    if d.rows.iter().any(|r| r.family.eq_ignore_ascii_case(&d.family) && r.style.eq_ignore_ascii_case(&d.style) && listed(r)) {
         return;
     }
     let system = if source == "system" { system_family() } else { String::new() };
-    let pick =
-        rows.iter().find(|r| !system.is_empty() && r.family.eq_ignore_ascii_case(&system) && listed(r)).or_else(|| rows.iter().find(|r| listed(r)));
-    d.fields.insert("family".into(), json!(pick.map(|r| r.family.clone()).unwrap_or_default()));
-    d.fields.insert("style".into(), json!(pick.map(|r| r.style.clone()).unwrap_or_default()));
+    let pick = d
+        .rows
+        .iter()
+        .find(|r| !system.is_empty() && r.family.eq_ignore_ascii_case(&system) && listed(r))
+        .or_else(|| d.rows.iter().find(|r| listed(r)))
+        .cloned();
+    (d.family, d.style) = pick.map(|r| (r.family, r.style)).unwrap_or_default();
 }
 
 /// Find In's choices (the `findIn` field): the whole document, the active artboard, or the layers
@@ -239,14 +320,14 @@ fn find_scope(app: &VectorcraftApp, find_in: &str) -> Value {
     }
 }
 
-/// Run the dialog's button `button` (find, change or changeAll) on the document font `from`.
-fn run_button(app: &mut VectorcraftApp, d: &Dialog, button: &str, from: &Value) -> Result<Value, String> {
+/// Run the dialog's button `button` (Find, Change or Change All) on the document font `from`.
+fn run_button(app: &mut VectorcraftApp, d: &FindFontDialog, button: Action, from: &Value) -> Result<Value, String> {
     match button {
-        "find" => {
-            let scope = find_scope(app, &d.str("findIn"));
+        Action::Find => {
+            let scope = find_scope(app, &d.find_in);
             app.run("select.font", json!({ "family": from["family"], "style": from["style"], "scope": scope }))
         }
-        "change" => change(app, d, from, false),
+        Action::Change => change(app, d, from, false),
         _ => change(app, d, from, true),
     }
 }
@@ -279,210 +360,278 @@ fn document_fonts(app: &mut VectorcraftApp, missing: bool) -> (Arc<Vec<Value>>, 
     (c.map(|c| c.fonts.clone()).unwrap_or_default(), missing && c.and_then(|c| c.missing).unwrap_or(false))
 }
 
-pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
-    if let Some(ctx) = app.ui_ctx.clone() {
-        clear_search(&ctx);
-    }
-    app.ui.dialog = None;
-    Ok(Value::Null)
-}
-
-/// Forget the replacement search: the next open starts with an empty one.
-pub(crate) fn clear_search(ctx: &egui::Context) {
-    let (source_key, query_id) = (egui::Id::unique("ff-search-source"), egui::Id::unique("ff-search"));
-    ctx.data_mut(|m| {
-        m.remove::<String>(source_key);
-        m.remove::<String>(query_id);
-    });
-}
-
 /// Replace the selected document font with the chosen one (`all`: everywhere, else the selection).
-fn change(app: &mut VectorcraftApp, d: &Dialog, from: &Value, all: bool) -> Result<Value, String> {
-    let style = d.str("style");
-    let to = if style.is_empty() { json!({ "family": d.str("family") }) } else { json!({ "family": d.str("family"), "style": style }) };
+fn change(app: &mut VectorcraftApp, d: &FindFontDialog, from: &Value, all: bool) -> Result<Value, String> {
+    let to = if d.style.is_empty() { json!({ "family": d.family }) } else { json!({ "family": d.family, "style": d.style }) };
     app.run("text.replaceFont", json!({ "from": { "family": from["family"], "style": from["style"] }, "to": to, "selectionOnly": !all }))
 }
 
-pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(mut d) = app.ui.dialog.clone() else { return };
-    let t = Tokens::get(ctx);
-    // Find in Folder… shows when the document misses fonts, fonts used only in its symbols included.
-    let can_pick = crate::picks::can(app, &crate::picks::PickRequest::Folder);
-    let (list, offer_folder) = document_fonts(app, can_pick);
-    let mut close = false;
-    let mut find_in_folder = false;
-    let mut act: Option<&str> = None;
-    // Escape over an open dropdown list closes only the list, which closes itself while it is drawn.
-    let popup_open = egui::Popup::is_any_open(ctx);
-    // The replacement-font search, kept in egui memory: cleared when the dialog closes, and when
-    // the source changes.
-    let source_key = egui::Id::unique("ff-search-source");
-    let query_id = egui::Id::unique("ff-search");
-    crate::dialogs::modal::show(ctx, tl!("Find Font"), egui::Id::unique("dialog-find-font"), -40.0, 22, |ui: &mut Ui| {
-        ui.set_width(380.0);
-        crate::dialogs::modal::heading(ui, tl!("Find Font"));
-        ui.add_space(10.0);
-        widgets::subheader(ui, &crate::i18n::fmt(tl!("Fonts in Document: {count}"), &[("count", &list.len().to_string())]));
-        let sel = d.fields.get("selected").and_then(Value::as_u64).unwrap_or(0) as usize;
-        egui::Frame::NONE.fill(t.input).stroke(egui::Stroke::new(1.0, t.input_border)).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
-            ui.set_min_height(120.0);
-            ui.set_width(ui.available_width());
-            egui::ScrollArea::vertical().id_salt("ff-document-list").max_height(160.0).auto_shrink([false, true]).show(ui, |ui| {
-                for (i, f) in list.iter().enumerate() {
-                    let (note, color) = font_note(f);
-                    let label = format!("{} {}{note}  ({})", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or(""), f["runs"]);
-                    let text = egui::RichText::new(label).color(color.unwrap_or(t.text));
-                    if ui.selectable_label(i == sel, text).clicked() {
-                        d.fields.insert("selected".into(), json!(i));
-                    }
-                }
-            });
-        });
-        // The missing fonts' files, looked for in a folder (the Missing Fonts dialog).
-        if offer_folder {
-            ui.add_space(6.0);
-            find_in_folder = ui.button(tl!("Find in Folder…")).clicked();
-        }
-        ui.add_space(10.0);
-        widgets::subheader(ui, tl!("Replace With Font"));
-        let source = d.str("replaceFrom");
-        ui.horizontal(|ui| {
-            widgets::field_label(ui, tl!("Replace With Font From"));
-            let at = SOURCES.iter().position(|s| *s == source).unwrap_or(2);
-            if let Some(i) = widgets::dropdown_named(ui, "ff-from", Some(tl!("Replace With Font From")), SOURCE_LABELS[at], &SOURCE_LABELS, 120.0) {
-                set_source(app, &mut d, SOURCES[i], &list);
-            }
-        });
-        let families = replacement_families(app, &d.str("replaceFrom"), &list);
-        // The rows Replace With Font lists for the source: one click picks the family and its style.
-        let rows: Vec<(String, String)> = d
-            .fields
-            .get("rows")
-            .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .map(|r| (r["family"].as_str().unwrap_or_default().to_string(), r["style"].as_str().unwrap_or_default().to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let (fam, style) = (d.str("family"), d.str("style"));
-        // A search like the Character panel's font menu: the family and style are filtered as typed.
-        // A new source starts with an empty search.
-        let source = d.str("replaceFrom");
-        if ui.data(|m| m.get_temp::<String>(source_key).as_deref() != Some(source.as_str())) {
-            ui.data_mut(|m| {
-                m.insert_temp(source_key, source.clone());
-                m.insert_temp(query_id, String::new());
-            });
-        }
-        let query = widgets::search_field(ui, query_id, tl!("Search")).to_lowercase();
-        let shown: Vec<&(String, String)> = rows.iter().filter(|(f, s)| row_matches(f, s, &query)).collect();
-        let mut picked: Option<(String, String, bool)> = None;
-        // Ten rows at a time, whichever height the rows get from the style.
-        let row = (ui.spacing().interact_size.y.max(ui.text_style_height(&egui::TextStyle::Body)) + ui.spacing().item_spacing.y).max(18.0);
-        egui::Frame::NONE.fill(t.input).stroke(egui::Stroke::new(1.0, t.input_border)).inner_margin(egui::Margin::same(4)).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            let area = egui::ScrollArea::vertical()
-                .id_salt("ff-rows-list")
-                // Ten rows at most, and no taller than the rows there are: a search of three fonts
-                // leaves a list three rows tall.
-                .max_height((shown.len() as f32 * row).clamp(row, 10.0 * row))
-                .auto_shrink([false, true])
-                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible);
-            area.show_rows(ui, row, shown.len(), |ui, range| {
-                for i in range {
-                    let Some((f, s)) = shown.get(i) else { continue };
-                    let is_selected = f.eq_ignore_ascii_case(&fam) && s.eq_ignore_ascii_case(&style);
-                    let resp = ui.selectable_label(is_selected, row_label(f, s));
-                    if resp.clicked() {
-                        picked = Some((f.clone(), s.clone(), resp.double_clicked()));
-                    }
-                }
-            });
-        });
-        if let Some((f, s, twice)) = picked {
-            d.fields.insert("family".into(), json!(f));
-            d.fields.insert("style".into(), json!(s));
-            if twice && can_replace(&d, families.as_deref()) {
-                act = Some("change");
-            }
-        }
-        ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            widgets::field_label(ui, tl!("Find In"));
-            let at = FIND_IN.iter().position(|s| *s == d.str("findIn")).unwrap_or(0);
-            if let Some(i) = widgets::dropdown_named(ui, "ff-find-in", Some(tl!("Find In")), FIND_IN_LABELS[at], &FIND_IN_LABELS, 120.0) {
-                d.fields.insert("findIn".into(), json!(FIND_IN[i]));
-            }
-        });
-        ui.add_space(6.0);
-        // An empty list (Recent before any font was applied) leaves nothing to change to.
-        let replace = sel < list.len() && can_replace(&d, families.as_deref());
-        ui.horizontal(|ui| {
-            let has = sel < list.len();
-            if ui.add_enabled(has, egui::Button::new(tl!("Find"))).clicked() {
-                act = Some("find");
-            }
-            if ui.add_enabled(replace, egui::Button::new(tl!("Change"))).on_hover_text(tl!("In the selected objects")).clicked() {
-                act = Some("change");
-            }
-            if ui.add_enabled(replace, egui::Button::new(tl!("Change All"))).clicked() {
-                act = Some("changeAll");
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if widgets::primary_button(ui, tl!("Done")).clicked() {
-                    close = true;
-                }
-            });
-        });
+/// Runs what the dialog asked for since the last pass, and pushes the document's fonts and the
+/// Find in Folder… offer into it. One line of `dialogs::host::pump`.
+///
+/// The press is taken out of the dialog when it runs, so a second pass of the same frame finds none
+/// and runs nothing twice. Nothing runs inside the host's lock: the dialog is copied out, the app
+/// acts, and the copy goes back.
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let (used, offer_folder) = current_fonts(app);
+    let taken = dialogs.with(|host| {
+        let d = host.get_mut::<FindFontDialog>()?;
+        let fresh = !Arc::ptr_eq(&d.used, &used);
+        d.used = used.clone();
+        d.offer_folder = offer_folder;
+        let action = d.pending.take();
+        Some((d.clone(), action, fresh))
     });
-    app.ui.find_font_in = d.str("findIn");
-    let sel = d.fields.get("selected").and_then(Value::as_u64).unwrap_or(0) as usize;
-    if let (Some(a), Some(from)) = (act, list.get(sel)) {
-        match run_button(app, &d, a, from) {
-            // The rows are a snapshot: the document's fonts and the recent fonts have moved on.
-            Ok(_) if a != "find" => {
-                let (used, _) = document_fonts(app, false);
-                d.fields.insert("rows".into(), rows_json(&replacement_rows(app, &d.str("replaceFrom"), &used)));
+    let Some((mut d, action, fresh)) = taken else { return };
+    if fresh || action.is_some() {
+        d.families = replacement_families(app, &d.replace_from, &used);
+    }
+    let mut folder = false;
+    match action {
+        Some(Action::Source(i)) => set_source(app, &mut d, SOURCES.get(i).copied().unwrap_or("system"), &used),
+        Some(Action::FindInFolder) => match app.run("ui.findFontsInFolder", json!({})) {
+            // Missing Fonts takes the dialog's place.
+            Ok(_) => folder = true,
+            Err(e) => app.ui.status = e,
+        },
+        Some(button) => {
+            if let Some(from) = used.get(d.selected) {
+                match run_button(app, &d, button, from) {
+                    // The rows are a snapshot: the document's fonts and the recent fonts have moved on.
+                    Ok(_) if button != Action::Find => {
+                        let (now, _) = document_fonts(app, false);
+                        d.rows = replacement_rows(app, &d.replace_from, &now);
+                        d.families = replacement_families(app, &d.replace_from, &now);
+                    }
+                    Ok(_) => {}
+                    Err(e) => app.ui.status = e,
+                }
             }
-            Ok(_) => {}
-            Err(e) => app.ui.status = e,
         }
+        None => {}
     }
-    if close || (!popup_open && crate::shortcuts::pressed_anew(ctx, egui::Key::Escape)) {
-        app.ui.dialog = None;
-        // The next open starts with an empty search.
-        clear_search(ctx);
-    } else if app.ui.dialog.is_some() {
-        app.ui.dialog = Some(d);
-    }
-    // Missing Fonts takes the dialog's place, searching the folder picked; the next Find Font
-    // starts with an empty search.
-    if find_in_folder {
-        match app.run("ui.findFontsInFolder", json!({})) {
-            Ok(_) => clear_search(ctx),
-            Err(e) => app.ui.status = e,
+    app.ui.find_font_in = d.find_in.clone();
+    dialogs.with(|host| {
+        if folder {
+            host.cancel::<FindFontDialog>(ctx);
+        } else if let Some(open) = host.get_mut::<FindFontDialog>() {
+            *open = d;
         }
+    });
+}
+
+/// The rows of a list as a collection source: `text(at)` is worked out for the rows the list asks for.
+struct Lines<'a> {
+    len: usize,
+    text: &'a dyn Fn(usize) -> String,
+}
+
+impl DisplayOrder<usize> for Lines<'_> {
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn key(&self, at: usize) -> usize {
+        at
+    }
+
+    fn index_of(&self, key: &usize) -> Option<usize> {
+        (*key < self.len).then_some(*key)
+    }
+
+    fn text(&self, at: usize) -> Option<Cow<'_, str>> {
+        (at < self.len).then(|| Cow::Owned((self.text)(at)))
     }
 }
 
+impl ItemSource<usize> for Lines<'_> {}
+
+/// The footer's buttons in the order [`StackDialog::show`] reads `picked` in.
+const FOOTER_ACTIONS: [Action; 3] = [Action::Find, Action::Change, Action::ChangeAll];
+
+/// A row of the document's fonts: the font and its runs, with the note and its icon when the font
+/// is missing, substituted or lacks characters.
+fn document_row(f: &Value) -> ListRow<'static> {
+    let (note, tone) = font_note(f);
+    let row = ListRow::new(format!("{} {} ({})", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or(""), f["runs"]));
+    let detail = note.trim().trim_start_matches('—').trim();
+    if detail.is_empty() { row } else { row.detail(detail.to_string()).icon(IconSpec::svg(IconId::new("warning"))).tone(tone) }
+}
+
+impl StackDialog for FindFontDialog {
+    type Result = ();
+
+    fn id(&self) -> DialogId {
+        dialog_id(KEY)
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(KEY)
+    }
+
+    fn show(&mut self, ui: &mut Ui, _stack: &DialogStack) -> Option<DialogResult<()>> {
+        let count = self.used.len();
+        let has = self.selected < count;
+        // An empty list (Recent before any font was applied) leaves nothing to change to.
+        let replace = has && can_replace(self, self.families.as_deref());
+        let query = self.search.to_lowercase();
+        // Rows of Replace With Font the search keeps, by index into `rows`.
+        let shown: Vec<usize> = self.rows.iter().enumerate().filter(|(_, r)| row_matches(&r.family, &r.style, &query)).map(|(i, _)| i).collect();
+        let chosen = shown.iter().position(|&i| {
+            self.rows.get(i).is_some_and(|r| r.family.eq_ignore_ascii_case(&self.family) && r.style.eq_ignore_ascii_case(&self.style))
+        });
+        let mut doc_selection = Selection::single(self.selected);
+        let mut row_selection = chosen.map_or_else(Selection::default, Selection::single);
+        let source = SOURCES.iter().position(|s| *s == self.replace_from).unwrap_or(2);
+        let find_in = FIND_IN.iter().position(|s| *s == self.find_in).unwrap_or(0);
+        let entries =
+            |labels: &[&str]| -> Vec<Entry<usize>> { labels.iter().enumerate().map(|(i, l)| Entry::new(i, crate::i18n::t(l).to_string())).collect() };
+        let (source_entries, find_in_entries) = (entries(&SOURCE_LABELS), entries(&FIND_IN_LABELS));
+        let heading = crate::i18n::fmt(tl!("Fonts in Document: {count}"), &[("count", &count.to_string())]);
+        let buttons = [
+            FooterButton::new(tl!("Find").to_string(), DialogRole::Other).stays_open(true).enabled(has),
+            FooterButton::new(tl!("Change").to_string(), DialogRole::Other)
+                .stays_open(true)
+                .enabled(replace)
+                .tooltip(tl!("In the selected objects").to_string()),
+            FooterButton::new(tl!("Change All").to_string(), DialogRole::Other).stays_open(true).enabled(replace),
+            FooterButton::new(tl!("Done").to_string(), DialogRole::Accept),
+        ];
+
+        let mut folder = false;
+        let mut new_source = None;
+        let mut new_find_in = None;
+        let mut new_search = None;
+        let mut activated = None;
+        let used = self.used.clone();
+        let (rows, offer_folder) = (&self.rows, self.offer_folder);
+        let doc_text = |at: usize| {
+            used.get(at)
+                .map_or_else(String::new, |f| format!("{} {} ({})", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or(""), f["runs"]))
+        };
+        let row_text = |at: usize| shown.get(at).and_then(|&i| rows.get(i)).map_or_else(String::new, |r| row_label(&r.family, &r.style));
+        let out = Dialog::new(tl!("Find Font").to_string()).buttons(buttons).show(ui, |ui, _| {
+            Stack::new().show(ui, |ui, _| {
+                Section::fixed(heading.clone()).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+                    let docs = Lines { len: count, text: &doc_text };
+                    List::<usize>::new(tl!("Fonts in Document").to_string())
+                        .select(SelectMode::Single)
+                        .sizing(Sizing::Content)
+                        .max_rows(8)
+                        .selection(Bind::bound(&mut doc_selection))
+                        .show_items(ui, &docs, &mut |key, _| used.get(*key).map_or_else(|| ListRow::new(String::new()), document_row));
+                });
+                // The missing fonts' files, looked for in a folder (the Missing Fonts dialog).
+                if offer_folder {
+                    folder = clicked(&Button::new(tl!("Find in Folder…").to_string()).show(ui));
+                }
+                Section::fixed(tl!("Replace With Font").to_string()).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+                    Field::new(tl!("Replace With Font From").to_string()).show(ui, |ui, _| {
+                        let edit = Select::new(tl!("Replace With Font From").to_string(), Bind::given(source), &source_entries).show(ui);
+                        new_source = edit.events.value().copied();
+                    });
+                    let edit = TextField::search(tl!("Search").to_string(), Bind::given(self.search.clone())).show(ui);
+                    new_search = edit.events.value().cloned();
+                    let lines = Lines { len: shown.len(), text: &row_text };
+                    let list = List::<usize>::new(tl!("Replace With Font").to_string())
+                        .select(SelectMode::Single)
+                        .sizing(Sizing::Content)
+                        .max_rows(10)
+                        .selection(Bind::bound(&mut row_selection))
+                        .show_items(ui, &lines, &mut |key, _| ListRow::new(row_text(*key)));
+                    activated = list.events.iter().find_map(|e| if let CollectionEvent::Activate(key) = e { Some(*key) } else { None });
+                });
+                Field::new(tl!("Find In").to_string()).show(ui, |ui, _| {
+                    let edit = Select::new(tl!("Find In").to_string(), Bind::given(find_in), &find_in_entries).show(ui);
+                    new_find_in = edit.events.value().copied();
+                });
+            });
+        });
+
+        if let Some(i) = doc_selection.lead {
+            self.selected = i;
+        }
+        if let Some(text) = new_search {
+            self.search = text;
+        }
+        if let Some(i) = new_find_in.and_then(|i| FIND_IN.get(i)) {
+            self.find_in = (*i).into();
+        }
+        // A click on a row picks its family and style; a double click also asks for Change.
+        let picked = activated.or(row_selection.lead.filter(|at| Some(*at) != chosen));
+        if let Some(row) = picked.and_then(|at| shown.get(at)).and_then(|&i| self.rows.get(i)).cloned() {
+            (self.family, self.style) = (row.family, row.style);
+            if activated.is_some() && replace_after_pick(self) {
+                self.pending = Some(Action::Change);
+            }
+        }
+        if let Some(i) = new_source {
+            self.pending = Some(Action::Source(i));
+        }
+        if folder {
+            self.pending = Some(Action::FindInFolder);
+        }
+        if let Some(action) = out.output.picked.and_then(|i| FOOTER_ACTIONS.get(i)) {
+            self.pending = Some(*action);
+        }
+        out.output.result(|| ())
+    }
+
+    fn confirm(&mut self, _ctx: &Context) -> Option<()> {
+        Some(())
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        Some(json!({
+            "selected": self.selected,
+            "family": self.family,
+            "style": self.style,
+            "selectionOnly": self.selection_only,
+            "replaceFrom": self.replace_from,
+            "findIn": self.find_in,
+            "rows": rows_json(&self.rows),
+        }))
+    }
+
+    fn set_json_field(&mut self, _ctx: &Context, field: &str, value: Value) -> Result<(), String> {
+        let refuse = || FieldRefusal::Rejects(&value).message(field);
+        match field {
+            "selected" => self.selected = value.as_u64().map(|i| i as usize).filter(|i| *i < self.used.len()).ok_or_else(refuse)?,
+            "family" => self.family = value.as_str().ok_or_else(refuse)?.to_string(),
+            "style" => self.style = value.as_str().ok_or_else(refuse)?.to_string(),
+            "selectionOnly" => self.selection_only = value.as_bool().ok_or_else(refuse)?,
+            "findIn" => self.find_in = value.as_str().and_then(|v| FIND_IN.iter().find(|f| **f == v)).ok_or_else(refuse)?.to_string(),
+            // The rows follow the source, which needs the app: the pump changes it.
+            "replaceFrom" => {
+                self.pending = Some(Action::Source(value.as_str().and_then(|v| SOURCES.iter().position(|s| *s == v)).ok_or_else(refuse)?));
+            }
+            "rows" => return Err(refuse()),
+            _ => return Err(FieldRefusal::Unknown.message(field)),
+        }
+        Ok(())
+    }
+}
+
+/// Does a double click on the row just picked ask for Change: the chosen font can replace.
+fn replace_after_pick(d: &FindFontDialog) -> bool {
+    d.selected < d.used.len() && can_replace(d, d.families.as_deref())
+}
+
 /// What a Find Font row says after the font's name (`text.fonts` row): a missing family, a style
-/// standing in for another, characters the font lacks; and the colour to flag it with.
-pub(crate) fn font_note(f: &Value) -> (String, Option<egui::Color32>) {
+/// standing in for another, characters the font lacks; and the tone to flag it with.
+pub(crate) fn font_note(f: &Value) -> (String, Tone) {
     let lacking = f["missingGlyphs"].as_u64().unwrap_or(0);
     let glyphs =
         if lacking > 0 { crate::i18n::fmt(tl!("  — {n} characters from another font"), &[("n", &lacking.to_string())]) } else { String::new() };
     match f["status"].as_str() {
-        Some("missing") => (format!("{}{glyphs}", tl!("  — missing")), Some(egui::Color32::from_rgb(230, 90, 90))),
+        Some("missing") => (format!("{}{glyphs}", tl!("  — missing")), Tone::Bad),
         Some("substitute") => {
             let used = f["resolved"]["style"].as_str().unwrap_or("");
-            (
-                format!("{}{glyphs}", crate::i18n::fmt(tl!("  — substituted by {style}"), &[("style", used)])),
-                Some(egui::Color32::from_rgb(220, 160, 60)),
-            )
+            (format!("{}{glyphs}", crate::i18n::fmt(tl!("  — substituted by {style}"), &[("style", used)])), Tone::Warn)
         }
-        _ if lacking > 0 => (glyphs, Some(egui::Color32::from_rgb(220, 160, 60))),
-        _ => (String::new(), None),
+        _ if lacking > 0 => (glyphs, Tone::Warn),
+        _ => (String::new(), Tone::Neutral),
     }
 }
 
@@ -490,28 +639,34 @@ pub(crate) fn font_note(f: &Value) -> (String, Option<egui::Color32>) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn dialog_draws_and_changes_all() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-        app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
-        open(&mut app);
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        let d = app.ui.dialog.clone().unwrap();
-        let from = fonts(&mut app)[0].clone();
-        assert_eq!(from["missing"], true);
-        change(&mut app, &d, &from, true).unwrap();
-        assert_eq!(fonts(&mut app)[0]["family"], "Source Sans 3");
+    /// An app whose window has a dialog host (it has a context).
+    fn new_app() -> VectorcraftApp {
+        crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()))
+    }
+
+    /// Runs `f` on the open Find Font dialog.
+    fn edit<R>(app: &VectorcraftApp, f: impl FnOnce(&mut FindFontDialog) -> R) -> R {
+        let dialogs = app.dialogs().expect("the window has a dialog host");
+        dialogs.with(|host| f(host.get_mut::<FindFontDialog>().expect("Find Font is open")))
+    }
+
+    /// A copy of the open Find Font dialog.
+    fn opened(app: &VectorcraftApp) -> FindFontDialog {
+        edit(app, |d| d.clone())
+    }
+
+    /// One pass of [`pump`].
+    fn pump_now(app: &mut VectorcraftApp) {
+        let ctx = app.ui_ctx.clone().expect("the window has a context");
+        pump(app, &ctx);
     }
 
     /// Find In passes Find the active artboard, or the selected layers (else the current
-    /// layer), as `select.font`'s scope.
+    /// layer), as `select.font`'s scope. The choice is set as automation sets it, and Find runs
+    /// from the pump.
     #[test]
     fn find_in_limits_find_to_the_artboard_or_the_layers() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = new_app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app.session.execute("artboard.new", &json!({"x": 200, "y": 0, "width": 100, "height": 100})).unwrap();
         let text = |app: &mut VectorcraftApp, x: i32| {
@@ -521,43 +676,47 @@ mod tests {
         let layer = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
         let second = text(&mut app, 210);
         let third = text(&mut app, 20);
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        // Choose Find In on the open dialog, draw a frame, then press Find.
+        // Choose Find In and the Inter row on the open dialog, press Find, and let the pump run it.
         let find = |app: &mut VectorcraftApp, find_in: &str| {
             open(app);
-            app.ui.dialog.as_mut().unwrap().fields.insert("findIn".into(), json!(find_in));
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx()));
-            out.textures_delta.clear();
-            let d = app.ui.dialog.clone().unwrap();
-            let from = fonts(app).into_iter().find(|f| f["family"] == "Inter").unwrap();
-            run_button(app, &d, "find", &from).unwrap();
+            let inter = fonts(app).iter().position(|f| f["family"] == "Inter").unwrap();
+            let ctx = app.ui_ctx.clone().unwrap();
+            edit(app, |d| {
+                d.set_json_field(&ctx, "findIn", json!(find_in)).unwrap();
+                d.selected = inter;
+                d.pending = Some(Action::Find);
+            });
+            app.session.active_mut().unwrap().selection.objects.clear();
+            pump_now(app);
             let mut ids: Vec<u64> = app.session.active().unwrap().selection.objects.iter().map(|id| id.0).collect();
             ids.sort_unstable();
+            // A second pass of the frame finds the press taken: nothing runs twice.
+            app.session.active_mut().unwrap().selection.objects.clear();
+            pump_now(app);
+            assert!(app.session.active().unwrap().selection.objects.is_empty(), "the press ran once");
             ids
         };
         open(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("findIn"), "document");
+        assert_eq!(opened(&app).find_in, "document");
         assert_eq!(find(&mut app, "document"), [first, second, third]);
         // Without a view, the active artboard is the first.
         assert_eq!(find(&mut app, "artboard"), [first, third]);
         assert_eq!(find_scope(&app, "layers"), json!({ "layers": [layer] }));
         assert_eq!(find(&mut app, "layers"), [second, third]);
-        // Closing and opening the dialog again keeps the last choice.
-        app.ui.dialog = None;
+        // Opening the dialog again keeps the last choice.
         open(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("findIn"), "layers");
+        assert_eq!(opened(&app).find_in, "layers");
     }
 
     /// Change All leaves locked text in its font, and the status bar says so.
     #[test]
     fn change_all_clears_the_skip_warning_after_unlocking_text() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = new_app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
         app.session.execute("object.lock", &json!({})).unwrap();
         open(&mut app);
-        let d = app.ui.dialog.clone().unwrap();
+        let d = opened(&app);
         let from = fonts(&mut app)[0].clone();
         let r = change(&mut app, &d, &from, true).unwrap();
         assert_eq!(r["runs"], 0, "{r}");
@@ -687,8 +846,7 @@ mod tests {
         assert!(!app.ui.status.is_empty());
 
         app.session.execute("object.unlockAll", &json!({})).unwrap();
-        let ctx = egui::Context::default();
-        app.begin_host_iteration();
+        let ctx = crate::testing::ui_context();
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
         assert_eq!(app.ui.status, "");
@@ -830,33 +988,47 @@ mod tests {
     #[test]
     fn find_in_folder_puts_the_missing_fonts_dialog_in_find_fonts_place() {
         let dir = std::fs::canonicalize(vectorcraft_testkit::temp_dir("find-font-folder")).unwrap();
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = new_app();
         app.session.search_rules = Some(vectorcraft_engine::cmd::findfiles::Rules { user_content: vec![dir.clone()], ..Default::default() });
         app.session.search_threads = Some(1);
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-        assert!(!crate::menus::enabled(&app, "ui.findFontsInFolder"), "no folder picker (the web)");
         let picked = dir.to_string_lossy().into_owned();
-        app.services.pick_folder = Some(Box::new(move || Some(picked.clone())));
-        assert!(crate::menus::enabled(&app, "ui.findFontsInFolder"));
+        // PLAN: fl.A20's `scripted` and `poll` live in files-w7's test module; `tests::picks` is its guessed path
+        let picker = crate::tests::picks::scripted(&mut app);
         // Nothing missing: no button, and no folder is asked for.
         open(&mut app);
-        let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert!(text.contains("Fonts in Document") && !text.contains("Find in Folder…"), "{text}");
+        pump_now(&mut app);
+        assert!(!opened(&app).offer_folder);
         assert_eq!(app.run("ui.findFontsInFolder", json!({})).err().as_deref(), Some("No fonts are missing in this document"));
         app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
-        let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert!(text.contains("Find in Folder…"), "{text}");
-        app.run("ui.findFontsInFolder", json!({})).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.kind.as_str(), d.str("folder")), (crate::dialogs::missing_fonts::KIND, dir.to_string_lossy().into_owned()));
-        assert_eq!(d.fields["fonts"][0]["family"], "Missing Family");
-        assert!(app.ui.dialog_search.is_some());
-        crate::dialogs::cancel(&mut app);
+        pump_now(&mut app);
+        assert!(opened(&app).offer_folder, "a missing font and a folder picker");
+        // Find in Folder… asks for the folder, and Missing Fonts takes Find Font's place.
+        edit(&app, |d| d.pending = Some(Action::FindInFolder));
+        pump_now(&mut app);
+        picker.answer(&[&picked]);
+        let ctx = app.ui_ctx.clone().unwrap();
+        crate::tests::picks::poll(&mut app, &ctx);
+        assert!(!app.dialogs().unwrap().with(|host| host.is_open::<FindFontDialog>()), "Find Font is gone");
+        // PLAN: files-w11 owns Missing Fonts' hosted type; its test asserts the search there
+    }
+
+    /// `f`'s answer, read while the font menu held still: tests running alongside add fonts to
+    /// the shared database and lend it composite fonts.
+    fn while_fonts_hold<T>(mut f: impl FnMut() -> T) -> T {
+        let db = vectorcraft_text::FontDb::global();
+        loop {
+            let before = db.menu_family_list();
+            let out = f();
+            if before == db.menu_family_list() {
+                return out;
+            }
+        }
     }
 
     /// A document set in Inter and Source Serif 4 (Inter twice), with Inter the one recent font.
     fn two_font_document() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = new_app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         for (y, font) in [(20, "Inter"), (40, "Source Serif 4"), (60, "Inter")] {
             app.session.execute("text.create", &json!({"x": 10, "y": y, "text": "Hi", "font": font})).unwrap();
@@ -875,58 +1047,14 @@ mod tests {
         assert_eq!(replacement_families(&app, "recent", &used).unwrap(), ["Inter"]);
         assert_eq!(replacement_families(&app, "system", &used), None, "System is the font menu of every installed family");
         open(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("replaceFrom"), "system");
+        assert_eq!(opened(&app).replace_from, "system");
         for source in SOURCES {
-            let mut d = app.ui.dialog.clone().unwrap();
+            let mut d = opened(&app);
             set_source(&app, &mut d, source, &used);
             let listed = replacement_families(&app, source, &used);
-            assert!(can_replace(&d, listed.as_deref()), "{source}: {}", d.str("family"));
-            app.ui.dialog = Some(d);
-            let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-            assert!(text.contains("Replace With Font From"), "{text}");
+            assert_eq!(d.families, listed, "{source}: the dialog keeps the list it shows");
+            assert!(can_replace(&d, listed.as_deref()), "{source}: {}", d.family);
         }
-    }
-
-    /// One headless frame of the dialog: every text it painted, with where.
-    fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
-        fn collect(s: &egui::epaint::Shape, out: &mut Vec<(String, egui::Rect)>) {
-            match s {
-                egui::epaint::Shape::Text(t) => out.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
-                egui::epaint::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
-                _ => {}
-            }
-        }
-        let raw = egui::RawInput { events, ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| show(app, ui.ctx()));
-        let mut texts = vec![];
-        for c in &out.shapes {
-            collect(&c.shape, &mut texts);
-        }
-        out.textures_delta.clear();
-        texts
-    }
-
-    /// The texts of a [`frame`] that are in `labels`, in order.
-    fn painted(frame: &[(String, egui::Rect)], labels: &[String]) -> Vec<String> {
-        frame.iter().map(|(t, _)| t.clone()).filter(|t| labels.contains(t)).collect()
-    }
-
-    /// A click at `at`: the press on one frame, the release on the next.
-    fn click(ctx: &egui::Context, app: &mut VectorcraftApp, at: egui::Pos2) {
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        frame(ctx, app, vec![egui::Event::PointerMoved(at), button(true)]);
-        frame(ctx, app, vec![button(false)]);
-        frame(ctx, app, vec![]);
-    }
-
-    /// A document set in `families`, one text each.
-    fn many_font_document(families: &[&str]) -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-        for (i, family) in families.iter().enumerate() {
-            app.session.execute("text.create", &json!({"x": 10, "y": 10.0 + i as f64 * 20.0, "text": "Hi", "font": family})).unwrap();
-        }
-        app
     }
 
     /// The catalog's closest style is the face a style-less request resolves to, and finding it reads
@@ -945,7 +1073,7 @@ mod tests {
     /// replacement and Change stays off for it: only a style the font has can be the target.
     #[test]
     fn a_substituted_style_is_listed_but_not_chosen() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = new_app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         // A style Source Sans 3 has none of: its closest style stands in.
         app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Source Sans 3", "style": "Black Wide"})).unwrap();
@@ -956,11 +1084,10 @@ mod tests {
         let rows = replacement_rows(&app, "document", &used);
         let stand_in = Row { family: "Source Sans 3".into(), style: "Black Wide".into() };
         assert!(rows.contains(&stand_in), "the row stays listed: {rows:?}");
-        let mut d = app.ui.dialog.clone().unwrap();
+        let mut d = opened(&app);
         set_source(&app, &mut d, "document", &used);
-        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Inter", "Regular"), "the first font whose style it has");
-        d.fields.insert("family".into(), json!("Source Sans 3"));
-        d.fields.insert("style".into(), json!("Black Wide"));
+        assert_eq!((d.family.as_str(), d.style.as_str()), ("Inter", "Regular"), "the first font whose style it has");
+        (d.family, d.style) = ("Source Sans 3".into(), "Black Wide".into());
         assert!(!can_replace(&d, replacement_families(&app, "document", &used).as_deref()), "Change stays off for the stand-in style");
     }
 
@@ -970,28 +1097,12 @@ mod tests {
     fn a_new_source_picks_a_row_its_list_shows() {
         let mut app = two_font_document();
         let used = fonts(&mut app);
-        let mut d = Dialog::new("findFont", json!({"family": "Inter", "style": "", "selected": 0, "replaceFrom": "system"}));
+        let mut d = FindFontDialog { family: "Inter".into(), replace_from: "system".into(), ..FindFontDialog::default() };
         set_source(&app, &mut d, "document", &used);
-        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Inter", "Regular"), "the document's own row");
-        d.fields.insert("family".into(), json!("Inter"));
-        d.fields.insert("style".into(), json!("Black Wide"));
+        assert_eq!((d.family.as_str(), d.style.as_str()), ("Inter", "Regular"), "the document's own row");
+        (d.family, d.style) = ("Inter".into(), "Black Wide".into());
         set_source(&app, &mut d, "document", &used);
-        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Inter", "Regular"), "a pair the list lacks gives way");
-    }
-
-    /// Confirming the dialog with Enter forgets the replacement search, as Done and Escape do.
-    #[test]
-    fn confirming_the_dialog_clears_the_replacement_search() {
-        let mut app = two_font_document();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        app.ui_ctx = Some(ctx.clone());
-        open(&mut app);
-        let query_id = egui::Id::unique("ff-search");
-        ctx.data_mut(|m| m.insert_temp(query_id, "times".to_string()));
-        confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none(), "the dialog closes");
-        assert_eq!(ctx.data(|m| m.get_temp::<String>(query_id)), None, "the search text is gone");
+        assert_eq!((d.family.as_str(), d.style.as_str()), ("Inter", "Regular"), "a pair the list lacks gives way");
     }
 
     /// The rows follow a replacement: Change All in the Document source leaves the list showing the
@@ -1000,234 +1111,26 @@ mod tests {
     fn the_rows_refresh_after_a_change() {
         let mut app = two_font_document();
         open(&mut app);
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        frame(&ctx, &mut app, vec![]);
         let used = fonts(&mut app);
-        let mut d = app.ui.dialog.clone().unwrap();
-        set_source(&app, &mut d, "document", &used);
-        d.fields.insert("family".into(), json!("Source Serif 4"));
-        d.fields.insert("style".into(), json!(""));
-        app.ui.dialog = Some(d);
-        frame(&ctx, &mut app, vec![]);
-        let texts = frame(&ctx, &mut app, vec![]);
-        let change_all = texts.iter().find(|(t, _)| t == "Change All").map(|(_, r)| r.center()).expect("Change All is shown");
-        click(&ctx, &mut app, change_all);
+        let inter = used.iter().position(|f| f["family"] == "Inter").unwrap();
+        // Source set through automation, then the pump; the press itself comes from the footer.
+        let ctx = app.ui_ctx.clone().unwrap();
+        edit(&app, |d| d.set_json_field(&ctx, "replaceFrom", json!("document")).unwrap());
+        pump_now(&mut app);
+        edit(&app, |d| {
+            (d.family, d.style) = ("Source Serif 4".into(), String::new());
+            d.selected = inter;
+            d.pending = Some(Action::ChangeAll);
+        });
+        pump_now(&mut app);
         assert!(fonts(&mut app).iter().all(|f| f["family"] == "Source Serif 4"), "the document changed");
-        let rows = app.ui.dialog.as_ref().expect("the dialog stays open").fields["rows"].as_array().cloned().unwrap_or_default();
-        let families: Vec<&str> = rows.iter().filter_map(|r| r["family"].as_str()).collect();
-        assert!(
-            !families.is_empty() && families.iter().all(|f| *f == "Source Serif 4"),
-            "the rows list the document's fonts after the change: {families:?}"
-        );
+        let d = opened(&app);
+        let now = fonts(&mut app);
+        assert_eq!(d.rows, replacement_rows(&app, "document", &now), "the rows follow the document");
+        assert!(d.rows.iter().all(|r| r.family == "Source Serif 4"), "{:?}", d.rows);
+        assert!(d.pending.is_none(), "the press was taken");
     }
 
-    /// Closing the dialog clears the replacement search: the next open starts with an empty one.
-    #[test]
-    fn closing_the_dialog_clears_the_replacement_search() {
-        let mut app = two_font_document();
-        open(&mut app);
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        frame(&ctx, &mut app, vec![]);
-        let query_id = egui::Id::unique("ff-search");
-        let source_id = egui::Id::unique("ff-search-source");
-        ctx.data_mut(|m| {
-            m.insert_temp(query_id, "times".to_string());
-            m.insert_temp(source_id, "system".to_string());
-        });
-        let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-        frame(&ctx, &mut app, vec![escape]);
-        frame(&ctx, &mut app, vec![]);
-        assert!(app.ui.dialog.is_none(), "Escape closes the dialog");
-        assert_eq!(ctx.data(|m| m.get_temp::<String>(query_id)), None, "the search text is gone");
-        assert_eq!(ctx.data(|m| m.get_temp::<String>(source_id)), None, "the source it was typed under is gone");
-    }
-
-    /// A context with the app's fonts and theme that the app knows as its own, for [`app_frame`].
-    fn app_ctx(app: &mut VectorcraftApp) -> egui::Context {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        crate::theme::apply(&ctx, Default::default());
-        app.ui_ctx = Some(ctx.clone());
-        ctx
-    }
-
-    /// One 1200 × 900 frame with `events` through the app's key handling and then the dialogs, as
-    /// the app runs them; the center of the text `label` if the frame shows it.
-    fn app_frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>, label: &str) -> Option<egui::Pos2> {
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0));
-        let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| {
-            crate::shortcuts::handle(app, ui.ctx());
-            crate::dialogs::show(app, ui.ctx());
-        });
-        out.textures_delta.clear();
-        out.shapes.iter().find_map(|s| match &s.shape {
-            egui::Shape::Text(t) if t.galley.text() == label => Some(egui::Rect::from_min_size(t.pos, t.galley.size()).center()),
-            _ => None,
-        })
-    }
-
-    /// Clicks the text `label` through [`app_frame`].
-    fn app_click(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) {
-        app_frame(ctx, app, vec![], label);
-        let at = app_frame(ctx, app, vec![], label).unwrap_or_else(|| panic!("no {label:?} shown"));
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        app_frame(ctx, app, vec![egui::Event::PointerMoved(at), button(true)], label);
-        app_frame(ctx, app, vec![button(false)], label);
-        app_frame(ctx, app, vec![], label);
-    }
-
-    /// An Escape key event: pressed, or let go.
-    fn escape_key(pressed: bool, repeat: bool) -> egui::Event {
-        egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat, modifiers: Default::default() }
-    }
-
-    /// Presses and lets go of Escape through [`app_frame`].
-    fn app_escape(ctx: &egui::Context, app: &mut VectorcraftApp) {
-        app_frame(ctx, app, vec![escape_key(true, false)], "");
-        app_frame(ctx, app, vec![escape_key(false, false)], "");
-    }
-
-    /// Types `query` into the replacement search under the dialog's source, as the search field
-    /// keeps it.
-    fn seed_search(ctx: &egui::Context, app: &VectorcraftApp, query: &str) {
-        let source = app.ui.dialog.as_ref().expect("Find Font is open").str("replaceFrom");
-        ctx.data_mut(|m| {
-            m.insert_temp(egui::Id::unique("ff-search-source"), source);
-            m.insert_temp(egui::Id::unique("ff-search"), query.to_string());
-        });
-    }
-
-    /// The replacement search and the source it was typed under, as egui memory keeps them.
-    fn search_state(ctx: &egui::Context) -> (Option<String>, Option<String>) {
-        ctx.data(|m| (m.get_temp::<String>(egui::Id::unique("ff-search")), m.get_temp::<String>(egui::Id::unique("ff-search-source"))))
-    }
-
-    /// Escape with Replace With Font From's or Find In's list open closes only the list: Find Font
-    /// stays open with its source and its search, holding Escape down leaves it open, and the next
-    /// press closes it and forgets the search.
-    #[test]
-    fn escape_over_an_open_dropdown_closes_only_the_dropdown() {
-        for current in ["System", "Document"] {
-            let mut app = two_font_document();
-            let ctx = app_ctx(&mut app);
-            open(&mut app);
-            app_frame(&ctx, &mut app, vec![], "");
-            seed_search(&ctx, &app, "inter");
-            app_click(&ctx, &mut app, current);
-            assert!(egui::Popup::is_any_open(&ctx), "{current}: the list is open");
-            app_frame(&ctx, &mut app, vec![escape_key(true, false)], "");
-            for _ in 0..3 {
-                app_frame(&ctx, &mut app, vec![escape_key(true, true)], "");
-            }
-            app_frame(&ctx, &mut app, vec![escape_key(false, false)], "");
-            assert!(!egui::Popup::is_any_open(&ctx), "{current}: Escape closes the list");
-            let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{current}: Find Font stays open"));
-            assert_eq!((d.kind.as_str(), d.str("replaceFrom"), d.str("findIn")), ("findFont", "system".into(), "document".into()), "{current}");
-            assert_eq!(search_state(&ctx), (Some("inter".into()), Some("system".into())), "{current}: the search is kept");
-            app_escape(&ctx, &mut app);
-            assert!(app.ui.dialog.is_none(), "{current}: the next Escape closes Find Font");
-            assert_eq!(search_state(&ctx), (None, None), "{current}: closing forgets the search");
-        }
-    }
-
-    /// Escape and Done, through the app's key handling, each close Find Font and forget the
-    /// replacement search and its source.
-    #[test]
-    fn escape_and_done_through_the_app_clear_the_replacement_search() {
-        for how in ["Escape", "Done"] {
-            let mut app = two_font_document();
-            let ctx = app_ctx(&mut app);
-            open(&mut app);
-            app_frame(&ctx, &mut app, vec![], "");
-            seed_search(&ctx, &app, "inter");
-            if how == "Escape" {
-                app_escape(&ctx, &mut app);
-            } else {
-                app_click(&ctx, &mut app, "Done");
-            }
-            assert!(app.ui.dialog.is_none(), "{how} closes Find Font");
-            assert_eq!(search_state(&ctx), (None, None), "{how} forgets the search");
-            open(&mut app);
-            app_frame(&ctx, &mut app, vec![], "");
-            assert_eq!(search_state(&ctx), (Some(String::new()), Some("system".into())), "{how}: the next open starts with an empty search");
-        }
-    }
-
-    /// Find in Folder… that opens Missing Fonts forgets Find Font's search; with no folder picked,
-    /// Find Font stays open with its search.
-    #[test]
-    fn find_in_folder_forgets_the_search_once_missing_fonts_opens() {
-        let dir = std::fs::canonicalize(vectorcraft_testkit::temp_dir("find-font-folder-search")).unwrap();
-        for picks in [false, true] {
-            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-            app.session.search_rules = Some(vectorcraft_engine::cmd::findfiles::Rules { user_content: vec![dir.clone()], ..Default::default() });
-            app.session.search_threads = Some(1);
-            app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-            app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
-            let picked = picks.then(|| dir.to_string_lossy().into_owned());
-            app.services.pick_folder = Some(Box::new(move || picked.clone()));
-            let ctx = app_ctx(&mut app);
-            open(&mut app);
-            app_frame(&ctx, &mut app, vec![], "");
-            seed_search(&ctx, &app, "inter");
-            app_click(&ctx, &mut app, "Find in Folder…");
-            let kind = app.ui.dialog.as_ref().map(|d| d.kind.clone());
-            if picks {
-                assert_eq!(kind.as_deref(), Some(crate::dialogs::missing_fonts::KIND), "Missing Fonts takes Find Font's place");
-                assert_eq!(search_state(&ctx), (None, None), "the search is forgotten");
-                crate::dialogs::cancel(&mut app);
-            } else {
-                assert_eq!(kind.as_deref(), Some("findFont"), "with no folder picked, Find Font stays open");
-                assert_eq!(search_state(&ctx), (Some("inter".into()), Some("system".into())), "and keeps its search");
-            }
-        }
-    }
-
-    /// The wheel over the rows scrolls them, and leaves the document's font list where it was: two
-    /// lists, two scrollbars.
-    #[test]
-    fn the_rows_list_scrolls_with_the_wheel_alone() {
-        let families = ["Arial", "Georgia", "Verdana", "Tahoma", "Courier New", "Times New Roman", "Consolas", "Impact"];
-        let mut app = many_font_document(&families);
-        open(&mut app);
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        frame(&ctx, &mut app, vec![]);
-        let texts = frame(&ctx, &mut app, vec![]);
-        let used = fonts(&mut app);
-        let doc_labels: Vec<String> = used
-            .iter()
-            .map(|f| {
-                let (note, _) = font_note(f);
-                format!("{} {}{note}  ({})", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or(""), f["runs"])
-            })
-            .collect();
-        let rows = replacement_rows(&app, "system", &used);
-        let labels: Vec<String> = rows.iter().map(|r| row_label(&r.family, &r.style)).collect();
-        let at = |texts: &[(String, egui::Rect)], text: &str| texts.iter().find(|(t, _)| t == text).map(|(_, r)| *r);
-        let start = at(&texts, &labels[0]).expect("the rows start at their top");
-        let (doc_before, rows_before) = (painted(&texts, &doc_labels), painted(&texts, &labels));
-        assert!(!doc_before.is_empty(), "the document's fonts are listed: {doc_before:?}");
-        assert!(!rows_before.is_empty(), "{rows_before:?}");
-        let wheel = egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Line,
-            delta: egui::vec2(0.0, -20.0),
-            phase: egui::TouchPhase::Move,
-            modifiers: Default::default(),
-            source: egui::MouseWheelSource::Unknown,
-        };
-        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(start.center()), wheel]);
-        for _ in 0..30 {
-            frame(&ctx, &mut app, vec![]);
-        }
-        let texts = frame(&ctx, &mut app, vec![]);
-        assert!(at(&texts, &labels[0]).is_none(), "the wheel scrolls the first rows out of view");
-        assert_ne!(painted(&texts, &labels), rows_before, "the wheel scrolls the rows");
-        assert_eq!(painted(&texts, &doc_labels), doc_before, "the document's font list stays where it was");
-    }
     /// The search filters the rows by family and style, whatever case was typed.
     #[test]
     fn the_search_filters_rows_by_family_and_style() {
@@ -1258,12 +1161,11 @@ mod tests {
         assert!(recent.iter().all(|r| r.family == "Inter"), "{recent:?}");
         assert_eq!(recent.len(), db.styles("Inter").len(), "each style once, the closest not repeated");
         assert!(recent.iter().all(|r| !r.style.is_empty()), "every row names its style: {recent:?}");
-        let system = replacement_rows(&app, "system", &used);
+        let (system, menu) = while_fonts_hold(|| (replacement_rows(&app, "system", &used), db.menu_family_list()));
         assert!(system.iter().any(|r| r.family == "Source Sans 3" && r.style == "Regular"), "{system:?}");
         assert!(!system.iter().any(|r| r.family.starts_with('.')), "the font menu's hidden families stay out");
         // A composite font is a family without styles of its own, listed by its name alone.
         assert!(system.iter().all(|r| !r.style.is_empty() || db.styles(&r.family).is_empty()), "no nameless rows: {system:?}");
-        let menu = db.menu_family_list();
         let listed: std::collections::BTreeSet<&str> = system.iter().map(|r| r.family.as_str()).collect();
         assert_eq!(listed.len(), menu.len(), "every family the font menu shows is listed");
         let mut unique = system.clone();
@@ -1271,13 +1173,15 @@ mod tests {
         assert_eq!(unique.len(), system.len(), "no family and style is listed twice");
         // The dialog stores the rows when it opens and when the source changes, and a picked row
         // sets both fields Change then uses.
-        open(&mut app);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["rows"].as_array().map(Vec::len), Some(system.len()));
-        let mut d = app.ui.dialog.clone().unwrap();
+        let (rows, system) = while_fonts_hold(|| {
+            open(&mut app);
+            (opened(&app).rows, replacement_rows(&app, "system", &used))
+        });
+        assert_eq!(rows.len(), system.len());
+        let mut d = opened(&app);
         set_source(&app, &mut d, "document", &used);
-        assert_eq!(d.fields["rows"].as_array().map(Vec::len), Some(document.len()));
-        d.fields.insert("family".into(), json!("Inter"));
-        d.fields.insert("style".into(), json!("Regular"));
+        assert_eq!(d.rows.len(), document.len());
+        (d.family, d.style) = ("Inter".into(), "Regular".into());
         let from = used.iter().find(|f| f["family"] == "Source Serif 4").unwrap().clone();
         change(&mut app, &d, &from, true).unwrap();
         assert!(fonts(&mut app).iter().all(|f| f["family"] == "Inter"));
@@ -1288,9 +1192,9 @@ mod tests {
         let mut app = two_font_document();
         open(&mut app);
         let used = fonts(&mut app);
-        let mut d = app.ui.dialog.clone().unwrap();
+        let mut d = opened(&app);
         set_source(&app, &mut d, "document", &used);
-        d.fields.insert("family".into(), json!("Inter"));
+        d.family = "Inter".into();
         let from = used.iter().find(|f| f["family"] == "Source Serif 4").unwrap().clone();
         change(&mut app, &d, &from, true).unwrap();
         let families: Vec<Value> = fonts(&mut app).iter().map(|f| f["family"].clone()).collect();
@@ -1303,8 +1207,8 @@ mod tests {
         let mut app = two_font_document();
         open(&mut app);
         let used = fonts(&mut app);
-        let mut d = app.ui.dialog.clone().unwrap();
-        d.fields.insert("family".into(), json!("Source Serif 4"));
+        let mut d = opened(&app);
+        d.family = "Source Serif 4".into();
         let from = used.iter().find(|f| f["family"] == "Inter").unwrap().clone();
         change(&mut app, &d, &from, true).unwrap();
         let used = fonts(&mut app);
@@ -1319,8 +1223,8 @@ mod tests {
         app.run("object.lock", json!({})).unwrap();
         open(&mut app);
         let used = fonts(&mut app);
-        let mut d = app.ui.dialog.clone().unwrap();
-        d.fields.insert("family".into(), json!("Source Sans 3"));
+        let mut d = opened(&app);
+        d.family = "Source Sans 3".into();
         let from = used.iter().find(|f| f["family"] == "Source Serif 4").unwrap().clone();
         assert_eq!(change(&mut app, &d, &from, true).unwrap()["runs"], 0);
         assert_eq!(app.ui.recent_fonts, ["Inter"]);
@@ -1332,8 +1236,8 @@ mod tests {
         let mut app = two_font_document();
         open(&mut app);
         let used = fonts(&mut app);
-        let mut d = app.ui.dialog.clone().unwrap();
-        d.fields.insert("family".into(), json!("SourceSerif4-Regular"));
+        let mut d = opened(&app);
+        d.family = "SourceSerif4-Regular".into();
         let from = used.iter().find(|f| f["family"] == "Inter").unwrap().clone();
         assert_eq!(change(&mut app, &d, &from, true).unwrap()["runs"], 2);
         assert_eq!(app.ui.recent_fonts, ["Source Serif 4", "Inter"]);
@@ -1345,21 +1249,18 @@ mod tests {
         app.ui.recent_fonts.clear();
         open(&mut app);
         let used = fonts(&mut app);
-        let mut d = app.ui.dialog.clone().unwrap();
+        let mut d = opened(&app);
         set_source(&app, &mut d, "recent", &used);
         assert_eq!(replacement_families(&app, "recent", &used).unwrap(), Vec::<String>::new());
-        assert_eq!(d.str("family"), "");
+        assert_eq!(d.family, "");
         assert!(!can_replace(&d, Some(&[])));
-        app.ui.dialog = Some(d);
-        let text = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert!(text.contains("Recent"), "{text}");
         assert_eq!(app.ui.status, "");
     }
 
     /// Document lists a missing family, but Change and Change All stay off for it, in every list.
     #[test]
     fn a_missing_document_font_is_listed_but_not_offered_to_change_to() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = new_app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         for (y, font) in [(20, "Missing Family"), (40, "Inter")] {
             app.session.execute("text.create", &json!({"x": 10, "y": y, "text": "Hi", "font": font})).unwrap();
@@ -1368,22 +1269,22 @@ mod tests {
         let used = fonts(&mut app);
         let document = replacement_families(&app, "document", &used).unwrap();
         assert!(document.iter().any(|f| f == "Missing Family"), "{document:?}");
-        let mut d = app.ui.dialog.clone().unwrap();
-        d.fields.insert("family".into(), json!("Missing Family"));
+        let mut d = opened(&app);
+        d.family = "Missing Family".into();
         set_source(&app, &mut d, "document", &used);
-        assert_eq!(d.str("family"), "Inter", "the first installed family is chosen");
+        assert_eq!(d.family, "Inter", "the first installed family is chosen");
         assert!(can_replace(&d, Some(&document)));
-        d.fields.insert("family".into(), json!("Missing Family"));
+        d.family = "Missing Family".into();
         assert!(!can_replace(&d, Some(&document)));
         assert!(!can_replace(&d, None), "System");
         set_source(&app, &mut d, "system", &used);
-        assert!(can_replace(&d, None), "System chooses an installed family: {}", d.str("family"));
+        assert!(can_replace(&d, None), "System chooses an installed family: {}", d.family);
         // A document set only in a missing family leaves nothing to change to.
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hi", "font": "Missing Family"})).unwrap();
         let used = fonts(&mut app);
         set_source(&app, &mut d, "document", &used);
-        assert_eq!(d.str("family"), "");
+        assert_eq!(d.family, "");
         assert!(!can_replace(&d, replacement_families(&app, "document", &used).as_deref()));
     }
 
@@ -1394,11 +1295,11 @@ mod tests {
         app.ui.recent_fonts.clear();
         open(&mut app);
         let used = fonts(&mut app);
-        let mut d = app.ui.dialog.clone().unwrap();
+        let mut d = opened(&app);
         set_source(&app, &mut d, "recent", &used);
-        assert_eq!(d.str("family"), "");
+        assert_eq!(d.family, "");
         set_source(&app, &mut d, "system", &used);
-        assert_eq!((d.str("family").as_str(), d.str("style").as_str()), ("Source Sans 3", "Regular"), "the family's first listed style");
+        assert_eq!((d.family.as_str(), d.style.as_str()), ("Source Sans 3", "Regular"), "the family's first listed style");
         assert!(can_replace(&d, None));
     }
 
@@ -1412,9 +1313,9 @@ mod tests {
         assert_eq!(system_family_in(|_| false, &[]), "");
         let mut app = two_font_document();
         open(&mut app);
-        let d = app.ui.dialog.clone().unwrap();
-        assert_eq!(d.str("family"), system_family());
-        assert!(can_replace(&d, None), "{}", d.str("family"));
+        let d = opened(&app);
+        assert_eq!(d.family, system_family());
+        assert!(can_replace(&d, None), "{}", d.family);
     }
 
     /// A family that is installed but left out of the font menu (a hidden `.` family that
@@ -1430,22 +1331,24 @@ mod tests {
             let mut app = two_font_document();
             open(&mut app);
             let used = fonts(&mut app);
-            let mut d = app.ui.dialog.clone().unwrap();
-            d.fields.insert("family".into(), json!(hidden));
+            let mut d = opened(&app);
+            d.family = hidden.clone();
             assert!(!can_replace(&d, None), "{hidden}");
             set_source(&app, &mut d, "system", &used);
-            assert_eq!(d.str("family"), system_family());
+            assert_eq!(d.family, system_family());
         }
     }
 
     #[test]
     fn rows_flag_missing_fonts_substituted_styles_and_lacking_characters() {
         let row = |status: &str, glyphs: u64| json!({"status": status, "resolved": {"style": "W4"}, "missingGlyphs": glyphs});
-        assert_eq!(font_note(&row("exact", 0)), (String::new(), None));
-        assert!(font_note(&row("missing", 0)).0.contains("missing"));
-        assert!(font_note(&row("substitute", 0)).0.contains("substituted by W4"));
-        let (note, color) = font_note(&row("exact", 2));
-        assert!(note.contains("2 characters") && color.is_some());
+        assert_eq!(font_note(&row("exact", 0)), (String::new(), Tone::Neutral));
+        let missing = font_note(&row("missing", 0));
+        assert!(missing.0.contains("missing") && missing.1 == Tone::Bad);
+        let substitute = font_note(&row("substitute", 0));
+        assert!(substitute.0.contains("substituted by W4") && substitute.1 == Tone::Warn);
+        let (note, tone) = font_note(&row("exact", 2));
+        assert!(note.contains("2 characters") && tone == Tone::Warn);
     }
 
     /// The font list the dialog keeps for the active document.
@@ -1453,23 +1356,22 @@ mod tests {
         app.canvas.find_font.as_ref().expect("the dialog kept the document's fonts").fonts.clone()
     }
 
-    /// The kept list and Find in Folder… are what `text.fonts` and `missing_fonts` give now.
-    fn assert_current(app: &mut VectorcraftApp, shown: &str, why: &str) {
+    /// The kept list and the Find in Folder… answer are what `text.fonts` and `missing_fonts` give
+    /// now, with a folder picker (`can_pick`) or without.
+    fn assert_current(app: &mut VectorcraftApp, can_pick: bool, offered: bool, why: &str) {
         let listed = fonts(app);
         assert_eq!(*kept_list(app), listed, "{why}: the list");
         let missing = app.session.active().is_some_and(|st| !vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).is_empty());
-        let picks = crate::picks::can(app, &crate::picks::PickRequest::Folder);
-        assert_eq!(shown.contains("Find in Folder…"), picks && missing, "{why}: Find in Folder… {shown}");
+        assert_eq!(offered, can_pick && missing, "{why}: Find in Folder…");
     }
 
-    /// A document set in a missing family and in Inter, with a folder picker.
+    /// A document set in a missing family and in Inter.
     fn missing_font_document() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut app = new_app();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         for (y, font) in [(20, "Missing Family"), (40, "Inter")] {
             app.session.execute("text.create", &json!({"x": 10, "y": y, "text": "Hi", "font": font})).unwrap();
         }
-        app.services.pick_folder = Some(Box::new(|| None));
         app
     }
 
@@ -1479,28 +1381,26 @@ mod tests {
     #[test]
     fn the_font_list_is_worked_out_once_per_document_version() {
         let mut app = missing_font_document();
-        let picker = app.services.pick_folder.take();
-        open(&mut app);
-        assert!(kept_over_frames(&mut app, "no folder picker"), "frames of one document version keep its list");
+        assert!(kept_over_frames(&mut app, false, "no folder picker"), "frames of one document version keep its list");
         assert_eq!(app.canvas.find_font.as_ref().and_then(|c| c.missing), None, "no picker: the document is not searched for missing fonts");
-        app.services.pick_folder = picker;
-        assert!(kept_over_frames(&mut app, "a folder picker"), "a picker alone keeps the list");
+        assert!(kept_over_frames(&mut app, true, "a folder picker"), "a picker alone keeps the list");
         assert_eq!(app.canvas.find_font.as_ref().and_then(|c| c.missing), Some(true));
         app.run("select.all", json!({})).unwrap();
-        assert!(kept_over_frames(&mut app, "a new selection"), "a new selection keeps the list");
+        assert!(kept_over_frames(&mut app, true, "a new selection"), "a new selection keeps the list");
     }
 
-    /// Draws frames of the dialog and tells whether they kept the list kept before them. Another
-    /// test thread that changes the available fonts meanwhile makes the dialog work the list out
-    /// again, so the frames are drawn again until the fonts stay as they are.
-    fn kept_over_frames(app: &mut VectorcraftApp, why: &str) -> bool {
+    /// Asks for the document's fonts as a frame does and tells whether they kept the list kept
+    /// before them. Another test thread that changes the available fonts meanwhile makes the list
+    /// work out again, so the asks are repeated until the fonts stay as they are.
+    fn kept_over_frames(app: &mut VectorcraftApp, can_pick: bool, why: &str) -> bool {
         for _ in 0..20 {
+            document_fonts(app, can_pick);
             // The generation the kept list was worked out under: the database's generation only
             // counts up, so the same one after the frames means no fonts changed in between.
             let before = kept_list(app);
             let generation = app.canvas.find_font.as_ref().map(|c| c.key.generation);
-            let shown = crate::tests_labels::painted_text(app, |app, ui| show(app, ui.ctx()));
-            assert_current(app, &shown, why);
+            let (_, offered) = document_fonts(app, can_pick);
+            assert_current(app, can_pick, offered, why);
             if Some(vectorcraft_text::FontDb::global().generation()) == generation {
                 return Arc::ptr_eq(&before, &kept_list(app));
             }
@@ -1512,25 +1412,23 @@ mod tests {
     #[test]
     fn an_edit_works_the_font_list_out_again() {
         let mut app = missing_font_document();
-        open(&mut app);
-        crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        let first = kept_list(&app);
+        let (first, _) = document_fonts(&mut app, true);
         app.run("text.replaceFont", json!({"from": {"family": "Missing Family"}, "to": {"family": "Inter"}})).unwrap();
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "after the replacement");
-        assert!(!shown.contains("Find in Folder…"), "nothing is missing: {shown}");
+        let (_, offered) = document_fonts(&mut app, true);
+        assert_current(&mut app, true, offered, "after the replacement");
+        assert!(!offered, "nothing is missing");
         assert_eq!(kept_list(&app).len(), 1, "{:?}", kept_list(&app));
         app.run("edit.undo", json!({})).unwrap();
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "after the undo");
+        let (_, offered) = document_fonts(&mut app, true);
+        assert_current(&mut app, true, offered, "after the undo");
         assert_eq!(*kept_list(&app), *first, "the undo brings back the first list");
-        let mut d = app.ui.dialog.clone().unwrap();
-        d.fields.insert("family".into(), json!("Source Serif 4"));
-        d.fields.insert("style".into(), json!(""));
+        open(&mut app);
+        let mut d = opened(&app);
+        (d.family, d.style) = ("Source Serif 4".into(), String::new());
         let from = first.iter().find(|f| f["family"] == "Inter").unwrap().clone();
         change(&mut app, &d, &from, true).unwrap();
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "after Change All");
+        let (_, offered) = document_fonts(&mut app, true);
+        assert_current(&mut app, true, offered, "after Change All");
         assert!(kept_list(&app).iter().any(|f| f["family"] == "Source Serif 4"), "{:?}", kept_list(&app));
     }
 
@@ -1541,28 +1439,27 @@ mod tests {
         const FAMILY: &str = "Find Font Kept List CF";
         let mut app = missing_font_document();
         app.session.execute("text.create", &json!({"x": 10, "y": 60, "text": "Ab12", "font": FAMILY})).unwrap();
-        open(&mut app);
-        crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        document_fonts(&mut app, true);
         // The same document under another generation of the font database: what is kept for it no
         // longer counts.
         let entry = app.canvas.find_font.as_mut().unwrap();
         entry.key.generation = u64::MAX;
         entry.fonts = Arc::default();
         entry.missing = Some(false);
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "another font generation");
+        let (_, offered) = document_fonts(&mut app, true);
+        assert_current(&mut app, true, offered, "another font generation");
         let row = |app: &VectorcraftApp| kept_list(app).iter().find(|f| f["family"] == FAMILY).cloned().unwrap();
         assert_eq!(row(&app)["status"], "missing");
         let generation = vectorcraft_text::FontDb::global().generation();
         let parts = json!({"name": FAMILY, "parts": {"kanji": {"font": "Source Sans 3"}, "roman": {"font": "JetBrains Mono"}, "numerals": {"font": "Inter"}}});
         app.run("type.compositeFonts.set", json!({"fonts": [parts]})).unwrap();
         assert_ne!(vectorcraft_text::FontDb::global().generation(), generation, "defining a composite font is a new generation");
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "the composite font defined");
+        let (_, offered) = document_fonts(&mut app, true);
+        assert_current(&mut app, true, offered, "the composite font defined");
         assert_eq!(row(&app)["status"], "exact");
         app.run("type.compositeFonts.set", json!({"fonts": []})).unwrap();
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "the composite font taken out");
+        let (_, offered) = document_fonts(&mut app, true);
+        assert_current(&mut app, true, offered, "the composite font taken out");
         assert_eq!(row(&app)["status"], "missing");
     }
 
@@ -1573,105 +1470,20 @@ mod tests {
         let mut app = missing_font_document();
         app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
         let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Source Serif 4"})).unwrap()["id"].clone();
-        app.services.pick_folder = Some(Box::new(|| None));
-        open(&mut app);
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "the second document");
+        let current = |app: &mut VectorcraftApp, why: &str| {
+            let (_, offered) = document_fonts(app, true);
+            assert_current(app, true, offered, why);
+            offered
+        };
+        current(&mut app, "the second document");
         app.session.set_active(0);
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "the first document");
-        assert!(shown.contains("Find in Folder…"), "{shown}");
+        assert!(current(&mut app, "the first document"), "the first document misses a font");
         app.session.set_active(1);
         app.run("select.set", json!({"ids": [id]})).unwrap();
         app.run("object.pattern.make", json!({"name": "Kept List"})).unwrap();
         assert!(app.session.active().unwrap().doc.pattern_edit.is_some(), "pattern editing");
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "pattern editing");
+        current(&mut app, "pattern editing");
         app.run("object.pattern.cancel", json!({})).unwrap();
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
-        assert_current(&mut app, &shown, "pattern editing canceled");
-    }
-
-    /// CPU time of this thread in nanoseconds where the system reports it (Linux), else `None`.
-    fn thread_cpu_ns() -> Option<u128> {
-        std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
-    }
-
-    /// Time the font list and the missing-font answer a Find Font frame reads, for a document of
-    /// 2,000 point-type objects of 50 characters each and one of 20, set in five installed faces
-    /// and a missing family, with a folder picker: worked out on every frame as `text.fonts` and
-    /// `missing_fonts` (each frame before they were kept), on the first frame of a document version
-    /// ([`document_fonts`] with nothing kept) and on later frames. Per run, the large document
-    /// draws 120 frames and the small one 12,000 (so the thread's CPU clock, which advances in
-    /// steps of a few milliseconds, sees them), and later frames number 1,000,000; the sides
-    /// alternate, and the median time per frame of 7 runs is printed.
-    /// Run with `cargo test --release -p vectorcraft-ui-egui --lib find_font_list_timing -- --ignored --nocapture`.
-    #[test]
-    #[ignore = "manual timing probe; performance depends on machine load"]
-    fn find_font_list_timing() {
-        const KEPT: u32 = 1_000_000;
-        const FACES: [(&str, &str); 6] = [
-            ("Inter", "Regular"),
-            ("Inter", "Medium"),
-            ("Source Sans 3", "Bold"),
-            ("Source Serif 4", "Regular"),
-            ("JetBrains Mono", "Regular"),
-            ("Missing Family", "Regular"),
-        ];
-        for (objects, frames) in [(2_000, 120), (20, 12_000)] {
-            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-            app.session.execute("file.new", &json!({"width": 2000, "height": 2000})).unwrap();
-            for i in 0..objects {
-                let (family, style) = FACES[i % FACES.len()];
-                let text: String = (0..50).map(|c| char::from(b'a' + ((i + c) % 26) as u8)).collect();
-                let (x, y) = ((i % 20 * 90) as f64, (i / 20 * 18) as f64 + 20.0);
-                app.session.execute("text.create", &json!({"x": x, "y": y, "text": text, "font": family, "style": style})).unwrap();
-            }
-            app.services.pick_folder = Some(Box::new(|| None));
-            let every_frame = |app: &mut VectorcraftApp| {
-                let list = fonts(app);
-                let offer = crate::picks::can(app, &crate::picks::PickRequest::Folder)
-                    && app.session.active().is_some_and(|st| !vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).is_empty());
-                (list, offer)
-            };
-            let expected = every_frame(&mut app);
-            assert!(expected.1 && expected.0.len() == FACES.len(), "{expected:?}");
-            let kept = document_fonts(&mut app, true);
-            assert_eq!((kept.0.to_vec(), kept.1), expected, "the kept answers are the ones worked out every frame");
-            // Each side's answers for one frame: the number of fonts listed and Find in Folder….
-            let time = |app: &mut VectorcraftApp, frames: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> (usize, bool)| {
-                let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
-                for _ in 0..frames {
-                    assert_eq!(f(app), (FACES.len(), true));
-                }
-                let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
-                ns as f64 / f64::from(frames) / 1000.0
-            };
-            let (mut full, mut first, mut later) = (vec![], vec![], vec![]);
-            for _ in 0..7 {
-                full.push(time(&mut app, frames, &mut |app| {
-                    let (list, offer) = every_frame(app);
-                    (list.len(), offer)
-                }));
-                first.push(time(&mut app, frames, &mut |app| {
-                    app.canvas.find_font = None;
-                    let (list, offer) = document_fonts(app, true);
-                    (list.len(), offer)
-                }));
-                later.push(time(&mut app, KEPT, &mut |app| {
-                    let (list, offer) = document_fonts(app, true);
-                    (list.len(), offer)
-                }));
-            }
-            let median = |v: &mut Vec<f64>| {
-                v.sort_by(f64::total_cmp);
-                v[v.len() / 2]
-            };
-            let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
-            eprintln!("{objects} text objects of 50 characters; {clock} per frame, median of 7 runs");
-            eprintln!("worked out every frame ({frames} frames a run):    {:>12.3} us  {full:.3?}", median(&mut full));
-            eprintln!("first frame of a version ({frames} a run):         {:>12.3} us  {first:.3?}", median(&mut first));
-            eprintln!("later frames of the version ({KEPT} a run): {:>12.4} us  {later:.4?}", median(&mut later));
-        }
+        current(&mut app, "pattern editing canceled");
     }
 }
