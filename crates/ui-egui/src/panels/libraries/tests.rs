@@ -1,70 +1,89 @@
+use std::cell::RefCell;
+
+use egui::{Key, Modifiers, Pos2, pos2};
 use serde_json::json;
 use vectorcraft_engine::Session;
 
 use super::*;
+use crate::tests::panel_harness::Panel as Harness;
+use crate::tests::picks::{answer_dialog, open_dialogs, poll, scripted};
 
-fn frame(app: &mut VectorcraftApp) {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-        show(app, ui);
-        menu(app, ui);
-    });
-    out.textures_delta.clear();
+/// A point inside the panel's list below every item, in the harness's room (300 x 1600).
+const BELOW: Pos2 = pos2(150.0, 1400.0);
+
+/// The name of the row that drags what [`CARRIED`] holds.
+const SOURCE: &str = "Dragged";
+
+thread_local! {
+    /// What the test's drag source carries: art off the canvas or a swatch from another panel.
+    static CARRIED: RefCell<Option<PanelDrag>> = const { RefCell::new(None) };
 }
 
-/// The panel draws with no library, an empty one and one holding every kind of item (#745).
-#[test]
-fn the_panel_draws_its_libraries() {
+/// An app with a 200 x 200 document.
+fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    frame(&mut app);
-    app.run("library.create", json!({"name": "Brand"})).unwrap();
-    frame(&mut app);
-    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
-    app.run("select.set", json!({"ids": [id]})).unwrap();
-    app.run("library.add", json!({"kind": "graphic"})).unwrap();
-    app.run("library.add", json!({"kind": "fillColor"})).unwrap();
-    let t = app.run("text.create", json!({"x": 10, "y": 80, "text": "Type"})).unwrap()["id"].clone();
-    app.run("select.set", json!({"ids": [t]})).unwrap();
-    app.run("library.add", json!({"kind": "charStyle"})).unwrap();
-    app.run("library.add", json!({"kind": "paraStyle"})).unwrap();
-    frame(&mut app);
-    let lib = app.session.libraries.get("Brand").unwrap();
-    assert_eq!((lib.graphics.len(), lib.colors.len(), lib.char_styles.len(), lib.para_styles.len()), (1, 1, 1, 1));
-    // The thumbnail decodes.
-    let ctx = egui::Context::default();
-    let g = &lib.graphics[0];
-    assert!(thumbnail(&ctx, "Brand", &g.id, &g.thumbnail, 256).is_some());
-    // Shrunk to the size it is drawn at.
-    let small = thumbnail(&ctx, "Brand", &g.id, &g.thumbnail, 40).unwrap();
-    assert_eq!(small.size().into_iter().max(), Some(40), "{:?}", small.size());
+    app
 }
 
-/// The panel's text: every label it shows in one frame (`query` typed in the search field).
-fn texts(app: &mut VectorcraftApp, query: &str) -> Vec<String> {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.data_mut(|d| d.insert_temp(egui::Id::unique("library-search"), query.to_string()));
-    let mut shapes = vec![];
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
-    out.textures_delta.clear();
-    shapes.append(&mut out.shapes);
-    let mut texts = vec![];
-    for s in shapes {
-        if let egui::epaint::Shape::Text(t) = s.shape {
-            texts.push(t.galley.text().to_string());
-        }
+/// The panel under a one-row list whose row drags what [`CARRIED`] holds when the drag starts, through the drag
+/// session a real source starts. The row is always there, so the panel's rows stay where a test measured them.
+fn with_source(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let rows = [SOURCE.to_string()];
+    let _ = List::<String>::new("Source")
+        .select(SelectMode::None)
+        .natural_height(true)
+        .drag_payload(|_: &ListDrag<String>| CARRIED.with(|carried| carried.borrow().clone()))
+        .show_items(ui, &keyed(&rows, String::clone), &mut |key, _| ListRow::new(key.clone()));
+    show(app, ui);
+}
+
+/// `drag` dragged from the source row and released at `at`.
+fn drop_at(panel: &mut Harness, drag: PanelDrag, at: Pos2) {
+    CARRIED.with(|carried| *carried.borrow_mut() = Some(drag));
+    panel.frame();
+    panel.drag_to(SOURCE, at, Modifiers::NONE);
+    panel.frame();
+}
+
+/// A point just inside the top edge of the control named `name`.
+fn top(panel: &Harness, name: &str) -> Pos2 {
+    let r = panel.rect(name);
+    pos2(r.center().x, r.top() + 2.0)
+}
+
+/// A point just inside the bottom edge of the control named `name`.
+fn bottom(panel: &Harness, name: &str) -> Pos2 {
+    let r = panel.rect(name);
+    pos2(r.center().x, r.bottom() - 2.0)
+}
+
+/// A 10-point-tall rectangle at `x`, added to the library as graphic `name` when there is one →
+/// its ids.
+fn art(app: &mut VectorcraftApp, x: f64, name: Option<&str>) -> Vec<vectorcraft_doc::NodeId> {
+    let id = app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 10.0 + x, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    if let Some(name) = name {
+        app.run("library.add", json!({"kind": "graphic", "ids": [id], "name": name})).unwrap();
     }
-    texts
+    vec![vectorcraft_doc::NodeId(id)]
+}
+
+/// New art at `x`, as the canvas drags it.
+fn art_drag(app: &mut VectorcraftApp, x: f64) -> PanelDrag {
+    let ids = art(app, x, None);
+    PanelDrag::Art { document: app.session.active().unwrap().uid, ids }
+}
+
+fn graphics(app: &mut VectorcraftApp) -> Vec<String> {
+    let got = app.run("library.get", json!({})).unwrap();
+    got["graphics"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap().to_string()).collect()
 }
 
 /// The search field filters items by name, ignoring case; groups show after the ungrouped
 /// items, and a search nothing matches says so (#926).
 #[test]
 fn the_panel_searches_and_shows_groups() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let mut app = app();
     app.run("library.create", json!({"name": "Brand"})).unwrap();
     for (name, color) in [("Ocean Blue", "#0044aa"), ("Sun Yellow", "#ffcc00")] {
         app.run("library.add", json!({"kind": "fillColor", "color": color, "name": name})).unwrap();
@@ -73,17 +92,17 @@ fn the_panel_searches_and_shows_groups() {
     app.run("select.set", json!({"ids": [t]})).unwrap();
     app.run("library.add", json!({"kind": "charStyle", "name": "Headline"})).unwrap();
     app.run("library.createGroup", json!({"name": "Warm", "items": [{"kind": "fillColor", "item": "Sun Yellow"}]})).unwrap();
-    let all = texts(&mut app, "");
-    let at = |s: &str| all.iter().position(|t| t == s);
-    assert!(at("Headline").is_some() && at("Warm").is_some(), "{all:?}");
-    assert!(at("Headline") < at("Warm"), "groups come after the ungrouped items: {all:?}");
+    let mut panel = Harness::new(app, show);
+    panel.frame();
+    assert!(panel.shows("Headline") && panel.shows("Warm"));
+    assert!(panel.rect("Headline").top() < panel.rect("Warm").top(), "groups come after the ungrouped items");
     // "BLUE" finds the blue swatch only: the style and the group without a match are hidden.
-    let found = texts(&mut app, "BLUE");
-    assert!(!found.iter().any(|t| t == "Headline" || t == "Warm"), "{found:?}");
-    let found = texts(&mut app, "yellow");
-    assert!(found.iter().any(|t| t == "Warm") && !found.iter().any(|t| t == "Headline"), "{found:?}");
-    let none = texts(&mut app, "zzz");
-    assert!(none.iter().any(|t| t == "No results"), "{none:?}");
+    panel.type_into("Search", "BLUE");
+    assert!(panel.shows("Ocean Blue") && !panel.shows("Headline") && !panel.shows("Warm"));
+    panel.type_into("Search", "yellow");
+    assert!(panel.shows("Warm") && !panel.shows("Headline"));
+    panel.type_into("Search", "zzz");
+    assert!(panel.shows("No results"));
 }
 
 /// A library imported from `styles` (character style names) and `groups` ([(name, its styles)])
@@ -98,38 +117,6 @@ fn styled(app: &mut VectorcraftApp, styles: &[&str], groups: &[(&str, &[&str])])
     app.run("library.import", json!({"data": data})).unwrap()["id"].as_str().unwrap().to_string()
 }
 
-/// One frame of the panel in a 260 × `tall` window with `events` → where each text it shows is
-/// (its rect), and the panel's height.
-fn frame_at(app: &mut VectorcraftApp, ctx: &egui::Context, tall: f32, events: Vec<egui::Event>) -> (Vec<(String, Rect)>, f32) {
-    let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(260.0, tall))), events, ..Default::default() };
-    let mut height = 0.0;
-    let mut out = ctx.run_ui(raw, |ui| {
-        show(app, ui);
-        height = ui.min_rect().height();
-    });
-    out.textures_delta.clear();
-    let mut texts = vec![];
-    for s in out.shapes {
-        if let egui::epaint::Shape::Text(t) = s.shape {
-            texts.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2())));
-        }
-    }
-    (texts, height)
-}
-
-/// Where text `name` is in `texts`.
-fn at(texts: &[(String, Rect)], name: &str) -> Rect {
-    texts.iter().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("{name} isn't shown: {texts:?}"))
-}
-
-/// `drag` released at `pos`.
-fn drop_at(app: &mut VectorcraftApp, ctx: &egui::Context, drag: PanelDrag, pos: egui::Pos2) {
-    egui::DragAndDrop::set_payload(ctx, drag);
-    let up = egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
-    frame_at(app, ctx, 600.0, vec![egui::Event::PointerMoved(pos), up]);
-    frame_at(app, ctx, 600.0, vec![]);
-}
-
 fn style_order(app: &mut VectorcraftApp) -> Vec<String> {
     let got = app.run("library.get", json!({})).unwrap();
     got["charStyles"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect()
@@ -141,196 +128,128 @@ fn group_names(app: &mut VectorcraftApp) -> Vec<(String, Vec<String>)> {
     got["groups"].as_array().unwrap().iter().map(|g| (g["name"].as_str().unwrap().to_string(), items(g))).collect()
 }
 
-/// Dragging in the list: a style dropped on the top or bottom half of another lands before or
-/// after it, in its group; one dropped on a group's header goes into that group; a group's
-/// header dropped on another group moves the group; and with every item grouped, a strip
-/// takes an item out of its group.
-#[test]
-fn items_and_groups_move_by_dragging() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let lib = styled(&mut app, &["A", "B", "C", "D"], &[("Warm", &["D"]), ("Cool", &[])]);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let item = |name: &str| PanelDrag::LibraryItem { library: lib.clone(), kind: ItemKind::CharStyle, item: name.into() };
-    // C onto A's top half: first.
-    let a = at(&texts, "A");
-    drop_at(&mut app, &ctx, item("C"), egui::pos2(a.center().x, a.top() - 4.0));
-    assert_eq!(style_order(&mut app), ["C", "A", "B", "D"]);
-    // A onto D's bottom half (in Warm): after D, in Warm.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let d = at(&texts, "D");
-    drop_at(&mut app, &ctx, item("A"), egui::pos2(d.center().x, d.bottom() + 4.0));
-    assert_eq!(style_order(&mut app), ["C", "B", "D", "A"]);
-    assert_eq!(group_names(&mut app), [("Warm".into(), vec!["D".to_string(), "A".into()]), ("Cool".into(), vec![])]);
-    // B onto Cool's header: into Cool, the order kept.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    drop_at(&mut app, &ctx, item("B"), at(&texts, "Cool").center());
-    assert_eq!(style_order(&mut app), ["C", "B", "D", "A"]);
-    assert_eq!(group_names(&mut app)[1], ("Cool".into(), vec!["B".to_string()]));
-    // Cool's header onto Warm's header (its top half): Cool first.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let warm = at(&texts, "Warm");
-    drop_at(&mut app, &ctx, PanelDrag::LibraryGroup { library: lib.clone(), group: "Cool".into() }, egui::pos2(warm.center().x, warm.top()));
-    assert_eq!(group_names(&mut app).iter().map(|(g, _)| g.as_str()).collect::<Vec<_>>(), ["Cool", "Warm"]);
-    // Every item grouped: while one is dragged a strip takes it out of its group.
-    app.run("library.moveItem", json!({"kind": "charStyle", "item": "C", "group": "Warm"})).unwrap();
-    egui::DragAndDrop::set_payload(&ctx, item("C"));
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let strip = at(&texts, "Drop here to take it out of its group");
-    drop_at(&mut app, &ctx, item("C"), strip.center());
-    assert!(group_names(&mut app).iter().all(|(_, items)| !items.contains(&"C".to_string())), "{:?}", group_names(&mut app));
-    // Without a drag there is no strip.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    assert!(!texts.iter().any(|(t, _)| t == "Drop here to take it out of its group"));
+/// The panel over styles A to D, D in Warm and Cool empty.
+fn ordered() -> Harness {
+    let mut app = app();
+    styled(&mut app, &["A", "B", "C", "D"], &[("Warm", &["D"]), ("Cool", &[])]);
+    let mut panel = Harness::new(app, show);
+    panel.frame();
+    panel
 }
 
-/// The list toggle beside the picker shows the colours and graphics as rows with their names
-/// (a colour's hex value too), the icon toggle as chips and tiles again; in the list an item
-/// dropped on another's top half lands before it.
-#[test]
-fn the_list_view_shows_names_and_takes_drops_by_row() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+/// The panel, with the drag source, over graphics Badge and Seal as rows, Seal in Logos.
+fn logos() -> Harness {
+    let mut app = app();
     app.run("library.create", json!({"name": "Brand"})).unwrap();
-    for (name, color) in [("Ocean Blue", "#0044aa"), ("Sun Yellow", "#ffcc00")] {
-        app.run("library.add", json!({"kind": "fillColor", "color": color, "name": name})).unwrap();
-    }
-    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].clone();
-    app.run("select.set", json!({"ids": [id]})).unwrap();
-    app.run("library.add", json!({"kind": "graphic", "name": "Badge"})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let shown = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t.eq_ignore_ascii_case(s));
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    assert!(!shown(&texts, "Ocean Blue") && !shown(&texts, "Badge"), "icons by default: {texts:?}");
-    // The list toggle: the first of the two buttons at the right of the picker's row.
-    let row = at(&texts, "Brand");
-    let list_button = egui::pos2(260.0 - 8.0 - 24.0 - ctx.global_style().spacing.item_spacing.x - 12.0, row.center().y);
-    let click =
-        |pressed| egui::Event::PointerButton { pos: list_button, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame_at(&mut app, &ctx, 600.0, vec![egui::Event::PointerMoved(list_button), click(true)]);
-    frame_at(&mut app, &ctx, 600.0, vec![click(false)]);
-    assert!(crate::panels::pstate::<bool>(&ctx, LIST_VIEW), "the list toggle was clicked");
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    for s in ["Ocean Blue", "#0044aa", "Sun Yellow", "#ffcc00", "Badge"] {
-        assert!(shown(&texts, s), "{s} in the list: {texts:?}");
-    }
-    // Sun Yellow onto Ocean Blue's top half: first.
-    let ocean = at(&texts, "Ocean Blue");
-    let drag = PanelDrag::Paint {
-        paint: Paint::solid(vectorcraft_color::Color::from_hex("#ffcc00").unwrap()),
-        params: json!({}),
-        rows: None,
-        library: Some(("Brand".into(), "Sun Yellow".into())),
-    };
-    drop_at(&mut app, &ctx, drag, egui::pos2(ocean.center().x, ocean.top() - 3.0));
-    let got = app.run("library.get", json!({})).unwrap();
-    let names: Vec<&str> = got["colors"].as_array().unwrap().iter().map(|c| c["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["Sun Yellow", "Ocean Blue"]);
-    // Back to icons: no names.
-    crate::panels::set_pstate(&ctx, LIST_VIEW, false);
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    assert!(!shown(&texts, "Ocean Blue"), "{texts:?}");
-}
-
-/// Art dragged off the canvas, and a colour from elsewhere, are added where they are dropped: on
-/// another graphic's top or bottom half, just before or after it and in its group; on a group's
-/// header, into that group; away from the items, ungrouped at the end, as into an empty library.
-#[test]
-fn art_and_colours_dropped_from_elsewhere_go_where_they_are_dropped() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    app.run("library.create", json!({"name": "Brand"})).unwrap();
-    let art = |app: &mut VectorcraftApp, x: f64, name: Option<&str>| {
-        let id = app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 10.0 + x, "height": 20})).unwrap()["id"].as_u64().unwrap();
-        if let Some(name) = name {
-            app.run("library.add", json!({"kind": "graphic", "ids": [id], "name": name})).unwrap();
-        }
-        PanelDrag::Art(vec![vectorcraft_doc::NodeId(id)])
-    };
-    // An empty library takes a drop anywhere on the list.
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame_at(&mut app, &ctx, 600.0, vec![]);
-    let drag = art(&mut app, 0.0, None);
-    drop_at(&mut app, &ctx, drag, egui::pos2(130.0, 200.0));
-    let graphics = |app: &mut VectorcraftApp| {
-        let got = app.run("library.get", json!({})).unwrap();
-        got["graphics"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap().to_string()).collect::<Vec<_>>()
-    };
-    assert_eq!(graphics(&mut app).len(), 1);
-    app.run("library.removeItem", json!({"kind": "graphic", "item": "graphic"})).unwrap();
     art(&mut app, 10.0, Some("Badge"));
     art(&mut app, 20.0, Some("Seal"));
     app.run("library.createGroup", json!({"name": "Logos", "items": [{"kind": "graphic", "item": "Seal"}]})).unwrap();
-    crate::panels::set_pstate(&ctx, LIST_VIEW, true);
-    // Onto Badge's top half: before it, ungrouped.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let badge = at(&texts, "Badge");
-    let drag = art(&mut app, 30.0, None);
-    drop_at(&mut app, &ctx, drag, egui::pos2(badge.center().x, badge.top() - 2.0));
-    let first = graphics(&mut app).first().cloned().unwrap();
-    assert_eq!(graphics(&mut app)[1..], ["Badge", "Seal"]);
-    assert_eq!(group_names(&mut app)[0].1.len(), 1, "only Seal is in Logos");
-    // Onto Seal's bottom half: after it, in Logos.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let seal = at(&texts, "Seal");
-    let drag = art(&mut app, 40.0, None);
-    drop_at(&mut app, &ctx, drag, egui::pos2(seal.center().x, seal.bottom() + 2.0));
-    let names = graphics(&mut app);
-    assert_eq!(names[..3], [first.as_str(), "Badge", "Seal"]);
-    assert_eq!(group_names(&mut app)[0].1.len(), 2, "the new graphic is in Logos: {:?}", group_names(&mut app));
-    // A swatch onto Logos's header: a colour in Logos.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    drop_at(&mut app, &ctx, PanelDrag::paint(Paint::solid(vectorcraft_color::Color::from_hex("#0044aa").unwrap())), at(&texts, "Logos").center());
-    let got = app.run("library.get", json!({})).unwrap();
+    app.ui.libraries_list_view = true;
+    let mut panel = Harness::new(app, with_source);
+    panel.frame();
+    panel
+}
+
+fn item_onto_an_items_top_half_lands_before_it() {
+    let mut panel = ordered();
+    let to = top(&panel, "A");
+    panel.drag_to("C", to, Modifiers::NONE);
+    panel.frame();
+    assert_eq!(style_order(&mut panel.app()), ["C", "A", "B", "D"]);
+}
+
+fn item_onto_a_grouped_items_bottom_half_lands_after_it_in_its_group() {
+    let mut panel = ordered();
+    let to = bottom(&panel, "D");
+    panel.drag_to("A", to, Modifiers::NONE);
+    panel.frame();
+    assert_eq!(style_order(&mut panel.app()), ["B", "C", "D", "A"]);
+    assert_eq!(group_names(&mut panel.app()), [("Warm".into(), vec!["D".to_string(), "A".into()]), ("Cool".into(), vec![])]);
+}
+
+fn item_onto_a_group_header_goes_into_that_group() {
+    let mut panel = ordered();
+    panel.drag("B", "Cool", Modifiers::NONE);
+    panel.frame();
+    assert_eq!(style_order(&mut panel.app()), ["A", "B", "C", "D"], "the order is kept");
+    assert_eq!(group_names(&mut panel.app())[1], ("Cool".into(), vec!["B".to_string()]));
+}
+
+fn group_header_onto_a_groups_top_half_moves_the_group() {
+    let mut panel = ordered();
+    let to = top(&panel, "Warm");
+    // The drag starts on Cool's title row (its heading), not the middle of the section, which lies in its body.
+    let from = panel.rect_role("Cool", craft::ui::contract::Role::HEADING).center();
+    panel.drag_between(from, to, Modifiers::NONE);
+    panel.frame();
+    assert_eq!(group_names(&mut panel.app()).iter().map(|(g, _)| g.as_str()).collect::<Vec<_>>(), ["Cool", "Warm"]);
+}
+
+fn item_dragged_out_of_every_group_leaves_its_group() {
+    let mut app = app();
+    styled(&mut app, &["A", "B", "C"], &[("Warm", &["A", "B", "C"])]);
+    let mut panel = Harness::new(app, show);
+    panel.frame();
+    assert!(!panel.shows("Drop here to take it out of its group"), "no strip without a drag");
+    // Every item is grouped: released away from the groups, C leaves its group.
+    panel.drag_to("C", BELOW, Modifiers::NONE);
+    panel.frame();
+    assert_eq!(group_names(&mut panel.app()), [("Warm".into(), vec!["A".to_string(), "B".into()])]);
+}
+
+fn art_onto_a_graphics_top_half_is_added_before_it_ungrouped() {
+    let mut panel = logos();
+    let drag = art_drag(&mut panel.app(), 30.0);
+    let at = top(&panel, "Badge");
+    drop_at(&mut panel, drag, at);
+    let names = graphics(&mut panel.app());
+    assert_eq!(names.get(1..), Some(&["Badge".to_string(), "Seal".into()][..]));
+    assert_eq!(group_names(&mut panel.app())[0].1.len(), 1, "only Seal is in Logos");
+}
+
+fn art_onto_a_grouped_graphics_bottom_half_is_added_after_it_in_its_group() {
+    let mut panel = logos();
+    let drag = art_drag(&mut panel.app(), 40.0);
+    let at = bottom(&panel, "Seal");
+    drop_at(&mut panel, drag, at);
+    let names = graphics(&mut panel.app());
+    assert_eq!(names.get(..2), Some(&["Badge".to_string(), "Seal".into()][..]));
+    assert_eq!(names.len(), 3);
+    assert_eq!(group_names(&mut panel.app())[0].1.len(), 2, "the new graphic is in Logos");
+}
+
+fn a_colour_onto_a_group_header_is_added_to_that_group() {
+    let mut panel = logos();
+    let at = panel.rect("Logos").center();
+    drop_at(&mut panel, PanelDrag::paint(Paint::solid(vectorcraft_color::Color::from_hex("#0044aa").unwrap())), at);
+    let got = panel.app().run("library.get", json!({})).unwrap();
     let color = got["colors"][0]["name"].as_str().unwrap().to_string();
-    assert!(group_names(&mut app)[0].1.contains(&color), "{:?}", group_names(&mut app));
-    // Below the items: ungrouped, at the end.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    // The last item is the graphic added after Seal, in the list's last section.
-    let below = at(&texts, "Seal").bottom() + 80.0;
-    let drag = art(&mut app, 50.0, None);
-    drop_at(&mut app, &ctx, drag, egui::pos2(130.0, below));
-    let got = app.run("library.get", json!({})).unwrap();
+    assert!(group_names(&mut panel.app())[0].1.contains(&color));
+}
+
+fn art_below_the_items_is_added_ungrouped_at_the_end() {
+    let mut panel = logos();
+    let drag = art_drag(&mut panel.app(), 50.0);
+    drop_at(&mut panel, drag, BELOW);
+    let got = panel.app().run("library.get", json!({})).unwrap();
     let last = got["graphics"].as_array().unwrap().last().unwrap()["id"].as_str().unwrap().to_string();
-    assert_eq!(graphics(&mut app).len(), 5);
-    assert!(!group_names(&mut app)[0].1.contains(&last), "{:?}", group_names(&mut app));
+    assert_eq!(graphics(&mut panel.app()).len(), 3);
+    assert!(!group_names(&mut panel.app())[0].1.contains(&last));
 }
 
-/// A long list scrolls inside the panel (its bottom bar stays in the window), and a drag held
-/// near the list's bottom edge scrolls it.
-#[test]
-fn a_long_list_scrolls_also_while_dragging() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let names: Vec<String> = (0..60).map(|i| format!("Style {i}")).collect();
-    let lib = styled(&mut app, &names.iter().map(String::as_str).collect::<Vec<_>>(), &[]);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let (texts, height) = frame_at(&mut app, &ctx, 400.0, vec![]);
-    assert!(height <= 400.0, "the panel fits the window: {height}");
-    let first = at(&texts, "Style 0");
-    // The list's bottom edge: the last text drawn before the window's bottom bar area.
-    let bottom = texts.iter().filter(|(t, _)| t.starts_with("Style ")).map(|(_, r)| r.bottom()).fold(0.0, f32::max).min(400.0 - BAR - 4.0);
-    egui::DragAndDrop::set_payload(&ctx, PanelDrag::LibraryItem { library: lib, kind: ItemKind::CharStyle, item: "Style 0".into() });
-    let hold = egui::pos2(first.center().x, bottom - 4.0);
-    for _ in 0..5 {
-        frame_at(&mut app, &ctx, 400.0, vec![egui::Event::PointerMoved(hold)]);
-    }
-    let (texts, _) = frame_at(&mut app, &ctx, 400.0, vec![egui::Event::PointerMoved(hold)]);
-    let moved = texts.iter().find(|(t, _)| t == "Style 0").map_or(f32::NEG_INFINITY, |(_, r)| r.top());
-    assert!(moved < first.top(), "the list scrolled down: {} → {moved}", first.top());
+fn an_empty_library_takes_art_anywhere() {
+    let mut app = app();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    let mut panel = Harness::new(app, with_source);
+    panel.frame();
+    let drag = art_drag(&mut panel.app(), 0.0);
+    let at = panel.rect("This library is empty").center();
+    drop_at(&mut panel, drag, at);
+    assert_eq!(graphics(&mut panel.app()).len(), 1);
 }
 
-/// Gradient and pattern swatches dropped on the list are added under their names and show under
-/// their headings; a click on one paints the selection through the active Fill/Stroke proxy.
-#[test]
 fn gradients_and_patterns_come_from_swatches_and_paint_the_selection() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let mut app = app();
     app.run("library.create", json!({"name": "Brand"})).unwrap();
     let sunset = json!({"stops": [{"offset": 0, "color": "#ffcc00"}, {"offset": 1, "color": "#cc3300"}]});
     app.run("swatch.new", json!({"name": "Sunset", "gradient": sunset})).unwrap();
@@ -338,188 +257,257 @@ fn gradients_and_patterns_come_from_swatches_and_paint_the_selection() {
     app.run("select.set", json!({"ids": [dot]})).unwrap();
     app.run("object.pattern.make", json!({"name": "Checks", "width": 16, "height": 16})).unwrap();
     app.run("object.pattern.done", json!({})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    crate::panels::set_pstate(&ctx, LIST_VIEW, true);
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let into = at(&texts, "Brand").center() + vec2(0.0, 80.0);
+    app.ui.libraries_list_view = true;
+    let mut panel = Harness::new(app, with_source);
+    panel.frame();
     for name in ["Sunset", "Checks"] {
-        let paint = app.session.active().unwrap().doc.swatch(name).unwrap().paint.clone();
-        let drag = PanelDrag::Paint { paint, params: json!({"swatch": name}), rows: None, library: None };
-        drop_at(&mut app, &ctx, drag, into);
+        let paint = panel.app().session.active().unwrap().doc.swatch(name).unwrap().paint.clone();
+        drop_at(&mut panel, PanelDrag::Paint { paint, params: json!({"swatch": name}), rows: None, library: None }, BELOW);
     }
-    let lib = app.session.libraries.get("Brand").unwrap();
-    assert_eq!((lib.gradients.len(), lib.patterns.len()), (1, 1));
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
+    {
+        let app = panel.app();
+        let lib = app.session.libraries.get("Brand").unwrap();
+        assert_eq!((lib.gradients.len(), lib.patterns.len()), (1, 1));
+    }
     for s in ["Gradients", "Sunset", "Patterns", "Checks"] {
-        at(&texts, s);
+        assert!(panel.shows(s), "{s} shows");
     }
-    let id = app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 60, "height": 60})).unwrap()["id"].clone();
-    app.run("select.set", json!({"ids": [id]})).unwrap();
-    let click = |pos| {
-        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        [vec![egui::Event::PointerMoved(pos), button(true)], vec![button(false)]]
-    };
-    let fill = |app: &VectorcraftApp| {
-        let d = &app.session.active().unwrap().doc;
-        d.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().appearance.fill_paint()
-    };
-    for events in click(at(&texts, "Sunset").center()) {
-        frame_at(&mut app, &ctx, 600.0, events);
+    let id = panel.app().run("shape.rectangle", json!({"x": 40, "y": 40, "width": 60, "height": 60})).unwrap()["id"].as_u64().unwrap();
+    panel.app().run("select.set", json!({"ids": [id]})).unwrap();
+    let fill = |panel: &Harness| panel.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+    panel.click("Sunset");
+    assert!(matches!(fill(&panel), Paint::Gradient(_)), "{:?}", fill(&panel));
+    panel.click("Checks");
+    assert!(matches!(fill(&panel), Paint::Pattern { ref pattern, .. } if pattern == "Checks"), "{:?}", fill(&panel));
+}
+
+fn the_list_view_shows_hex_values_and_takes_drops_by_row() {
+    let mut app = app();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    for (name, color) in [("Ocean Blue", "#0044aa"), ("Sun Yellow", "#ffcc00")] {
+        app.run("library.add", json!({"kind": "fillColor", "color": color, "name": name})).unwrap();
     }
-    assert!(matches!(fill(&app), Paint::Gradient(_)), "{:?}", fill(&app));
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    for events in click(at(&texts, "Checks").center()) {
-        frame_at(&mut app, &ctx, 600.0, events);
+    let mut panel = Harness::new(app, show);
+    panel.frame();
+    // A list row's text after its name is read with the row, as its description.
+    let beside = |panel: &Harness, name: &str, hex: &str| panel.description(name).is_some_and(|d| d.contains(hex));
+    assert!(!panel.shows("#0044aa"), "chips by default");
+    panel.app().ui.libraries_list_view = true;
+    panel.frame();
+    assert!(beside(&panel, "Ocean Blue", "#0044aa") && beside(&panel, "Sun Yellow", "#ffcc00"), "a colour's hex value beside its name");
+    // Sun Yellow onto Ocean Blue's top half: first.
+    let to = top(&panel, "Ocean Blue");
+    panel.drag_to("Sun Yellow", to, Modifiers::NONE);
+    panel.frame();
+    let got = panel.app().run("library.get", json!({})).unwrap();
+    let names: Vec<&str> = got["colors"].as_array().unwrap().iter().map(|c| c["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Sun Yellow", "Ocean Blue"]);
+    panel.app().ui.libraries_list_view = false;
+    panel.frame();
+    assert!(!panel.shows("#0044aa"), "back to chips");
+}
+
+/// Dragging in the panel and dropping on it: items move before or after another of their kind
+/// and into or out of groups, groups move by their headers, art and swatches are added where they
+/// are dropped, and a click on a gradient or pattern paints the selection.
+#[test]
+fn gestures_on_the_panel_run_library_commands() {
+    let rows: [(&str, fn()); 12] = [
+        ("an item onto another's top half lands before it", item_onto_an_items_top_half_lands_before_it),
+        ("an item onto a grouped item's bottom half lands after it, in its group", item_onto_a_grouped_items_bottom_half_lands_after_it_in_its_group),
+        ("an item onto a group header goes into that group", item_onto_a_group_header_goes_into_that_group),
+        ("a group header onto a group's top half moves the group", group_header_onto_a_groups_top_half_moves_the_group),
+        ("an item dragged away from the groups leaves its group", item_dragged_out_of_every_group_leaves_its_group),
+        ("art onto a graphic's top half is added before it", art_onto_a_graphics_top_half_is_added_before_it_ungrouped),
+        (
+            "art onto a grouped graphic's bottom half is added after it, in its group",
+            art_onto_a_grouped_graphics_bottom_half_is_added_after_it_in_its_group,
+        ),
+        ("a colour onto a group header is added to that group", a_colour_onto_a_group_header_is_added_to_that_group),
+        ("art below the items is added ungrouped", art_below_the_items_is_added_ungrouped_at_the_end),
+        ("an empty library takes art anywhere", an_empty_library_takes_art_anywhere),
+        ("gradients and patterns come from swatches and paint the selection", gradients_and_patterns_come_from_swatches_and_paint_the_selection),
+        ("the list view shows hex values and takes drops by row", the_list_view_shows_hex_values_and_takes_drops_by_row),
+    ];
+    for (name, row) in rows {
+        eprintln!("row: {name}");
+        CARRIED.with(|carried| *carried.borrow_mut() = None);
+        row();
     }
-    assert!(matches!(fill(&app), Paint::Pattern { ref pattern, .. } if pattern == "Checks"), "{:?}", fill(&app));
 }
 
 /// A spot swatch dropped on the list (as the Swatches panel drags it, with its name) is added as
 /// a spot colour of that ink, at its tint (#5812).
 #[test]
 fn a_spot_swatch_dropped_on_the_list_stays_spot() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let mut app = app();
     app.run("library.create", json!({"name": "Brand"})).unwrap();
     app.run("swatch.new", json!({"name": "Kiss-cut", "color": "#ff00ff", "spot": true})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    crate::panels::set_pstate(&ctx, LIST_VIEW, true);
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let into = at(&texts, "Brand").center() + vec2(0.0, 80.0);
+    app.ui.libraries_list_view = true;
+    let mut panel = Harness::new(app, with_source);
+    panel.frame();
     for tint in [1.0, 0.5] {
-        let paint = app.session.active().unwrap().doc.tint_paint("Kiss-cut", tint).unwrap();
+        let paint = panel.app().session.active().unwrap().doc.tint_paint("Kiss-cut", tint).unwrap();
         let drag = PanelDrag::Paint { params: crate::panels::paint_params(&paint), paint, rows: None, library: None };
-        drop_at(&mut app, &ctx, drag, into);
+        drop_at(&mut panel, drag, BELOW);
     }
+    let app = panel.app();
     let lib = app.session.libraries.get("Brand").unwrap();
     let inks: Vec<_> = lib.colors.iter().map(|c| (c.spot.as_deref(), c.tint)).collect();
     assert_eq!(inks, [(Some("Kiss-cut"), 1.0), (Some("Kiss-cut"), 0.5)]);
 }
 
-/// New Group… and Rename Group… ask for a name and act on the library and group they came
-/// from; the dialog shows only the name.
-#[test]
+/// The open dialog opened last, and the value of its field `name`.
+fn last_dialog(app: &VectorcraftApp) -> (craft::ui::dialog::DialogId, Value) {
+    let open = open_dialogs(app);
+    let last = open.last().expect("a dialog is open");
+    (last.id, last.fields.as_ref().and_then(|f| f.get("name")).cloned().unwrap_or_default())
+}
+
 fn group_dialogs_run_with_their_library_and_group() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let mut app = app();
     let lib = app.run("library.create", json!({"name": "Brand"})).unwrap()["id"].as_str().unwrap().to_string();
     app.run("library.add", json!({"kind": "fillColor", "color": "#0044aa", "name": "Blue"})).unwrap();
-    ask_group_name(&mut app, &lib, None, json!([{"kind": "fillColor", "item": "Blue"}]));
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Cool"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    ask_group_name(&mut app, &lib, Some("Cool"), Value::Null);
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Cold"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    let got = app.run("library.get", json!({})).unwrap();
+    let mut panel = Harness::new(app, show);
+    panel.frame();
+    ask_group_name(&mut panel.app(), &lib, None, json!([{"kind": "fillColor", "item": "Blue"}]));
+    let (id, name) = last_dialog(&panel.app());
+    assert_eq!(name, json!("Group"));
+    answer_dialog(&mut panel.app(), id, &[("name", json!("Cool"))], true);
+    ask_group_name(&mut panel.app(), &lib, Some("Cool"), Value::Null);
+    let (id, name) = last_dialog(&panel.app());
+    assert_eq!(name, json!("Cool"));
+    answer_dialog(&mut panel.app(), id, &[("name", json!("Cold"))], true);
+    let got = panel.app().run("library.get", json!({})).unwrap();
     assert_eq!(got["groups"], json!([{"name": "Cold", "items": [{"kind": "color", "item": "Blue"}]}]));
 }
 
-/// A `button` click at `pos`, pressed in one frame and released in the next.
-fn click_at(app: &mut VectorcraftApp, ctx: &egui::Context, pos: egui::Pos2, button: egui::PointerButton) -> Vec<(String, Rect)> {
-    let event = |pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
-    frame_at(app, ctx, 600.0, vec![egui::Event::PointerMoved(pos), event(true)]);
-    frame_at(app, ctx, 600.0, vec![event(false)]);
-    frame_at(app, ctx, 600.0, vec![]).0
-}
-
-/// The menu entries shown in `texts`, in order from the top: the labels starting with the menu's
-/// indent.
-fn menu_entries(texts: &[(String, Rect)]) -> Vec<String> {
-    let mut entries: Vec<_> = texts.iter().filter(|(t, _)| t.starts_with("   ")).map(|(t, r)| (t.trim().to_string(), r.top())).collect();
-    entries.sort_by(|a, b| a.1.total_cmp(&b.1));
-    entries.into_iter().map(|(t, _)| t).collect()
-}
-
-/// A right-click on a library character style opens its menu without applying it: Apply
-/// Character Style (only with type selected), Add to Character Styles, Move to Group, Rename… and
-/// Delete. Add puts the style in the document's character styles and leaves the selected type as
-/// it was; Rename… opens a dialog with the style's name that renames it on OK and changes nothing
-/// on Cancel. A paragraph style's menu stays Move to Group and Delete.
-#[test]
-fn a_character_style_s_menu_applies_adds_renames_and_deletes() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+fn a_character_styles_menu_applies_adds_renames_and_deletes() {
+    let mut app = app();
     let data = json!({"name": "Type", "charStyles": [{"name": "Headline", "attrs": {"size": 31.0}}], "paraStyles": [{"name": "Body", "attrs": {}}]});
     let lib = app.run("library.import", json!({"data": data.to_string()})).unwrap()["id"].as_str().unwrap().to_string();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    // No type selected: Apply is there but does nothing.
-    let menu = click_at(&mut app, &ctx, at(&texts, "Headline").center(), egui::PointerButton::Secondary);
-    assert_eq!(menu_entries(&menu), ["Apply Character Style", "Add to Character Styles", "Move to Group", "Rename…", "Delete"]);
-    click_at(&mut app, &ctx, at(&menu, "   Apply Character Style").center(), egui::PointerButton::Primary);
-    assert!(app.session.active().unwrap().doc.char_styles.is_empty(), "disabled without type");
-    // With type selected: a right-click applies nothing; Add adds the style, unapplied.
-    let t = app.run("text.create", json!({"x": 10, "y": 80, "text": "Type", "size": 9})).unwrap()["id"].as_u64().unwrap();
-    app.run("select.set", json!({"ids": [t]})).unwrap();
-    let style_of = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(t)).unwrap().kind {
+    let mut panel = Harness::new(app, show);
+    panel.frame();
+    // No type selected: Apply is there but disabled.
+    panel.secondary_click("Headline");
+    assert!(panel.shows("Apply Character Style") && !panel.enabled("Apply Character Style"));
+    panel.click("Apply Character Style");
+    assert!(panel.app().session.active().unwrap().doc.char_styles.is_empty(), "disabled without type");
+    panel.key(Key::Escape, Modifiers::NONE);
+    // With type selected: a right-click applies nothing; Add adds the style, unapplied, in one step.
+    let t = panel.app().run("text.create", json!({"x": 10, "y": 80, "text": "Type", "size": 9})).unwrap()["id"].as_u64().unwrap();
+    panel.app().run("select.set", json!({"ids": [t]})).unwrap();
+    panel.frame();
+    let style_of = |panel: &Harness| match &panel.app().session.active().unwrap().doc.node(vectorcraft_doc::NodeId(t)).unwrap().kind {
         vectorcraft_doc::NodeKind::Text(text) => (text.runs[0].style.size, text.runs[0].style.style_name.clone()),
         _ => panic!("not text"),
     };
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let menu = click_at(&mut app, &ctx, at(&texts, "Headline").center(), egui::PointerButton::Secondary);
-    assert_eq!(style_of(&app), (9.0, None), "a right-click applies nothing");
-    let undo = app.session.active().unwrap().history.undo.len();
-    click_at(&mut app, &ctx, at(&menu, "   Add to Character Styles").center(), egui::PointerButton::Primary);
-    let doc = &app.session.active().unwrap().doc;
-    assert_eq!(doc.char_styles.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Headline"]);
-    assert_eq!(style_of(&app), (9.0, None), "added, not applied");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    panel.secondary_click("Headline");
+    assert_eq!(style_of(&panel), (9.0, None), "a right-click applies nothing");
+    let undo = panel.app().session.active().unwrap().history.undo.len();
+    panel.click("Add to Character Styles");
+    {
+        let app = panel.app();
+        let doc = &app.session.active().unwrap().doc;
+        assert_eq!(doc.char_styles.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Headline"]);
+    }
+    assert_eq!(style_of(&panel), (9.0, None), "added, not applied");
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
     // Apply applies it.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let menu = click_at(&mut app, &ctx, at(&texts, "Headline").center(), egui::PointerButton::Secondary);
-    click_at(&mut app, &ctx, at(&menu, "   Apply Character Style").center(), egui::PointerButton::Primary);
-    assert_eq!(style_of(&app), (31.0, Some("Headline".into())));
+    panel.secondary_click("Headline");
+    panel.click("Apply Character Style");
+    assert_eq!(style_of(&panel), (31.0, Some("Headline".into())));
     // Rename…: Cancel keeps the name, OK renames.
     for (ok, want) in [(false, "Headline"), (true, "Title")] {
-        let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-        let menu = click_at(&mut app, &ctx, at(&texts, "Headline").center(), egui::PointerButton::Secondary);
-        click_at(&mut app, &ctx, at(&menu, "   Rename…").center(), egui::PointerButton::Primary);
-        let d = app.ui.dialog.as_mut().expect("the Rename dialog");
-        assert_eq!((d.str("__command"), d.str("name")), ("library.renameItem".to_string(), "Headline".to_string()));
-        d.fields.insert("name".into(), json!("Title"));
+        panel.secondary_click("Headline");
+        panel.click("Rename…");
+        let (id, name) = last_dialog(&panel.app());
+        assert_eq!(name, json!("Headline"), "the dialog opens with the style's name");
         if ok {
-            crate::dialogs::confirm(&mut app).unwrap();
+            answer_dialog(&mut panel.app(), id, &[("name", json!("Title"))], true);
         } else {
-            crate::dialogs::cancel(&mut app);
+            let ctx = panel.ctx().clone();
+            let dialogs = panel.app().dialogs().expect("a window");
+            dialogs.with(|host| host.cancel_by_id(&ctx, id));
+            crate::dialogs::host::pump(&mut panel.app(), &ctx);
         }
-        assert_eq!(style_order(&mut app), [want]);
+        panel.frame();
+        assert_eq!(style_order(&mut panel.app()), [want]);
     }
-    // The paragraph style's menu.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let menu = click_at(&mut app, &ctx, at(&texts, "Body").center(), egui::PointerButton::Secondary);
-    assert_eq!(menu_entries(&menu), ["Move to Group", "Delete"]);
+    // A paragraph style's menu has no Apply or Add.
+    panel.secondary_click("Body");
+    assert!(panel.shows("Move to Group") && panel.shows("Delete"));
+    assert!(!panel.shows("Apply Character Style") && !panel.shows("Add to Character Styles"));
+    panel.key(Key::Escape, Modifiers::NONE);
     // Delete removes the character style from the library only.
-    let (texts, _) = frame_at(&mut app, &ctx, 600.0, vec![]);
-    let menu = click_at(&mut app, &ctx, at(&texts, "Title").center(), egui::PointerButton::Secondary);
-    click_at(&mut app, &ctx, at(&menu, "   Delete").center(), egui::PointerButton::Primary);
-    assert!(app.session.libraries.get(&lib).unwrap().char_styles.is_empty());
-    assert_eq!(app.session.active().unwrap().doc.char_styles.len(), 1, "the document's style stays");
+    panel.secondary_click("Title");
+    panel.click("Delete");
+    assert!(panel.app().session.libraries.get(&lib).unwrap().char_styles.is_empty());
+    assert_eq!(panel.app().session.active().unwrap().doc.char_styles.len(), 1, "the document's style stays");
 }
 
-/// Export Library… writes the library's file and Import Library… adds it back as a new library.
+fn the_panel_menu_creates_a_library_and_acts_on_the_current_one() {
+    let mut panel = Harness::new(app(), show);
+    panel.frame();
+    let enabled = |panel: &Harness, id: &str| {
+        let mut states = CommandStates::new();
+        menu_states(&panel.app(), &mut states);
+        states.get(&CommandRef::new(id)).is_some_and(CommandState::is_enabled)
+    };
+    assert!(enabled(&panel, CREATE) && !enabled(&panel, DELETE) && !enabled(&panel, EXPORT), "nothing to act on without a library");
+    panel.app().run(CREATE, json!({})).unwrap();
+    let (id, name) = last_dialog(&panel.app());
+    assert_eq!(name, json!("My Library"));
+    answer_dialog(&mut panel.app(), id, &[("name", json!("Brand"))], true);
+    panel.frame();
+    assert_eq!(panel.app().session.libraries.all().iter().map(|(_, l)| l.name.as_str()).collect::<Vec<_>>(), ["Brand"]);
+    assert!(enabled(&panel, DELETE) && enabled(&panel, EXPORT));
+    panel.app().run(RENAME, json!({})).unwrap();
+    let (id, name) = last_dialog(&panel.app());
+    assert_eq!(name, json!("Brand"), "Rename Library… opens with the library's name");
+    answer_dialog(&mut panel.app(), id, &[("name", json!("House"))], true);
+    assert_eq!(panel.app().session.libraries.all().iter().map(|(_, l)| l.name.as_str()).collect::<Vec<_>>(), ["House"]);
+}
+
+/// The panel menu's rows and the name dialogs: each dialog opens with its name, and OK runs its
+/// command with its library, group or item.
+#[test]
+fn menu_rows_and_dialogs_run_library_commands() {
+    let rows: [(&str, fn()); 3] = [
+        ("New Group… and Rename Group… run with their library and group", group_dialogs_run_with_their_library_and_group),
+        ("a character style's menu applies, adds, renames and deletes", a_character_styles_menu_applies_adds_renames_and_deletes),
+        ("the panel menu creates a library and acts on the current one", the_panel_menu_creates_a_library_and_acts_on_the_current_one),
+    ];
+    for (name, row) in rows {
+        eprintln!("row: {name}");
+        row();
+    }
+}
+
+/// Export Library… writes the library's file under its name and Import Library… adds it back as a
+/// new library.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn libraries_are_exported_and_imported_from_the_panel_menu() {
     let dir = vectorcraft_testkit::temp_dir("libraries-panel");
     let path = dir.join("Brand.vclibrary").to_string_lossy().to_string();
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let mut app = app();
     app.run("library.create", json!({"name": "Brand"})).unwrap();
     app.run("library.add", json!({"kind": "fillColor", "color": "#0044aa", "name": "Blue"})).unwrap();
-    let picked = path.clone();
-    app.services.pick_save = Some(Box::new(move |pick: &crate::FilePick| {
-        assert_eq!(pick.name, "Brand.vclibrary", "the library's name suggested");
-        Some(picked.clone())
-    }));
-    app.services.write = Some(Box::new(|p: &str, bytes: &[u8]| std::fs::write(p, bytes).map_err(|e| e.to_string())));
-    export_picked(&mut app, "Brand", "Brand");
-    assert!(std::path::Path::new(&path).exists());
-    let picked = path.clone();
-    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
-    import_picked(&mut app);
+    let ctx = crate::testing::ui_context();
+    let picker = scripted(&mut app);
+    app.run(EXPORT, json!({})).unwrap();
+    let asked: Vec<_> = picker.requests().into_iter().map(|r| r.file_name).collect();
+    assert_eq!(asked, [Some("Brand.vclibrary".to_string())], "the library's name suggested");
+    picker.answer_saved(&path, None);
+    poll(&mut app, &ctx);
+    assert_eq!(picker.written(), std::slice::from_ref(&path));
+    // The file on disk, as the export left it, for Import Library… to read.
+    let lib = app.session.libraries.get("Brand").unwrap();
+    std::fs::write(&path, serde_json::to_vec(lib).unwrap()).unwrap();
+    app.run(IMPORT, json!({})).unwrap();
+    picker.answer(&[path.as_str()]);
+    poll(&mut app, &ctx);
     let list = app.run("library.list", json!({})).unwrap();
     let names: Vec<&str> = list["libraries"].as_array().unwrap().iter().map(|l| l["name"].as_str().unwrap()).collect();
     assert_eq!(names, ["Brand", "Brand (2)"]);
