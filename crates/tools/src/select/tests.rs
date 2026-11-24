@@ -654,6 +654,28 @@ fn escape_cancels_a_bracket_drag() {
     assert!(t.pointer(&cx, &ev(PointerKind::Up, 330.0, 290.0)).is_empty(), "the release commits nothing");
 }
 
+/// A bracket drag of type on a path reads where it is released, and a tool switch cancels it.
+#[test]
+fn a_bracket_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+    let (d, id) = crate::testutil::doc_with_path_type();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    check_widget_release_and_tool_switch(&cx, Point::new(280.0, 290.0), Point::new(320.0, 290.0), Point::new(340.0, 290.0));
+}
+
+/// A corner widget drag reads where it is released, and a tool switch cancels it.
+#[test]
+fn a_corner_widget_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+    let (d, id) = doc_with_live_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    check_widget_release_and_tool_switch(&cx, Point::new(190.0, 191.0), Point::new(175.0, 176.0), Point::new(165.0, 166.0));
+}
+
 /// #812: with Smart Guides on, hovering near an object's centre or an anchor labels it, and a
 /// press there grabs the object by that point.
 #[test]
@@ -3120,4 +3142,41 @@ fn a_press_on_a_selected_member_of_a_group_moves_the_selected_members() {
     assert_eq!(t.cursor(&c, Point::new(125.0, 125.0), Mods::default()), Cursor::Move, "every anchor");
     let down = t.pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
     assert!(!is_select(&down), "every anchor: {down:?}");
+}
+
+/// A press near an anchor of a member selected inside a group grabs the member by that anchor,
+/// so with Smart Guides or Snap to Point on that anchor is the point that snaps during the move.
+#[test]
+fn a_press_near_an_anchor_of_a_selected_group_member_grabs_it_by_that_anchor() {
+    use vectorcraft_doc::{Appearance, Document, Node};
+    use vectorcraft_geom::shapes;
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let (outer, inner, a, b) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let path = |id: NodeId, x: f64| Node::path(id, shapes::rectangle(Rect::new(x, 100.0, x + 50.0, 150.0)), Appearance::default_art());
+    d.insert(Some(l), 0, Node::group(outer, vec![])).unwrap();
+    d.insert(Some(outer), 0, Node::group(inner, vec![])).unwrap();
+    d.insert(Some(inner), 0, path(a, 100.0)).unwrap();
+    d.insert(Some(outer), 1, path(b, 300.0)).unwrap();
+    let mut s = Selection::default();
+    s.set([a]);
+    let p = paint();
+    for (smart_guides, snap_to_point) in [(true, true), (true, false), (false, true)] {
+        // The bounding box hidden: its corner handle sits on the anchor and would take the press.
+        let c = ToolContext { smart_guides, snap_to_point, show_bbox: false, ..cx(&d, &s, &p) };
+        let mut t = SelectionTool::default();
+        let down = t.pointer(&c, &ev(PointerKind::Down, 103.0, 103.0));
+        assert!(down.is_empty(), "smart guides {smart_guides}, snap to point {snap_to_point}: {down:?}");
+        assert!(
+            matches!(t.state, State::Moving { hold, grip: Grip::Anchor, .. } if hold == Point::new(100.0, 100.0)),
+            "smart guides {smart_guides}, snap to point {snap_to_point}: {:?}",
+            t.state
+        );
+        // The grabbed anchor follows the pointer: dragged to (301.5, 101), the anchor at (100, 100)
+        // lands on the other member's anchor at (300, 100).
+        let a = t.pointer(&c, &ev(PointerKind::Drag, 301.5, 101.0));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("smart guides {smart_guides}, snap to point {snap_to_point}: {a:?}") };
+        let moved = (v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap());
+        assert!((moved.0 - 200.0).abs() < 1e-9 && moved.1.abs() < 1e-9, "smart guides {smart_guides}, snap to point {snap_to_point}: {moved:?}");
+    }
 }

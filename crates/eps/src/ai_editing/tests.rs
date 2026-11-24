@@ -9309,6 +9309,57 @@ fn a_masked_copy_nested_too_deep_for_its_mask_keeps_all_of_its_pixels() {
     assert!(whole >= 2, "the first copy and a copy whose mask is left out: {sizes:?}");
 }
 
+/// A distorted image in the art of an opacity mask written at the deepest level a mask takes is
+/// written as its pieces, as an undistorted image there is written whole: the mask keeps its art.
+#[test]
+fn a_distorted_image_in_a_mask_at_the_nesting_limit_keeps_its_pixels() {
+    // GUARDS: the distorted image was written there as an empty group, so the mask hid the object.
+    let masks = |distorted: bool| {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut masked = speckled_photo(&mut doc);
+        let mut art = speckled_photo(&mut doc);
+        if distorted {
+            let q = [(40.0, 10.0), (100.0, 10.0), (148.0, 138.0), (20.0, 138.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+            art.set_image_corners(q).unwrap();
+        }
+        masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }));
+        doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(masked) });
+        // Each isolated instance is written as its art, a level deeper: the masked object's mask
+        // art is at the limit.
+        for i in 1..writer::MAX_NEST - 1 {
+            let mut inner = instance(&mut doc, &format!("S{}", i - 1), Affine::IDENTITY);
+            inner.isolate = true;
+            doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(inner) });
+        }
+        let mut outer = instance(&mut doc, &format!("S{}", writer::MAX_NEST - 2), Affine::IDENTITY);
+        outer.isolate = true;
+        doc.insert(Some(layer), usize::MAX, outer).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::DEEP_MASKS), "{:?}", out.warnings);
+        // Each mask read back, by whether its art holds an image.
+        let back = read_back(&doc);
+        let mut found = vec![];
+        let mut look = |n: &Node| {
+            if let Some(m) = n.extras().mask.as_ref() {
+                let mut image = false;
+                m.art.walk(&mut |c| image |= matches!(c.kind, NodeKind::Image(_)));
+                found.push(image);
+            }
+        };
+        for l in &back.layers {
+            l.walk(&mut look);
+        }
+        for s in &back.symbols {
+            s.art.walk(&mut look);
+        }
+        found
+    };
+    let (plain, distorted) = (masks(false), masks(true));
+    assert!(!plain.is_empty() && plain.iter().all(|i| *i), "{plain:?}");
+    assert_eq!(distorted, plain);
+}
+
 /// [`warped_photo`] linked to `/Users/someone/Job/art/photo.png`, in folder `art` next to the
 /// document's.
 fn linked_warped_photo(doc: &mut Document, effects: Vec<vectorcraft_doc::Effect>) -> Node {

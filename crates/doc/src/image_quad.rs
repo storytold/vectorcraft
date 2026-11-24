@@ -392,6 +392,11 @@ mod tests {
         assert_eq!(n.image_quad(), None);
         assert!(distorted_art(&n).is_none());
         assert_eq!(n.image_corners(), Some(rect_corners(Rect::new(0.0, 0.0, 100.0, 100.0))));
+        // Reading the file drops it, so a later transform can't make it a distortion.
+        let mut back: Node = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
+        assert!(back.extras().image_quad.is_none());
+        back.transform(Affine::scale_non_uniform(1e6, 1.0), false);
+        assert!(!back.is_distorted_image());
     }
 
     #[test]
@@ -471,6 +476,50 @@ mod tests {
         let q = pts([(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
         n.set_image_corners(q).unwrap();
         let read: Node = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
+        assert_eq!(read.image_quad(), Some(q));
+    }
+
+    /// An entry among the first four that is not a point, or a field that is not a list, drops the
+    /// corners and leaves the rest of the image read; the entries after a bad one are skipped.
+    #[test]
+    fn malformed_corners_a_file_holds_are_dropped_as_it_is_read() {
+        let n = image(100, 100);
+        let plain: Node = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
+        let bad_entries = [
+            serde_json::json!([[40.0, 0.0], "not a point", [100.0, 100.0], [0.0, 100.0]]),
+            serde_json::json!([[40.0, 0.0], [60.0, 0.0], [100.0, 100.0], {"x": 1}]),
+            serde_json::json!([null, [60.0, 0.0], [100.0, 100.0], [0.0, 100.0]]),
+            serde_json::json!([[40.0, 0.0], [60.0], [100.0, 100.0], [0.0, 100.0], [5.0, 5.0]]),
+            serde_json::json!([[40.0, 0.0], [[1.0, 2.0], 3.0]]),
+            serde_json::json!([[40.0, 0.0], [60.0, 0.0, 1.0], [100.0, 100.0], [0.0, 100.0]]),
+            serde_json::json!([[40.0, 0.0], {"x": 60.0, "y": "0"}, [100.0, 100.0], [0.0, 100.0]]),
+        ];
+        let bad_fields = [serde_json::json!("corners"), serde_json::json!(4), serde_json::json!(true), serde_json::json!({"a": [1.0, 2.0]})];
+        for quad in bad_entries.into_iter().chain(bad_fields) {
+            let mut v = serde_json::to_value(&n).unwrap();
+            v["image_quad"] = quad.clone();
+            // File text, so the fields after the corners are read from the same stream.
+            let text = serde_json::to_string(&v).unwrap();
+            let read: Node = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{quad}: {e}"));
+            assert!(read.extras().image_quad.is_none(), "{quad}");
+            assert!(!read.is_distorted_image(), "{quad}");
+            assert_eq!(read, plain, "{quad}");
+            assert_eq!(read.geometric_bounds(), Some(Rect::new(0.0, 0.0, 100.0, 100.0)), "{quad}");
+        }
+        // A point with a repeated coordinate.
+        let mut v = serde_json::to_value(&n).unwrap();
+        v["image_quad"] = serde_json::json!([[40.0, 0.0], "SECOND", [100.0, 100.0], [0.0, 100.0]]);
+        let text = serde_json::to_string(&v).unwrap().replace("\"SECOND\"", r#"{"x":60.0,"y":0.0,"y":1.0}"#);
+        let read: Node = serde_json::from_str(&text).unwrap();
+        assert_eq!(read, plain);
+        // Both forms of a point, whole numbers and unknown fields read as corners, from text and
+        // from a value.
+        let mut v = serde_json::to_value(&n).unwrap();
+        v["image_quad"] = serde_json::json!([[40, 0], {"y": 0.0, "x": 60.0, "z": [1, 2]}, [100.0, 100.0], {"x": 0, "y": 100}]);
+        let q = pts([(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        let read: Node = serde_json::from_str(&serde_json::to_string(&v).unwrap()).unwrap();
+        assert_eq!(read.image_quad(), Some(q));
+        let read: Node = serde_json::from_value(v).unwrap();
         assert_eq!(read.image_quad(), Some(q));
     }
 

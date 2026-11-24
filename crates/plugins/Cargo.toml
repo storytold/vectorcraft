@@ -28,5 +28,10 @@ wasmparser = { workspace = true }
 # the build through eframe.
 web-time = "1"
 
+# Opens a `.wasm` in the plug-ins folder without waiting when it is a named pipe (`registry.rs`).
+# Already in Cargo.lock, so this adds no new crate.
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true, features = ["std", "fs"] }
+
 [dev-dependencies]
 wat = { workspace = true }

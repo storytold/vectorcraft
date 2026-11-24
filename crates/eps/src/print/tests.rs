@@ -403,3 +403,16 @@ fn overprinting_gradient_strokes_type_freeforms_and_spot_inks_keep_the_ink_below
     ];
     assert_keeps_the_ink_below(&cases);
 }
+
+#[test]
+fn an_overprinting_freeform_gradient_leaves_out_the_cells_its_samples_write_without_ink_on_a_postscript_plate() {
+    // 0.1% cyan around the left point: not paper white, but the plate's 8-bit samples write it as
+    // none of the ink, so the cyan below prints there.
+    let (faint, inked) = (Color::cmyk(0.001, 0.3, 0.0, 0.0), Color::cmyk(0.6, 0.3, 0.0, 0.0));
+    let mut freeform = GradientPaint::new(Gradient::new(GradientKind::Freeform, vec![GradientStop::new(0.0, faint), GradientStop::new(1.0, inked)]));
+    let pure = |at: Point, c: Color| FreeformPoint { spread: 0.9, ..FreeformPoint::new(at, c) };
+    freeform.freeform =
+        Some(Freeform { points: vec![pure(Point::new(50.0, 50.0), faint), pure(Point::new(150.0, 50.0), inked)], ..Default::default() });
+    let cyan = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    assert_keeps_the_ink_below(&[("faint", overprinting(Paint::Gradient(Box::new(freeform)), Paint::None), cyan, "Cyan")]);
+}

@@ -373,16 +373,25 @@ impl DocState {
     }
 }
 
+/// Is `t` the Live Paint Bucket, or a tool armed to switch back to it after its pick?
+fn works_for_bucket(t: &dyn vectorcraft_tools::Tool) -> bool {
+    t.id() == LIVE_PAINT_BUCKET || t.returns_to() == Some(LIVE_PAINT_BUCKET)
+}
+
 impl Session {
+    /// Did the Live Paint Bucket, or the Eyedropper armed for it, lend the active tool (a Cmd+click)?
+    pub(crate) fn lent_by_bucket(&self) -> bool {
+        self.lender.as_deref().is_some_and(works_for_bucket)
+    }
+
     /// Do the fill and stroke proxies, and the paint commands that name no objects, stand for the
     /// colors the Live Paint Bucket paints with? They do while the bucket is the active tool, while
     /// a Cmd+click with the bucket uses the Selection tool, and while the Eyedropper samples into a
     /// stop of the bucket's gradient for the Gradient panel's eyedropper, up to and including the
     /// sample its click takes before it switches back to the bucket.
     pub fn bucket_paints(&self) -> bool {
-        let for_bucket = |t: &dyn vectorcraft_tools::Tool| t.id() == LIVE_PAINT_BUCKET || t.returns_to() == Some(LIVE_PAINT_BUCKET);
         // A Cmd+click lends the Selection tool to the bucket, or to the Eyedropper armed for it.
-        self.back_to_bucket || for_bucket(self.tool.as_ref()) || self.lender.as_deref().is_some_and(for_bucket)
+        self.back_to_bucket || works_for_bucket(self.tool.as_ref()) || self.lent_by_bucket()
     }
 
     /// The tool the active tool's armed one-shot pick switches back to after its click

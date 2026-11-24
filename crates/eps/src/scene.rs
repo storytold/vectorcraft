@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use kurbo::Shape;
 use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
-use vectorcraft_doc::overprint::is_white;
 use vectorcraft_doc::{
     AppearanceItem, ColorMode, Document, Effect, ImageBlob, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject,
 };
@@ -1586,30 +1585,61 @@ impl<'a> Scene<'a> {
         let field = g.freeform_on(b).model_field(spread_scale(b));
         let q = |v: f32| (unit(v) * 255.0).round() as u8;
         let (w, h) = (u32::from(cols), u32::from(rows));
-        // Overprinting on a plate: the cells of paper white put none of the ink down, so they are
-        // left out, as clear pixels at Level 3 and outside a clip of the other cells at Level 2.
-        let blank: Option<Vec<bool>> = self.keep_below.then(|| field.grid(area, cols, rows).map(|(c, _)| is_white(&Paint::solid(c))).collect());
+        let in_inks = field.model() == Some(Model::Cmyk) || (self.cmyk && field.model() == Some(Model::Gray));
+        // Each cell's samples: its inks or its RGB, then its alpha.
+        let (mut samples, paper): (Vec<u8>, u8) = if in_inks {
+            let inks = field.grid(area, cols, rows).flat_map(|(color, a)| {
+                let [c, m, y, k] = color.to_cmyk();
+                [q(c), q(m), q(y), q(k), q(a)]
+            });
+            (inks.collect(), 0)
+        } else {
+            (field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect(), 255)
+        };
+        let n = if in_inks { 5 } else { 4 };
+        // Overprinting on a plate: the cells whose samples put none of the ink down once their
+        // opacity is applied, as `encode_inks` and `encode_image` write them (RGB converted to
+        // CMYK in CMYK output), are left out, as clear pixels at Level 3 and outside a clip of the
+        // other cells at Level 2.
+        let written = |v: u8, a: u8| {
+            let (v, a) = (u32::from(v), u32::from(a));
+            ((v * a + u32::from(paper) * (255 - a) + 127) / 255) as u8
+        };
+        let (cms, to_cmyk) = (self.cms.clone(), !in_inks && self.cmyk);
+        let intent = cms.settings().intent;
+        let mut converted: HashMap<[u8; 3], bool> = HashMap::new();
+        let blank: Option<Vec<bool>> = self.keep_below.then(|| {
+            samples
+                .chunks(n)
+                .map(|s| {
+                    let a = s.last().copied().unwrap_or(0);
+                    if a == 0 || in_inks {
+                        return s.iter().take(n - 1).all(|&v| written(v, a) == paper);
+                    }
+                    let rgb = [0, 1, 2].map(|i| s.get(i).map_or(paper, |&v| written(v, a)));
+                    if !to_cmyk {
+                        return rgb == [paper; 3];
+                    }
+                    *converted.entry(rgb).or_insert_with(|| {
+                        let inks = cms.srgb_to_cmyk(rgb.map(|x| f32::from(x) / 255.0), intent);
+                        inks.iter().all(|&x| (unit(x) * 255.0).round() as u8 == 0)
+                    })
+                })
+                .collect()
+        });
         let blank = blank.filter(|b| b.contains(&true));
         if blank.as_ref().is_some_and(|b| !b.contains(&false)) {
             return;
         }
         let keyed = self.o.level == Level::Three;
-        let clear = |i: usize, a: u8| if keyed && blank.as_ref().is_some_and(|b| b[i]) { 0 } else { a };
-        let image = if field.model() == Some(Model::Cmyk) || (self.cmyk && field.model() == Some(Model::Gray)) {
-            let inks: Vec<u8> = field
-                .grid(area, cols, rows)
-                .enumerate()
-                .flat_map(|(i, (color, a))| {
-                    let [c, m, y, k] = color.to_cmyk();
-                    [q(c), q(m), q(y), q(k), clear(i, q(a))]
-                })
-                .collect();
-            self.encode_inks(&inks, w, h)
-        } else {
-            let rgba: Vec<u8> =
-                field.display_grid(area, cols, rows).enumerate().flat_map(|(i, (c, a))| [q(c[0]), q(c[1]), q(c[2]), clear(i, q(a))]).collect();
-            self.encode_image(&rgba, w, h)
-        };
+        if let Some(b) = blank.as_ref().filter(|_| keyed) {
+            for (s, _) in samples.chunks_mut(n).zip(b).filter(|(_, blank)| **blank) {
+                if let Some(a) = s.last_mut() {
+                    *a = 0;
+                }
+            }
+        }
+        let image = if in_inks { self.encode_inks(&samples, w, h) } else { self.encode_image(&samples, w, h) };
         let Some(image) = image else { return };
         let cells = blank.filter(|_| !keyed).map(|b| {
             let (cw, ch) = (area.width() / f64::from(cols), area.height() / f64::from(rows));
@@ -1631,8 +1661,13 @@ impl<'a> Scene<'a> {
             bp
         });
         if let Some(bp) = &cells {
-            // Each row's run of cells is a rectangle of five path elements, about 60 bytes.
-            if self.size().saturating_add(bp.elements().len().saturating_mul(12)).saturating_add(image.inline_len) > self.max_body {
+            // Each row's run of cells is a rectangle of five path elements, about 60 bytes. The
+            // image is a reference when one encoded the same is already drawn.
+            let cost = self
+                .kept_field(&image)
+                .and_then(|i| self.codes.get(i))
+                .map_or(image.inline_len, |c| if c.uses == 0 { c.inline_len } else { c.ref_len });
+            if self.size().saturating_add(bp.elements().len().saturating_mul(12)).saturating_add(cost) > self.max_body {
                 self.warn(TOO_LARGE);
                 return;
             }
@@ -1649,9 +1684,7 @@ impl<'a> Scene<'a> {
     /// image already kept when one is encoded the same.
     fn place_field(&mut self, image: ImageCode, place: Affine) {
         let key = image.content_key();
-        let found =
-            self.fields.get(&key).and_then(|bucket| bucket.iter().copied().find(|&i| self.codes.get(i).is_some_and(|c| c.same_image(&image))));
-        let i = match found {
+        let i = match self.kept_field(&image) {
             Some(i) => i,
             None => {
                 // A field that can't be placed isn't kept.
@@ -1665,6 +1698,12 @@ impl<'a> Scene<'a> {
             }
         };
         self.place_image(i, place);
+    }
+
+    /// The index in `codes` of a kept freeform gradient image encoded the same as `image`.
+    fn kept_field(&self, image: &ImageCode) -> Option<usize> {
+        let bucket = self.fields.get(&image.content_key())?;
+        bucket.iter().copied().find(|&i| self.codes.get(i).is_some_and(|c| c.same_image(image)))
     }
 
     /// Forget the encoded images after the first `n` codes that no placement draws any longer, and
