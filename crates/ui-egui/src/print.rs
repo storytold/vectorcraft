@@ -5,19 +5,12 @@
 //! PostScript file (`format: "postscript"`, or a `.ps` path) is always saved. `print.printers`
 //! lists the printers.
 
-use serde::Serialize;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
 
 use crate::{VectorcraftApp, io};
 
-/// A printer the system knows.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct Printer {
-    pub name: String,
-    /// The system's default printer.
-    pub default: bool,
-}
+pub use craft::print::ui::Printer;
 
 /// A print job: a print-ready PDF, every copy and page in it.
 pub struct PrintJob<'a> {
@@ -64,6 +57,7 @@ pub trait PrintService {
 /// `print.printers`: the system's printers, and what the print service offers.
 pub fn printers(app: &mut VectorcraftApp) -> Value {
     let (printers, setup) = app.services.print.as_mut().map(|s| (s.printers(), s.has_setup())).unwrap_or_default();
+    let printers: Vec<Value> = printers.iter().map(|p| json!({ "name": p.name, "default": p.default })).collect();
     json!({ "printers": printers, "service": app.services.print.is_some(), "setup": setup })
 }
 
@@ -91,14 +85,15 @@ pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         if let Some(path) = s("path") {
             q["path"] = json!(path);
         }
-        let (path, mut v) = io::run_to_file(app, "file.print", if postscript { "ps" } else { "pdf" }, q)?;
-        io::report_saved(app, &path, &v);
-        if !to_file {
-            app.ui.status.push_str(" (printing isn't available here: the job was saved as a PDF)");
-        }
-        v["path"] = json!(path);
-        v["printed"] = json!(false);
-        return Ok(v);
+        return io::run_to_file(app, "file.print", if postscript { "ps" } else { "pdf" }, q, move |app, path, mut v| {
+            io::report_saved(app, &path, &v);
+            if !to_file {
+                app.ui.status.push_str(" (printing isn't available here: the job was saved as a PDF)");
+            }
+            v["path"] = json!(path);
+            v["printed"] = json!(false);
+            Ok(v)
+        });
     }
     if app.services.print.as_ref().is_some_and(|s| !s.turns_landscape()) {
         q["forPrinter"] = json!(true);

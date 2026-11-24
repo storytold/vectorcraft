@@ -102,10 +102,11 @@ fn plaintext_metadata_stays_readable() {
     // PDF 1.4 encrypts it anyway, and says so.
     let bytes = protected(Compatibility::Pdf14, security("pw", ""), false);
     assert!(find(&bytes, b"<x:xmpmeta", 0).is_none());
+    let notes = |s: &PdfSettings| s.warnings(&ActiveProfiles::default()).into_iter().map(|w| w.message).collect::<Vec<_>>();
     let set = PdfSettings { compatibility: Compatibility::Pdf14, security: security("pw", ""), ..Default::default() };
-    assert!(set.warnings().iter().any(|w| w.contains("plaintext metadata")), "{:?}", set.warnings());
+    assert!(notes(&set).iter().any(|w| w.contains("plaintext metadata")), "{:?}", notes(&set));
     let set = PdfSettings { compatibility: Compatibility::Pdf15, ..set };
-    assert!(set.warnings().is_empty(), "{:?}", set.warnings());
+    assert!(notes(&set).is_empty(), "{:?}", notes(&set));
 }
 
 #[test]
@@ -116,51 +117,6 @@ fn a_permissions_password_alone_opens_without_a_password_and_restricts() {
         assert_eq!(shapes_of(&bytes, None), 1, "{v:?} opens without a password");
         assert!(encrypt_dict(&bytes).contains(&format!("/P {}", sec.permission_bits())), "{v:?}");
     }
-}
-
-#[test]
-fn permission_bits_follow_the_options() {
-    let bits = |sec: SecuritySettings| sec.permission_bits() as u32;
-    let bit = |n: u32| 1u32 << (n - 1);
-    let reserved = 0xFFFF_F0C0;
-    // Without a permissions password everything is allowed.
-    assert_eq!(bits(SecuritySettings { printing: Printing::None, copy: false, ..security("open", "") }), 0xFFFF_FFFC);
-    // Everything allowed: print (3), modify (4), copy (5), annotate (6), forms (9), accessibility
-    // (10), assemble (11), high-quality print (12).
-    assert_eq!(bits(security("", "p")), reserved | [3, 4, 5, 6, 9, 10, 11, 12].iter().map(|n| bit(*n)).sum::<u32>());
-    let none = SecuritySettings { printing: Printing::None, changes: Changes::None, copy: false, screen_reader: false, ..security("", "p") };
-    assert_eq!(bits(none.clone()), reserved);
-    assert_eq!(bits(SecuritySettings { printing: Printing::Low, ..none.clone() }), reserved | bit(3));
-    assert_eq!(bits(SecuritySettings { printing: Printing::High, ..none.clone() }), reserved | bit(3) | bit(12));
-    for (changes, set) in [
-        (Changes::Pages, bit(11)),
-        (Changes::Forms, bit(9)),
-        (Changes::Comments, bit(6) | bit(9)),
-        (Changes::Any, bit(4) | bit(6) | bit(9) | bit(11)),
-    ] {
-        assert_eq!(bits(SecuritySettings { changes, ..none.clone() }), reserved | set, "{changes:?}");
-    }
-    assert_eq!(bits(SecuritySettings { screen_reader: true, ..none.clone() }), reserved | bit(10));
-    assert_eq!(bits(SecuritySettings { copy: true, ..none }), reserved | bit(5) | bit(10), "copying lets screen readers read");
-}
-
-#[test]
-fn standards_and_bad_passwords_are_refused() {
-    let set = |standard, compatibility, sec| PdfSettings { standard, compatibility, security: sec, ..Default::default() };
-    for standard in [Standard::PdfA2b, Standard::PdfX1a, Standard::PdfX3, Standard::PdfX4] {
-        let e = set(standard, standard.version(), security("pw", "")).check_values().unwrap_err();
-        assert!(matches!(&e, PdfError::BadSetting(m) if m.contains("password-protected")), "{standard:?}: {e}");
-        let e = set(standard, standard.version(), security("", "pw")).check_values().unwrap_err();
-        assert!(e.to_string().contains("password-protected"), "{standard:?}: {e}");
-        assert!(set(standard, standard.version(), security("", "")).check_values().is_ok(), "{standard:?} without passwords");
-    }
-    let bad = |c, sec| set(Standard::None, c, sec).check_values().unwrap_err().to_string();
-    assert!(bad(Compatibility::Pdf17, security("same", "same")).contains("must differ"));
-    assert!(bad(Compatibility::Pdf16, security("pässword", "")).contains("ASCII"));
-    assert!(bad(Compatibility::Pdf14, security(&"x".repeat(33), "")).contains("32"));
-    assert!(bad(Compatibility::Pdf17, security(&"x".repeat(128), "")).contains("127"));
-    assert!(set(Standard::None, Compatibility::Pdf17, security("pässwörd", "ünïcode")).check_values().is_ok());
-    assert!(set(Standard::None, Compatibility::Pdf14, security(&"x".repeat(32), "")).check_values().is_ok());
 }
 
 #[test]

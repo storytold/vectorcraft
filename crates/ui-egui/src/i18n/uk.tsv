@@ -202,6 +202,7 @@
 	Anti-alias Rasters	Згладжувати растрові зображення
 	Anti-aliased Artwork	Згладжений малюнок
 	Anti-aliasing Method	Метод згладжування
+@id	language.name	Українська
 antiAlias	Sharp	Різке
 	Crisp	Чітке
 	Strong	Сильне
@@ -5159,7 +5160,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	PDF settings are not an object	Параметри PDF не є об’єктом
 @msg	PDF security settings are not an object	Параметри безпеки PDF не є об’єктом
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})|Упаковано файли: {n} {folder} ({note})|Упаковано файли: {n} {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	укажіть `desiredK`, бажаний розмір файлу в K (1024 байти): число більше за 0 і не більше 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` має значення `current` або `auto`
@@ -6872,9 +6873,9 @@ lighting	Light	Світло
 	Slope:	Ухил:
 axis	X Axis	Вісь X
 axis	Y Axis	Вісь Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
 @plural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
@@ -6926,7 +6927,7 @@ axis	Y Axis	Вісь Y
 @msg	module is {_1} bytes (limit {_2})	модуль займає {_1} байтів (межа {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	потрібне схвалення: він запитує {0}, що користувач дозволяє під час окремого встановлення
 @msg	not JSON: {e}	не JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	не двійковий файл WebAssembly (немає заголовка \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	не двійковий файл WebAssembly (немає заголовка \\0asm)
 @msg	parameter `{k}`: {what}	параметр `{k}`: {what}
 @msg	parameter `{name}`: {what}	параметр `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметри модуля мають бути об’єктом JSON

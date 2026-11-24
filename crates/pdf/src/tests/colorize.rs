@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Name, Object, Stream};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Name, Object, Stream};
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::{ColorMode, Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
