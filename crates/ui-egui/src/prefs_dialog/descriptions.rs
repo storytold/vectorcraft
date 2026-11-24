@@ -332,6 +332,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "lowResProxyEps",
         "When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.",
     ),
+    ("pdfImportEmbeddedFonts", "Uses a PDF's embedded glyphs for imported text when its font is missing; off, it uses the fallback font."),
     (
         "antiAliasedBitmaps",
         "In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.",
