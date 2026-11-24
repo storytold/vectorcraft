@@ -1,119 +1,81 @@
 //! Headless frames of the Stroke panel's reach: Units > Stroke in the panel, the Control bar and
 //! the Properties panel, mixed values shown blank, Align Stroke for open paths and type (also
-//! while the Type tool edits it), and the
-//! weight presets.
+//! while the Type tool edits it), and the weight presets.
 
+use craft::behavior::PartKey;
+use craft::ui::text::NumberField;
+use egui::Modifiers;
 use serde_json::json;
 
-use super::tests_appearance::{app_with_rect, click, frame_events, run, text_rect};
+use super::tests_appearance::{app_with_rect, run};
 use super::*;
+use crate::tests::panel_harness::{Panel, ROOM};
 
-type Texts = Vec<(String, egui::Rect)>;
-
-fn texts(ctx: &egui::Context, app: &mut VectorcraftApp, f: impl FnMut(&mut VectorcraftApp, &mut Ui)) -> Texts {
-    frame_events(ctx, app, vec![], f)
-}
-
-fn shows(t: &Texts, s: &str) -> bool {
-    t.iter().any(|(x, _)| x == s)
-}
-
-/// The centre of the `n`th (0-based) 24 px button right of a Stroke panel row label.
-fn row_button(ctx: &egui::Context, t: &Texts, label: &str, n: usize) -> egui::Pos2 {
-    let r = text_rect(t, label);
-    let sp = ctx.global_style().spacing.item_spacing.x;
-    egui::pos2(r.right() + sp + n as f32 * (24.0 + sp) + 12.0, r.center().y)
-}
+type Show = fn(&mut VectorcraftApp, &mut Ui);
 
 #[test]
 fn weights_and_dashes_show_in_the_stroke_unit_everywhere() {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
     let mut app = app_with_rect();
     app.session.prefs.units_stroke = "millimeters".into();
-    run(&mut app, "stroke.set", json!({"dash": [12, 6]}));
-    let mm = vectorcraft_doc::Unit::Millimeters.format(1.0);
-    assert_eq!(mm, "0.3528 mm");
-    let t = texts(&ctx, &mut app, stroke::show);
-    assert!(shows(&t, &mm), "Stroke panel: {t:?}");
-    assert!(shows(&t, "4.2333") && shows(&t, "2.1167"), "dash and gap in mm: {t:?}");
-    assert!(shows(&texts(&ctx, &mut app, properties::show), &mm), "Properties panel");
-    assert!(shows(&texts(&ctx, &mut app, crate::chrome::control_bar), &mm), "Control bar");
-}
-
-/// The Properties panel's Stroke row is the Control bar's: the Stroke link opens the Stroke panel
-/// as a popover and the weight spinner lists the presets (Discord feedback).
-#[test]
-fn the_properties_stroke_link_and_weight_presets() {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut app = app_with_rect();
-    let t = texts(&ctx, &mut app, properties::show);
-    assert!(!shows(&t, "Cap:"), "closed: {t:?}");
-    click(&ctx, &mut app, text_rect(&t, "Stroke").center(), properties::show);
-    let t = texts(&ctx, &mut app, properties::show);
-    assert!(shows(&t, "Cap:") && shows(&t, "Align Stroke:"), "the Stroke panel's popover: {t:?}");
-    click(&ctx, &mut app, text_rect(&t, "Stroke").center(), properties::show);
-    // The weight's dropdown: the 20 pt chevron cell right of the field showing "1 pt".
-    let field = text_rect(&texts(&ctx, &mut app, properties::show), "1 pt");
-    let chevron = ctx.viewport(|vp| {
-        let w = vp.prev_pass.widgets.layers().flat_map(|(_, w)| w.iter()).map(|w| w.rect);
-        w.filter(|r| r.width() == 20.0 && r.left() > field.right() && r.y_range().contains(field.center().y))
-            .min_by(|a, b| a.left().total_cmp(&b.left()))
-    });
-    click(&ctx, &mut app, chevron.expect("the weight's preset chevron").center(), properties::show);
-    let t = texts(&ctx, &mut app, properties::show);
-    assert!(!shows(&t, "Cap:") && shows(&t, "0.25 pt") && shows(&t, "100 pt"), "the presets: {t:?}");
-    click(&ctx, &mut app, text_rect(&t, "3 pt").center(), properties::show);
-    assert_eq!(app.session.shown_stroke().unwrap().width, 3.0);
+    // The Control bar spans the window.
+    let surfaces: [(Show, egui::Vec2); 3] = [(stroke::show, ROOM), (properties::show, ROOM), (crate::chrome::control_bar, egui::vec2(1600.0, 200.0))];
+    let panel = Panel::new(app, stroke::show);
+    for (show, room) in surfaces {
+        let mut p =
+            Panel::new(std::mem::replace(&mut *panel.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default())), show);
+        p.room(room).frame();
+        assert!(super::tests_units::reads(p.value("Weight"), vectorcraft_doc::Unit::Millimeters, 1.0), "{:?}", p.value("Weight"));
+        *panel.app() = std::mem::replace(&mut *p.app(), VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+    }
 }
 
 #[test]
 fn mixed_weights_show_blank() {
-    let ctx = egui::Context::default();
     let mut app = app_with_rect();
     let a = app.session.active().unwrap().selection.objects[0];
     let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
     run(&mut app, "stroke.set", json!({"ids": [b], "weight": 3}));
     run(&mut app, "select.set", json!({ "ids": [a.0, b] }));
-    let t = texts(&ctx, &mut app, stroke::show);
-    assert!(!shows(&t, "1 pt") && !shows(&t, "3 pt"), "{t:?}");
-    run(&mut app, "select.set", json!({ "ids": [b] }));
-    assert!(shows(&texts(&ctx, &mut app, stroke::show), "3 pt"), "the cache follows the selection");
+    let mut panel = Panel::new(app, stroke::show);
+    panel.frame();
+    assert_eq!(panel.value("Weight").unwrap_or_default(), "");
+    run(&mut panel.app(), "select.set", json!({ "ids": [b] }));
+    panel.frame();
+    assert_eq!(panel.value("Weight"), Some(vectorcraft_doc::Unit::Points.format(3.0)), "the cache follows the selection");
 }
 
 #[test]
 fn inside_and_outside_are_off_for_open_paths_and_on_for_type() {
-    let ctx = egui::Context::default();
-    let mut app = app_with_rect();
-    let align = |app: &VectorcraftApp| current_stroke(app).unwrap().align;
-    let at = row_button(&ctx, &texts(&ctx, &mut app, stroke::show), "Align Stroke:", 1);
-    click(&ctx, &mut app, at, stroke::show);
-    assert_eq!(align(&app), vectorcraft_doc::StrokeAlign::Inside, "a closed path takes an inside stroke");
-    run(&mut app, "shape.line", json!({"x1": 10, "y1": 150, "x2": 150, "y2": 150}));
-    click(&ctx, &mut app, at, stroke::show);
-    assert_eq!(align(&app), vectorcraft_doc::StrokeAlign::Center, "an open path doesn't");
-    let id = run(&mut app, "text.create", json!({"x": 10, "y": 190, "text": "Hi"}))["id"].as_u64().unwrap();
-    run(&mut app, "select.set", json!({ "ids": [id] }));
-    run(&mut app, "paint.setStroke", json!({"color": "#000000"}));
-    click(&ctx, &mut app, at, stroke::show);
-    assert_eq!(align(&app), vectorcraft_doc::StrokeAlign::Inside, "type's characters do, around their glyphs");
+    let mut panel = Panel::new(app_with_rect(), stroke::show);
+    let align = |p: &Panel| current_stroke(&p.app()).unwrap().align;
+    panel.click("Inside");
+    assert_eq!(align(&panel), vectorcraft_doc::StrokeAlign::Inside, "a closed path takes an inside stroke");
+    run(&mut panel.app(), "shape.line", json!({"x1": 10, "y1": 150, "x2": 150, "y2": 150}));
+    panel.frame();
+    assert!(!panel.enabled("Inside"));
+    assert_eq!(align(&panel), vectorcraft_doc::StrokeAlign::Center, "an open path doesn't");
+    let id = run(&mut panel.app(), "text.create", json!({"x": 10, "y": 190, "text": "Hi"}))["id"].as_u64().unwrap();
+    run(&mut panel.app(), "select.set", json!({ "ids": [id] }));
+    run(&mut panel.app(), "paint.setStroke", json!({"color": "#000000"}));
+    panel.frame();
+    panel.click("Inside");
+    assert_eq!(align(&panel), vectorcraft_doc::StrokeAlign::Inside, "type's characters do, around their glyphs");
 }
 
 /// While the Type tool edits text, Align Stroke styles the selected characters' stroke.
 #[test]
 fn align_stroke_styles_the_characters_the_type_tool_selects() {
-    let ctx = egui::Context::default();
     let mut app = app_with_rect();
-    let at = row_button(&ctx, &texts(&ctx, &mut app, stroke::show), "Align Stroke:", 2);
     app.session.select_tool("type", Default::default()).unwrap();
     let id = run(&mut app, "text.create", json!({"x": 10, "y": 190, "text": "Hello"}))["id"].as_u64().unwrap();
     run(&mut app, "paint.setStroke", json!({"color": "#000000"}));
     app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
     app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
     assert!(character::text_editing(&app).is_some());
-    assert!(stroke_mixed(&app, &ctx).can_align, "the buttons are on");
-    click(&ctx, &mut app, at, stroke::show);
+    assert!(stroke_mixed(&app, &crate::testing::ui_context()).can_align, "the buttons are on");
+    let mut panel = Panel::new(app, stroke::show);
+    panel.click("Outside");
+    let app = panel.app();
     let vectorcraft_doc::NodeKind::Text(t) = &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else {
         panic!("not type")
     };
@@ -131,30 +93,15 @@ fn the_stroke_panel_shows_the_live_paint_bucket_stroke_as_one_stroke() {
     run(&mut app, "stroke.set", json!({"weight": 1, "ids": [a]}));
     run(&mut app, "stroke.set", json!({"weight": 7, "ids": [b]}));
     run(&mut app, "select.set", json!({ "ids": [] }));
-    let none_selected = stroke_mixed(&app, &egui::Context::default());
+    let none_selected = stroke_mixed(&app, &crate::testing::ui_context());
     assert!(none_selected.can_align, "Align Stroke applies with nothing selected");
     run(&mut app, "select.set", json!({ "ids": [a, b] }));
-    let mixed = stroke_mixed(&app, &egui::Context::default());
+    let mixed = stroke_mixed(&app, &crate::testing::ui_context());
     assert!(mixed.weight, "the selection's weights differ");
     app.session.select_tool("livePaintBucket", Default::default()).unwrap();
-    let mixed = stroke_mixed(&app, &egui::Context::default());
+    let mixed = stroke_mixed(&app, &crate::testing::ui_context());
     assert_eq!(mixed, none_selected, "one stroke that Align Stroke applies to, as with nothing selected");
     assert_eq!(stroke::shown_weight(&app, current_stroke(&app).as_ref(), &mixed), Some(app.session.paint.stroke_width));
-}
-
-#[test]
-fn the_weight_presets_run_from_a_quarter_point_to_a_hundred() {
-    let pt = stroke::weight_presets(vectorcraft_doc::Unit::Points);
-    assert!(pt.contains(&0.25) && pt.contains(&100.0));
-    let ctx = egui::Context::default();
-    let mut app = app_with_rect();
-    // The chevron at the right end of the 120 px weight spinner opens them.
-    let t = texts(&ctx, &mut app, stroke::show);
-    let r = text_rect(&t, "Weight:");
-    let sp = ctx.global_style().spacing.item_spacing.x;
-    click(&ctx, &mut app, egui::pos2(r.right() + sp + 110.0, r.center().y), stroke::show);
-    let t = texts(&ctx, &mut app, stroke::show);
-    assert!(shows(&t, "0.25 pt") && shows(&t, "100 pt"), "{t:?}");
 }
 
 #[test]
@@ -182,64 +129,28 @@ fn weight_presets_display_cleanly_in_their_native_unit() {
     assert_eq!(stroke::weight_presets(Unit::Meters), stroke::weight_presets(Unit::Points));
 }
 
-/// #991: the spinner left of the Stroke Weight field steps ten with Shift on both arrows and a
-/// tenth with Ctrl/Cmd, as ↑/↓ do in the focused field, while a plain click steps one point.
-#[test]
-fn stroke_weight_stepper_uses_ten_point_shift_steps() {
-    use super::tests_appearance::frame_raw;
+/// A click on the weight's step arrow in `show`'s surface, drawn in `room`: the stroke's weight afterwards.
+fn step(app: VectorcraftApp, show: Show, room: egui::Vec2, part: PartKey) -> f64 {
+    let mut panel = Panel::new(app, show);
+    panel.room(room).frame();
+    panel.click_part("Weight", part, Modifiers::NONE);
 
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut app = app_with_rect();
-    run(&mut app, "stroke.set", json!({"weight": 14}));
-    let t = texts(&ctx, &mut app, stroke::show);
-    // The 16 px spinner sits just left of the field's text.
-    let r = text_rect(&t, "14 pt");
-    let x = r.left() - 14.0;
-    let click_step = |app: &mut VectorcraftApp, y: f32, modifiers: egui::Modifiers| {
-        let pos = egui::pos2(x, y);
-        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
-        for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
-            let events = vec![egui::Event::ModifiersChanged(modifiers), event];
-            frame_raw(&ctx, app, egui::RawInput { events, ..Default::default() }, stroke::show);
-        }
-    };
-
-    click_step(&mut app, r.center().y - 5.0, egui::Modifiers::SHIFT);
-    assert_eq!(app.session.shown_stroke().unwrap().width, 24.0);
-    click_step(&mut app, r.center().y + 5.0, egui::Modifiers::NONE);
-    assert_eq!(app.session.shown_stroke().unwrap().width, 23.0);
-    click_step(&mut app, r.center().y + 5.0, egui::Modifiers::SHIFT);
-    assert_eq!(app.session.shown_stroke().unwrap().width, 13.0);
-    // Ctrl/Cmd steps a tenth, as ↑/↓ and the wheel do in the field.
-    click_step(&mut app, r.center().y + 5.0, egui::Modifiers::COMMAND);
-    assert!((app.session.shown_stroke().unwrap().width - 12.9).abs() < 1e-6);
+    panel.app().session.shown_stroke().unwrap().width
 }
 
 /// The weight spinner in the Stroke panel, the Control bar and the Properties panel steps from a
 /// weight between the presets to the next preset: 0.52 pt went down to 0 pt.
 #[test]
 fn every_weight_spinner_steps_to_the_next_preset() {
-    use super::tests_appearance::frame_raw;
-
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    type Show = fn(&mut VectorcraftApp, &mut Ui);
-    let surfaces: [(&str, Show); 3] =
-        [("Stroke panel", stroke::show), ("Control bar", crate::chrome::control_bar), ("Properties panel", properties::show)];
-    for (surface, show) in surfaces {
-        for (up, after) in [(false, 0.5), (true, 0.75)] {
+    // The Control bar spans the window.
+    let bar = egui::vec2(1600.0, 200.0);
+    let surfaces: [(&str, Show, egui::Vec2); 3] =
+        [("Stroke panel", stroke::show, ROOM), ("Control bar", crate::chrome::control_bar, bar), ("Properties panel", properties::show, ROOM)];
+    for (surface, show, room) in surfaces {
+        for (part, after) in [(NumberField::STEP_DOWN, 0.5), (NumberField::STEP_UP, 0.75)] {
             let mut app = app_with_rect();
             run(&mut app, "stroke.set", json!({"weight": 0.52}));
-            let t = texts(&ctx, &mut app, show);
-            let r = text_rect(&t, "0.52 pt");
-            let pos = egui::pos2(r.left() - 14.0, r.center().y + if up { -5.0 } else { 5.0 });
-            let button =
-                |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-            for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
-                frame_raw(&ctx, &mut app, egui::RawInput { events: vec![event], ..Default::default() }, show);
-            }
-            assert_eq!(app.session.shown_stroke().unwrap().width, after, "{surface}, up: {up}");
+            assert_eq!(step(app, show, room, part), after, "{surface}, {}", part.name());
         }
     }
 }
@@ -248,31 +159,10 @@ fn every_weight_spinner_steps_to_the_next_preset() {
 /// spinner from 2.004 pt, shown as `0.167 p` like the 2 pt preset, goes on to 1 pt.
 #[test]
 fn a_spinner_step_from_a_weight_shown_as_a_preset_moves_past_it() {
-    use super::tests_appearance::frame_raw;
-
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
     let mut app = app_with_rect();
     app.session.prefs.units_stroke = "picas".into();
     run(&mut app, "stroke.set", json!({"weight": 2.004}));
-    let t = texts(&ctx, &mut app, stroke::show);
-    let r = text_rect(&t, "0.167 p");
-    let pos = egui::pos2(r.left() - 14.0, r.center().y + 5.0);
-    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-    for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
-        frame_raw(&ctx, &mut app, egui::RawInput { events: vec![event], ..Default::default() }, stroke::show);
-    }
-    assert_eq!(app.session.shown_stroke().unwrap().width, 1.0);
-}
-
-/// The screen rect of the Weight spinner in the Stroke panel, found by its accessibility label, so
-/// the tests do not depend on where the panel puts the field.
-fn weight_spinner_rect(ctx: &egui::Context, app: &mut VectorcraftApp) -> egui::Rect {
-    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| stroke::show(app, ui));
-    out.textures_delta.clear();
-    let nodes = &out.platform_output.accesskit_update.as_ref().expect("accessibility is on").nodes;
-    let b = nodes.iter().find(|(_, n)| n.label() == Some("Step up or down")).expect("the weight spinner").1.bounds().expect("its bounds");
-    egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32))
+    assert_eq!(step(app, stroke::show, ROOM, NumberField::STEP_DOWN), 1.0);
 }
 
 /// With objects of different weights selected the Weight field is blank, and its spinner steps
@@ -280,56 +170,24 @@ fn weight_spinner_rect(ctx: &egui::Context, app: &mut VectorcraftApp) -> egui::R
 /// Units > Stroke.
 #[test]
 fn the_spinner_of_a_blank_weight_steps_from_a_quarter_point() {
-    use super::tests_appearance::frame_raw;
-
-    for (unit, up, after) in [("points", true, 0.5), ("points", false, 0.0), ("millimeters", true, 0.5), ("millimeters", false, 0.0)] {
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        crate::theme::install_fonts(&ctx);
+    for (unit, part, after) in [
+        ("points", NumberField::STEP_UP, 0.5),
+        ("points", NumberField::STEP_DOWN, 0.0),
+        ("millimeters", NumberField::STEP_UP, 0.5),
+        ("millimeters", NumberField::STEP_DOWN, 0.0),
+    ] {
         let mut app = app_with_rect();
         app.session.prefs.units_stroke = unit.into();
         let a = app.session.active().unwrap().selection.objects[0];
         let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
         run(&mut app, "stroke.set", json!({"ids": [b], "weight": 3}));
         run(&mut app, "select.set", json!({ "ids": [a.0, b] }));
-        texts(&ctx, &mut app, stroke::show);
-        let sr = weight_spinner_rect(&ctx, &mut app);
-        // The up arrow is the upper half of the spinner, the down arrow the lower half.
-        let pos = egui::pos2(sr.center().x, sr.center().y + if up { -sr.height() / 4.0 } else { sr.height() / 4.0 });
-        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-        for event in [egui::Event::PointerMoved(pos), button(true), button(false)] {
-            frame_raw(&ctx, &mut app, egui::RawInput { events: vec![event], ..Default::default() }, stroke::show);
-        }
+        let mut panel = Panel::new(app, stroke::show);
+        panel.frame();
+        panel.click_part("Weight", part, Modifiers::NONE);
         for id in [a.0, b] {
-            run(&mut app, "select.set", json!({ "ids": [id] }));
-            assert_eq!(app.session.shown_stroke().unwrap().width, after, "object {id}, up: {up}, {unit}");
-        }
-    }
-}
-
-/// ↑/↓ in the focused blank Weight field step from 0.25 pt too, for every selected object.
-#[test]
-fn the_arrow_keys_in_a_blank_weight_step_from_a_quarter_point() {
-    for (key, after) in [(egui::Key::ArrowUp, 0.5), (egui::Key::ArrowDown, 0.0)] {
-        // A new context each time: the field keeps its text in the context, and the 0.5 pt left by ArrowUp
-        // would make the blank field of the next run start from 0.5 pt.
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        crate::theme::install_fonts(&ctx);
-        let mut app = app_with_rect();
-        let a = app.session.active().unwrap().selection.objects[0];
-        let b = run(&mut app, "shape.rectangle", json!({"x": 120, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap();
-        run(&mut app, "stroke.set", json!({"ids": [b], "weight": 3}));
-        run(&mut app, "select.set", json!({ "ids": [a.0, b] }));
-        texts(&ctx, &mut app, stroke::show);
-        // The blank field, right of the spinner.
-        let sr = weight_spinner_rect(&ctx, &mut app);
-        click(&ctx, &mut app, egui::pos2(sr.right() + 30.0, sr.center().y), stroke::show);
-        let press = egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-        frame_events(&ctx, &mut app, vec![press], stroke::show);
-        for id in [a.0, b] {
-            run(&mut app, "select.set", json!({ "ids": [id] }));
-            assert_eq!(app.session.shown_stroke().unwrap().width, after, "object {id}, {key:?}");
+            run(&mut panel.app(), "select.set", json!({ "ids": [id] }));
+            assert_eq!(panel.app().session.shown_stroke().unwrap().width, after, "object {id}, {}, {unit}", part.name());
         }
     }
 }

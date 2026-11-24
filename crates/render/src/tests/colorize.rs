@@ -284,7 +284,7 @@ fn colorize_dims_with_the_grays() {
 fn a_colorized_missing_link_placeholder_draws_in_its_own_colors() {
     let proxy = |bytes: Vec<u8>| {
         let bytes = std::sync::Arc::new(bytes);
-        ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) }
+        ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() }
     };
     let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
     let sharp = RenderOptions { smooth_images: false, ..Default::default() };
@@ -316,6 +316,46 @@ fn separations_preview_shows_the_image_on_its_spot_plate() {
     assert!(on[..3].iter().all(|v| *v < 128), "the Ink plate shows the image, got {on:?}");
     let off = shown(&["Cyan", "Magenta", "Yellow", "Black"]);
     assert!(off[..3].iter().all(|v| *v >= 250), "the process plates show paper, got {off:?}");
+}
+
+/// A spot-colorized image over a cyan square knocks the cyan out where it is dark, unless its
+/// color overprints: then Separations Preview's Cyan plate keeps the square under it, its Ink
+/// plate still shows the image, and Overprint Preview darkens the two together.
+#[test]
+fn an_overprinting_colorized_image_keeps_the_ink_below_in_the_previews() {
+    let ink = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+    let shown = |overprint: bool, plates: Option<&[&str]>| {
+        let mut d = Document::new_with_mode(40.0, 20.0, vectorcraft_doc::ColorMode::Cmyk);
+        d.swatches.push(vectorcraft_color::Swatch { name: "Ink".into(), paint: Paint::solid(ink), global: true, spot: true });
+        let square = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)),
+            Appearance::basic(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), Paint::None, 0.0),
+        );
+        d.insert(Some(d.layers[0].id), 0, square).unwrap();
+        d.images.insert("pic".into(), ImageBlob::new("image/png", gray_png()));
+        let im =
+            ImageObject { key: "pic".into(), width: 2, height: 1, xf: Affine::scale(20.0), link: None, placement: Default::default(), pixels: None };
+        let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
+        n.extras_mut().colorize = Some(Box::new(Paint::Solid { color: ink, swatch: Some("Ink".into()), tint: 1.0 }));
+        n.extras_mut().colorize_overprint = overprint;
+        d.insert(Some(d.layers[0].id), 1, n).unwrap();
+        let opts = match plates {
+            Some(plates) => separations(plates),
+            None => RenderOptions { overprint_preview: true, smooth_images: false, ..Default::default() },
+        };
+        Renderer::new().render(&d, 40, 20, Affine::IDENTITY, &opts).pixel(10, 10)
+    };
+    let knocked = shown(false, Some(&["Cyan"]));
+    assert!(knocked[..3].iter().all(|v| *v >= 250), "knocking out, the Cyan plate is paper under the image, got {knocked:?}");
+    let kept = shown(true, Some(&["Cyan"]));
+    assert!(kept[..3].iter().all(|v| *v < 128), "overprinting, the Cyan plate keeps the square, got {kept:?}");
+    let on = shown(true, Some(&["Ink"]));
+    assert!(on[..3].iter().all(|v| *v < 128), "the Ink plate shows the image, got {on:?}");
+    // Overprint Preview alone: the red ink over cyan darkens to near black where it knocked out
+    // to red.
+    let (red, dark) = (shown(false, None), shown(true, None));
+    assert!(red[0] > 128 && dark[0] < 128, "knocking out {red:?}, overprinting {dark:?}");
 }
 
 /// Separations Preview shows an image placed from a DCS file through its own plates: its spot
