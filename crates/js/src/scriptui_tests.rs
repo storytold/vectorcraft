@@ -550,6 +550,68 @@ fn a_palette_event_finds_its_control_by_its_place() {
 }
 
 #[test]
+fn a_palette_event_does_not_run_a_handler_once_a_getter_closed_the_palette() {
+    let (mut r, calls) = palette_realm(vec![palette_event(1.0, click(2))]);
+    r.run(
+        "var p = new Window('palette'); var label = p.add('statictext', undefined, 'idle'); var b = p.add('button', undefined, 'Go'); \
+         var clicks = 0; b.onClick = function () { clicks++; }; var armed = false; \
+         Object.defineProperty(label, 'text', {get: function () { if (armed) { armed = false; p.close(); } return 'idle'; }}); p.show();",
+    )
+    .unwrap();
+    // The event reads the label's text for the palette's description, which closes the palette.
+    r.run("armed = true; Window.__vcPaletteEvent();").unwrap();
+    assert_eq!(r.run("clicks").unwrap(), JsValue::Number(0.0), "the click is not given to a closed palette");
+    assert!(calls.borrow().contains(&("paletteClose".into(), 1.0)));
+}
+
+#[test]
+fn a_palette_list_change_does_not_run_on_change_once_an_item_s_text_getter_closed_the_palette() {
+    let (mut r, _) = palette_realm(vec![seen_list_change(1.0)]);
+    // The event reads the first item's text twice: for the palette's description, then to compare
+    // it with the items the person saw. The second read closes the palette.
+    r.run(
+        "var p = new Window('palette'); var l = p.add('listbox', undefined, ['a', 'b']); var got = []; \
+         l.onChange = function () { got.push(String(l.selection)); }; var reads = -1; \
+         Object.defineProperty(l.items[0], 'text', {get: function () { if (reads >= 0 && ++reads == 2) { p.close(); } return 'a'; }}); \
+         p.show();",
+    )
+    .unwrap();
+    let e = r.run("reads = 0; try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
+    assert_eq!(e, JsValue::String("none".into()));
+    assert_eq!(r.run("[reads, got.join(), String(l.selection)].join()").unwrap(), JsValue::String("2,,null".into()));
+}
+
+#[test]
+fn a_palette_event_does_not_run_a_handler_whose_getter_closed_the_palette() {
+    let (mut r, calls) = palette_realm(vec![palette_event(1.0, click(1))]);
+    r.run(
+        "var p = new Window('palette'); var b = p.add('button', undefined, 'Go'); var clicks = 0; var reads = 0; \
+         Object.defineProperty(b, 'onClick', {get: function () { reads++; p.close(); return function () { clicks++; }; }}); p.show();",
+    )
+    .unwrap();
+    r.run("Window.__vcPaletteEvent();").unwrap();
+    assert_eq!(r.run("[reads, clicks].join()").unwrap(), JsValue::String("1,0".into()), "the handler read from a closed palette does not run");
+    assert!(calls.borrow().contains(&("paletteClose".into(), 1.0)));
+}
+
+#[test]
+fn a_palette_list_change_is_dropped_once_an_item_s_text_getter_closed_the_palette_and_on_close_changed_the_list() {
+    let (mut r, _) = palette_realm(vec![seen_list_change(1.0)]);
+    // The second read of the first item's text closes the palette, and its `onClose` adds an item.
+    r.run(
+        "var p = new Window('palette'); var l = p.add('listbox', undefined, ['a', 'b']); var got = []; \
+         l.onChange = function () { got.push(String(l.selection)); }; var reads = -1; \
+         p.onClose = function () { l.add('item', 'c'); }; \
+         Object.defineProperty(l.items[0], 'text', {get: function () { if (reads >= 0 && ++reads == 2) { p.close(); } return 'a'; }}); \
+         p.show();",
+    )
+    .unwrap();
+    let e = r.run("reads = 0; try { Window.__vcPaletteEvent(); 'none'; } catch (e) { e.message; }").unwrap();
+    assert_eq!(e, JsValue::String("none".into()), "the event for a closed palette is dropped without an error");
+    assert_eq!(r.run("[reads >= 2, l.items.length, got.join(), String(l.selection)].join()").unwrap(), JsValue::String("true,3,,null".into()));
+}
+
+#[test]
 fn a_palette_s_visible_follows_hide_and_show() {
     let (mut r, _) = palette_realm(Vec::new());
     let v = r

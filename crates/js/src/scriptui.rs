@@ -794,6 +794,10 @@ fn palette_event(i: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Val
             close_palette(i, win)?;
         } else {
             let (_, nodes, ..) = describe(i, win)?;
+            // A getter read in the description may have closed the palette.
+            if !still_takes(i, win, ev, None)? {
+                return Ok(Value::Undefined);
+            }
             i.temp_roots.push(Value::Object(nodes));
             let held = list_values(i, nodes)?;
             // The host gives the control's place, which is found again in the palette as it is now:
@@ -818,6 +822,34 @@ fn palette_event(i: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Val
     })();
     i.temp_roots.truncate(mark);
     r
+}
+
+/// Whether the window `win` still takes the event `ev`: a dialog (`keep` is `Some`) always does,
+/// and a palette only while the host shows it under the id the event names. A getter or a handler
+/// run for the event may have closed the palette.
+fn still_takes(i: &mut Interp, win: ObjId, ev: ObjId, keep: Option<&[Value]>) -> JsResult<bool> {
+    if keep.is_some() {
+        return Ok(true);
+    }
+    let id = slot(i, ev, "palette")?;
+    Ok(matches!((slot(i, win, PALETTE_ID)?, id), (Value::Number(a), Value::Number(b)) if a == b))
+}
+
+/// Calls control `c`'s handler `name` for the event `ev` when it has one and `win` still takes the
+/// event once the handler has been read: a getter for `name` may have closed the palette.
+/// → `None` when `win` no longer takes the event, otherwise `handler`'s answer.
+fn event_handler(i: &mut Interp, win: ObjId, c: ObjId, ev: ObjId, keep: Option<&[Value]>, name: &str) -> JsResult<Option<Option<Value>>> {
+    if !still_takes(i, win, ev, keep)? {
+        return Ok(None);
+    }
+    let f = i.get_value(&Value::Object(c), &key(name))?;
+    if !still_takes(i, win, ev, keep)? {
+        return Ok(None);
+    }
+    if !i.is_callable(&f) {
+        return Ok(Some(None));
+    }
+    i.call(&f, &Value::Object(c), &[]).map(|v| Some(Some(v)))
 }
 
 /// The control at `place` in `win` as it is now: the index of each control among its container's
@@ -975,7 +1007,8 @@ fn answered(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
 /// A click or a change the host gave in `ev` for control `id` of `nodes` (a description's list of
 /// elements): the control takes it and its handler runs. A dialog's button without `onClick` asks
 /// to close it with 1 when it is the default element and 2 when it is the cancel element, which
-/// `keep` (`show()`'s kept values) names; a palette has no `keep`.
+/// `keep` (`show()`'s kept values) names; a palette has no `keep`. No handler of a palette runs
+/// once a getter, a setter or an earlier handler of the event closed the palette.
 fn take_event(i: &mut Interp, win: ObjId, nodes: ObjId, ev: ObjId, event: &str, keep: Option<&[Value]>) -> JsResult<()> {
     let id = match slot(i, ev, "id")? {
         Value::Number(n) if n >= 0.0 && n.fract() == 0.0 => n as usize,
@@ -1003,7 +1036,10 @@ fn take_event(i: &mut Interp, win: ObjId, nodes: ObjId, ev: ObjId, event: &str, 
                 }
                 i.put(c, key("value"), Value::Bool(true), true)?;
             }
-            if handler(i, c, "onClick")?.is_none()
+            let Some(ran) = event_handler(i, win, c, ev, keep, "onClick")? else {
+                return Ok(());
+            };
+            if ran.is_none()
                 && kind == "button"
                 && let Some(keep) = keep
             {
@@ -1019,11 +1055,15 @@ fn take_event(i: &mut Interp, win: ObjId, nodes: ObjId, ev: ObjId, event: &str, 
             match kind.as_str() {
                 "edittext" => {
                     i.put(c, key("text"), value, true)?;
-                    handler(i, c, "onChanging")?;
+                    if event_handler(i, win, c, ev, keep, "onChanging")?.is_none() {
+                        return Ok(());
+                    }
                 }
                 "slider" => {
                     i.put(c, key("value"), value, true)?;
-                    handler(i, c, "onChanging")?;
+                    if event_handler(i, win, c, ev, keep, "onChanging")?.is_none() {
+                        return Ok(());
+                    }
                 }
                 _ => {
                     let n = match value {
@@ -1050,6 +1090,11 @@ fn take_event(i: &mut Interp, win: ObjId, nodes: ObjId, ev: ObjId, event: &str, 
                                 Value::Number(r) => r != number_slot(i, c, REVISION)?,
                                 _ => false,
                             };
+                            // An item's text getter may have closed the palette, and its `onClose`
+                            // may have changed the list: the event is then dropped, not refused.
+                            if !still_takes(i, win, ev, keep)? {
+                                return Ok(());
+                            }
                             if revised || !same || (n >= 0.0 && n as usize >= items_of(i, c)?.len()) {
                                 return Err(error(i, "a palette's list changed before the person's choice was taken"));
                             }
@@ -1058,7 +1103,8 @@ fn take_event(i: &mut Interp, win: ObjId, nodes: ObjId, ev: ObjId, event: &str, 
                     set_slot(i, c, SELECTION, Value::Number(n))?;
                 }
             }
-            handler(i, c, "onChange")?;
+            // `onChanging` may have closed the palette.
+            event_handler(i, win, c, ev, keep, "onChange")?;
         }
         _ => return Err(Abrupt::Internal(format!("the host gave show the event {event}"))),
     }
