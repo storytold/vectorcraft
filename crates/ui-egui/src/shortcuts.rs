@@ -89,6 +89,10 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
     if fired.phase == FirePhase::Release {
         return;
     }
+    // A held action key plays its action once, as production's action keys ignored repeats.
+    if fired.phase == FirePhase::Repeat && command.id == crate::panels::actions::PLAY_ACTION {
+        return;
+    }
     // A panel's pick shows the panel, where `window.panel` would put a showing one away.
     if picked
         && command.id == "window.panel"
