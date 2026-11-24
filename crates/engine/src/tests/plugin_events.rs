@@ -328,6 +328,49 @@ fn a_save_before_a_failed_batch_step_is_delivered() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A document a script opened before it failed is discarded with the run's working copy, so the
+/// plug-in is not told of it. The save the script made before failing is still given, and so is a
+/// document the frontend opened while the run was paused.
+#[test]
+fn a_failed_script_gives_its_save_but_not_its_open() {
+    let id = "test.events.failed_script";
+    let mut s = session();
+    let doc = s.doc().unwrap().uid;
+    install(&mut s, id, r#"["document.saved","document.opened"]"#, &[], "", tpl::LOG_EVENT, &[]);
+    s.plugin_event_frames = true;
+    let dir = std::env::temp_dir().join(format!("vectorcraft-engine-plugin-events-failed-script-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    run(&mut s, "document.save", json!({"path": dir.join("failed-script.vectorcraft").to_string_lossy()}));
+    s.deliver_plugin_events();
+    assert_eq!(given(&mut s, id), [json!({"type": "document.saved", "document": doc})]);
+    let data = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+
+    s.script_frames = true;
+    let source = format!(
+        "vc.run('document.save', {{}}); vc.run('document.open', {{name: 'b.vectorcraft', dataBase64: '{data}'}}); \
+         for (var i = 0; i < 3000000; i++) {{}} throw new Error('stop');"
+    );
+    assert_eq!(run(&mut s, "script.run", json!({"source": source, "name": "t.js"}))["running"], true);
+    assert!(s.script_pump().is_none(), "paused after its first slice");
+    let bytes = vectorcraft_format::base64_decode(&data).unwrap();
+    let index = crate::cmd::fileio::open_bytes(&mut s, "front.vectorcraft", &bytes, None).unwrap()["index"].as_u64().unwrap();
+    let front = s.documents()[index as usize].uid;
+    let mut slices = 0;
+    let r = loop {
+        slices += 1;
+        assert!(slices < 100_000, "the script ends");
+        if let Some(r) = s.script_pump() {
+            break r;
+        }
+    };
+    assert!(r.is_err(), "the script threw");
+    assert!(s.docs.iter().all(|d| d.uid == doc || d.uid == front), "the script's document was discarded");
+    s.deliver_plugin_events();
+    assert_eq!(given(&mut s, id), [json!({"type": "document.saved", "document": doc}), json!({"type": "document.opened", "document": front})]);
+    std::fs::remove_dir_all(&dir).ok();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A `selection.changed` event of a plug-in without `doc.read` gives the count and no ids; one
 /// with it lists the selected ids.
 #[test]

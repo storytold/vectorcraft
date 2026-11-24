@@ -67,6 +67,9 @@ struct Pending {
     to: Vec<(Recipient, Vec<&'static str>)>,
     /// When it was queued ([`PluginEvents::queued`] then).
     seq: u64,
+    /// Queued by a command of the running script, whose run has not ended yet
+    /// ([`Session::plugin_events_script_ended`]).
+    by_script: bool,
 }
 
 impl Pending {
@@ -169,7 +172,7 @@ impl PluginEvents {
             log::warn!("plug-in events: dropped a waiting {} event, past {MAX_PENDING} waiting", dropped.event.name());
         }
         let to = to.into_iter().map(|r| (r, reasons.clone())).collect();
-        self.pending.push_back(Pending { event, document: uid, to, seq: self.queued });
+        self.pending.push_back(Pending { event, document: uid, to, seq: self.queued, by_script: false });
         self.queued += 1;
     }
 
@@ -270,6 +273,25 @@ impl Session {
             return;
         }
         self.plugin_events.queue(event, uid, Vec::new(), to);
+        // An open or a save is queued as its own entry, the newest.
+        if self.script_in_run
+            && let Some(p) = self.plugin_events.pending.back_mut()
+        {
+            p.by_script = true;
+        }
+    }
+
+    /// At the end of a script's run. When the run failed (`kept` false), drops the waiting
+    /// `document.opened` events its commands queued, since the documents they opened were discarded
+    /// with its working copy. Its saves stay, since the files they wrote stay written, and so do the
+    /// events of documents a frontend opened while the run was paused.
+    pub(crate) fn plugin_events_script_ended(&mut self, kept: bool) {
+        if !kept {
+            self.plugin_events.pending.retain(|p| !(p.by_script && p.event == Event::DocumentOpened));
+        }
+        for p in &mut self.plugin_events.pending {
+            p.by_script = false;
+        }
     }
 
     /// A mark for [`Session::forget_plugin_opens_since`]: the events queued so far.

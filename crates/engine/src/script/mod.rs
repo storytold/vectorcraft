@@ -1910,6 +1910,8 @@ impl Session {
             lost
         });
         drop(lost);
+        // The job's working copy went with it, with the documents the run opened.
+        self.plugin_events_script_ended(false);
         raise_ids(self);
         self.script_stop.clear();
         self.reset_tool();
@@ -2182,6 +2184,7 @@ impl Session {
         let mut report = failure_report(&job.name, &e, file.as_deref(), &job.host, fuel_left, job.realm.limits().fuel.saturating_sub(fuel_left));
         close_run(self, &job.host, &mut report, ending(&e.kind));
         self.end_job(job, e.kind == RunErrorKind::Internal);
+        self.plugin_events_script_ended(false);
         raise_ids(self);
         self.script_stop.clear();
         self.reset_tool();
@@ -2271,6 +2274,7 @@ impl Session {
         host.more_written(&mut report);
         close_run(self, host, &mut report, console::Ending::Finished);
         self.end_job(job, false);
+        self.plugin_events_script_ended(true);
         self.script_report = Some(report.clone());
         Ok(report)
     }
