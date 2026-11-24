@@ -222,7 +222,7 @@ fn escape_ends_one_thing(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// An arrow nudge of the window or of a tool that left it. `direction` points the way of the arrow. In
 /// Presentation Mode Left and Right step the artboard and nothing moves; with only type selected, Alt steps the
-/// type's spacing; otherwise the selection moves (Shift ×10, Alt copies, `patterns_only` moves pattern fills only).
+/// type's spacing; otherwise the selection moves (Shift ×10, Ctrl/Cmd ÷10, Alt copies, `patterns_only` moves pattern fills only).
 pub(crate) fn nudge(app: &mut VectorcraftApp, direction: egui::Vec2, mods: Mods, patterns_only: bool) {
     if app.ui.screen_mode == 3 {
         if direction.x != 0.0 {
@@ -246,7 +246,7 @@ pub(crate) fn nudge(app: &mut VectorcraftApp, direction: egui::Vec2, mods: Mods,
         return;
     }
     if app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
-        let mut params = json!({"dx": f64::from(direction.x), "dy": f64::from(direction.y), "big": mods.shift, "copy": mods.alt});
+        let mut params = json!({"dx": f64::from(direction.x), "dy": f64::from(direction.y), "big": mods.shift, "fine": mods.cmd, "copy": mods.alt});
         if patterns_only {
             params["objects"] = json!(false);
             params["patterns"] = json!(true);

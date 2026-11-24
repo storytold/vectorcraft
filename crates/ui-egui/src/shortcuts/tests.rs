@@ -1076,6 +1076,24 @@ fn selected_vertical_area_and_path_type_use_vertical_spacing_chords() {
     }
 }
 
+/// #5258: Ctrl/Cmd+arrow nudges the selection by a tenth of the keyboard increment, and Shift+Ctrl/Cmd+arrow by one
+/// increment, one undo step each.
+#[test]
+fn command_arrows_nudge_by_a_tenth_of_the_keyboard_increment() {
+    let mut app = new_app();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let x0 = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap().x0;
+    let ctx = ready(&mut app);
+    let before = undo_len(&app);
+    for (m, x, n) in [(cmd(), 20.1, 1), (cmd() | Modifiers::SHIFT, 21.1, 2), (Modifiers::NONE, 22.1, 3)] {
+        key_frame(&mut app, &ctx, tap(Key::ArrowRight, m));
+        assert!((x0(&app) - x).abs() < 1e-9, "{m:?}: {}", x0(&app));
+        assert_eq!(undo_len(&app), before + n, "{m:?}");
+    }
+}
+
 /// Alt+arrows step a selected type object instead of copying it; a rectangle with Alt is copied.
 #[test]
 fn alt_arrows_step_selected_type_object() {
