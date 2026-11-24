@@ -257,8 +257,13 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
             crate::dialogs::dimension::floating(app, ui, space.view.rect);
         }
         let editing = app.session.tool_wants_text();
-        crate::type_editing::show(app, ui);
+        let editor = crate::type_editing::show(app, ui);
         out.reply = pass.map(|pass| tool_adapter::run(app, ui, pass));
+        if let Some(editor) = editor
+            && pass.is_some_and(|pass| matches!(pass.press.phase, PressPhase::Release { .. } | PressPhase::Cancel { .. }))
+        {
+            crate::type_editing::keep_keys(app, ui.ctx(), editor);
+        }
         // An edit the tool host started (a double-click on type) shows its editor in the same pass, so the keys of the
         // next frame are the edit's.
         if !editing {
