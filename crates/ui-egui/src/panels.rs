@@ -56,7 +56,7 @@ pub mod variables;
 
 use std::sync::Arc;
 
-use craft::behavior::{ColumnWidth, IconId, Mixed};
+use craft::behavior::{IconId, Mixed};
 use craft::color_ui::ui::{ChannelRule, HarmonyCommand};
 use craft::color_ui::ui::{PaintChip, PairWell, SwatchPair, SwatchPairOutput, SwatchPalette, Well};
 use craft::keymap::CommandRef;
@@ -64,10 +64,10 @@ use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::SwatchSpacing;
-use craft::ui::contract::{Bind, CommandSet as _, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{Bind, CommandSet as _, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger};
 use craft::ui::display::{Divider, Shade, Text};
-use craft::ui::form::Field;
-use craft::ui::layout_components::{Grid, Row};
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::layout_components::Row;
 use craft::ui::menu::{Menu, PanelMenu, PanelRow};
 use craft::ui::notices::{Notice, NoticeIcon, NoticeLayout};
 use craft::ui::pickers::Select;
@@ -151,10 +151,10 @@ fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     }
 }
 
-/// A select of the corner kinds named `name`, showing `current` (blank for None). Returns the kind
-/// picked.
+/// A select of the corner kinds named `name`, showing `current` (blank for None), as wide as its
+/// widest kind, so it fits beside a corner's radius field. Returns the kind picked.
 fn corner_select(ui: &mut Ui, name: &'static str, current: Option<CornerKind>, entries: &[Entry<CornerKind>]) -> Option<CornerKind> {
-    Select::new(name, Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), entries).show(ui).value().copied()
+    Select::new(name, Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), entries).sizing(Sizing::Content).show(ui).value().copied()
 }
 
 /// Set `kind` on corner `corner` (every corner for None) of each selected live rectangle
@@ -199,27 +199,26 @@ fn rectangle_corners() -> [(usize, &'static str, &'static str); 4] {
     ]
 }
 
-/// The columns of [`corner_fields`]: each corner's labelled radius field, then its Corner select.
-const CORNER_COLUMNS: [ColumnWidth; 2] = [ColumnWidth::fill(1.0), ColumnWidth::Content];
-
 /// One Corner Radius field and one Corner select per corner of a live rectangle, each pair on its
-/// own row with the corner's label; in a panel too narrow for that, each select goes under its
-/// field. A value typed or a kind picked is set on that corner alone, of each selected live
-/// rectangle ([`set_rectangle_corners`]).
+/// own row after the corner's label, the labels in one column; in a panel too narrow for that,
+/// each select wraps under its field. A value typed or a kind picked is set on that corner alone,
+/// of each selected live rectangle ([`set_rectangle_corners`]).
 fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     let Some(lc) = LiveCorners::of(n) else { return };
     let lengths = general_lengths(app);
     let entries = corner_entries();
     let mut radii = Vec::new();
     let mut kinds = Vec::new();
-    let _ = Grid::new(&CORNER_COLUMNS).show(ui, |ui, _| {
+    FieldGroup::new(tl!("Corners")).show(ui, |ui, _| {
         for (k, label, corner) in rectangle_corners() {
             Field::new(label).show(ui, |ui, _| {
-                radii.push((k, NumberField::length(label, Bind::given(Some(lc.radius(k))), lengths).show(ui).edit));
+                Row::new().wrap(true).show(ui, |ui, _| {
+                    radii.push((k, NumberField::length(label, Bind::given(Some(lc.radius(k))), lengths).show(ui).edit));
+                    if let Some(kind) = corner_select(ui, corner, Some(lc.kind(k)), &entries) {
+                        kinds.push((k, kind));
+                    }
+                });
             });
-            if let Some(kind) = corner_select(ui, corner, Some(lc.kind(k)), &entries) {
-                kinds.push((k, kind));
-            }
         }
     });
     for (k, edit) in &radii {
