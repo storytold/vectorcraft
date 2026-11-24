@@ -4,12 +4,14 @@
 //! threaded ([Align text](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/align-text.html)),
 //! so they are turned off when a selected frame has rows or columns or is threaded.
 
+use craft::behavior::{IconId, Mixed};
+use craft::ui::buttons::ToggleButton;
+use craft::ui::contract::{Bind, Props as _, Show as _};
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{NodeKind, TextKind, VerticalAlign};
 
 use crate::VectorcraftApp;
-use crate::widgets;
 
 /// The vertical alignment the selected area type shows, and whether the buttons can change it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,7 +49,7 @@ pub(crate) fn shown(app: &VectorcraftApp) -> Option<Shown> {
 /// it on every selected frame in one undo step (`text.areaOptions {verticalAlign}`, as Area Type
 /// Options does, each frame keeping its other options). Turned off for frames with rows or columns
 /// and threaded ones; nothing shows without area type. Returns whether the buttons were drawn.
-pub(crate) fn buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) -> bool {
+pub(crate) fn buttons(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let Some(s) = shown(app) else { return false };
     for (a, icon, tip, id) in [
         (VerticalAlign::Top, "dc-al-top", tl!("Align Top"), "top"),
@@ -55,7 +57,9 @@ pub(crate) fn buttons(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) -> bool 
         (VerticalAlign::Bottom, "dc-al-bottom", tl!("Align Bottom"), "bottom"),
         (VerticalAlign::Justify, "dc-dist-vcenter", tl!("Justify Vertically"), "justify"),
     ] {
-        if widgets::icon_button_enabled(ui, icon, tip, s.enabled && s.shared == Some(a), s.enabled, size).clicked()
+        let on = s.shared.map_or(Mixed::Mixed, |shared| Mixed::Same(shared == a));
+        let out = ToggleButton::new(tip, Bind::given(on)).icon(IconId::new(icon)).icon_only().enabled(s.enabled).show(ui);
+        if out.events.committed().is_some()
             && let Err(e) = app.run("text.areaOptions", json!({ "verticalAlign": id }))
         {
             app.status(e);
