@@ -105,12 +105,17 @@ impl Drop for SteadyFonts {
 
 /// [`SteadyFonts`] for `db`. Catalogs `db`'s installed fonts first: a first scan does not wait for
 /// any guard, so this thread can wait for one running on another thread while it holds a guard. A
-/// thread's first guard waits for the font changes under way or waiting.
+/// thread's first guard waits for a font change under way, and for a waiting change that can start
+/// now. It does not wait for a change that is waiting for guards other threads hold: the thread
+/// waiting for this guard may hold one of them.
 pub fn steady_fonts(db: &crate::FontDb) -> SteadyFonts {
     db.ensure_catalog();
     if STEADY.with(std::cell::Cell::get) == 0 {
         let mut s = steadiness();
-        while !CHANGING.with(std::cell::Cell::get) && (s.changing || s.waiting > 0) {
+        let waits = |s: &Steadiness| !CHANGING.with(std::cell::Cell::get) && (s.changing || (s.waiting > 0 && s.holders == s.holders_waiting));
+        #[cfg(test)]
+        gate_decisions().push((std::thread::current().id(), GateAsk::Guard, waits(&s)));
+        while waits(&s) {
             s = await_steadiness(s);
         }
         s.holders += 1;
@@ -150,7 +155,10 @@ pub(crate) fn font_change() -> FontChange {
     font_changers().push(std::thread::current().id());
     s.waiting += 1;
     s.holders_waiting += usize::from(holder);
-    while s.changing || if holder { s.holders > s.holders_waiting } else { s.holders > 0 } {
+    let waits = |s: &Steadiness| s.changing || if holder { s.holders > s.holders_waiting } else { s.holders > 0 };
+    #[cfg(test)]
+    gate_decisions().push((std::thread::current().id(), GateAsk::Change, waits(&s)));
+    while waits(&s) {
         s = await_steadiness(s);
     }
     s.waiting -= 1;
@@ -173,6 +181,22 @@ pub(crate) fn font_changes_held_back() -> bool {
 pub(crate) fn font_changers() -> std::sync::MutexGuard<'static, Vec<std::thread::ThreadId>> {
     static CHANGERS: std::sync::Mutex<Vec<std::thread::ThreadId>> = std::sync::Mutex::new(Vec::new());
     CHANGERS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// What a thread asked the gate for: its first [`SteadyFonts`] or a [`FontChange`].
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GateAsk {
+    Guard,
+    Change,
+}
+
+/// Each ask made of the gate, with whether it waited when it was made, recorded under the gate's
+/// lock ([`steady_fonts`], [`font_change`]).
+#[cfg(test)]
+pub(crate) fn gate_decisions() -> std::sync::MutexGuard<'static, Vec<(std::thread::ThreadId, GateAsk, bool)>> {
+    static DECISIONS: std::sync::Mutex<Vec<(std::thread::ThreadId, GateAsk, bool)>> = std::sync::Mutex::new(Vec::new());
+    DECISIONS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// The family of [`variable_font`].
@@ -374,22 +398,7 @@ pub fn two_axis_font() -> Option<Vec<u8>> {
 
 /// A `name` table of Windows English (US) records (name id, string).
 pub fn name_table(records: &[(u16, &str)]) -> Option<Vec<u8>> {
-    let mut records = records.to_vec();
-    records.sort_by_key(|r| r.0);
-    let n = u16::try_from(records.len()).ok()?;
-    let (mut head, mut strings) = (Vec::new(), Vec::new());
-    for v in [0, n, 6 + 12 * n] {
-        head.extend_from_slice(&v.to_be_bytes());
-    }
-    for (id, s) in records {
-        let bytes: Vec<u8> = s.encode_utf16().flat_map(u16::to_be_bytes).collect();
-        for v in [3, 1, 0x0409, id, u16::try_from(bytes.len()).ok()?, u16::try_from(strings.len()).ok()?] {
-            head.extend_from_slice(&v.to_be_bytes());
-        }
-        strings.extend(bytes);
-    }
-    head.extend(strings);
-    Some(head)
+    crate::file_font::name_table(records)
 }
 
 /// The family of [`vertical_font`].
@@ -1979,6 +1988,101 @@ pub fn pair_kerning_font() -> Option<Vec<u8>> {
     let lookups = PositionLookupList::new(vec![PositionLookup::Pair(Lookup::new(Default::default(), vec![pos]))]);
     let family = PAIR_KERNING_FAMILY;
     let name = name_table(&[(1, family), (2, "Regular"), (4, "Pairtest Sans Regular"), (6, "PairtestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&Gpos::new(scripts, features, lookups)).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"kern") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`positive_kerning_font`].
+pub const POSITIVE_KERNING_FAMILY: &str = "Poskern Sans";
+
+/// The units [`positive_kerning_font`] adds to the advance of an i that another i follows.
+pub const POSITIVE_KERNING_UNITS: i16 = 120;
+
+/// The bundled Source Sans 3 Regular as family [`POSITIVE_KERNING_FAMILY`], its `GPOS` replaced by
+/// one `kern` pair, i followed by i, that adds [`POSITIVE_KERNING_UNITS`] to the first glyph's
+/// advance. `None` when it can't be built.
+pub fn positive_kerning_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gpos::{Gpos, PairPos, PairSet, PairValueRecord, PositionLookup, PositionLookupList, ValueRecord};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let i = GlyphId16::new(u16::try_from(font.charmap().map('i')?.to_u32()).ok()?);
+    let record = PairValueRecord::new(i, ValueRecord::new().with_x_advance(POSITIVE_KERNING_UNITS), ValueRecord::new());
+    let coverage = CoverageFormat1::new(vec![i]);
+    let pos = PairPos::format_1(coverage.into(), vec![PairSet::new(vec![record])]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0])), vec![]))]);
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"kern"), Feature::new(None, vec![0]))]);
+    let lookups = PositionLookupList::new(vec![PositionLookup::Pair(Lookup::new(Default::default(), vec![pos]))]);
+    let family = POSITIVE_KERNING_FAMILY;
+    let name = name_table(&[(1, family), (2, "Regular"), (4, "Poskern Sans Regular"), (6, "PoskernSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&Gpos::new(scripts, features, lookups)).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"kern") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`space_kerning_font`].
+pub const SPACE_KERNING_FAMILY: &str = "Spacekern Sans";
+
+/// The units [`space_kerning_font`] adds to the advance of an i that a space follows.
+pub const SPACE_KERNING_UNITS: i16 = 130;
+
+/// The bundled Source Sans 3 Regular as family [`SPACE_KERNING_FAMILY`], its `GPOS` replaced by one
+/// `kern` pair, i followed by a space, that adds [`SPACE_KERNING_UNITS`] to the first glyph's
+/// advance. `None` when it can't be built.
+pub fn space_kerning_font() -> Option<Vec<u8>> {
+    space_kerned_font(SPACE_KERNING_FAMILY, "Spacekern", SPACE_KERNING_UNITS)
+}
+
+/// The family of [`space_narrowing_font`].
+pub const SPACE_NARROWING_FAMILY: &str = "Spacenarrow Sans";
+
+/// The units [`space_narrowing_font`] takes off the advance of an i that a space follows.
+pub const SPACE_NARROWING_UNITS: i16 = 130;
+
+/// [`space_kerning_font`] as family [`SPACE_NARROWING_FAMILY`], its pair taking
+/// [`SPACE_NARROWING_UNITS`] off the first glyph's advance instead. `None` when it can't be built.
+pub fn space_narrowing_font() -> Option<Vec<u8>> {
+    space_kerned_font(SPACE_NARROWING_FAMILY, "Spacenarrow", -SPACE_NARROWING_UNITS)
+}
+
+/// The bundled Source Sans 3 Regular as `family` (`short` Sans in its PostScript name), its `GPOS`
+/// replaced by one `kern` pair, i followed by a space, that adds `units` to the first glyph's
+/// advance.
+fn space_kerned_font(family: &str, short: &str, units: i16) -> Option<Vec<u8>> {
+    use write_fonts::tables::gpos::{Gpos, PairPos, PairSet, PairValueRecord, PositionLookup, PositionLookupList, ValueRecord};
+    use write_fonts::tables::layout::{CoverageFormat1, Feature, FeatureList, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord};
+    use write_fonts::types::GlyphId16;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let (i, space) = (gid('i')?, gid(' ')?);
+    let record = PairValueRecord::new(space, ValueRecord::new().with_x_advance(units), ValueRecord::new());
+    let coverage = CoverageFormat1::new(vec![i]);
+    let pos = PairPos::format_1(coverage.into(), vec![PairSet::new(vec![record])]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0])), vec![]))]);
+    let features = FeatureList::new(vec![FeatureRecord::new(Tag::new(b"kern"), Feature::new(None, vec![0]))]);
+    let lookups = PositionLookupList::new(vec![PositionLookup::Pair(Lookup::new(Default::default(), vec![pos]))]);
+    let (full, ps) = (format!("{family} Regular"), format!("{short}Sans-Regular"));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (6, &ps)])?;
     let mut builder = FontBuilder::new();
     builder.add_table(&Gpos::new(scripts, features, lookups)).ok()?;
     builder.add_raw(Tag::new(b"name"), name);
