@@ -158,10 +158,11 @@ fn native_options(custom_titlebar: bool) -> eframe::NativeOptions {
     }
 }
 
-/// Where eframe keeps the window's size and position: a nightly's private profile ([`nightly_root`]),
-/// never the folder the stable app's own window state sits in.
+/// Where eframe keeps its own saved state, if its persistence feature is ever on: a folder of its
+/// own inside the nightly profile ([`nightly_root`]), never the file craft's window placement is in
+/// (`<profile>/window.json`, which eframe would treat as a folder) and never the stable app's.
 fn nightly_window_state() -> Option<std::path::PathBuf> {
-    nightly_root().map(|root| root.join(craft::window::restore::FILE_NAME))
+    nightly_root().map(|root| root.join("eframe"))
 }
 
 /// The saved window placement (the framework's `window.json`): beside the preferences, as it always
@@ -512,7 +513,7 @@ fn main() -> std::process::ExitCode {
     };
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
-    log::info!("VectorCraft {} ({channel_name()})", vectorcraft_ui_egui::os_window::version());
+    log::info!("VectorCraft {} ({})", vectorcraft_ui_egui::os_window::version(), channel_name());
     if nightly {
         log::info!("nightly profile: {}", nightly_root().map(|root| root.display().to_string()).unwrap_or_default());
     }
@@ -778,7 +779,7 @@ fn main() -> std::process::ExitCode {
                 let (files, file_panels) = file_service(wake, folders);
                 let files = Arc::new(files);
                 craft::host::Host::builder(AppInfo {
-                    id: vectorcraft_ui_egui::os_window::app_id(),
+                    id: vectorcraft_ui_egui::os_window::SETTINGS_APP_ID,
                     name: vectorcraft_ui_egui::os_window::name(),
                     version: vectorcraft_ui_egui::os_window::version(),
                 })
@@ -975,8 +976,10 @@ fn main() -> std::process::ExitCode {
     // The window is gone: later launches start their own app, including the one a graphics
     // failure starts again below. A nightly's session record is finished here, by the controlled
     // return, before a successor can take the profile; on macOS the window's own `on_exit` already
-    // did it (a Dock quit ends the process inside AppKit), so this is then a no-op.
-    nightly_session::finish_once();
+    // did it (a Dock quit ends the process inside AppKit), so this is then a no-op. A caught panic
+    // is not a controlled return: it keeps the record for the next launch to report, and only
+    // frees the lease for the successor this run may still start.
+    nightly_session::finish_after(outcome.as_ref().is_ok_and(|result| result.is_ok()));
     #[cfg(not(target_os = "macos"))]
     single_instance::resign();
     // The process ends normally from here: this launch didn't stop while a plug-in was loading.

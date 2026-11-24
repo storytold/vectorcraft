@@ -5,16 +5,25 @@ use serde_json::Value;
 
 use crate::VectorcraftApp;
 
-#[cfg(target_arch = "wasm32")]
 use craft::ui::dialog::{Alert, HostedAlert};
 #[cfg(not(target_arch = "wasm32"))]
 use craft::update::stack_dialogs::{CheckChoice, UpdateCheckDialog, UpdatePromptDialog};
 #[cfg(not(target_arch = "wasm32"))]
 use craft::update::updater::{Action, Status, Updater};
 
+/// Whether this build checks for, downloads and installs VectorCraft's releases itself. A nightly
+/// does not: ArtCraft Launcher manages its updates, and the updater keeps its records, downloads
+/// and logs in the stable app's folders (`%LOCALAPPDATA%\VectorCraft` on Windows), which the
+/// profile fence refuses.
+#[cfg(not(target_arch = "wasm32"))]
+const fn app_updates_allowed_for(identity: crate::os_window::LaunchIdentity) -> bool {
+    crate::os_window::stable_services_for(identity)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) struct Runtime {
-    updater: Updater,
+    /// This build's updater: absent in a nightly, which never checks, downloads or installs.
+    updater: Option<Updater>,
     /// The desktop app turns the check at start on; tests leave it off.
     startup_check: bool,
     /// Whether a modal update dialog was open in the last pass.
@@ -22,9 +31,19 @@ pub(crate) struct Runtime {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+impl Runtime {
+    /// The runtime `identity` uses: a nightly keeps no updater at all, so no check, download,
+    /// install or record can start from it.
+    fn for_identity(identity: crate::os_window::LaunchIdentity) -> Self {
+        let updater = app_updates_allowed_for(identity).then(|| Updater::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")));
+        Self { updater, startup_check: false, was_modal: false }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 impl Default for Runtime {
     fn default() -> Self {
-        Self { updater: Updater::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")), startup_check: false, was_modal: false }
+        Self::for_identity(crate::os_window::identity())
     }
 }
 
@@ -40,7 +59,8 @@ impl VectorcraftApp {
     /// there, since the app is then never dropped.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn start_pending_update(&mut self) {
-        self.updates_rt.updater.start_pending_update();
+        let Some(updater) = self.updates_rt.updater.as_mut() else { return };
+        updater.start_pending_update();
     }
 }
 
@@ -55,11 +75,25 @@ pub(crate) fn check(app: &mut VectorcraftApp) -> Result<Value, String> {
     let dialogs = app.dialogs().ok_or("no window")?;
     #[cfg(not(target_arch = "wasm32"))]
     {
+        let Some(updater) = app.updates_rt.updater.as_mut() else {
+            // A nightly's updates are the Launcher's: say so, rather than offer a stable release
+            // that would install over the profile this build has to stay inside.
+            dialogs.with(|h| {
+                // One notice is enough: a second Check while it is open shows nothing new.
+                if !h.is_open::<HostedAlert>() {
+                    h.open(HostedAlert::new(Alert::new(
+                        tl!("VectorCraft Updates").to_string(),
+                        tl!("VectorCraft Nightly's updates come from ArtCraft Launcher.").to_string(),
+                    )));
+                }
+            });
+            return Ok(Value::Null);
+        };
         // An open result dialog shows the new status itself.
         dialogs.with(|h| {
             let _ = h.open_unless_open(check_dialog());
         });
-        app.updates_rt.updater.check_now();
+        updater.check_now();
     }
     #[cfg(target_arch = "wasm32")]
     dialogs.with(|h| {
@@ -76,15 +110,22 @@ pub(crate) fn check(app: &mut VectorcraftApp) -> Result<Value, String> {
 pub(crate) fn tick(app: &mut VectorcraftApp, ctx: &egui::Context) {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let rt = &mut app.updates_rt;
-        if rt.startup_check {
-            rt.updater.check_at_start();
+        // A nightly keeps no updater: nothing here runs, so nothing checks, downloads or installs.
+        if app.updates_rt.updater.is_none() {
+            return;
         }
-        rt.updater.tick(ctx);
+        if app.updates_rt.startup_check
+            && let Some(updater) = app.updates_rt.updater.as_mut()
+        {
+            updater.check_at_start();
+        }
+        let Some(updater) = app.updates_rt.updater.as_mut() else { return };
+        updater.tick(ctx);
         // An installation, and the close for a ready update, wait for unsaved and running work.
         let safe = safe_to_close(app);
         let Some(dialogs) = app.dialogs() else { return };
-        match dialogs.with(|h| app.updates_rt.updater.run(h, safe)) {
+        let Some(updater) = app.updates_rt.updater.as_mut() else { return };
+        match dialogs.with(|h| updater.run(h, safe)) {
             Action::OpenUrl(url) => app.open_url(&url),
             Action::Close => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             _ => {}
@@ -123,7 +164,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let Some(dialogs) = app.dialogs() else { return };
-        let updater = &mut app.updates_rt.updater;
+        let Some(updater) = app.updates_rt.updater.as_mut() else { return };
         let status = updater.status().clone();
         let prompt_open = updater.prompt_open();
         let (answered, modal) = dialogs.with(|h| {
@@ -170,7 +211,7 @@ pub(crate) fn open_prompt_for_test(app: &mut VectorcraftApp) {
 /// Closes the update prompt and the result dialog for a test in another module.
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn close_dialogs_for_test(app: &mut VectorcraftApp) {
-    app.updates_rt.updater = tests::isolated_updater(env!("CARGO_PKG_VERSION"), "closed");
+    app.updates_rt.updater = Some(tests::isolated_updater(env!("CARGO_PKG_VERSION"), "closed"));
     // The dialogs are the host's: a new updater does not take them down.
     if let (Some(ctx), Some(dialogs)) = (app.ui_ctx.clone(), app.dialogs()) {
         dialogs.with(|h| {
@@ -205,8 +246,9 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn offer(app: &mut VectorcraftApp) {
-        app.updates_rt.updater = isolated_updater(env!("CARGO_PKG_VERSION"), "prompt");
-        offer_and_wait(&mut app.updates_rt.updater, release_99());
+        let mut updater = isolated_updater(env!("CARGO_PKG_VERSION"), "prompt");
+        offer_and_wait(&mut updater, release_99());
+        app.updates_rt.updater = Some(updater);
     }
 
     /// The release the tests offer.
@@ -253,6 +295,31 @@ mod tests {
         app.run("file.save", json!({"path": "/docs/saved.vectorcraft"})).unwrap();
         assert!(!crate::unsaved::any_dirty(&app));
         app
+    }
+
+    /// A nightly keeps no updater: its check points at ArtCraft Launcher, and no frame or exit
+    /// hook starts a check, a download or an install.
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn a_nightly_never_checks_downloads_or_installs_an_update() {
+        use crate::os_window::LaunchIdentity;
+        assert!(app_updates_allowed_for(LaunchIdentity::Stable));
+        assert!(!app_updates_allowed_for(LaunchIdentity::NightlyV1));
+        assert!(Runtime::for_identity(LaunchIdentity::NightlyV1).updater.is_none());
+        assert!(Runtime::for_identity(LaunchIdentity::Stable).updater.is_some());
+
+        let mut app = app_with_saved_object();
+        let ctx = crate::testing::ui_context();
+        app.updates_rt.updater = None;
+        // Neither a frame nor the exit hook does anything at all.
+        tick(&mut app, &ctx);
+        pump(&mut app, &ctx);
+        app.start_pending_update();
+        let opened = app.dialogs().unwrap().with(|h| h.open_dialogs().len());
+        assert_eq!(opened, 0, "a nightly opens no update dialog on its own");
+        // Asked to check, it says who manages its updates instead of asking about a release.
+        check(&mut app).unwrap();
+        assert!(app.dialogs().unwrap().with(|h| h.is_open::<HostedAlert>()), "the check names ArtCraft Launcher");
     }
 
     #[test]

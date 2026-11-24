@@ -148,6 +148,18 @@ pub fn finish_once() {
     }
 }
 
+/// The end of a launch: a controlled return clears the record ([`finish_once`]); an abnormal one
+/// (a caught panic) keeps it for the next launch to report and only frees the lease, so the
+/// successor a graphics restart starts can take the profile.
+pub fn finish_after(clean: bool) {
+    if clean { finish_once() } else { release() }
+}
+
+/// An abnormal end: the record stays, the lease is dropped. Later calls do nothing.
+fn release() {
+    drop(SESSION.lock().unwrap_or_else(PoisonError::into_inner).take());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,6 +238,24 @@ mod tests {
         assert!(!clean.previous_unclean());
         clean.finish(false).unwrap();
         assert!(!fixture.0.join(RECORD).exists());
+    }
+
+    #[test]
+    fn an_abnormal_end_keeps_the_record_but_frees_the_lease() {
+        let fixture = Fixture::new();
+        assert!(!begin(Some(&fixture.0), "nightly", Some("panicked")).unwrap());
+        finish_after(false);
+        // A second end is a no-op, and the record stays for the next launch to report.
+        finish_after(false);
+        assert!(fixture.0.join(RECORD).exists(), "a caught panic leaves its record");
+        let successor = Session::begin(Some(&fixture.0), "successor", None).unwrap().unwrap();
+        assert!(successor.previous_unclean(), "the successor reports the interruption");
+        successor.finish(true).unwrap();
+        assert!(!fixture.0.join(RECORD).exists());
+        // A controlled return still clears the record it recorded.
+        assert!(!begin(Some(&fixture.0), "clean", None).unwrap());
+        finish_after(true);
+        assert!(!fixture.0.join(RECORD).exists(), "a controlled return clears its record");
     }
 
     #[test]

@@ -83,6 +83,12 @@ rm -rf "$WORK"
 install -Dm755 "$BIN/vectorcraft" "$STAGE/usr/bin/vectorcraft"
 install -Dm755 "$BIN/vectorcraft-cli" "$STAGE/usr/bin/vectorcraft-cli"
 "${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/vectorcraft" "$STAGE/usr/bin/vectorcraft-cli" 2>/dev/null || true
+if [[ "$IS_NIGHTLY" = 1 ]]; then
+  # The standard Nightly layout, for every format this tree feeds (tar, deb/rpm, AppImage, Flatpak):
+  # `<app>` is the launcher and `<app>-bin` the GUI it starts in the channel's own profile.
+  mv "$STAGE/usr/bin/vectorcraft" "$STAGE/usr/bin/vectorcraft-bin"
+  install -Dm755 "$HERE/nightly-launch.sh" "$STAGE/usr/bin/vectorcraft"
+fi
 install -Dm644 "$HERE/$APP_ID.desktop" "$STAGE/usr/share/applications/$APP_ID.desktop"
 if [[ "$IS_NIGHTLY" = 1 ]]; then
   sed -e 's|^StartupWMClass=.*|StartupWMClass=ai.storyteller.vectorcraft.nightly-v1|' \
@@ -144,21 +150,11 @@ if has deb || has rpm; then
     NFPM_STAGE="$WORK/nfpm-root"
     rm -rf "$NFPM_STAGE"
     cp -R "$STAGE" "$NFPM_STAGE"
-    install -Dm755 "$NFPM_STAGE/usr/bin/vectorcraft" "$NFPM_STAGE/usr/lib/vectorcraft-nightly/vectorcraft"
-    # The nightly is started the Launcher's way, with its own profile root: the build refuses
-    # VECTORCRAFT_CONFIG_DIR, so the wrapper passes the profile instead of an environment override.
-    cat >"$NFPM_STAGE/usr/bin/$NFPM_BIN" <<'WRAPPER'
-#!/bin/sh
-set -eu
-if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
-  exec /usr/lib/vectorcraft-nightly/vectorcraft "$@"
-fi
-profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
-exec /usr/lib/vectorcraft-nightly/vectorcraft \
-  --launch-profile nightly-v1 --profile-root "$profile_base/vectorcraft-nightly" -- "$@"
-WRAPPER
-    chmod 755 "$NFPM_STAGE/usr/bin/$NFPM_BIN"
-    rm -f "$NFPM_STAGE/usr/bin/vectorcraft"
+    install -Dm755 "$NFPM_STAGE/usr/bin/vectorcraft-bin" "$NFPM_STAGE/usr/lib/vectorcraft-nightly/vectorcraft-bin"
+    # The nightly is started the Launcher's way, with its own profile root: the same launcher every
+    # other format uses, which finds the GUI at ../lib/vectorcraft-nightly/vectorcraft-bin.
+    install -Dm755 "$HERE/nightly-launch.sh" "$NFPM_STAGE/usr/bin/$NFPM_BIN"
+    rm -f "$NFPM_STAGE/usr/bin/vectorcraft" "$NFPM_STAGE/usr/bin/vectorcraft-bin"
     # The CLI is a separate program that keeps the environment override: it follows the same folder.
     install -Dm755 "$NFPM_STAGE/usr/bin/vectorcraft-cli" "$NFPM_STAGE/usr/lib/vectorcraft-nightly/vectorcraft-cli"
     cat >"$NFPM_STAGE/usr/bin/$NFPM_CLI" <<'CLI_WRAPPER'
@@ -192,6 +188,9 @@ CLI_WRAPPER
     [[ -f "$NIGHTLY_ICON" ]] || NIGHTLY_ICON="$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png"
     install -Dm644 "$NIGHTLY_ICON" \
       "$NFPM_STAGE/usr/share/icons/hicolor/256x256/apps/$NIGHTLY_DESK_ID.png"
+    # No stable command name stays in the tree: an installed nightly must not replace or conflict
+    # with the stable package's own /usr/bin/vectorcraft-cli.
+    rm -f "$NFPM_STAGE/usr/bin/vectorcraft-cli"
   fi
   # nfpm expands env vars in fields like `version` and `arch`, but not in `contents[].src`.
   DROP_LIB_TREE=
@@ -227,19 +226,9 @@ if has appimage; then
   cp -R "$STAGE" "$APPDIR"
   if [[ "$IS_NIGHTLY" = 1 ]]; then
     APPIMAGE_ID="$APP_ID.nightly-v1"
-    # A script, not a symlink, and the flavor's own way of selecting the profile (see the deb wrapper).
-    cat >"$APPDIR/AppRun" <<'WRAPPER'
-#!/bin/sh
-set -eu
-APPDIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
-  exec "$APPDIR/usr/bin/vectorcraft" "$@"
-fi
-profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
-exec "$APPDIR/usr/bin/vectorcraft" \
-  --launch-profile nightly-v1 --profile-root "$profile_base/vectorcraft-nightly" -- "$@"
-WRAPPER
-    chmod 755 "$APPDIR/AppRun"
+    # A script, not a symlink: the same launcher every other format uses, which finds the GUI at
+    # usr/bin/vectorcraft-bin inside this AppDir.
+    install -Dm755 "$HERE/nightly-launch.sh" "$APPDIR/AppRun"
     sed -e "s|^Icon=$APP_ID$|Icon=$APPIMAGE_ID|" \
         -e "s|^Name=VectorCraft$|Name=VectorCraft Nightly|" \
         -e '/^MimeType=/d' \

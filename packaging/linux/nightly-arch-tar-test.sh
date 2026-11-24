@@ -24,6 +24,10 @@ cp "$stage/bin/vectorcraft" "$stage/bin/vectorcraft-cli"
 bash "$HERE/nightly-arch-tar.sh" "$stage" "$work/stage" "$dst" "$base"
 tar -xzf "$dst/$base.tar.gz" -C "$work/extract"
 bin="$work/extract/$base/bin"
+# The standard Nightly layout: `bin/vectorcraft` is the launcher and `bin/.vectorcraft-nightly/
+# vectorcraft-bin` the GUI it starts.
+cmp "$HERE/nightly-launch.sh" "$bin/vectorcraft"
+cmp "$stage/bin/vectorcraft" "$bin/.vectorcraft-nightly/vectorcraft-bin"
 # Simulate the existing Arch bin-tree copy and public launcher rename.
 mkdir -p "$work/installed"
 cp -R "$bin" "$work/installed/bin"
@@ -32,7 +36,8 @@ mv "$bin/vectorcraft" "$bin/vectorcraft-nightly"
 mv "$bin/vectorcraft-cli" "$bin/vectorcraft-nightly-cli"
 
 test ! -e "$stage/bin/.vectorcraft-nightly"
-cmp "$stage/bin/vectorcraft" "$bin/.vectorcraft-nightly/vectorcraft"
+cmp "$HERE/nightly-launch.sh" "$bin/vectorcraft-nightly"
+cmp "$stage/bin/vectorcraft" "$bin/.vectorcraft-nightly/vectorcraft-bin"
 cmp "$stage/bin/vectorcraft-cli" "$bin/vectorcraft-nightly-cli"
 export HOME="$work/home with space"
 unset XDG_DATA_HOME VECTORCRAFT_CONFIG_DIR
@@ -52,11 +57,17 @@ export XDG_DATA_HOME="$work/xdg with space"
 expect "$(printf 'CONFIG=<>\n<--launch-profile>\n<nightly-v1>\n<--profile-root>\n<%s>\n<-->\n<%s>\n<%s>\n' \
   "$XDG_DATA_HOME/vectorcraft-nightly" 'drawing with spaces.svg' '--other-name.svg')" \
   'drawing with spaces.svg' '--other-name.svg'
-# A version query reaches the binary without a profile: it must answer before any root exists.
+# A version or help query reaches the GUI without a profile: it answers before any root exists.
 expect "$(printf 'CONFIG=<>\n<--version>\n')" --version
 expect "$(printf 'CONFIG=<>\n<-V>\n')" -V
-# A VECTORCRAFT_CONFIG_DIR in the caller's environment is not consulted: the profile comes from the
-# Launcher's arguments, and the nightly build refuses that variable.
+expect "$(printf 'CONFIG=<>\n<--help>\n')" --help
+# The Launcher's own invocation passes through untouched, and a caller-written delimiter is not doubled.
+expect "$(printf 'CONFIG=<>\n<--launch-profile>\n<nightly-v1>\n<--profile-root>\n<%s>\n<--version>\n' "$work/launcher root")" \
+  --launch-profile nightly-v1 --profile-root "$work/launcher root" --version
+expect "$(printf 'CONFIG=<>\n<--launch-profile>\n<nightly-v1>\n<--profile-root>\n<%s>\n<-->\n<%s>\n' \
+  "$XDG_DATA_HOME/vectorcraft-nightly" 'sample.svg')" -- sample.svg
+# A VECTORCRAFT_CONFIG_DIR in the caller's environment is not turned into the profile: the launcher
+# passes it through untouched, and the nightly build then refuses that variable.
 unset XDG_DATA_HOME
 VECTORCRAFT_CONFIG_DIR="$work/explicit with space" \
   expect "$(printf 'CONFIG=<%s>\n<--launch-profile>\n<nightly-v1>\n<--profile-root>\n<%s>\n<-->\n<%s>\n' "$work/explicit with space" "$HOME/.local/share/vectorcraft-nightly" 'sample.svg')" sample.svg

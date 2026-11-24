@@ -37,7 +37,8 @@ jobs:
       - name: Parse every nightly shell script
         run: |
           set -euo pipefail
-          for script in packaging/nightly-common.sh packaging/linux/nightly.sh packaging/macos/nightly.sh \
+          for script in packaging/nightly-common.sh packaging/linux/nightly.sh packaging/linux/nightly-launch.sh \
+            packaging/linux/nightly-arch-tar.sh packaging/macos/nightly.sh \
             packaging/macos/nightly-lib.sh packaging/macos/nightly-sign.sh packaging/macos/nightly-verify.sh; do
             bash -n "$script"
           done
@@ -47,6 +48,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           shellcheck -x -P packaging packaging/nightly-common.sh packaging/linux/nightly.sh \
+            packaging/linux/nightly-launch.sh \
             packaging/macos/nightly.sh packaging/macos/nightly-lib.sh packaging/macos/nightly-sign.sh \
             packaging/macos/nightly-verify.sh
 

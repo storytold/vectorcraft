@@ -20,8 +20,18 @@ $global:SigningFixtureCargoCalls = 0
 if (-not [IO.Path]::IsPathRooted($FixtureRoot)) { throw 'use an owned absolute FixtureRoot' }
 $root = Join-Path $FixtureRoot ('signing-policy-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root | Out-Null
-$version = '0.24.1-nightly.20261124.12345.1.gaaaaaaaaaaaa'
+# The producer checks the prepared identity against the checked-out commit and the original run's
+# date (`nightly.ps1` Assert-NightlySource) before it reaches Cargo, so the fixture names both. A
+# made-up commit like `aaaa…` fails that check first, and the boundary case never runs.
+$repo = (Resolve-Path (Join-Path $PackagingRoot '..\..')).Path
+$head = "$(git -C $repo rev-parse HEAD)".Trim()
+if ($LASTEXITCODE -ne 0 -or $head -cnotmatch '^[0-9a-f]{40}$') { throw 'the signing suite needs the checked-out commit' }
+$stamp = '20261124'
+$date = "$($stamp.Substring(0, 4))-$($stamp.Substring(4, 2))-$($stamp.Substring(6, 2))"
+$version = "0.24.1-nightly.$stamp.12345.1.g$($head.Substring(0, 12))"
 $env:VECTORCRAFT_VERSION = $version
+$env:VECTORCRAFT_BUILD_SHA = $head
+$env:VECTORCRAFT_BUILD_DATE = $date
 function Invoke-Build([switch] $BuildOnly) {
   $arguments = @{Arch='x64';Version=$version;Target='x86_64-pc-windows-msvc';TargetDir=$root;Dist=(Join-Path $root 'dist')}
   if ($BuildOnly) { $arguments.BuildOnly = $true }

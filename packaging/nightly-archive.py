@@ -33,7 +33,7 @@ def checked_entries(root, stage):
     total = 0
     for entry in entries:
         name = entry.name
-        if name not in {"vectorcraft", "vectorcraft-nightly", "vectorcraft.png"} and not notice(name):
+        if name not in {"vectorcraft", "vectorcraft-bin", "vectorcraft.png"} and not notice(name):
             raise ValueError(f"unexpected nightly member: {name}")
         if len(name.encode("utf-8")) > 100:
             raise ValueError(f"nightly member must be a short regular file: {name}")
@@ -44,7 +44,9 @@ def checked_entries(root, stage):
         if name.casefold() in folded:
             raise ValueError(f"case-colliding nightly member: {name}")
         folded.add(name.casefold())
-    required = {"vectorcraft", "vectorcraft-nightly", "vectorcraft.png", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE", "ATTRIBUTION.md"}
+    # The standard Nightly layout: `<app>` is the launcher script and `<app>-bin` the GUI it starts,
+    # which the shared smoke queries through the entrypoint.
+    required = {"vectorcraft", "vectorcraft-bin", "vectorcraft.png", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE", "ATTRIBUTION.md"}
     if not required.issubset({item.name for item in entries}):
         raise ValueError("required GUI/icon/notices missing")
     return entries

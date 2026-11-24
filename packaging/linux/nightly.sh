@@ -18,12 +18,14 @@ OUTPUT="$DIST/vectorcraft-$VERSION-linux-x86_64-nightly.tar.gz"
 nightly_build_gui
 STAGE="$NIGHTLY_WORK/stage"
 mkdir -p "$STAGE"
-cp "$NIGHTLY_GUI" "$STAGE/vectorcraft"
+# The standard Nightly layout: `<app>` is the launcher and `<app>-bin` the GUI it starts, so an
+# unpacked tar is isolated like the packages and the shared smoke can query the entrypoint.
+cp "$NIGHTLY_GUI" "$STAGE/vectorcraft-bin"
+chmod 755 "$STAGE/vectorcraft-bin"
+cp "$ROOT/packaging/linux/nightly-launch.sh" "$STAGE/vectorcraft"
 chmod 755 "$STAGE/vectorcraft"
-# An unpacked tar is isolated too: the launcher starts the GUI with this channel's own profile.
-cp "$ROOT/packaging/linux/nightly-launch.sh" "$STAGE/vectorcraft-nightly"
-chmod 755 "$STAGE/vectorcraft-nightly"
-cp "$ROOT/assets/app-icon/vectorcraft-1024.png" "$STAGE/vectorcraft.png"
+# The Nightly art, not stable's: with both channels open the two tars must not share an icon.
+cp "$ROOT/assets/app-icon/vectorcraft-nightly.png" "$STAGE/vectorcraft.png"
 nightly_copy_notices "$STAGE"
 # The private mktemp cwd is the helper authority root, not a CLI path parent.
 (cd "$NIGHTLY_WORK" && python3 "$ROOT/packaging/nightly-archive.py" linux stage archive.tar.gz)

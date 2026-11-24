@@ -40,10 +40,11 @@ pub(crate) mod view;
 
 pub use fonts::MAX_RECENT_FONTS;
 
-/// VectorCraft as the framework's services know it: the settings folder, the name and the version.
-/// A nightly build gives its own window id, name and feed version ([`crate::os_window`]).
+/// VectorCraft as the framework's services know it: the settings id, the name and the version.
+/// A nightly build gives its own name and feed version; the id stays the stable one, since the
+/// runtime keys a theme's `[apps.<id>]` pins on it.
 fn app_info() -> AppInfo {
-    AppInfo { id: crate::os_window::app_id(), name: crate::os_window::name(), version: crate::os_window::version() }
+    AppInfo { id: crate::os_window::SETTINGS_APP_ID, name: crate::os_window::name(), version: crate::os_window::version() }
 }
 
 /// Monotonic seconds of the app's clock, which recovery, the clipboard look and the frame rate

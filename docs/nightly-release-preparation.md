@@ -88,10 +88,20 @@ The producer and signer call into this repository:
 The three platform-specific scripts share `packaging/nightly-common.sh` (input checks, the owned
 compile, the notice copier, the exclusive publish) and `packaging/nightly_paths.py` (the private
 build root every helper stays inside). `packaging/nightly-tests.py` runs the synthetic suites
-(`nightly-archive-tests.py`, `macos/nightly_plist_tests.py`, `macos/nightly_sign_tests.py`,
-`nightly-release-tests.py`); `.github/workflows/nightly-check.yml` runs them with the Windows
-PowerShell suites, and `.github/workflows/nightly-macos.yml` builds and verifies the unsigned
-bundle behind the `full-ci` label.
+(`nightly-archive-tests.py`, `linux/nightly-launch-tests.py`, `macos/nightly_plist_tests.py`,
+`macos/nightly_sign_tests.py`, `nightly-release-tests.py`); `.github/workflows/nightly-check.yml`
+runs them with the Windows PowerShell suites, and `.github/workflows/nightly-macos.yml` builds and
+verifies the unsigned bundle behind the `full-ci` label.
+
+Every Linux Nightly format starts the app the same way, through one launcher
+(`packaging/linux/nightly-launch.sh`): the plain tar's `vectorcraft`, the deb/rpm's
+`/usr/bin/vectorcraft-nightly`, the AppImage's `AppRun`, the Arch handoff's `bin/vectorcraft` and
+the Flatpak's `/app/bin/vectorcraft`. It runs the GUI beside it (`<app>-bin`, the standard Nightly
+layout; `/usr/lib/vectorcraft-nightly/vectorcraft-bin` for deb/rpm, `/app/libexec/vectorcraft-bin`
+inside the Flatpak) with `--launch-profile nightly-v1 --profile-root <dir> -- "$@"`, and passes a
+version query, help or the Launcher's own `--launch-profile` invocation straight through. The
+Nightly tar therefore holds `vectorcraft` (launcher), `vectorcraft-bin` (GUI), `vectorcraft.png`
+(the Nightly art) and the notices.
 
 The build switch is `VECTORCRAFT_BUILD_CHANNEL=nightly-v1`, which `apps/vectorcraft/build.rs` turns
 into `cfg(vectorcraft_nightly_v1)`; the identity is `VECTORCRAFT_VERSION`
@@ -102,11 +112,24 @@ to cargo. A nightly build without that identity refuses to build.
 The executable answers `--version`, `-V` and the Launcher's `--launch-profile nightly-v1
 --profile-root <abs> --version` before root validation, logging, IPC or any window, with exactly
 `VectorCraft <version> (nightly-v1)`. A nightly without a profile is refused (exit 2) with the
-message to open VectorCraft Nightly from ArtCraft Launcher; a stable build refuses the profile.
+message to open VectorCraft Nightly from ArtCraft Launcher; a stable build refuses the profile. That
+refusal goes to standard error, which a Launcher launch records: a release build has no console, so
+a Nightly started outside the Launcher exits 2 without a dialog. A native message box would need a
+new dependency (the workspace denies `unsafe_code`, and a cross-platform dialog crate would change
+`Cargo.lock`); the Launcher is the supported way in.
+
+A nightly does not update itself: Help › Check for Updates says that ArtCraft Launcher manages
+the Nightly's updates, and the startup check, the pending install and the updater itself are not
+created (`updates_ui::Runtime` keeps no updater unless `os_window::stable_services_allowed()`). The
+craft-update records, downloads and logs otherwise live in the stable app's folders, which the
+profile fence refuses.
 
 All user state of a nightly launch lives in the profile root the Launcher passes: `config.toml`,
 `logs`, `Data Recovery`, `Plug-ins`, `Fonts`, the user's libraries and script data, the
-single-instance record, the eframe window state (`app.ron`) and the framework's `window.json`.
+single-instance record, the session record and the framework's `window.json` (the window's size
+and position). eframe's own persistence is off in this build (its `persistence` feature is not
+enabled, so no `app.ron` is written anywhere); if it is ever turned on, its state goes to
+`<profile>/eframe`, a folder of its own, never to the `window.json` file.
 `apps/vectorcraft/src/profile_root.rs` fences it off stable's folders, a portable copy and the
 installation on every platform, and `apps/vectorcraft/src/profile.rs` (`install_data_root`) is the
 one hook every data path follows.

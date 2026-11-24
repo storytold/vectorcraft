@@ -10,6 +10,7 @@ def main() -> int:
     suite = unittest.TestSuite()
     for name, relative in (
         ("vector_archive_suite", "nightly-archive-tests.py"),
+        ("vector_launcher_suite", "linux/nightly-launch-tests.py"),
         ("vector_plist_suite", "macos/nightly_plist_tests.py"),
         ("vector_release_dispatch_suite", "nightly-release-tests.py"),
         ("vector_mac_sign_suite", "macos/nightly_sign_tests.py"),

@@ -392,9 +392,14 @@ mod tests {
                 let refused = result.is_err();
                 // A Flatpak instance only keeps the stable app's sockets on native Unix packages.
                 assert_eq!(refused, !(key == "FLATPAK_ID" && platform == Platform::Windows), "{key} on {platform:?}");
+                if refused {
+                    assert!(!root.exists(), "a refused launch creates nothing ({key} on {platform:?})");
+                } else if root.exists() {
+                    // The accepted case validated the root, which creates it: start the next one clean.
+                    std::fs::remove_dir_all(&root).expect("remove the accepted launch's root");
+                }
             }
         }
-        assert!(!root.exists(), "a refused launch creates nothing");
     }
 
     #[test]

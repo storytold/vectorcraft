@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn a_joined_flag_form_is_refused() {
-        for joined in [format!("--launch-profile={VERSION}"), format!("--profile-root={absolute()}")] {
+        for joined in [format!("--launch-profile={VERSION}"), format!("--profile-root={}", absolute())] {
             let argv = vec![OsString::from(joined), OsString::from("--")];
             assert!(parse(argv).is_err());
         }

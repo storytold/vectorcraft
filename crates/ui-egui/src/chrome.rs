@@ -187,8 +187,10 @@ pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {
     // Both closures need the app; the bar runs them one after the other.
     let start = |ui: &mut Ui, _: &mut BodyCx<'_>| leading(ui, &mut app.borrow_mut());
     let end = |ui: &mut Ui, _: &mut BodyCx<'_>| trailing(ui, &mut app.borrow_mut());
+    // A nightly's window and Dock entry carry its own name, so they never read as the stable app's.
+    let title = if crate::os_window::stable_services_allowed() { tl!("VectorCraft") } else { crate::os_window::name() };
     let _ = if titled {
-        TitleBar::new().surface(SurfaceKind::Background).show_titled(ui, Title::new(tl!("VectorCraft")), start, end)
+        TitleBar::new().surface(SurfaceKind::Background).show_titled(ui, Title::new(title), start, end)
     } else {
         TitleBar::new().surface(SurfaceKind::Background).show_fitted(ui, start, end)
     };
@@ -196,13 +198,19 @@ pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {
 
 /// The OS window title: the active document's name suffixed with the app name (a `*` prefix
 /// marks unsaved changes, like the `*` in the document tabs), or just the app name with no
-/// document open; in Safe Mode, followed by "(Safe Mode)".
+/// document open; in Safe Mode, followed by "(Safe Mode)". The app name is the build's own
+/// ([`crate::os_window::name`]): a nightly's window is not the stable app's.
 pub fn window_title(app: &VectorcraftApp) -> String {
+    window_title_named(app, crate::os_window::name())
+}
+
+/// [`window_title`] with the app name given, so both channels' titles can be read in one build.
+fn window_title_named(app: &VectorcraftApp, app_name: &str) -> String {
     let title = app
         .session
         .active()
-        .map(|d| format!("{}{} \u{2014} VectorCraft", if d.is_dirty() { "*" } else { "" }, d.title()))
-        .unwrap_or_else(|| "VectorCraft".into());
+        .map(|d| format!("{}{} \u{2014} {app_name}", if d.is_dirty() { "*" } else { "" }, d.title()))
+        .unwrap_or_else(|| app_name.to_string());
     if vectorcraft_plugins::safe_mode::active() { format!("{title} ({})", tl!("Safe Mode")) } else { title }
 }
 

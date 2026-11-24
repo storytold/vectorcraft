@@ -63,19 +63,9 @@ mkdir -p "$WORK/stage"
 tar -xzf "$TARBALL" -C "$WORK/stage" --strip-components=1
 [[ -x "$WORK/stage/bin/vectorcraft" ]] || { echo "error: $TARBALL has no bin/vectorcraft" >&2; exit 1; }
 if [[ "$FLATPAK_ID" != "$APP_ID" ]]; then
-  mv "$WORK/stage/bin/vectorcraft" "$WORK/stage/bin/vectorcraft-bin"
-  # The nightly selects its profile the flavor's way; the Flatpak's own HOME is the sandbox's.
-  cat >"$WORK/stage/bin/vectorcraft" <<'WRAPPER'
-#!/bin/sh
-set -eu
-if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
-  exec /app/libexec/vectorcraft "$@"
-fi
-profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
-exec /app/libexec/vectorcraft \
-  --launch-profile nightly-v1 --profile-root "$profile_base/vectorcraft-nightly" -- "$@"
-WRAPPER
-  chmod 755 "$WORK/stage/bin/vectorcraft"
+  # The Nightly tar already carries the standard layout: `bin/vectorcraft` is the launcher and
+  # `bin/vectorcraft-bin` the GUI it starts. The sandbox's own HOME is the profile's base.
+  [[ -x "$WORK/stage/bin/vectorcraft-bin" ]] || { echo "error: $TARBALL is not a Nightly tar (no bin/vectorcraft-bin)" >&2; exit 1; }
   sed -e "s|^Icon=$APP_ID$|Icon=$FLATPAK_ID|" \
       -e "s|^Name=VectorCraft$|Name=VectorCraft Nightly|" \
       -e 's|^StartupWMClass=.*|StartupWMClass=ai.storyteller.vectorcraft.nightly-v1|' \
@@ -95,7 +85,7 @@ WRAPPER
   install -Dm644 "$NIGHTLY_ICON" \
     "$WORK/stage/share/icons/hicolor/256x256/apps/$FLATPAK_ID.png"
   sed -e "s|ai\.storyteller\.vectorcraft|$FLATPAK_ID|g" \
-      -e 's|- install -Dm755 bin/vectorcraft /app/bin/vectorcraft|- install -Dm755 bin/vectorcraft-bin /app/libexec/vectorcraft\n      - install -Dm755 bin/vectorcraft /app/bin/vectorcraft|' \
+      -e 's|- install -Dm755 bin/vectorcraft /app/bin/vectorcraft|- install -Dm755 bin/vectorcraft-bin /app/libexec/vectorcraft-bin\n      - install -Dm755 bin/vectorcraft /app/bin/vectorcraft|' \
       "$HERE/flatpak/$APP_ID.bundle.yml" >"$WORK/$FLATPAK_ID.yml"
 else
   cp "$HERE/flatpak/$APP_ID.bundle.yml" "$WORK/$FLATPAK_ID.yml"

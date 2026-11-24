@@ -10,6 +10,10 @@
 /// Matches the `.desktop` file and hicolor icon name, so Wayland docks pick up the icon.
 pub const APP_ID: &str = "ai.storyteller.vectorcraft";
 
+/// The craft-settings app id, which the runtime keys a theme's `[apps.<id>]` pins on: neither the
+/// window id nor the channel, so it stays the same in both, and a user's theme keeps applying.
+pub const SETTINGS_APP_ID: &str = "vectorcraft";
+
 /// The package, macOS bundle and Linux archive identity of a nightly-v1 build; the window and the
 /// Windows AUMID end in `.nightly-v1` instead (see [`NIGHTLY_APP_ID`]), so the two stay apart.
 pub const NIGHTLY_PACKAGE_ID: &str = "ai.storyteller.vectorcraft.nightly";
@@ -118,6 +122,13 @@ mod tests {
         assert_eq!(NIGHTLY_PACKAGE_ID, "ai.storyteller.vectorcraft.nightly");
         assert_eq!(NIGHTLY_APP_ID, "ai.storyteller.vectorcraft.nightly-v1");
         assert_ne!(NIGHTLY_PACKAGE_ID, NIGHTLY_APP_ID);
+    }
+
+    #[test]
+    fn the_settings_app_id_is_neither_the_window_id_nor_channel_specific() {
+        assert_eq!(SETTINGS_APP_ID, "vectorcraft");
+        assert_ne!(SETTINGS_APP_ID, APP_ID);
+        assert_ne!(SETTINGS_APP_ID, id_for(LaunchIdentity::NightlyV1));
     }
 
     #[test]
