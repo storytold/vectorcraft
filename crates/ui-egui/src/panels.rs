@@ -75,6 +75,7 @@ use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandStates;
 use craft::ui::runtime::env::Label;
+use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::{NumberField, link_toggle};
 use egui::Ui;
 use serde_json::{Value, json};
@@ -891,6 +892,12 @@ pub(crate) fn whole_steps(range: std::ops::RangeInclusive<f64>) -> ChannelRule {
     let mut rule = ChannelRule::ALPHA;
     rule.range = range;
     rule
+}
+
+/// A section of a panel or dialog under its heading in label text: the reference app's section headings are regular
+/// weight, not bold.
+pub(crate) fn section<'a>(title: impl Into<Label>) -> Section<'a> {
+    Section::fixed(title).strength(HeaderStrength::Normal)
 }
 
 /// The empty state of a panel with nothing to show: `icon` over the title and the message,

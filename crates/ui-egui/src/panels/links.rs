@@ -31,7 +31,7 @@ use craft::ui::form::Field;
 use craft::ui::list::{List, ListRow, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::sections::{FooterAction, FooterBar, Panel, Section};
+use craft::ui::sections::{FooterAction, FooterBar, Panel};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -920,7 +920,7 @@ fn info_row(ui: &mut Ui, label: &'static str, value: String) {
 
 /// The Link Info section: the details of `info` (`links.info`), or a hint.
 fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
-    Section::fixed(tl!("Link Info")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Link Info")).show(ui, |ui, _| {
         let Some(i) = info else {
             Text::new(tl!("Select an image to see its Link Info.")).shade(Shade::Muted).show(ui);
             return;

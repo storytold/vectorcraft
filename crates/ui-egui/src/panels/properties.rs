@@ -7,12 +7,11 @@ use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::patterns::panels::Inspector;
 
 use craft::ui::runtime::commands::CommandRef;
-use craft::ui::sections::{HeaderStrength, Section};
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{LiveShape, Node, NodeKind};
 
-use super::first_selected;
+use super::{first_selected, section};
 use crate::VectorcraftApp;
 
 /// Run-only state of the Properties panel.
@@ -66,11 +65,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
-}
-
-/// A section of the panel under its heading in label text, as the reference panel's section headings are.
-fn section<'a>(title: &'static str) -> Section<'a> {
-    Section::fixed(title).strength(HeaderStrength::Normal)
 }
 
 /// The document's uid: production's field ids do not change with the selection, so neither does the key and the

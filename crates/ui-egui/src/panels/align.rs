@@ -10,7 +10,6 @@ use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
 use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::NumberField;
 use egui::Ui;
 use serde::Serialize;
@@ -479,14 +478,14 @@ pub(crate) fn run_align_to(app: &mut VectorcraftApp, v: AlignTo) -> Result<Value
 /// Spacing with its value and Align To. The buttons are commands, so their state and clicks come
 /// from the command layer ([`button_enabled`], [`run_button`]).
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    Section::fixed(tl!("Align Objects:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::section(tl!("Align Objects:")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
             for (icon, b) in align_icons() {
                 command_button(ui, icon, b);
             }
         });
     });
-    Section::fixed(tl!("Distribute Objects:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::section(tl!("Distribute Objects:")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
             for (icon, b) in distribute_icons() {
                 command_button(ui, icon, b);
@@ -504,7 +503,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let lengths = crate::canvas::general_lengths(app);
     let min_spacing = spacing_min(app);
     let mut edited = None;
-    Section::fixed(tl!("Distribute Spacing:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::section(tl!("Distribute Spacing:")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
             command_button(ui, "dc-dist-vspace", Button::Spacing("vertical"));
             command_button(ui, "dc-dist-hspace", Button::Spacing("horizontal"));
@@ -519,7 +518,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(v) = edited {
         app.ui.align_spacing = v;
     }
-    Section::fixed(tl!("Align To:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::section(tl!("Align To:")).show(ui, |ui, _| {
         // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
         let anchor = key_is_anchor(app);
         ui.horizontal(|ui| {
