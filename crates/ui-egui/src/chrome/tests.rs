@@ -2431,6 +2431,29 @@ fn the_control_bar_leaves_members_out_in_its_priority_order() {
     assert!(seen.iter().any(|s| s[0] && !s[1]), "some width shows the Align buttons without the fields");
 }
 
+/// With type selected, the Character and Paragraph groups leave the Control bar before the members ahead of them: at
+/// every width that shows the Character group, Opacity, Recolor Artwork and the Style picker show too, the Paragraph
+/// group leaves before the Character group, the Align buttons leave before the Paragraph group, and some width shows
+/// Opacity without them.
+#[test]
+fn the_type_groups_leave_the_control_bar_before_opacity_and_style() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Hi"})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let mut bar = control_shown(app);
+    let names = ["Character:", "Paragraph:", "Opacity:", "Recolor Artwork", "Style:", "Horizontal Align Left"];
+    let seen = control_bar_widths(&mut bar, &names);
+    assert!(seen.iter().any(|s| s.iter().all(|shown| *shown)), "a wide bar shows {names:?}");
+    for s in &seen {
+        assert!(!s[0] || s[2..5].iter().all(|shown| *shown), "the Character group shows only with {:?}: {s:?}", &names[2..5]);
+        assert!(!s[1] || s[0], "the Paragraph group shows only with the Character group: {s:?}");
+        assert!(!s[5] || s[1], "the Align buttons show only with the Paragraph group: {s:?}");
+    }
+    assert!(seen.iter().any(|s| s[2] && !s[0]), "some width shows Opacity without the Character group");
+}
+
 /// The names of the bar's X, Y, W and H fields, in their order.
 const BAR_FIELDS: [&str; 4] = ["X position", "Y position", "Width", "Height"];
 
