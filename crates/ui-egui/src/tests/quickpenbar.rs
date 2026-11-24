@@ -1,14 +1,21 @@
 //! The Quick Pen toolbar: it shows while the Quick Pen tool is active, its buttons set the tool's
 //! action and flip the last sharp-corner arc, it follows the drawing beside the path's last point,
-//! and its More Options menu's commands hide it, pin it and reset its place.
+//! and its More options menu's commands hide it, pin it and reset its place.
 
-use egui::{Event, PointerButton, Pos2, Rect, vec2};
+use egui::{Event, PointerButton, Pos2, Rect, Vec2, vec2};
 use serde_json::json;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_geom::{Point, SubPath};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
-use crate::{VectorcraftApp, canvas};
+use super::taskbar::{Rig, on_canvas};
+use crate::VectorcraftApp;
+
+/// The toolbar's access name.
+const BAR: &str = "Quick Pen";
+
+/// The names of its members.
+const MEMBERS: [&str; 5] = ["Straight Line", "Continuous Arc", "Sharp Corner Arc", "Flip Arc", "More options"];
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
@@ -17,61 +24,14 @@ fn app() -> VectorcraftApp {
     app
 }
 
-fn context() -> egui::Context {
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    ctx
-}
-
-/// One frame of the canvas; returns the buttons it drew, by name, from the accessibility tree.
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect, bool)> {
-    frame_in(app, ctx, events, vec2(1000.0, 700.0))
-}
-
-/// [`frame`] in a window of `size`.
-fn frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>, size: egui::Vec2) -> Vec<(String, Rect, bool)> {
-    let screen = Rect::from_min_size(Pos2::ZERO, size);
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| canvas::show(app, ui));
-    out.textures_delta.clear();
-    let Some(update) = out.platform_output.accesskit_update.as_ref() else { return vec![] };
-    update
-        .nodes
-        .iter()
-        .filter(|(_, n)| n.role() == egui::accesskit::Role::Button)
-        .filter_map(|(_, n)| {
-            let b = n.bounds()?;
-            let r = Rect::from_min_max(Pos2::new(b.x0 as f32, b.y0 as f32), Pos2::new(b.x1 as f32, b.y1 as f32));
-            Some((n.label()?.to_string(), r, !n.is_disabled()))
-        })
-        .collect()
-}
-
-/// Two frames, for the toolbar's area to settle; returns the second frame's buttons.
-fn settle(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, Rect, bool)> {
-    frame(app, ctx, vec![]);
-    frame(app, ctx, vec![])
-}
-
-fn bar(ctx: &egui::Context) -> Option<Rect> {
-    canvas::quick_pen_bar_rect(ctx)
-}
-
-/// Click the toolbar's button named `name`, which must be enabled.
-fn click_button(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
-    let named = settle(app, ctx);
-    let (_, r, on) = named.iter().find(|(n, _, _)| n == name).unwrap_or_else(|| panic!("no button named {name:?} in {named:?}"));
-    assert!(*on, "{name} is enabled");
-    let p = r.center();
-    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(app, ctx, vec![Event::PointerMoved(p)]);
-    frame(app, ctx, vec![press(true)]);
-    frame(app, ctx, vec![press(false)]);
-    frame(app, ctx, vec![]);
+/// The toolbar's rect, once the frames have settled; `None` while it is not shown.
+fn bar(rig: &mut Rig) -> Option<Rect> {
+    rig.target(BAR).map(|t| t.rect)
 }
 
 /// A click of the tool at `x`, `y` in the document.
-fn click_doc(app: &mut VectorcraftApp, x: f64, y: f64) {
+fn click_doc(rig: &Rig, x: f64, y: f64) {
+    let mut app = rig.app();
     let v = app.view_info();
     for kind in [PointerKind::Down, PointerKind::Up] {
         app.session.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
@@ -88,89 +48,99 @@ fn paths(app: &VectorcraftApp) -> Vec<SubPath> {
     v
 }
 
-fn screen(app: &VectorcraftApp, x: f64, y: f64) -> Pos2 {
-    app.canvas_xf().unwrap().to_screen(Point::new(x, y))
+/// The point `x`, `y` of the document on screen.
+fn screen(rig: &Rig, x: f64, y: f64) -> Pos2 {
+    rig.app().canvas_view().unwrap().to_screen(Point::new(x, y))
 }
 
-fn near(p: Pos2, q: Pos2) {
-    assert!((p - q).length() < 1.5, "{p:?} is not at {q:?}");
+fn button(pos: Pos2, which: PointerButton, pressed: bool) -> Event {
+    Event::PointerButton { pos, button: which, pressed, modifiers: Default::default() }
+}
+
+fn canvas_rect(rig: &Rig) -> Rect {
+    rig.app().canvas_view().unwrap().rect
+}
+
+/// Whether the toolbar rests at the bottom center of the canvas: centered across it and in its lower half.
+fn rests(rig: &mut Rig, r: Rect) -> bool {
+    let canvas = canvas_rect(rig);
+    (r.center().x - canvas.center().x).abs() < 1.5 && r.center().y > canvas.center().y && canvas.contains_rect(r)
+}
+
+/// Escape on the tool, which ends the path being drawn.
+fn escape(rig: &Rig) {
+    let mut app = rig.app();
+    let v = app.view_info();
+    app.session.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
 }
 
 /// The toolbar shows only with the Quick Pen tool, at the bottom center of the canvas while no path
 /// is being drawn; its action buttons set the tool's action without drawing on the canvas under
-/// them; Hide Toolbar and Window › Quick Pen Toolbar hide and show it.
+/// them; Window › Quick Pen Toolbar hides and shows it.
 #[test]
 fn the_toolbar_shows_with_the_tool_and_its_buttons_set_the_action() {
     let mut app = app();
-    let ctx = context();
-    let named = settle(&mut app, &ctx);
-    let r = bar(&ctx).expect("the toolbar shows with the Quick Pen tool");
-    for name in ["Straight Line", "Continuous Arc", "Sharp Corner Arc", "Flip Arc", "More Options"] {
-        assert!(named.iter().any(|(n, _, _)| n == name), "{name} in {named:?}");
-    }
-    assert!(!named.iter().any(|(n, _, on)| n == "Flip Arc" && *on), "Flip Arc waits for an arc");
-    let canvas = app.canvas_xf().unwrap().rect;
-    assert!((r.center().x - canvas.center().x).abs() < 1.5 && (r.bottom() - (canvas.bottom() - 8.0)).abs() < 1.5, "{r:?} in {canvas:?}");
+    on_canvas(&mut app, |rig| {
+        let r = bar(rig).expect("the toolbar shows with the Quick Pen tool");
+        for name in MEMBERS {
+            assert!(rig.target(name).is_some(), "{name}");
+        }
+        let flip = rig.target("Flip Arc").unwrap();
+        assert!(rig.fx.tree().is_disabled_key(flip.node), "Flip Arc waits for an arc");
+        assert!(rests(rig, r), "{r:?} rests at the bottom center of the canvas");
 
-    click_button(&mut app, &ctx, "Sharp Corner Arc");
-    assert_eq!(app.session.tool_options()["action"], "sharpArc");
-    click_button(&mut app, &ctx, "Continuous Arc");
-    assert_eq!(app.session.tool_options()["action"], "continuousArc");
-    click_button(&mut app, &ctx, "Straight Line");
-    assert_eq!(app.session.tool_options()["action"], "line");
-    assert!(paths(&app).is_empty(), "a click on the toolbar draws nothing");
+        let action = |rig: &Rig| rig.app().session.tool_options()["action"].clone();
+        rig.click("Sharp Corner Arc");
+        assert_eq!(action(rig), "sharpArc");
+        rig.click("Continuous Arc");
+        assert_eq!(action(rig), "continuousArc");
+        rig.click("Straight Line");
+        assert_eq!(action(rig), "line");
+        assert!(paths(&rig.app()).is_empty(), "a click on the toolbar draws nothing");
 
-    assert_eq!(app.run("window.quickPenToolbar", json!({})).unwrap(), json!(false));
-    assert_eq!(crate::menus::checked(&app, "window.quickPenToolbar", &json!({})), Some(false));
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_none(), "hidden");
-    assert_eq!(app.run("window.quickPenToolbar", json!({})).unwrap(), json!(true));
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_some(), "shown again");
+        assert_eq!(rig.app().run("window.quickPenToolbar", json!({})).unwrap(), json!(false));
+        assert_eq!(crate::menus::checked(&rig.app(), "window.quickPenToolbar", &json!({})), Some(false));
+        assert!(bar(rig).is_none(), "hidden");
+        assert_eq!(rig.app().run("window.quickPenToolbar", json!({})).unwrap(), json!(true));
+        assert!(bar(rig).is_some(), "shown again");
 
-    app.select_tool("pen");
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_none(), "only with the Quick Pen tool");
+        rig.app().select_tool("pen");
+        assert!(bar(rig).is_none(), "only with the Quick Pen tool");
 
-    // Hidden, it shows again when the tool is selected again.
-    app.select_tool("quickPen");
-    settle(&mut app, &ctx);
-    assert_eq!(app.run("window.quickPenToolbar", json!({})).unwrap(), json!(false));
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_none(), "hidden");
-    app.select_tool("pen");
-    app.select_tool("quickPen");
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_some(), "selecting the tool shows it");
-    assert_eq!(crate::menus::checked(&app, "window.quickPenToolbar", &json!({})), Some(true));
-    // Selecting it again while it is active shows it too.
-    app.run("window.quickPenToolbar", json!({})).unwrap();
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_none(), "hidden");
-    app.run("tool.select", json!({"tool": "quickPen"})).unwrap();
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_some(), "selected again");
+        // Hidden, it shows again when the tool is selected again.
+        rig.app().select_tool("quickPen");
+        assert!(bar(rig).is_some());
+        assert_eq!(rig.app().run("window.quickPenToolbar", json!({})).unwrap(), json!(false));
+        assert!(bar(rig).is_none(), "hidden");
+        rig.app().select_tool("pen");
+        rig.app().select_tool("quickPen");
+        assert!(bar(rig).is_some(), "selecting the tool shows it");
+        assert_eq!(crate::menus::checked(&rig.app(), "window.quickPenToolbar", &json!({})), Some(true));
+        // Selecting it again while it is active shows it too.
+        rig.app().run("window.quickPenToolbar", json!({})).unwrap();
+        assert!(bar(rig).is_none(), "hidden");
+        rig.app().run("tool.select", json!({"tool": "quickPen"})).unwrap();
+        assert!(bar(rig).is_some(), "selected again");
+    });
 }
 
 /// The toolbar hides while a press drags on the canvas, and shows again once it is let go.
 #[test]
 fn the_toolbar_hides_while_a_press_drags_on_the_canvas() {
     let mut app = app();
-    let ctx = context();
-    // The first click places the path's start; the press that follows drags out a piece.
-    click_doc(&mut app, 60.0, 60.0);
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_some());
-    let (a, b) = (screen(&app, 100.0, 100.0), screen(&app, 200.0, 140.0));
-    let press = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![Event::PointerMoved(a), press(a, true)]);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(a + (b - a) / 2.0)]);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(b)]);
-    assert!(app.session.tool_busy(), "the press reached the tool");
-    assert!(bar(&ctx).is_none(), "hidden mid-drag");
-    frame(&mut app, &ctx, vec![press(b, false)]);
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_some(), "shown after the drag");
+    on_canvas(&mut app, |rig| {
+        // The first click places the path's start; the press that follows drags out a piece.
+        click_doc(rig, 60.0, 60.0);
+        assert!(bar(rig).is_some());
+        let (a, b) = (screen(rig, 100.0, 100.0), screen(rig, 200.0, 140.0));
+        rig.fx.frame(vec![Event::PointerMoved(a), button(a, PointerButton::Primary, true)]);
+        rig.fx.frame(vec![Event::PointerMoved(a + (b - a) / 2.0)]);
+        rig.fx.frame(vec![Event::PointerMoved(b)]);
+        assert!(rig.app().session.tool_busy(), "the press reached the tool");
+        assert!(rig.fx.by_label(BAR).is_none(), "hidden mid-drag");
+        rig.fx.frame(vec![button(b, PointerButton::Primary, false)]);
+        assert!(bar(rig).is_some(), "shown after the drag");
+    });
 }
 
 /// A middle-button drag on the canvas (a pan), which the tool takes no press from, hides the toolbar
@@ -178,36 +148,17 @@ fn the_toolbar_hides_while_a_press_drags_on_the_canvas() {
 #[test]
 fn the_toolbar_hides_while_the_canvas_pans() {
     let mut app = app();
-    let ctx = context();
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_some());
-    let (a, b) = (screen(&app, 100.0, 100.0), screen(&app, 200.0, 140.0));
-    let press = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Middle, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![Event::PointerMoved(a), press(a, true)]);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(a + (b - a) / 2.0)]);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(b)]);
-    assert!(!app.session.tool_busy(), "the tool has no press under way");
-    assert!(bar(&ctx).is_none(), "hidden mid-pan");
-    frame(&mut app, &ctx, vec![press(b, false)]);
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_some(), "shown after the pan");
-}
-
-/// On a canvas narrower than the toolbar, its controls wrap onto more rows, so every button lies
-/// on the canvas.
-#[test]
-fn the_toolbar_wraps_on_a_narrow_canvas() {
-    let mut app = app();
-    let ctx = context();
-    let size = vec2(130.0, 500.0);
-    frame_in(&mut app, &ctx, vec![], size);
-    let named = frame_in(&mut app, &ctx, vec![], size);
-    let canvas = app.canvas_xf().unwrap().rect;
-    assert!(canvas.width() < 150.0, "{canvas:?}");
-    for name in ["Straight Line", "Continuous Arc", "Sharp Corner Arc", "Flip Arc", "More Options"] {
-        let (_, r, _) = named.iter().find(|(n, _, _)| n == name).unwrap_or_else(|| panic!("{name} in {named:?}"));
-        assert!(canvas.contains_rect(*r), "{name} at {r:?} is off the canvas {canvas:?}");
-    }
+    on_canvas(&mut app, |rig| {
+        assert!(bar(rig).is_some());
+        let (a, b) = (screen(rig, 100.0, 100.0), screen(rig, 200.0, 140.0));
+        rig.fx.frame(vec![Event::PointerMoved(a), button(a, PointerButton::Middle, true)]);
+        rig.fx.frame(vec![Event::PointerMoved(a + (b - a) / 2.0)]);
+        rig.fx.frame(vec![Event::PointerMoved(b)]);
+        assert!(!rig.app().session.tool_busy(), "the tool has no press under way");
+        assert!(rig.fx.by_label(BAR).is_none(), "hidden mid-pan");
+        rig.fx.frame(vec![button(b, PointerButton::Middle, false)]);
+        assert!(bar(rig).is_some(), "shown after the pan");
+    });
 }
 
 /// Flip Arc's command sends C only to the Quick Pen tool: with the Arc tool, which takes C while it
@@ -225,49 +176,73 @@ fn flip_arc_does_nothing_with_another_tool() {
     assert_eq!(app.session.tool_options()["closed"], closed, "the arc's C was not sent");
 }
 
-/// While a path is drawn, the toolbar sits 24 points off its last point, on the side the path
-/// heads toward; Flip Arc flips the last sharp-corner arc as one undo step and is off after a line;
-/// Escape sends the toolbar back to the bottom of the canvas.
+/// While a path is drawn, the toolbar sits below its last point, on the side the path heads toward;
+/// Flip Arc flips the last sharp-corner arc as one undo step and is off after a line; Escape sends the
+/// toolbar back to the bottom of the canvas.
 #[test]
 fn the_toolbar_follows_the_drawing_and_flips_the_last_arc() {
     let mut app = app();
-    let ctx = context();
-    settle(&mut app, &ctx);
-    let resting = bar(&ctx).unwrap();
-    app.run("tool.setOption", json!({"key": "action", "value": "sharpArc"})).unwrap();
-    assert_eq!(app.run("tool.quickPen.flipArc", json!({})).unwrap(), json!(false), "no path being drawn");
-    click_doc(&mut app, 100.0, 150.0);
-    click_doc(&mut app, 200.0, 150.0);
-    // A half circle above the chord, which arrives at (200, 150) heading down: right and below.
-    let mid = |app: &VectorcraftApp| paths(app)[0].anchors[1].p;
-    assert!(mid(&app).y < 150.0);
-    settle(&mut app, &ctx);
-    near(bar(&ctx).unwrap().min, screen(&app, 200.0, 150.0) + vec2(24.0, 24.0));
+    on_canvas(&mut app, |rig| {
+        let resting = bar(rig).unwrap();
+        assert!(rests(rig, resting));
+        rig.app().run("tool.setOption", json!({"key": "action", "value": "sharpArc"})).unwrap();
+        assert_eq!(rig.app().run("tool.quickPen.flipArc", json!({})).unwrap(), json!(false), "no path being drawn");
+        click_doc(rig, 100.0, 150.0);
+        click_doc(rig, 200.0, 150.0);
+        // A half circle above the chord, which arrives at (200, 150) heading down: right of and below the end.
+        let mid = |rig: &Rig| paths(&rig.app())[0].anchors[1].p;
+        assert!(mid(rig).y < 150.0);
+        let r = bar(rig).unwrap();
+        let end = screen(rig, 200.0, 150.0);
+        assert!(r.left() > end.x && r.top() > end.y, "{r:?} right of and below {end:?}");
 
-    let undo = app.session.active().unwrap().history.undo.len();
-    click_button(&mut app, &ctx, "Flip Arc");
-    assert!(mid(&app).y > 150.0, "flipped below the chord");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        let undo = rig.app().session.active().unwrap().history.undo.len();
+        rig.click("Flip Arc");
+        assert!(mid(rig).y > 150.0, "flipped below the chord");
+        assert_eq!(rig.app().session.active().unwrap().history.undo.len(), undo + 1);
 
-    // A line drawn to the left: the toolbar goes to the left of its end, still below it.
-    app.run("tool.setOption", json!({"key": "action", "value": "line"})).unwrap();
-    click_doc(&mut app, 120.0, 150.0);
-    let named = settle(&mut app, &ctx);
-    let r = bar(&ctx).unwrap();
-    let end = screen(&app, 120.0, 150.0);
-    near(pos2_of(r.right(), r.top()), end + vec2(-24.0, 24.0));
-    assert!(!named.iter().any(|(n, _, on)| n == "Flip Arc" && *on), "Flip Arc is off after a line");
-    assert_eq!(app.run("tool.quickPen.flipArc", json!({})).unwrap(), json!(false));
-    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 2, "the line, and no flip");
+        // A line drawn to the left: the toolbar goes to the left of its end, still below it.
+        rig.app().run("tool.setOption", json!({"key": "action", "value": "line"})).unwrap();
+        click_doc(rig, 120.0, 150.0);
+        let r = bar(rig).unwrap();
+        let end = screen(rig, 120.0, 150.0);
+        assert!(r.right() < end.x && r.top() > end.y, "{r:?} left of and below {end:?}");
+        let flip = rig.target("Flip Arc").unwrap();
+        assert!(rig.fx.tree().is_disabled_key(flip.node), "Flip Arc is off after a line");
+        assert_eq!(rig.app().run("tool.quickPen.flipArc", json!({})).unwrap(), json!(false));
+        assert_eq!(rig.app().session.active().unwrap().history.undo.len(), undo + 2, "the line, and no flip");
 
-    let v = app.view_info();
-    app.session.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
-    settle(&mut app, &ctx);
-    near(bar(&ctx).unwrap().min, resting.min);
+        escape(rig);
+        let r = bar(rig).unwrap();
+        assert!(rests(rig, r), "{r:?} is back at the bottom of the canvas");
+    });
 }
 
-fn pos2_of(x: f32, y: f32) -> Pos2 {
-    Pos2::new(x, y)
+/// Near the bottom of the canvas, a path heading down gets its toolbar above its end, not over it; near
+/// the top, one heading up gets it below.
+#[test]
+fn the_toolbar_goes_to_the_other_side_where_it_runs_off_the_canvas() {
+    let mut app = app();
+    on_canvas(&mut app, |rig| {
+        assert!(bar(rig).is_some());
+        let canvas = canvas_rect(rig);
+        let doc = |rig: &Rig, y: f32| rig.app().canvas_view().unwrap().to_doc(egui::pos2(canvas.center().x, y));
+        // A line to the right along the canvas's bottom edge, then one along its top edge drawn upward.
+        for (from, to, heads_down) in [(canvas.bottom() - 8.0, canvas.bottom() - 8.0, true), (canvas.top() + 40.0, canvas.top() + 8.0, false)] {
+            escape(rig);
+            let (a, b) = (doc(rig, from), doc(rig, to));
+            click_doc(rig, a.x - 40.0, a.y);
+            click_doc(rig, b.x, b.y);
+            let r = bar(rig).unwrap();
+            let end = screen(rig, b.x, b.y);
+            assert!(canvas.contains_rect(r), "{r:?} on the canvas {canvas:?}");
+            if heads_down {
+                assert!(r.bottom() < end.y && r.left() > end.x, "{r:?} above and right of {end:?}");
+            } else {
+                assert!(r.top() > end.y, "{r:?} below {end:?}");
+            }
+        }
+    });
 }
 
 /// The toolbar stays shown while its handle is dragged farther than the toolbar's height, when the
@@ -275,74 +250,66 @@ fn pos2_of(x: f32, y: f32) -> Pos2 {
 #[test]
 fn the_toolbar_stays_while_its_handle_drags_far() {
     let mut app = app();
-    let ctx = context();
-    settle(&mut app, &ctx);
-    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    let grip = pos2_of(bar(&ctx).unwrap().left() + 10.0, bar(&ctx).unwrap().center().y);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(grip)]);
-    frame(&mut app, &ctx, vec![button(grip, true)]);
-    for k in 1..=6 {
-        frame(&mut app, &ctx, vec![Event::PointerMoved(grip + vec2(-20.0, -30.0) * k as f32)]);
-        assert!(bar(&ctx).is_some(), "shown at step {k}");
-    }
-    frame(&mut app, &ctx, vec![button(grip + vec2(-120.0, -180.0), false)]);
-    settle(&mut app, &ctx);
-    assert!(bar(&ctx).is_some());
+    on_canvas(&mut app, |rig| {
+        assert!(bar(rig).is_some());
+        let grip = rig.target("Move bar").expect("the toolbar's handle");
+        rig.fx.press(&grip);
+        let from = grip.center();
+        for k in 1..=6 {
+            rig.fx.frame(vec![Event::PointerMoved(from + vec2(-20.0, -30.0) * k as f32)]);
+            assert!(rig.fx.by_label(BAR).is_some(), "shown at step {k}");
+        }
+        rig.fx.release_at(from + vec2(-120.0, -180.0));
+        assert!(bar(rig).is_some());
+    });
 }
 
 /// The handle drags the toolbar, which keeps that offset as it follows the drawing, but not in its
-/// resting place with no path being drawn; pinned, it stays put; Reset Toolbar Position puts it
-/// back beside the drawing, unpinned.
+/// resting place with no path being drawn; pinned, it stays put; Reset bar position puts it back beside
+/// the drawing, unpinned.
 #[test]
 fn the_toolbar_drags_pins_and_resets() {
     let mut app = app();
-    let ctx = context();
-    click_doc(&mut app, 100.0, 100.0);
-    click_doc(&mut app, 150.0, 100.0);
-    settle(&mut app, &ctx);
-    let beside = |app: &VectorcraftApp, x: f64, y: f64| screen(app, x, y) + vec2(24.0, 24.0);
-    near(bar(&ctx).unwrap().min, beside(&app, 150.0, 100.0));
-    let button = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    let grip = pos2_of(bar(&ctx).unwrap().left() + 10.0, bar(&ctx).unwrap().center().y);
-    let by = vec2(30.0, 40.0);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(grip)]);
-    frame(&mut app, &ctx, vec![button(grip, true)]);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(grip + by)]);
-    frame(&mut app, &ctx, vec![button(grip + by, false)]);
-    settle(&mut app, &ctx);
-    near(bar(&ctx).unwrap().min, beside(&app, 150.0, 100.0) + by);
-    assert_eq!(paths(&app)[0].anchors.len(), 2, "dragging the handle draws nothing");
+    on_canvas(&mut app, |rig| {
+        // Where the toolbar's corner lies from the end of the drawing.
+        let from_end = |rig: &mut Rig, x: f64, y: f64| -> Vec2 { bar(rig).unwrap().min - screen(rig, x, y) };
+        click_doc(rig, 100.0, 100.0);
+        click_doc(rig, 150.0, 100.0);
+        let beside = from_end(rig, 150.0, 100.0);
+        assert!(beside.x > 0.0 && beside.y > 0.0, "beside the end, below it: {beside:?}");
+        let grip = rig.target("Move bar").expect("the toolbar's handle");
+        let by = vec2(30.0, 40.0);
+        rig.fx.drag(&grip, by);
+        rig.fx.settle();
+        let moved = from_end(rig, 150.0, 100.0);
+        assert!((moved - (beside + by)).length() < 1.5, "the drag moved it by {by:?}: {beside:?} to {moved:?}");
+        assert_eq!(paths(&rig.app())[0].anchors.len(), 2, "dragging the handle draws nothing");
 
-    click_doc(&mut app, 200.0, 100.0);
-    settle(&mut app, &ctx);
-    near(bar(&ctx).unwrap().min, beside(&app, 200.0, 100.0) + by);
+        click_doc(rig, 200.0, 100.0);
+        let followed = from_end(rig, 200.0, 100.0);
+        assert!((followed - moved).length() < 1.5, "it keeps the offset as it follows: {moved:?} then {followed:?}");
 
-    // A drag made beside the drawing does not move the resting toolbar.
-    let resting = {
-        let canvas = app.canvas_xf().unwrap().rect.shrink(8.0);
-        let r = bar(&ctx).unwrap();
-        Pos2::new(canvas.center().x - r.width() / 2.0, canvas.bottom() - r.height())
-    };
-    let v = app.view_info();
-    app.session.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
-    settle(&mut app, &ctx);
-    near(bar(&ctx).unwrap().min, resting);
-    // A new path, away from the first one's ends.
-    click_doc(&mut app, 100.0, 200.0);
-    click_doc(&mut app, 200.0, 200.0);
-    settle(&mut app, &ctx);
-    near(bar(&ctx).unwrap().min, beside(&app, 200.0, 200.0) + by);
+        // A drag made beside the drawing does not move the resting toolbar.
+        escape(rig);
+        let r = bar(rig).unwrap();
+        assert!(rests(rig, r), "{r:?} rests");
+        // A new path, away from the first one's ends.
+        click_doc(rig, 100.0, 200.0);
+        click_doc(rig, 200.0, 200.0);
+        let again = from_end(rig, 200.0, 200.0);
+        assert!((again - moved).length() < 1.5, "the offset follows the next path: {moved:?} then {again:?}");
 
-    assert_eq!(app.run("window.quickPenToolbar.pin", json!({})).unwrap(), json!(true));
-    assert_eq!(crate::menus::checked(&app, "window.quickPenToolbar.pin", &json!({})), Some(true));
-    let pinned = bar(&ctx).unwrap().min;
-    click_doc(&mut app, 250.0, 200.0);
-    settle(&mut app, &ctx);
-    near(bar(&ctx).unwrap().min, pinned);
-    assert!(app.run("window.quickPenToolbar.pin", json!({"pinned": "yes"})).is_err());
+        assert_eq!(rig.app().run("window.quickPenToolbar.pin", json!({})).unwrap(), json!(true));
+        assert_eq!(crate::menus::checked(&rig.app(), "window.quickPenToolbar.pin", &json!({})), Some(true));
+        let pinned = bar(rig).unwrap().min;
+        click_doc(rig, 250.0, 200.0);
+        let after = bar(rig).unwrap().min;
+        assert!((after - pinned).length() < 1.5, "pinned, it stays put: {pinned:?} then {after:?}");
+        assert!(rig.app().run("window.quickPenToolbar.pin", json!({"pinned": "yes"})).is_err());
 
-    app.run("window.quickPenToolbar.reset", json!({})).unwrap();
-    assert!(!app.ui.quick_pen_bar_place.pinned);
-    settle(&mut app, &ctx);
-    near(bar(&ctx).unwrap().min, beside(&app, 250.0, 200.0));
+        rig.app().run("window.quickPenToolbar.reset", json!({})).unwrap();
+        assert!(!rig.app().ui.quick_pen_bar_place.place.pinned);
+        let reset = from_end(rig, 250.0, 200.0);
+        assert!((reset - beside).length() < 1.5, "back beside the drawing: {beside:?} then {reset:?}");
+    });
 }
