@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also goes into a shown, unlocked compound path and gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also goes into a shown, unlocked compound path and gives up its own paint (the compound path becomes pixel-aligned when the path or the compound path it leaves was), and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
             has_doc,
             move_node
         ),
@@ -936,6 +936,7 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     let shown = from_compound.map_or(&n.appearance, |p| &p.appearance);
     let paint = compound.filter(|c| c.children().is_some_and(Vec::is_empty)).map(|c| (c.id, shown.clone()));
     let into = compound.map(|c| c.id);
+    let from_aligned = from_compound.is_some_and(|c| c.extras().pixel_aligned);
     // A path that leaves a compound path for a layer or a group takes the compound path's paint and
     // pixel alignment, as Release Compound Path gives them to its paths.
     let out_of = from_compound.filter(|_| compound.is_none()).map(|c| (c.appearance.clone(), c.extras().pixel_aligned));
@@ -954,12 +955,13 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
             n.appearance = appearance;
         }
         // A path in a compound path keeps no paint, live shape or pixel alignment of its own, as
-        // Make Compound Path leaves its paths; the compound path becomes pixel-aligned instead.
+        // Make Compound Path leaves its paths; the compound path becomes pixel-aligned instead when
+        // the path was, or when the compound path it leaves was.
         if let Some(c) = into {
-            let mut aligned = false;
+            let mut aligned = from_aligned;
             if let Some(m) = d.node_mut(id) {
                 m.appearance = vectorcraft_doc::Appearance::default().into();
-                aligned = std::mem::take(&mut m.extras_mut().pixel_aligned);
+                aligned |= std::mem::take(&mut m.extras_mut().pixel_aligned);
                 if let NodeKind::Path { live, .. } = &mut m.kind {
                     *live = None;
                 }

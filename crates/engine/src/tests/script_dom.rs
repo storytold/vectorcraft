@@ -1764,6 +1764,25 @@ fn a_path_moved_out_of_a_compound_path_keeps_the_paint_it_was_drawn_with() {
     assert_ne!(d.node(b).unwrap().appearance, red);
 }
 
+/// A path that leaves a pixel-aligned compound path for another compound path makes that one
+/// pixel-aligned, as it gives it the paint it was drawn with.
+#[test]
+fn a_path_moved_between_compound_paths_keeps_its_pixel_alignment() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("object.setPixelAligned", &json!({"on": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(!s.active().unwrap().doc.node(a).unwrap().extras().pixel_aligned);
+    let to = NodeId(s.execute("object.newGroup", &json!({"compound": true})).unwrap()["id"].as_u64().unwrap());
+    assert!(!s.active().unwrap().doc.node(to).unwrap().extras().pixel_aligned);
+    s.execute("node.move", &json!({"id": a.0, "parent": to.0, "index": 0})).unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(a), Some(to));
+    assert!(d.node(to).unwrap().extras().pixel_aligned);
+    assert!(!d.node(a).unwrap().extras().pixel_aligned);
+}
+
 #[test]
 fn a_compound_paths_path_items_are_path_items() {
     let (mut s, a, b) = doc();

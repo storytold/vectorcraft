@@ -2740,7 +2740,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   layer's or group's contents, or of the current layer's for the document's collection, and `compoundPathItems.add()`
   makes an empty compound path in the same place
   (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItems/). A path that `move` or `duplicate` puts into a
-  compound path becomes one of its paths and gives up its own paint, as Make Compound Path leaves its paths. An empty
+  compound path becomes one of its paths and gives up its own paint, as Make Compound Path leaves its paths. The
+  compound path becomes pixel-aligned when the path was, or when the compound path it leaves was. An empty
   compound path takes the paint the first path that goes in was drawn with: the path's own, or the paint of the
   compound path it leaves. Other objects are refused. A path that `move` takes out of a compound path into a layer or
   a group takes the compound path's paint and pixel alignment, as Release Compound Path gives them to its paths.
