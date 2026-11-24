@@ -430,20 +430,29 @@ impl CanvasTool for SessionTool<'_> {
                 if self.send_key(k, tool_mods(*mods, space)) || self.busy_key(k) {
                     return true;
                 }
-                // An arrow an application command is bound to runs it, as production's keymap ran it first; one it
-                // leaves moves the selection, with Backtick held only its pattern paint. A panel's own arrows (a page
-                // preview's) are not the canvas's.
+                // An arrow an application command is bound to runs it, as production's keymap ran it first: the
+                // canvas takes every arrow, so no shortcut runs it otherwise. One it leaves moves the selection, with
+                // Backtick held only its pattern paint. A panel's own arrows (a page preview's) are not the canvas's.
                 let chord = Chord::new(*mods, arrow);
-                let bound = self.app().ui_ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).is_some_and(|keymap| {
+                let ctx = self.app().ui_ctx.clone();
+                let bound = ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).and_then(|keymap| {
                     let global = |command: &craft::keymap::CommandRef| {
                         keymap.bindable(command).is_some_and(|def| keymap.scopes().kind(&def.scope) == craft::keymap::ScopeKind::Application)
                     };
-                    !matches!(keymap.lookup_where(&chord, false, &craft::keymap::Active::NONE, &[], &global), craft::keymap::Lookup::None)
+                    match keymap.lookup_where(&chord, false, &craft::keymap::Active::NONE, &[], &global) {
+                        craft::keymap::Lookup::Run(command) => Some(command),
+                        // The key's own press fires the group's first tool, as here.
+                        craft::keymap::Lookup::Cycle(commands) => commands.into_iter().next(),
+                        _ => None,
+                    }
                 });
-                if !bound {
-                    crate::shortcuts::nudge(&mut self.app(), *direction, *mods, with.contains(&Key::Backtick));
+                match ctx.zip(bound) {
+                    Some((ctx, command)) => {
+                        craft::ui::runtime::commands::fire(&ctx, command, craft::ui::runtime::commands::FireSource::Key);
+                    }
+                    None => crate::shortcuts::nudge(&mut self.app(), *direction, *mods, with.contains(&Key::Backtick)),
                 }
-                !bound
+                true
             }
             ToolKey::Delete { forward, .. } => self.send_key(if *forward { EngineKey::Delete } else { EngineKey::Backspace }, held),
             ToolKey::Submit => {
