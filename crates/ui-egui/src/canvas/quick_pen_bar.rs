@@ -52,13 +52,29 @@ pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canva
     // Beside the end, on the side the path arrives from (a path of one point: right and below), a gap off it
     // both ways, as production's corner did; the bar's sides are reading-order ones, so a rightward arrival is
     // `End` under LTR and `Start` under RTL. The anchor moves the gap down (or up), the side adds it across.
+    // The framework flips the side across; up or down is chosen here, as the framework's flip would line the
+    // bar up with the gapped point instead of a gap off the other side of the end.
+    let height_id = egui::Id::unique("quick-pen-bar-height");
     let (anchor, side, align) = match end {
         Some((p, dir)) => {
-            let heading = dir.map(|d| space.view.to_screen(p + d) - space.view.to_screen(p));
+            let at = space.view.to_screen(p);
+            let heading = dir.map(|d| space.view.to_screen(p + d) - at);
             let right = heading.is_none_or(|d| d.x >= 0.0);
-            let down = heading.is_none_or(|d| d.y >= 0.0);
+            let mut down = heading.is_none_or(|d| d.y >= 0.0);
             let gap = env.tokens.space.gap.section;
-            let off = space.view.to_doc(space.view.to_screen(p) + egui::vec2(0.0, if down { gap } else { -gap }));
+            // With the bar's height from the last pass, that side gives way where it runs off the canvas and the
+            // other fits or runs off by less, as in production.
+            if let Some(height) = ui.ctx().data(|d| d.get_temp::<f32>(height_id)) {
+                let area = space.view.rect;
+                let over = |down: bool| {
+                    let top = if down { at.y + gap } else { at.y - gap - height };
+                    (area.top() - top).max(0.0) + (top + height - area.bottom()).max(0.0)
+                };
+                if over(!down) < over(down) {
+                    down = !down;
+                }
+            }
+            let off = space.view.to_doc(at + egui::vec2(0.0, if down { gap } else { -gap }));
             (vec![off], if right != rtl { Side::End } else { Side::Start }, if down { Align::Start } else { Align::End })
         }
         None => (vec![space.view.to_doc(space.view.rect.center_bottom())], Side::Above, Align::Center),
@@ -82,6 +98,9 @@ pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canva
             run = Some(("tool.quickPen.flipArc", json!({})));
         }
     });
+    if shown.output.rect.is_positive() {
+        ui.ctx().data_mut(|d| d.insert_temp(height_id, shown.output.rect.height()));
+    }
     if shown.output.hide {
         run = Some(("window.quickPenToolbar", json!({})));
     }

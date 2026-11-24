@@ -12,15 +12,12 @@ use craft::update::stack_dialogs::{CheckChoice, UpdateCheckDialog, UpdatePromptD
 #[cfg(not(target_arch = "wasm32"))]
 use craft::update::updater::{Action, Status, Updater};
 
-#[cfg_attr(target_arch = "wasm32", derive(Default))]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) struct Runtime {
-    #[cfg(not(target_arch = "wasm32"))]
     updater: Updater,
-    /// The desktop app turns the check at start on; tests and the web build leave it off.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// The desktop app turns the check at start on; tests leave it off.
     startup_check: bool,
     /// Whether a modal update dialog was open in the last pass.
-    #[cfg(not(target_arch = "wasm32"))]
     was_modal: bool,
 }
 

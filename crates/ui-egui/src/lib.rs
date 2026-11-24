@@ -182,6 +182,7 @@ pub struct VectorcraftApp {
     /// The current context (set by [`Self::adopt_context`]): the dialogs, the overlays and the
     /// window host are read through it.
     ui_ctx: Option<egui::Context>,
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) updates_rt: updates_ui::Runtime,
     /// The status bar's frame rate ([`frame_rate`]).
     frame_rate: frame_rate::FrameRate,

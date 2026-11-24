@@ -1535,6 +1535,7 @@ pub(crate) const SYSTEM_CLIPBOARD_POLL: f64 = 0.25;
 
 /// How often the font catalog looks for fonts a font manager activated while the app stays in
 /// front (#2576).
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) const FONT_INSTALL_POLL: std::time::Duration = std::time::Duration::from_secs(2);
 
 #[cfg(test)]
