@@ -121,6 +121,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "game-trails",
             "energy-beams",
             "dry-media",
+            "impact-bursts",
             "tech-circuit",
             "engraving",
             "arrows",
@@ -204,6 +205,7 @@ fn every_builtin_library_brush_has_its_kind_and_draws() {
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
+        ("impact-bursts", "art"),
         ("arrows", "art"),
         ("image-brush", "scatter"),
         ("artistic", "art"),
@@ -1316,3 +1318,10 @@ fn a_library_file_that_repeats_a_brush_name_loads_with_the_later_one_numbered() 
     let size = |b: Brush| if let BrushKind::Calligraphic(c) = b.kind { c.size } else { 0.0 };
     assert_eq!(size(brush(&s, "Nib 2")), 2.0);
 }
+
+    let impact = run(&mut s, "brush.library", json!({"library": "impact-bursts"}));
+    assert_eq!(
+        impact["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
+        ["Star Burst", "Ring Shock", "Slash Arc", "Spark Fan", "Debris Spray", "Crack Line"]
+    );
+    assert_eq!((libs[14]["name"].as_str(), libs[14]["count"].as_u64()), (Some("Impact Bursts"), Some(6)));
