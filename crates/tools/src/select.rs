@@ -4,7 +4,7 @@
 //! bounding-box scale (Shift proportional, Alt from center; Snap to Grid, Snap to Pixel, Smart
 //! Guides and Snap to Point snap what the handle moves) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's or polygon's corner widget to round its corners (Alt-click cycles their kind,
-//! double-click opens the Corners dialog), drag a live ellipse's pie widgets to set its pie angles
+//! double-click shows the Transform panel), drag a live ellipse's pie widgets to set its pie angles
 //! (double-click makes it whole again: [`crate::pie`]), double-click a group or an object to enter isolation
 //! mode (Double Click To Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
 //! click or drag a ruler guide ([`crate::rulerguide`]), Cmd/Ctrl+Shift-double-click a ruler guide or
@@ -1634,7 +1634,12 @@ impl SelectionTool {
             }
             return vec![];
         }
-        if let Some(a) = corners::double_click(cx, p, false).or_else(|| pie::double_click(cx, p)).or_else(|| typewidget::double_click(cx, p)) {
+        // A corner widget of a selected live shape shows the Transform panel, as with the shape
+        // tools; the tool and the selection stay as they are. Direct Selection opens Corners.
+        if corners::over_widget(cx, p, false) {
+            return vec![Action::Panel("transform".into())];
+        }
+        if let Some(a) = pie::double_click(cx, p).or_else(|| typewidget::double_click(cx, p)) {
             return vec![a];
         }
         if let Some(a) = release_guide_at(cx, p, m) {
