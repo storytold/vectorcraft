@@ -2120,6 +2120,7 @@ impl Session {
                     }));
                 }
                 (if fresh { realm.add_script_extensions() } else { Ok(()) })
+                    .and_then(|()| if fresh { realm.add_unit_values() } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })

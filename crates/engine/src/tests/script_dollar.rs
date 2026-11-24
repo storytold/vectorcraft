@@ -1,5 +1,5 @@
-//! The `$` object's members besides `$.write` and `$.writeln`, the global `localize` and
-//! `toSource`, and what of them one run keeps to itself.
+//! The `$` object's members besides `$.write` and `$.writeln`, the global `localize`, `toSource`
+//! and `UnitValue`, and what of them one run keeps to itself.
 
 use std::time::Duration;
 
@@ -138,6 +138,15 @@ fn to_source_writes_plain_data() {
     assert_eq!(value(&mut s, "[true, 2].toSource()"), json!("[true, 2]"));
     assert!(thrown(&mut s, "var o = {}; o.o = o; toSource(o)").starts_with("TypeError"));
     assert!(thrown(&mut s, "toSource(vc)").starts_with("TypeError"), "a host object is not plain data");
+}
+
+#[test]
+fn unit_values_convert_and_calculate_in_a_run() {
+    let mut s = Session::new();
+    assert_eq!(value(&mut s, "UnitValue('1 in').as('pt')"), json!(72));
+    assert_eq!(value(&mut s, "String(new UnitValue(1, 'm') + new UnitValue(10, 'cm'))"), json!("1.1 m"));
+    assert_eq!(value(&mut s, "[UnitValue(98, 'cm') < UnitValue(1, 'm'), UnitValue(98, 'cm') == 98]"), json!([true, true]));
+    assert!(thrown(&mut s, "UnitValue(1, 'in').as('furlong')").starts_with("Error"));
 }
 
 #[test]

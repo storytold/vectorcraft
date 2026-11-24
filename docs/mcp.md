@@ -2743,6 +2743,27 @@ itself throws a `TypeError`. So does a property that is not writable or not conf
 would make each of them writable, configurable and extensible again (VectorCraft's own rule). A value deeper than 64 levels, with more than 1,048,576 entries or with text longer than 16,777,216
 characters throws a `RangeError`.
 
+`UnitValue` holds a measurement: a number and a unit
+(https://extendscript.docsforadobe.dev/extendscript-tools-features/specifying-measurement-values/). Scripts make one
+with or without `new`, as `UnitValue(12, 'pt')`, `UnitValue('12 pt')` or `UnitValue(other)` (a copy). The units are
+`in`, `ft`, `yd`, `mi`, `mm`, `cm`, `m`, `km`, `pt`, `pc`, `tpt`, `tpc`, `ci`, `px` and `%`, each also written as its
+singular or plural name (`inch`, `inches`, `traditional point`); `type` gives the abbreviation. `as(unit)` gives the
+number in another unit and `convert(unit)` changes the object to it and returns `true`. A pixel is one `baseUnit` and
+100% is one `baseUnit`; new objects take `UnitValue.baseUnit`, which is `1 pt` (1/72 inch) until a script sets it, `null` sets
+it back, and an object's own `baseUnit` replaces it for that object. `toString()` gives the number and the abbreviation,
+such as `12 pt`. With a `UnitValue` and a number, `+`, `-`, `*`, `/` and `%` calculate with the object's number and
+give a new `UnitValue` in its unit; with two, the right one is converted to the left one's unit, with the left one's
+`baseUnit` for `px` and `%`, and the result is in the left one's unit. `<`, `<=`, `==` and `!=` compare the numbers the same way, `>` is true when `<=` is false and
+`>=` when `<` is false, and `===` compares objects as usual. Unary `+` and `-` give the number and its negation, `~`
+inverts its 32-bit integer, and `!` is true for a number that is not 0. Other operands, and the other operators,
+work as in standard JavaScript. VectorCraft's own rules: an unknown unit, text that is not a number and a unit (or
+longer than 64 characters), and a number that is not finite make an object whose `type` is `?` and whose `value` is
+0, which prints as `UnitValue 0.00000`; converting it, using it with any of these operators, a result that is not finite (a division
+by 0 included) and a comparison with a number that is not finite throw a `RangeError`; an unknown unit given to `as`, `convert` or `type` throws an
+`Error` and leaves the object as it was; `value` takes only a finite number; and `baseUnit` takes only `null` or a
+length greater than 0 (not pixels or percentages). Two units of length convert through their exact ratio to the inch,
+so `UnitValue(1, 'in').as('pt')` is exactly 72.
+
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
 commands run one at a time. A preference the run changed takes the run's value, and a preference changed in the app

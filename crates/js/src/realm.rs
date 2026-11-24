@@ -529,6 +529,18 @@ impl Realm {
         }
     }
 
+    /// Adds the global constructor `UnitValue`, measurements with a magnitude and a unit, and has
+    /// the arithmetic, comparison and unary operators calculate with its objects
+    /// ([`crate::unit_value`]). A realm without it keeps the standard operators. A second call
+    /// after one that succeeded changes nothing; after one that failed, it installs everything
+    /// again.
+    pub fn add_unit_values(&mut self) -> Result<(), RunError> {
+        match crate::unit_value::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Defines the global function `name`, whose arguments arrive converted as `args` says
     /// ([`crate::HostItem::Converted`]). Unlike a host object, a script may replace or delete it, as
     /// it may a built-in function.
