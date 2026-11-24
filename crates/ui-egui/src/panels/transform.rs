@@ -13,9 +13,9 @@ use craft::draw::ui::transform::{
     FieldArrangement, SizeUnit, TransformField, TransformFields, TransformFieldsOutput, TransformGroups, TransformRow, TransformSource,
 };
 use craft::keymap::CommandRef;
-use craft::ui::buttons::{IconButton, Link};
+use craft::ui::buttons::IconButton;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, LabelPress, Props, Show, ShowContainer, SideLabel};
+use craft::ui::contract::{Bind, Entry, GlyphLabel, LabelKind, LabelPress, Props, Show, ShowContainer, SideLabel, Sizing};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -419,7 +419,8 @@ pub(crate) fn object_bar_fields(app: &mut VectorcraftApp, ui: &mut Ui) -> Option
     Some(out)
 }
 
-/// A field of an angle: its icon as a scrubbing label, the value in degrees and the presets on a ladder of stops.
+/// A field of an angle: its icon in place of its label, which scrubs it, the value in degrees and the presets on a
+/// ladder of stops.
 fn angle_field(
     ui: &mut Ui,
     label: &'static str,
@@ -431,7 +432,8 @@ fn angle_field(
 ) -> Option<NumberOutput> {
     let entries: Vec<Entry<NumberPick>> = presets.iter().map(|v| Entry::new(NumberPick::Number(*v), format!("{v}°"))).collect();
     Field::new(label)
-        .side(SideLabel::new().icon(IconId::new(icon)).scrub(true))
+        .sizing(Sizing::Content)
+        .side(SideLabel::new().kind(LabelKind::Glyph(GlyphLabel::icon(IconId::new(icon)))).tooltip(label).scrub(true))
         .enabled(enabled)
         .show(ui, |ui, _| {
             NumberField::new(label, Bind::given(Some(shown)))
@@ -653,7 +655,7 @@ fn pixel_aligned_ids(app: &VectorcraftApp) -> Vec<u64> {
 /// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub(crate) fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let out = Link::new(tl!("Transform")).tooltip(tl!("Transform options")).show(ui);
+    let out = crate::panels::option_link(tl!("Transform")).tooltip(tl!("Transform options")).show(ui);
     popover(app, ui, &out.response);
 }
 

@@ -471,6 +471,20 @@ fn object_align_lists_the_align_to_choices() {
     assert_eq!(app.ui.align_to, AlignTo::Selection);
 }
 
+/// With anchor points of one path selected (Direct Selection), Align to Selection returns
+/// `"selection"`: the points align to each other, so the lone path does not make it Artboard.
+#[test]
+fn align_to_selection_with_anchor_points_returns_selection() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("path.create", json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap();
+    app.ui.align_to = AlignTo::Artboard;
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "selection"}));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+    assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
+}
+
 /// With the Artboard tool chosen, Align to Key Object is off and fails, and Align to Artboard and
 /// Align to Selection store the choice while the selected objects keep their key.
 #[test]
@@ -489,6 +503,19 @@ fn align_to_commands_with_the_artboard_tool() {
     assert_eq!(app.ui.align_to, AlignTo::Selection);
     assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
     assert_eq!(app.session.active().unwrap().selection.key.map(|k| k.0), front.as_u64(), "the key stays");
+}
+
+/// With the Artboard tool chosen and one object selected with no anchor points, Align to Selection
+/// returns `"selection"`, the stored choice, not `"artboard"`.
+#[test]
+fn align_to_selection_with_one_object_and_the_artboard_tool_returns_selection() {
+    let (mut app, back, _) = back_and_front();
+    app.run("select.set", json!({"ids": [back]})).unwrap();
+    app.ui.align_to = AlignTo::Artboard;
+    app.select_tool("artboard");
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "selection"}));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+    assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
 }
 
 /// Align to Key Object is off and fails when the topmost selected object can't be the key: a group

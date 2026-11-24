@@ -47,7 +47,7 @@ use craft::ui::notices::{Notice, NoticeIcon, NoticeLayout};
 use craft::ui::pickers::Select;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::sections::{DropAction, FooterAction, FooterBar, Section};
+use craft::ui::sections::{DropAction, FooterAction, FooterBar};
 use craft::ui::tile_grid::{BadgeKind, BadgeSlot, Tile, TileBadge, TileGrid};
 use egui::{Color32, Rect, Ui};
 use serde_json::{Map, Value, json};
@@ -524,7 +524,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (mut export_clicked, mut footer, mut screens) = (false, None, false);
     // The grid takes the room the settings, Export and the footer bar leave.
     let footed = Stack::new().fill().footer(|ui, _| {
-        Section::fixed(tl!("Export Settings")).show(ui, |ui, _| {
+        crate::panels::section(tl!("Export Settings")).show(ui, |ui, _| {
             let (change, files_each) = settings(ui, st);
             (seen.change, seen.files_each) = (change, files_each);
             seen.format_3d = format_3d(ui, st, &sel_or_all(&shown_sel, &all));

@@ -210,12 +210,22 @@ pub enum Punct {
     ColonColon,
     /// `@`, read only with [`crate::Options::e4x`].
     At,
+    /// `=>`, read only with [`crate::Options::es2015`].
+    Arrow,
+    /// `...`, read only with [`crate::Options::es2015`].
+    Ellipsis,
+    /// `?.` not followed by a decimal digit (ECMA-262 2020 section 11.7), read only with
+    /// [`crate::Options::es2015`].
+    QuestionDot,
+    /// `??`, read only with [`crate::Options::es2015`].
+    QuestionQuestion,
 }
 
 impl Punct {
     /// Punctuators by spelling, longest first, so the first that matches is the longest.
     pub(crate) const ALL: &'static [(&'static str, Punct)] = &[
         (">>>=", Punct::UShrEq),
+        ("...", Punct::Ellipsis),
         ("===", Punct::EqEqEq),
         ("!==", Punct::NotEqEq),
         (">>>", Punct::UShr),
@@ -223,6 +233,7 @@ impl Punct {
         (">>=", Punct::ShrEq),
         ("<=", Punct::LtEq),
         (">=", Punct::GtEq),
+        ("=>", Punct::Arrow),
         ("==", Punct::EqEq),
         ("!=", Punct::NotEq),
         ("++", Punct::PlusPlus),
@@ -239,6 +250,8 @@ impl Punct {
         ("|=", Punct::PipeEq),
         ("^=", Punct::CaretEq),
         ("/=", Punct::SlashEq),
+        ("??", Punct::QuestionQuestion),
+        ("?.", Punct::QuestionDot),
         ("..", Punct::DotDot),
         ("::", Punct::ColonColon),
         ("@", Punct::At),
@@ -354,6 +367,15 @@ pub enum TokenKind {
     Directive(Directive),
     /// An XML or XMLList literal; the tokens of its embedded expressions follow it.
     XmlLiteral,
+    /// A piece of a template literal (read only with [`crate::Options::es2015`]): from its
+    /// backtick, or from the `}` that ends a substitution, to the next `${` or the closing
+    /// backtick (`tail`). `cooked` is the text with its escapes read and `raw` the text as written,
+    /// both with each CR LF and each CR read as a line feed; U+2028 and U+2029 stay as written.
+    Template {
+        cooked: Vec<u16>,
+        raw: Vec<u16>,
+        tail: bool,
+    },
 }
 
 /// A token, with where it is and the facts the grammar's rules need about it.

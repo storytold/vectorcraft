@@ -3,11 +3,13 @@
 //! canvas, runs the seams in order and copies the view back to the document's `View`.
 
 use craft::behavior::{CanvasView, PressPhase};
+use craft::keymap::Mods;
 use craft::ui::canvas::{
     Canvas, CanvasScrollbars, CanvasSpace, RotateView, ToolHostResponse, ToolPass, ViewCommands, ViewRequest, ViewTarget, canvas_space, tool_pass,
 };
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::runtime::env::Env;
+use craft::ui::runtime::focus::NudgeMods;
 use craft::ui::style::StyleCx;
 use egui::Ui;
 use serde_json::json;
@@ -71,6 +73,19 @@ pub(crate) fn animated_zoom(p: &vectorcraft_engine::Prefs) -> bool {
 pub(crate) fn revolve_editing(app: &VectorcraftApp) -> bool {
     app.three_d_dialog.is_some()
 }
+
+/// The arrows the canvas takes with nothing in the window focused, as it takes every arrow while it has the focus:
+/// each modifier combination. A plain arrow nudges, Shift ten times as far, Alt nudges a copy, and an arrow an app
+/// command is bound to runs it ([`tool_adapter`]).
+const ARROWS: NudgeMods = {
+    let mut arrows = NudgeMods::NONE;
+    let mut held = 0;
+    while held < 16 {
+        arrows = arrows.with(Mods { cmd: held & 1 != 0, ctrl: held & 2 != 0, alt: held & 4 != 0, shift: held & 8 != 0 });
+        held += 1;
+    }
+    arrows
+};
 
 /// The id `Canvas::new("Document")` gets for a body of `win`.
 pub(crate) fn canvas_id(win: Win) -> egui::Id {
@@ -166,6 +181,7 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         .layer_bounds(&layers)
         .queued(&queued)
         .navigation(crate::app::view::navigation(prefs))
+        .body_nudges(ARROWS)
         .rulers(x, y)
         .with_rulers(strips)
         .precise_cursors(prefs.use_precise_cursors);

@@ -27,7 +27,7 @@ pub const KIND: &str = "svgOptions";
 /// The UI command of the dialog's Show in Browser button.
 pub const BROWSER: &str = "file.export.svg.browser";
 
-/// The id of the dialog's Show in Browser footer button, as `take_footer_action` reports it.
+/// The id of the dialog's Show in Browser footer button, as `take_action` reports it.
 pub(super) const BROWSER_ACTION: &str = "browser";
 
 /// The folder in the system's temporary folder that Show in Browser's previews go to.

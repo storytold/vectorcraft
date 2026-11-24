@@ -510,8 +510,13 @@ impl Renderer {
                 self.draw_children(ctx, f, children, knockout)
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } if f.opts.outline => {
+                // A piece of a mesh-warped image: the copy of the image it clips is not crossed.
+                let piece = n.warp_piece_image();
                 for c in children {
+                    let outer = self.in_warp_piece;
+                    self.in_warp_piece = piece.is_some_and(|image| std::ptr::eq(image, &**c));
                     self.draw_outline_member(ctx, f, c);
+                    self.in_warp_piece = outer;
                 }
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
@@ -581,7 +586,9 @@ impl Renderer {
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
             NodeKind::Image(im) if !n.is_distorted_image() => {
-                self.draw_image_in(ctx, f, &f.doc.shown_image(n, im), None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated)
+                self.draw_image_in(ctx, f, &f.doc.shown_image(n, im), None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated);
+                // Crossed by the node's own link: a color mask's copy of the image has none.
+                self.cross_linked_image(ctx, f, n);
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = f.symbols.symbol(symbol) {

@@ -104,7 +104,7 @@ pub(crate) fn run_fired(app: &mut VectorcraftApp, ctx: &egui::Context, fired: &F
         }
         return;
     }
-    if command.id == "select.all" && crate::panels::artboards::selects_all(app) {
+    if command.id == "select.all" && crate::panels::artboards::selects_all(app, ctx) {
         // With the Artboard tool, Select All's keys after a click on an Artboards panel row select every artboard
         // instead of the art.
         crate::panels::artboards::select_all(app);
