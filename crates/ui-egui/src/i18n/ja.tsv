@@ -21,6 +21,7 @@
 	Anchors:	アンカー:
 	Any Kind	すべての種類
 	Font Technology	フォントテクノロジー
+@id	language.name	日本語
 font-technology	Variable	バリアブル
 	Ascender	アセンダ
 	Baseline	ベースライン
@@ -7019,7 +7020,7 @@ axis	Y Axis	Y 軸
 @msg	module is {_1} bytes (limit {_2})	モジュールは {_1} バイトです (上限 {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	承認が必要です: {0} を要求しています。これはユーザーが単独でインストールするときに許可します
 @msg	not JSON: {e}	JSON ではありません: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly バイナリではありません (\0asm ヘッダーがありません)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly バイナリではありません (\\0asm ヘッダーがありません)
 @msg	parameter `{k}`: {what}	パラメーター `{k}`: {what}
 @msg	parameter `{name}`: {what}	パラメーター `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	プラグインのパラメーターは JSON オブジェクトにしてください

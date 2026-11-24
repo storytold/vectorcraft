@@ -22,6 +22,7 @@
 	Quit VectorCraft	Slut VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Slip illustration
+@id	language.name	Dansk
 @msg	{key} must be [x, y] with finite coordinates	{key} skal være [x, y] med endelige koordinater
 @msg	ids must contain 1–10000 object ids	ids skal indeholde 1–10000 objekt-id’er
 
@@ -552,7 +553,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	module is {_1} bytes (limit {_2})	modulet fylder {_1} byte (grænse {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kræver godkendelse: det beder om {0}, som brugeren tildeler, når det installeres for sig selv
 @msg	not JSON: {e}	ikke JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	ikke en WebAssembly-binærfil (headeren \0asm mangler)
+@msg	not a WebAssembly binary (missing \\0asm header)	ikke en WebAssembly-binærfil (headeren \\0asm mangler)
 @msg	parameter `{k}`: {what}	parameteren `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameteren `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parametrene skal være et JSON-objekt

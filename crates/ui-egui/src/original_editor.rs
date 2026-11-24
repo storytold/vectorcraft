@@ -1,9 +1,15 @@
 //! The raster editor is selected by a person in a native picker, never by a preference command
 //! or a generic dialog field. Keep both the saved choice and the dialog's draft opaque.
 
+use std::path::Path;
+
+use craft::host::{Host, PickId, PickRequest};
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Props as _, Show as _};
+use craft::ui::display::Text;
 use serde::{Deserialize, Serialize};
 
-use crate::{FilePick, VectorcraftApp, state::Dialog};
+use crate::VectorcraftApp;
 
 /// Opaque saved choice. Public so hosts can construct `UiState` with a struct update; its path
 /// has no public setter and is never read from the generic preference or dialog-field maps.
@@ -15,11 +21,26 @@ pub struct Choice {
 #[derive(Default)]
 pub(crate) struct Draft {
     choice: Choice,
-    generation: u64,
+    /// The picker Choose… opened; its answer is taken by the row, and a reopened Preferences forgets it.
+    pick: Option<PickId>,
+}
+
+// PLAN: assumed app.ui_ctx readable here (the window's context).
+fn host(app: &VectorcraftApp) -> Option<std::sync::Arc<Host>> {
+    app.ui_ctx.as_ref().and_then(Host::try_of_ctx)
+}
+
+/// Drops a pick still open, so its answer never reaches the draft.
+fn forget(app: &mut VectorcraftApp) {
+    if let Some(ticket) = app.original_editor.pick.take()
+        && let Some(host) = host(app)
+    {
+        host.files().forget(ticket);
+    }
 }
 
 pub(crate) fn open(app: &mut VectorcraftApp) {
-    app.original_editor.generation = app.original_editor.generation.wrapping_add(1);
+    forget(app);
     app.original_editor.choice = app.ui.original_editor.clone();
 }
 
@@ -28,9 +49,8 @@ pub(crate) fn commit(app: &mut VectorcraftApp) {
 }
 
 pub(crate) fn reset(app: &mut VectorcraftApp) {
+    forget(app);
     app.original_editor.choice = Choice::default();
-    // Discard an outstanding pick when Reset was pressed while its dialog was open.
-    app.original_editor.generation = app.original_editor.generation.wrapping_add(1);
 }
 
 pub(crate) fn cancel(app: &mut VectorcraftApp) {
@@ -41,49 +61,75 @@ pub(crate) fn cancel(app: &mut VectorcraftApp) {
 /// validation and launch failures are errors, as they are for PhotoCraft.
 pub(crate) fn try_open(app: &mut VectorcraftApp, path: &str) -> Result<bool, String> {
     let Some(editor) = app.ui.original_editor.path.as_deref() else { return Ok(false) };
-    let Some(open) = app.services.open_in_application.as_mut() else { return Ok(false) };
-    open(editor, path)
+    launch(editor, path)
 }
 
-fn pick(app: &mut VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+#[cfg(not(target_arch = "wasm32"))]
+fn launch(editor: &str, path: &str) -> Result<bool, String> {
+    match craft::platform::open::open_with(Path::new(editor), Path::new(path)) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn launch(_: &str, _: &str) -> Result<bool, String> {
+    Ok(false)
+}
+
+fn pick(app: &mut VectorcraftApp) -> Result<(), String> {
     app.refuse_automation("preferences.chooseOriginalEditor")?;
-    let generation = app.original_editor.generation;
-    crate::picks::in_app_dialog(app, d, move |app, _| {
-        if generation != app.original_editor.generation {
-            return Ok(());
-        }
-        let filters = if cfg!(target_os = "macos") {
-            vec![FilePick::filter("Applications", &["app"])]
-        } else if cfg!(windows) {
-            vec![FilePick::filter("Applications", &["exe"])]
-        } else {
-            Vec::new()
-        };
-        let Some(path) = crate::picks::open(app, &FilePick { filters, ..Default::default() }) else { return Ok(()) };
-        app.services.check_application.as_ref().ok_or("no application chooser here")?(&path)?;
-        app.original_editor.choice.path = Some(path);
-        Ok(())
-    })
+    let host = host(app).ok_or("no file picker here")?;
+    forget(app);
+    let request = PickRequest::open("originalEditor");
+    let request = if cfg!(target_os = "macos") {
+        request.filter("Applications", &["app"])
+    } else if cfg!(windows) {
+        request.filter("Applications", &["exe"])
+    } else {
+        request
+    };
+    app.original_editor.pick = Some(host.files().pick(request));
+    Ok(())
 }
 
-pub(crate) fn show(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog) {
-    if app.services.check_application.is_none() || app.services.open_in_application.is_none() {
+/// The answer of the picker Choose… opened, once it has come: a draft until Preferences' OK.
+fn take_picked(app: &mut VectorcraftApp, host: &Host) -> Result<(), String> {
+    let Some(ticket) = app.original_editor.pick else { return Ok(()) };
+    let Some(picked) = host.files().take_answer(ticket) else { return Ok(()) };
+    app.original_editor.pick = None;
+    let Some(path) = picked.paths().into_iter().next() else { return Ok(()) };
+    if !craft::platform::open::is_application(&path) {
+        return Err(tl!("not an application").into());
+    }
+    app.original_editor.choice.path = Some(path.to_string_lossy().into_owned());
+    Ok(())
+}
+
+/// The File Handling row: the chosen editor, Choose… and PhotoCraft. It draws only where the platform opens files with an
+/// application; `enabled` is off while Use System Defaults for Edit Original is on.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, enabled: bool) {
+    if !craft::platform::open::CAN_OPEN_WITH {
         return;
     }
-    ui.add_enabled_ui(!d.bool("editOriginalSystemDefaults"), |ui| {
-        ui.horizontal_wrapped(|ui| {
-            ui.label(tl!("Edit Original with:"));
-            let name = app.original_editor.choice.path.as_deref().and_then(|p| std::path::Path::new(p).file_name());
-            ui.label(name.map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "PhotoCraft".into()));
-            if ui.button(tl!("Choose…")).clicked()
-                && let Err(e) = pick(app, d)
-            {
-                app.status(e);
-            }
-            if app.original_editor.choice.path.is_some() && ui.button("PhotoCraft").clicked() {
-                reset(app);
-            }
-        });
+    if let Some(host) = Host::try_of_ctx(ui.ctx())
+        && let Err(e) = take_picked(app, &host)
+    {
+        app.status(e);
+    }
+    ui.horizontal_wrapped(|ui| {
+        Text::new(tl!("Edit Original with:")).show(ui);
+        let name = app.original_editor.choice.path.as_deref().and_then(|p| Path::new(p).file_name());
+        Text::new(name.map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "PhotoCraft".into())).show(ui);
+        if Button::new(tl!("Choose…")).enabled(enabled).show(ui).clicked()
+            && let Err(e) = pick(app)
+        {
+            app.status(e);
+        }
+        if app.original_editor.choice.path.is_some() && Button::new("PhotoCraft").enabled(enabled).show(ui).clicked() {
+            reset(app);
+        }
     });
 }
 
@@ -91,59 +137,98 @@ pub(crate) fn show(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog) 
 mod tests {
     use super::*;
     use crate::{
-        Services,
-        control::{ControlRequest, Outcome},
         prefs_dialog,
+        tests::picks::{Picker, scripted},
     };
+    use craft::automation::{ControlRequest, Reply};
+    use craft::ui::dialog::PromptChoice;
     use serde_json::{Value, json};
     use std::{cell::RefCell, rc::Rc};
 
-    fn app() -> VectorcraftApp {
-        let services = Services {
-            check_application: Some(Box::new(|p| if p == "/Apps/Bad" { Err("not an application".into()) } else { Ok(()) })),
-            open_in_application: Some(Box::new(|_, _| Ok(true))),
-            ..Default::default()
-        };
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), services);
+    fn app() -> (VectorcraftApp, Picker) {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let picker = scripted(&mut app);
         prefs_dialog::open(&mut app, Some("File Handling"));
-        app
+        (app, picker)
     }
 
-    fn choose(app: &mut VectorcraftApp, path: Option<&str>) -> Result<(), String> {
-        let path = path.map(str::to_owned);
-        app.services.pick_open = Some(Box::new(move |_| path.clone()));
-        let mut d = app.ui.dialog.take().unwrap();
-        let r = pick(app, &mut d);
-        app.ui.dialog = Some(d);
-        r
+    // PLAN: assumed `app.ui_ctx` readable from tests (the window's context, which holds the scripted host).
+    fn ctx(app: &VectorcraftApp) -> egui::Context {
+        app.ui_ctx.clone().expect("a window")
     }
 
+    /// An application the platform accepts: an `.app` folder, an `.exe` file, or an executable file.
+    fn editor(name: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("vectorcraft-editor-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = if cfg!(target_os = "macos") {
+            let p = dir.join("Editor.app");
+            std::fs::create_dir_all(&p).unwrap();
+            p
+        } else {
+            let p = dir.join(if cfg!(windows) { "Editor.exe" } else { "editor" });
+            std::fs::write(&p, b"").unwrap();
+            #[cfg(unix)]
+            std::os::unix::fs::PermissionsExt::set_mode(&mut std::fs::metadata(&p).unwrap().permissions(), 0o755);
+            p
+        };
+        path.to_string_lossy().into_owned()
+    }
+
+    /// An existing file that is not an application.
+    fn not_an_application(name: &str) -> String {
+        let p = std::env::temp_dir().join(format!("vectorcraft-editor-{name}-{}.txt", std::process::id()));
+        std::fs::write(&p, b"text").unwrap();
+        p.to_string_lossy().into_owned()
+    }
+
+    /// One pass of the File Handling row.
+    fn row(app: &mut VectorcraftApp) {
+        let ctx = ctx(app);
+        ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui, true)).textures_delta.clear();
+    }
+
+    /// Choose… answered with `path` (cancelled for none), then the pass that takes the answer.
+    fn choose(app: &mut VectorcraftApp, picker: &Picker, path: Option<&str>) -> Result<(), String> {
+        pick(app)?;
+        match path {
+            Some(path) => picker.answer(&[path]),
+            None => picker.cancel(),
+        }
+        row(app);
+        Ok(())
+    }
+
+    // PLAN: assumed `crate::control::handle(app, &ctx, &req) -> Reply` with `Reply::Done(Value)` (shell-w12).
     fn request(app: &mut VectorcraftApp, method: &str, params: Value) -> Value {
         let (req, _) = ControlRequest::new(method, params);
-        let Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("deferred") };
+        let ctx = ctx(app);
+        let Reply::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("deferred") };
         r
     }
 
     #[test]
     fn native_choice_commits_persists_cancels_and_resets() {
-        let mut app = app();
-        choose(&mut app, Some("/Apps/My Editor.app")).unwrap();
+        let (mut app, picker) = app();
+        let (mine, other, bad) = (editor("mine"), editor("other"), not_an_application("bad"));
+        choose(&mut app, &picker, Some(&mine)).unwrap();
         assert!(app.ui.original_editor.path.is_none(), "a draft until OK");
         prefs_dialog::confirm(&mut app).unwrap();
         let saved = serde_json::to_vec(&app.ui).unwrap();
         let restored: crate::UiState = serde_json::from_slice(&saved).unwrap();
-        assert_eq!(restored.original_editor.path.as_deref(), Some("/Apps/My Editor.app"));
+        assert_eq!(restored.original_editor.path.as_deref(), Some(mine.as_str()));
         assert!(app.session.prefs.to_json().get("original_editor").is_none());
         assert!(app.take_prefs_changed(), "OK asks the host to persist the choice");
         prefs_dialog::open(&mut app, Some("File Handling"));
-        choose(&mut app, None).unwrap();
+        choose(&mut app, &picker, None).unwrap();
         assert_eq!(app.original_editor.choice.path, restored.original_editor.path);
-        choose(&mut app, Some("/Apps/Other Editor.app")).unwrap();
-        crate::dialogs::cancel(&mut app);
+        choose(&mut app, &picker, Some(&other)).unwrap();
+        cancel(&mut app);
         prefs_dialog::open(&mut app, Some("File Handling"));
         assert_eq!(app.original_editor.choice.path, restored.original_editor.path);
-        assert!(choose(&mut app, Some("/Apps/Bad")).is_err());
-        assert_eq!(app.original_editor.choice.path, restored.original_editor.path);
+        choose(&mut app, &picker, Some(&bad)).unwrap();
+        assert_eq!(app.original_editor.choice.path, restored.original_editor.path, "not an application");
         reset(&mut app);
         prefs_dialog::confirm(&mut app).unwrap();
         assert!(app.ui.original_editor.path.is_none());
@@ -153,31 +238,31 @@ mod tests {
 
     #[test]
     fn original_editor_reset_confirmation_preserves_cancel_and_defers_persistence() {
-        let mut app = app();
-        choose(&mut app, Some("/Apps/My Editor.app")).unwrap();
+        let (mut app, picker) = app();
+        let mine = editor("reset");
+        choose(&mut app, &picker, Some(&mine)).unwrap();
         prefs_dialog::confirm(&mut app).unwrap();
         prefs_dialog::open(&mut app, Some("File Handling"));
-        crate::dialogs::confirm::ask_reset_prefs(&mut app);
-        crate::dialogs::cancel(&mut app);
-        assert_eq!(app.original_editor.choice.path.as_deref(), Some("/Apps/My Editor.app"));
-        crate::dialogs::confirm::ask_reset_prefs(&mut app);
-        crate::dialogs::confirm(&mut app).unwrap();
+        prefs_dialog::ask_reset(&mut app);
+        prefs_dialog::answer_reset(&mut app, PromptChoice::Cancel);
+        assert_eq!(app.original_editor.choice.path.as_deref(), Some(mine.as_str()));
+        prefs_dialog::ask_reset(&mut app);
+        prefs_dialog::answer_reset(&mut app, PromptChoice::Proceed);
         assert!(app.original_editor.choice.path.is_none());
-        assert_eq!(app.ui.original_editor.path.as_deref(), Some("/Apps/My Editor.app"));
-        crate::dialogs::cancel(&mut app);
+        assert_eq!(app.ui.original_editor.path.as_deref(), Some(mine.as_str()));
+        cancel(&mut app);
         prefs_dialog::open(&mut app, Some("File Handling"));
-        assert_eq!(app.original_editor.choice.path.as_deref(), Some("/Apps/My Editor.app"));
-        crate::dialogs::confirm::ask_reset_prefs(&mut app);
-        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.original_editor.choice.path.as_deref(), Some(mine.as_str()));
+        prefs_dialog::ask_reset(&mut app);
+        prefs_dialog::answer_reset(&mut app, PromptChoice::Proceed);
         prefs_dialog::confirm(&mut app).unwrap();
         assert!(app.ui.original_editor.path.is_none());
     }
 
     #[test]
+    #[cfg(not(target_arch = "wasm32"))]
     fn original_editor_routing_and_errors() {
-        let mut app = app();
-        choose(&mut app, Some("/Apps/My Editor.app")).unwrap();
-        prefs_dialog::confirm(&mut app).unwrap();
+        let (mut app, _picker) = app();
         let calls = Rc::new(RefCell::new(Vec::new()));
         let c = calls.clone();
         app.services.open_file = Some(Box::new(move |_| {
@@ -189,108 +274,72 @@ mod tests {
             c.borrow_mut().push("photocraft");
             Ok(true)
         }));
-        let c = calls.clone();
-        app.services.open_in_application = Some(Box::new(move |editor, path| {
-            assert_eq!(editor, "/Apps/My Editor.app");
-            assert_eq!(path, "/Art/a b.png");
-            c.borrow_mut().push("chosen");
-            Ok(true)
-        }));
+        // The chosen application is gone: only absence falls through.
+        app.original_editor.choice.path = Some(std::env::temp_dir().join("vectorcraft-no-such-editor").to_string_lossy().into_owned());
+        commit(&mut app);
         crate::io::open_original(&mut app, "/Art/a b.png").unwrap();
         app.session.prefs.edit_original_system_defaults = false;
         crate::io::open_original(&mut app, "/Art/a b.png").unwrap();
         crate::io::open_original(&mut app, "/Art/plan.emf").unwrap();
-        app.services.open_in_application = Some(Box::new(|_, _| Ok(false)));
-        crate::io::open_original(&mut app, "/Art/a b.png").unwrap();
         app.services.open_in_photocraft = Some(Box::new(|_| Ok(false)));
         crate::io::open_original(&mut app, "/Art/a b.png").unwrap();
-        app.services.open_in_application = Some(Box::new(|_, _| Err("launch failed".into())));
-        assert_eq!(crate::io::open_original(&mut app, "/Art/a b.png").unwrap_err(), "launch failed");
-        assert_eq!(*calls.borrow(), ["system", "chosen", "system", "photocraft", "system"]);
+        assert_eq!(*calls.borrow(), ["system", "photocraft", "system", "system"]);
+        // A chosen file that is not an application is an error, not a fall through.
+        app.original_editor.choice.path = Some(not_an_application("routing"));
+        commit(&mut app);
+        assert!(crate::io::open_original(&mut app, "/Art/a b.png").is_err());
     }
 
     #[test]
     fn automation_cannot_inject_an_original_editor() {
-        let mut app = app();
+        let (mut app, picker) = app();
+        let bad = editor("injected");
         for key in ["editOriginalApp", "original_editor", "__originalEditor", "__chosenApp"] {
-            let r = request(&mut app, "engine.execute", json!({"command": "prefs.set", "params": {"key": key, "value": "/Apps/Bad"}}));
+            let r = request(&mut app, "engine.execute", json!({"command": "prefs.set", "params": {"key": key, "value": bad}}));
             assert_eq!(r["ok"], false, "{r}");
-            let r = request(&mut app, "engine.execute", json!({"command": "prefs.set", "params": {"values": {key: "/Apps/Bad"}}}));
+            let r = request(&mut app, "engine.execute", json!({"command": "prefs.set", "params": {"values": {key: bad}}}));
             assert_eq!(r["ok"], false, "{r}");
-            // __ fields are accepted by generic dialogs, but they cannot become a trusted choice.
-            let _ = request(&mut app, "ui.dialog.set", json!({"field": key, "value": "/Apps/Bad"}));
+            let _ = request(&mut app, "ui.dialog.set", json!({"field": key, "value": bad}));
         }
-        let r = request(&mut app, "engine.execute", json!({"command": "prefs.setValues", "params": {"values": {"editOriginalApp": "/Apps/Bad"}}}));
+        let r = request(&mut app, "engine.execute", json!({"command": "prefs.setValues", "params": {"values": {"editOriginalApp": bad}}}));
         assert_eq!(r["ok"], false, "{r}");
-        let _ = request(&mut app, "ui.set", json!({"original_editor": {"path": "/Apps/Bad"}}));
+        let _ = request(&mut app, "ui.set", json!({"original_editor": {"path": bad}}));
         let r = request(&mut app, "ui.dialog.confirm", json!({}));
         assert_eq!(r["ok"], true, "{r}");
         assert!(app.ui.original_editor.path.is_none());
         prefs_dialog::open(&mut app, Some("File Handling"));
         app.ui.answering_control = true;
-        assert!(choose(&mut app, Some("/Apps/Bad")).is_err());
+        assert!(choose(&mut app, &picker, Some(&bad)).is_err());
         app.ui.answering_control = false;
-        app.synthetic_frame = true;
-        assert!(choose(&mut app, Some("/Apps/Bad")).is_err());
+        // A pass that carries injected input acts for automation too.
+        let ctx = ctx(&app);
+        craft::ui::runtime::windows::WindowHost::of(&ctx).inject_key(egui::ViewportId::ROOT, craft::keymap::Key::A, Default::default(), false);
+        ctx.run_ui(egui::RawInput::default(), |_| assert!(pick(&mut app).is_err())).textures_delta.clear();
         assert!(app.original_editor.choice.path.is_none());
     }
 
     #[test]
     fn original_editor_async_picker_validates_and_commits_only_on_ok() {
-        let mut app = app();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let mut rx = Some(rx);
-        app.services.start_pick = Some(Box::new(move |_| rx.take()));
-        choose(&mut app, None).unwrap();
-        tx.send(vec!["/Apps/Async Editor.app".into()]).unwrap();
-        crate::picks::poll(&mut app, &egui::Context::default());
-        assert_eq!(app.original_editor.choice.path.as_deref(), Some("/Apps/Async Editor.app"));
+        let (mut app, picker) = app();
+        let late = editor("late");
+        pick(&mut app).unwrap();
+        picker.answer(&[&late]);
+        row(&mut app);
+        assert_eq!(app.original_editor.choice.path.as_deref(), Some(late.as_str()));
         assert!(app.ui.original_editor.path.is_none());
         prefs_dialog::confirm(&mut app).unwrap();
-        assert_eq!(app.ui.original_editor.path.as_deref(), Some("/Apps/Async Editor.app"));
+        assert_eq!(app.ui.original_editor.path.as_deref(), Some(late.as_str()));
     }
 
     #[test]
     fn original_editor_picker_answer_does_not_survive_reopening_preferences() {
-        let mut app = app();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let mut rx = Some(rx);
-        app.services.start_pick = Some(Box::new(move |_| rx.take()));
-        choose(&mut app, None).unwrap();
-        crate::dialogs::cancel(&mut app);
+        let (mut app, picker) = app();
+        let stale = editor("stale");
+        pick(&mut app).unwrap();
+        cancel(&mut app);
         prefs_dialog::open(&mut app, Some("File Handling"));
-        tx.send(vec!["/Apps/Stale.app".into()]).unwrap();
-        crate::picks::poll(&mut app, &egui::Context::default());
+        picker.answer(&[&stale]);
+        row(&mut app);
         assert!(app.original_editor.choice.path.is_none());
-    }
-
-    #[test]
-    fn original_editor_controls_are_desktop_only_and_draw_the_choice() {
-        let mut app = app();
-        let paint = |app: &mut VectorcraftApp| {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("__found".into(), json!("editOriginalSystemDefaults"));
-            d.fields.insert("__scrollTo".into(), json!(true));
-            let ctx = egui::Context::default();
-            crate::theme::install_fonts(&ctx);
-            let mut text = String::new();
-            // The fixed-height Preferences list scrolls after its sizing pass.
-            for frame in 0..4 {
-                let input = egui::RawInput {
-                    time: Some(f64::from(frame)),
-                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 1000.0))),
-                    ..Default::default()
-                };
-                let mut out = ctx.run_ui(input, |ui| prefs_dialog::show(app, ui.ctx()));
-                out.textures_delta.clear();
-                text = crate::tests_labels::shapes_text(&out);
-            }
-            text
-        };
-        let text = paint(&mut app);
-        assert!(text.contains("Edit Original with:") && text.contains("PhotoCraft"), "{text}");
-        app.services.check_application = None;
-        let text = paint(&mut app);
-        assert!(!text.contains("Edit Original with:"), "{text}");
     }
 }

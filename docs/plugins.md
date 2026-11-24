@@ -129,14 +129,14 @@ defaults):
 | Module size | 32 MiB | rejected |
 | Linear memory | 512 MiB per instance (input and parameters: at most half) | `memory.grow` returns -1; oversized input or initial memory fails |
 | Output | 64 MiB of JSON | `Limit("output size")` |
-| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; an object filter with the [Large instruction budget](#instruction-budget-preference) 250 M + 4,000 per byte; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte | `Limit("instruction budget")` |
-| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (checked every 20 M instructions; the web build reads the page's `performance.now()`) | `Limit("time budget")` |
+| Instructions (fuel) | 50 M per call + 4,000 per input byte for `vc_run`; an object filter with the [Large instruction budget](#instruction-budget-preference) 250 M + 4,000 per byte; a [heavy filter](#heavy-filters) 1 G + 4,000 per byte; an export or import 10 G + 4,000 per byte; [storage calls](#settings-and-cache) take one more for every 64 bytes they move | `Limit("instruction budget")` |
+| Wall clock | 60 s per filter run, 5 s per live-effect run, 300 s per heavy filter run, export or import (checked every 20 M instructions and after each [storage call](#settings-and-cache); the web build reads the page's `performance.now()`) | `Limit("time budget")` |
 | Import input | 128 MiB of the file (`vectorcraft_plugins::import::MAX_INPUT_BYTES`) | the file doesn't open; a larger file named by `path` is not read past that |
 | Call depth | 1,024 frames | trap |
 | Module shape | wasmi's strict limits (≤ 10,000 functions, 1 memory, …) | rejected |
 
 An export runs where the export runs: with Background Export on, on the export's worker, whose Cancel stops the
-plug-in between two of those 20 M-instruction slices; nothing is written then. An import stops the same way when the
+plug-in between two of those 20 M-instruction slices or after a storage call; nothing is written then. An import stops the same way when the
 open it runs in is cancelled, and nothing opens then.
 
 ### Instruction budget preference
@@ -151,7 +151,7 @@ and MCP alike:
 
 A [heavy filter](#heavy-filters) keeps its 1 G and 300 s with either choice. Live effects, exporters and importers keep
 their own budgets. A change applies to the next run of every installed filter, without installing it again. Cancel and
-the time budget stop a run between two 20 M-instruction slices with either choice. `prefs.set {key:
+the time budget stop a run between two 20 M-instruction slices, or after a storage call, with either choice. `prefs.set {key:
 "pluginInstructionBudget", value}` takes `normal` or `large` (or the labels Normal and Large) and refuses any other
 value; a saved preferences file with another value reads as Normal.
 
@@ -491,6 +491,14 @@ its 10,000 storage calls or its 1 GiB of storage reads and writes. Each call cou
 settings call counts the whole settings file when it reads the file, and a set or delete also counts the whole file
 when it writes the file; a cache call counts the entry it reads or writes. A read counts them even when the value
 doesn't fit and nothing is copied. A call that would pass the 1 GiB returns `-7` before it reads or writes anything.
+The bytes the calls count also cost the run one instruction of its budget for every 64 bytes (VectorCraft's own
+value), counted over the whole run, so the 1 GiB costs about 16.8 M instructions. A get also pays at that rate for the
+bytes it copies into the module's memory that it didn't count, such as a value answered from memory. A call stops
+before a read or write of a file that the run's instructions can't pay for, and the run ends with
+`Limit("instruction budget")`; a set or delete may already have read the settings file then. A call takes
+instructions beyond the current 20 M-instruction slice only before Cancel and the time budget; after either, a read or
+write that needs them doesn't happen. After every storage call the run checks its time budget and Cancel, and stops
+if either has come. A read or write that would pass the 1 GiB still returns `-7`, whatever the instructions left.
 
 The app keeps the settings in memory after the first call and reads `settings.json` again only when the file's size
 or modified time differs from the last read or write. A get answered from memory reads no file and counts no bytes. A
