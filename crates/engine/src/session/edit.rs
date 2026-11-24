@@ -362,31 +362,33 @@ impl Session {
         }
         // A change the command made to the new-art paints stays when the next preview or a cancel
         // puts back the paints the interaction began with (the Live Paint Bucket's colors); the
-        // parts it left alone keep the interaction's.
-        let (now, start) = (&self.paint, &mut it.paint);
-        if now.fill != paint.fill {
-            start.fill.clone_from(&now.fill);
+        // parts it left alone keep the interaction's. The pattern lists every field, so a field
+        // added to `PaintDefaults` does not compile until it is handled here.
+        let vectorcraft_tools::PaintDefaults { fill, stroke, stroke_width, appearance, opacity, blend, style, inherited } = &self.paint;
+        let start = &mut it.paint;
+        if *fill != paint.fill {
+            start.fill.clone_from(fill);
         }
-        if now.stroke != paint.stroke {
-            start.stroke.clone_from(&now.stroke);
+        if *stroke != paint.stroke {
+            start.stroke.clone_from(stroke);
         }
-        if now.stroke_width != paint.stroke_width {
-            start.stroke_width = now.stroke_width;
+        if *stroke_width != paint.stroke_width {
+            start.stroke_width = *stroke_width;
         }
-        if now.appearance != paint.appearance {
-            start.appearance.clone_from(&now.appearance);
+        if *appearance != paint.appearance {
+            start.appearance.clone_from(appearance);
         }
-        if now.opacity != paint.opacity {
-            start.opacity = now.opacity;
+        if *opacity != paint.opacity {
+            start.opacity = *opacity;
         }
-        if now.blend != paint.blend {
-            start.blend = now.blend;
+        if *blend != paint.blend {
+            start.blend = *blend;
         }
-        if now.style != paint.style {
-            start.style.clone_from(&now.style);
+        if *style != paint.style {
+            start.style.clone_from(style);
         }
-        if now.inherited != paint.inherited {
-            start.inherited = now.inherited;
+        if *inherited != paint.inherited {
+            start.inherited = *inherited;
         }
         let active = self.active().is_some_and(|d| d.uid == uid);
         let Some(st) = self.docs.iter_mut().find(|d| d.uid == uid) else { return };
