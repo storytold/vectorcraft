@@ -185,6 +185,7 @@ impl Session {
             self.journal_note.clear();
             self.note_depth = 1;
             self.journal_query = false;
+            self.defaults_only_ran = None;
             self.batch_stash = None;
             self.batch_steps = None;
         }
@@ -287,8 +288,9 @@ impl Session {
     }
 
     /// Record `key: value` in the running top-level command's journal entry (or its interaction's
-    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing): a value
-    /// it resolved from the preferences or the clock.
+    /// preview, or its step in a batch) unless its params give `key` (a null gives nothing, and a
+    /// noted `defaultsOnly` replaces the params' own): a value it resolved from the preferences or
+    /// the clock.
     pub fn note_journal(&mut self, key: &str, value: Value) {
         if self.depth == self.note_depth {
             self.journal_note.insert(key.to_string(), value);
@@ -383,10 +385,11 @@ impl Session {
         let mut note = std::mem::take(&mut self.journal_note);
         match params {
             // The params' own values win, except a null: it reads as a key left out, so the
-            // noted value is the one the command resolved.
+            // noted value is the one the command resolved. A noted `defaultsOnly` wins too: the
+            // Live Paint Bucket kept the command to the defaults although the params gave `false`.
             Value::Object(m) if !note.is_empty() => {
                 for (k, v) in m {
-                    if !v.is_null() || !note.contains_key(k) {
+                    if (!v.is_null() && k != "defaultsOnly") || !note.contains_key(k) {
                         note.insert(k.clone(), v.clone());
                     }
                 }

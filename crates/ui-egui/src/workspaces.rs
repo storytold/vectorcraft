@@ -18,6 +18,7 @@ use craft::keymap::CommandRef;
 use craft::ui::dialog::{DialogResult, dialog_id};
 use craft::ui::patterns::dock::{HostedNewWorkspace, NewWorkspace, WorkspaceSwitcher};
 use craft::ui::patterns::form_dialogs::{ActionEnabled, HostedListManager, ListManagerAction, ListManagerChoice, ListManagerEntry};
+use craft::ui::pickers::SelectLook;
 use craft::ui::rails::LastUsed;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -525,7 +526,7 @@ pub fn menu_items(saved: &[String]) -> Vec<crate::menus::Node> {
 /// Manage Workspaces…; picking a workspace runs `window.workspace`.
 pub fn switcher(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let rows = ["window.workspace.reset", "window.workspace.new", "window.workspace.manage"].map(CommandRef::new).to_vec();
-    let shown = WorkspaceSwitcher::new(&app.ui.workspaces.set).commands(rows).show(ui);
+    let shown = WorkspaceSwitcher::new(&app.ui.workspaces.set).commands(rows).look(SelectLook::Quiet).show(ui);
     if let Some(id) = shown.switched {
         crate::menus::invoke(app, "window.workspace", json!({"name": id}));
     }

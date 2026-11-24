@@ -47,8 +47,10 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
 /// documents; `Document.close` throws "not available yet". `app.open` reads the file it is given.
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder alert confirm localize prompt toSource"),
+    ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
+    ("UnitValue.", "baseUnit baseUnit= length prototype"),
+    ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
     (
