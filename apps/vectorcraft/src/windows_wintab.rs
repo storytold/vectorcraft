@@ -270,6 +270,9 @@ struct Readings {
     /// The pointer id of the pen whose message first read the wheel since the readings started
     /// afresh; another pen's messages read none.
     pen: Option<u32>,
+    /// The cursor whose wheel that pen read; the pen reads no other cursor's wheel until the
+    /// readings start afresh.
+    cursor: Option<u32>,
 }
 
 impl Readings {
@@ -317,6 +320,7 @@ impl Readings {
         self.list.clear();
         self.eraser = None;
         self.pen = None;
+        self.cursor = None;
     }
 
     /// The pen whose leaving starts the readings afresh, for a message of `pen`: the pen that took
@@ -331,7 +335,8 @@ impl Readings {
     /// readings, the one cursor read since they started afresh, however long ago its last packet
     /// came (a pen held still sends none). `None` when no cursor, or more than one, is that recent,
     /// or the cursor has read only 0 since the readings started afresh, or another pen's message
-    /// read a wheel first since then. A turn to the other end starts them afresh first.
+    /// read a wheel first since then, or the pen read another cursor's wheel since then. A turn to
+    /// the other end starts them afresh first.
     fn wheel_for(&mut self, time: u32, pen: u32, eraser: bool) -> Option<f32> {
         if self.pen.is_some_and(|p| p != pen) {
             return None;
@@ -351,11 +356,12 @@ impl Readings {
                 r
             }
         };
-        if !r.moved {
+        if !r.moved || self.cursor.is_some_and(|c| c != r.cursor) {
             return None;
         }
         let wheel = r.axis?.wheel(r.raw)?;
         self.pen = Some(pen);
+        self.cursor = Some(r.cursor);
         Some(wheel)
     }
 }
@@ -1107,6 +1113,21 @@ mod tests {
     }
 
     #[test]
+    fn a_pen_keeps_the_airbrush_whose_wheel_it_read() {
+        let mut r = Readings::default();
+        r.packet(packet(1, 250), AXIS, 1000);
+        assert_eq!(r.wheel_at(1000, false), Some(0.25));
+        // Another tablet's airbrush moves while the pen is held still.
+        r.packet(packet(2, 750), AXIS, 5000);
+        assert_eq!(r.wheel_at(5010, false), None, "the other cursor's wheel");
+        r.packet(packet(1, 500), AXIS, 6000);
+        assert_eq!(r.wheel_at(6010, false), Some(0.5), "its own cursor again");
+        r.forget();
+        r.packet(packet(2, 750), AXIS, 7000);
+        assert_eq!(r.wheel_at(7010, false), Some(0.75), "after the readings started afresh");
+    }
+
+    #[test]
     fn zero_is_no_wheel_until_the_pen_reports_another_value() {
         let mut r = Readings::default();
         r.packet(packet(1, 0), AXIS, 100);
@@ -1136,6 +1157,7 @@ mod tests {
         r.forget();
         r.packet(packet(1, 300), AXIS, 150);
         assert_eq!(r.wheel_at(150, false), Some(0.3), "after the readings started afresh");
+        r.forget();
         for c in 0..10 {
             r.packet(packet(c, 300), AXIS, 1000 * c);
         }
