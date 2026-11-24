@@ -3,8 +3,9 @@
 
 use craft::behavior::Mixed;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Bracket, Props as _, Show as _, ShowContainer as _};
 use craft::ui::form::Field;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::pickers::Select;
 use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::{NumberField, link_toggle};
@@ -152,21 +153,21 @@ fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape) -> bool {
 }
 
 /// An ellipse's Pie Start and End Angle (degrees, counterclockwise from 3 o'clock; 0 to 360 is the whole
-/// ellipse), the Constrain Pie Angle link after them, and Invert Pie, which shows the other part of it. With the
+/// ellipse), the Constrain Pie Angle link beside them, and Invert Pie, which shows the other part of it. With the
 /// link on, a typed angle moves the other one by as much, so each selected ellipse keeps its span.
 fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64)) {
     let constrain = app.ui.constrain_pie_angle;
-    for (label, key, v) in [(tl!("Pie Start Angle"), "pieStart", pie.0), (tl!("Pie End Angle"), "pieEnd", pie.1)] {
-        number_row(
-            app,
-            ui,
-            label,
-            Some(v),
-            Quantity::Degrees,
-            |a| if constrain { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) },
-        );
-    }
-    link_toggle(tl!("Constrain Pie Angle"), Bind::bound(&mut app.ui.constrain_pie_angle)).show(ui);
+    // The link sits halfway between the two fields, with no bracket drawn to them.
+    Row::new().bracket(Bracket::Unlinked).show(ui, |ui, _| {
+        Stack::new().show(ui, |ui, _| {
+            for (label, key, v) in [(tl!("Pie Start Angle"), "pieStart", pie.0), (tl!("Pie End Angle"), "pieEnd", pie.1)] {
+                number_row(app, ui, label, Some(v), Quantity::Degrees, |a| {
+                    if constrain { json!({ key: a, "constrainPie": true }) } else { json!({ key: a }) }
+                });
+            }
+        });
+        link_toggle(tl!("Constrain Pie Angle"), Bind::bound(&mut app.ui.constrain_pie_angle)).show(ui);
+    });
     if Button::new(tl!("Invert Pie")).show(ui).clicked() {
         set_live_shape(app, json!({"invertPie": true}));
     }
