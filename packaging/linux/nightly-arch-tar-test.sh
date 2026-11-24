@@ -53,5 +53,7 @@ expect "$(printf 'CONFIG=<>\n<--version>\n')" --version
 expect "$(printf 'CONFIG=<>\n<-V>\n')" -V
 VECTORCRAFT_CONFIG_DIR="$work/explicit with space" \
   expect "$(printf 'CONFIG=<%s>\n<%s>\n' "$work/explicit with space" 'sample.svg')" sample.svg
+VECTORCRAFT_CONFIG_DIR="" \
+  expect "$(printf 'CONFIG=<>\n<%s>\n' 'sample.svg')" sample.svg
 
 echo "PASS: Arch Nightly handoff isolates the profile and preserves launch arguments"

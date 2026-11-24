@@ -54,7 +54,11 @@ if [[ "${VECTORCRAFT_BUILD_CHANNEL:-}" == nightly-v1 || "$VERSION" == *-nightly*
   export VECTORCRAFT_BUILD_CHANNEL=nightly-v1
   export VECTORCRAFT_OVERRIDE_VERSION="$VERSION"
 fi
-BASENAME="vectorcraft-$VERSION-linux-$ARCH"
+if [[ "$IS_NIGHTLY" = 1 && "$VERSION" != *-nightly* ]]; then
+  BASENAME="vectorcraft-$VERSION-nightly-linux-$ARCH"
+else
+  BASENAME="vectorcraft-$VERSION-linux-$ARCH"
+fi
 
 if [[ -n "$ARCH_TAR_DIR" && "$IS_NIGHTLY" != 1 ]]; then
   echo "error: --arch-tar-dir is only for Nightly builds" >&2
@@ -147,7 +151,7 @@ set -eu
 if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
   exec /usr/lib/vectorcraft-nightly/vectorcraft "$@"
 fi
-if [ -z "${VECTORCRAFT_CONFIG_DIR:-}" ]; then
+if [ -z "${VECTORCRAFT_CONFIG_DIR+x}" ]; then
   profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
   export VECTORCRAFT_CONFIG_DIR="$profile_base/vectorcraft-nightly"
 fi
@@ -219,7 +223,7 @@ APPDIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
   exec "$APPDIR/usr/bin/vectorcraft" "$@"
 fi
-if [ -z "${VECTORCRAFT_CONFIG_DIR:-}" ]; then
+if [ -z "${VECTORCRAFT_CONFIG_DIR+x}" ]; then
   profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
   export VECTORCRAFT_CONFIG_DIR="$profile_base/vectorcraft-nightly"
 fi

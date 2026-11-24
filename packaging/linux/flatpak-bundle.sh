@@ -44,7 +44,11 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-BASENAME="vectorcraft-$VERSION-linux-$ARCH"
+if [[ "$FLATPAK_ID" != "$APP_ID" && "$VERSION" != *-nightly* ]]; then
+  BASENAME="vectorcraft-$VERSION-nightly-linux-$ARCH"
+else
+  BASENAME="vectorcraft-$VERSION-linux-$ARCH"
+fi
 TARBALL="${TARBALL:-$DIST/$BASENAME.tar.gz}"
 [[ -f "$TARBALL" ]] || { echo "error: $TARBALL not found (run packaging/linux/package.sh --formats tar first)" >&2; exit 1; }
 for tool in flatpak flatpak-builder; do
@@ -66,7 +70,7 @@ set -eu
 if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
   exec /app/libexec/vectorcraft "$@"
 fi
-if [ -z "${VECTORCRAFT_CONFIG_DIR:-}" ]; then
+if [ -z "${VECTORCRAFT_CONFIG_DIR+x}" ]; then
   profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.var/app/ai.storyteller.vectorcraft.nightly/data}"
   export VECTORCRAFT_CONFIG_DIR="$profile_base/profile"
 fi
