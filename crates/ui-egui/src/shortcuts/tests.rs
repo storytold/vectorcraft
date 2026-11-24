@@ -1482,8 +1482,10 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
         key_frame(&mut app, &ctx, vec![]);
         assert_eq!(dialog_kind(&app).as_deref(), Some(dialog), "{tool}: and it stays open");
         assert_eq!(steps(&app), before, "{tool}: the Enter that opened it didn't confirm it");
-        // With its default values only Reflect changes the art. A held OK closes its dialog on the window's next pass.
+        // With its default values only Reflect changes the art. A held OK closes its dialog on the window's next pass,
+        // and its field gives up the keyboard in the frame after that.
         key_frame(&mut app, &ctx, enter());
+        key_frame(&mut app, &ctx, vec![]);
         key_frame(&mut app, &ctx, vec![]);
         let after = (before.0 + usize::from(dialog == "object.reflect"), before.1 + 1);
         assert_eq!((dialog_kind(&app), steps(&app)), (None, after), "{tool}: Enter confirms");
