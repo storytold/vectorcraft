@@ -517,11 +517,13 @@ impl VectorcraftApp {
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let opening = !self.opening.pending.is_empty();
         let presenting = self.ui.presenting();
+        let large_tabs = self.session.prefs.large_tabs;
         // The tab strip and the document are two closures of one panel: they take the app in
         // turn, and a borrow that fails (a closure re-entered) skips its part.
         let app = std::cell::RefCell::new(self);
         CanvasPanel::new()
             .opening(opening)
+            .large_tabs(large_tabs)
             .tabs(|ui, _cx| {
                 if !presenting && let Ok(mut app) = app.try_borrow_mut() {
                     chrome::doc_tabs(&mut app, ui);

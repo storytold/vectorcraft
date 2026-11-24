@@ -154,6 +154,8 @@ const SIZES: &[u8] = br#"{
     "compact": {
         "size.control.md": 26,
         "size.panel_header": 33,
+        "size.bar.tab": 35,
+        "size.bar.tab_large": 44,
         "space.pad.regular": 10,
         "space.gap.row": 5,
         "radius.control": 5,
