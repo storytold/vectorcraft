@@ -6,6 +6,8 @@
 
 > Selection update (2026-11-11): path and compound-path interiors follow enabled non-None fill rows, including lower fills beneath a top None row (#6625). Hidden-only interiors miss; zero-opacity fills remain selectable. Cap/join follow-up (2026-11-12): hidden-fill and no-fill stroke hits must respect cap and join geometry; focused cap/join CPU regressions passed. Scores and estimates unchanged.
 
+> Live blend isolation update (2026-11-12): with Double Click To Isolate enabled, the Selection tool enters live blend isolation on double-click (#6618). Scores and estimates unchanged.
+
 > Blend redraw update (#5179; previously: Keyboard Shortcuts: user-bindable Switch Selection Tools (#7645), with no default key; scores and estimates unchanged): renderer bounds include spine-placed keys and steps; both focused CPU regressions pass. Scores and estimates unchanged.
 
 > **File-font hardening status (2026-11-12, #4569):** G8 implementation and synthetic regressions added; compilation and runtime proof pending. Scores and estimates unchanged.
@@ -154,6 +156,8 @@ partial one, and it blocks beta, not alpha.
 from G14 and the budget run of G15: **~170–270 h** one agent, ~50–80 h wall clock with 4–6 agents.
 
 ## G1 Interaction fidelity
+
+- **Done (#6618):** with Double Click To Isolate enabled, the Selection tool enters isolation on a live blend from a key or intermediate step. Entry and selection preserve an existing curved spine. Key movement and Undo/Redo are covered for the default straight spine; source movement after Replace Spine is tracked separately in #6809. Broader G1 estimates unchanged.
 
 - **#7237, request 3 only:** Space during an ordinary path's Direct Selection direction-handle drag moves the owning anchor and both handles, including while Direct Selection is lent from the Pen; releasing Space resumes handle adjustment and the Pen can continue the same path. The separate handle-hover label request remains open. See the Direct Selection checklist and validation evidence in [ui-parity.md](ui-parity.md) and [target-app-parity.md](target-app-parity.md#evidence-what-ships-today-by-area). Scores and estimates unchanged.
 
@@ -1013,6 +1017,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | 2026-11-07 | minor | G4: the Glyphs panel's Alternates for Current Selection applies the OpenType feature that draws a variant to that letter alone (`salt=2`; the style commands take `tag=N`; runs that differ only in their features shape as one piece of text), so an Arabic word stays joined, and Show › Entire Font lists the unencoded glyphs (#5514). Estimate unchanged. |
 | 2026-11-12 | minor | G11: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects the whole value (#6659, follow-up to #1326); short-drag and jitter-tap regressions in `tests/numfields.rs`; estimates unchanged. |
 | 2026-11-03 | minor | An imported document's own title (an SVG's root `<title>`, a PDF's XMP `dc:title` else its Info `Title`) goes into File Info only; the document's name stays the file's name (#3626); no scored gap or estimate reassessed. |
+| 2026-11-12 | minor | G1/M8: with Double Click To Isolate on, a Selection-tool double-click isolates a live blend to edit its existing keys; spacing, orientation and a curved spine are kept (#6618). Scores and estimates unchanged. |
 | 2026-11-11 | minor | Eyedropper copies effective character dimensions between transformed text objects (#6404); scores and estimates unchanged. |
 | 2026-11-11 | minor | Ordinary Save to a location refusing writes offers Save As (#6146); cancellation preserves the original path and modified state; automation receives READ_ONLY_LOCATION. Scores and estimates unchanged. Validation pending. |
 | 2026-11-11 | minor | G5: built-in Energy Beams brush library (Laser Bolt, Plasma Arc, Charge Wave, Spark Trail); Missing trimmed; estimate 5–15 → 4–14 h; MCP Brush libraries list Energy Beams. |
