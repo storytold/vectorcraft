@@ -400,6 +400,264 @@ fn a_selection_made_during_a_move_drag_leaves_the_paints_of_the_drag_object() {
     }
 }
 
+/// Replay the journal of `s` from `start` on `replayed`.
+fn replay_from(s: &Session, start: usize, replayed: &mut Session) {
+    for (id, p) in s.journal.iter().skip(start) {
+        replayed.replay(id, p).unwrap();
+    }
+}
+
+/// The journal of a move drag with a selection command run during it replays as the drag went:
+/// the drag moves its own object, not the one the command selected.
+#[test]
+fn a_move_drag_after_a_selection_command_replays_on_its_own_object() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let (mut s, target, other) = two_squares(real_time);
+        s.select_tool("selection", view()).unwrap();
+        let start = s.journal.len();
+        drag_with(&mut s, &[(120.0, 120.0), (140.0, 130.0), (170.0, 150.0)], |s| {
+            s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        });
+        let bounds = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            (d.bounds_of(&[target], false), d.bounds_of(&[other], false))
+        };
+        assert_eq!(bounds(&s), (Some(Rect::new(150.0, 130.0, 190.0, 170.0)), Some(Rect::new(10.0, 10.0, 30.0, 30.0))), "{at}");
+        let (mut replayed, _, _) = two_squares(real_time);
+        replay_from(&s, start, &mut replayed);
+        assert_eq!(bounds(&replayed), bounds(&s), "{at}: {:?}", journaled(&s, start));
+        assert_eq!(replayed.doc().unwrap().selection.objects, s.doc().unwrap().selection.objects, "{at}");
+        assert_eq!(replayed.doc().unwrap().active_layer, s.doc().unwrap().active_layer, "{at}");
+    }
+}
+
+/// A square on a second layer selected with a ruler guide, and a square on the first layer →
+/// the session (with Real-time Drawing `real_time`) and the square on the first layer.
+fn square_and_guide(real_time: bool) -> (Session, NodeId) {
+    let mut s = Session::new();
+    s.prefs.real_time_drawing = real_time;
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let other = s.doc().unwrap().selection.objects[0];
+    s.execute("layer.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 40, "height": 40})).unwrap();
+    let target = s.doc().unwrap().selection.objects[0];
+    s.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
+    s.execute("select.set", &json!({"ids": [target.0]})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    (s, other)
+}
+
+/// The journal of a move drag of a square and a ruler guide, with a command during it that
+/// selects an object on another layer, replays with the drag's selection, guide included, with
+/// the layer the command made current and with the Layers panel rows the command left highlighted.
+#[test]
+fn a_move_drag_of_a_guide_after_a_selection_command_replays_its_selection_and_layer() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let (mut s, other) = square_and_guide(real_time);
+        s.select_tool("selection", view()).unwrap();
+        let start = s.journal.len();
+        drag_with(&mut s, &[(120.0, 120.0), (140.0, 130.0), (170.0, 150.0)], |s| {
+            s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        });
+        let (mut replayed, _) = square_and_guide(real_time);
+        replay_from(&s, start, &mut replayed);
+        let state = |s: &mut Session| {
+            let d = s.doc().unwrap();
+            let state = (
+                d.selection.objects.clone(),
+                d.selection.guides.clone(),
+                d.active_layer,
+                d.highlighted_rows(),
+                d.doc.bounds_of(&d.selection.objects, false),
+            );
+            (state, s.execute("guide.list", &json!({})).unwrap())
+        };
+        assert_eq!(state(&mut replayed), state(&mut s), "{at}: {:?}", journaled(&s, start));
+    }
+}
+
+/// The journal of a move drag of a targeted square, with a command during it that selects another
+/// square, replays with the square targeted, as the drag leaves it.
+#[test]
+fn a_move_drag_of_a_targeted_object_after_a_selection_command_replays_its_target() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let setup = || {
+            let (mut s, target, other) = two_squares(real_time);
+            s.execute("layer.target", &json!({"id": target.0})).unwrap();
+            s.select_tool("selection", view()).unwrap();
+            (s, other)
+        };
+        let (mut s, other) = setup();
+        let start = s.journal.len();
+        drag_with(&mut s, &[(120.0, 120.0), (140.0, 130.0), (170.0, 150.0)], |s| {
+            s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        });
+        let (mut replayed, _) = setup();
+        replay_from(&s, start, &mut replayed);
+        let state = |s: &Session| {
+            let d = s.doc().unwrap();
+            (d.selection.objects.clone(), d.selection.target, d.doc.bounds_of(&d.selection.objects, false))
+        };
+        assert_eq!(state(&replayed), state(&s), "{at}: {:?}", journaled(&s, start));
+    }
+}
+
+/// The journal of a move drag of a targeted square and a ruler guide, with a command during it
+/// that selects another square, replays with the square targeted and the guide selected.
+#[test]
+fn a_move_drag_of_a_targeted_object_and_a_guide_after_a_selection_command_replays_both() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let setup = || {
+            let (mut s, target, other) = two_squares(real_time);
+            s.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
+            s.execute("layer.target", &json!({"id": target.0})).unwrap();
+            s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+            s.select_tool("selection", view()).unwrap();
+            (s, target, other)
+        };
+        let (mut s, target, other) = setup();
+        let start = s.journal.len();
+        drag_with(&mut s, &[(120.0, 120.0), (140.0, 130.0), (170.0, 150.0)], |s| {
+            s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        });
+        let state = |s: &mut Session| {
+            let d = s.doc().unwrap();
+            let state = (d.selection.objects.clone(), d.selection.target, d.selection.guides.clone(), d.doc.bounds_of(&d.selection.objects, false));
+            (state, s.execute("guide.list", &json!({})).unwrap())
+        };
+        let live = state(&mut s);
+        assert_eq!((live.0.1, live.0.2.len()), (Some(target), 1), "{at}: the drag leaves the square targeted and the guide selected");
+        let (mut replayed, _, _) = setup();
+        replay_from(&s, start, &mut replayed);
+        assert_eq!(state(&mut replayed), live, "{at}: {:?}", journaled(&s, start));
+    }
+}
+
+/// The journal of a move drag of a path with every anchor selected as anchor points, with a
+/// command during it that selects another square, replays with those anchors selected.
+#[test]
+fn a_move_drag_of_every_anchor_of_a_path_after_a_selection_command_replays_its_anchors() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let setup = || {
+            let (mut s, target, other) = two_squares(real_time);
+            s.execute("select.set", &json!({"ids": [target.0]})).unwrap();
+            s.execute("select.anchors", &json!({"id": target.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
+            s.select_tool("selection", view()).unwrap();
+            (s, target, other)
+        };
+        let (mut s, target, other) = setup();
+        let every = s.doc().unwrap().selection.anchors.get(&target).cloned();
+        assert!(every.as_ref().is_some_and(|a| a.len() > 1), "{at}: {every:?}");
+        let start = s.journal.len();
+        drag_with(&mut s, &[(120.0, 120.0), (140.0, 130.0), (170.0, 150.0)], |s| {
+            s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        });
+        let state = |s: &Session| {
+            let d = s.doc().unwrap();
+            (d.selection.objects.clone(), d.selection.anchors.clone(), d.doc.bounds_of(&d.selection.objects, false))
+        };
+        assert_eq!(state(&s).1.get(&target), every.as_ref(), "{at}: the drag leaves every anchor selected as anchors");
+        let (mut replayed, _, _) = setup();
+        replay_from(&s, start, &mut replayed);
+        assert_eq!(state(&replayed), state(&s), "{at}: {:?}", journaled(&s, start));
+    }
+}
+
+/// The journal of a move drag of a targeted layer's art, with a duplicate made on that layer
+/// during it, replays with the drag moving its own objects, not the duplicates.
+#[test]
+fn a_move_drag_of_a_targeted_layer_after_a_duplicate_replays_its_objects() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let setup = || {
+            let (mut s, _, _) = two_squares(real_time);
+            let layer = s.doc().unwrap().doc.layers[0].id;
+            s.execute("layer.target", &json!({"id": layer.0})).unwrap();
+            s.select_tool("selection", view()).unwrap();
+            s
+        };
+        let mut s = setup();
+        let start = s.journal.len();
+        drag_with(&mut s, &[(120.0, 120.0), (140.0, 130.0), (170.0, 150.0)], |s| {
+            s.execute("edit.duplicate", &json!({})).unwrap();
+        });
+        let mut replayed = setup();
+        replay_from(&s, start, &mut replayed);
+        let state = |s: &Session| {
+            let d = s.doc().unwrap();
+            (d.selection.objects.clone(), d.doc.bounds_of(&d.selection.objects, false), objects(s))
+        };
+        assert_eq!(state(&replayed), state(&s), "{at}: {:?}", journaled(&s, start));
+    }
+}
+
+/// A selected user slice and a square → the session (with Real-time Drawing `real_time`), the
+/// slice and the square.
+fn slice_and_square(real_time: bool) -> (Session, NodeId, NodeId) {
+    let mut s = Session::new();
+    s.prefs.real_time_drawing = real_time;
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let other = s.doc().unwrap().selection.objects[0];
+    let slice = s.execute("object.slice.create", &json!({"x": 200, "y": 200, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.slice.select", &json!({"slices": [slice]})).unwrap();
+    (s, NodeId(slice), other)
+}
+
+/// The journal of a Slice Selection drag, with a command during it that selects an object,
+/// replays with the slice selected, as the drag leaves it.
+#[test]
+fn a_slice_drag_after_a_selection_command_replays_its_slice_selection() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let (mut s, slice, other) = slice_and_square(real_time);
+        s.select_tool("sliceSelection", view()).unwrap();
+        let start = s.journal.len();
+        drag_with(&mut s, &[(220.0, 220.0), (230.0, 230.0), (240.0, 240.0)], |s| {
+            s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        });
+        assert_eq!(s.doc().unwrap().selection.slices, [slice], "{at}");
+        let (mut replayed, _, _) = slice_and_square(real_time);
+        replay_from(&s, start, &mut replayed);
+        let state = |s: &Session| {
+            let sel = &s.doc().unwrap().selection;
+            (sel.objects.clone(), sel.slices.clone())
+        };
+        assert_eq!(state(&replayed), state(&s), "{at}: {:?}", journaled(&s, start));
+    }
+}
+
+/// A Warp stroke over two selected squares, with a command that deletes one of them during the
+/// stroke: the release still warps the other square, and the stroke's journal entry names it.
+#[test]
+fn a_warp_stroke_over_an_object_a_command_deleted_still_warps_the_others() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let (mut s, target, other) = two_squares(real_time);
+        s.execute("select.all", &json!({})).unwrap();
+        s.select_tool("warp", view()).unwrap();
+        let before = s.doc().unwrap().doc.node(target).cloned();
+        let steps = s.doc().unwrap().history.undo.len();
+        pointer(&mut s, PointerKind::Down, 120.0, 120.0);
+        pointer(&mut s, PointerKind::Drag, 135.0, 125.0);
+        let r = s.execute("edit.clear", &json!({"ids": [other.0]})).unwrap();
+        assert!(r.get("warning").is_none(), "{at}: {r}");
+        pointer(&mut s, PointerKind::Up, 135.0, 125.0);
+        assert!(!s.in_interaction(), "{at}");
+        assert!(s.doc().unwrap().doc.node(other).is_none(), "{at}: the deletion stays");
+        assert_ne!(s.doc().unwrap().doc.node(target).cloned(), before, "{at}: the release warps the other square");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 2, "{at}: the deletion and the stroke are a step each");
+        let (id, p) = s.journal.last().unwrap();
+        assert_eq!((id.as_str(), &p["ids"]), ("object.liquify", &json!([target.0])), "{at}");
+    }
+}
+
 /// The Scale and Rotate tools and the Pen adding to a path, with a command that deletes the
 /// object they act on during the drag: the drag ends without an edit of its own and the deletion
 /// stays.

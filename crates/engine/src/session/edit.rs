@@ -383,10 +383,19 @@ impl Session {
             }
             return;
         }
-        it.doc = st.doc.clone();
+        let began = std::mem::replace(&mut it.doc, st.doc.clone());
         // The drag acts on the objects it began with: a selection the command made (a paste, a
         // duplicate, Select All) does not change what the drag moves.
         it.selection = Arc::new(drag_selection(&it.selection, &st.doc));
+        // The journal holds the selection the command left. The drag's own selection is journaled
+        // after it, so the drag and the commands after it replay on the objects they act on.
+        let reselect = (active && st.selection != *it.selection)
+            .then(|| selection_steps(&it.selection, &st.selection, &st.doc, st.active_layer, &st.highlighted_rows()));
+        // The objects the drag's preview names leave out those the command removed, hid or locked.
+        // A preview left naming none has nothing to apply, and the drag records no step.
+        if it.preview.as_mut().is_some_and(|(_, p)| !drag_targets(p, &began, &st.doc)) {
+            it.preview = None;
+        }
         it.copies = None;
         it.move_box = std::sync::OnceLock::new();
         // With Real-time Drawing off the preview waits for the commit, as it did before the command.
@@ -398,6 +407,13 @@ impl Session {
             st.revision += 1;
         }
         st.interaction = Some(it);
+        if let Some(steps) = reselect {
+            let (from, grouped) = (self.journal.len(), self.undo_group_docs());
+            for step in steps {
+                self.journal.push(step);
+            }
+            self.journal_in_undo_groups(Some(uid), &grouped, from);
+        }
         self.clear_deferred_overlay_cache();
         if let Some((cmd, p)) = again {
             match self.preview(&cmd, &p) {
@@ -685,4 +701,123 @@ fn drag_selection(began: &Selection, doc: &Document) -> Selection {
     let held: Vec<_> = selection.objects.iter().copied().filter(|&id| !editable(id)).collect();
     selection.remove_all(held);
     selection
+}
+
+/// Take out of the `ids` of a drag's preview `params` the objects that a command run during the
+/// drag removed from `doc`, or hid or locked there while they were editable in `began` → false
+/// when the preview named objects and none of them is left.
+fn drag_targets(params: &mut Value, began: &Document, doc: &Document) -> bool {
+    let Some(ids) = params.get_mut("ids").and_then(Value::as_array_mut) else { return true };
+    if ids.is_empty() {
+        return true;
+    }
+    let (was, now) = (began.editable(), doc.editable());
+    ids.retain(|v| v.as_u64().map(vectorcraft_doc::NodeId).is_none_or(|id| doc.node(id).is_some() && (now(id) || !was(id))));
+    !ids.is_empty()
+}
+
+/// The journal entries that select `selection` again in `doc` after `made`, the selection a
+/// command left with `layer` current and `rows` highlighted in the Layers panel ([`object_steps`]).
+/// When selecting the objects would make another layer current, `layer.setCurrent` makes `layer`
+/// current again, as the drag leaves it, and `layer.highlight` gives back the highlighted rows.
+fn selection_steps(
+    selection: &Selection,
+    made: &Selection,
+    doc: &Document,
+    layer: Option<vectorcraft_doc::NodeId>,
+    rows: &[vectorcraft_doc::NodeId],
+) -> Vec<(String, Value)> {
+    let mut steps = object_steps(selection, doc);
+    // `layer.target` on a layer makes it current; any other change to the selected objects makes
+    // the layer of the last selected object current.
+    let targeted = steps.first().is_some_and(|(id, _)| id == "layer.target");
+    let selects = match selection.target.filter(|t| targeted && doc.node(*t).is_some_and(|n| n.is_layer())) {
+        Some(t) => Some(t),
+        None if selection.objects != made.objects => {
+            selection.objects.last().and_then(|id| doc.layer_containing(*id)).filter(|l| doc.is_editable(*l))
+        }
+        None => None,
+    };
+    if let Some(layer) = layer.filter(|l| selects.is_some_and(|s| s != *l)) {
+        steps.push(("layer.setCurrent".into(), serde_json::json!({ "id": layer.0 })));
+        // `layer.setCurrent` highlights the layer's row. `layer.highlight` sets the rows the command
+        // left instead; it keeps `layer` current while the last of them is on `layer`, or none is left.
+        if rows != [layer] && rows.last().is_none_or(|r| doc.layer_containing(*r) == Some(layer)) {
+            let ids: Vec<u64> = rows.iter().map(|r| r.0).collect();
+            steps.push(("layer.highlight".into(), serde_json::json!({ "ids": ids, "mode": "set" })));
+        }
+    }
+    steps
+}
+
+/// The journal entries that select `selection` in `doc`: the selections made on their own (its
+/// slices with `object.slice.select`, its target with `layer.target`, its symbol part with
+/// `symbol.instance.selectPart`, its Objects on Path member with
+/// `object.objectsOnPath.selectMember`), or its objects in their order (`select.set`), the anchors
+/// left out on paths that are not selected whole (`select.anchorsMany`), the anchors of paths with
+/// every anchor selected (`select.anchors`) and its segments (`select.segments`); after its objects
+/// or its target, its ruler guides (`guide.select`) and its key object, key guide or key anchor
+/// (`select.key`).
+fn object_steps(selection: &Selection, doc: &Document) -> Vec<(String, Value)> {
+    use serde_json::json;
+    if !selection.slices.is_empty() {
+        let slices: Vec<u64> = selection.slices.iter().map(|id| id.0).collect();
+        return vec![("object.slice.select".into(), json!({ "slices": slices }))];
+    }
+    // A target is selected again only while targeting it selects the same objects: when a command
+    // added art to a targeted layer, `select.set` selects the drag's objects.
+    let targets = |t: vectorcraft_doc::NodeId| match doc.node(t) {
+        Some(n) if n.is_layer() => n.layer_art(true) == selection.objects,
+        _ => selection.objects == [t],
+    };
+    let json_refs = |refs: &mut dyn Iterator<Item = &(usize, usize)>| Value::Array(refs.map(|&(a, b)| json!([a, b])).collect());
+    // A targeted object keeps the ruler guides and the key selected beside it.
+    let mut steps = if let Some(t) = selection.target.filter(|&t| targets(t)) {
+        vec![("layer.target".to_string(), json!({ "id": t.0 }))]
+    } else if let Some(part) = &selection.symbol_part {
+        return vec![("symbol.instance.selectPart".into(), json!({ "id": part.instance.0, "path": part.path }))];
+    } else if let Some(member) = selection.on_path_member {
+        return vec![("object.objectsOnPath.selectMember".into(), json!({ "member": member.0 }))];
+    } else {
+        let ids: Vec<u64> = selection.objects.iter().map(|id| id.0).collect();
+        let mut steps = vec![("select.set".to_string(), json!({ "ids": ids }))];
+        // `select.set` selects each path whole: subtracting the anchors that are not selected leaves
+        // the ones that are, and keeps the order of the objects. A path with every anchor selected
+        // as anchors gets them back with `select.anchors`, which keeps them all as anchors.
+        let mut every = Vec::new();
+        let partial: Vec<Value> = selection
+            .objects
+            .iter()
+            .filter_map(|id| {
+                let refs = selection.anchors.get(id)?;
+                let path = doc.node(*id)?.path_data()?;
+                let out: Vec<(usize, usize)> = path.anchors().map(|(s, i, _)| (s, i)).filter(|r| !refs.contains(r)).collect();
+                if out.is_empty() {
+                    every.push(("select.anchors".to_string(), json!({ "id": id.0, "anchors": json_refs(&mut refs.iter()), "mode": "add" })));
+                    return None;
+                }
+                Some(json!({ "id": id.0, "anchors": json_refs(&mut out.iter()) }))
+            })
+            .collect();
+        if !partial.is_empty() {
+            steps.push(("select.anchorsMany".into(), json!({ "items": partial, "mode": "subtract" })));
+        }
+        steps.extend(every);
+        for (id, refs) in &selection.segments {
+            steps.push(("select.segments".into(), json!({ "id": id.0, "segments": json_refs(&mut refs.iter()), "mode": "add" })));
+        }
+        steps
+    };
+    if !selection.guides.is_empty() {
+        let indexes = cmd::guide_indexes(doc, &selection.guides);
+        steps.push(("guide.select".into(), json!({ "indexes": indexes, "toggle": true })));
+    }
+    if let Some((id, (s, i))) = selection.key_anchor {
+        steps.push(("select.key".into(), json!({ "id": id.0, "anchor": [s, i] })));
+    } else if let Some(g) = selection.key_guide.and_then(|g| cmd::guide_indexes(doc, &[g]).first().copied()) {
+        steps.push(("select.key".into(), json!({ "guide": g })));
+    } else if let Some(key) = selection.key {
+        steps.push(("select.key".into(), json!({ "id": key.0 })));
+    }
+    steps
 }
