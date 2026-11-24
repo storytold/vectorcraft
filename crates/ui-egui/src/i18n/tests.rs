@@ -747,7 +747,7 @@ fn menu_labels() -> Vec<(String, String, serde_json::Value)> {
     fn walk(items: &[Node], out: &mut Vec<(String, String, serde_json::Value)>) {
         for i in items {
             match i {
-                Node::Item(it) if it.command.id == crate::menus::TODO => out.push((it.label.clone(), String::new(), serde_json::Value::Null)),
+                Node::Item(it) if crate::menus::unbound(&it.command.id) => out.push((it.label.clone(), String::new(), serde_json::Value::Null)),
                 Node::Item(it) => out.push((it.label.clone(), it.command.id.clone(), it.command.params.clone())),
                 Node::Heading(l) => out.push((l.clone(), String::new(), serde_json::Value::Null)),
                 Node::Submenu { label, children, .. } => {
@@ -773,11 +773,11 @@ fn menu_item_effect<'a>(id: &str, p: &'a serde_json::Value) -> Option<&'a str> {
 
 /// The label a menu item shows in `lang`, as the menus resolve it: an Effect menu item by its
 /// effect's `@id` row when the catalog has one, any other command by its id's row or its English
-/// label, and a submenu or an unbuilt item by its English label.
+/// label, and a submenu, an unbuilt item or a placeholder by its English label.
 fn shown_menu_label(lang: Lang, item: &crate::menus::Node) -> Option<&str> {
     use crate::menus::Node;
     match item {
-        Node::Item(it) if it.command.id == crate::menus::TODO => Some(tr(lang, &it.label)),
+        Node::Item(it) if crate::menus::unbound(&it.command.id) => Some(tr(lang, &it.label)),
         Node::Item(it) => {
             let (id, p) = (it.command.id.as_str(), &it.command.params);
             let by_effect = menu_item_effect(id, p).map(|e| tr_id(lang, e, "")).filter(|s| !s.is_empty());
@@ -799,7 +799,7 @@ fn menu_items_side_by_side_have_different_labels() {
         for item in items {
             let Some(shown) = shown_menu_label(lang, item) else { continue };
             let (english, what) = match item {
-                Node::Item(it) if it.command.id == crate::menus::TODO => (it.label.as_str(), "submenu or unbuilt item"),
+                Node::Item(it) if crate::menus::unbound(&it.command.id) => (it.label.as_str(), "submenu, unbuilt item or placeholder"),
                 Node::Item(it) => (it.label.as_str(), menu_item_effect(&it.command.id, &it.command.params).unwrap_or(it.command.id.as_str())),
                 Node::Submenu { label, .. } => (label.as_str(), "submenu or unbuilt item"),
                 _ => continue,
@@ -854,7 +854,7 @@ fn menu_items_never_show_an_id() {
     fn walk(lang: Lang, items: &[crate::menus::Node], out: &mut Vec<String>) {
         for item in items {
             match item {
-                crate::menus::Node::Item(it) if it.command.id != crate::menus::TODO => {
+                crate::menus::Node::Item(it) if !crate::menus::unbound(&it.command.id) => {
                     let (l, id) = (&it.label, it.command.id.as_str());
                     let key = menu_item_effect(id, &it.command.params).unwrap_or(id);
                     let shown = shown_menu_label(lang, item).unwrap_or_default();
