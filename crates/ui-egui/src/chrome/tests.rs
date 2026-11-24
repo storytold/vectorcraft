@@ -2458,7 +2458,7 @@ fn label_links_open_their_panels() {
     app.run("window.panel", json!({"panel": links})).unwrap();
     app.run("window.panel.dock", json!({"panel": links, "onto": "layers"})).unwrap();
     let mut bar = control_shown(app);
-    bar.room(egui::vec2(2000.0, 600.0));
+    bar.room(egui::vec2(2400.0, 600.0));
     // Closes the Links panel, clicks `name` on the bar and answers whether the panel shows.
     let click = |bar: &mut Shown, name: &str| {
         // Closing a panel that is already closed is an error that changes nothing.
