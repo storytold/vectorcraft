@@ -1,0 +1,62 @@
+{
+  "dock_tab": "Layers",
+  "toolbar_right": true,
+  "toolbar_double": true,
+  "toolbar_pos": null,
+  "slot_tool": {
+    "pen": "addAnchor",
+    "nosuchtool": "pen"
+  },
+  "floating_flyouts": [
+    {
+      "tools": ["selection", "directSelection"],
+      "pos": [40.0, 60.0]
+    }
+  ],
+  "custom_toolbars": [
+    {
+      "name": "Floating",
+      "slots": [["pen", "addAnchor"]],
+      "shown": true,
+      "pos": [500.0, 200.0]
+    },
+    {
+      "name": "Docked",
+      "slots": [["rectangle"]],
+      "shown": true,
+      "pos": [0.0, 0.0],
+      "dock": 0,
+      "dock_right": false,
+      "double": true
+    }
+  ],
+  "docking": {
+    "root": {
+      "Tabs": {
+        "panels": ["properties"],
+        "active": 0
+      }
+    },
+    "floating": [
+      {
+        "panels": ["layers"],
+        "active": 0,
+        "rect": [10.0, 20.0, 300.0, 400.0]
+      }
+    ]
+  },
+  "custom_workspaces": [
+    {
+      "name": "Tools Beside",
+      "toolsBesideCanvas": true,
+      "toolbars": [
+        {
+          "name": "Saved",
+          "slots": [["pen"]],
+          "shown": true,
+          "pos": [1.0, 2.0]
+        }
+      ]
+    }
+  ]
+}

@@ -1,20 +1,7 @@
-use super::{CacheKey, Cursor, Mods, Point, VectorcraftApp};
+use craft::behavior::CanvasView;
+use vectorcraft_geom::Point;
 
-/// The active tool's cursor at the pointer, as `mods` make it. While the view moves (`still`
-/// false), the cursor the tool last gave for the same tool and keys stays: asking the tool again
-/// would hit-test the art under the pointer at every frame of the move (#2452).
-pub(super) fn hover_cursor(app: &mut VectorcraftApp, mods: Mods, view: vectorcraft_engine::ViewInfo, still: bool) -> Option<Cursor> {
-    let id = app.session.tool_id();
-    if !still
-        && let Some((was, with, c)) = app.canvas.hover_cursor
-        && (was, with) == (id, mods)
-    {
-        return Some(c);
-    }
-    let c = app.session.cursor(app.hover_doc?, mods, view);
-    app.canvas.hover_cursor = Some((id, mods, c));
-    Some(c)
-}
+use crate::CacheKey;
 
 /// How long (seconds) the view must stay still before a canvas with
 /// [`crate::CanvasCache::waits_for_still`] set renders a heavy document again.
@@ -35,9 +22,16 @@ pub struct ViewKey {
     pub(super) rotation: f64,
 }
 
-/// Note the view `key` at time `now` (seconds, egui's input time) → how many more seconds the
-/// canvas leaves the art under the pointer alone: the view changed less than [`HOVER_STILL_SECS`]
-/// ago. The first view noted counts as still.
+impl ViewKey {
+    /// The key of the view `view` shows.
+    pub fn of(view: &CanvasView) -> Self {
+        Self { rect: view.rect, zoom: view.zoom, center: view.center, rotation: view.rotation }
+    }
+}
+
+/// Note the view `key` at time `now` (seconds; the pass time, `frame::clock`, which every pass of a
+/// frame shares) → how many more seconds the canvas leaves the art under the pointer alone: the
+/// view changed less than [`HOVER_STILL_SECS`] ago. The first view noted counts as still.
 pub(super) fn hover_wait(moved: &mut Option<(ViewKey, f64)>, key: ViewKey, now: f64) -> Option<f64> {
     match moved {
         Some((k, at)) if *k != key => (*k, *at) = (key, now),
@@ -49,8 +43,8 @@ pub(super) fn hover_wait(moved: &mut Option<(ViewKey, f64)>, key: ViewKey, now: 
     (0.0..HOVER_STILL_SECS).contains(&waited).then_some(HOVER_STILL_SECS - waited)
 }
 
-/// Note that the canvas asks for `key` at time `now` (seconds, egui's input time) → how many more
-/// seconds it draws the frame `shown` reprojected instead of rendering `key`: while the last
+/// Note that the canvas asks for `key` at time `now` (seconds; the pass time, `frame::clock`) → how
+/// many more seconds it draws the frame `shown` reprojected instead of rendering `key`: while the last
 /// render was `slow`, only the view differs between the two, and the canvas has asked for the view
 /// of `key` for less than [`STILL_SECS`]. `still` holds the key last asked for and when the canvas first
 /// asked for its view. An edit leaves that time as it is: with the view still and edits drawn into
@@ -77,98 +71,4 @@ fn same_view(a: &CacheKey, b: &CacheKey) -> bool {
 pub(super) fn only_view_differs(a: &CacheKey, b: &CacheKey) -> bool {
     a.pixel.is_some() == b.pixel.is_some()
         && *a == CacheKey { zoom: a.zoom, cx: a.cx, cy: a.cy, w: a.w, h: a.h, ppp: a.ppp, rot: a.rot, pixel: a.pixel, ..b.clone() }
-}
-
-pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
-    use egui::CursorIcon as C;
-    match c {
-        Cursor::Arrow
-        | Cursor::ArrowHollow
-        | Cursor::DirectAnchor
-        | Cursor::DirectAnchorSelected
-        | Cursor::ReshapeSegment
-        | Cursor::GroupSelection
-        | Cursor::CornerRadius
-        | Cursor::PathBracket
-        | Cursor::TypeWidget
-        | Cursor::LoadedText
-        | Cursor::LoadedTextLink
-        | Cursor::LivePaintSelectFace
-        | Cursor::LivePaintSelectEdge
-        | Cursor::LivePaintSelectOutside => C::Default,
-        Cursor::SelectionCopy => C::Copy,
-        Cursor::Move => C::Move,
-        Cursor::Crosshair => C::Crosshair,
-        Cursor::ResizeH | Cursor::ShearH => C::ResizeHorizontal,
-        Cursor::ResizeV | Cursor::ShearV => C::ResizeVertical,
-        Cursor::ResizeNwSe => C::ResizeNwSe,
-        Cursor::ResizeNeSw => C::ResizeNeSw,
-        Cursor::Rotate | Cursor::RotateToward(_) => C::Alias,
-        Cursor::Pen
-        | Cursor::PenDrawing
-        | Cursor::PenAdd
-        | Cursor::PenDelete
-        | Cursor::PenClose
-        | Cursor::PenContinue
-        | Cursor::PenJoin
-        | Cursor::PenConvert
-        | Cursor::AnchorPoint
-        | Cursor::Curvature => C::Crosshair,
-        Cursor::Text => C::Text,
-        Cursor::Hand => C::Grab,
-        Cursor::HandGrab => C::Grabbing,
-        Cursor::ZoomIn => C::ZoomIn,
-        Cursor::ZoomOut => C::ZoomOut,
-        Cursor::Eyedropper => C::Crosshair,
-        Cursor::NotAllowed => C::NotAllowed,
-        Cursor::Busy => C::Progress,
-        Cursor::AddStop => C::Copy,
-        Cursor::RemoveStop => C::NotAllowed,
-        Cursor::Slice => C::Crosshair,
-        Cursor::SliceSelect => C::Default,
-        Cursor::Width | Cursor::WidthAdd => C::Crosshair,
-        Cursor::WidthPoint => C::Move,
-        Cursor::PencilNew => C::Crosshair,
-        Cursor::Blend | Cursor::BlendObject | Cursor::BlendAnchor | Cursor::ShapeBuilder | Cursor::ShapeBuilderErase => C::Crosshair,
-        Cursor::PencilClose | Cursor::PencilStraight | Cursor::PencilContinue | Cursor::PaintbrushClose => C::Crosshair,
-        Cursor::TypeVertical | Cursor::TypeAreaVertical | Cursor::TypeOnPathVertical => C::VerticalText,
-        Cursor::TypeArea | Cursor::TypeOnPath => C::Text,
-        // The system has no tip outline to go round: its crosshair aims as well.
-        Cursor::BlobBrush | Cursor::Eraser => C::Crosshair,
-        Cursor::LivePaintBucket | Cursor::LivePaintBucketFace | Cursor::LivePaintBucketEdge => C::Crosshair,
-        // The system has no knife: its crosshair aims at the blade's point.
-        Cursor::Knife => C::Crosshair,
-        // Not drawn yet: the cursor each borrows.
-        Cursor::Lasso
-        | Cursor::MagicWand
-        | Cursor::Pencil
-        | Cursor::Paintbrush
-        | Cursor::Smooth
-        | Cursor::PathEraser
-        | Cursor::Join
-        | Cursor::Shaper
-        | Cursor::Measure
-        | Cursor::PrintTiling
-        | Cursor::SymbolSprayer
-        | Cursor::SymbolShifter
-        | Cursor::SymbolScruncher
-        | Cursor::SymbolSizer
-        | Cursor::SymbolSpinner
-        | Cursor::SymbolStainer
-        | Cursor::SymbolScreener
-        | Cursor::SymbolStyler
-        | Cursor::ObjectsOnPath
-        | Cursor::Scissors
-        | Cursor::ScissorsNotAllowed
-        | Cursor::MeshAdd
-        | Cursor::PuppetPin
-        | Cursor::AnchorEraser
-        | Cursor::ExtendPath
-        | Cursor::MeasureInspect
-        | Cursor::ParametricShape
-        | Cursor::CornerTool
-        | Cursor::SlideAnchor
-        | Cursor::SharedEdge
-        | Cursor::SmartPen => cursor_icon(c.stand_in().unwrap_or(Cursor::Crosshair)),
-    }
 }
