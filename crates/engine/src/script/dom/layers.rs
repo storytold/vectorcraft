@@ -28,7 +28,9 @@
 //! - `Artboard.rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down; with global
 //!   rulers, setting it moves the document's zero point.
 //! - `setActiveArtboardIndex` changes the view's active artboard: no undo step, and the run's report
-//!   lists it in `activeArtboards` for the app to show.
+//!   lists it in `activeArtboards` for the app to show. The report also lists a document whose
+//!   active artboard has another index at the end of the run, because artboards were inserted,
+//!   removed or reordered before it.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -38,8 +40,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_
 
 use super::{
     Answer, Doc, Item, MAX_LISTED, MAX_TEXT_BYTES, NOT_FOUND, ON_LOCKED_ARTBOARD, Placement, STALE_DOCUMENT, STALE_ITEM, active_artboard, arg,
-    boolean, command, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later, method, named,
-    num, number, on_doc, page_items, placement_of, property, text, typename, whole, with_doc,
+    boolean, command, command_value, doc_of, doc_ref, editable, find_doc, float, frame, get, handle_of, id_of, id_parts, item_of, item_ref, later,
+    method, named, num, number, on_doc, page_items, placement_of, property, text, typename, whole, with_doc,
 };
 use crate::script::{Host, Link};
 use crate::{DocState, Document, NodeId, NodeKind};
@@ -86,13 +88,10 @@ fn type_error(what: &str) -> HostError {
     HostError::Type(format!("this is not a {what}"))
 }
 
-/// The id a command's result gives under `key`.
-fn result_id(d: &Data, key: &str) -> Option<u64> {
-    let Data::Object(o) = d else { return None };
-    match o.iter().find(|(k, _)| k == key).map(|(_, v)| v) {
-        Some(Data::Number(n)) => whole(*n),
-        _ => None,
-    }
+/// The whole number under `key` in a command's own result (not the script's copy, whose numbers
+/// are exact only up to 2^53), such as the id of the object it made.
+fn result_id(v: &Value, key: &str) -> Option<u64> {
+    v.get(key).and_then(Value::as_u64)
 }
 
 // ---- Layer ----
@@ -523,9 +522,9 @@ fn layers_add(h: &Host, a: &[Data]) -> Answer {
             return Err(HostError::Error("the layer is hidden or locked".into()));
         }
     }
-    let r = on_doc(h, doc.uid, true, |h| match parent {
-        None => command(h, "layer.new", &json!({"top": true})),
-        Some(p) => command(h, "layer.newSublayer", &json!({"parent": p.0})),
+    let (_, r) = on_doc(h, doc.uid, true, |h| match parent {
+        None => command_value(h, "layer.new", &json!({"top": true})),
+        Some(p) => command_value(h, "layer.newSublayer", &json!({"parent": p.0})),
     })?;
     let id = result_id(&r, "id").ok_or_else(|| HostError::Error("the layer was not made".into()))?;
     Ok(layer_ref(h, doc.uid, NodeId(id)))
@@ -783,7 +782,7 @@ fn groups_add(h: &Host, a: &[Data]) -> Answer {
         }
     }
     let params = c.map_or_else(|| json!({}), |c| json!({"parent": c.0}));
-    let r = on_doc(h, doc.uid, true, |h| command(h, "object.newGroup", &params))?;
+    let (_, r) = on_doc(h, doc.uid, true, |h| command_value(h, "object.newGroup", &params))?;
     let id = result_id(&r, "id").ok_or_else(|| HostError::Error("the group was not made".into()))?;
     let s = h.session.borrow();
     let st = s.documents().iter().find(|d| d.uid == doc.uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
@@ -1201,7 +1200,7 @@ fn add_board(h: &Host, a: &[Data], at: Option<&Data>) -> Answer {
     }
     let id = super::atomically(h, |h| {
         on_doc(h, doc.uid, true, |h| {
-            let made = command(h, "artboard.new", &json!({"x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "name": name}))?;
+            let (_, made) = command_value(h, "artboard.new", &json!({"x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "name": name}))?;
             let index = result_id(&made, "index")
                 .and_then(|i| usize::try_from(i).ok())
                 .ok_or_else(|| HostError::Error("the artboard was not made".into()))?;
@@ -1265,9 +1264,18 @@ fn boards_set_active(h: &Host, a: &[Data]) -> Answer {
 
 /// The documents whose active artboard the run changed, as `script.run`'s report gives them:
 /// `[{document, artboard}]`, each an index, with the active artboard each document has at the end
-/// of the run, or `None` when there are none.
-pub(crate) fn active_artboards(moved: &[u64], docs: &[DocState]) -> Option<Value> {
-    let list: Vec<Value> = moved
+/// of the run, or `None` when there are none. They are the documents in `moved`, then those whose
+/// active artboard's index differs from the one in `start` (an artboard added, inserted, removed or
+/// reordered before it).
+pub(crate) fn active_artboards(moved: &[u64], start: &[(u64, usize)], docs: &[DocState]) -> Option<Value> {
+    let mut uids = moved.to_vec();
+    for (uid, at) in start {
+        let shifted = docs.iter().find(|d| d.uid == *uid).is_some_and(|st| active_artboard(st) != *at);
+        if shifted && !uids.contains(uid) {
+            uids.push(*uid);
+        }
+    }
+    let list: Vec<Value> = uids
         .iter()
         .filter_map(|uid| {
             let document = docs.iter().position(|d| d.uid == *uid)?;

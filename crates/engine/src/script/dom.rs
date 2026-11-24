@@ -100,10 +100,17 @@ pub(super) struct State {
     art: RefCell<Vec<layers::ArtList>>,
     /// The uids of the documents whose active artboard `setActiveArtboardIndex` changed.
     pub(super) active_artboards: RefCell<Vec<u64>>,
+    /// Each open document's uid and the index of its active artboard when the run started.
+    pub(super) boards_at_start: Vec<(u64, usize)>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
 }
 
 impl State {
+    /// The state of a run that starts with the documents `docs` open.
+    pub(super) fn new(docs: &[DocState]) -> Self {
+        Self { boards_at_start: docs.iter().map(|st| (st.uid, active_artboard(st))).collect(), ..Self::default() }
+    }
+
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()

@@ -1134,6 +1134,22 @@ fn layers_list_top_first_and_add_makes_the_new_layer_current() {
 }
 
 #[test]
+fn a_new_layer_or_group_with_a_large_id_is_the_new_one() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    // The new ids, 2^53 + 1 and 2^53 + 3, are not exact as numbers.
+    for (id, source) in
+        [(1, "var l = app.activeDocument.layers.add(); l.name = 'made';"), (3, "var g = app.activeDocument.groupItems.add(); g.name = 'made';")]
+    {
+        let big = (1u64 << 53) + id;
+        s.active_mut().unwrap().change_unsaved(|d| std::sync::Arc::make_mut(d).raise_next_id(big));
+        run(&mut s, source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        let d = &s.active().unwrap().doc;
+        assert_eq!(d.node(NodeId(big)).and_then(|n| n.name.clone()).as_deref(), Some("made"), "{source}");
+    }
+}
+
+#[test]
 fn layer_properties_round_trip_and_reject_bad_values() {
     let (mut s, _, _) = doc();
     let out = log(
@@ -1440,6 +1456,22 @@ fn the_report_gives_the_active_artboard_the_run_leaves() {
     let active = r["log"][0].clone();
     assert!(active.as_u64().is_some_and(|i| i < 2), "{r}");
     assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": active}]));
+}
+
+#[test]
+fn the_report_gives_the_active_artboards_new_index_after_an_insert_or_remove() {
+    let (mut s, _, _) = doc();
+    run(&mut s, "var A = app.activeDocument.artboards; A.add([500, 300, 700, 100]); A.setActiveArtboardIndex(1);").unwrap();
+    // An artboard inserted or removed before the active one moves it to another index.
+    let r = run(&mut s, "var A = app.activeDocument.artboards; A.insert([800, 300, 900, 100], 0); vc.log(A.getActiveArtboardIndex());").unwrap();
+    assert_eq!(r["log"], json!([2]));
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": 2}]));
+    let r = run(&mut s, "var A = app.activeDocument.artboards; A.remove(0); vc.log(A.getActiveArtboardIndex());").unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": 1}]));
+    // One added after it leaves its index as it was.
+    let r = run(&mut s, "app.activeDocument.artboards.add([1000, 300, 1100, 100]);").unwrap();
+    assert!(r.get("activeArtboards").is_none(), "{r}");
 }
 
 #[test]

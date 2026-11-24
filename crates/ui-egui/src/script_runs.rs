@@ -38,7 +38,9 @@ pub fn poll(app: &mut VectorcraftApp) {
 }
 
 /// Makes each artboard a run's `setActiveArtboardIndex` chose the active one of its document's view
-/// (`activeArtboards` in the run's report: `{document, artboard}`, both indexes).
+/// (`activeArtboards` in the run's report: `{document, artboard}`, both indexes). The end of a run
+/// starts the tool afresh, so the Artboard tool then takes the active document's active artboard as
+/// its only selected one, as choosing it in the Artboards panel does.
 fn show_artboards(app: &mut VectorcraftApp, boards: &[serde_json::Value]) {
     for b in boards {
         let index = |k: &str| b[k].as_u64().and_then(|i| usize::try_from(i).ok());
@@ -49,6 +51,11 @@ fn show_artboards(app: &mut VectorcraftApp, boards: &[serde_json::Value]) {
         {
             view.artboard = board;
         }
+    }
+    if app.session.tool_id() == "artboard"
+        && let Some(n) = app.session.active().map(|d| d.doc.artboards.len()).filter(|n| *n > 0)
+    {
+        crate::panels::artboards::select(app, crate::panels::artboards::selected(app, n));
     }
 }
 

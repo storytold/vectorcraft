@@ -2765,7 +2765,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   past the artboard count that no other artboard's name uses. `rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down.
   `setActiveArtboardIndex` changes the view's active artboard with no undo step, and `script.run`'s report lists the
   change in `activeArtboards` (`[{document, artboard}]`, both indexes, with each document's active artboard as the
-  run leaves it). An index outside the list throws a
+  run leaves it). The report also lists a document whose active artboard has another index when the run ends because
+  artboards were inserted, removed or reordered before it. An index outside the list throws a
   `RangeError`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
   `Stale artboard`. `Layer.pathItems`, `blendingMode`, `artworkKnockout` and `sliced`, `GroupItem.pathItems` and
   `GroupItems.createFromFile` throw an error that says they are not available yet.
