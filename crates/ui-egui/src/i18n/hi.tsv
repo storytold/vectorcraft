@@ -355,6 +355,7 @@
 	Anti-alias Rasters	रास्टर एंटी-एलियास करें
 	Anti-aliased Artwork	एंटी-एलियास किया आर्टवर्क
 	Anti-aliasing Method	एंटी-एलियासिंग विधि
+@id	language.name	हिन्दी
 antiAlias	Sharp	शार्प
 	Crisp	क्रिस्प
 	Strong	स्ट्रॉन्ग
@@ -6806,7 +6807,7 @@ arrowhead	Feather	पंख
 @msg	{label}: select paths, compound paths, groups or text	{label}: चुनें पाथ, यौगिक पाथ, समूह या टेक्स्ट
 @msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, परिणाम के आकार को नहीं बदलता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} ने खाली परिणाम का उत्पादन किया: कोई रेखा या अन्य खुला पाथ कोई क्षेत्र नहीं घेरता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
-@msg	{label}…	{label}...
+@msg	{label}…	{label}…
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} बनाया गया है और इसे हटाया नहीं जा सकता है।
 @msg	{name} must be {range} (got {v})	{name} को {range} होना चाहिए ({v} मिला)
@@ -8200,7 +8201,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	Live Paint: select paths or compound paths	लाइव पेंट: पाथ या यौगिक पाथ सिलेक्ट करें
 @msg	Live Paint: these paths are too degenerate to paint	लाइव पेंट: इन पाथ को पेंट करने के लिए बहुत अलग किया जाता है
 @msg	loading profiles from disk isn't available in the browser	डिस्क से लोडिंग प्रोफ़ाइल ब्राउज़र में उपलब्ध नहीं है
-@msg	Loading VectorCraft…	वेक्टर क्रेफ्ट लोड हो रहा है ...
+@msg	Loading VectorCraft…	वेक्टर क्रेफ्ट लोड हो रहा है …
 @msg	Lock Workspace is not available in VectorCraft	लॉक वर्कस्पेस VectorCraft में उपलब्ध नहीं है
 @msg	Make Guides: select paths	गाइड बनाना: पाथ सिलेक्ट करें
 @msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	मैनिफ़ेस्ट {_1} बाइट्स का है (सीमा {MAX_MANIFEST_BYTES})
@@ -8628,7 +8629,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	not a valid SVGZ file: {e}	एक मान्य SVGZ फ़ाइल नहीं: {e}
 @msg	not a VectorCraft file: {0}	एक वेक्टर क्रेफ्ट फ़ाइल नहीं: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	एक VectorCraft शॉर्टकट सेट नहीं है ( `overrides`)
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly बाइनरी नहीं है (\0asm हेडर नहीं है)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly बाइनरी नहीं है (\\0asm हेडर नहीं है)
 @msg	not a Word document: its compound file has no WordDocument stream	एक वर्ड डॉक्यूमेंट नहीं: इसकी यौगिक फ़ाइल में WordDocument स्ट्रीम नहीं है
 @msg	not a Word document: its main part is not a WordprocessingML document	वर्ड डॉक्यूमेंट नहीं: इसका मुख्य हिस्सा वर्डप्रोसेसिंगएमएल डॉक्यूमेंट नहीं है
 @msg	not a Word document: its package has no main document part	नहीं एक वर्ड डॉक्यूमेंट: इसके पैकेज में कोई मुख्य डॉक्यूमेंट हिस्सा नहीं है
@@ -8644,7 +8645,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	not an export presets file (format `{_1}`)	यह एक्सपोर्ट प्रीसेट फ़ाइल नहीं है (फ़ॉर्मैट `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
-@msg	not an RTF file: it doesn't start with {{\\rtf	RTF फ़ाइल नहीं: यह {{\rtf के साथ शुरू नहीं होता है
+@msg	not an RTF file: it doesn't start with {{\\rtf	RTF फ़ाइल नहीं: यह {{\\rtf के साथ शुरू नहीं होता है
 @msg	not area type (text in a frame) outside perspective	पर्सपेक्टिव के बाहर का एरिया टाइप (फ़्रेम में टेक्स्ट) नहीं है
 @msg	not editing an opacity mask	ओपेसिटी मास्क संपादित नहीं किया जा रहा है
 @msg	not found	नहीं मिला
@@ -8889,7 +8890,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	rows and cols must be 1..50	पंक्तियां और कॉल 1..50 होना चाहिए
 @msg	rows and columns must be 1..500	rows और columns को 1..500 होना चाहिए
 @msg	rows of objects whose appearances differ can't be reordered together	उन ऑब्जेक्ट्स की पंक्तियाँ जिनकी उपस्थिति भिन्न होती हैं, उन्हें एक साथ फिर से व्यवस्थित नहीं किया जा सकता है
-@msg	Running “{name}”…	"{name}"...
+@msg	Running “{name}”…	"{name}"…
 @msg	Save for Web: the image is empty	वेब के लिए सेव करें: इमेज खाली है
 @msg	save the document first: copy puts the file in its folder	पहले डॉक्यूमेंट को सेव करना: प्रतिलिपि फ़ाइल को अपने फ़ोल्डर में डालती है
 @msg	save the document first: Package collects a saved document	पहले डॉक्यूमेंट को सेव करना: पैकेज एक सेव किए गए डॉक्यूमेंट एकत्र करता है

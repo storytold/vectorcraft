@@ -208,6 +208,7 @@
 	Anti-alias Rasters	Anti-aliasing per immagini raster
 	Anti-aliased Artwork	Grafica con anti-aliasing
 	Anti-aliasing Method	Metodo di anti-aliasing
+@id	language.name	Italiano
 antiAlias	Sharp	Nitido
 	Crisp	Definito
 	Strong	Forte
@@ -5177,7 +5178,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	PDF settings are not an object	Le impostazioni PDF non sono un oggetto
 @msg	PDF security settings are not an object	Le impostazioni di sicurezza PDF non sono un oggetto
 @msg	PDF writer error: {0}	Errore del generatore PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})|Pacchetto creato con {n} file in {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (sul web i file vengono invece scaricati)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, la dimensione del file desiderata in K (1024 byte): un numero maggiore di 0 e al massimo 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` è `current` o `auto`
@@ -6892,9 +6893,9 @@ lighting	Light	Luce
 	Slope:	Pendenza:
 axis	X Axis	Asse X
 axis	Y Axis	Asse Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}|Pacchetto creato con {n} file in {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}|Pacchetto creato con {n} file {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file|Pacchetto creato con {n} file
 @plural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file|Pacchetto creato con {n} file
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}|Pacchetto creato con {n} file in {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}|Pacchetto creato con {n} file {note}
@@ -6946,7 +6947,7 @@ axis	Y Axis	Asse Y
 @msg	module is {_1} bytes (limit {_2})	il modulo occupa {_1} byte (limite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	richiede approvazione: chiede {0}, che l’utente concede installandolo da solo
 @msg	not JSON: {e}	non è JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	non è un binario WebAssembly (manca l’intestazione \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	non è un binario WebAssembly (manca l’intestazione \\0asm)
 @msg	parameter `{k}`: {what}	parametro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	i parametri del plug-in devono essere un oggetto JSON

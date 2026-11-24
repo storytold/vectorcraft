@@ -208,6 +208,7 @@
 	Anti-alias Rasters	Suavizar imágenes ráster
 	Anti-aliased Artwork	Ilustración suavizada
 	Anti-aliasing Method	Método de suavizado
+@id	language.name	Español
 antiAlias	Sharp	Nítido
 	Crisp	Definido
 	Strong	Fuerte
@@ -7299,7 +7300,7 @@ axis	Y Axis	Eje Y
 @msg	module is {_1} bytes (limit {_2})	el módulo ocupa {_1} bytes (límite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	requiere aprobación: pide {0}, que el usuario concede al instalarlo por separado
 @msg	not JSON: {e}	no es JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	no es un binario WebAssembly (falta el encabezado \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	no es un binario WebAssembly (falta el encabezado \\0asm)
 @msg	parameter `{k}`: {what}	parámetro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parámetro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	los parámetros del plugin deben ser un objeto JSON

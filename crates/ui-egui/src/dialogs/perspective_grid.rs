@@ -8,41 +8,43 @@
 //! The same dialog is View → Perspective Grid → Save Grid as Preset… and the preset editor of
 //! Edit → Perspective Grid Presets (New…, Edit…), whose OK returns to the presets.
 //!
-//! Fields: those of `perspective.grid.define` (lengths are real-world lengths in `units`; `name`
-//! the preset), plus `__mode` (`save`, `edit` or none for Define Grid), `__from` (`define`: Save
-//! Preset… returns to Define Grid) and `__original` (the saved preset an edit changes).
+//! Fields: the keys of `GridDefinition` (lengths are real-world lengths in `units`; `name` the
+//! preset). What the dialog is (Define Grid, Save Grid as Preset, the preset editor) is its mode,
+//! not a field.
 
+use std::cell::Cell;
+
+use craft::theme::variant::Tone;
+use craft::theme::{Rgba, Srgba};
+use craft::ui::buttons::Button;
+use craft::ui::choice::Swatch;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::display::{Shade, Text};
+use craft::ui::form::{Field, SliderField, SliderFieldLayout};
+use craft::ui::layout_components::Row;
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::patterns::presets::{PresetPicker, PresetRow, PresetSource, PresetState};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::overlay::CloseReason;
+use craft::ui::sections::Section;
+use craft::ui::style::TypeRole;
+use craft::ui::text::{NumberField, TextField};
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_tools::distort::perspective::define::is_builtin;
 use vectorcraft_tools::distort::perspective::{GridDefinition, Rgb};
 
-use super::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
+use crate::canvas::rulers::{general_lengths, unit_kind};
+use crate::panels::label_or_name;
 
 /// The dialog kind of Define Perspective Grid.
 pub const KIND: &str = "perspectiveGrid";
 
-/// The label column's width.
-const LABEL: f32 = 140.0;
-/// A value field's width.
-const FIELD: f32 = 120.0;
-
-/// The unit the lengths were last shown in.
-const SHOWN: &str = "__units";
-/// What the dialog is: Define Grid (none), `save` (Save Grid as Preset) or `edit` (the preset
-/// editor).
-const MODE: &str = "__mode";
-const FROM: &str = "__from";
-const ORIGINAL: &str = "__original";
-
 /// The Preset menu's entry for fields no preset has.
 const CUSTOM: &str = "[Custom]";
-
-/// The lengths among the fields: real-world lengths in `units`.
-const LENGTHS: [&str; 3] = ["gridline", "distance", "horizonHeight"];
 
 /// The scale choices: (label, [artboard, real world]).
 const SCALES: [(&str, [f64; 2]); 9] = [
@@ -59,27 +61,68 @@ const SCALES: [(&str, [f64; 2]); 9] = [
 
 const TYPES: [&str; 3] = ["One Point Perspective", "Two Point Perspective", "Three Point Perspective"];
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| {
-        match d.str(MODE).as_str() {
-            "save" => tl!("Save Grid as Preset"),
-            "edit" => tl!("Perspective Grid Preset"),
-            _ => tl!("Define Perspective Grid"),
-        }
-        .into()
-    },
-    body,
-    confirm,
-    min_width: 420.0,
-    max_width: Some(460.0),
-    ..DialogSpec::FORM
-};
+/// The least and greatest custom scale part, as `GridDefinition::validate` takes them.
+const SCALE_RANGE: std::ops::RangeInclusive<f64> = 0.001..=1.0e6;
 
-/// Open the dialog on `def`'s fields as `mode` (`""`, `save` or `edit`).
-fn open_on(app: &mut VectorcraftApp, mut def: Value, mode: &str) {
-    def[SHOWN] = def["units"].clone();
-    def[MODE] = json!(mode);
-    app.ui.dialog = Some(Dialog::new(KIND, def));
+/// The translated English string `s` as a label.
+pub(super) fn word(s: &str) -> Label {
+    Label::from(crate::i18n::t(s).to_owned())
+}
+
+/// What the dialog is.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum GridMode {
+    /// Define Grid: OK defines the document's grid.
+    Define,
+    /// Save Grid as Preset: OK saves a new preset; `back` returns to Define Grid on it (Save Preset…).
+    Save {
+        /// Whether the dialog goes back to Define Grid once the preset is saved.
+        back: bool,
+    },
+    /// The preset editor: OK saves `original`'s changes, or a new preset when there is none; the presets
+    /// manager opens again on it.
+    Edit {
+        /// The saved preset the editor changes.
+        original: Option<String>,
+    },
+}
+
+/// The fields the dialog edits.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct GridDraft {
+    /// The grid as the dialog shows it.
+    def: GridDefinition,
+}
+
+impl GridDraft {
+    /// The type, 1 to 3.
+    fn kind(&self) -> u8 {
+        self.def.kind.clamp(1, 3)
+    }
+
+    /// Shows the lengths in `unit`: they keep their size, so their numbers convert.
+    fn set_units(&mut self, unit: Unit) {
+        let before = self.def.unit();
+        if unit == before {
+            return;
+        }
+        let f = before.points() / unit.points();
+        let d = &mut self.def;
+        for v in [&mut d.gridline, &mut d.distance, &mut d.horizon_height].into_iter().chain(d.third_vp.iter_mut()) {
+            *v *= f;
+        }
+        d.units = unit.key().into();
+    }
+
+    /// The name of the preset among `presets` whose fields these are; a draft that is no preset's loses its name
+    /// (the Preset row reads [Custom]).
+    fn matched(&mut self, presets: &[GridDefinition]) -> Option<String> {
+        let found = presets.iter().find(|p| p.name == self.def.name && self.def.same(p)).map(|p| p.name.clone());
+        if found.is_none() {
+            self.def.name.clear();
+        }
+        found
+    }
 }
 
 /// The active document's grid as Define Grid fields.
@@ -87,262 +130,445 @@ fn grid_fields(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(app.session.execute("perspective.grid.get", &json!({})).map_err(|e| e.to_string())?["define"].take())
 }
 
+/// Opens the dialog on `def` as `mode`.
+fn open_on(app: &mut VectorcraftApp, def: GridDefinition, mode: GridMode) -> Result<Value, String> {
+    let dialog = GridDialog::new(
+        def,
+        mode,
+        (general_lengths(app).pixels_per_inch, app.session.prefs.numbers_without_units_are_points),
+        app.session.perspective_presets(),
+        app.session.new_perspective_preset_name(),
+    );
+    app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
+    Ok(Value::Null)
+}
+
 /// Open Define Grid on the active document's grid.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let fields = grid_fields(app)?;
-    open_on(app, fields, "");
-    Ok(Value::Null)
+    let def = serde_json::from_value(grid_fields(app)?).map_err(|e| e.to_string())?;
+    open_on(app, def, GridMode::Define)
 }
 
 /// View → Perspective Grid → Save Grid as Preset…: the grid's fields under a new preset name.
 pub fn open_save(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let mut fields = grid_fields(app)?;
-    fields["name"] = json!(app.session.new_perspective_preset_name());
-    open_on(app, fields, "save");
-    Ok(Value::Null)
+    let mut def: GridDefinition = serde_json::from_value(grid_fields(app)?).map_err(|e| e.to_string())?;
+    def.name = app.session.new_perspective_preset_name();
+    open_on(app, def, GridMode::Save { back: false })
 }
 
 /// The preset editor: the saved preset `original` (Edit…), or a new preset starting from `base`
 /// (New…). Its OK returns to Edit → Perspective Grid Presets.
 pub fn open_edit(app: &mut VectorcraftApp, original: Option<&str>, base: &str) -> Result<(), String> {
     let name = original.unwrap_or(base);
-    let mut def = json!(app.session.perspective_preset(name).ok_or_else(|| format!("no perspective grid preset named `{name}`"))?);
-    match original {
-        Some(n) => def[ORIGINAL] = json!(n),
-        None => def["name"] = json!(app.session.new_perspective_preset_name()),
+    let mut def = app.session.perspective_preset(name).ok_or_else(|| format!("no perspective grid preset named `{name}`"))?;
+    if original.is_none() {
+        def.name = app.session.new_perspective_preset_name();
     }
-    open_on(app, def, "edit");
-    Ok(())
+    open_on(app, def, GridMode::Edit { original: original.map(str::to_owned) }).map(|_| ())
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut params = form::params(d);
-    match d.str(MODE).as_str() {
-        "save" | "edit" => {
-            if let Some(original) = d.fields.get(ORIGINAL).and_then(Value::as_str) {
-                params["newName"] = params["name"].take();
-                params["name"] = json!(original);
-            }
-            let r = app.run("perspective.presets.save", params)?;
-            let name = r["name"].as_str().unwrap_or_default().to_string();
-            if d.str(MODE) == "edit" {
-                super::perspective_presets::open(app, Some(&name));
-            } else if d.str(FROM) == "define" {
-                // Back to Define Grid, on the preset just saved.
-                if let Some(back) = app.ui.dialog.as_mut() {
-                    back.fields.remove(MODE);
-                    back.fields.remove(FROM);
-                    back.fields.insert("name".into(), json!(name));
+/// Define Perspective Grid, Save Grid as Preset and the preset editor, on the window's dialog host. OK files the
+/// fields for [`pump`], which runs the command and answers it.
+pub(super) struct GridDialog {
+    id: DialogId,
+    mode: GridMode,
+    draft: GridDraft,
+    /// The presets the Preset row offers, as the document and the preferences have them.
+    presets: Vec<GridDefinition>,
+    /// The Preset row's rows, for `presets`.
+    rows: Vec<PresetRow<String>>,
+    /// The name Save Preset… starts from.
+    new_name: String,
+    /// The document's pixels per inch, which sizes lengths shown in pixels.
+    ppi: f64,
+    /// Numbers Without Units Are Points.
+    bare_points: bool,
+    picker: PresetState<String>,
+    held: HeldAnswer<GridDefinition>,
+    /// The draft the filed answer was refused for: the reason shows until the draft changes.
+    refused_at: Option<GridDraft>,
+    open: bool,
+}
+
+impl GridDialog {
+    fn new(def: GridDefinition, mode: GridMode, (ppi, bare_points): (f64, bool), presets: Vec<GridDefinition>, new_name: String) -> Self {
+        let mut dialog = GridDialog {
+            id: dialog_id(KIND),
+            mode,
+            draft: GridDraft { def },
+            presets: Vec::new(),
+            rows: Vec::new(),
+            new_name,
+            ppi,
+            bare_points,
+            picker: PresetState::default(),
+            held: HeldAnswer::new(),
+            refused_at: None,
+            open: true,
+        };
+        dialog.set_presets(presets, dialog.new_name.clone());
+        dialog
+    }
+
+    /// The presets and the name a new preset starts from, as the app has them now.
+    fn set_presets(&mut self, presets: Vec<GridDefinition>, new_name: String) {
+        self.new_name = new_name;
+        if self.presets != presets {
+            self.rows = presets.iter().map(|p| PresetRow::item(p.name.clone(), label_or_name(&p.name, is_builtin(&p.name)).to_owned(), 0)).collect();
+            self.presets = presets;
+        }
+    }
+
+    /// Save Preset…: the fields under a new name, back to Define Grid once saved.
+    pub(super) fn start_save(&mut self) {
+        self.mode = GridMode::Save { back: true };
+        self.draft.def.name = self.new_name.clone();
+    }
+
+    /// The saved preset `name` is the fields now: Define Grid again, on it.
+    fn back_to_define(&mut self, name: String) {
+        self.mode = GridMode::Define;
+        self.draft.def.name = name;
+        self.held = HeldAnswer::new();
+        self.refused_at = None;
+    }
+
+    /// The app refused the filed answer for `reason`.
+    fn refuse(&mut self, reason: Label) {
+        self.refused_at = Some(self.draft.clone());
+        self.held.answer(Err(reason));
+    }
+
+    fn title(&self) -> Label {
+        match self.mode {
+            GridMode::Define => word("Define Perspective Grid"),
+            GridMode::Save { .. } => word("Save Grid as Preset"),
+            GridMode::Edit { .. } => word("Perspective Grid Preset"),
+        }
+    }
+}
+
+/// What a pass reads besides the draft.
+struct Pass<'p> {
+    mode: &'p GridMode,
+    presets: &'p [GridDefinition],
+    rows: &'p [PresetRow<String>],
+    ppi: f64,
+    bare_points: bool,
+    /// Why the app refused the last OK.
+    refusal: Option<&'p Label>,
+}
+
+impl Pass<'_> {
+    /// The rows; whether the draft can be accepted. `save` is set when Save Preset… was pressed.
+    fn body(&self, ui: &mut egui::Ui, draft: &mut GridDraft, picker: &mut PresetState<String>, save: &mut bool) -> bool {
+        self.name(ui, draft, picker, save);
+        Section::fixed(word("Perspective Grid Settings")).id_salt("settings").show(ui, |ui, _| self.settings(ui, draft));
+        Section::fixed(word("Grid Color & Opacity")).id_salt("colors").show(ui, |ui, _| colors(ui, draft));
+        let valid = draft.def.validate();
+        if let Err(why) = &valid {
+            Text::new(why.clone()).role(TypeRole::Caption).tone(Tone::Bad).show(ui);
+        } else if let Some(reason) = self.refusal {
+            Text::new(reason.clone()).role(TypeRole::Caption).tone(Tone::Bad).show(ui);
+        }
+        valid.is_ok()
+    }
+
+    /// The Name row: in Define Grid the Preset menu (choosing a preset loads its fields) and Save Preset…, else the
+    /// preset's name.
+    fn name(&self, ui: &mut egui::Ui, draft: &mut GridDraft, picker: &mut PresetState<String>, save: &mut bool) {
+        if *self.mode != GridMode::Define {
+            let label = word("Name:");
+            row(ui, &label, "name", |ui| {
+                if let Some(name) = TextField::new(label.clone(), Bind::given(draft.def.name.clone())).show(ui).value().cloned() {
+                    draft.def.name = name;
                 }
-            } else {
-                app.ui.dialog = None;
-            }
-            Ok(r)
+            });
+            return;
         }
-        _ => {
-            let r = app.run("perspective.grid.define", params);
-            if r.is_ok() {
-                app.ui.dialog = None;
+        let current = draft.matched(self.presets);
+        Row::new().id_salt("preset").show(ui, |ui, _| {
+            let shown = PresetPicker::new(word("Preset:"), Bind::given(current.clone()), &PresetSource::listed(self.rows), Bind::bound(picker))
+                .placeholder(CUSTOM)
+                .show(ui);
+            if let Some(preset) = shown.picked.and_then(|name| self.presets.iter().find(|p| p.name == name)) {
+                draft.def = preset.clone();
             }
-            r
+            let button = Button::new(word("Save Preset…")).tooltip(word("Save these settings as a preset")).show(ui);
+            *save |= clicked(&button);
+        });
+    }
+
+    fn settings(&self, ui: &mut egui::Ui, draft: &mut GridDraft) {
+        let kind = draft.kind();
+        let types: Vec<Entry<u8>> = (1..=3).zip(TYPES).map(|(k, name)| Entry::new(k, word(name))).collect();
+        choose(ui, "Type:", "type", &types, kind, |k| draft.def.kind = k);
+        let units: Vec<Entry<Unit>> = Unit::ALL.iter().filter(|u| **u != Unit::FeetInches).map(|u| Entry::new(*u, u.label())).collect();
+        choose(ui, "Units:", "units", &units, draft.def.unit(), |u| draft.set_units(u));
+
+        let unit = draft.def.unit();
+        let lengths = crate::fields::bare_points(LengthUnits::new(unit_kind(unit), unit_kind(unit), self.ppi), self.bare_points);
+        let scale = draft.def.scale;
+        let named = SCALES.iter().position(|(_, s)| *s == scale);
+        let mut scales: Vec<Entry<usize>> = SCALES.iter().enumerate().map(|(i, (label, _))| Entry::new(i, *label)).collect();
+        scales.push(Entry::new(SCALES.len(), word("Custom")));
+        // Custom starts from the scale shown.
+        choose(ui, "Scale:", "scale", &scales, named.unwrap_or(SCALES.len()), |i| draft.def.scale = SCALES.get(i).map_or(scale, |(_, s)| *s));
+        if named.is_none() {
+            Row::new().id_salt("custom-scale").show(ui, |ui, _| {
+                for (i, label) in [word("Artboard:"), word("Real World:")].into_iter().enumerate() {
+                    let field = NumberField::new(label, Bind::given(Some(scale[i]))).range(SCALE_RANGE).show(ui);
+                    if let Some(v) = field.edit.value().copied().flatten() {
+                        draft.def.scale[i] = v;
+                    }
+                }
+            });
         }
+        length(ui, "Gridline every:", "gridline", &mut draft.def.gridline, lengths);
+        if scale[0] != scale[1] {
+            let real = unit.number(unit.to_pt(scale[1] / scale[0]));
+            let note = crate::i18n::fmt(
+                tl!("1 {unit} on the artboard stands for {real} {unit} in the scene."),
+                &[("unit", unit.suffix()), ("real", real.as_str())],
+            );
+            Text::new(note).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
+        }
+        let label = word("Viewing Angle:");
+        row(ui, &label, "angle", |ui| {
+            let field = NumberField::new(label.clone(), Bind::given(Some(draft.def.angle))).unit_kind(UnitKind::Degrees);
+            if let Some(v) = field.range(0.01..=89.99).enabled(kind != 1).show(ui).edit.value().copied().flatten() {
+                draft.def.angle = v;
+            }
+        });
+        length(ui, "Viewing Distance:", "distance", &mut draft.def.distance, lengths);
+        length(ui, "Horizon Height:", "horizonHeight", &mut draft.def.horizon_height, lengths);
+        let label = word("Third Vanishing Point:");
+        row(ui, &label, "third-vp", |ui| {
+            Row::new().id_salt("third-vp-row").show(ui, |ui, _| {
+                for (i, axis) in ["X:", "Y:"].into_iter().enumerate() {
+                    let field = NumberField::length(word(axis), Bind::given(Some(draft.def.third_vp[i])), lengths).enabled(kind == 3);
+                    if let Some(v) = field.show(ui).edit.value().copied().flatten() {
+                        draft.def.third_vp[i] = v;
+                    }
+                }
+            });
+        });
     }
 }
 
-/// The unit the lengths are in.
-fn unit(d: &Dialog) -> Unit {
-    Unit::named(&d.str("units")).unwrap_or_default()
+/// Shows `body` in a field named `name`.
+fn row(ui: &mut egui::Ui, name: &Label, salt: &str, mut body: impl FnMut(&mut egui::Ui)) {
+    Field::new(name.clone()).id_salt(salt).show(ui, |ui, _| body(ui));
 }
 
-fn kind(d: &Dialog) -> u8 {
-    d.fields.get("kind").and_then(Value::as_u64).map_or(2, |k| k.clamp(1, 3) as u8)
-}
-
-fn scale(d: &Dialog) -> [f64; 2] {
-    let v = d.fields.get("scale").and_then(Value::as_array);
-    let at = |i: usize| v.and_then(|a| a.get(i)).and_then(Value::as_f64).unwrap_or(1.0);
-    [at(0), at(1)]
-}
-
-/// A length field (`key`, in `unit`) `width` wide. Returns true when it changed.
-fn length(ui: &mut egui::Ui, d: &mut Dialog, key: &str, unit: Unit, width: f32) -> bool {
-    let pt = d.fields.get(key).and_then(Value::as_f64).map(|v| unit.to_pt(v));
-    let Some(v) = widgets::num_field(ui, ("persp-len", key), pt, unit, width) else { return false };
-    d.fields.insert(key.into(), json!(unit.from_pt(v)));
-    true
-}
-
-/// One of the third vanishing point's coordinates (`i`: 0 = x, 1 = y).
-fn third_vp(ui: &mut egui::Ui, d: &mut Dialog, i: usize, unit: Unit, enabled: bool) {
-    let mut v = d.fields.get("thirdVp").and_then(Value::as_array).cloned().unwrap_or_else(|| vec![json!(0), json!(0)]);
-    v.resize(2, json!(0));
-    let pt = v.get(i).and_then(Value::as_f64).map(|x| unit.to_pt(x));
-    ui.label(if i == 0 { "X:" } else { "Y:" });
-    let name = if i == 0 { crate::i18n::t("X:") } else { crate::i18n::t("Y:") };
-    if let Some(x) = ui.add_enabled_ui(enabled, |ui| widgets::num_field_named(ui, ("persp-vp3", i), Some(name), pt, unit, 84.0)).inner {
-        v[i] = json!(unit.from_pt(x));
-        d.fields.insert("thirdVp".into(), Value::Array(v));
-    }
-}
-
-/// A plane's gridline colour: a chip and its hex.
-fn color(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
-    let t = Tokens::get(ui.ctx());
-    let cur = Rgb::parse(&d.str(key));
-    widgets::label_row(ui, label, LABEL, |ui| {
-        let (chip, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
-        if let Some(Rgb([r, g, b])) = cur {
-            ui.painter().rect_filled(chip, 2.0, egui::Color32::from_rgb(r, g, b));
-        }
-        ui.painter().rect_stroke(chip, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-        let hex = cur.map(|c| c.hex()).unwrap_or_default();
-        if let Some(c) = widgets::hex_field(ui, ("persp-color", key), hex.trim_start_matches('#')).as_deref().and_then(Rgb::parse) {
-            d.fields.insert(key.into(), json!(c.hex()));
+/// A select of `entries` named `name` (an English label), over `value`; `set` takes a pick.
+fn choose<T: craft::behavior::Value>(ui: &mut egui::Ui, name: &str, salt: &str, entries: &[Entry<T>], value: T, mut set: impl FnMut(T)) {
+    let label = word(name);
+    row(ui, &label, salt, |ui| {
+        if let Some(picked) = Select::new(label.clone(), Bind::given(value.clone()), entries).show(ui).value().cloned() {
+            set(picked);
         }
     });
 }
 
-/// The Name row: in Define Grid the Preset menu (choosing a preset loads its fields) and Save
-/// Preset…, else the preset's name.
-fn name_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    if !d.str(MODE).is_empty() {
-        widgets::label_row(ui, tl!("Name:"), LABEL, |ui| {
-            form::text(ui, d, "name", 200.0);
+/// A length field named `name` (an English label) over `value`, in the dialog's unit.
+fn length(ui: &mut egui::Ui, name: &str, salt: &str, value: &mut f64, lengths: LengthUnits) {
+    let label = word(name);
+    row(ui, &label, salt, |ui| {
+        if let Some(v) = NumberField::length(label.clone(), Bind::given(Some(*value)), lengths).show(ui).edit.value().copied().flatten() {
+            *value = v;
+        }
+    });
+}
+
+/// The three planes' gridline colours, and the opacity.
+fn colors(ui: &mut egui::Ui, draft: &mut GridDraft) {
+    let d = &mut draft.def;
+    for (name, salt, rgb) in
+        [("Left Grid:", "left", &mut d.left_color), ("Right Grid:", "right", &mut d.right_color), ("Horizontal Grid:", "ground", &mut d.ground_color)]
+    {
+        let label = word(name);
+        let shown = Rgba::rgb(rgb.0[0], rgb.0[1], rgb.0[2]);
+        row(ui, &label, salt, |ui| {
+            Row::new().id_salt((salt, "color")).show(ui, |ui, _| {
+                Swatch::new(label.clone(), Srgba::from(shown)).show(ui);
+                if let Some(Rgba([r, g, b, _])) = TextField::hex(label.clone(), Bind::given(shown)).show(ui).value().copied() {
+                    *rgb = Rgb([r, g, b]);
+                }
+            });
         });
+    }
+    let label = word("Opacity:");
+    row(ui, &label, "opacity", |ui| {
+        let field = SliderField::new(label.clone(), Bind::given(d.opacity), 0.0..=100.0).step(1.0).layout(SliderFieldLayout::Inline).show(ui);
+        if let Some(v) = field.value().map(|v| v.round().clamp(0.0, 100.0)) {
+            d.opacity = v;
+        }
+    });
+}
+
+impl StackDialog for GridDialog {
+    type Result = ();
+
+    /// Files the fields as OK does, for the app to run; answers none until the app accepted them.
+    fn confirm(&mut self, _ctx: &egui::Context) -> Option<()> {
+        if self.held.is_accepted() {
+            return self.held.finish().map(|_| ());
+        }
+        if self.held.is_waiting() || self.draft.def.validate().is_err() {
+            return None;
+        }
+        self.held.file(self.draft.def.clone());
+        None
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.held.state()
+    }
+
+    /// The keys of `GridDefinition`.
+    fn json_fields(&self) -> Option<Value> {
+        serde_json::to_value(&self.draft.def).ok()
+    }
+
+    /// Sets a field as `GridDefinition::merged` reads it; `units` converts the lengths. The angle takes no input
+    /// in a one-point grid, nor the third vanishing point outside a three-point one.
+    fn set_json_field(&mut self, _ctx: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        let rejects = || FieldRefusal::Rejects(&value).message(field);
+        let known = serde_json::to_value(&self.draft.def).map_err(|e| e.to_string())?;
+        if known.get(field).is_none() {
+            return Err(FieldRefusal::Unknown.message(field));
+        }
+        let kind = self.draft.kind();
+        if (field == "angle" && kind == 1) || (field == "thirdVp" && kind != 3) {
+            return Err(FieldRefusal::Inactive.message(field));
+        }
+        if field == "units" {
+            let unit = value.as_str().and_then(Unit::named).filter(|u| *u != Unit::FeetInches).ok_or_else(rejects)?;
+            self.draft.set_units(unit);
+            return Ok(());
+        }
+        self.draft.def = self.draft.def.merged(&json!({ field: value.clone() })).map_err(|_| rejects())?;
+        Ok(())
+    }
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(KIND)
+    }
+
+    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<()>> {
+        let finish = self.held.is_accepted();
+        if self.refused_at.as_ref().is_some_and(|at| *at != self.draft) {
+            self.refused_at = None;
+            self.held.clear_refusal();
+        }
+        let mut save = false;
+        let title = self.title();
+        let pass = Pass {
+            mode: &self.mode,
+            presets: &self.presets,
+            rows: &self.rows,
+            ppi: self.ppi,
+            bare_points: self.bare_points,
+            refusal: self.held.refusal().map(|(reason, _)| reason),
+        };
+        let picker = &mut self.picker;
+        let accepted = Cell::new(false);
+        // OK files the answer and the dialog stays; it closes once the app accepted it.
+        let shown = FormDialog::new(title, Bind::bound(&mut self.draft))
+            .opened(Bind::bound(&mut self.open))
+            .ok_enabled(finish || !self.held.is_waiting())
+            .accept_stays_open(true)
+            .enter_confirms(false)
+            .show(ui, |ui, form, draft| {
+                if finish {
+                    form.request_close_as(CloseReason::Activated);
+                }
+                let valid = pass.body(ui, draft, picker, &mut save);
+                accepted.set(valid);
+                valid
+            });
+        if save {
+            self.start_save();
+            ui.ctx().request_repaint();
+        }
+        if shown.picked == Some(0) && accepted.get() && !self.held.is_waiting() {
+            self.held.file(self.draft.def.clone());
+            ui.ctx().request_repaint();
+        }
+        if finish && shown.accepted.is_some() {
+            self.held.finish();
+            return Some(DialogResult::Ok(()));
+        }
+        shown.closed.map(|_| DialogResult::Cancel)
+    }
+}
+
+/// Runs the OK the open dialog filed: Define Grid defines the grid, the other modes save the preset.
+enum Next {
+    /// The dialog closes.
+    Close,
+    /// Save Preset… saved `name`: back to Define Grid on it.
+    Define(String),
+    /// The preset editor saved `name`: the presets manager opens on it.
+    Presets(String),
+}
+
+fn file(app: &mut VectorcraftApp, mode: &GridMode, def: &GridDefinition) -> Result<Next, String> {
+    let mut params = serde_json::to_value(def).map_err(|e| e.to_string())?;
+    if *mode == GridMode::Define {
+        app.run("perspective.grid.define", params)?;
+        return Ok(Next::Close);
+    }
+    if let GridMode::Edit { original: Some(original) } = mode {
+        params["newName"] = params["name"].take();
+        params["name"] = json!(original);
+    }
+    let saved = app.run("perspective.presets.save", params)?;
+    let name = saved["name"].as_str().unwrap_or_default().to_string();
+    Ok(match mode {
+        GridMode::Edit { .. } => Next::Presets(name),
+        GridMode::Save { back: true } => Next::Define(name),
+        _ => Next::Close,
+    })
+}
+
+/// Once a frame: gives the open dialog the app's presets and runs the OK it filed. A failure shows under the rows
+/// and on the status line; the dialog stays.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    if dialogs.with(|host| host.get::<GridDialog>().is_none()) {
         return;
     }
-    let presets = app.session.perspective_presets();
-    let name = d.str("name");
-    // The fields no longer the named preset's: [Custom].
-    let fields: Option<GridDefinition> = serde_json::from_value(form::params(d)).ok();
-    let current = presets.iter().find(|p| p.name == name).filter(|p| fields.as_ref().is_some_and(|f| f.same(p)));
-    if current.is_none() && !name.is_empty() {
-        d.fields.insert("name".into(), json!(""));
+    let (presets, new_name) = (app.session.perspective_presets(), app.session.new_perspective_preset_name());
+    let filed = dialogs.with(|host| {
+        let dialog = host.get_mut::<GridDialog>()?;
+        dialog.set_presets(presets, new_name);
+        dialog.held.take().map(|def| (dialog.mode.clone(), def))
+    });
+    let Some((mode, def)) = filed else { return };
+    let next = file(app, &mode, &def);
+    if let Err(why) = &next {
+        app.status(why.clone());
     }
-    let shown = current.map_or(CUSTOM, |p| p.name.as_str());
-    let names: Vec<&str> = std::iter::once(CUSTOM).chain(presets.iter().map(|p| p.name.as_str())).collect();
-    // [Custom] and the built-in presets are ours (translated); the saved ones are names.
-    let builtin = |k: usize| k == 0 || names.get(k).is_some_and(|n| is_builtin(n));
-    widgets::label_row(ui, tl!("Preset:"), LABEL, |ui| {
-        let picked = super::mixed_dropdown(ui, "persp-preset", shown, &names, 200.0, builtin);
-        if let Some(p) = picked.and_then(|i| i.checked_sub(1)).and_then(|i| presets.get(i)) {
-            let mut fields = json!(p);
-            fields[SHOWN] = fields["units"].clone();
-            if let Some(o) = fields.as_object() {
-                d.fields.extend(o.clone());
+    // The new preset is in the list the dialog reads next.
+    let (presets, new_name) = (app.session.perspective_presets(), app.session.new_perspective_preset_name());
+    dialogs.with(|host| {
+        let Some(dialog) = host.get_mut::<GridDialog>() else { return };
+        dialog.set_presets(presets, new_name);
+        match &next {
+            Ok(Next::Define(name)) => dialog.back_to_define(name.clone()),
+            Ok(_) => {
+                dialog.held.answer(Ok(()));
             }
-        }
-        if widgets::flat_button(ui, tl!("Save Preset…"), 96.0).on_hover_text(tl!("Save these settings as a preset")).clicked() {
-            d.fields.insert(MODE.into(), json!("save"));
-            d.fields.insert(FROM.into(), json!("define"));
-            d.fields.insert("name".into(), json!(app.session.new_perspective_preset_name()));
+            Err(why) => dialog.refuse(Label::from(why.clone())),
         }
     });
-    ui.add_space(8.0);
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    name_row(app, ui, d);
-    widgets::subheader(ui, tl!("Perspective Grid Settings"));
-    ui.add_space(6.0);
-    let k = kind(d);
-    widgets::label_row(ui, tl!("Type:"), LABEL, |ui| {
-        if let Some(i) = widgets::dropdown(ui, "persp-type", TYPES[usize::from(k - 1)], &TYPES, 200.0) {
-            d.fields.insert("kind".into(), json!(i + 1));
-        }
-    });
-    let units: Vec<(&str, &str)> = Unit::ALL.iter().filter(|u| **u != Unit::FeetInches).map(|u| (u.key(), u.label())).collect();
-    form::choice(ui, d, "units", tl!("Units:"), (LABEL, 200.0), &units);
-    // A new unit (the menu or `ui.dialog.set`) keeps the lengths: they are converted.
-    let unit = unit(d);
-    let before = Unit::named(&d.str(SHOWN)).unwrap_or(unit);
-    d.fields.insert(SHOWN.into(), json!(unit.key()));
-    if unit != before {
-        let f = before.points() / unit.points();
-        for key in LENGTHS {
-            if let Some(v) = d.fields.get(key).and_then(Value::as_f64) {
-                d.fields.insert(key.into(), json!(v * f));
-            }
-        }
-        if let Some(v) = d.fields.get("thirdVp").and_then(Value::as_array) {
-            let v: Vec<f64> = v.iter().map(|x| x.as_f64().unwrap_or(0.0) * f).collect();
-            d.fields.insert("thirdVp".into(), json!(v));
-        }
+    if let Ok(Next::Presets(name)) = next {
+        super::perspective_presets::open(app, Some(&name));
     }
-    let sc = scale(d);
-    let named = SCALES.iter().find(|(_, s)| *s == sc).map(|(l, _)| *l);
-    let mut labels: Vec<&str> = SCALES.iter().map(|(l, _)| *l).collect();
-    labels.push("Custom");
-    widgets::label_row(ui, tl!("Scale:"), LABEL, |ui| {
-        if let Some(i) = widgets::dropdown(ui, "persp-scale", named.unwrap_or("Custom"), &labels, 200.0) {
-            // Custom starts from the scale shown.
-            let s = SCALES.get(i).map_or(sc, |(_, s)| *s);
-            d.fields.insert("scale".into(), json!(s));
-        }
-    });
-    if named.is_none() {
-        widgets::label_row(ui, "", LABEL, |ui| {
-            for (i, label) in [tl!("Artboard:"), tl!("Real World:")].into_iter().enumerate() {
-                ui.label(egui::RichText::new(label).color(t.text_dim));
-                if let Some(v) = widgets::plain_field(ui, ("persp-scale", i), sc[i], "", 3, 56.0).filter(|v| *v > 0.0 && v.is_finite()) {
-                    let mut s = sc;
-                    s[i] = v;
-                    d.fields.insert("scale".into(), json!(s));
-                }
-            }
-        });
-    }
-    widgets::label_row(ui, tl!("Gridline every:"), LABEL, |ui| {
-        length(ui, d, "gridline", unit, FIELD);
-    });
-    if sc[0] != sc[1] {
-        let real = unit.number(unit.to_pt(sc[1] / sc[0]));
-        let note = crate::i18n::fmt(
-            tl!("1 {unit} on the artboard stands for {real} {unit} in the scene."),
-            &[("unit", unit.suffix()), ("real", &real.to_string())],
-        );
-        widgets::label_row(ui, "", LABEL, |ui| {
-            ui.label(egui::RichText::new(note).size(11.5).color(t.text_dim));
-        });
-    }
-    ui.add_space(4.0);
-    widgets::label_row(ui, tl!("Viewing Angle:"), LABEL, |ui| {
-        let a = d.f64("angle", 45.0);
-        if let Some(v) = ui.add_enabled_ui(k != 1, |ui| widgets::plain_field(ui, "persp-angle", a, "°", 2, FIELD)).inner {
-            d.fields.insert("angle".into(), json!(v));
-        }
-    });
-    widgets::label_row(ui, tl!("Viewing Distance:"), LABEL, |ui| {
-        length(ui, d, "distance", unit, FIELD);
-    });
-    widgets::label_row(ui, tl!("Horizon Height:"), LABEL, |ui| {
-        length(ui, d, "horizonHeight", unit, FIELD);
-    });
-    widgets::label_row(ui, tl!("Third Vanishing Point:"), LABEL, |ui| {
-        third_vp(ui, d, 0, unit, k == 3);
-        third_vp(ui, d, 1, unit, k == 3);
-    });
-    ui.add_space(12.0);
-    widgets::subheader(ui, tl!("Grid Color & Opacity"));
-    ui.add_space(6.0);
-    color(ui, d, "leftColor", tl!("Left Grid:"));
-    color(ui, d, "rightColor", tl!("Right Grid:"));
-    color(ui, d, "groundColor", tl!("Horizontal Grid:"));
-    // Opacity: a slider and its field, in the label column the rows above use.
-    widgets::label_row(ui, tl!("Opacity:"), LABEL, |ui| {
-        let v = d.f64("opacity", 50.0).clamp(0.0, 100.0);
-        let track = |x: f32| egui::Color32::from_gray((60.0 + x * 160.0) as u8);
-        let shown = widgets::SliderValue::field(v, 0.0..=100.0, "%", 0);
-        let (x, _, keyed) =
-            widgets::color_slider_stepped(ui, "persp-opacity", tl!("Opacity:"), Some(shown), (v / 100.0) as f32, form::SLIDER_WIDTH, &track);
-        let mut new = x.map(|x| (f64::from(x) * 100.0).round()).or(keyed);
-        if let Some(x) = widgets::range_field(ui, "persp-opacity-field", v, 0.0..=100.0, "%", 0, 52.0) {
-            new = Some(x);
-        }
-        if let Some(n) = new.filter(|n| *n != v) {
-            d.fields.insert("opacity".into(), json!(n));
-        }
-    });
-    false
 }
