@@ -12774,6 +12774,13 @@ per glyph. A line splits where its type stops drawing the outlines in place, and
 tracking their own gaps give. These rules are VectorCraft's own. Each entry of the result's `fonts` list has
 `tracking`.
 
+No retyped line starts with a combining mark (Unicode general category Mn, Mc or Me). When a shape would start a line
+and the first 16 glyphs it matches include another character's glyph, it starts the line as that character. When they
+are all marks, the shape stays an outline and is listed in `unmatched`, and the glyph after it starts the line. The
+same holds for a mark at the start of a part that a split leaves: it becomes that other character on a line of its
+own, or stays an outline. A mark that follows another glyph on its line is retyped with
+that glyph. This rule is VectorCraft's own.
+
 ```json
 {"name":"run_command","arguments":{"command":"type.retype","params":{}}}
 ```
@@ -12810,7 +12817,8 @@ name. `count` is a whole number from 1 to 96 (default 10); any other value is an
 `{fonts: [{family, style, matched}], shapes, more, truncated}`: `matched` is the number of shapes the font matches,
 `shapes` the number of shapes compared, `more` is true when more fonts match than `count`, and `truncated` is true when
 shapes past the limits of `type.retype` were left out. Shapes that `type.retype` would keep as outlines because of
-their paint still count. The command does not change the document and records no undo step. With no path or compound
+their paint still count. A font whose glyphs match the shapes only as combining marks is not listed. The
+command does not change the document and records no undo step. With no path or compound
 path selected it is an error.
 
 Window › Retype shows the Retype panel. Find Matching Fonts runs `retype.find {}`, which shows the panel, ranks up to
