@@ -254,6 +254,25 @@ fn pf_outline_joins_junctions_closer_than_the_precision() {
     assert!(close(length(&coarse), length(&at_default), 1e-6), "{} against {}", length(&coarse), length(&at_default));
 }
 
+/// Two boundaries that are close only at their start, end and middle stay two edges at 10 pt: an
+/// ellipse 0.005 pt inside a circle at its rightmost and leftmost points, and 30 pt inside it at
+/// the top and bottom. Two copies of one boundary are still one edge at that precision.
+#[test]
+fn pf_outline_keeps_boundaries_that_differ_between_their_ends_at_coarse_precision() {
+    let ellipse = |rx: f64, ry: f64| PathData::from_bezpath(&kurbo::Ellipse::new((100.0, 100.0), (rx, ry), 0.0).to_path(1e-4));
+    let s = vec![shape(ellipse(50.0, 50.0), 1), shape(ellipse(49.995, 20.0), 2)];
+    let length = |r: &[Shape]| r.iter().map(|s| s.path.length()).sum::<f64>();
+    let expected = s[0].path.length() + s[1].path.length();
+    for precision in [DEFAULT_PRECISION, 10.0] {
+        let r = pathfinder_with(PathfinderOp::Outline, &s, precision);
+        assert_eq!(r.len(), 2, "{precision} pt: {r:?}");
+        assert!(close(length(&r), expected, 1e-6), "{precision} pt: {} against {expected}", length(&r));
+    }
+    let copies = vec![shape(ellipse(50.0, 50.0), 1), shape(ellipse(50.0, 50.0), 2)];
+    let r = pathfinder_with(PathfinderOp::Outline, &copies, 10.0);
+    assert!(close(length(&r), copies[0].path.length(), 1e-6), "{r:?}");
+}
+
 #[test]
 fn regions_and_region_at() {
     let s = stack();
