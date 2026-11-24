@@ -1217,6 +1217,55 @@ fn message_scan_joins_a_literal_continued_on_the_next_line() {
     }
 }
 
+/// The scan reads each of Rust's character escapes in a message as the character Rust gives it
+/// (https://doc.rust-lang.org/reference/tokens.html#character-escapes), and stops at the literal's
+/// own closing quote, not at an escaped one.
+#[test]
+fn message_scan_decodes_rust_character_escapes() {
+    let cases = [
+        (r#"a\rb" tail"#, "a\rb"),
+        (r#"a\0b""#, "a\0b"),
+        (r#"\x41\x7f\x7F""#, "A\x7f\x7f"),
+        (r#"caf\u{e9}""#, "café"),
+        (r#"caf\u{E_9}""#, "café"),
+        (r#"\u{1F600}\u{10_FFFF}\u{0}""#, "\u{1F600}\u{10FFFF}\0"),
+        (r#"a\\b""#, "a\\b"),
+        (r#"say \"hi\"" tail"#, "say \"hi\""),
+        (r#"it\'s""#, "it's"),
+        (r#"\n\t""#, "\n\t"),
+    ];
+    let wrong: Vec<_> = cases.iter().filter(|(body, text)| string_literal(body).as_deref() != Some(*text)).collect();
+    assert!(wrong.is_empty(), "{wrong:?}");
+    let found = source_messages(r#"fn run() { let _ = Err("bad \x41 value \u{e9}"); }"#, &[], &Default::default());
+    assert_eq!(found, ["bad A value é"]);
+}
+
+/// A literal with an escape Rust does not accept is not read as a message: an unknown letter, `\x`
+/// with fewer than two hex digits or above `7F`, and `\u` without braces, without digits, with a
+/// leading underscore, with more than six digits, or naming a surrogate or a value above `10FFFF`.
+#[test]
+fn message_scan_rejects_invalid_rust_escapes() {
+    let bodies = [
+        r#"bad \q""#,
+        r#"bad \x4""#,
+        r#"bad \x4g""#,
+        r#"bad \x80""#,
+        r#"bad \x+1""#,
+        concat!(r"bad \u", "00e9\""),
+        r#"bad \u{""#,
+        r#"bad \u{}""#,
+        r#"bad \u{_e9}""#,
+        r#"bad \u{e9""#,
+        r#"bad \u{D800}""#,
+        r#"bad \u{110000}""#,
+        r#"bad \u{1234567}""#,
+    ];
+    let read: Vec<_> = bodies.iter().filter(|body| string_literal(body).is_some()).collect();
+    assert!(read.is_empty(), "{read:?}");
+    let code = r#"fn run() { let _ = Err("bad \q value"); let _ = Err("bad \u{D800} value"); let _ = Err("good value"); }"#;
+    assert_eq!(source_messages(code, &[], &Default::default()), ["good value"]);
+}
+
 /// The scan reads the message of each of the plug-in host's [`ERROR_HELPERS`]: a literal, a
 /// `format!` string with or without a `&` before it, after the location of `out_err` (a
 /// `format!` string too), the number and range of `in_range`, the number and location of `unit`,
@@ -2078,8 +2127,12 @@ fn without_test_module(text: &str) -> &str {
     text
 }
 
-/// The text of a string literal whose opening quote was just read, escapes resolved. A `\` at the
-/// end of a line drops the line break and the whitespace that starts the next line, as Rust does.
+/// The text of a string literal whose opening quote was just read, escapes resolved as Rust resolves
+/// them (https://doc.rust-lang.org/reference/tokens.html#character-escapes): `\n`, `\r`, `\t`, `\0`,
+/// `\\`, `\'`, `\"`, `\x` with two hex digits up to `7F`, and `\u{…}` with one to six hex digits
+/// (underscores allowed after the first) naming a Unicode scalar value. A `\` at the end of a line
+/// drops the line break and the whitespace that starts the next line. A literal with any other
+/// escape, or one left unclosed, is `None`.
 fn string_literal(s: &str) -> Option<String> {
     let mut out = String::new();
     let mut it = s.chars();
@@ -2088,9 +2141,36 @@ fn string_literal(s: &str) -> Option<String> {
             '"' => return Some(out),
             '\\' => match it.next()? {
                 'n' => out.push('\n'),
+                'r' => out.push('\r'),
                 't' => out.push('\t'),
+                '0' => out.push('\0'),
+                c @ ('\\' | '\'' | '"') => out.push(c),
+                'x' => {
+                    let (high, low) = (it.next()?.to_digit(16)?, it.next()?.to_digit(16)?);
+                    out.push(char::from_u32(high * 16 + low).filter(char::is_ascii)?);
+                }
+                'u' => {
+                    if it.next()? != '{' {
+                        return None;
+                    }
+                    let (mut value, mut digits) = (0u32, 0);
+                    loop {
+                        match it.next()? {
+                            '}' if digits > 0 => break,
+                            '_' if digits > 0 => {}
+                            c => {
+                                value = value * 16 + c.to_digit(16)?;
+                                digits += 1;
+                                if digits > 6 {
+                                    return None;
+                                }
+                            }
+                        }
+                    }
+                    out.push(char::from_u32(value)?);
+                }
                 '\n' | '\r' => it = it.as_str().trim_start_matches([' ', '\t', '\n', '\r']).chars(),
-                c => out.push(c),
+                _ => return None,
             },
             c => out.push(c),
         }

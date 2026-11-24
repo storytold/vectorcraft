@@ -1,8 +1,9 @@
 //! The user's interface choices (brightness, accent, colour scheme) and how they select the root theme.
 
-use craft::theme::{ModeChoice, Rgba, ThemeId};
+use craft::theme::{AppSizes, ModeChoice, Rgba, ThemeId};
 use egui::{FontFamily, FontId};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, LazyLock};
 use vectorcraft_engine::Prefs;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,6 +145,38 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
     }
 }
 
+/// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
+/// where the sets give pills, and the compact set takes the reference app's metrics: 26-point fields and spinners,
+/// 10 points inside panels, 5 between rows, 13-point body type with 12.5-point labels and 11-point captions, 5-point
+/// control corners, 8-point menus and 10-point windows, and 33-point panel tabs.
+const SIZES: &[u8] = br#"{
+    "all": {"radius.button": 4},
+    "compact": {
+        "size.control.md": 26,
+        "size.panel_header": 33,
+        "space.pad.regular": 10,
+        "space.gap.row": 5,
+        "radius.control": 5,
+        "radius.surface": 8,
+        "radius.window": 10,
+        "typography.body.size": 13,
+        "typography.body.line_height": 17,
+        "typography.body_strong.size": 13,
+        "typography.body_strong.line_height": 17,
+        "typography.label.size": 12.5,
+        "typography.label.line_height": 17,
+        "typography.caption.size": 11,
+        "typography.caption.line_height": 15
+    }
+}"#;
+
+/// The app's sizes ([`SIZES`]) as one shared value: the token cache tells a change of sizes by its pointer, so a
+/// new value each frame would resolve the tokens again each frame.
+pub fn app_sizes() -> Arc<AppSizes> {
+    static SHARED: LazyLock<Arc<AppSizes>> = LazyLock::new(|| Arc::new(AppSizes::parse_or_default(SIZES)));
+    Arc::clone(&SHARED)
+}
+
 pub fn semibold(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(craft::ui::fonts::SEMIBOLD.into()))
 }
@@ -162,5 +195,11 @@ mod tests {
             assert_eq!(Brightness::parse(b.id()), Some(b));
             assert_eq!(Brightness::parse(b.label()), Some(b));
         }
+    }
+
+    /// A size `app_sizes` cannot read is only logged and dropped, which brings the pill buttons back unnoticed.
+    #[test]
+    fn the_app_sizes_are_read_whole() {
+        assert!(AppSizes::parse(SIZES).is_ok_and(|sizes| !sizes.is_empty()));
     }
 }

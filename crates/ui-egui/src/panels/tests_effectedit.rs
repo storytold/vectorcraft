@@ -134,7 +134,7 @@ fn effect_rows_drag_to_reorder_and_into_an_item() {
     let mut panel = Panel::new(app, appearance::show);
     let ids = |fx: Vec<vectorcraft_doc::Effect>| fx.into_iter().map(|e| e.id).collect::<Vec<_>>();
     // Twist below Roughen: dropped on the lower half of its row.
-    let (twist, below) = (row_spot(&mut panel, "Twist"), row_spot(&mut panel, "Roughen") + egui::vec2(0.0, 6.0));
+    let (twist, below) = (row_spot(&mut panel, "Twist"), row_spot(&mut panel, "Roughen") + egui::vec2(0.0, 9.0));
     panel.drag_between(twist, below, egui::Modifiers::NONE);
     assert_eq!(ids(effects(&panel.app(), None)), ["distort.roughen", "distort.twist"]);
     drag_row(&mut panel, "Twist", "Stroke:", egui::Modifiers::ALT);

@@ -158,6 +158,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-crystallize.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-cube.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-curvature-circle.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (an arch with the circle that touches it at its top, and that circle's center) | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-cycle-sizes.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (two stacked triangles, a panel's Cycle Display Sizes control) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-dash-align.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-dash-exact.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-dimension.svg` | Osama Amin | Original work, drawn for VectorCraft: a dimension line with arrowheads between two extension lines | MIT OR Apache-2.0 |  |
@@ -206,6 +207,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-graphic-styles.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-grid-view.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-group-select.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-help.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a question mark in a circle) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-bevel.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-miter.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-join-round.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
@@ -285,7 +287,10 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-stroke-outside.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-stroke.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-swap.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-swatch-global.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a square with a filled corner, a global process color) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-swatch-kinds.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-swatch-process.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a square, a process color) | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-swatch-spot.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a dot in a ring, a spot color) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-symbol-screener.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-symbol-scruncher.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-symbol-shifter.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |

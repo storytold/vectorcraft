@@ -125,6 +125,22 @@ fn file_names_are_uri_encoded_and_current_relative() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `localizedName` of a file and a folder is the name they show, decoded, as `displayName` is,
+/// not the encoded `name`.
+#[test]
+fn file_and_folder_give_their_localized_name() {
+    let base = folder("localized");
+    let log = logged(
+        &base,
+        "var f = new File('caf%C3%A9 x.txt'), d = new Folder('n%C3%A9w');\n\
+         f.localizedName = 'other';\n\
+         vc.log([f.localizedName === f.displayName, f.localizedName === f.name, d.localizedName === d.displayName,\n\
+         d.localizedName === d.name, f.localizedName, 'localizedName' in Folder.prototype]);",
+    );
+    assert_eq!(log, json!([[true, false, true, false, "caf\u{e9} x.txt", true]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 #[test]
 fn script_file_without_scope_cannot_probe_home() {
     let base = folder("home");

@@ -306,7 +306,7 @@ fn store(ctx: &craft::egui::Context) -> TextureStore<u8> {
 fn print_queue(ui: &Ui) -> JobQueue<PrintKey, Option<Print>> {
     let ctx = ui.ctx().clone();
     let jobs = Env::of(ui).view().host().map_or_else(default_jobs, |host| Arc::clone(host.jobs_shared()));
-    let options = QueueOptions { lanes: QueueOptions::default_lanes().min(1), name: "fold-print" };
+    let options = QueueOptions { lanes: QueueOptions::default_lanes().min(1), name: "fold-print", ..QueueOptions::default() };
     JobQueue::new(jobs, Wake::new(move || ctx.request_repaint()), options)
 }
 
@@ -620,7 +620,7 @@ fn status(blanks: usize, folded: Option<(&Blank, &Folded)>, errors: bool) -> Vec
 /// Shows the Fold Preview window: the toolbar, the folded blank, the status lines and the sliders.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else {
-        crate::panels::empty_state(ui, "box", tl!("No document"), tl!("Open a document to preview its folded shape."));
+        crate::panels::empty_state(ui, "dc-cube", tl!("No document"), tl!("Open a document to preview its folded shape."));
         return;
     };
     let (uid, revision, doc) = (st.uid, st.revision, st.doc.clone());
