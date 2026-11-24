@@ -8927,6 +8927,8 @@ breakText	Glyphs	Glifi
 @msg	`dataBase64` is larger than the module limit	`dataBase64` supera il limite del modulo
 @msg	`dataBase64` is not valid base64	`dataBase64` non è un base64 valido
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` non può essere combinato con `ids`, `reverse` o `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` non può essere combinato con `ids`, `id` o `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` non può essere combinato con `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` e `childLimit` riducono il riepilogo: passa `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` è il nome di un design, o null per colonne semplici
 @msg	`design` is a design name, or null for the default marker	`design` è il nome di un design, o null per il marcatore predefinito

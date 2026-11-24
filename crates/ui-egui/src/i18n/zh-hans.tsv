@@ -9146,6 +9146,8 @@ breakText	Glyphs	字形
 @msg	`dataBase64` is larger than the module limit	`dataBase64` 超过了模块大小上限
 @msg	`dataBase64` is not valid base64	`dataBase64` 不是有效的 base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` 不能与 `ids`、`reverse` 或 `append` 同时使用
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` 不能与 `ids`、`id` 或 `item` 同时使用
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` 不能与 `brush` 同时使用
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` 和 `childLimit` 用于截取摘要：请传入 `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` 是设计名称，或用 null 表示普通柱形
 @msg	`design` is a design name, or null for the default marker	`design` 是设计名称，或用 null 表示默认标记

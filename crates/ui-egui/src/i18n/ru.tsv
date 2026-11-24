@@ -9013,6 +9013,8 @@ shape	Open	Открытый
 @msg	`dataBase64` is larger than the module limit	`dataBase64` больше ограничения для модуля
 @msg	`dataBase64` is not valid base64	`dataBase64` не является допустимым base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` нельзя сочетать с `ids`, `reverse` или `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` нельзя сочетать с `ids`, `id` или `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` нельзя сочетать с `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` и `childLimit` ограничивают сводку: передайте `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` — имя дизайна или null для обычных столбцов
 @msg	`design` is a design name, or null for the default marker	`design` — имя дизайна или null для маркера по умолчанию

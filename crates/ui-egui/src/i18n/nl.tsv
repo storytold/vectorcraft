@@ -6535,6 +6535,8 @@ imageTrace	Outline	Contour
 @msg	`dataBase64` is larger than the module limit	`dataBase64` is groter dan de modulelimiet
 @msg	`dataBase64` is not valid base64	`dataBase64` is geen geldige base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `reverse` of `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `id` of `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan niet worden gecombineerd met `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` en `childLimit` beperken de samenvatting: geef `summary: true` op
 @msg	`design` is a design name, or null for plain columns	`design` is de naam van een ontwerp, of null voor gewone kolommen
 @msg	`design` is a design name, or null for the default marker	`design` is de naam van een ontwerp, of null voor de standaardmarkering

@@ -8899,6 +8899,8 @@ breakText	Glyphs	Glifák
 @msg	`dataBase64` is larger than the module limit	`dataBase64`: nagyobb a modulok méretkorlátjánál
 @msg	`dataBase64` is not valid base64	`dataBase64`: nem érvényes base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`: nem használható együtt ezekkel: `ids`, `reverse`, `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`: nem használható együtt ezekkel: `ids`, `id`, `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`: nem használható együtt ezzel: `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` és `childLimit`: az összegzést szűkítik; add meg ezt: `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design`: diagramminta neve, vagy null az egyszerű oszlopokhoz
 @msg	`design` is a design name, or null for the default marker	`design`: diagramminta neve, vagy null az alapértelmezett jelölőhöz

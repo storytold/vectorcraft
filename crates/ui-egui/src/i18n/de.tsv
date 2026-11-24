@@ -8874,6 +8874,8 @@ breakText	Glyphs	Glyphen
 @msg	`dataBase64` is larger than the module limit	`dataBase64` ist größer als die Modulgrenze
 @msg	`dataBase64` is not valid base64	`dataBase64` ist kein gültiges Base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kann nicht mit `ids`, `reverse` oder `append` kombiniert werden
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kann nicht mit `ids`, `id` oder `item` kombiniert werden
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kann nicht mit `brush` kombiniert werden
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` und `childLimit` begrenzen die Zusammenfassung: Übergeben Sie `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` ist ein Designname oder null für einfache Säulen
 @msg	`design` is a design name, or null for the default marker	`design` ist ein Designname oder null für die Standardmarkierung

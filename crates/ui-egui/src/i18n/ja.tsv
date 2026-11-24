@@ -7744,6 +7744,8 @@ axis	Y Axis	Y 軸
 @msg	`dataBase64` is larger than the module limit	`dataBase64` がモジュールの上限を超えています
 @msg	`dataBase64` is not valid base64	`dataBase64` が有効な base64 ではありません
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` は `ids`、`reverse`、`append` と同時に使用できません
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` は `ids`、`id`、`item` と同時に使用できません
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` は `brush` と同時に使用できません
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` と `childLimit` はサマリーを絞り込みます: `summary: true` を指定してください
 @msg	`design` is a design name, or null for plain columns	`design` にはデザイン名を指定します。通常の棒にするには null を指定します
 @msg	`design` is a design name, or null for the default marker	`design` にはデザイン名を指定します。初期設定のマーカーにするには null を指定します

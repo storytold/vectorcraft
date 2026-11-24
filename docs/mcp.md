@@ -4877,7 +4877,13 @@ already walks Image Trace. Short agent entry points:
   `paint.invert`, `paint.complement`, `paint.sampleColor`, `gradient.presets.apply`, a swatch or the Color Picker), and
   `paint.swap` or `paint.default` without `ids` or `id`, becomes the color the bucket paints with, and a stroke weight
   (`stroke.set`, `stroke.weightUp`, `stroke.weightDown`) becomes the weight it paints with. The selection keeps its
-  paint, and no undo step is recorded. A null `ids` or `id` counts as left out. The Stroke panel's other options
+  paint, and no undo step is recorded. A null `ids` or `id` counts as left out. The journal records each of these
+  commands with `defaultsOnly: true`, and it records `library.use` with a color, gradient or pattern and
+  `swatch.library.add` with `apply` the same way. A replay of the entry, or the same params sent with any tool active, changes
+  only the defaults. `defaultsOnly` is a bool, and it is refused together with `ids`, `id` or an appearance `item` (`library.use` takes
+  `item` as the library item to apply, which stays valid), and in `stroke.setAdvanced` together with `brush`. While the bucket is active, `defaultsOnly: false` without a target is
+  journaled as `true`. A preview with `defaultsOnly: true` starts from the defaults the interaction began with, and
+  canceling the interaction puts them back, also after a later preview without `defaultsOnly`. The Stroke panel's other options
   (`stroke.set`, `stroke.setAdvanced` without `brush`) change the stroke for new art and leave the selection as it is;
   the bucket takes only the color and weight of that stroke. A stop selected on the bucket's gradient
   (`gradient.selectStop`) is deselected when another tool is chosen, when the first selected object changes, when an

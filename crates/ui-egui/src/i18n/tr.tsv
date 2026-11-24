@@ -8125,6 +8125,8 @@ axis	Y Axis	Y ekseni
 @msg	`dataBase64` is larger than the module limit	`dataBase64` modül sınırından büyük
 @msg	`dataBase64` is not valid base64	`dataBase64` geçerli bir base64 değil
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`; `ids`, `reverse` veya `append` ile birleştirilemez
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`; `ids`, `id` veya `item` ile birleştirilemez
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`; `brush` ile birleştirilemez
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` ve `childLimit` özeti dilimler: `summary: true` verin
 @msg	`design` is a design name, or null for plain columns	`design` bir tasarım adıdır veya düz sütunlar için null olur
 @msg	`design` is a design name, or null for the default marker	`design` bir tasarım adıdır veya varsayılan işaretçi için null olur

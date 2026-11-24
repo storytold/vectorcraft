@@ -9090,6 +9090,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`dataBase64` is larger than the module limit	`dataBase64` excede o limite do módulo
 @msg	`dataBase64` is not valid base64	`dataBase64` não é base64 válido
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` não pode ser combinado com `ids`, `reverse` ou `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` não pode ser combinado com `ids`, `id` ou `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` não pode ser combinado com `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` e `childLimit` recortam o resumo: passe `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` é o nome de um projeto, ou null para colunas simples
 @msg	`design` is a design name, or null for the default marker	`design` é o nome de um projeto, ou null para o marcador padrão

@@ -218,6 +218,8 @@
 @msg	`dataBase64` is larger than the module limit	`dataBase64` მოდულის ლიმიტზე დიდია
 @msg	`dataBase64` is not valid base64	`dataBase64` სწორი base64 არ არის
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` ვერ გამოიყენება `ids`-თან, `reverse`-თან ან `append`-თან ერთად
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` ვერ გამოიყენება `ids`-თან, `id`-თან ან `item`-თან ერთად
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` ვერ გამოიყენება `brush`-თან ერთად
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` და `childLimit` შეჯამებას ზღუდავს: გადაეცით `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` არის დიზაინის სახელი, ან null — ჩვეულებრივი სვეტებისთვის
 @msg	`design` is a design name, or null for the default marker	`design` არის დიზაინის სახელი, ან null — ნაგულისხმევი მარკერისთვის

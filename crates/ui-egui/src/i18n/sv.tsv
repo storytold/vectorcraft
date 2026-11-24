@@ -8870,6 +8870,8 @@ digits	Hindi	Hindi
 @msg	`dataBase64` is larger than the module limit	`dataBase64` är större än modulgränsen
 @msg	`dataBase64` is not valid base64	`dataBase64` är inte giltig base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan inte kombineras med `ids`, `reverse` eller `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan inte kombineras med `ids`, `id` eller `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan inte kombineras med `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` och `childLimit` begränsar sammanfattningen: ange `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` är ett designnamn, eller null för vanliga kolumner
 @msg	`design` is a design name, or null for the default marker	`design` är ett designnamn, eller null för standardmarkören

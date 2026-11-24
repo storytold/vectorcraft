@@ -118,6 +118,7 @@ impl Session {
             journal_note: Default::default(),
             note_depth: 1,
             journal_query: false,
+            defaults_only_ran: None,
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,

@@ -7011,6 +7011,8 @@ arrowhead	Feather	पंख
 @msg	`dataBase64` is not valid base64	`dataBase64` मान्य नहीं है base64
 @msg	`datasetFileNaming` must be `fileNumber`, `fileDataSetName` or `dataSetName`	`datasetFileNaming` होना चाहिए `fileNumber`, `fileDataSetName` या `dataSetName`
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` को `ids`, `reverse` या `append` के साथ उपयोग नहीं कर सकते
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` को `ids`, `id` या `item` के साथ उपयोग नहीं कर सकते
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` को `brush` के साथ उपयोग नहीं कर सकते
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` और `childLimit` सारांश के हिस्से चुनते हैं: `summary: true` दें
 @msg	`design` is a design name, or null for plain columns	`design` एक डिजाइन नाम है, या सादे स्तंभों के लिए null है
 @msg	`design` is a design name, or null for the default marker	`design` एक डिजाइन नाम है, या डिफ़ॉल्ट मार्कर के लिए null है

@@ -9028,6 +9028,8 @@ breakText	Glyphs	Glyfy
 @msg	`dataBase64` is larger than the module limit	`dataBase64` je větší než limit modulu
 @msg	`dataBase64` is not valid base64	`dataBase64` není platný base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` nelze kombinovat s `ids`, `reverse` ani `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` nelze kombinovat s `ids`, `id` ani `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` nelze kombinovat s `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` a `childLimit` omezují souhrn: předejte `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` je název návrhu, nebo null pro obyčejné sloupce
 @msg	`design` is a design name, or null for the default marker	`design` je název návrhu, nebo null pro výchozí značku

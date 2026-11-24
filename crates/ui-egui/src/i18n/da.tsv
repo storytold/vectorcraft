@@ -1139,6 +1139,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`dataBase64` is larger than the module limit	`dataBase64` er større end modulgrænsen
 @msg	`dataBase64` is not valid base64	`dataBase64` er ikke gyldig base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan ikke kombineres med `ids`, `reverse` eller `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan ikke kombineres med `ids`, `id` eller `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan ikke kombineres med `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` og `childLimit` opdeler oversigten: angiv `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` er et designnavn eller null for almindelige søjler
 @msg	`design` is a design name, or null for the default marker	`design` er et designnavn eller null for standardmarkøren

@@ -8676,6 +8676,8 @@ breakText	Glyphs	Гліфи
 @msg	`dataBase64` is larger than the module limit	`dataBase64` перевищує обмеження модуля
 @msg	`dataBase64` is not valid base64	`dataBase64` не є припустимим base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` не можна поєднувати з `ids`, `reverse` або `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` не можна поєднувати з `ids`, `id` або `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` не можна поєднувати з `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` і `childLimit` обмежують зведення: передайте `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` — це назва дизайну або null для звичайних стовпців
 @msg	`design` is a design name, or null for the default marker	`design` — це назва дизайну або null для стандартного маркера

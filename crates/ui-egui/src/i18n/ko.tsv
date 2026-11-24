@@ -8667,6 +8667,8 @@ breakText	Glyphs	글리프
 @msg	`dataBase64` is larger than the module limit	`dataBase64`이(가) 모듈 한도보다 큽니다
 @msg	`dataBase64` is not valid base64	`dataBase64`이(가) 올바른 base64가 아닙니다
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`은(는) `ids`, `reverse` 또는 `append`와 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`은(는) `ids`, `id` 또는 `item`과 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`은(는) `brush`와 함께 쓸 수 없습니다
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth`와 `childLimit`은 요약을 잘라 냅니다: `summary: true`를 전달하세요
 @msg	`design` is a design name, or null for plain columns	`design`은(는) 디자인 이름이며, 일반 막대에는 null입니다
 @msg	`design` is a design name, or null for the default marker	`design`은(는) 디자인 이름이며, 기본 마커에는 null입니다
