@@ -3,12 +3,10 @@
 //! on Discord's colour with the word "Discord".
 
 use craft::behavior::IconId;
-use craft::theme::Emphasis;
-use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Props, Show};
 use craft::ui::primitives::IconSpec;
-use craft::ui::style::{DataColor, Variant};
+use craft::ui::style::DataColor;
 use egui::{Color32, Ui};
 
 use crate::VectorcraftApp;
@@ -16,14 +14,11 @@ use crate::VectorcraftApp;
 /// Discord's brand colour (a colour, not a logo).
 const DISCORD: Color32 = Color32::from_rgb(0x58, 0x65, 0xF2);
 
-/// The Discord button: a soft neutral button, with Discord's colour on its icon alone. It opens the community link.
+/// The Discord button: the app's filled push button with no edge, as production's app bar drew it, with Discord's colour
+/// on its icon alone. It opens the community link.
 pub fn discord_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     let icon = IconSpec::svg(IconId::new("message-circle")).data_color(DataColor::new(DISCORD));
-    let shown = Button::new(tl!("Discord"))
-        .icon(icon)
-        .variant(Variant::look(Emphasis::Soft, Tone::Neutral))
-        .tooltip(tl!("Join the ArtCraft community on Discord (discord.gg/artcraft)"))
-        .show(ui);
+    let shown = Button::new(tl!("Discord")).icon(icon).tooltip(tl!("Join the ArtCraft community on Discord (discord.gg/artcraft)")).show(ui);
     if shown.clicks > 0 {
         app.open_link("help.discord");
     }

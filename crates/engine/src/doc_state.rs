@@ -129,6 +129,11 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// What the commands scripts ran did to the document since the person last opened or saved it:
+    /// `None` when they did nothing. The commands a script runs read and write the document's file,
+    /// and read the files it links to, only as the person left them ([`DocState::as_person_left`]).
+    /// Not saved.
+    pub(crate) by_script: Option<ByScript>,
     /// The live-effect plug-in stages deferred while the document is drawn on screen, and the time
     /// budget of its first view ([`vectorcraft_plugins::deferred`]). Not saved.
     pub plugin_effects: vectorcraft_plugins::deferred::Deferrals,
@@ -145,6 +150,17 @@ pub struct DocState {
     /// measured: the next refresh checks only the layer trees that differ from it
     /// ([`cmd::inline::refresh`]). Not saved.
     pub(crate) inline_resolved: Option<cmd::inline::Resolved>,
+}
+
+/// What the commands scripts ran did to an open document since the person last opened or saved it
+/// ([`DocState::by_script`]).
+#[derive(Clone, Debug)]
+pub(crate) enum ByScript {
+    /// A command a script ran opened it (or made it).
+    Opened,
+    /// A command a script ran changed it or gave it another file: the document, its file and the
+    /// file it was read from as they were before the first such command.
+    Changed { doc: Arc<Document>, path: Option<String>, links_from: Option<String> },
 }
 
 /// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
@@ -385,11 +401,39 @@ impl DocState {
             links_from: None,
             last_perspective: None,
             opened_by: file_access::current(),
+            by_script: None,
             empty_artboards: Default::default(),
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),
             measured_in_own: None,
             inline_resolved: None,
+        }
+    }
+
+    /// The document, its file and the file it was read from as the person last left them, for the
+    /// commands scripts run ([`DocState::by_script`]): `None` for a document a script's command
+    /// opened.
+    pub(crate) fn as_person_left(&self) -> Option<(&Arc<Document>, Option<&str>, Option<&str>)> {
+        match &self.by_script {
+            None => Some((&self.doc, self.path.as_deref(), self.links_from.as_deref())),
+            Some(ByScript::Opened) => None,
+            Some(ByScript::Changed { doc, path, links_from }) => Some((doc, path.as_deref(), links_from.as_deref())),
+        }
+    }
+
+    /// Notes what a command a script ran did to the document, which was `was` (the document, its
+    /// file and the file it was read from) before the command ran, or not open when `was` is
+    /// `None`. The first change is kept until the person saves the document.
+    pub(crate) fn note_script_command(&mut self, was: Option<(&Arc<Document>, &Option<String>, &Option<String>)>) {
+        if self.by_script.is_some() {
+            return;
+        }
+        let Some((doc, path, links_from)) = was else {
+            self.by_script = Some(ByScript::Opened);
+            return;
+        };
+        if !Arc::ptr_eq(doc, &self.doc) || *path != self.path || *links_from != self.links_from {
+            self.by_script = Some(ByScript::Changed { doc: doc.clone(), path: path.clone(), links_from: links_from.clone() });
         }
     }
     /// `measure`'s answer for the document now. `measure` runs once for each version of the document,

@@ -7,7 +7,6 @@ use craft::ui::contract::{Bind, Bracket, Props as _, Show as _, ShowContainer as
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::pickers::Select;
-use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::{NumberField, link_toggle};
 use egui::Ui;
 use serde_json::{Value, json};
@@ -51,11 +50,11 @@ pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, l
     true
 }
 
-/// `rows` under a caption heading, or bare when there is none.
+/// `rows` under a sub-heading, or bare when there is none.
 fn under_heading(ui: &mut Ui, heading: Option<&'static str>, mut rows: impl FnMut(&mut Ui)) {
     match heading {
         Some(title) => {
-            Section::fixed(title).strength(HeaderStrength::Caption).show(ui, |ui, _| rows(ui));
+            crate::panels::subheading(title).show(ui, |ui, _| rows(ui));
         }
         None => rows(ui),
     }

@@ -309,6 +309,7 @@ impl Session {
             selection: Arc::new(st.selection.clone()),
             preview: None,
             paint,
+            used_defaults_only: false,
             preview_paint: None,
             color_mode_paints: None,
             deferred_color_mode: None,
@@ -331,7 +332,8 @@ impl Session {
             return Err(EngineError::Busy);
         }
         // While the Live Paint Bucket is active, paint previews change only the bucket's colors, so
-        // each preview starts from the colors the interaction began with.
+        // each preview starts from the colors the interaction began with; so does a preview with
+        // `defaultsOnly: true`, and one after it.
         let bucket = self.bucket_paints();
         let (paint, restore_paint) = {
             let menu = self.menu.clone();
@@ -346,9 +348,11 @@ impl Session {
             st.doc = it.doc.clone();
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
+            it.used_defaults_only |= cmd::asks_defaults_only(params);
             let restore_paint = bucket
                 || cmd == "command.batch"
-                || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch")
+                || it.used_defaults_only
+                || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
                 || it.color_mode_paints.is_some();
             let paint = it.paint.clone();
             it.preview_paint = None;
@@ -378,6 +382,8 @@ impl Session {
         let outer = std::mem::replace(&mut self.previewing, true);
         let r = self.execute(cmd, params);
         self.previewing = outer;
+        // A step inside a batch that changed only the defaults counts as well.
+        let ran_defaults_only = self.defaults_only_ran.is_some();
         if let Some(paint) = color_mode_paint {
             self.paint = paint;
         }
@@ -385,6 +391,7 @@ impl Session {
         let batch_paint = (r.is_ok() && cmd == "command.batch").then(|| self.paint.clone());
         let st = self.doc_mut()?;
         if let Some(it) = &mut st.interaction {
+            it.used_defaults_only |= ran_defaults_only;
             // A failed preview leaves the document at the snapshot, so nothing is left to commit
             // (not even an earlier successful preview, which the reset above already undid).
             it.preview = r.is_ok().then(|| (cmd.to_string(), params));
@@ -505,12 +512,18 @@ impl Session {
         self.decoded_images.empty();
         self.pending_paint = None;
         // While the Live Paint Bucket is active, a previewed color is the bucket's color, which the
-        // cancel puts back as well.
+        // cancel puts back as well, as it does a color previewed with `defaultsOnly: true`.
         let bucket = self.bucket_paints();
+        let used_defaults_only = self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.used_defaults_only);
         if let Some(paint) = self
             .active()
             .and_then(|st| st.interaction.as_ref())
-            .filter(|it| bucket || it.preview.as_ref().is_some_and(|(id, _)| id == "command.batch") || it.color_mode_paints.is_some())
+            .filter(|it| {
+                bucket
+                    || it.used_defaults_only
+                    || it.preview.as_ref().is_some_and(|(id, p)| id == "command.batch" || cmd::asks_defaults_only(p))
+                    || it.color_mode_paints.is_some()
+            })
             .map(|it| it.paint.clone())
         {
             self.paint = paint;
@@ -523,8 +536,11 @@ impl Session {
         // A canceled preview's Assign Profile is undone with it.
         self.sync_front_profiles();
         // With New Art Has Basic Appearance off, new art takes the appearance of the selection as
-        // the document has it again, not as a preview left it.
-        self.inherit_new_art();
+        // the document has it again, not as a preview left it. An interaction that changed only the
+        // defaults (`defaultsOnly: true`) leaves the defaults it began with.
+        if !used_defaults_only {
+            self.inherit_new_art();
+        }
         Ok(())
     }
 
