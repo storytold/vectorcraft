@@ -1012,7 +1012,7 @@ fn mark_text(text: &str) -> Option<TextObject> {
 /// CIDs otherwise resolve through the active font's ToUnicode. A shared mark glyph can only
 /// carry one ToUnicode value; its other clusters must still occur exactly once via ActualText.
 fn mark_stream(bytes: &[u8]) -> (usize, Vec<String>, Vec<String>) {
-    use craft_pdf::syntax::{
+    use craft::pdf::syntax::{
         Pdf,
         content::UntypedIter,
         object::{Dict, Object, Stream},
@@ -1054,7 +1054,7 @@ fn mark_stream(bytes: &[u8]) -> (usize, Vec<String>, Vec<String>) {
             b"BMC" | b"BDC" => {
                 let replacement = op.operands().find_map(|operand| {
                     if let Object::Dict(d) = operand {
-                        d.get::<craft_pdf::syntax::object::String<'_>>(b"ActualText").map(|s| crate::import_scan::text_string(s.as_bytes()))
+                        d.get::<craft::pdf::syntax::object::String<'_>>(b"ActualText").map(|s| crate::import_scan::text_string(s.as_bytes()))
                     } else {
                         None
                     }
@@ -1074,7 +1074,7 @@ fn mark_stream(bytes: &[u8]) -> (usize, Vec<String>, Vec<String>) {
                     .operands()
                     .flat_map(|o| match o {
                         Object::String(s) => vec![s.clone()],
-                        Object::Array(a) => a.iter::<craft_pdf::syntax::object::String<'_>>().collect(),
+                        Object::Array(a) => a.iter::<craft::pdf::syntax::object::String<'_>>().collect(),
                         _ => vec![],
                     })
                     .collect();

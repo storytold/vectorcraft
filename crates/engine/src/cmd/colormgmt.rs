@@ -169,7 +169,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Overprint Black…",
             ["Edit", "Edit Colors"],
             None,
-            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
+            "{remove?: false, percentage?: 100, fill?: true, stroke?: true, includeCmyBlacks?: false, includeSpotBlacks?: false, ids?} make the black fills and/or strokes of the selection (or ids; groups: their contents; type: its characters; a grayscale or 1-bit image colorized by paint.setFill: its color, as a fill) overprint, or stop (remove). Black: K ≥ percentage with no C, M or Y (any with includeCmyBlacks), not linked to a spot swatch (unless includeSpotBlacks); a gradient is black when every stop is → {changed: objects}",
             has_doc,
             super::overprint::overprint_black
         ),

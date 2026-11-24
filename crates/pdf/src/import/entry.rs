@@ -224,11 +224,11 @@ pub(crate) fn read(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, P
 }
 
 #[cfg(test)]
-pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft::pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     vectorcraft_doc::depth::with_deep_stack(|| read_with_reader_options(bytes, opts, reader))
 }
 
-fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft::pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open_with_options(bytes, opts.password.as_deref(), reader)?;
     read_opened(bytes, opts, reader, &original)
 }
@@ -270,7 +270,7 @@ fn warn_missing_fonts(b: &mut Builder, doc: &Document) {
 }
 
 /// The widest bleed of `pages` on each side (`[top, bottom, left, right]`, see [`crate::pages::bleed`]).
-fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft_pdf::syntax::page::Page<'d>>) -> [f64; 4] {
+fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft::pdf::syntax::page::Page<'d>>) -> [f64; 4] {
     pages.fold([0.0; 4], |widest, page| {
         let bleed = crate::pages::bleed(page);
         std::array::from_fn(|i| widest[i].max(bleed[i]))
@@ -281,8 +281,8 @@ fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft_pdf::syntax::p
 fn read_opened(
     bytes: &[u8],
     opts: &ImportOptions,
-    reader: &craft_pdf::OpenOptions,
-    original: &craft_pdf::syntax::Pdf,
+    reader: &craft::pdf::OpenOptions,
+    original: &craft::pdf::syntax::Pdf,
 ) -> Result<ImportReport, PdfError> {
     #[cfg(any(test, feature = "read-count"))]
     if let Ok(mut imports) = IMPORTS.lock() {
@@ -358,7 +358,7 @@ fn read_opened(
             merge_order(&mut order, &mut known, &marked);
         }
         b.begin_page(scan);
-        craft_pdf::interpret_page(page, &mut ctx, &mut b).map_err(|e| PdfError::Parse(e.to_string()))?;
+        craft::pdf::interpret_page(page, &mut ctx, &mut b).map_err(|e| PdfError::Parse(e.to_string()))?;
         if incomplete.load(Ordering::Relaxed) {
             return Err(crate::import_scan::incomplete_content());
         }
@@ -576,12 +576,12 @@ fn is_only_text(nodes: &[Arc<Node>]) -> bool {
 fn reopen_with_groups_on(
     bytes: &[u8],
     opts: &ImportOptions,
-    reader: &craft_pdf::OpenOptions,
-    original: &craft_pdf::syntax::Pdf,
+    reader: &craft::pdf::OpenOptions,
+    original: &craft::pdf::syntax::Pdf,
     picked: &[usize],
     ocgs: &mut Ocgs,
     route: bool,
-) -> Result<(Option<craft_pdf::syntax::Pdf>, bool, Vec<String>), PdfError> {
+) -> Result<(Option<craft::pdf::syntax::Pdf>, bool, Vec<String>), PdfError> {
     // Content that is off imports as hidden layers: an update of the file turns every group on
     // (unless a form is hidden by its own group: its art couldn't be told apart).
     let hide = route && ocgs.skips_any();
