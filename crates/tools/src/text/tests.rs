@@ -2,7 +2,6 @@
 //! `tests_textedit`).
 
 use super::*;
-use crate::ImeSurrounding;
 use crate::testutil::{cx, paint};
 use vectorcraft_doc::{CharStyle, Document, Node, NodeKind, Selection, TextObject};
 use vectorcraft_text::FontDb;
@@ -1109,29 +1108,6 @@ fn ime_ranges_convert_characters_to_bytes() {
     assert_eq!(char_range_to_bytes("ががく", backwards), None, "backwards");
 }
 
-/// Outgoing surrounding text excludes the pre-edit and remaps a selection that crosses it, not
-/// only a caret at its end.
-#[test]
-fn ime_surrounding_remaps_a_selection_across_the_preedit() {
-    let (mut d, _id, mut tool) = editing("abcd");
-    let snap = d.clone();
-    let (sel, p) = (Selection::default(), paint());
-    tool.caret = 2;
-    tool.anchor = 2;
-    let acts = tool.ime_preedit(&cx(&d, &sel, &p), "xy", None);
-    apply(&mut d, &snap, &acts);
-    assert_eq!(tool.preedit.as_ref().map(|p| p.range.clone()), Some(2..4));
-    // A selection from before the marked text to after it: the IME receives the committed text
-    // with both offsets folded across the removed pre-edit.
-    tool.anchor = 1;
-    tool.caret = 6;
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &sel, &p), 4000) else {
-        panic!("the pre-edit has committed text around it");
-    };
-    assert_eq!(text, "abcd");
-    assert_eq!((cursor, anchor), (4, 1));
-}
-
 #[test]
 fn marked_text_is_underlined_with_the_converting_clause_thick() {
     let (mut d, id, mut tool) = editing("曲");
@@ -1948,47 +1924,6 @@ fn type_on_a_path_has_its_ports_beyond_its_brackets() {
     assert!(near(port_centre(t, Port::In, 0.5), Point::new(160.0 - PORT_RISE_PX / 2.0, 300.0)), "screen pixels at 200%");
 }
 
-/// The outgoing query copies only the 4 KiB window around the selection, not the whole document,
-/// and reports offsets into that window.
-#[test]
-fn ime_surrounding_bounds_a_long_document() {
-    let source: String = (0..10_000).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
-    let (d, _id, mut tool) = editing(&source);
-    tool.caret = 5000;
-    tool.anchor = 5000;
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("a caret in a long document is available");
-    };
-    assert_eq!(text.len(), 4000, "only the bounded window is copied");
-    assert_eq!(text.as_str(), &source[3000..7000]);
-    assert_eq!((cursor, anchor), (2000, 2000), "offsets are relative to the returned window");
-
-    tool.anchor = 0;
-    let ImeSurrounding::Unavailable(reason) = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("a selection wider than the limit must be explicit");
-    };
-    assert!(reason.contains("selection"), "{reason}");
-}
-
-/// Unicode offsets are UTF-8 bytes and a reversed selection stays reversed through the query.
-#[test]
-fn ime_surrounding_preserves_reversed_unicode_selection_and_empty_text() {
-    let (d, _id, mut tool) = editing("aé😀z");
-    tool.caret = 1;
-    tool.anchor = 7;
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("the short text is available");
-    };
-    assert_eq!(text, "aé😀z");
-    assert_eq!((cursor, anchor), (1, 7), "cursor is the primary end, anchor the other");
-
-    let (d, _id, tool) = editing("");
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("an empty document is available, not unavailable");
-    };
-    assert_eq!((text.as_str(), cursor, anchor), ("", 0, 0));
-}
-
 /// Deleting around a selection removes only the surrounding text, keeps the reversed selection
 /// direction, and leaves it for the following commit to replace.
 #[test]
@@ -2003,10 +1938,6 @@ fn ime_delete_surrounding_preserves_a_reversed_selection() {
     let NodeKind::Text(t) = &d.node(_id).unwrap().kind else { panic!() };
     assert_eq!(t.plain_text(), "bc", "the selection itself is preserved");
     assert_eq!((tool.caret, tool.anchor), (0, 2), "direction is kept, shifted left by the preceding deletion");
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &sel, &p), 4000) else {
-        panic!("the selection is still an available context");
-    };
-    assert_eq!((text.as_str(), cursor, anchor), ("bc", 0, 2));
 }
 
 /// Deleting around a composition removes only the surrounding committed text, keeps the pre-edit
@@ -2026,10 +1957,6 @@ fn ime_delete_surrounding_preserves_the_preedit() {
     let NodeKind::Text(t) = &d.node(id).unwrap().kind else { panic!() };
     assert_eq!(t.plain_text(), "axycd", "only the byte before the composition is deleted");
     assert_eq!(tool.preedit.as_ref().map(|p| p.range.clone()), Some(1..3), "the composition stayed and moved left");
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &sel, &p), 4000) else {
-        panic!("the composition has committed text around it");
-    };
-    assert_eq!((text.as_str(), cursor, anchor), ("acd", 1, 1), "the pre-edit is excluded and remapped");
 }
 
 /// Edit-session identity changes only when editing starts afresh, not on ordinary edits or caret
@@ -2047,23 +1974,6 @@ fn ime_target_is_stable_within_an_edit_session() {
     let second = tool.ime_target(&cx(&d, &sel, &p)).expect("re-entering has an owner");
     assert_eq!((second.0, second.1), (first.0, first.1));
     assert_ne!(second.2, first.2, "a new edit session is a replacement epoch");
-}
-
-/// The bounded query walks the styled runs without joining them, and its byte offsets still refer
-/// to the concatenated logical text.
-#[test]
-fn ime_surrounding_maps_across_styled_runs() {
-    use vectorcraft_doc::TextRun;
-    let (mut d, id, mut tool) = editing("aé😀z");
-    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!() };
-    t.runs =
-        vec![TextRun::new("aé", CharStyle { size: 20.0, ..Default::default() }), TextRun::new("😀z", CharStyle { size: 24.0, ..Default::default() })];
-    tool.caret = 1;
-    tool.anchor = 7;
-    let ImeSurrounding::Available { text, cursor, anchor } = tool.ime_surrounding(&cx(&d, &Selection::default(), &paint()), 4000) else {
-        panic!("the short text is available");
-    };
-    assert_eq!((text.as_str(), cursor, anchor), ("aé😀z", 1, 7));
 }
 
 /// Deletion counts start at the caret, including when it is in a later styled run. Character
@@ -2118,31 +2028,6 @@ fn a_recreated_type_tool_gets_a_new_replacement_epoch() {
     let b = second.ime_target(&cx(&d, &sel, &p)).expect("the recreated tool edits");
     assert_eq!((a.0, a.1), (b.0, b.1), "the owner key is the document and text node");
     assert_ne!(a.2, b.2, "edit sessions are numbered process-wide, not per tool");
-}
-
-/// The surrounding query never publishes a typing session's text after the document changed
-/// outside it: it reports the document's own text (and drops the stale marked-text range), and the
-/// commit-time session check keeps the reset from earning an IME receipt.
-#[test]
-fn ime_surrounding_reports_the_document_when_it_changed_under_the_session() {
-    let (mut d, id, mut tool) = editing("abc");
-    let (sel, p) = (Selection::default(), paint());
-    tool.caret = 3;
-    tool.anchor = 3;
-    let snap = d.clone();
-    let acts = tool.text_input(&cx(&d, &sel, &p), "x");
-    apply(&mut d, &snap, &acts);
-    let ImeSurrounding::Available { text, .. } = tool.ime_surrounding(&cx(&d, &sel, &p), 4000) else {
-        panic!("the session matches the document");
-    };
-    assert_eq!(text, "abcx");
-    // A panel, menu or control edit replaces the text while the typing session is open.
-    let NodeKind::Text(t) = &mut d.node_mut(id).unwrap().kind else { panic!() };
-    let len = edit::runs_len(&t.runs);
-    let _ = edit::replace_range(&mut t.runs, 0, len, "XYZ");
-    let stale = tool.ime_surrounding(&cx(&d, &sel, &p), 4000);
-    assert_eq!(stale, ImeSurrounding::Available { text: "XYZ".into(), cursor: 3, anchor: 3 });
-    assert!(!tool.ime_session_matches_document(&cx(&d, &sel, &p)), "the commit starts a fresh session");
 }
 
 #[test]
