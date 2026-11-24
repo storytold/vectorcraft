@@ -183,6 +183,28 @@ fn an_unhandled_rejection_is_reported_with_its_line() {
 }
 
 #[test]
+fn a_long_rejection_reason_is_reported_cut_to_its_first_500_characters() {
+    let mut r = realm();
+    r.run(
+        "function rep(t, n) { var s = ''; for (var i = 0; i < n; i++) s = s + t; return s; }\n\
+         var ab = 'ab'; for (var i = 0; i < 16; i++) ab = ab + ab;\n\
+         Promise.reject(ab);\n\
+         Promise.reject(new RangeError(ab));\n\
+         Promise.reject(rep('\\ud83d\\ude00', 600));\n\
+         Promise.reject(rep('x', 500));",
+    )
+    .unwrap();
+    let got: Vec<String> = r.unhandled_rejections().iter().map(|j| j.message.clone()).collect();
+    let want = vec![
+        format!("{}…", "ab".repeat(250)),
+        format!("RangeError: {}…", "ab".repeat(244)),
+        format!("{}…", "\u{1F600}".repeat(500)),
+        "x".repeat(500),
+    ];
+    assert_eq!(got, want);
+}
+
+#[test]
 fn a_rejection_handled_in_a_later_job_is_not_reported() {
     let mut r = realm();
     r.run("var p = Promise.reject(1); Promise.resolve().then(function () { p.catch(function () {}); });").unwrap();

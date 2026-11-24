@@ -741,7 +741,9 @@ impl Interp {
             if out.len() >= MAX_REPORTED {
                 continue;
             }
-            let mut message = self.describe(&reason);
+            // Two code units per character keeps MAX_REASON_CHARS characters and one more, so the
+            // cut below still marks a longer reason.
+            let mut message = self.describe_prefix(&reason, 2 * MAX_REASON_CHARS + 2);
             if let Some((cut, _)) = message.char_indices().nth(MAX_REASON_CHARS) {
                 message.truncate(cut);
                 message.push('…');

@@ -194,6 +194,31 @@ impl Str {
     pub(crate) fn to_rust_string(&self) -> String {
         String::from_utf16_lossy(&self.flat())
     }
+
+    /// The first `max_units` code units as a Rust string, read along the rope without flattening
+    /// it, so a long string is not copied whole.
+    pub(crate) fn prefix_to_rust_string(&self, max_units: usize) -> String {
+        if self.len() <= max_units {
+            return self.to_rust_string();
+        }
+        let mut units = Vec::with_capacity(max_units);
+        let mut stack = vec![self.clone()];
+        while let Some(s) = stack.pop() {
+            let room = max_units - units.len();
+            if room == 0 {
+                break;
+            }
+            match &*s.0.borrow() {
+                Node::Flat(f) => units.extend_from_slice(&f[..f.len().min(room)]),
+                Node::Concat { left, right, .. } => {
+                    stack.push(right.clone());
+                    stack.push(left.clone());
+                }
+                Node::Taken => {}
+            }
+        }
+        String::from_utf16_lossy(&units)
+    }
 }
 
 impl PartialEq for Str {
