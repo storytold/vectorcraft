@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pathfinder Options…",
             ["Window", "Pathfinder"],
             None,
-            "{precision?: pt 0.001..10 (0.01; how closely the Pathfinder operations follow the paths: results are refit to within it and pieces thinner than it are dropped; Outline treats crossings closer together than a tolerance multiplied by precision / 0.01 as one point), removeRedundantPoints?: bool (false; the results lose the anchors that don't change their shape), removeUnpainted?: bool (false; Divide and Outline leave out the pieces of objects with no fill)} Pathfinder Options, kept in the preferences and used by every later Shape Mode and Pathfinder operation (not Trap); {} reads them → the options",
+            "{precision?: pt 0.001..10 (0.01; how closely the Pathfinder operations follow the paths: results are refit to within it and pieces thinner than it are dropped; Outline treats crossings closer together than precision / 10000 as one point, or than the tolerance for the art's size when that is larger), removeRedundantPoints?: bool (false; the results lose the anchors that don't change their shape), removeUnpainted?: bool (false; Divide and Outline leave out the pieces of objects with no fill)} Pathfinder Options, kept in the preferences and used by every later Shape Mode and Pathfinder operation (not Trap); {} reads them → the options",
             always,
             pathfinder_options
         ),

@@ -254,6 +254,32 @@ fn pf_outline_joins_junctions_closer_than_the_precision() {
     assert!(close(length(&coarse), length(&at_default), 1e-6), "{} against {}", length(&coarse), length(&at_default));
 }
 
+/// Outline at a tenth of the size and a tenth of the precision gives the same pieces at a tenth of
+/// the length: crossings 0.05 pt apart on a 1,000 pt square at 10 pt, and 0.005 pt apart on a 100 pt
+/// square at 1 pt, stay two junctions in both.
+#[test]
+fn pf_outline_scales_with_the_art_and_the_precision_together() {
+    let art = |k: f64| {
+        vec![
+            shape(rect(0.0, 0.0, 1000.0 * k, 1000.0 * k), 1),
+            shape(rect(500.0 * k, 900.0 * k, 100.0 * k, 200.0 * k), 2),
+            shape(rect(500.05 * k, 950.0 * k, 49.95 * k, 100.0 * k), 3),
+        ]
+    };
+    let length = |r: &[Shape]| r.iter().map(|s| s.path.length()).sum::<f64>();
+    let large = pathfinder_with(PathfinderOp::Outline, &art(1.0), 10.0);
+    let small = pathfinder_with(PathfinderOp::Outline, &art(0.1), 1.0);
+    assert_eq!(large.len(), small.len(), "{large:?}\n{small:?}");
+    assert!(close(length(&large) / 10.0, length(&small), 1e-6), "{} against {}", length(&large), length(&small));
+    let pieces = |r: &[Shape], k: f64| {
+        let mut l: Vec<f64> = r.iter().map(|s| s.path.length() / k).collect();
+        l.sort_by(f64::total_cmp);
+        l
+    };
+    let (a, b) = (pieces(&large, 1.0), pieces(&small, 0.1));
+    assert!(a.iter().zip(&b).all(|(x, y)| close(*x, *y, 1e-6)), "{a:?} against {b:?}");
+}
+
 /// Two boundaries that are close only at their start, end and middle stay two edges at 10 pt: an
 /// ellipse 0.005 pt inside a circle at its rightmost and leftmost points, and 30 pt inside it at
 /// the top and bottom. Two copies of one boundary are still one edge at that precision.

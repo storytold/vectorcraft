@@ -1015,14 +1015,16 @@ fn along_closely(a: &[PathSeg], b: &[PathSeg], tol: f64) -> bool {
 
 /// Pathfinder Outline: split every shape's boundary at junctions of the arrangement. Junctions
 /// closer together than `reach` are one, and coincident edges within ten times it are one edge.
-/// `reach` is its value at [`DEFAULT_PRECISION`] times `precision / DEFAULT_PRECISION`, a factor kept
-/// within 0.1 to 1000 (Pathfinder Options › Precision's range of 0.001 to 10 pt).
+/// `reach` is the larger of the arrangement's tolerance for the art's size and `precision` / 10,000,
+/// with `precision` kept within 0.001 to 10 pt (Pathfinder Options › Precision's range), so the
+/// default precision gives 0.000001 pt as before. Scaling the art and the precision together scales
+/// `reach` by the same amount.
 fn outline_edges(arr: &Arrangement, shapes: &[Shape], precision: f64) -> Vec<Shape> {
     // Sorted by x (then y), so a segment needs only the junctions inside its control box.
     let junctions = arr.junctions();
     let scale = shapes.iter().filter_map(|s| s.path.control_bounds()).map(|r| r.width().max(r.height())).fold(1.0, f64::max);
     let tol = scale * 1e-7;
-    let reach = tol.max(1e-6) * (precision / DEFAULT_PRECISION).clamp(0.1, 1000.0);
+    let reach = tol.max(1e-6 * (precision / DEFAULT_PRECISION).clamp(0.1, 1000.0));
     // (chain, key, source index)
     let mut chains: Vec<(Vec<Seg>, u64)> = Vec::new();
     for s in shapes {
