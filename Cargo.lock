@@ -1532,7 +1532,7 @@ dependencies = [
  "hayro-jpeg2000",
  "image",
  "image-webp",
- "jpeg-encoder",
+ "jpeg-encoder 0.6.1",
  "png 0.18.1",
  "rayon",
  "serde_json",
@@ -2390,7 +2390,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3073,7 +3073,7 @@ checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
 dependencies = [
  "io-lifetimes 2.0.4",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4106,7 +4106,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
 dependencies = [
  "io-lifetimes 3.0.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4249,6 +4249,12 @@ name = "jpeg-encoder"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b454d911ac55068f53495488d8ccd0646eaa540c033a28ee15b07838afafb01f"
+
+[[package]]
+name = "jpeg-encoder"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0370574b86f7eca156b9f298392b5e69a23f8c86f3f865add60bbc2e79467a6"
 
 [[package]]
 name = "js-sys"
@@ -8229,7 +8235,7 @@ dependencies = [
  "craft-stream-codecs",
  "flate2",
  "image",
- "jpeg-encoder",
+ "jpeg-encoder 0.7.1",
  "kurbo 0.13.1",
  "proptest",
  "serde",
@@ -8477,7 +8483,7 @@ dependencies = [
  "flate2",
  "getrandom 0.4.3",
  "image",
- "jpeg-encoder",
+ "jpeg-encoder 0.7.1",
  "krilla",
  "kurbo 0.13.1",
  "log",
@@ -8533,7 +8539,7 @@ dependencies = [
  "craft-tiff",
  "flate2",
  "image",
- "jpeg-encoder",
+ "jpeg-encoder 0.7.1",
  "log",
  "proptest",
  "serde_json",
@@ -9707,7 +9713,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f3fd376f71958b862e7afb20cfe5a22830e1963462f3a17f49d82a6c1d1f42d"
 dependencies = [
  "bitflags 2.13.2",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
