@@ -98,11 +98,15 @@ impl PieWidget {
         if !selection.anchors.is_empty() || !zoom.is_finite() || zoom <= 0.0 {
             return vec![];
         }
-        let editable = doc.editable();
-        let shown = |id: &&NodeId| editable(**id) && !selection.segments.contains_key(*id);
+        // Made for the first ellipse, then shared: on a locked artboard it measures the art of the
+        // layer object that holds each ellipse.
+        let editable = std::cell::OnceCell::new();
         let mut out = vec![];
-        for id in selection.objects.iter().filter(shown) {
+        for id in selection.objects.iter().filter(|id| !selection.segments.contains_key(*id)) {
             let Some((e, (start, end))) = Ellipse::of(doc, *id) else { continue };
+            if !editable.get_or_init(|| doc.editable())(*id) {
+                continue;
+            }
             let c = e.center();
             for (which, deg) in [(PieEnd::End, end), (PieEnd::Start, start)] {
                 let on = e.point_at(deg);
@@ -308,6 +312,16 @@ mod tests {
         assert!(!t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { .. })), "the readout is removed");
         assert!(t.pointer(&c, &ev(PointerKind::Drag, Point::new(100.0, 200.0))).is_empty(), "the drag is over");
         assert!(t.pointer(&c, &ev(PointerKind::Up, Point::new(100.0, 200.0))).is_empty(), "the release commits nothing");
+    }
+
+    /// A pie widget drag with the Selection tool reads where it is released, and a tool switch
+    /// cancels it.
+    #[test]
+    fn a_pie_widget_drag_reads_its_release_and_a_tool_switch_cancels_it() {
+        let (d, _, s) = doc_with_ellipse((0.0, 360.0));
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        check_widget_release_and_tool_switch(&c, Point::new(312.0, 150.0), Point::new(200.0, 20.0), Point::new(100.0, 150.0));
     }
 
     /// On a whole ellipse the two widgets sit at the very same point, whatever its size, place or
