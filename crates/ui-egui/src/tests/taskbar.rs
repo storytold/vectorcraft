@@ -1130,6 +1130,8 @@ fn the_shape_properties_popup_changes_a_rectangle_corner_type() {
         assert_eq!(rig.count_text("Chamfer"), 2);
         assert!(rig.has_text("Inverted Round"));
         rig.click_text("Chamfer", true);
+        // The closed list fades out on the clock.
+        rig.fx.advance(1.0);
         assert!(!rig.has_text("Inverted Round"), "the pick closes the list");
         assert_eq!(steps(&rig.app()), before + 1, "the same kind adds no undo step");
 
