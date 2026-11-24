@@ -309,6 +309,7 @@
 	Anti-aliased Artwork	Art amb antialiàsing
 	Anti-aliasing:	Antialiàsing:
 	Anti-aliasing Method	Mètode d'antialiàsing
+@id	language.name	Català
 antiAlias	Sharp	Nítid
 	Crisp	Definit
 	Strong	Intens
@@ -7712,7 +7713,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	module is {_1} bytes (limit {_2})	el mòdul té {_1} bytes (límit {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
 @msg	not JSON: {e}	no és JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	no és un binari WebAssembly (falta la capçalera \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	no és un binari WebAssembly (falta la capçalera \\0asm)
 @msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
 @msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON

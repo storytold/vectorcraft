@@ -2,7 +2,7 @@
 //! window froze while it did. A trace the user asks for (Object › Image Trace › Make and Make and
 //! Expand, the task bar's Image Trace, the Image Trace panel's Trace and presets) is prepared at
 //! once, so a bad setting fails before anything runs, and traced on a thread of its own ([`start`])
-//! while editing goes on: the status bar shows it, and after [`DELAY`] a progress window shows how
+//! while editing goes on: the status bar shows it, and after the progress window's delay it shows how
 //! many of its colours are traced, with Cancel (also Esc, `imageTrace.cancelRuns`) and Continue in
 //! Background (`imageTrace.hideRuns`). A new trace of the same object cancels the one before it.
 //!
@@ -24,10 +24,7 @@ use vectorcraft_doc::cancel::CancelToken;
 use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::{TraceRun, Traced};
 
-use crate::VectorcraftApp;
-use crate::export_progress::{self, Pressed};
-
-pub use crate::export_progress::DELAY;
+use crate::{VectorcraftApp, export_progress};
 
 /// What the status bar and the progress window say.
 const LABEL: &str = "Tracing the image";
@@ -37,7 +34,8 @@ type Done = (TraceRun, Result<Traced, String>);
 
 /// A trace running.
 pub struct Running {
-    id: u64,
+    /// [`crate::export_progress::now`] when it started: the progress window's delay counts from it.
+    pub(crate) started: f64,
     /// The document it traces in ([`vectorcraft_engine::DocState::uid`]) and the object.
     doc: u64,
     target: NodeId,
@@ -73,7 +71,6 @@ impl Running {
 #[derive(Default)]
 pub struct TraceRuns {
     pub running: Vec<Running>,
-    next_id: u64,
     /// Set by unit tests whose app traces off the UI thread.
     pub(crate) off_the_ui_thread: bool,
     /// The status bar's message the latest Image Trace with notes left, with
@@ -128,9 +125,8 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
             let _ = tx.send((run, traced));
         })
         .map_err(|e| e.to_string())?;
-    let runs = &mut app.trace_runs;
-    runs.next_id += 1;
-    runs.running.push(Running { id: runs.next_id, doc, target, token, superseded: false, steps, from_panel, hidden: false, done });
+    let started = crate::export_progress::now();
+    app.trace_runs.running.push(Running { started, doc, target, token, superseded: false, steps, from_panel, hidden: false, done });
     // This frame may have asked for its next one before the trace started (`tick`): ask now.
     if let Some(ctx) = &app.ui_ctx {
         ctx.request_repaint();
@@ -144,7 +140,7 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
 /// dialog is open (its OK acts on the active document, which a trace's result changes), nor while
 /// an interaction is open or a tool drags with the pointer button held, as [`crate::placing::poll`].
 pub fn poll(app: &mut VectorcraftApp) {
-    if app.ui.dialog.is_some() || app.session.in_interaction() || (app.session.tool_busy() && app.session.pointer_held()) {
+    if app.any_dialog_open() || app.session.in_interaction() || (app.session.tool_busy() && app.session.pointer_held()) {
         return;
     }
     let mut i = 0;
@@ -241,44 +237,20 @@ pub fn any_shown(app: &VectorcraftApp) -> bool {
     app.trace_runs.running.iter().any(Running::shown)
 }
 
-/// The progress window of the first trace it shows, once that has run for [`DELAY`]. Not while a
-/// dialog, the export progress window or a plug-in's is open: never two modals at once.
-pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(first) = app.trace_runs.running.iter().find(|r| r.shown()) else { return };
-    let now = ctx.input(|i| i.time);
-    let since = ctx.data_mut(|m| {
-        let seen = m.get_temp_mut_or_insert_with(egui::Id::unique("trace-run-seen"), || (first.id, now));
-        if seen.0 != first.id {
-            *seen = (first.id, now);
-        }
-        seen.1
-    });
-    let exporting = app.background.jobs.iter().any(|j| j.progress.is_some() && !j.hidden && !j.cancelled());
-    if now - since < DELAY || app.ui.dialog.is_some() || exporting || crate::plugin_runs::any_shown(app) {
-        return;
-    }
+/// The progress window of the first trace it shows; `export_progress::show` decides when it
+/// shows and runs the command of the button pressed.
+pub(crate) fn shown(app: &VectorcraftApp) -> Option<export_progress::Shown> {
+    let first = app.trace_runs.running.iter().find(|r| r.shown())?;
     let fraction = first.fraction();
-    let t = crate::theme::Tokens::get(ctx);
-    let heading = format!("{}…", crate::i18n::msg(LABEL));
-    let pressed = export_progress::window(ctx, "trace-run-progress", &heading, |ui| match fraction {
-        Some(frac) => {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(tl!("Tracing the colors…")).color(t.text_dim));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(egui::RichText::new(format!("{:.0} %", frac * 100.0)).color(t.text_dim));
-                });
-            });
-            ui.add_space(4.0);
-            ui.add(egui::ProgressBar::new(frac).desired_width(360.0).desired_height(6.0).fill(t.accent));
-        }
-        None => export_progress::busy(ui, tl!("Preparing the image…")),
-    });
-    let id = match pressed {
-        Some(Pressed::Cancel) => "imageTrace.cancelRuns",
-        Some(Pressed::Hide) => "imageTrace.hideRuns",
-        None => return,
-    };
-    if let Err(e) = app.run(id, json!({})) {
-        app.status(e);
-    }
+    let step = if fraction.is_some() { tl!("Tracing the colors…") } else { tl!("Preparing the image…") };
+    Some(export_progress::Shown {
+        title: format!("{}…", crate::i18n::msg(LABEL)),
+        step: step.to_string(),
+        fraction,
+        counts: None,
+        queued: None,
+        started: first.started,
+        cancel: "imageTrace.cancelRuns",
+        hide: Some("imageTrace.hideRuns"),
+    })
 }

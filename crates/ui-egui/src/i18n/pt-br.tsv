@@ -207,6 +207,7 @@
 	Anti-alias Rasters	Suavizar Rasters
 	Anti-aliased Artwork	Arte Suavizada
 	Anti-aliasing Method	Método de Suavização
+@id	language.name	Português (Brasil)
 antiAlias	Sharp	Nítido
 	Crisp	Definido
 	Strong	Forte
@@ -7222,7 +7223,7 @@ axis	Y Axis	Eixo Y
 @msg	module is {_1} bytes (limit {_2})	o módulo tem {_1} bytes (limite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	precisa de aprovação: pede {0}, que o usuário concede ao instalá-lo separadamente
 @msg	not JSON: {e}	não é JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	não é um binário WebAssembly (falta o cabeçalho \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	não é um binário WebAssembly (falta o cabeçalho \\0asm)
 @msg	parameter `{k}`: {what}	parâmetro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parâmetro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	os parâmetros do plug-in devem ser um objeto JSON
@@ -9030,7 +9031,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Não foi possível ler o perfil {name}, então o novo documento tem as configurações padrão: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Armadilha: mais de {_1} pares de objetos estão próximos o bastante para a armadilha, ou objetos demais compartilham uma faixa horizontal; aplique a armadilha a menos objetos por vez
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Caixa e Linhas de Descasque: nenhuma linha de descasque cabe fora da arte, e a caixa de descasque está desativada
-@msg	\ at end of pattern	\ no fim do padrão
+@msg	\\ at end of pattern	\\ no fim do padrão
 @msg	`alignOn` cannot be empty	`alignOn` não pode ficar vazio
 @msg	`alignOn` must be a string	`alignOn` deve ser uma string
 @msg	`align` is start, center or end	`align` é start, center ou end
@@ -9364,7 +9365,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	a CMap has too many mappings	um CMap tem mapeamentos demais
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	um desenho DXF tem uma única origem: passe useArtboards: true para um desenho por prancheta
 @msg	a PDF presets file with over {_1} presets	um arquivo de predefinições de PDF com mais de {_1} predefinições
-@msg	a \u escape needs four hexadecimal digits	um escape \u precisa de quatro dígitos hexadecimais
+@msg	a \\u escape needs four hexadecimal digits	um escape \\u precisa de quatro dígitos hexadecimais
 @msg	a batch preview cannot switch documents	uma prévia de lote não pode trocar de documento
 @msg	a brush named `{nn}` exists	já existe um pincel chamado `{nn}`
 @msg	a comma in an XPath expression must separate function arguments	uma vírgula em uma expressão XPath deve separar argumentos de função

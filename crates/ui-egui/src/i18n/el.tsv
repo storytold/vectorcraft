@@ -188,6 +188,7 @@
 	Anti-alias Rasters	Εξομάλυνση ακμών εικόνων ράστερ
 	Anti-aliased Artwork	Γραφικά με εξομαλυμένες ακμές
 	Anti-aliasing Method	Μέθοδος εξομάλυνσης ακμών
+@id	language.name	Ελληνικά
 antiAlias	Sharp	Οξεία
 	Crisp	Καθαρή
 	Strong	Έντονη
@@ -7312,7 +7313,7 @@ axis	Y Axis	Άξονας Y
 @msg	module is {_1} bytes (limit {_2})	η λειτουργική μονάδα έχει {_1} byte (όριο {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	χρειάζεται έγκριση: ζητά {0}, που ο χρήστης παραχωρεί όταν το εγκαθιστά μόνο του
 @msg	not JSON: {e}	δεν είναι JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \\0asm)
 @msg	parameter `{k}`: {what}	παράμετρος `{k}`: {what}
 @msg	parameter `{name}`: {what}	παράμετρος `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	οι παράμετροι του προσθέτου πρέπει να είναι αντικείμενο JSON

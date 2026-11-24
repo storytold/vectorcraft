@@ -225,6 +225,7 @@
 	Anti-alias Rasters	Khử răng cưa ảnh raster
 	Anti-aliased Artwork	Tác phẩm khử răng cưa
 	Anti-aliasing Method	Phương pháp khử răng cưa
+@id	language.name	Tiếng Việt
 antiAlias	Sharp	Sắc nét
 	Crisp	Rõ nét
 	Strong	Đậm
@@ -6973,7 +6974,7 @@ axis	Y Axis	Trục Y
 @msg	module is {_1} bytes (limit {_2})	mô-đun có {_1} byte (giới hạn {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cần phê duyệt: plug-in yêu cầu {0}, quyền mà người dùng cấp khi cài đặt riêng plug-in đó
 @msg	not JSON: {e}	không phải JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	không phải tệp nhị phân WebAssembly (thiếu phần đầu \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	không phải tệp nhị phân WebAssembly (thiếu phần đầu \\0asm)
 @msg	parameter `{k}`: {what}	tham số `{k}`: {what}
 @msg	parameter `{name}`: {what}	tham số `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	tham số plug-in phải là một đối tượng JSON

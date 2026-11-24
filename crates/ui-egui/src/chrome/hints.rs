@@ -1,5 +1,15 @@
-use super::status_bar::{ANIMATED_ZOOM_HINT, clipped_label};
-use super::{Cow, Sense, Stroke, Tokens, Ui, VectorcraftApp, menus, theme, vec2, widgets};
+use super::status_bar::ANIMATED_ZOOM_HINT;
+use super::{Cow, Ui, VectorcraftApp, menus};
+use craft::behavior::IconId;
+use craft::ui::bars::{Bar, BarKind};
+use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::display::{Elide, Icon, Text};
+use craft::ui::primitives::IconSpec;
+use craft::ui::style::Span;
+
+// PLAN: assumed `SlotKey` is a `&'static str` alias exported by the framework's layout module (hub-w1's slots).
+/// The key of the bottom slot that holds the hint bar.
+pub const HINT_SLOT: craft::ui::runtime::env::SlotKey = "hints";
 
 fn hint_for(tool: &str) -> Option<&'static [(&'static str, bool)]> {
     Some(match tool {
@@ -194,19 +204,18 @@ pub fn hint_strings() -> Vec<&'static str> {
     v
 }
 
-pub(super) fn hint_segments(tool: &str) -> Vec<(Cow<'static, str>, bool)> {
-    let search;
-    let segments = match hint_for(tool) {
-        Some(s) => s,
-        None => {
-            search = match menus::shortcut_of("help.commandPalette") {
-                Some(sc) => [(tl!("Press "), false), (sc, true), (tl!(" to search every command"), false)],
-                None => [(tl!("Use "), false), (tl!("Help › Search Commands…"), true), (tl!(" to search every command"), false)],
-            };
-            &search
-        }
-    };
-    shown_segments(segments)
+pub(super) fn hint_segments(app: &VectorcraftApp, tool: &str) -> Vec<(Cow<'static, str>, bool)> {
+    if let Some(segments) = hint_for(tool) {
+        return shown_segments(segments);
+    }
+    match menus::shortcut_of(app, "help.commandPalette") {
+        Some(chord) => vec![
+            (Cow::Borrowed(tl!("Press ")), false),
+            (Cow::Owned(chord.display(crate::keymap::platform())), true),
+            (Cow::Borrowed(tl!(" to search every command")), false),
+        ],
+        None => shown_segments(&[(tl!("Use "), false), (tl!("Help › Search Commands…"), true), (tl!(" to search every command"), false)]),
+    }
 }
 
 /// The hint bar's segments for `tool` as [`hint_segments`] shows them, the Zoom tool's for animated
@@ -227,41 +236,35 @@ fn shown_segments(segments: &[(&'static str, bool)]) -> Vec<(Cow<'static, str>, 
             }
             match text.rsplit_once('+') {
                 Some((_, key)) if !key.is_empty() => {
-                    let pretty = menus::shown_shortcut(text);
+                    let pretty = crate::keymap::chord_text(text);
                     let shown = pretty.strip_suffix(key).map_or(pretty.clone(), |m| format!("{m}{}", tl!(key)));
                     (Cow::Owned(shown), bold)
                 }
-                _ => (Cow::Owned(menus::shown_shortcut(tl!(text))), bold),
+                _ => (Cow::Owned(crate::keymap::chord_text(tl!(text))), bold),
             }
         })
         .collect()
 }
 
+/// Shows the hint bar: the help icon and one line of the active tool's hint, bold segments in the strong face.
 pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
-    let panel = egui::Panel::bottom("hint_bar")
-        .exact_size(28.0)
-        .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0, t.border)))
-        .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                let (r, _) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
-                ui.painter().circle_stroke(r.center(), 7.0, Stroke::new(1.2, t.text));
-                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", theme::semibold(11.0), t.text);
-                ui.add_space(6.0);
-                let mut job = egui::text::LayoutJob::default();
-                let segments = if let Some(d) = app.ui.dialog.as_ref().filter(|d| crate::dialogs::revolve_gizmo::active(d)) {
-                    vec![(crate::dialogs::revolve_gizmo::hint(d).into(), false)]
-                } else {
-                    let tool = app.session.tool_id();
-                    let hint = if tool == "zoom" && crate::canvas::animated_zoom(&app.session.prefs) { ANIMATED_ZOOM_HINT } else { tool };
-                    hint_segments(hint)
-                };
-                for (txt, bold) in segments {
-                    let font = if bold { theme::semibold(12.5) } else { egui::FontId::proportional(12.5) };
-                    job.append(&txt, 0.0, egui::TextFormat { font_id: font, color: if bold { t.text_strong } else { t.text }, ..Default::default() });
-                }
-                clipped_label(ui, job);
-            });
-        });
-    widgets::set_menu_floor(ui.ctx(), panel.response.rect.top());
+    let segments: Vec<(Cow<'static, str>, bool)> = match crate::dialogs::three_d::hint(app) {
+        Some(hint) => vec![(Cow::Borrowed(hint), false)],
+        None => {
+            let tool = app.session.tool_id();
+            let hint = if tool == "zoom" && crate::canvas::animated_zoom(&app.session.prefs) { ANIMATED_ZOOM_HINT } else { tool };
+            hint_segments(app, hint)
+        }
+    };
+    Bar::new(tl!("Help Bar"), BarKind::Status).show(ui, |ui, _| {
+        Icon::new(IconSpec::svg(IconId::new("dc-help"))).show(ui);
+        let spans = segments
+            .iter()
+            .map(|(text, bold)| {
+                let span = Span::new(text.clone());
+                if *bold { span.strong() } else { span }
+            })
+            .collect();
+        Text::styled(spans).elide(Elide::End).show(ui);
+    });
 }
