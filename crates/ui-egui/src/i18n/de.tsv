@@ -1118,6 +1118,7 @@ font-technology	Variable	Variabel
 	Embed Fonts (Glyphs Used)	Schriften einbetten (verwendete Glyphen)
 	Embed ICC Profile	ICC-Profil einbetten
 	Embed ICC Profiles	ICC-Profile einbetten
+	Embed Preview	Vorschau einbetten
 	Embed Image	Bild einbetten
 	Embed Image(s)	Bild(er) einbetten
 	Embed page thumbnails	Seitenminiaturen einbetten
@@ -3430,6 +3431,7 @@ digits	Malayalam	Malayalam
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„Original bearbeiten“ öffnet eine verknüpfte Datei im Standardprogramm des Systems für ihren Typ; ausgeschaltet öffnet sich ein verknüpftes Rasterbild in PhotoCraft, sofern es installiert ist.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Eine von einer älteren VectorCraft-Version gespeicherte Datei öffnet sich mit [Converted] hinter ihrem Namen, und „Speichern“ fragt nach dem Speicherort; ausgeschaltet ersetzt „Speichern“ die Datei.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-Dateien und -Vorlagen werden komprimiert und damit kleiner gespeichert, sofern ein Speichern nichts anderes angibt; was für Versionen gespeichert wird, die keine komprimierten Dateien öffnen, bleibt unkomprimiert.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft-Dateien und -Vorlagen werden mit einem Bild der ersten Zeichenfläche von höchstens 256 Pixeln gespeichert, das der Finder und andere Dateibrowser zeigen, sofern ein Speichern nichts anderes angibt.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopieren und Ausschneiden geben anderen Apps auch den SVG-Code des Bildmaterials; auf dem Desktop wird der Code nicht als Text kopiert, wenn das Bildmaterial mehr als 1 MiB Bilder einbettet.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Unter Windows geben Kopieren und Ausschneiden anderen Apps auch ein PDF des Bildmaterials; die anderen Plattformen kopieren noch kein PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft speichert diese Wahl, aber Kopieren und Ausschneiden verwenden noch kein Format der älteren Vektorzwischenablage.

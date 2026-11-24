@@ -3698,6 +3698,7 @@ antiAlias	Sharp	Scherp
 	{secs} sec	{secs} sec
 	Create PDF-Compatible File	PDF-compatibel bestand maken
 	Embed ICC Profiles	ICC-profielen insluiten
+	Embed Preview	Voorbeeld insluiten
 	File Name:	Bestandsnaam:
 	Save As	Opslaan als
 	Save as Template	Opslaan als sjabloon
@@ -5278,6 +5279,7 @@ font-technology	Variable	Variabel
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Origineel bewerken opent een gekoppeld bestand in de standaardapp van het systeem voor dat type; uit opent een gekoppelde rasterafbeelding in PhotoCraft als dat geïnstalleerd is.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Een bestand dat een oudere VectorCraft-versie heeft opgeslagen, opent met [Converted] achter de naam, en Opslaan vraagt waar het moet worden opgeslagen; uit vervangt Opslaan het bestand.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-bestanden en -sjablonen worden gecomprimeerd en dus kleiner opgeslagen, tenzij een opslag iets anders zegt; wat wordt opgeslagen voor versies die geen gecomprimeerde bestanden openen, blijft ongecomprimeerd.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft-bestanden en -sjablonen worden opgeslagen met een afbeelding van het eerste tekenbord, hoogstens 256 pixels, die de Finder en andere bestandsbrowsers tonen, tenzij een opslag iets anders zegt.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiëren en Knippen geven andere apps ook de SVG-code van de illustratie; op de desktop wordt de code niet als tekst gekopieerd als de illustratie meer dan 1 MiB aan afbeeldingen insluit.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Op Windows geven Kopiëren en Knippen andere apps ook een PDF van de illustratie; de andere platforms kopiëren nog geen PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft slaat deze keuze op, maar Kopiëren en Knippen gebruiken nog geen indeling van het verouderde vectorklembord.

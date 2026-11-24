@@ -1078,6 +1078,7 @@ font-technology	Variable	Μεταβλητές
 	Embed Fonts (Glyphs Used)	Ενσωμάτωση γραμματοσειρών (για τους χρησιμοποιημένους γλύφους)
 	Embed ICC Profile	Ενσωμάτωση προφίλ ICC
 	Embed ICC Profiles	Ενσωμάτωση προφίλ ICC
+	Embed Preview	Ενσωμάτωση προεπισκόπησης
 	Embed Image	Ενσωμάτωση εικόνας
 	Embed Image(s)	Ενσωμάτωση εικόνας/εικόνων
 	Embed page thumbnails	Ενσωμάτωση μικρογραφιών σελίδων
@@ -4283,6 +4284,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Η Επεξεργασία πρωτοτύπου ανοίγει ένα συνδεδεμένο αρχείο στην προεπιλεγμένη εφαρμογή του συστήματος για τον τύπο του· όταν είναι ανενεργό, μια συνδεδεμένη εικόνα raster ανοίγει στο PhotoCraft, αν είναι εγκατεστημένο.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Ένα αρχείο αποθηκευμένο από παλαιότερη έκδοση του VectorCraft ανοίγει με [Converted] μετά το όνομά του, και η Αποθήκευση ρωτά πού να το αποθηκεύσει· όταν είναι ανενεργό, η Αποθήκευση αντικαθιστά το αρχείο.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Τα αρχεία και τα πρότυπα του VectorCraft αποθηκεύονται συμπιεσμένα, άρα μικρότερα, εκτός αν μια αποθήκευση ορίζει κάτι άλλο· οι αποθηκεύσεις για εκδόσεις που δεν ανοίγουν συμπιεσμένα αρχεία μένουν ασυμπίεστες.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	Τα αρχεία και τα πρότυπα του VectorCraft αποθηκεύονται με μια εικόνα του πρώτου πίνακα σχεδίασης, έως 256 pixel, που δείχνουν το Finder και άλλα προγράμματα περιήγησης αρχείων, εκτός αν μια αποθήκευση ορίζει κάτι άλλο.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Η Αντιγραφή και η Αποκοπή δίνουν και κώδικα SVG του σχεδίου σε άλλες εφαρμογές· στην επιφάνεια εργασίας ο κώδικας δεν αντιγράφεται ως κείμενο όταν το σχέδιο ενσωματώνει εικόνες άνω του 1 MiB.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Στα Windows, η Αντιγραφή και η Αποκοπή δίνουν και ένα PDF του σχεδίου σε άλλες εφαρμογές· οι άλλες πλατφόρμες δεν αντιγράφουν ακόμη PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	Το VectorCraft αποθηκεύει αυτή την επιλογή, αλλά η Αντιγραφή και η Αποκοπή δεν χρησιμοποιούν ακόμη μορφή του πρόχειρου διανυσμάτων παλαιού τύπου.

@@ -3705,6 +3705,7 @@ antiAlias	Sharp	Tajam
 	{secs} sec	{secs} dtk
 	Create PDF-Compatible File	Buat file kompatibel PDF
 	Embed ICC Profiles	Sematkan profil ICC
+	Embed Preview	Sematkan pratinjau
 	File Name:	Nama file:
 	Save As	Simpan sebagai
 	Save as Template	Simpan sebagai templat
@@ -5279,6 +5280,7 @@ font-technology	Variable	Variabel
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Edit asli membuka berkas tertaut di aplikasi bawaan sistem untuk jenisnya; jika nonaktif, gambar raster tertaut terbuka di PhotoCraft jika terpasang.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Berkas yang disimpan oleh versi VectorCraft lama terbuka dengan [Converted] di belakang namanya, dan Simpan menanyakan tempat menyimpannya; jika nonaktif, Simpan menimpa berkas itu.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Berkas dan templat VectorCraft disimpan terkompresi sehingga lebih kecil, kecuali penyimpanan menentukan lain; penyimpanan untuk versi yang tidak bisa membuka berkas terkompresi tetap tidak terkompresi.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	Berkas dan templat VectorCraft disimpan dengan gambar artboard pertama, paling besar 256 piksel, yang ditampilkan Finder dan penjelajah berkas lain, kecuali penyimpanan menentukan lain.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Salin dan Potong juga memberi aplikasi lain kode SVG dari karya; di desktop, kode tidak disalin sebagai teks jika karya menyematkan gambar lebih dari 1 MiB.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Di Windows, Salin dan Potong juga memberi aplikasi lain PDF dari karya; platform lain belum menyalin PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft menyimpan pilihan ini, tetapi Salin dan Potong belum memakai format clipboard vektor lama.

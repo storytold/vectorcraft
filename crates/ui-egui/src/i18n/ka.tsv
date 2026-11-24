@@ -5174,6 +5174,7 @@ antiAlias	Sharp	მკვეთრი
 	{secs} sec	{secs} წმ
 	Create PDF-Compatible File	PDF-თან თავსებადი ფაილის შექმნა
 	Embed ICC Profiles	ICC პროფილების ჩაშენება
+	Embed Preview	წინასწარი ნახვის ჩაშენება
 	File Name:	ფაილის სახელი:
 	Save As	შენახვა როგორც
 	Save as Template	შაბლონად შენახვა
@@ -6660,6 +6661,7 @@ font-technology	Variable	ცვლადი
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	„ორიგინალის რედაქტირება“ მიბმულ ფაილს მისი ტიპისთვის სისტემის ნაგულისხმევ აპში ხსნის; გამორთულისას მიბმული რასტრული გამოსახულება PhotoCraft-ში იხსნება, თუ ის დაინსტალირებულია.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraft-ის ძველი ვერსიით შენახული ფაილი სახელის შემდეგ [Converted]-ით იხსნება, „შენახვა“ კი გეკითხებათ, სად შეინახოს; გამორთულისას „შენახვა“ ფაილს ცვლის.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-ის ფაილები და შაბლონები შეკუმშულად, ანუ უფრო მცირე ზომით ინახება, თუ შენახვა სხვას არ მიუთითებს; შენახვები ვერსიებისთვის, რომლებიც შეკუმშულ ფაილებს ვერ ხსნის, შეუკუმშავი რჩება.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft-ის ფაილები და შაბლონები ინახება პირველი სამუშაო დაფის სურათით, მაქსიმუმ 256 პიქსელი, რომელსაც Finder და სხვა ფაილების ბრაუზერები აჩვენებს, თუ შენახვა სხვას არ მიუთითებს.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	კოპირება და ამოჭრა სხვა აპებს ნახატის SVG კოდსაც აძლევს; დესკტოპზე კოდი ტექსტად არ კოპირდება, როცა ნახატში 1 MiB-ზე მეტი სურათია ჩაშენებული.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows-ზე კოპირება და ამოჭრა სხვა აპებს ნახატის PDF-საც აძლევს; სხვა პლატფორმები PDF-ს ჯერ არ აკოპირებს.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft ამ არჩევანს ინახავს, მაგრამ კოპირება და ამოჭრა ძველი ვექტორული ბუფერის ფორმატს ჯერ არ იყენებს.

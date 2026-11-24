@@ -1444,6 +1444,7 @@ arrowhead	Target	Céltábla
 	Embed Fonts (Glyphs Used)	Betűtípusok beágyazása (használt glifák)
 	Embed ICC Profile	ICC-profil beágyazása
 	Embed ICC Profiles	ICC-profilok beágyazása
+	Embed Preview	Előnézet beágyazása
 	Embed Image	Kép beágyazása
 	Embed Image(s)	Kép(ek) beágyazása
 	Embed page thumbnails	Oldalbélyegképek beágyazása
@@ -4053,6 +4054,7 @@ mark-style	Japanese	Japán
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Az Eredeti szerkesztése a csatolt fájlt a rendszer adott típushoz tartozó alapértelmezett alkalmazásában nyitja meg; kikapcsolva a csatolt raszterkép a PhotoCraftban nyílik meg, ha telepítve van.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	A VectorCraft egy régebbi verziójával mentett fájl a neve után [Converted] jelöléssel nyílik meg, és a Mentés megkérdezi, hova mentse; kikapcsolva a Mentés felülírja a fájlt.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	A VectorCraft-fájlok és -sablonok tömörítve, így kisebb méretben mentődnek, hacsak a mentés mást nem ad meg; a tömörített fájlokat meg nem nyitó verziókhoz készülő mentések tömörítetlenek maradnak.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	A VectorCraft-fájlok és -sablonok az első rajztábla legfeljebb 256 képpontos képével mentődnek, amelyet a Finder és más fájlböngészők megjelenítenek, hacsak a mentés mást nem ad meg.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	A Másolás és a Kivágás a grafika SVG-kódját is átadja más alkalmazásoknak; asztali gépen a kód nem másolódik szövegként, ha a grafika 1 MiB-nál több képet ágyaz be.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windowson a Másolás és a Kivágás a grafika PDF-jét is átadja más alkalmazásoknak; a többi platform még nem másol PDF-et.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	A VectorCraft menti ezt a választást, de a Másolás és a Kivágás még nem használ régi vektoros vágólapformátumot.

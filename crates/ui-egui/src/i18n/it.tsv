@@ -1155,6 +1155,7 @@ font-technology	Variable	Variabili
 	Embed Fonts (Glyphs Used)	Incorpora font (glifi utilizzati)
 	Embed ICC Profile	Incorpora profilo ICC
 	Embed ICC Profiles	Incorpora profili ICC
+	Embed Preview	Incorpora anteprima
 	Embed Image	Incorpora immagine
 	Embed Image(s)	Incorpora immagini
 	Embed page thumbnails	Incorpora miniature delle pagine
@@ -3515,6 +3516,7 @@ digits	Malayalam	Malayalam
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Modifica originale apre un file collegato nell’app predefinita del sistema per il suo tipo; se disattivata, un’immagine raster collegata si apre in PhotoCraft, se installato.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Un file salvato da una versione precedente di VectorCraft si apre con [Converted] dopo il nome, e Salva chiede dove salvarlo; se disattivata, Salva sostituisce il file.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	I file e i modelli VectorCraft vengono salvati compressi, quindi più piccoli, salvo che un salvataggio indichi altrimenti; i salvataggi per versioni che non aprono file compressi restano non compressi.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	I file e i modelli VectorCraft vengono salvati con un’immagine della prima tavola da disegno, di al massimo 256 pixel, che il Finder e altri browser di file mostrano, salvo che un salvataggio indichi altrimenti.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Copia e Taglia danno anche ad altre app il codice SVG della grafica; sul desktop il codice non viene copiato come testo quando la grafica incorpora più di 1 MiB di immagini.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Su Windows, Copia e Taglia danno anche ad altre app un PDF della grafica; le altre piattaforme non copiano ancora un PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft salva questa scelta, ma Copia e Taglia non usano ancora un formato degli appunti vettoriali tradizionali.

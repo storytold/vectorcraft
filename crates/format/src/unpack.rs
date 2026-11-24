@@ -1,7 +1,7 @@
 //! Reading a file: its JSON, then the entries of the data after it (v4) one by one. A compressed
 //! file is unpacked as a stream: the JSON into one buffer, each entry straight into its own, so
-//! the file is never held unpacked as a whole. Limits apply per part ([`MAX_JSON`], [`MAX_BLOB`],
-//! [`MAX_BLOBS`]), guarding against decompression bombs.
+//! the file is never held unpacked as a whole. Limits apply per part ([`crate::MAX_JSON`], [`MAX_BLOB`],
+//! [`crate::MAX_BLOBS`], or the smaller [`ReadCaps`] a reader gives), guarding against decompression bombs.
 
 use std::collections::HashMap;
 use std::io::{self, Read};
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use craft_vectorcraft_format::{Entries, marker_at, split_tail};
 use flate2::read::GzDecoder;
 
-use crate::{BLOB_MAGIC, FormatError, MAX_BLOB, MAX_BLOBS, MAX_JSON, MAX_UNPACKED, is_compressed};
+use crate::{BLOB_MAGIC, FormatError, MAX_BLOB, MAX_BLOBS, MAX_JSON, MAX_UNPACKED, ReadCaps, is_compressed};
 
 /// Bytes unpacked at a time while looking for the end of the JSON.
 const CHUNK: u64 = 64 << 10;
@@ -65,18 +65,37 @@ enum Tail<'a> {
 }
 
 impl<'a> Unpacked<'a> {
-    /// Open `bytes` (compressed or not), with the JSON part capped at [`MAX_JSON`].
+    /// Open `bytes` (compressed or not), within the default caps ([`crate::MAX_JSON`] for the JSON
+    /// part).
+    #[cfg(test)]
     pub(crate) fn new(bytes: &'a [u8]) -> Result<Self, FormatError> {
-        Self::within(bytes, MAX_JSON)
+        Self::open(bytes, ReadCaps::default())
     }
 
-    /// Open `bytes` with the JSON part capped at `max_json` bytes instead of [`MAX_JSON`], so
-    /// the cap is exercised wherever the test runs: a compressed file's JSON is deserialized into
-    /// a document several times its size, and the cap is what keeps that off the address space
-    /// (#3587).
+    /// Open `bytes` with the JSON part capped at `max_json` bytes instead of [`crate::MAX_JSON`],
+    /// so the cap is exercised wherever the test runs: a compressed file's JSON is deserialized
+    /// into a document several times its size, and the cap is what keeps that off the address
+    /// space (#3587).
+    #[cfg(test)]
     fn within(bytes: &'a [u8], max_json: u64) -> Result<Self, FormatError> {
-        let (json, tail) = Self::open(bytes, max_json, MAX_UNPACKED)?;
+        let (json, tail) = Self::split(bytes, max_json, MAX_UNPACKED)?;
         Ok(Self { json, tail, max_blobs: MAX_BLOBS, max_work: max_json.saturating_add(MAX_BLOBS).min(MAX_WORK), capped: false })
+    }
+
+    /// Open `bytes` (compressed or not) within `caps` (each at most its default): the JSON part
+    /// unpacks to at most `caps.json` bytes, and the entries after it are read within
+    /// `caps.blobs` ([`Self::entries`]). An uncompressed file's JSON is already in memory, so the
+    /// default cap doesn't apply to it, but a tighter one does: the document read from it is
+    /// several times its size.
+    pub(crate) fn open(bytes: &'a [u8], caps: ReadCaps) -> Result<Self, FormatError> {
+        let caps = caps.within_defaults();
+        if !is_compressed(bytes) && caps.json < ReadCaps::default().json && split_tail(bytes).0.len() as u64 > caps.json {
+            return Err(FormatError::TooBig);
+        }
+        // A file unpacked whole: within what the JSON and the entries may have together.
+        let whole = MAX_UNPACKED.min(caps.json.saturating_add(caps.blobs));
+        let (json, tail) = Self::split(bytes, caps.json, whole)?;
+        Ok(Self { json, tail, max_blobs: caps.blobs, max_work: caps.json.saturating_add(caps.blobs).min(MAX_WORK), capped: false })
     }
 
     /// [`Self::within`], with a compressed file that lacks the marker after its JSON (unpacked
@@ -85,12 +104,12 @@ impl<'a> Unpacked<'a> {
     /// at `max_json` and `max_blobs` together instead of [`MAX_WORK`]. A streamed file whose data
     /// after the JSON unpacks to more than `max_blobs` bytes is refused when its entries are read.
     pub(crate) fn within_capped(bytes: &'a [u8], max_json: u64, max_whole: u64, max_blobs: u64) -> Result<Self, FormatError> {
-        let (json, tail) = Self::open(bytes, max_json, max_whole)?;
+        let (json, tail) = Self::split(bytes, max_json, max_whole)?;
         Ok(Self { json, tail, max_blobs, max_work: max_json.saturating_add(max_blobs).min(MAX_WORK), capped: true })
     }
 
     /// The JSON of `bytes` and where the data after it is, within `max_json` and `max_whole`.
-    fn open(bytes: &'a [u8], max_json: u64, max_whole: u64) -> Result<(Json<'a>, Tail<'a>), FormatError> {
+    fn split(bytes: &'a [u8], max_json: u64, max_whole: u64) -> Result<(Json<'a>, Tail<'a>), FormatError> {
         if !is_compressed(bytes) {
             let (json, tail) = split_tail(bytes);
             return Ok((Json::Borrowed(json), Tail::Slice(tail)));
@@ -152,8 +171,8 @@ impl<'a> Unpacked<'a> {
     /// The entries `[offset, length]` of the data after the JSON → each one's bytes, `None` for
     /// one that isn't there (the data ends before it). Entries naming the same bytes (only in
     /// hand-made files) share one buffer. Errors: the compressed data is damaged, or the entries
-    /// of a compressed file are larger than [`MAX_BLOB`] each or [`MAX_BLOBS`] together, or those
-    /// of an uncompressed file larger together than both [`MAX_BLOBS`] and the data, or the
+    /// of a compressed file are larger than [`MAX_BLOB`] each or the caps' `blobs` together, or
+    /// those of an uncompressed file larger together than both the caps' `blobs` and the data, or the
     /// distinct entries found larger together than the data they are in (overlapping entries
     /// would copy the same bytes once each, #3574). Entries are read in the order of their
     /// offsets, each straight into its own buffer. A capped file ([`Self::within_capped`]) takes
@@ -181,6 +200,12 @@ impl<'a> Unpacked<'a> {
         };
         match self.tail {
             Tail::Slice(tail) => {
+                // In memory already: the default cap doesn't limit the entries (they are copied
+                // from the data, no more than it has), but a tighter one in `ReadCaps` does, as
+                // for the JSON (`within_capped` caps compressed files only).
+                if !capped && max_blobs < MAX_BLOBS {
+                    within(wanted, MAX_BLOB.min(max_blobs), max_blobs)?;
+                }
                 within(wanted, u64::MAX, max_blobs.max(tail.len() as u64))?;
                 in_memory(tail, &mut out)?;
             }
@@ -249,7 +274,8 @@ struct Stream<'a> {
     file: &'a [u8],
     /// Where the data after the JSON starts in the unpacked stream.
     at: u64,
-    /// Bytes that may still be unpacked ([`MAX_WORK`] in all): the entries' own, the gaps before
+    /// Bytes that may still be unpacked ([`MAX_WORK`] in all, or the caps' JSON and `blobs`
+    /// together): the entries' own, the gaps before
     /// them, and the stream from its start again for each entry behind the one before.
     left: u64,
 }
@@ -310,6 +336,7 @@ mod tests {
     use std::io::Write;
 
     use super::*;
+    use crate::MAX_JSON;
 
     fn gzip(bytes: &[u8]) -> Vec<u8> {
         let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());

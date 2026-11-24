@@ -3295,6 +3295,7 @@ antiAlias	Sharp	Ostré
 	{secs} sec	{secs} s
 	Create PDF-Compatible File	Vytvořit soubor kompatibilní s PDF
 	Embed ICC Profiles	Vložit profily ICC
+	Embed Preview	Vložit náhled
 	File Name:	Název souboru:
 	Save As	Uložit jako
 	Save as Template	Uložit jako šablonu
@@ -4955,6 +4956,7 @@ font-technology	Variable	Variabilní
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Upravit originál otevře propojený soubor ve výchozí aplikaci systému pro jeho typ; při vypnutí se propojený rastrový obraz otevře v PhotoCraftu, pokud je nainstalován.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Soubor uložený starší verzí VectorCraftu se otevře s [Converted] za názvem a Uložit se zeptá, kam ho uložit; při vypnutí Uložit soubor nahradí.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Soubory a šablony VectorCraftu se ukládají komprimované, a proto menší, pokud uložení neurčí jinak; uložení pro verze, které komprimované soubory neotevřou, zůstávají nekomprimovaná.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	Soubory a šablony VectorCraftu se ukládají s obrázkem první pracovní plochy, nejvýše 256 pixelů, který zobrazuje Finder a další prohlížeče souborů, pokud uložení neurčí jinak.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopírovat a Vyjmout předají ostatním aplikacím i kód SVG kresby; na desktopu se kód nekopíruje jako text, když kresba vkládá obrazy o více než 1 MiB.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Ve Windows Kopírovat a Vyjmout předají ostatním aplikacím i PDF kresby; ostatní platformy PDF zatím nekopírují.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft tuto volbu uloží, ale Kopírovat a Vyjmout zatím nepoužívají formát starší vektorové schránky.

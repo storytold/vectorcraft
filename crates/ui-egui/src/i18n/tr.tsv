@@ -1107,6 +1107,7 @@ font-technology	Variable	Değişken
 	Embed Fonts (Glyphs Used)	Gömülü Yazı Tipleri (Kullanılan Glifler)
 	Embed ICC Profile	ICC Profilini Yerleştirin
 	Embed ICC Profiles	ICC Profillerini Göm
+	Embed Preview	Önizlemeyi Göm
 	Embed Image	Resim Göm
 	Embed Image(s)	Resim(ler)i Göm
 	Embed page thumbnails	Sayfa küçük resimlerini yerleştirme
@@ -3231,6 +3232,7 @@ digits	Malayalam	Malayalam
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Orijinali Düzenle, bağlı bir dosyayı sistemin o tür için varsayılan uygulamasında açar; kapalıyken bağlı bir raster görüntü, kuruluysa PhotoCraft'ta açılır.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraft'ın eski bir sürümüyle kaydedilmiş bir dosya, adının ardında [Converted] ile açılır ve Kaydet nereye kaydedileceğini sorar; kapalıyken Kaydet dosyanın üzerine yazar.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft dosyaları ve şablonları, bir kayıt aksini belirtmedikçe sıkıştırılarak ve böylece daha küçük kaydedilir; sıkıştırılmış dosyaları açamayan sürümler için yapılan kayıtlar sıkıştırılmadan kalır.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft dosyaları ve şablonları, bir kayıt aksini belirtmedikçe, Finder ve diğer dosya tarayıcılarının gösterdiği, ilk çalışma yüzeyinin en fazla 256 piksellik bir resmiyle kaydedilir.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopyala ve Kes, çizimin SVG kodunu da diğer uygulamalara verir; masaüstünde, çizim 1 MiB'tan fazla görüntü gömdüğünde kod metin olarak kopyalanmaz.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows'ta Kopyala ve Kes, çizimin PDF'ini de diğer uygulamalara verir; diğer platformlar henüz PDF kopyalamaz.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft bu seçimi kaydeder, ancak Kopyala ve Kes henüz eski vektör panosu biçimini kullanmaz.

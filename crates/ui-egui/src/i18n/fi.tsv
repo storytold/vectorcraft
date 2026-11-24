@@ -3237,6 +3237,7 @@ antiAlias	Sharp	Terävä
 	{secs} sec	{secs} s
 	Create PDF-Compatible File	Luo PDF-yhteensopiva tiedosto
 	Embed ICC Profiles	Upota ICC-profiilit
+	Embed Preview	Upota esikatselu
 	File Name:	Tiedostonimi:
 	Save As	Tallenna nimellä
 	Save as Template	Tallenna mallina
@@ -4866,6 +4867,7 @@ font-technology	Variable	Muuttuvat
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Muokkaa alkuperäistä avaa linkitetyn tiedoston järjestelmän oletussovelluksessa sen tyypin mukaan; pois päältä linkitetty rasterikuva avautuu PhotoCraftissa, jos se on asennettu.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraftin vanhemmalla versiolla tallennettu tiedosto avautuu nimensä perässä [Converted], ja Tallenna kysyy tallennuspaikan; pois päältä Tallenna korvaa tiedoston.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-tiedostot ja -mallipohjat tallennetaan pakattuina, jolloin ne ovat pienempiä, ellei tallennus määrää toisin; tallennukset versioille, jotka eivät avaa pakattuja tiedostoja, jäävät pakkaamattomiksi.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft-tiedostot ja -mallipohjat tallennetaan ensimmäisen piirtoalustan kuvan kanssa, enintään 256 pikseliä, jonka Finder ja muut tiedostoselaimet näyttävät, ellei tallennus määrää toisin.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopioi ja Leikkaa antavat muille sovelluksille myös piirroksen SVG-koodin; työpöydällä koodia ei kopioida tekstinä, kun piirros upottaa yli 1 MiB kuvia.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windowsissa Kopioi ja Leikkaa antavat muille sovelluksille myös piirroksen PDF:n; muut alustat eivät vielä kopioi PDF:ää.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft tallentaa tämän valinnan, mutta Kopioi ja Leikkaa eivät vielä käytä vanhan vektorileikepöydän muotoa.

@@ -4848,6 +4848,7 @@ arrowhead	Feather	पंख
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	मूल एडिट करें लिंक की गई फ़ाइल को उसके प्रकार के लिए सिस्टम के डिफ़ॉल्ट ऐप में खोलता है; बंद होने पर, लिंक की गई रास्टर इमेज PhotoCraft इंस्टॉल होने पर उसमें खुलती है।
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraft के पुराने संस्करण से सेव की गई फ़ाइल अपने नाम के बाद [Converted] के साथ खुलती है, व सेव पूछता है कि उसे कहाँ सेव करें; बंद होने पर, सेव फ़ाइल को बदल देता है।
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	जब तक कोई सेव कुछ और न कहे, VectorCraft फ़ाइलें व टेम्पलेट्स कंप्रेस करके सेव होते हैं, इसलिए छोटे होते हैं; कंप्रेस फ़ाइलें न खोल पाने वाले संस्करणों के लिए सेव बिना कंप्रेस रहते हैं।
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	जब तक कोई सेव कुछ और न कहे, VectorCraft फ़ाइलें व टेम्पलेट्स पहले आर्टबोर्ड की अधिकतम 256 पिक्सेल की तस्वीर के साथ सेव होते हैं, जिसे Finder और दूसरे फ़ाइल ब्राउज़र दिखाते हैं।
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	कॉपी करें और काटें दूसरे ऐप्स को आर्ट का SVG कोड भी देते हैं; डेस्कटॉप पर, आर्ट में 1 MiB से अधिक इमेज एम्बेड होने पर कोड टेक्स्ट के रूप में कॉपी नहीं होता।
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows पर कॉपी करें और काटें दूसरे ऐप्स को आर्ट का PDF भी देते हैं; दूसरे प्लेटफ़ॉर्म अभी PDF कॉपी नहीं करते।
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft यह विकल्प सेव करता है, लेकिन कॉपी करें और काटें अभी विरासत वेक्टर क्लिपबोर्ड फ़ॉर्मेट का उपयोग नहीं करते।
@@ -6285,6 +6286,7 @@ arrowhead	Feather	पंख
 	Use Artboards	आर्टबोर्ड का उपयोग करें
 	Use Black Point Compensation	ब्लैक पॉइंट मुआवजा का उपयोग करें
 	Use Compression	संपीड़न का उपयोग करें
+	Embed Preview	पूर्वावलोकन एम्बेड करें
 	Use Default	डिफ़ॉल्ट का उपयोग करें
 	Use document bleed settings	डॉक्यूमेंट की ब्लीड सेटिंग्स उपयोग करें
 	Use Document Raster Effects Resolution	डॉक्यूमेंट के रास्टर इफ़ेक्ट्स का रिज़ॉल्यूशन उपयोग करें

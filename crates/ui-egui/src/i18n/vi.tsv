@@ -1335,6 +1335,7 @@ font-technology	Variable	Biến thiên
 	Embed Fonts (Glyphs Used)	Nhúng phông (các glyph đã dùng)
 	Embed ICC Profile	Nhúng hồ sơ ICC
 	Embed ICC Profiles	Nhúng các hồ sơ ICC
+	Embed Preview	Nhúng bản xem trước
 	Embed Image	Nhúng ảnh
 	Embed Image(s)	Nhúng ảnh
 	Embed page thumbnails	Nhúng hình thu nhỏ trang
@@ -3827,6 +3828,7 @@ mark-style	Japanese	Kiểu Nhật
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Chỉnh sửa bản gốc mở tệp liên kết trong ứng dụng mặc định của hệ thống cho loại của nó; khi tắt, ảnh raster liên kết mở trong PhotoCraft nếu đã cài.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Tệp được lưu bởi phiên bản VectorCraft cũ hơn sẽ mở với [Converted] sau tên, và Lưu hỏi nơi lưu; khi tắt, Lưu thay thế tệp.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Tệp và mẫu VectorCraft được lưu ở dạng nén nên nhỏ hơn, trừ khi lần lưu chỉ định khác; các lần lưu cho phiên bản không mở được tệp nén vẫn không nén.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	Tệp và mẫu VectorCraft được lưu kèm hình ảnh của bảng vẽ đầu tiên, tối đa 256 điểm ảnh, mà Finder và các trình duyệt tệp khác hiển thị, trừ khi lần lưu chỉ định khác.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Sao chép và Cắt cũng đưa mã SVG của hình cho ứng dụng khác; trên máy tính, mã không được sao chép dưới dạng văn bản khi hình nhúng hơn 1 MiB ảnh.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Trên Windows, Sao chép và Cắt cũng đưa một PDF của hình cho ứng dụng khác; các nền tảng khác chưa sao chép PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft lưu lựa chọn này, nhưng Sao chép và Cắt chưa dùng định dạng bảng tạm vector cũ.

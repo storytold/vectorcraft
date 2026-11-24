@@ -97,6 +97,8 @@ craft-jxl = { workspace = true }
 hayro-ccitt = { workspace = true }
 craft-stream-codecs = { workspace = true }
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
+# The Quick Look extensions' read path, fuzzed with the native files (tests/import_fuzz.rs).
+vectorcraft-quicklook = { workspace = true }
 craft-cdr = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }
 vectorcraft-testkit = { workspace = true }

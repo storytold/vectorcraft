@@ -361,6 +361,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "useCompression",
         "VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.",
     ),
+    (
+        "embedPreview",
+        "VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.",
+    ),
     // Clipboard Handling
     (
         "copyAsSvg",

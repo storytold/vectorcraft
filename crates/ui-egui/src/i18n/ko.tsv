@@ -1826,6 +1826,7 @@ antiAlias	Sharp	날카롭게
 	Embed Fonts (for other applications)	글꼴 포함 (다른 응용 프로그램용)
 	Embed ICC Profile	ICC 프로파일 포함
 	Embed ICC Profiles	ICC 프로파일 포함
+	Embed Preview	미리 보기 포함
 	Embed Image	이미지 포함
 	Embed Image(s)	이미지 포함
 	Embed page thumbnails	페이지 미리 보기 포함
@@ -3472,6 +3473,7 @@ mark-style	Japanese	일본식
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	원본 편집은 연결된 파일을 해당 유형에 대한 시스템 기본 앱에서 엽니다. 끄면 연결된 래스터 이미지는 PhotoCraft가 설치되어 있을 때 PhotoCraft에서 열립니다.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	이전 버전의 VectorCraft로 저장한 파일은 이름 뒤에 [Converted]가 붙어 열리고, 저장은 저장할 위치를 묻습니다. 끄면 저장이 파일을 바꿉니다.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft 파일과 템플릿은 저장에서 달리 지정하지 않는 한 압축되어 더 작게 저장됩니다. 압축 파일을 열 수 없는 버전용으로 저장하면 압축하지 않습니다.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft 파일과 템플릿은 저장에서 달리 지정하지 않는 한, Finder와 다른 파일 브라우저가 보여 주는 첫 번째 아트보드의 이미지(최대 256픽셀)와 함께 저장됩니다.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	복사와 잘라내기는 아트의 SVG 코드도 다른 앱에 전달합니다. 데스크톱에서는 아트에 1 MiB가 넘는 이미지가 포함되면 코드가 텍스트로 복사되지 않습니다.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows에서는 복사와 잘라내기가 아트의 PDF도 다른 앱에 전달합니다. 다른 플랫폼은 아직 PDF를 복사하지 않습니다.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft는 이 선택을 저장하지만 복사와 잘라내기는 아직 레거시 벡터 클립보드 형식을 사용하지 않습니다.

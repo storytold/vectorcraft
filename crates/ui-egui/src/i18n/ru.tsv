@@ -1138,6 +1138,7 @@ font-technology	Variable	Вариативные
 	Embed Fonts (Glyphs Used)	Внедрить шрифты (использованные глифы)
 	Embed ICC Profile	Внедрить профиль ICC
 	Embed ICC Profiles	Внедрить профили ICC
+	Embed Preview	Внедрить просмотр
 	Embed Image	Внедрить изображение
 	Embed Image(s)	Внедрить изображение(я)
 	Embed page thumbnails	Внедрить миниатюры страниц
@@ -3496,6 +3497,7 @@ digits	Malayalam	Малаялам
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	«Редактировать оригинал» открывает связанный файл в стандартном приложении системы для его типа; если выключено, связанное растровое изображение открывается в PhotoCraft, если он установлен.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Файл, сохранённый более старой версией VectorCraft, открывается с [Converted] после имени, а «Сохранить» спрашивает, куда его сохранить; если выключено, «Сохранить» заменяет файл.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Файлы и шаблоны VectorCraft сохраняются сжатыми и поэтому меньше, если сохранение не указывает иное; сохранения для версий, которые не открывают сжатые файлы, остаются несжатыми.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	Файлы и шаблоны VectorCraft сохраняются с изображением первой монтажной области, не больше 256 пикселей, которое показывают Finder и другие файловые браузеры, если сохранение не указывает иное.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Копировать и Вырезать также передают другим приложениям SVG-код графики; на компьютере код не копируется как текст, если графика встраивает больше 1 МиБ изображений.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	В Windows Копировать и Вырезать также передают другим приложениям PDF графики; другие платформы пока не копируют PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft сохраняет этот выбор, но Копировать и Вырезать пока не используют формат устаревшего векторного буфера обмена.

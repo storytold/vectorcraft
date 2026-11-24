@@ -3519,6 +3519,7 @@ arrowhead	Feather	પીંછું
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	મૂળ સંપાદિત કરો લિંક કરેલી ફાઇલને તેના પ્રકાર માટેની સિસ્ટમની ડિફૉલ્ટ ઍપમાં ખોલે છે; બંધ હોય ત્યારે, લિંક કરેલી રાસ્ટર છબી PhotoCraft ઇન્સ્ટોલ હોય તો તેમાં ખૂલે છે.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	VectorCraft ના જૂના સંસ્કરણથી સાચવેલી ફાઇલ તેના નામ પછી [Converted] સાથે ખૂલે છે, અને સાચવો પૂછે છે કે તેને ક્યાં સાચવવી; બંધ હોય ત્યારે, સાચવો ફાઇલને બદલી નાખે છે.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	સાચવતી વખતે બીજું કંઈ જણાવ્યું ન હોય તો, VectorCraft ફાઇલો અને ટેમ્પ્લેટ સંકુચિત રીતે સચવાય છે, તેથી નાની હોય છે; સંકુચિત ફાઇલો ન ખોલી શકતાં સંસ્કરણો માટેના સેવ સંકુચિત થતા નથી.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	સાચવતી વખતે બીજું કંઈ જણાવ્યું ન હોય તો, VectorCraft ફાઇલો અને ટેમ્પ્લેટ પહેલા આર્ટબોર્ડના વધુમાં વધુ 256 પિક્સેલના ચિત્ર સાથે સચવાય છે, જે Finder અને અન્ય ફાઇલ બ્રાઉઝર બતાવે છે.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	નકલ અને કાપો બીજી એપ્સને આર્ટનો SVG કોડ પણ આપે છે; ડેસ્કટોપ પર, આર્ટમાં 1 MiB કરતાં વધુ છબીઓ જડેલી હોય ત્યારે કોડ ટેક્સ્ટ તરીકે નકલ થતો નથી.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows પર નકલ અને કાપો બીજી એપ્સને આર્ટની PDF પણ આપે છે; બીજાં પ્લેટફોર્મ હજી PDF નકલ કરતાં નથી.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft આ પસંદગી સાચવે છે, પણ નકલ અને કાપો હજી લેગસી વેક્ટર ક્લિપબોર્ડ ફોર્મેટ વાપરતા નથી.
@@ -4599,6 +4600,7 @@ arrowhead	Feather	પીંછું
 	Use Artboards	આર્ટબોર્ડ વાપરો
 	Use Black Point Compensation	બ્લેક પૉઇન્ટ કમ્પેન્સેશન વાપરો
 	Use Compression	કમ્પ્રેશન વાપરો
+	Embed Preview	પૂર્વાવલોકન એમ્બેડ કરો
 	Use Document Raster Effects Resolution	દસ્તાવેજ રાસ્ટર અસર રિઝોલ્યુશન વાપરો
 	Use Even-Odd Fill Rule	ઇવન-ઓડ ભરો નિયમ વાપરો
 	Use Japanese Crop Marks	જાપાનીઝ ક્રોપ માર્ક્સ વાપરો

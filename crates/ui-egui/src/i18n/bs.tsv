@@ -3212,6 +3212,7 @@ antiAlias	Sharp	Oštro
 	{secs} sec	{secs} sek.
 	Create PDF-Compatible File	Kreiraj datoteku kompatibilnu s PDF-om
 	Embed ICC Profiles	Ugradi ICC profile
+	Embed Preview	Ugradi pregled
 	File Name:	Naziv datoteke:
 	Save As	Sačuvaj kao
 	Save as Template	Sačuvaj kao predložak
@@ -4846,6 +4847,7 @@ font-technology	Variable	Varijabilni
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Uredi original otvara povezanu datoteku u zadanoj aplikaciji sistema za njen tip; isključeno, povezana rasterska slika otvara se u PhotoCraftu ako je instaliran.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Datoteka sačuvana starijom verzijom VectorCrafta otvara se sa [Converted] iza imena, a Sačuvaj pita gdje je sačuvati; isključeno, Sačuvaj zamjenjuje datoteku.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft datoteke i predlošci čuvaju se komprimirani, pa su manji, osim ako čuvanje ne kaže drugačije; čuvanja za verzije koje ne otvaraju komprimirane datoteke ostaju nekomprimirana.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft datoteke i predlošci čuvaju se sa slikom prve radne ploče, najviše 256 piksela, koju prikazuju Finder i drugi preglednici datoteka, osim ako čuvanje ne kaže drugačije.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiraj i Izreži daju drugim aplikacijama i SVG kod crteža; na desktopu se kod ne kopira kao tekst kada crtež ugrađuje više od 1 MiB slika.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Na Windowsu Kopiraj i Izreži daju drugim aplikacijama i PDF crteža; ostale platforme još ne kopiraju PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft čuva ovaj izbor, ali Kopiraj i Izreži još ne koriste format naslijeđenog vektorskog međuspremnika.

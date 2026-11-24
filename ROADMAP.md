@@ -2,7 +2,7 @@
 
 **Stage: alpha** · next: beta, ~13 points (ready for real work ~62% → ~75%, and reliable `.ai` exchange) and ~170–270 h away
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-15 · **Change:** minor (G5: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h); previously: Tech Circuit brush library, G5; previously: docs tidy-up, no content change: stray notes at the top moved into the revision table; scores and estimates unchanged; previously minor: Raster effects 85% → 88%, gallery thumbnails and in-dialog preview in; headline numbers unchanged; Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-16 · **Change:** minor (macOS Quick Look thumbnails and previews of native files (#663); previously: G5: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h); previously: Tech Circuit brush library, G5; previously: docs tidy-up, no content change: stray notes at the top moved into the revision table; scores and estimates unchanged; previously minor: Raster effects 85% → 88%, gallery thumbnails and in-dialog preview in; headline numbers unchanged; Symbols area ~87% → ~88%: dynamic instance parts take opacity, blend, gradient and pattern on the canvas; G5 docs sync for Overlap and Pattern auto corners; previously minor: Tools stays beside the canvas with left-side panels; Hindi catalog draft complete under the translation tests; contributor loanword terminology reviewed; wider proofreading welcome; Compound Shapes add-on, beyond Illustrator; scores and estimates unchanged; Contour add-on, beyond Illustrator; scores and estimates unchanged; new gradients follow document color mode; scores and estimates unchanged) · **Target:** Adobe Illustrator 2026 (30.x)
 
 VectorCraft is a clean-room, open-source, pure-Rust reimplementation of the Adobe Illustrator workflow. It runs
 on macOS, Windows, Linux, FreeBSD and the web (WASM), and agents can drive all of it over MCP, the CLI and a JSON
@@ -123,6 +123,8 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 5. **Then:** type core and advanced type (G4), the Illustrator 2026 additions (G13), 3D (G3). The Effect Gallery's filter thumbnails and in-dialog preview are in (G2).
 
 ## Progress log
+
+- 2026-11-20: macOS Quick Look (#663): Finder thumbnails and Space-bar previews of `.vectorcraft` and `.drawcraft` files, through two app extensions written in Rust (`apps/vectorcraft-ql`, their read path `crates/quicklook`), packaged in `VectorCraft.app/Contents/PlugIns`; native saves embed the preview by default (File Handling › Embed Preview). The thumbnail is the embedded preview, so files saved before keep the icon until saved again. Thumbnails checked on a macOS 15 runner (`packaging/macos/quicklook/check-thumbnails.sh`, ad-hoc signed: good files in 0.05–0.25 s, bad ones an error in under 0.2 s); the Space-bar preview and a notarised build on a real Mac are still to check. Headline numbers unchanged.
 
 - 2026-11-18: Built-in symbol library Media Controls: adds a seventh procedural symbol library (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu) containing six original vector symbols (Play, Pause, Stop, Skip Next, Shuffle, Repeat) generated in code without default 9-slice guides (part of Gap 5). Headline numbers unchanged.
 
@@ -249,6 +251,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-16 | minor | Progress log row for macOS Quick Look (#663); headline numbers unchanged. |
 | 2026-11-15 | minor | Graphic Styles: built-in Neon & Glow graphic style library (Cyan Neon, Magenta Laser, Amber Tube, Electric Lime, Pulse Violet, Cobalt Phosphor); G5 estimate unchanged (3–13 h). |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
 | 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |

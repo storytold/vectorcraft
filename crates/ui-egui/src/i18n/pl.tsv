@@ -3200,6 +3200,7 @@ antiAlias	Sharp	Ostre
 	{secs} sec	{secs} s
 	Create PDF-Compatible File	Utwórz plik zgodny z PDF
 	Embed ICC Profiles	Osadź profile ICC
+	Embed Preview	Osadź podgląd
 	File Name:	Nazwa pliku:
 	Save As	Zapisz jako
 	Save as Template	Zapisz jako szablon
@@ -4799,6 +4800,7 @@ font-technology	Variable	Zmienne
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Edytuj oryginał otwiera połączony plik w domyślnej aplikacji systemu dla jego typu; po wyłączeniu połączony obraz rastrowy otwiera się w PhotoCraft, jeśli jest zainstalowany.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	Plik zapisany starszą wersją VectorCraft otwiera się z [Converted] po nazwie, a Zapisz pyta, gdzie go zapisać; po wyłączeniu Zapisz zastępuje plik.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	Pliki i szablony VectorCraft są zapisywane skompresowane, więc są mniejsze, chyba że zapis stanowi inaczej; zapisy dla wersji, które nie otwierają skompresowanych plików, pozostają nieskompresowane.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	Pliki i szablony VectorCraft są zapisywane z obrazem pierwszego obszaru kompozycji, najwyżej 256 pikseli, który pokazują Finder i inne przeglądarki plików, chyba że zapis stanowi inaczej.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiuj i Wytnij przekazują innym aplikacjom także kod SVG kompozycji; na komputerze kod nie jest kopiowany jako tekst, gdy kompozycja osadza ponad 1 MiB obrazów.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	W systemie Windows Kopiuj i Wytnij przekazują innym aplikacjom także PDF kompozycji; inne platformy jeszcze nie kopiują PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft zapisuje ten wybór, ale Kopiuj i Wytnij nie używają jeszcze formatu starszego schowka wektorowego.

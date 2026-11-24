@@ -5835,6 +5835,7 @@ antiAlias	Sharp	Skarp
 	{secs} sec	{secs} sek
 	Create PDF-Compatible File	Opret PDF-kompatibel fil
 	Embed ICC Profiles	Indlejr ICC-profiler
+	Embed Preview	Indlejr forhåndsvisning
 	File Name:	Filnavn:
 	Save As	Gem som
 	Save as Template	Gem som skabelon
@@ -7414,6 +7415,7 @@ font-technology	Variable	Variable
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Redigér original åbner en linket fil i systemets standardapp for dens type; slået fra åbnes et linket rasterbillede i PhotoCraft, hvis det er installeret.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	En fil gemt af en ældre VectorCraft-version åbnes med [Converted] efter navnet, og Gem spørger, hvor den skal gemmes; slået fra erstatter Gem filen.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-filer og -skabeloner gemmes komprimeret og fylder derfor mindre, medmindre en gemning angiver andet; gemninger til versioner, der ikke kan åbne komprimerede filer, forbliver ukomprimerede.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft-filer og -skabeloner gemmes med et billede af den første kunstplade, højst 256 pixel, som Finder og andre filbrowsere viser, medmindre en gemning angiver andet.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiér og Klip giver også andre apps tegningens SVG-kode; på skrivebordet kopieres koden ikke som tekst, når tegningen indlejrer mere end 1 MiB billeder.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	På Windows giver Kopiér og Klip også andre apps en PDF af tegningen; de andre platforme kopierer endnu ikke en PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft gemmer dette valg, men Kopiér og Klip bruger endnu ikke et format til den ældre vektorudklipsholder.

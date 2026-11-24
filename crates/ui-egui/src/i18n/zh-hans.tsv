@@ -1085,6 +1085,7 @@ antiAlias	Sharp	锐利
 	Embed Fonts (Glyphs Used)	嵌入字体 (所用字形)
 	Embed ICC Profile	嵌入 ICC 配置文件
 	Embed ICC Profiles	嵌入 ICC 配置文件
+	Embed Preview	嵌入预览
 	Embed Image	嵌入图像
 	Embed Image(s)	嵌入图像
 	Embed page thumbnails	嵌入页面缩略图
@@ -3355,6 +3356,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	“编辑原稿”用系统中该类型的默认应用打开链接文件；关闭此项后，若已安装 PhotoCraft，链接的栅格图像会在 PhotoCraft 中打开。
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	由旧版 VectorCraft 保存的文件打开时名称后会加上 [Converted]，“保存”会询问保存位置；关闭此项后，“保存”会替换该文件。
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	除非保存时另有指定，VectorCraft 文件和模板以压缩形式保存，因此更小；为无法打开压缩文件的版本保存时不压缩。
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	除非保存时另有指定，VectorCraft 文件和模板会附带第一个画板的图像（最大 256 像素）保存，供 Finder 和其他文件浏览器显示。
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	复制和剪切还会将图稿的 SVG 代码提供给其他应用；在桌面版中，图稿嵌入的图像超过 1 MiB 时，代码不会作为文本复制。
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	在 Windows 上，复制和剪切还会将图稿的 PDF 提供给其他应用；其他平台尚不复制 PDF。
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft 会存储此选项，但复制和剪切尚不使用旧版矢量剪贴板格式。

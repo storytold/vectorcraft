@@ -1111,6 +1111,7 @@ font-technology	Variable	Variabla
 	Embed Fonts (Glyphs Used)	Bädda in typsnitt (använda glyfer)
 	Embed ICC Profile	Bädda in ICC-profil
 	Embed ICC Profiles	Bädda in ICC-profiler
+	Embed Preview	Bädda in förhandsgranskning
 	Embed Image	Bädda in bild
 	Embed Image(s)	Bädda in bild(er)
 	Embed page thumbnails	Bädda in sidminiatyrer
@@ -3386,6 +3387,7 @@ digits	Malayalam	Malayalam
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Redigera original öppnar en länkad fil i systemets standardapp för dess typ; avstängt öppnas en länkad rasterbild i PhotoCraft om det är installerat.
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	En fil sparad av en äldre VectorCraft-version öppnas med [Converted] efter namnet, och Spara frågar var den ska sparas; avstängt ersätter Spara filen.
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft-filer och -mallar sparas komprimerade och blir därmed mindre, om inte en sparning anger annat; sparningar för versioner som inte kan öppna komprimerade filer förblir okomprimerade.
+	VectorCraft files and templates are saved with a picture of the first artboard, at most 256 pixels, that Finder and other file browsers show, unless a save says otherwise.	VectorCraft-filer och -mallar sparas med en bild av den första ritytan, högst 256 pixlar, som Finder och andra filbläddrare visar, om inte en sparning anger annat.
 	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	Kopiera och Klipp ut ger även andra appar teckningens SVG-kod; på skrivbordet kopieras koden inte som text när teckningen bäddar in mer än 1 MiB bilder.
 	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	I Windows ger Kopiera och Klipp ut även andra appar en PDF av teckningen; de andra plattformarna kopierar ännu ingen PDF.
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft sparar det här valet, men Kopiera och Klipp ut använder ännu inget format för äldre vektorurklipp.
