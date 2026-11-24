@@ -421,26 +421,27 @@ fn composer_x_mixed_sizes_around_text_wrap() {
         let l = layout(db(), &t);
         (line_texts(&t, &l), l, t)
     };
-    let (every, l, t) = set(Composer::EveryLine);
-    assert_eq!(
-        every,
-        ["Destroy all creatures with", "toughness\u{a0}X", "or less. Then", "draw a card for", "each creature", "destroyed this", "way."]
-    );
-    assert!(past_their_room(&t, &l).is_empty() && !l.overflow, "{:?}", l.lines);
-    // Two spans share each baseline beside the object.
-    assert_eq!(l.lines[1].baseline, l.lines[2].baseline);
-    assert!(l.lines[1].ascent > 30.0 && l.lines[2].avail.0 > object.x1, "{:?}", l.lines);
-    let text = t.plain_text();
-    let hits = l.glyphs.iter().filter(|g| {
-        let li = &l.lines[g.line];
-        let across = li.baseline - li.ascent < object.y1 && li.baseline + li.descent > object.y0;
-        across && !text[g.byte..].starts_with(char::is_whitespace) && g.origin.x < object.x1 && g.origin.x + g.advance > object.x0
-    });
-    assert_eq!(hits.count(), 0, "{:?}", l.lines);
     // The single-line composer measures each line across its height too, and breaks this
-    // paragraph the same way.
-    let (greedy, _, _) = set(Composer::SingleLine);
-    assert_eq!(every, greedy);
+    // paragraph the same way, with its lines set clear of the object as well.
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let (texts, l, t) = set(composer);
+        assert_eq!(
+            texts,
+            ["Destroy all creatures with", "toughness\u{a0}X", "or less. Then", "draw a card for", "each creature", "destroyed this", "way."],
+            "{composer:?}"
+        );
+        assert!(past_their_room(&t, &l).is_empty() && !l.overflow, "{composer:?}: {:?}", l.lines);
+        // Two spans share each baseline beside the object.
+        assert_eq!(l.lines[1].baseline, l.lines[2].baseline, "{composer:?}");
+        assert!(l.lines[1].ascent > 30.0 && l.lines[2].avail.0 > object.x1, "{composer:?}: {:?}", l.lines);
+        let text = t.plain_text();
+        let hits = l.glyphs.iter().filter(|g| {
+            let li = &l.lines[g.line];
+            let across = li.baseline - li.ascent < object.y1 && li.baseline + li.descent > object.y0;
+            across && !text[g.byte..].starts_with(char::is_whitespace) && g.origin.x < object.x1 && g.origin.x + g.advance > object.x0
+        });
+        assert_eq!(hits.count(), 0, "{composer:?}: {:?}", l.lines);
+    }
 }
 
 #[test]
@@ -581,23 +582,23 @@ fn composer_x_mixed_sizes_overflow_around_text_wrap() {
         let l = layout(db(), &t);
         (line_texts(&t, &l), l, t)
     };
-    let (every, l, t) = set(Composer::EveryLine);
-    assert!(l.overflow && l.lines.len() >= 3, "{:?}", l.lines);
-    assert!(l.lines.windows(2).all(|p| p[0].end == p[1].start && p[0].start < p[0].end), "{:?}", l.lines);
-    assert!(past_their_room(&t, &l).is_empty(), "{:?}", l.lines);
-    let text = t.plain_text();
-    let hits = l.glyphs.iter().filter(|g| {
-        let li = &l.lines[g.line];
-        let across = li.baseline - li.ascent < object.y1 && li.baseline + li.descent > object.y0;
-        across && !text[g.byte..].starts_with(char::is_whitespace) && g.origin.x < object.x1 && g.origin.x + g.advance > object.x0
-    });
-    assert_eq!(hits.count(), 0, "{:?}", l.lines);
-    // The lines that fit break as in `composer_x_mixed_sizes_around_text_wrap`'s taller frame.
-    assert_eq!(every, ["Destroy all creatures with", "toughness\u{a0}X", "or less. Then", "draw a card for", "each creature"]);
-    // The single-line composer measures each line across its height too, and breaks the lines
-    // that fit the same way.
-    let (greedy, ..) = set(Composer::SingleLine);
-    assert_eq!(every, greedy);
+    // The single-line composer measures each line across its height too, and breaks and sets the
+    // lines that fit the same way.
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let (texts, l, t) = set(composer);
+        assert!(l.overflow && l.lines.len() >= 3, "{composer:?}: {:?}", l.lines);
+        assert!(l.lines.windows(2).all(|p| p[0].end == p[1].start && p[0].start < p[0].end), "{composer:?}: {:?}", l.lines);
+        assert!(past_their_room(&t, &l).is_empty(), "{composer:?}: {:?}", l.lines);
+        let text = t.plain_text();
+        let hits = l.glyphs.iter().filter(|g| {
+            let li = &l.lines[g.line];
+            let across = li.baseline - li.ascent < object.y1 && li.baseline + li.descent > object.y0;
+            across && !text[g.byte..].starts_with(char::is_whitespace) && g.origin.x < object.x1 && g.origin.x + g.advance > object.x0
+        });
+        assert_eq!(hits.count(), 0, "{composer:?}: {:?}", l.lines);
+        // The lines that fit break as in `composer_x_mixed_sizes_around_text_wrap`'s taller frame.
+        assert_eq!(texts, ["Destroy all creatures with", "toughness\u{a0}X", "or less. Then", "draw a card for", "each creature"], "{composer:?}");
+    }
 }
 
 #[test]
