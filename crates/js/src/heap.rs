@@ -348,6 +348,26 @@ pub(crate) struct Binding {
     pub(crate) value: Value,
     pub(crate) mutable: bool,
     pub(crate) deletable: bool,
+    /// A `let`, `const` or parameter binding not yet initialized: reading or writing it is a
+    /// `ReferenceError` (its temporal dead zone).
+    pub(crate) uninitialized: bool,
+    /// A `const` binding: writing it is a `TypeError`, in strict mode code or not.
+    pub(crate) constant: bool,
+    /// A `let` or `const` binding, or a function declared in a block: a `var` that eval code
+    /// declares cannot take its name.
+    pub(crate) lexical: bool,
+}
+
+impl Binding {
+    /// An initialized binding.
+    pub(crate) fn new(value: Value, mutable: bool, deletable: bool) -> Self {
+        Self { value, mutable, deletable, uninitialized: false, constant: false, lexical: false }
+    }
+
+    /// A `let` (or with `constant`, a `const`) binding not yet initialized.
+    pub(crate) fn lexical(constant: bool) -> Self {
+        Self { value: Value::Undefined, mutable: !constant, deletable: false, uninitialized: true, constant, lexical: true }
+    }
 }
 
 /// An environment record (section 10.2.1) with its outer environment.
@@ -601,7 +621,9 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             + code.functions.len()
             + code.params.len()
             + code.vars.len()
-            + 2 * code.fun_decls.len();
+            + 2 * code.fun_decls.len()
+            + code.scopes.iter().map(|s| 2 + s.lets.len() + 2 * s.funcs.len()).sum::<usize>()
+            + code.templates.iter().map(|t| 2 + t.cooked.len() + t.raw.len()).sum::<usize>();
         let tables = code.finally_tables.iter().map(|t| 24 + 4 * t.len()).sum::<usize>();
         strings.bytes += CODE_BYTES
             + size_of::<Op>() * code.ops.len()
@@ -618,8 +640,14 @@ fn mark_code(code: &Code, strings: &mut StringSizes) {
             strings.add(flags);
         }
         let keys = code.names.iter().chain(&code.params).chain(&code.vars).chain(code.fun_decls.iter().map(|(k, _)| k));
-        for k in keys.chain(&code.self_name).chain(&code.decl_name) {
+        for k in keys.chain(&code.self_name).chain(&code.decl_name).chain(&code.rest) {
             strings.add_key(k);
+        }
+        for scope in &code.scopes {
+            scope.lets.iter().map(|(k, _)| k).chain(scope.funcs.iter().map(|(k, _)| k)).for_each(|k| strings.add_key(k));
+        }
+        for t in &code.templates {
+            t.cooked.iter().chain(&t.raw).for_each(|s| strings.add(s));
         }
         stack.extend(code.functions.iter().map(|f| &**f));
     }

@@ -1514,7 +1514,7 @@ fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostErro
         if f.line > 0 { host.placed(error, f.file, f.line, f.column) } else { error }
     })?;
     // A file without preprocessor lines is parsed here first, so its syntax error names its place.
-    let options = vectorcraft_js::Options { max_source_units: include::MAX_TOTAL_BYTES, ..vectorcraft_js::Options::default() };
+    let options = host.files.borrow().options();
     if let Err(e) = vectorcraft_js::parse(&expanded.source, &options) {
         host.files.borrow_mut().end_eval();
         let (_, file, line, column) = expanded.map.locate(e.line, e.column);
@@ -2006,11 +2006,16 @@ impl Session {
         // A realm made here gets the script extensions, `$` and the dialogs; a kept one has them
         // from its first run, and they act for the run that calls them.
         let fresh = realm.is_none();
-        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), ..Options::default() };
+        // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
+        // code the way the script does.
+        let es2015 = include::es2015_script(request.file.as_deref());
+        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, ..Options::default() };
         let strict = options.strict;
+        // A kept engine reads each run's code the way that run's script does.
         let mut realm = match realm {
             Some(mut realm) => {
                 realm.set_limits(limits);
+                realm.set_es2015(es2015);
                 realm
             }
             None => {

@@ -30,6 +30,8 @@ const BACKSLASH: u32 = b'\\' as u32;
 const SLASH: u32 = b'/' as u32;
 const STAR: u32 = b'*' as u32;
 const DOT: u32 = b'.' as u32;
+const BACKTICK: u32 = b'`' as u32;
+const DOLLAR: u32 = b'$' as u32;
 const CR: u32 = 0x0D;
 const LF: u32 = 0x0A;
 
@@ -49,18 +51,26 @@ pub struct Lexer<'s> {
     max_depth: usize,
     /// Read the E4X punctuators `..`, `::` and `@`.
     e4x: bool,
+    /// Read `=>`, `...` and template literals.
+    es2015: bool,
 }
 
 impl<'s> Lexer<'s> {
     /// A lexer of `src`. `preprocessor_lines` turns on the reading of preprocessor lines;
     /// `max_depth` limits how deeply a regular expression literal's groups may nest.
     pub fn new(src: &'s [u16], preprocessor_lines: bool, max_depth: usize) -> Self {
-        Self { src, pos: 0, line: 1, line_start: 0, blank_line: true, preprocessor_lines, max_depth, e4x: false }
+        Self { src, pos: 0, line: 1, line_start: 0, blank_line: true, preprocessor_lines, max_depth, e4x: false, es2015: false }
     }
 
     /// The same lexer, reading the E4X punctuators when `e4x` is true.
     pub fn with_e4x(mut self, e4x: bool) -> Self {
         self.e4x = e4x;
+        self
+    }
+
+    /// The same lexer, reading `=>`, `...` and template literals when `es2015` is true.
+    pub fn with_es2015(mut self, es2015: bool) -> Self {
+        self.es2015 = es2015;
         self
     }
 
@@ -149,6 +159,9 @@ impl<'s> Lexer<'s> {
             self.string(start, line, column)?
         } else if c == SLASH && goal == Goal::RegExp {
             self.regexp(start, line, column)?
+        } else if c == BACKTICK && self.es2015 {
+            self.pos += 1;
+            self.template(start, line, column)?
         } else {
             let punct = self.punct().ok_or_else(|| self.error_at(start, unexpected_character(c)))?;
             self.token(TokenKind::Punct(punct), start, line, column, false)
@@ -170,6 +183,85 @@ impl<'s> Lexer<'s> {
         let mut regexp = self.regexp(start, token.line, token.column)?;
         regexp.newline_before = token.newline_before;
         Ok(regexp)
+    }
+
+    /// Reads the token `token`, a `}` that ends a template literal's substitution, again as the
+    /// template's next piece.
+    pub(crate) fn rescan_template(&mut self, token: &Token) -> Result<Token, SyntaxError> {
+        let start = usize::try_from(token.span.start).unwrap_or(usize::MAX);
+        self.pos = start + 1;
+        self.line = token.line;
+        self.line_start = start.saturating_sub(usize::try_from(token.column.saturating_sub(1)).unwrap_or(0));
+        self.blank_line = false;
+        let mut piece = self.template(start, token.line, token.column)?;
+        // A piece continued over a line ends on a new line, but not at its start.
+        self.blank_line = false;
+        piece.newline_before = token.newline_before;
+        Ok(piece)
+    }
+
+    /// Reads a template literal's characters after its backtick or `}` up to `${` or the closing
+    /// backtick (ECMA-262 2015 sections 11.8.6 and 11.8.6.1): the cooked text, with escapes read
+    /// as a string literal's are except that octal escapes are errors, and the raw text as written,
+    /// with each line terminator sequence (CR LF, CR or LF) read as LF in both, and a line
+    /// continuation left out of the cooked text.
+    fn template(&mut self, start: usize, line: u32, column: u32) -> Result<Token, SyntaxError> {
+        let at = (start, line, column);
+        let mut cooked = Vec::new();
+        let mut raw = Vec::new();
+        let tail = loop {
+            match self.peek() {
+                None => return Err(Self::error_from(at, "unterminated template literal")),
+                Some(BACKTICK) => {
+                    self.pos += 1;
+                    break true;
+                }
+                Some(DOLLAR) if self.peek_at(1) == Some(u32::from(b'{')) => {
+                    self.pos += 2;
+                    break false;
+                }
+                Some(BACKSLASH) => {
+                    let begin = self.pos;
+                    let begin_line = self.line;
+                    self.template_escape(&mut cooked)?;
+                    // The raw text keeps the escape as written, its line terminator read as LF.
+                    if self.line != begin_line {
+                        let terminator = self.unit(begin + 1).unwrap_or(LF);
+                        raw.push(BACKSLASH as u16);
+                        raw.push(if terminator == CR { LF as u16 } else { terminator as u16 });
+                    } else {
+                        raw.extend_from_slice(self.src.get(begin..self.pos).unwrap_or_default());
+                    }
+                }
+                Some(c) if is_line_terminator(c) => {
+                    let unit = if c == CR { LF as u16 } else { c as u16 };
+                    self.line_terminator();
+                    cooked.push(unit);
+                    raw.push(unit);
+                }
+                Some(c) => {
+                    cooked.push(c as u16);
+                    raw.push(c as u16);
+                    self.pos += 1;
+                }
+            }
+        };
+        Ok(self.token(TokenKind::Template { cooked, raw, tail }, start, line, column, false))
+    }
+
+    /// Reads an escape in a template literal into `cooked`. A line continuation adds nothing; an
+    /// octal escape (`\1`, `\00`), `\8` and `\9` are errors, as are malformed `\x` and `\u` escapes.
+    fn template_escape(&mut self, cooked: &mut Vec<u16>) -> Result<(), SyntaxError> {
+        let at = self.pos;
+        match self.peek_at(1).and_then(char::from_u32) {
+            Some('0') if !self.peek_at(2).is_some_and(is_decimal_digit) => {
+                self.pos += 2;
+                cooked.push(0);
+                Ok(())
+            }
+            Some('0'..='9') => Err(self.error_at(at, "octal escape sequences are not allowed in template literals")),
+            _ => self.string_escape(cooked).map(drop),
+        }
     }
 
     fn token(&self, kind: TokenKind, start: usize, line: u32, column: u32, newline_before: bool) -> Token {
@@ -596,6 +688,9 @@ impl<'s> Lexer<'s> {
         let rest = &self.src[self.pos..];
         for (spelling, punct) in Punct::ALL {
             if !self.e4x && matches!(punct, Punct::DotDot | Punct::ColonColon | Punct::At) {
+                continue;
+            }
+            if !self.es2015 && matches!(punct, Punct::Arrow | Punct::Ellipsis) {
                 continue;
             }
             let bytes = spelling.as_bytes();

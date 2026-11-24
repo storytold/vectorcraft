@@ -215,6 +215,19 @@ impl Realm {
         self.interp.reset_gc_threshold();
     }
 
+    /// Sets [`Options::es2015`] for the next runs, and for the code they evaluate. The `let` and
+    /// `const` names earlier runs declared stay visible when it is turned off. A run begun with
+    /// [`Realm::start`] that is still going keeps the language it started with for the code it
+    /// evaluates; the new one applies once it ends.
+    pub fn set_es2015(&mut self, es2015: bool) {
+        if self.is_running() || self.interp.waiting {
+            self.interp.next_es2015 = Some(es2015);
+        } else {
+            self.interp.next_es2015 = None;
+            self.interp.set_es2015(es2015);
+        }
+    }
+
     /// The realm's interrupt flag. Setting it stops a running script, or the next one to start.
     pub fn interrupt(&self) -> Interrupt {
         Interrupt(self.interp.interrupt.clone())
@@ -293,6 +306,9 @@ impl Realm {
         interp.waiting = false;
         interp.resuming = None;
         interp.passing = Value::Undefined;
+        if let Some(es2015) = interp.next_es2015.take() {
+            interp.set_es2015(es2015);
+        }
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
             Err(Abrupt::Throw(v)) => {

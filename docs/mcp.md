@@ -2625,7 +2625,16 @@ https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-act
 describes that menu item. Pass exactly one of `path` and `source`. A `path` must end in `.js` or `.jsx`, in any
 case. A `.jsxbin` file or text that starts with `@JSXBIN@` is compiled and ends with an error, as does text that is
 not UTF-8. The language is ES5.1, except that identifiers take the characters Unicode's `ID_Start` and
-`ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. The script reaches the
+`ID_Continue` properties allow, as later editions define them, and may use `\u{...}` escapes. A `path` that ends in
+`.js` (in any case) also reads these ECMAScript 2015 forms (https://262.ecma-international.org/6.0/): `let` and
+`const` with block scope and their temporal dead zone, a new `let` binding for each `for` loop iteration, function
+declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
+parameters, and spread in array literals, calls and `new`. Spread reads arrays by index, reading the length again
+before each element, strings and `String` objects by code point, and objects with a `length` property by index, and
+throws a `TypeError` for any other value; that rule is VectorCraft's own
+until iterators are added. `eval`, `Function`, `#include` files and `$.evalFile` read code the way the script does, and
+an engine that `#targetengine` keeps reads each run the way that run's script does. A
+`.jsx` file and a `source` string read ES5.1 only, and the ECMAScript 2015 forms are syntax errors there. The script reaches the
 app through the global object `vc`, and writes to the Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can

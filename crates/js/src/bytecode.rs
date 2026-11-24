@@ -178,6 +178,49 @@ pub(crate) enum Op {
     ForEachValue(u32),
     /// `value` → nothing: sets the default XML namespace of the running code.
     SetDefaultNamespace,
+    /// Enters a block's environment: the `let` and `const` names of `scopes[i]`, not yet
+    /// initialized, and its function declarations.
+    PushBlock(u32),
+    /// Replaces the current environment with a copy of it, for a `for` loop's next iteration.
+    CopyEnv,
+    /// `value` → nothing: initializes the nearest binding of `names[i]`, a `let`, a `const` or
+    /// a parameter of a function with default or rest parameters.
+    InitVar(u32),
+    /// Pushes the value of the parameter `names[i]` of the running function, initialized or not.
+    LoadParam(u32),
+    /// Ends the parameters of a function with default or rest parameters: enters the environment
+    /// of its body's variables and function declarations, and of its `let` and `const` names.
+    BodyEnv,
+    /// `value` → nothing: assigns the function declared in a block outside strict mode code to
+    /// the variable `names[i]` of the running code (ECMA-262 2015 Annex B.3.3).
+    AnnexB(u32),
+    /// `array value` → `array`, with the elements of the value appended (spread).
+    ArraySpread,
+    /// `function this array` → result: a call with the array's elements as its arguments, a
+    /// direct eval when `eval` is true and the function is the global `eval`.
+    CallSpread(bool),
+    /// `function array` → the new object, constructed with the array's elements as arguments.
+    NewSpread,
+    /// `value` → its string (a template literal's substitution).
+    ToStr,
+    /// Pushes the template object of `templates[i]`, the same object for each evaluation.
+    TemplateObject(u32),
+}
+
+/// The names a block declares, entered with [`Op::PushBlock`].
+#[derive(Debug, Default)]
+pub(crate) struct BlockScope {
+    /// The `let` and `const` names, each with whether it is a `const`.
+    pub(crate) lets: Vec<(Key, bool)>,
+    /// The function declarations: their names and indices in `functions`.
+    pub(crate) funcs: Vec<(Key, u32)>,
+}
+
+/// A tagged template's strings: as read and as written.
+#[derive(Debug)]
+pub(crate) struct Template {
+    pub(crate) cooked: Vec<Str>,
+    pub(crate) raw: Vec<Str>,
 }
 
 /// What code is: a function body, a script, or eval code.
@@ -239,6 +282,23 @@ pub(crate) struct Code {
     pub(crate) source: Rc<Source>,
     /// Where the function's text starts and ends in the source.
     pub(crate) span: (u32, u32),
+    /// The block scopes [`Op::PushBlock`] enters.
+    pub(crate) scopes: Vec<BlockScope>,
+    /// The scope of the `let` and `const` names at the top of the body, script or eval code.
+    pub(crate) top_scope: Option<u32>,
+    /// The tagged templates [`Op::TemplateObject`] makes objects of.
+    pub(crate) templates: Vec<Template>,
+    /// The rest parameter's name.
+    pub(crate) rest: Option<Key>,
+    /// The function's `length`: its parameters before the first with a default value.
+    pub(crate) length: u32,
+    /// The code is an arrow function's.
+    pub(crate) arrow: bool,
+    /// The code reads `this` or calls `eval`, itself or in an arrow function inside it.
+    pub(crate) uses_this: bool,
+    /// The function has default or rest parameters: its parameters start uninitialized, its
+    /// code initializes them and then enters its body with [`Op::BodyEnv`].
+    pub(crate) param_init: bool,
 }
 
 impl Code {
@@ -315,6 +375,12 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::XmlScopeRef => e(1, 2),
         Op::ForEachValue(n) => e(n + 2, n + 3),
         Op::SetDefaultNamespace => e(1, 0),
+        Op::PushBlock(_) | Op::CopyEnv | Op::BodyEnv => e(0, 0),
+        Op::InitVar(_) | Op::AnnexB(_) => e(1, 0),
+        Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
+        Op::ArraySpread | Op::NewSpread => e(2, 1),
+        Op::CallSpread(_) => e(3, 1),
+        Op::ToStr => e(1, 1),
     })
 }
 
@@ -341,8 +407,13 @@ fn check_indices(op: Op, code: &Code) -> Result<(), String> {
         | Op::InitProp(i)
         | Op::InitGetter(i)
         | Op::InitSetter(i)
-        | Op::PushCatch(i) => check(i, code.names.len(), "name"),
+        | Op::PushCatch(i)
+        | Op::InitVar(i)
+        | Op::LoadParam(i)
+        | Op::AnnexB(i) => check(i, code.names.len(), "name"),
         Op::Closure(i) => check(i, code.functions.len(), "function"),
+        Op::PushBlock(i) => check(i, code.scopes.len(), "scope"),
+        Op::TemplateObject(i) => check(i, code.templates.len(), "template"),
         Op::RegExp(i) => check(i, code.regexps.len(), "regular expression"),
         _ => Ok(()),
     }
@@ -363,8 +434,14 @@ pub(crate) fn verify(code: &Code) -> Result<u32, String> {
             return Err("a function declaration without a name".into());
         }
     }
-    if code.fun_decls.iter().any(|(_, i)| *i as usize >= code.functions.len()) {
+    if code.fun_decls.iter().chain(code.scopes.iter().flat_map(|s| &s.funcs)).any(|(_, i)| *i as usize >= code.functions.len()) {
         return Err("function declaration index out of range".into());
+    }
+    if code.top_scope.is_some_and(|i| i as usize >= code.scopes.len()) {
+        return Err("top scope out of range".into());
+    }
+    if code.templates.iter().any(|t| t.cooked.len() != t.raw.len()) {
+        return Err("a template whose strings do not match".into());
     }
     let mut depth: Vec<Option<u32>> = vec![None; len];
     let mut work: Vec<(u32, u32)> = vec![(0, 0)];
