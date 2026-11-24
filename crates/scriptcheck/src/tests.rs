@@ -1585,6 +1585,18 @@ fn menu_commands_are_counted_with_their_lines() {
 }
 
 #[test]
+fn a_menu_command_string_with_a_trailing_comma_is_listed() {
+    let r = report(concat!(
+        "app.executeMenuCommand('acmecopyall',);\n",
+        "app.executeMenuCommand('acmecopyall', n);\n",
+        "app.executeMenuCommand('acmecopyall',\n",
+    ));
+    let strings: Vec<(&str, usize, &[usize])> = r.menu_strings.iter().map(|s| (s.value.as_str(), s.count, s.lines.as_slice())).collect();
+    assert_eq!(strings, [("acmecopyall", 1, &[1][..])]);
+    assert_eq!(r.menu_dynamic, 2);
+}
+
+#[test]
 fn effects_outside_the_document_are_listed_in_order() {
     let r = report(concat!(
         "var log = new File(p);\n",
