@@ -12,7 +12,7 @@ use craft::behavior::dock::{Action, DockEdge};
 use craft::behavior::geometry::BoxState;
 use craft::behavior::overlay::Side;
 use craft::behavior::{EditEvent, IconId, Mixed};
-use craft::color_ui::ui::PaintChip;
+use craft::color_ui::ui::{PaintChip, PaintChipSize};
 use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, TransformGroups, TransformRow, TransformSource};
 use craft::theme::ControlSize;
 use craft::ui::buttons::{Button, IconButton};
@@ -708,7 +708,8 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         Row::new().wrap(true).show(ui, |ui, _| {
             for (label, cmd, paint) in &chips {
                 let shown = Mixed::Same(well_paint(paint, &|_| None));
-                let out = PaintChip::new(*label, Bind::given(shown), fallback).popover(false).size(ControlSize::Sm).tooltip(*label).show(ui);
+                let out =
+                    PaintChip::new(*label, Bind::given(shown), fallback).popover(false).chip_size(PaintChipSize::Swatch).tooltip(*label).show(ui);
                 if let Some(mods) = out.clicked {
                     clicked = Some((*cmd, mods.cmd));
                 }

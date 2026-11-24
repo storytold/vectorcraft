@@ -1,6 +1,6 @@
 use craft::behavior::CanvasView;
 use craft::behavior::{IconId, Mixed};
-use craft::color_ui::ui::PaintChip;
+use craft::color_ui::ui::{PaintChip, PaintChipSize};
 use craft::theme::{Srgba, Variant};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
@@ -488,6 +488,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                         let chip = PaintChip::new(chip.label(has_shape), Bind::given(value), Srgba::BLACK)
                             .popover(false)
                             .ring(stroke)
+                            .chip_size(PaintChipSize::Compact)
                             .selected(app.session.fill_active != stroke)
                             .show(ui);
                         if chip.clicked.is_some() {
