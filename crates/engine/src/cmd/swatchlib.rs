@@ -97,6 +97,8 @@ pub fn specs() -> Vec<CommandSpec> {
 #[derive(Clone, Debug, Default)]
 pub struct DesignLibraries {
     libs: Vec<DesignLibrary>,
+    /// How many times a library was set; the next library's [`DesignLibrary::generation`].
+    loads: u64,
 }
 
 /// A document loaded as a swatch library that holds graph designs ([`DesignLibraries`]).
@@ -108,6 +110,9 @@ pub struct DesignLibrary {
     pub name: String,
     /// The designs and the resources their art uses.
     pub doc: Arc<vectorcraft_doc::Document>,
+    /// Which load of the library this is: it differs from every other load's, so a picture of a design of
+    /// this library is stale once the library is loaded again.
+    pub generation: u64,
 }
 
 impl DesignLibraries {
@@ -125,8 +130,9 @@ impl DesignLibraries {
     /// before; with no designs, `id` no longer has any.
     fn set(&mut self, id: &str, name: &str, doc: Option<vectorcraft_doc::Document>) {
         self.libs.retain(|l| l.id != id);
+        self.loads += 1;
         if let Some(doc) = doc {
-            self.libs.push(DesignLibrary { id: id.to_string(), name: name.to_string(), doc: Arc::new(doc) });
+            self.libs.push(DesignLibrary { id: id.to_string(), name: name.to_string(), doc: Arc::new(doc), generation: self.loads });
         }
     }
 }
