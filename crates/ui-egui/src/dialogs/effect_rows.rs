@@ -35,7 +35,12 @@ fn data_label(text: &str) -> Label {
 
 /// A whole-number slider row over `0..=100` percent.
 fn percent_range(key: &str, label: Label, default: f64) -> Param {
-    Param::new(key, label, ParamKind::range(0.0, 100.0, default, SliderScale::Linear)).decimals(0).unit(UnitKind::Percent)
+    count_range(key, label, default).unit(UnitKind::Percent)
+}
+
+/// A whole-number slider row over `0..=100` with no unit after the number.
+fn count_range(key: &str, label: Label, default: f64) -> Param {
+    Param::new(key, label, ParamKind::range(0.0, 100.0, default, SliderScale::Linear)).decimals(0)
 }
 
 /// The row of `key` for either unit of a Relative/Absolute pair: a share of the object's size, or a distance in the
@@ -81,7 +86,7 @@ pub(super) fn transform(cx: &EffectCx, _fields: &DialogFields) -> Vec<Param> {
 pub(super) fn distort(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
     let roughen = cx.id == "distort.roughen";
     // PLAN: production suffixes Detail with "/in"; `Param::unit` takes a `UnitKind` and none stands for it
-    let second = if roughen { percent_range("detail", lbl!("Detail:"), 10.0) } else { percent_range("ridges", lbl!("Ridges per segment:"), 4.0) };
+    let second = if roughen { count_range("detail", lbl!("Detail:"), 10.0) } else { count_range("ridges", lbl!("Ridges per segment:"), 4.0) };
     let points: Vec<(String, Label)> = choices(&cx.id, "points")
         .unwrap_or_default()
         .iter()

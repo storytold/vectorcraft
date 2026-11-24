@@ -377,6 +377,39 @@ fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
     assert_eq!(doc(&h), before);
 }
 
+/// The Bevel heading is a section named Bevel that holds its Reset, on its own line between Cap and Bevel Shape.
+#[test]
+fn the_bevel_heading_is_a_section_between_cap_and_bevel_shape() {
+    use craft::ui::contract::Role;
+    let mut h = drawn(SQUARE, EXTRUDE);
+    h.set("__page", json!("object"));
+    let (cap, reset, shape) = (h.target("Cap").rect, h.target("Reset").rect, h.target("Bevel Shape").rect);
+    let tree = h.fixture.tree();
+    let section = h.fixture.by_role(Role::GROUP).into_iter().find(|t| tree.name_of(t.node) == Some("Bevel")).map(|t| t.rect);
+    assert!(section.is_some_and(|s| s.contains_rect(reset)), "a section named Bevel holds Reset: {section:?} {reset:?}");
+    assert!(reset.top() >= cap.bottom(), "Reset is below Cap: {cap:?} {reset:?}");
+    assert!(shape.top() >= reset.bottom(), "Bevel Shape is below Reset: {reset:?} {shape:?}");
+    h.cancel();
+}
+
+/// The bevel's Repeat and Revolve's Segments are counts: their rows show no unit after the number, while Taper, a
+/// share, shows its percent sign.
+#[test]
+fn the_bevel_repeat_and_the_revolve_segments_show_no_unit() {
+    use craft::ui::patterns::form_dialogs::DialogFields;
+    use craft::ui::runtime::env::UnitKind;
+    let app = VectorcraftApp::new(Session::new(), crate::Services::default());
+    let unit = |effect: &str, page: &str, key: &str| {
+        let data = super::super::three_d::data(&app, Some(effect), &serde_json::Map::new());
+        let mut fields = DialogFields::new();
+        fields.set("__page", FieldValue::Text(page.into()));
+        super::params(&data, &fields, super::Place::Dialog).into_iter().find(|p| p.key == key).map(|p| p.unit)
+    };
+    assert_eq!(unit(EXTRUDE, "object", "bevelRepeat"), Some(None));
+    assert_eq!(unit(REVOLVE, "rotation", "segments"), Some(None));
+    assert_eq!(unit(EXTRUDE, "object", "taper"), Some(Some(UnitKind::Percent)));
+}
+
 #[test]
 fn reset_all_keeps_map_art_and_its_options() {
     let mut h = drawn(SQUARE, CLASSIC_EXTRUDE);

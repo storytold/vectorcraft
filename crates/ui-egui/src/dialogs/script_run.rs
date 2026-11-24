@@ -32,11 +32,12 @@ use std::path::Path;
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Outcome as _, Show as _};
+use craft::ui::contract::{Bind, Outcome as _, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::{
     DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id,
 };
 use craft::ui::display::Text;
+use craft::ui::layout_components::Stack;
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use egui::Ui;
@@ -65,6 +66,8 @@ pub(crate) const BY_PERSON: &str = "Only the person at the keyboard can allow a 
 
 /// The note the file dialog shows when the person picked more files than a script is given.
 const PICKED_LEFT_OUT: &str = "A script is given at most 2,048 files: the files picked after them were left out";
+/// The height of the Script File Access prompt's list of picked files before it scrolls, in points.
+const PICKED_LIST_HEIGHT: f32 = 120.0;
 
 /// The warning before a script runs. One type per question, so the host's per-type results never
 /// mix the three questions of this area.
@@ -353,7 +356,12 @@ impl StackDialog for ScriptFiles {
             }
             let rows = |ui: &mut Ui| paths.iter().for_each(|path| drop(Text::new(shown_text(path, false)).show(ui)));
             if paths.len() > 1 {
-                egui::ScrollArea::vertical().id_salt("script-picked").max_height(120.0).show(ui, rows);
+                Stack::new()
+                    .label(tl!("Picked files"))
+                    .scroll(Scroll::vertical())
+                    .room_height(PICKED_LIST_HEIGHT)
+                    .id_salt("script-picked")
+                    .show(ui, |ui, _| rows(ui));
             } else {
                 rows(ui);
             }

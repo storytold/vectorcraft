@@ -9,7 +9,7 @@ use craft::behavior::{DisplayOrder, ItemSource, SelectionChange};
 use craft::theme::Srgba;
 use craft::ui::buttons::Button;
 use craft::ui::contract::Entry;
-use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, clicked};
+use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamKind, ParamRows};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::LengthUnits;
@@ -174,8 +174,13 @@ impl Rows<'_> {
         self.defaults.get(key).and_then(Value::as_f64).unwrap_or(0.0)
     }
 
-    fn range(&self, key: &str, label: &'static str, (lo, hi): (f64, f64), decimals: u32, unit: UnitKind) -> Param {
-        Param::new(key, label, ParamKind::range(lo, hi, self.default_number(key), SliderScale::Linear)).decimals(decimals).unit(unit).resettable()
+    fn range(&self, key: &str, label: &'static str, range: (f64, f64), decimals: u32, unit: UnitKind) -> Param {
+        self.plain(key, label, range, decimals).unit(unit)
+    }
+
+    /// A slider over a number shown with no unit after it, such as a count.
+    fn plain(&self, key: &str, label: &'static str, (lo, hi): (f64, f64), decimals: u32) -> Param {
+        Param::new(key, label, ParamKind::range(lo, hi, self.default_number(key), SliderScale::Linear)).decimals(decimals).resettable()
     }
 
     fn degrees(&self, key: &str, label: &'static str, range: (f64, f64), decimals: u32) -> Param {
@@ -272,7 +277,7 @@ fn object_rows(data: &Data, rows: &Rows, effect: &str, place: Place) -> Vec<Para
     out.push(bevel_row(data, effect, place));
     out.push(sized(rows.length("bevelWidth", tl!("Width"), (0.0, 1000.0))));
     out.push(sized(rows.length("bevelHeight", tl!("Height"), (0.0, 1000.0))));
-    out.push(sized(rows.range("bevelRepeat", tl!("Repeat"), (1.0, 32.0), 0, UnitKind::Pixels)));
+    out.push(sized(rows.plain("bevelRepeat", tl!("Repeat"), (1.0, 32.0), 0)));
     out.push(sized(rows.percent("bevelSpace", c3("Space"), (0.0, 90.0))));
     out.push(sized(rows.flag("bevelInside", tl!("Bevel Inside"))));
     out.push(sized(rows.flag("bevelBothSides", tl!("Bevel both sides"))));
@@ -294,15 +299,16 @@ fn bevel_heading() -> Param {
     let defaults = bevel_defaults();
     let keys: Vec<String> = defaults.keys().cloned().collect();
     Param::custom("__bevelHeading", c3("Bevel"), move |ui, fields, _| {
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(c3("Bevel")).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if pressed(ui, tl!("Reset"), differs_from(fields, &defaults), None) {
-                    defaults.iter().for_each(|(k, v)| set_value(fields, k, v));
-                }
-            });
-        })
-        .response
+        let mut reset = false;
+        let changed = differs_from(fields, &defaults);
+        let shown = crate::panels::section(c3("Bevel"))
+            .id_salt("bevel")
+            .controls(|ui, _| reset = pressed(ui, tl!("Reset"), changed, None))
+            .show(ui, |_, _| {});
+        if reset {
+            defaults.iter().for_each(|(k, v)| set_value(fields, k, v));
+        }
+        shown.output.response
     })
     .companions(keys)
     .full_width()
@@ -408,7 +414,7 @@ fn differs_from(fields: &DialogFields, defaults: &serde_json::Map<String, Value>
 
 /// Revolve's Rotation page: shape, view and the advanced settings.
 fn revolve_rows(rows: &Rows, effect: &str, place: Place) -> Vec<Param> {
-    let mut advanced = vec![rows.range("segments", tl!("Segments"), (8.0, 128.0), 0, UnitKind::Pixels)];
+    let mut advanced = vec![rows.plain("segments", tl!("Segments"), (8.0, 128.0), 0)];
     if place == Place::Dialog {
         advanced.push(rows.flag("__showAxis", tl!("Show axis")));
     }

@@ -465,3 +465,25 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     cancel(&mut app, PICKER_KIND);
     finish(&mut app);
 }
+
+/// With two files picked, the file dialog lists them in a scrolled group named Picked files.
+#[test]
+fn a_scripts_file_dialog_lists_several_picked_files_in_a_named_group() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "File.openDialog('Pick', '', true);" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    let given = vec!["/picked/a.txt".to_string(), "/picked/b.txt".to_string()];
+    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().map(|d| d.add(given, true, false))).unwrap();
+    frame(&app, vec![]);
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+    let out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| dialogs.with(|host| host.run(ui)));
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    let groups: Vec<_> =
+        update.nodes.iter().filter(|(_, node)| node.role() == egui::accesskit::Role::Group).filter_map(|(_, node)| node.label()).collect();
+    assert!(groups.contains(&"Picked files"), "a group named Picked files: {groups:?}");
+    cancel(&mut app, PICKER_KIND);
+    finish(&mut app);
+}
