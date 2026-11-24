@@ -409,8 +409,9 @@ fn objects(a: &App) -> usize {
     a.app.session.active().unwrap().doc.layers[0].children().unwrap().len()
 }
 
-/// #8432: with text selected in another window's label, Copy and then Cut in the main window copy
-/// the art and then cut it: that window's text is not the main window's label selection.
+/// #8432: with text selected in another window's label, Copy and then Cut in the main window's next
+/// frame copy the art and then cut it: the art Copy runs in the Cut's frame, and its text is not
+/// taken for a label's copy of the Cut.
 #[test]
 fn copy_then_cut_with_text_selected_in_another_window_copy_and_cut_the_art() {
     let mut a = App::new();
@@ -418,9 +419,44 @@ fn copy_then_cut_with_text_selected_in_another_window_copy_and_cut_the_art() {
     let copy = a.frame(vec![Event::ModifiersChanged(Modifiers::COMMAND), Event::Copy]);
     let cut = a.frame(vec![Event::ModifiersChanged(Modifiers::COMMAND), Event::Cut]);
     a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
-    assert!(copied(&copy).iter().chain(&copied(&cut)).all(|t| t != "234 pt"), "the other window's text was not copied");
-    assert!(copied(&copy).iter().chain(&copied(&cut)).any(|t| t.starts_with("<?xml")), "Copy copied the art");
-    assert_eq!(objects(&a), 1, "Cut cut the selected object");
+    assert!(copied(&copy).is_empty(), "no label of the main window copied the text");
+    assert!(copied(&cut).iter().any(|t| t.starts_with("<?xml")), "Copy copied the art a frame later");
+    assert_eq!(objects(&a), 1, "Cut cut the selected object a frame later");
+}
+
+/// #8432: with text selected in another window's label, a Cut that runs a pass later cuts the
+/// object selected when it was pressed, not the objects a Select All in the same frame selected.
+/// The objects Select All selected stay selected after it.
+#[test]
+fn a_cut_left_to_the_labels_cuts_the_selection_it_was_given() {
+    let mut a = App::new();
+    select_label_text_in_another_window(&mut a);
+    assert_eq!(a.selected(), 1);
+    a.frame(vec![Event::ModifiersChanged(Modifiers::COMMAND), Event::Cut, press(Key::A, Modifiers::COMMAND)]);
+    a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
+    assert_eq!(objects(&a), 1, "Cut cut only the object selected when it was pressed");
+    assert_eq!(a.selected(), 1, "the other object Select All selected stays selected");
+}
+
+/// #8432: as above, with two opposite sides of a rectangle direct-selected: the Cut leaves the other
+/// two sides as separate paths, which join the objects Select All selected.
+#[test]
+fn a_cut_left_to_the_labels_keeps_the_pieces_of_a_split_path_selected() {
+    let mut a = App::new();
+    let rect = a.app.session.active().unwrap().selection.objects[0];
+    a.app
+        .session
+        .select(|_, sel| {
+            sel.set([rect]);
+            sel.anchors.insert(rect, [(0, 0), (0, 1), (0, 2), (0, 3)].into());
+            sel.segments.insert(rect, [(0, 0), (0, 2)].into());
+        })
+        .unwrap();
+    select_label_text_in_another_window(&mut a);
+    a.frame(vec![Event::ModifiersChanged(Modifiers::COMMAND), Event::Cut, press(Key::A, Modifiers::COMMAND)]);
+    a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
+    assert_eq!(objects(&a), 3, "two sides of the rectangle and the other rectangle remain");
+    assert_eq!(a.selected(), 3, "all three are selected after Select All");
 }
 
 /// #8432: Copy or Cut with a Document Info value's text selected, by its keys or the menu bar's
