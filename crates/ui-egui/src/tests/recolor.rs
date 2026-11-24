@@ -688,13 +688,15 @@ fn new_hsb(r: &Recolor) -> Vec<[f32; 3]> {
 fn dragging_a_wheel_handle_keeps_the_other_handles_apart() {
     let mut r = edit(&["cmyk 0 100 100 0", "cmyk 100 0 0 0"]);
     let (c, radius) = wheel(&r);
-    // Each row's new colour: its hue, and where its marker is drawn.
-    let handles = |r: &Recolor| -> Vec<(f32, Pos2)> { new_hsb(r).iter().enumerate().map(|(i, hsb)| (hsb[0], marker(r, i))).collect() };
+    // Each row's new colour: its hue, and where the wheel puts it, worked out from the rows because mid-drag the
+    // markers' names lag one move behind (the wheel draws before the pass's move applies, as production's did).
+    let handles = |r: &Recolor| -> Vec<(f32, Pos2)> { new_hsb(r).iter().map(|hsb| (hsb[0], polar(c, hsb[0], radius * hsb[1]))).collect() };
     let gap = |a: f32, b: f32| (a - b).rem_euclid(360.0).min((b - a).rem_euclid(360.0));
     let start = handles(&r);
-    // Drag the red handle a quarter turn, a few points at a time.
-    let s0 = start[0].1.distance(c) / radius;
-    let mut path = vec![start[0].1];
+    // Drag the red handle a quarter turn, a few points at a time, from where its marker is drawn.
+    let from = marker(&r, 0);
+    let s0 = from.distance(c) / radius;
+    let mut path = vec![from];
     path.extend((1..=12).map(|k| polar(c, start[0].0 + 6.0 * k as f32, radius * (s0 + (0.75 - s0) * k as f32 / 12.0))));
     drag_path(&mut r, &path);
     let p = path[path.len() - 1];
