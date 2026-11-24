@@ -6,16 +6,20 @@
 //! {color, transparency, overprint}, stroke: {color, transparency, overprint, weight, cap, join,
 //! miter, dash}}, character, paragraph}`, each leaf a bool).
 
+use craft::behavior::Mixed;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Outcome as _, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::display::Text;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::Label;
 use serde_json::{Value, json};
 
-use super::DialogSpec;
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::{form, host};
+use crate::VectorcraftApp;
 
 /// The dialog kind of Eyedropper Options.
 pub const KIND: &str = "eyedropperOptions";
-
-pub(super) const SPEC: DialogSpec = DialogSpec { heading: |_| tl!("Eyedropper Options").into(), body, confirm, min_width: 460.0, ..DialogSpec::FORM };
 
 /// The raster sample sizes: (pixels square, label).
 const SAMPLE_SIZES: [(u64, &str); 3] = [(1, "Point Sample"), (3, "3 x 3 Average"), (5, "5 x 5 Average")];
@@ -41,9 +45,41 @@ const TREE: &[(&str, &str, u8)] = &[
     ("/paragraph", "Paragraph Style", 0),
 ];
 
+/// The rows: the sample size (its option ids are the sizes as text) and the two trees.
+fn params() -> Vec<Param> {
+    let sizes = SAMPLE_SIZES.iter().map(|(n, label)| (n.to_string(), Label::from(tl!(label)))).collect();
+    vec![
+        Param::new("sampleSize", tl!("Raster Sample Size:"), ParamKind::choice(sizes, Some("1".into()))),
+        Param::custom("trees", "", trees).companions(["pickUp", "apply"]),
+    ]
+}
+
 /// Open the dialog with the current options.
 pub fn open(app: &mut VectorcraftApp) {
-    app.ui.dialog = Some(Dialog::new(KIND, json!(app.session.prefs.eyedropper)));
+    let params = params();
+    let mut options = json!(app.session.prefs.eyedropper);
+    if let Some(size) = options.get("sampleSize").and_then(Value::as_u64) {
+        options["sampleSize"] = json!(size.to_string());
+    }
+    let fields = options.as_object().map(|m| form::fields_of(&params, m)).unwrap_or_default();
+    let shown = params.clone();
+    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| {
+        let mut values = form::json_of(&params, &result.fields);
+        // The command takes the size as a number.
+        if let Some(size) = values.get("sampleSize").and_then(Value::as_str).and_then(|s| s.parse::<u64>().ok()) {
+            values.insert("sampleSize".into(), json!(size));
+        }
+        app.run("eyedropper.setOptions", Value::Object(values)).map(|_| ())
+    };
+    let opened = app.ui_ctx.clone().and_then(|ctx| {
+        let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |f| {
+            ParamDialog::new(KIND, tl!("Eyedropper Options"), shown.clone()).values(Bind::bound(f))
+        });
+        host::open_held(app, dialog, ok)
+    });
+    if opened.is_none() {
+        app.status(tl!("No window to show the dialog in.").to_string());
+    }
 }
 
 /// A flag or a branch of flags: `Some(on)` when every flag under it is `on`, `None` when mixed.
@@ -67,83 +103,63 @@ fn set_all(v: &mut Value, on: bool) {
     }
 }
 
+/// The two trees side by side.
+fn trees(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut CustomContext) -> egui::Response {
+    Row::new()
+        .show(ui, |ui, _| {
+            for (key, title) in [("pickUp", tl!("Eyedropper Picks Up:")), ("apply", tl!("Eyedropper Applies:"))] {
+                Stack::new().show(ui, |ui, _| {
+                    Text::new(title).show(ui);
+                    tree(ui, fields, key);
+                });
+            }
+        })
+        .output
+}
+
 /// One tree (`key`: `pickUp` or `apply`) of checkboxes; a branch's box sets everything under it.
-fn tree(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str) {
-    ui.vertical(|ui| {
-        ui.label(egui::RichText::new(tl!(title)).strong());
-        ui.add_space(4.0);
-        let Some(t) = d.fields.get_mut(key) else { return };
-        for (path, label, depth) in TREE {
-            let Some(node) = t.pointer_mut(path) else { continue };
-            let s = state(node);
-            ui.horizontal(|ui| {
-                ui.add_space(*depth as f32 * 18.0);
-                if widgets::check3(ui, label, s, true) {
-                    set_all(node, s != Some(true));
-                }
-            });
-        }
-    });
-}
-
-fn body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let size = d.fields.get("sampleSize").and_then(Value::as_u64).unwrap_or(1);
-    let current = SAMPLE_SIZES.iter().find(|(n, _)| *n == size).map_or(SAMPLE_SIZES[0].1, |s| s.1);
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Raster Sample Size:"));
-        let labels = SAMPLE_SIZES.map(|s| s.1);
-        if let Some(i) = widgets::dropdown(ui, "eyedropper-sample", current, &labels, 150.0) {
-            d.fields.insert("sampleSize".into(), json!(SAMPLE_SIZES[i].0));
-        }
-    });
-    ui.add_space(10.0);
-    ui.horizontal_top(|ui| {
-        tree(ui, d, "pickUp", tl!("Eyedropper Picks Up:"));
-        ui.add_space(24.0);
-        tree(ui, d, "apply", tl!("Eyedropper Applies:"));
-    });
-    false
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    super::run_and_close(app, "eyedropper.setOptions", Value::Object(d.fields.clone()))
+fn tree(ui: &mut egui::Ui, fields: &mut DialogFields, key: &str) {
+    let Some(FieldValue::Json(mut t)) = fields.get(key).cloned() else { return };
+    let mut changed = false;
+    for (path, label, depth) in TREE {
+        let Some(node) = t.pointer_mut(path) else { continue };
+        let s = state(node);
+        Row::new().indent(*depth).show(ui, |ui, _| {
+            let shown = s.map_or(Mixed::Mixed, Mixed::Same);
+            let out = Checkbox::new(Bind::given(shown)).label(tl!(label)).show(ui);
+            if clicked(out.response()) {
+                set_all(node, s != Some(true));
+                changed = true;
+            }
+        });
+    }
+    if changed {
+        fields.set(key, FieldValue::Json(t));
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::tests_rectangular_grid::{field_of, set_of, try_confirm};
     use super::*;
     use vectorcraft_engine::Session;
 
     #[test]
     fn the_trees_set_the_options() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("tool.options", json!({"tool": "eyedropper"})).unwrap();
-        let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
-        for label in [
-            "Eyedropper Options",
-            "Raster Sample Size:",
-            "Point Sample",
-            "Eyedropper Picks Up:",
-            "Eyedropper Applies:",
-            "Focal Stroke",
-            "Dash Pattern",
-            "Paragraph Style",
-        ] {
-            assert!(text.contains(label), "{label} in {text}");
-        }
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        open(&mut app);
         // A branch's box sets the flags under it; a mixed branch shows a dash.
-        let d = app.ui.dialog.as_mut().unwrap();
-        let t = d.fields.get_mut("apply").unwrap();
-        set_all(t.pointer_mut("/appearance/stroke").unwrap(), false);
-        assert_eq!(state(&t["appearance"]["stroke"]), Some(false));
-        assert_eq!(state(&t["appearance"]), None);
-        d.fields.insert("sampleSize".into(), json!(5));
-        super::super::confirm(&mut app).unwrap();
+        let mut apply = field_of(&app, KIND, "apply");
+        set_all(apply.pointer_mut("/appearance/stroke").unwrap(), false);
+        assert_eq!(state(&apply["appearance"]["stroke"]), Some(false));
+        assert_eq!(state(&apply["appearance"]), None);
+        set_of(&mut app, KIND, "apply", apply).unwrap();
+        set_of(&mut app, KIND, "sampleSize", json!("5")).unwrap();
+        try_confirm(&mut app, KIND).unwrap();
         let o = app.session.prefs.eyedropper;
         assert_eq!(
             (o.sample_size, o.apply.appearance.stroke.dash, o.apply.appearance.fill.color, o.pick_up.appearance.stroke.dash),
             (5, false, true, true)
         );
-        assert!(app.ui.dialog.is_none());
     }
 }

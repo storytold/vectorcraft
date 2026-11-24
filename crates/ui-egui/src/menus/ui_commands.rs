@@ -396,7 +396,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "align.toSelection",
         "Align to Selection",
         "",
-        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected, since one object aligns to the artboard}; with the Artboard tool chosen the selected objects keep their key",
+        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected with no anchor points selected and the Artboard tool is not chosen, since one object aligns to the artboard; \"selection\" while anchor points are selected (Direct Selection) and with the Artboard tool chosen}; with the Artboard tool chosen the selected objects keep their key",
     ),
     (
         "align.toKeyObject",
@@ -571,18 +571,17 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{double?: bool, toolbar?: name} show the toolbar's tools (with `toolbar`, that toolbar made with New Toolbar's) in two columns (true), one (false) or toggle (omitted), as the double arrow at the top of the toolbar does; returns the new state",
     ),
-    ("window.toolbarAdvanced", "Toolbar: Advanced / Basic", "", "{}"),
+    (
+        "window.toolbarAdvanced",
+        "Toolbar: Advanced / Basic",
+        "",
+        "{advanced?: bool} give the Tools panel the Advanced toolbar (true) or the Basic one (false), as the All Tools drawer's menu does, which then edits the Tools panel's toolbar also when it was editing one made with New Toolbar; omitted, toggle between them; returns the new state",
+    ),
     (
         "window.toolbarCompact",
         "Compact Tools",
         "",
         "{on?: bool} use smaller tool cells and a narrower main Tools panel (true), restore its regular spacing (false), or toggle (omitted or null); the choice starts off and is kept with the workspace, independently of one/two columns and Basic/Advanced or edited tools. Tool icons and footer controls keep their size; tool flyouts, torn-off groups and named custom toolbars keep their spacing. A value other than true, false or null is an error and changes nothing; returns the new state",
-    ),
-    (
-        "window.toolsBesideCanvas",
-        "Keep Tools Beside the Canvas",
-        "",
-        "{on?: bool} dock the Tools panel between the left-side panels and the canvas (true) or at the window's left edge (false, the default), or toggle (omitted or null; any other value is an error); a floating Tools panel stays floating and docks at the chosen place when it is docked again. Dropping a floating Tools panel on the canvas's left edge, right of panels docked on the left, turns it on, and on the window's left edge turns it off; with no panels docked on the left, or in the column both edges share beside panels collapsed to icons, a drop leaves it as it is. Kept with the workspace; a workspace saved without it docks Tools at the window's edge. Returns the new state",
     ),
     (
         "window.floatTools",
@@ -779,7 +778,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel.dock",
         "Dock Panel",
         "",
-        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window, or beside the canvas inside any left-side dock while window.toolsBesideCanvas is on; with side: right (or End) on the right, between the canvas and the panels, as dropping it there or on the window's right edge does (default: the side it docked at last; left or Start docks it on the left), returning {panel, floating, pos, side}. Returns {layout, closed, floating}",
+        "{panel: id or \"tools\", anchor?: id, zone?: tab|center|left|right|top|bottom|above|below, before?: id, group?: bool, column?: bool or n, side?: Start|End, onto?: id, above?: id, below?: id, icon?: bool, collapsed?: bool} dock a panel (with `group`, its whole group): with no destination a floating panel goes back where it floated from (else joins the first dock group) and a hidden one shows where it was; with `anchor` (or `onto`) in the group holding that panel, `zone` as for window.panel.move; with `side`, as a new innermost column of that dock (`column: true` then moves its whole dock column or floating window); `column: n` with no other destination docks its group, or the whole floating window it floats in, as a new dock column at that place (1: next to the icon column, counting inwards; `true`: innermost); `icon: true` puts it in a row of its own at the end of the icon column; `above` / `below` as a group of its own above or below the group holding that panel. `collapsed` then minimizes or restores its group. \"tools\" docks the Tools panel at the left edge of the window; with side: right (or End) on the right, between the canvas and the panels, as dropping it there or on the window's right edge does (default: the side it docked at last; left or Start docks it on the left), returning {panel, floating, pos, side}. Returns {layout, closed, floating}",
     ),
     (
         "window.collapseDock",
@@ -1345,12 +1344,6 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{selected?: preset name} open the presets manager (dialog `flattenerPresets`, fields `selected`, then the selected preset's `name` and option keys: setting them on a saved preset saves it, a new `name` renames it; built-in presets don't change). New, Delete, Import… and Export… run flattener.presets.save / delete / import / export",
     ),
     (
-        "ui.imageTracePresetDialog",
-        "Save as New Preset…",
-        "",
-        "{params?: tracing settings (default: the Default preset's), rename?: a saved preset's name} the Image Trace panel's Manage Presets: open Save as New Preset… for those settings, or with `rename`, Rename… for that saved preset (dialog `imageTracePreset`, field `name`: a new \"Tracing Preset N\" or the preset's name); OK runs imageTrace.presets.save with the name (as `newName` when renaming), and the panel shows the preset it made from its settings",
-    ),
-    (
         "ui.tracingPresetsDialog",
         "Tracing Presets…",
         "",
@@ -1533,7 +1526,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.corners",
         "Corners…",
         "",
-        "{id?, corners?: [i…]} open Corners for path `id` (default: the selected one) and its corners (anchor indices of the path with its corners uncut, as object.setLiveShape takes them: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else every corner) (dialog `corners`: kind (round|invertedRound|chamfer), radius (pt); double-clicking a corner widget opens it too): OK runs object.setLiveShape",
+        "{id?, corners?: [i…]} open Corners for path `id` (default: the selected one) and its corners (anchor indices of the path with its corners uncut, as object.setLiveShape takes them: a rectangle's 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; default: the Direct-Selected corners, else every corner) (dialog `corners`: kind (round|invertedRound|chamfer), radius (pt); double-clicking a corner widget with Direct Selection opens it too): OK runs object.setLiveShape",
     ),
     (
         "ui.simplifyAuto",
@@ -1557,7 +1550,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.dialogReset",
         "Reset",
         "",
-        "{} the open dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, dialog `flareOptions`; Save PDF, dialog `savePdf`): its fields go back to their defaults (Save PDF: the chosen preset's settings, with the path and artboards kept) and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open, the open one has no Reset, or Save PDF's chosen preset was deleted (the fields stay as they are)",
+        "{} the top dialog's Reset, which its Cancel button reads while Alt (Option on macOS) is held (Flare Tool Options, Save PDF): its fields go back to their defaults (Save PDF: the chosen preset's settings, with the path and artboards kept) and the dialog stays open, so OK applies them → the dialog; an error when no dialog is open, the top one has no Reset, or Save PDF's chosen preset was deleted (the fields stay as they are)",
     ),
     (
         "ui.justification",
