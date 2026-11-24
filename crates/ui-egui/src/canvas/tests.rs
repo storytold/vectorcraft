@@ -2788,12 +2788,14 @@ fn space_moves_a_text_edit_zoom_marquee_after_cmd_is_let_go() {
     app.session.prefs.placeholder_text = false;
     app.run("prefs.set", json!({"key": "animatedZoom", "value": false})).unwrap();
     let ctx = crate::testing::ui_context();
+    ctx.enable_accesskit();
     let id = start_typing(&mut app, &ctx);
     let rect = app.canvas_view().unwrap().rect;
-    let at = rect.center() - vec2(100.0, 50.0);
     let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
     let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
-    typing_frame(&mut app, &ctx, vec![Event::Text("a".into())]);
+    let out = typing_frame(&mut app, &ctx, vec![Event::Text("a".into())]);
+    // The press starts on the canvas under the task bar: a press on the bar drags the bar.
+    let at = under_task_bar(&out, rect);
     let z0 = app.view().unwrap().zoom;
     // Space held since the Cmd+Space press sizes the marquee, also once Cmd is let go.
     typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
@@ -2823,6 +2825,8 @@ fn space_moves_a_text_edit_zoom_marquee_after_cmd_is_let_go() {
     assert_eq!(plain(&app, id), "a ", "Space types a space");
     // With Animated Zoom, Space during the Cmd+Space drag does not type a space either.
     app.run("prefs.set", json!({"key": "animatedZoom", "value": true})).unwrap();
+    // The zoom moved the text and its task bar.
+    let at = under_task_bar(&typing_frame(&mut app, &ctx, vec![]), app.canvas_view().unwrap().rect);
     typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
     typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
     typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::NONE), space(false, Modifiers::NONE)]);
@@ -3382,7 +3386,7 @@ fn art_moved_off_the_canvas_resumes_when_the_pointer_returns() {
 
 // One frame of the canvas as the app runs it, with Escape taken last in the pass; the commands the
 /// frame's keys fired then run, as the next frame's input takes them first.
-fn typing_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+fn typing_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> egui::FullOutput {
     app.ui_ctx = Some(ctx.clone());
     let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| {
@@ -3391,6 +3395,14 @@ fn typing_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui:
     });
     out.textures_delta.clear();
     craft::ui::shell::embed::before_input(ctx, |output| app.frame_input(output));
+    out
+}
+
+/// A point on the canvas of `rect` just under the Contextual Task Bar of the frame `out`, or `rect`'s centre with no bar.
+fn under_task_bar(out: &egui::FullOutput, rect: egui::Rect) -> Pos2 {
+    let nodes = out.platform_output.accesskit_update.as_ref().map_or(&[][..], |u| &u.nodes[..]);
+    let bar = nodes.iter().find(|(_, n)| n.label() == Some(BAR)).and_then(|(_, n)| n.bounds());
+    bar.map_or(rect.center(), |b| pos2(rect.center().x - 100.0, b.y1 as f32 + 20.0))
 }
 
 fn preedit(t: &str, chars: usize) -> egui::Event {
