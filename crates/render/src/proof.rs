@@ -35,7 +35,7 @@ pub use vectorcraft_color::cms::{Intent, ProofSetup, ProofTarget};
 use vectorcraft_color::{Color, Paint, Swatch, SwatchGroup};
 pub use vectorcraft_doc::inks::{Inks, Link, Plate, inks, map_document_colors, map_node_colors, plates, spot_color};
 use vectorcraft_doc::inks::{StopPlates, map_node_inks, stop_inks};
-use vectorcraft_doc::overprint::darken_overprints;
+use vectorcraft_doc::overprint::{DiscardWhite, darken_overprints};
 use vectorcraft_doc::{AppearanceItem, Document, ImageBlob, Node, NodeId, Shared};
 use vello_cpu::Pixmap;
 use vello_cpu::color::PremulRgba8;
@@ -399,7 +399,8 @@ pub(crate) struct Prepared {
 /// What [`prepare`] reads besides the art.
 #[derive(PartialEq)]
 struct Inputs {
-    discard_white: bool,
+    /// Discard White Overprint, with the spot inks a white tint of which still overprints.
+    discard_white: DiscardWhite,
     /// [`images_state`]: which pixels a colorized image shows, and whether they take its color
     /// ([`ImageBlob::takes_colorize`]), and so whether it darkens, depend on the document's images.
     images: u64,
@@ -444,7 +445,7 @@ impl PartialEq for Plates {
 /// print it ([`plate_color`]).
 struct How<'a> {
     doc: &'a Document,
-    discard_white: bool,
+    discard_white: DiscardWhite,
     /// Separations Preview: the color settings, the proof setup and the visible plates.
     plates: Option<(&'a Cms, &'a ProofSetup, &'a [String])>,
 }
@@ -458,7 +459,7 @@ impl How<'_> {
 
     /// Change the fills, strokes and other colors of node `a`, which holds no members.
     fn apply(&self, a: &mut Arc<Node>) {
-        darken_overprints(a, self.discard_white, &self.doc.images);
+        darken_overprints(a, &self.discard_white, &self.doc.images);
         if let Some((c, proof, visible)) = self.plates {
             map_node_inks(Arc::make_mut(a), &mut |col, sw, plates| plate_color(self.doc, c, proof, visible, col, sw, plates));
         }
@@ -477,7 +478,7 @@ pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions, kept: &mut Op
     let seps = opts.proof.as_ref().and_then(|p| p.separations.as_ref().map(|s| (p, s)));
     let c = cms::active();
     let inputs = Inputs {
-        discard_white: doc.setup.discard_white_overprint,
+        discard_white: DiscardWhite::of(doc),
         images: images_state(&doc.images),
         plates: seps.map(|(proof, _)| Plates {
             proof: proof.clone(),
@@ -489,7 +490,7 @@ pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions, kept: &mut Op
         }),
     };
     let earlier = kept.take().filter(|k| k.inputs == inputs);
-    let how = How { doc, discard_white: inputs.discard_white, plates: seps.map(|(proof, visible)| (&*c, proof, visible.as_slice())) };
+    let how = How { doc, discard_white: inputs.discard_white.clone(), plates: seps.map(|(proof, visible)| (&*c, proof, visible.as_slice())) };
     let none = (vec![], vec![]);
     let (layers, art) = earlier.as_ref().map_or((&none, &none), |k| (&k.layers, &k.art));
     let made_layers = prepare_list(&doc.layers, &layers.0, &layers.1, &how);

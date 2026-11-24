@@ -375,6 +375,32 @@ fn separations_hide_an_overprinting_image_on_plates_without_its_ink() {
     }
 }
 
+/// With Discard White Overprint on, an overprinting colorized image in a tint of a spot ink whose
+/// color is white still overprints, in the PDF and on printed separations: it prints as that ink,
+/// not as paper white.
+#[test]
+fn a_white_spot_ink_image_overprints_with_discard_white_overprint() {
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let spot = Paint::Solid { color: white, swatch: Some("White Ink".into()), tint: 0.5 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    d.swatches.push(Swatch { name: "White Ink".into(), paint: Paint::solid(white), global: true, spot: true });
+    d.setup.discard_white_overprint = true;
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    let out = pdf(&d);
+    assert!(String::from_utf8_lossy(&out).contains("/OP true/op true"), "the image overprints");
+    assert!(images(&out).contains(&("DeviceN".into(), vec!["White Ink".into()], true)), "{:?}", images(&out));
+
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+    for postscript in [true, false] {
+        let job = plan(&d, &PrintOptions { settings: settings.clone(), postscript, ..Default::default() }).unwrap();
+        for (name, p) in names.iter().zip(&job.plates) {
+            assert_eq!(p.layers[0].children().unwrap()[0].visible, name == "White Ink", "{name}");
+        }
+    }
+}
+
 /// An overprinting colorized image whose pixels don't take its color (a color preview of its
 /// file) is separated as those pixels on every plate, so it is not hidden on the plates its
 /// color puts no ink on.

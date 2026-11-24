@@ -10,7 +10,7 @@ use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{BlendMode, Color, GradientKind, GradientStop, Paint};
 use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
 use vectorcraft_doc::overprint::{
-    colorized_shown_key, darken_overprints, image_overprints_whole, image_row_draws, is_black_ink, is_colorized_image, is_white, refuses_colorize,
+    DiscardWhite, colorized_shown_key, darken_overprints, image_overprints_whole, image_row_draws, is_black_ink, is_colorized_image, refuses_colorize,
 };
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
 
@@ -238,8 +238,8 @@ impl<'a> Separator<'a> {
 
     /// Overprinting fills and strokes of `a`'s subtree with a Normal blending mode, and
     /// overprinting character fills and strokes, that put none of ink `plate` down leave its plate
-    /// as it is: they are drawn as nothing on it (white ones with `discard_white` aside, which
-    /// knock out). A writer without blending modes (PostScript) then keeps the ink below them,
+    /// as it is: they are drawn as nothing on it (white ones that `discard_white` knocks out
+    /// aside, [`DiscardWhite::discards`]). A writer without blending modes (PostScript) then keeps the ink below them,
     /// where it would draw their Darken as a knockout. One that puts any ink down is drawn, and on
     /// a PostScript plate its ink replaces the ink below, as a nonzero component of an overprinting
     /// color replaces the backdrop's with overprint mode 1 (ISO 32000-1, 11.7.4.2). On a
@@ -250,8 +250,8 @@ impl<'a> Separator<'a> {
     /// draws, the PostScript writer leaves out the image's paper-white pixels and draws the row.
     /// A colorized image that does not overprint as a whole, or whose pixels don't take its color
     /// ([`refuses_colorize`]) and so print as they are, knocks out on the plate.
-    fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: bool) {
-        let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !(discard_white && is_white(p)) && self.no_ink(plate, p);
+    fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: &DiscardWhite) {
+        let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !discard_white.discards(p) && self.no_ink(plate, p);
         let n = Arc::make_mut(a);
         let whole = image_overprints_whole(n, discard_white, &self.doc.images);
         if n.colorize_overprints() && !whole {
@@ -296,12 +296,12 @@ impl<'a> Separator<'a> {
     /// ink the plate below shows through instead of being knocked out.
     pub fn plate(&self, plate: &str) -> Document {
         let mut d = self.doc.clone();
-        let discard_white = d.setup.discard_white_overprint;
+        let discard_white = DiscardWhite::of(self.doc);
         let mut colorized = BTreeSet::new();
         let nodes = d.layers.iter_mut().chain(d.symbols.iter_mut().map(|s| &mut s.art)).chain(d.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
         for n in nodes {
-            self.clear_inkless_overprints(plate, n, discard_white);
-            darken_overprints(n, discard_white, &d.images);
+            self.clear_inkless_overprints(plate, n, &discard_white);
+            darken_overprints(n, &discard_white, &d.images);
             self.node(plate, Arc::make_mut(n));
             keep_colorized_pixels(n, &d.images, &mut colorized);
         }

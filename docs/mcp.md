@@ -5089,9 +5089,10 @@ printed plates an image whose pixels do not take its color (a preview of its fil
 pixels. Older files that listed Overprint Black objects in the document get the flags on load.
 PDF export writes them with `advanced.overprint: "preserve"` (the default): each overprinting fill and stroke sets a
 graphics state with `/OP true /op true /OPM 1` (`/OPM 0` in PDF/A). With `discardWhiteOverprint` (`document.setup`, on by
-default) white ones knock out instead; `"discard"` writes none. EPS export (`overprints: "preserve"`, the default) turns
+default) white ones knock out instead, but not a tint above 0% of a spot swatch, which prints as that ink;
+`"discard"` writes none. EPS export (`overprints: "preserve"`, the default) turns
 overprinting on for a colorized image's color as it does for fills and strokes, except a white color with
-`discardWhiteOverprint` on, which knocks out. PDF export writes an overprinting
+`discardWhiteOverprint` on, which knocks out unless it is such a spot tint. PDF export writes an overprinting
 colorized image in a gray or CMYK color in only the process inks the color puts down, and EPS export does too (one
 DeviceN image at Level 3, one Separation image per ink at Level 2). The previews and printed separations show a
 colorized image knocking out when it has a visible effect of its own other than a warp or a geometry effect (a drop
