@@ -6,6 +6,7 @@ use craft::theme::variant::Tone;
 use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::choice::ChoiceLook;
 use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, SectionRhythm};
+use craft::ui::docking::IconGroupSeparator;
 use craft::ui::list::CommandHighlight;
 use craft::ui::menu::MenuTitlePad;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
@@ -706,6 +707,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.values.set(MenuTitlePad::Control);
     // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
     root.values.set(DocumentTabLook::Semibold);
+    // A collapsed panel column's icon groups stand apart by a hairline, as production drew them.
+    root.values.set(IconGroupSeparator::Rule);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.
