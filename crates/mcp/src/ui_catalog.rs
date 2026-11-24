@@ -395,7 +395,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "align.toSelection",
         "Align to Selection",
         "",
-        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected, since one object aligns to the artboard}; with the Artboard tool chosen the selected objects keep their key",
+        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected with no anchor points selected and the Artboard tool is not chosen, since one object aligns to the artboard; \"selection\" while anchor points are selected (Direct Selection) and with the Artboard tool chosen}; with the Artboard tool chosen the selected objects keep their key",
     ),
     (
         "align.toKeyObject",

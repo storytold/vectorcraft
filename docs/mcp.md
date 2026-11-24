@@ -7945,7 +7945,9 @@ and each item runs its command.
 
 The Align panel's Align To choices are UI commands too, with no params: `align.toSelection`, `align.toKeyObject` and
 `align.toArtboard`. Each chooses what a click on its Align To button chooses and returns `{alignTo}`, the choice the
-panel then shows (`align.toSelection` returns `"artboard"` while one object is selected, which aligns to the artboard).
+panel then shows (`align.toSelection` returns `"artboard"` while one object is selected with no anchor points selected
+and the Artboard tool is not chosen, which aligns to the artboard; it returns `"selection"` while anchor points are
+selected with Direct Selection, which align to each other, and with the Artboard tool chosen).
 `align.toSelection` and `align.toArtboard` store the choice (`ui.inspect` › `ui.align_to`) and let the key go; with the
 Artboard tool chosen they store it and the selected objects keep their key. With no key, `align.toKeyObject` makes the
 topmost of two or more selected objects the key object, or a ruler guide selected with one object the key guide, and
