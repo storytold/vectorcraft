@@ -1808,6 +1808,86 @@ fn filters_keep_their_data_with_the_document() {
     assert_eq!(data(&s), None);
 }
 
+/// A filter run whose output changes nothing (an echo) records no undo step, leaves a saved
+/// document unmodified and the document as it was, and still selects its objects. One that changes
+/// one of the objects records exactly one step, and running it again records none.
+#[test]
+fn a_filter_run_that_changes_nothing_records_no_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, "#ff0000");
+    let b = rect(&mut s, 40.0, "#0000ff");
+    let echo = "test.engine.noop.echo";
+    install_wat(&mut s, &tpl::module(&tpl::manifest(echo, "filter", "{}"), tpl::ECHO, "", 1));
+    run(&mut s, "select.none", json!({}));
+    s.doc_mut().unwrap().mark_saved();
+    let (doc, undo) = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    let r = run(&mut s, "plugin.run", json!({"id": echo, "ids": [a.0, b.0]}));
+    assert_eq!(r["ids"], json!([a.0, b.0]));
+    let st = s.doc().unwrap();
+    assert!(std::sync::Arc::ptr_eq(&st.doc, &doc), "the document stays as it was");
+    assert_eq!((st.history.undo.len(), st.is_dirty()), (undo, false), "no undo step; still saved");
+    assert_eq!(st.selection.objects, [a, b], "its objects are selected");
+    // Renaming one object of the two is one undo step.
+    let renamer = "test.engine.noop.renamer";
+    let renamed = json!({"objects": [{"id": a.0, "name": "Renamed"}, {"id": b.0}]});
+    install_wat(&mut s, &tpl::returning(&tpl::manifest(renamer, "filter", "{}"), &renamed.to_string()));
+    run(&mut s, "plugin.run", json!({"id": renamer, "ids": [a.0, b.0]}));
+    let st = s.doc().unwrap();
+    assert_eq!((st.history.undo.len(), st.is_dirty()), (undo + 1, true));
+    assert_eq!(node(&s, a).name.as_deref(), Some("Renamed"));
+    // Run again, it renames nothing: no second step.
+    run(&mut s, "plugin.run", json!({"id": renamer, "ids": [a.0, b.0]}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    for id in [echo, renamer] {
+        run(&mut s, "plugin.remove", json!({"id": id}));
+    }
+}
+
+/// A filter that writes the data it already keeps with the document records no undo step; writing
+/// other data, or removing it, records one, and removing data it does not keep records none.
+#[test]
+fn a_filter_that_keeps_the_same_data_records_no_undo_step() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let pid = "test.engine.noop.data";
+    let keep = |s: &mut Session, data: Value| {
+        let out = json!({"objects": [{"id": id.0}], "documentData": data});
+        install_wat(s, &tpl::returning(&tpl::manifest(pid, "filter", "{}"), &out.to_string()));
+        run(s, "plugin.run", json!({"id": pid, "ids": [id.0]}));
+        s.doc().unwrap().history.undo.len()
+    };
+    let undo = s.doc().unwrap().history.undo.len();
+    assert_eq!(keep(&mut s, json!({"pen": 2})), undo + 1);
+    assert_eq!(keep(&mut s, json!({"pen": 2})), undo + 1, "the same data: no step");
+    assert_eq!(keep(&mut s, json!({"pen": 3})), undo + 2);
+    assert_eq!(keep(&mut s, Value::Null), undo + 3, "removed");
+    assert_eq!(keep(&mut s, Value::Null), undo + 3, "nothing kept to remove: no step");
+    assert_eq!(s.doc().unwrap().doc.plugin_data(pid), None);
+    run(&mut s, "plugin.remove", json!({"id": pid}));
+}
+
+/// A plug-in command whose run changes nothing records no undo step, and so does a filter or a
+/// command that may call commands and hands back what it is given.
+#[test]
+fn a_plugin_command_that_changes_nothing_records_no_undo_step() {
+    let mut s = session();
+    rect(&mut s, 10.0, "#ff0000");
+    run(&mut s, "select.all", json!({}));
+    let undo = s.doc().unwrap().history.undo.len();
+    let id = "test.engine.noop.cmds";
+    install_wat(&mut s, &grower(id));
+    run(&mut s, &format!("plugin.{id}.tidy"), json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "tidy hands back its input");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    let calling = "test.engine.noop.calling";
+    install_echo_calling(&mut s, calling, r#"[{"id":"same","label":"Same"}]"#);
+    run(&mut s, &format!("plugin.{calling}.same"), json!({}));
+    run(&mut s, "plugin.run", json!({"id": calling}));
+    assert!(!s.in_interaction());
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "an echo that may call commands");
+    run(&mut s, "plugin.remove", json!({"id": calling}));
+}
+
 #[test]
 fn plugin_management_commands() {
     let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
@@ -5316,13 +5396,12 @@ fn deferred_move(s: &mut Session) -> NodeId {
     r
 }
 
-/// The rectangle a run named `label` during [`deferred_move`] left: moved, with the interaction
-/// ended and the move an undo step of its own before the run's.
-fn assert_moved_once(s: &Session, r: NodeId, label: &str) {
+/// The rectangle a run that hands back what it is given left during [`deferred_move`]: moved, with
+/// the interaction ended and the move the last undo step, since the run changed nothing.
+fn assert_moved_once(s: &Session, r: NodeId) {
     assert!(!s.in_interaction());
     assert_eq!(node(s, r).geometric_bounds().unwrap().x0, 17.0, "the filter was given the moved rectangle");
-    let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
-    assert_eq!(labels, [label, "Move"]);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Move"));
 }
 
 /// With Real-time Drawing off, `plugin.run` of a filter that calls commands during a drag applies
@@ -5334,7 +5413,7 @@ fn a_filter_that_calls_commands_is_given_a_deferred_move() {
     install_echo_calling(&mut s, id, "[]");
     let r = deferred_move(&mut s);
     run(&mut s, "plugin.run", json!({"id": id}));
-    assert_moved_once(&s, r, &format!("Test {id}"));
+    assert_moved_once(&s, r);
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
@@ -5347,6 +5426,6 @@ fn a_plugin_command_that_calls_commands_is_given_a_deferred_move() {
     install_echo_calling(&mut s, id, r#"[{"id":"same","label":"Same"}]"#);
     let r = deferred_move(&mut s);
     run(&mut s, &format!("plugin.{id}.same"), json!({}));
-    assert_moved_once(&s, r, "Same");
+    assert_moved_once(&s, r);
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
