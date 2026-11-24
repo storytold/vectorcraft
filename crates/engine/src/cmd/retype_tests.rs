@@ -121,7 +121,7 @@ fn two_words_keep_their_space() {
 
 #[test]
 fn craft_fonts_glyphs_retype_too() {
-    let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.is_japanese()) else {
+    let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.has_script("Jpan")) else {
         eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
         return;
     };

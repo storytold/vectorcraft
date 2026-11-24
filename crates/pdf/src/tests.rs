@@ -39,7 +39,6 @@ mod mesh_export;
 mod output;
 mod pdf13;
 mod pdfx;
-mod presets;
 mod print;
 mod printadvanced;
 mod reader_compat;
@@ -99,7 +98,7 @@ fn uncompressed(d: &Document) -> String {
 }
 
 fn page_count(bytes: &[u8]) -> usize {
-    craft_pdf::syntax::Pdf::new(bytes.to_vec()).expect("parse").pages().len()
+    craft::pdf::syntax::Pdf::new(bytes.to_vec()).expect("parse").pages().len()
 }
 
 #[test]
@@ -151,7 +150,7 @@ fn one_page_per_artboard_with_sizes() {
         guide_label: None,
     });
     let bytes = export(&d, &PdfOptions::default()).unwrap();
-    let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
     let sizes: Vec<(f32, f32)> = pdf.pages().iter().map(|p| p.render_dimensions()).collect();
     assert_eq!(sizes, vec![(200.0, 100.0), (100.0, 400.0), (612.0, 792.0)]);
 }
@@ -172,7 +171,7 @@ fn artboard_range_and_bad_index() {
         guide_label: None,
     });
     let bytes = export(&d, &PdfOptions { artboards: Some(vec![1]), ..Default::default() }).unwrap();
-    let pdf = craft_pdf::syntax::Pdf::new(bytes).unwrap();
+    let pdf = craft::pdf::syntax::Pdf::new(bytes).unwrap();
     assert_eq!(pdf.pages().len(), 1);
     assert_eq!(pdf.pages()[0].render_dimensions(), (100.0, 400.0));
     assert_eq!(export(&d, &PdfOptions { artboards: Some(vec![5]), ..Default::default() }), Err(PdfError::BadArtboard(5)));
