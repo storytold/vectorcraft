@@ -3102,7 +3102,8 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
         crate::dialogs::host::pump(app, &ctx);
     };
     let b = node(&app).geometric_bounds().unwrap();
-    let at = xf.to_screen(b.center());
+    // A quarter of the way in, away from the middle of the text.
+    let at = xf.to_screen(Point::new(b.x0 + b.width() * 0.25, b.center().y));
     let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     let double_click = |app: &mut VectorcraftApp, time: f64| {
         timed(app, time, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
@@ -3134,6 +3135,10 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     assert_eq!(o["editing"], json!(id));
     let caret = o["caret"].as_u64().unwrap();
     assert!((1..11).contains(&caret), "caret {caret}");
+    // The caret is the one a click at that point puts in the type being edited.
+    timed(&mut app, 5.0, vec![button(true), button(false)]);
+    timed(&mut app, 5.1, vec![]);
+    assert_eq!(app.session.tool_options()["caret"], json!(caret), "the caret where the type was double-clicked");
     app.session.tool_text("X", app.view_info()).unwrap();
     let NodeKind::Text(t) = &node(&app).kind else { panic!("not text") };
     assert_eq!(t.plain_text().find('X'), Some(caret as usize), "{}", t.plain_text());

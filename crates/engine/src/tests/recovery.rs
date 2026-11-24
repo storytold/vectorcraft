@@ -1785,3 +1785,70 @@ fn a_crash_between_a_copys_document_and_its_details_keeps_every_image() {
         assert_eq!(images_of(&s), images, "first copy: {first}");
     }
 }
+
+/// A crash between writing a copy's document and its details, after a script's command changed
+/// the document since the last copy, restores the document as one a script opened.
+#[test]
+fn a_crash_between_a_copys_document_and_its_details_keeps_a_scripts_change() {
+    let store = Arc::new(MemoryStore::default());
+    let mut s = session_in(&store);
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    let source = "vc.run('shape.ellipse', {x: 80, y: 20, width: 20, height: 20});";
+    s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    assert!(s.doc().unwrap().by_script.is_some(), "the script's command changed the document");
+    let doc = vectorcraft_doc::Document::clone(&s.doc().unwrap().doc);
+    s.recovery.set_store(Arc::new(DiesAfterDocument { inner: store.clone(), dead: Default::default() }));
+    assert!(s.execute("file.recovery.save", &json!({})).is_err(), "the details weren't written");
+    drop(s);
+    let mut s = relaunch(&store);
+    assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1);
+    let count = |d: &vectorcraft_doc::Document| d.layers.iter().map(|l| l.count()).sum::<usize>();
+    assert_eq!(count(&s.doc().unwrap().doc), count(&doc), "the new document is in");
+    assert!(s.doc().unwrap().by_script.is_some(), "restored as a document a script opened");
+}
+
+/// A crash while a restore moves a copy into the app's own area leaves no copy that a later
+/// restore opens without its details: a script's change is kept.
+#[test]
+fn a_crash_while_a_copy_is_restored_keeps_a_scripts_change() {
+    let store = Arc::new(MemoryStore::default());
+    let mut s = session_in(&store);
+    let source = "vc.run('shape.ellipse', {x: 80, y: 20, width: 20, height: 20});";
+    s.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    s.execute("file.recovery.save", &json!({})).unwrap();
+    drop(s);
+    let mut s = Session::new();
+    s.recovery.set_store(Arc::new(DiesAfterDocument { inner: store.clone(), dead: Default::default() }));
+    let _ = s.execute("file.recovery.restore", &json!({}));
+    drop(s);
+    let mut s = relaunch(&store);
+    assert!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()) >= 1);
+    for st in s.documents().iter().filter(|st| st.recovered) {
+        assert!(st.by_script.is_some(), "every restored copy keeps the script's change: {}", st.title());
+    }
+}
+
+/// A copy whose details entry is missing or can't be parsed restores as a document a script
+/// opened, and so does the copy that restore writes, after a later crash; a valid details entry
+/// without the script's mark restores as the person left it.
+#[test]
+fn a_copy_without_readable_details_restores_as_a_scripts_document() {
+    let cases: [Option<&[u8]>; 3] = [Some(b"{ not json"), None, Some(b"{}")];
+    for details in cases {
+        let store = Arc::new(MemoryStore::default());
+        let mut s = session_in(&store);
+        let r = s.execute("file.recovery.save", &json!({})).unwrap();
+        let entry = format!("{}.json", r["saved"][0]["file"].as_str().unwrap());
+        drop(s);
+        match details {
+            Some(bytes) => store.write(&entry, bytes).unwrap(),
+            None => store.remove(&entry).unwrap(),
+        }
+        let by_script = details != Some(b"{}".as_slice());
+        for round in 1..=2 {
+            let mut s = relaunch(&store);
+            assert_eq!(restored(s.execute("file.recovery.restore", &json!({})).unwrap()), 1, "{details:?}, restore {round}");
+            assert_eq!(s.doc().unwrap().by_script.is_some(), by_script, "{details:?}, restore {round}");
+        }
+    }
+}

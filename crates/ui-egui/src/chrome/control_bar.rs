@@ -1,6 +1,6 @@
 use craft::behavior::IconId;
 use craft::ui::bars::{Bar, BarKind};
-use craft::ui::buttons::{Button, IconButton, Link};
+use craft::ui::buttons::{Button, IconButton};
 use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, SideLabel, Trigger};
 use craft::ui::display::{Divider, Elide, Shade, Text};
 use craft::ui::form::Field;
@@ -323,7 +323,7 @@ fn opacity_field(app: &mut VectorcraftApp, ui: &mut Ui, opacity: f32, selected: 
 fn style_group(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut open = false;
     ranked(ui, rank::GROUP, |ui| {
-        open |= Link::new(tl!("Style:")).show(ui).clicked();
+        open |= crate::panels::option_link(tl!("Style:")).show(ui).clicked();
         crate::panels::graphic_styles::style_picker(app, ui);
     });
     if open {
@@ -533,7 +533,7 @@ fn object_name(app: &VectorcraftApp, anchors: AnchorControls) -> Option<(&'stati
 fn object_label(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, image: bool) {
     if !image {
         Text::new(label).elide(Elide::End).show(ui);
-    } else if Link::new(label).show(ui).clicked() {
+    } else if crate::panels::option_link(label).show(ui).clicked() {
         crate::panels::links::show_selected_image(app, ui.ctx());
     }
 }

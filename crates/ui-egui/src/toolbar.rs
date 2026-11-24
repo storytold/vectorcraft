@@ -12,10 +12,10 @@ use craft::behavior::dock::{Action, DockEdge};
 use craft::behavior::geometry::BoxState;
 use craft::behavior::overlay::Side;
 use craft::behavior::{EditEvent, IconId, Mixed};
-use craft::color_ui::ui::PaintChip;
+use craft::color_ui::ui::{PaintChip, PaintChipSize};
 use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, TransformGroups, TransformRow, TransformSource};
 use craft::theme::ControlSize;
-use craft::ui::buttons::{Button, IconButton};
+use craft::ui::buttons::{ActiveLook, Button, IconButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, BodyCx, Entry, Gap, Props as _, Show as _, ShowContainer as _, Tracked};
 use craft::ui::display::Divider;
@@ -23,7 +23,7 @@ use craft::ui::docking::{DockGrid, GroupAt};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::{Anchor9, ReferencePointLook, Select};
-use craft::ui::rails::{LastUsed, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
+use craft::ui::rails::{LastUsed, RailDensity, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
 use craft::ui::runtime::commands::{self, CommandRef};
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, Vec2};
@@ -260,7 +260,13 @@ pub(crate) fn dock_grid(app: &VectorcraftApp, owner: &Owner) -> DockGrid {
         Owner::Strip(parent, first) => strip_tools(app, parent, first).len(),
         _ => groups_of(app, owner).len() + 1,
     };
-    DockGrid::rail(cells)
+    DockGrid::rail(cells).density(rail_density(app, owner))
+}
+
+/// How tightly the rail of `owner` packs its buttons: the Tools panel's packs them tight under Window › Toolbars ›
+/// Compact.
+fn rail_density(app: &VectorcraftApp, owner: &Owner) -> RailDensity {
+    if matches!(owner, Owner::Tools) && app.ui.toolbar_compact { RailDensity::Dense } else { RailDensity::Regular }
 }
 
 /// The groups of several tools of the Tools panel's toolbar (`toolbar` none) or of the toolbar made
@@ -387,7 +393,12 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     let located = locate::wanted(&app.ui, &home);
     let holds = |tool: &str| model.slots.iter().any(|slot| slot.tools.iter().any(|t| t.id == tool));
     let reveal = matches!(at, GroupAt::Show(_)).then(|| locate::take_reveal(&mut app.ui, &home, holds)).flatten();
-    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).tips(&cards);
+    // The current tool in production's pressed fill, with no accent edge.
+    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used)
+        .opens(opens)
+        .tips(&cards)
+        .active_look(ActiveLook::Pressed)
+        .density(rail_density(app, &owner));
     if let Some(tool) = &located {
         rail = rail.mark(tool);
     }
@@ -708,7 +719,8 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         Row::new().wrap(true).show(ui, |ui, _| {
             for (label, cmd, paint) in &chips {
                 let shown = Mixed::Same(well_paint(paint, &|_| None));
-                let out = PaintChip::new(*label, Bind::given(shown), fallback).popover(false).size(ControlSize::Sm).tooltip(*label).show(ui);
+                let out =
+                    PaintChip::new(*label, Bind::given(shown), fallback).popover(false).chip_size(PaintChipSize::Swatch).tooltip(*label).show(ui);
                 if let Some(mods) = out.clicked {
                     clicked = Some((*cmd, mods.cmd));
                 }

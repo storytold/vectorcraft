@@ -1702,6 +1702,15 @@ pub fn private_use_font() -> Option<Vec<u8>> {
     remapped_source_sans(PRIVATE_USE_FAMILY, "PrivateUseSans-Regular", &[(PRIVATE_USE_CHAR, 'H')])
 }
 
+/// The family of [`spacing_comma_font`].
+pub const SPACING_COMMA_FAMILY: &str = "Spacingcomma Sans";
+
+/// A face that maps only U+02BB (a modifier letter) to the bundled Source Sans 3 outline of U+0326
+/// (a combining mark), for tests of a shape that is a mark in one face and a character in another.
+pub fn spacing_comma_font() -> Option<Vec<u8>> {
+    remapped_source_sans(SPACING_COMMA_FAMILY, "SpacingcommaSans-Regular", &[('\u{2BB}', '\u{326}')])
+}
+
 /// The family of [`large_cmap_font`].
 pub const LARGE_CMAP_FAMILY: &str = "Largecmap Sans";
 

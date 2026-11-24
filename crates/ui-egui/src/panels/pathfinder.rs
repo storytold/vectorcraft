@@ -132,7 +132,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mixed = !modes.is_empty() && shared.is_none();
     // Selected members can always take a mode.
     let count = if modes.is_empty() { n } else { n.max(2) };
-    crate::panels::section(tl!("Shape Modes:")).show(ui, |ui, _| {
+    crate::panels::subheading(tl!("Shape Modes:")).show(ui, |ui, _| {
         Row::new().gap(Gap::Item).show(ui, |ui, _| {
             for ((icon, label, op), mode) in SHAPE_MODES.into_iter().zip(ShapeMode::ALL) {
                 let glyph = ShapeModeGlyph { icon: IconId::new(icon), mixed };
@@ -153,7 +153,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 .show(ui);
         });
     });
-    crate::panels::section(tl!("Pathfinders:")).show(ui, |ui, _| {
+    crate::panels::subheading(tl!("Pathfinders:")).show(ui, |ui, _| {
         Row::new().gap(Gap::Item).show(ui, |ui, _| {
             for (icon, label, op) in PATHFINDERS {
                 IconButton::command(IconSpec::svg(IconId::new(icon)), CommandRef::new(format!("object.pathfinder.{op}")))

@@ -6861,6 +6861,7 @@ mark-style	Japanese	Japonské
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D efekt na výplni nebo tahu skupiny nic nekreslí
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Síť 3D objektu je neúplná nebo obsahuje hodnotu, která není číslo
 @msg	the <filter> element needs an id, the filter's name	prvek <filter> potřebuje id, název filtru
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id filtru SVG má nejvýše {MAX_NAME} znaků
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> není prvkem filtru SVG
@@ -7328,6 +7329,12 @@ axis	Y Axis	osa Y
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry zásuvného modulu musí být objekt JSON
 @msg	the module must export its linear memory as `memory`	modul musí exportovat svou lineární paměť jako `memory`
+@msg	the module must export `{name}` with the type {signature}	modul musí exportovat `{name}` s typem {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modul má více než jednu vlastní sekci `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	rozpočet paměti (počáteční paměť modulu má {initial} bajtů, limit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifest ve vlastní sekci `{MANIFEST_SECTION}` musí uvádět `abi` jako {ABI_VERSION}, verzi ABI, kterou tento hostitel implementuje
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	rozpočet tabulek (modul definuje {count} tabulek, největší s {largest} prvky; limit {MAX_TABLES} tabulek po {MAX_TABLE_ELEMENTS} prvcích)
+@msg	the module's table section could not be read	sekci tabulek modulu nelze přečíst
 @msg	the objects to change are no longer in the document	objekty ke změně už v dokumentu nejsou
 @msg	the runtime panicked	běhové prostředí havarovalo
 @msg	unexpected host trap	neočekávaná chyba (trap) hostitele
@@ -7397,6 +7404,8 @@ axis	Y Axis	osa Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vyžaduje zarážku propojenou se vzorkem přímé barvy
 @msg	the output	výstup
 @msg	the path has no anchor points	cesta nemá žádné kotevní body
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	složená cesta {id} má skrytý, zamčený nebo vodítkový člen, takže její členy nelze nahradit
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	složená cesta {id} má člen, který není cestou, takže její členy nelze nahradit
 @msg	too many anchor points (limit {MAX_ANCHORS})	příliš mnoho kotevních bodů (limit {MAX_ANCHORS})
 @msg	true or false	true nebo false
 @msg	a number >= {_1}	číslo >= {_1}
@@ -9028,6 +9037,8 @@ breakText	Glyphs	Glyfy
 @msg	`dataBase64` is larger than the module limit	`dataBase64` je větší než limit modulu
 @msg	`dataBase64` is not valid base64	`dataBase64` není platný base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` nelze kombinovat s `ids`, `reverse` ani `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` nelze kombinovat s `ids`, `id` ani `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` nelze kombinovat s `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` a `childLimit` omezují souhrn: předejte `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` je název návrhu, nebo null pro obyčejné sloupce
 @msg	`design` is a design name, or null for the default marker	`design` je název návrhu, nebo null pro výchozí značku
