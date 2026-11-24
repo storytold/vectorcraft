@@ -550,7 +550,7 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
     let id = super::canvas_id(win).with("selection_widget_drag");
     let mut held: Option<Held> = ui.data(|d| d.get_temp::<Option<Held>>(id)).flatten();
     end_hidden(app, &mut held, &layout);
-    let out = SelectionWidgets::new(layout).show(ui);
+    let out = SelectionWidgets::new(layout).show_at(ui, space.view.rect);
     for (widget, press) in out.presses {
         if !press.phase.start().is_some_and(|s| s.button == PointerButton::Primary) {
             continue;
