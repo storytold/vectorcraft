@@ -22,6 +22,7 @@
 	Quit VectorCraft	Keluar dari VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Letakkan karya
+@id	language.name	Bahasa Indonesia
 @msg	{key} must be [x, y] with finite coordinates	{key} harus berupa [x, y] dengan koordinat berhingga
 @msg	ids must contain 1–10000 object ids	ids harus berisi 1–10000 ID objek
 
@@ -437,7 +438,7 @@
 @msg	module is {_1} bytes (limit {_2})	modul berukuran {_1} byte (batas {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	memerlukan persetujuan: plug-in meminta {0}, yang diberikan pengguna saat memasangnya sendiri
 @msg	not JSON: {e}	bukan JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	bukan biner WebAssembly (header \0asm tidak ada)
+@msg	not a WebAssembly binary (missing \\0asm header)	bukan biner WebAssembly (header \\0asm tidak ada)
 @msg	parameter `{k}`: {what}	parameter `{k}`: {what}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parameter plug-in harus berupa objek JSON

@@ -4,20 +4,29 @@
 
 use serde_json::{Value, json};
 
-use crate::tests_svg::app;
+use super::nativeoptions::answer;
+use super::picks::open_dialogs;
+use crate::tests_svg::{app, picked};
+
+/// The fields of the options dialog the save opened.
+fn options(app: &crate::VectorcraftApp) -> Value {
+    open_dialogs(app).last().and_then(|d| d.fields.clone()).expect("the .ai options")
+}
 
 #[test]
 fn save_as_ai_writes_a_pdf_that_reopens_editable() {
     let (mut app, written) = app("/tmp/art.ai");
-    // Save As asks for the .ai options first (M4.38), then writes.
+    // Save As asks for the .ai options after the save panel (M4.38), then writes.
     let r = app.run("file.saveAs", Value::Null).unwrap();
-    assert_eq!(r["pending"], "saveOptions", "{r}");
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.str("format").as_str(), d.str("path").as_str(), d.bool("pdfCompatible")), ("ai", "/tmp/art.ai", true));
-    let r = crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!(r["path"], "/tmp/art.ai", "{r}");
-    assert!(app.ui.dialog.is_none());
-    let ai = written.borrow()[0].1.clone();
+    assert_eq!(r["pending"], "fileDialog", "{r}");
+    picked(&mut app);
+    let f = options(&app);
+    assert_eq!((f["format"].clone(), f["pdfCompatible"].clone()), (json!("ai"), json!(true)));
+    assert!(written.borrow().is_empty(), "nothing is written before OK");
+    answer(&mut app, &[], true);
+    assert!(open_dialogs(&app).is_empty());
+    let (path, ai) = written.borrow()[0].clone();
+    assert_eq!(path, "/tmp/art.ai");
     assert!(ai.starts_with(b"%PDF"));
     assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/tmp/art.ai"));
     // Save writes .ai again; the document reopens from it.
@@ -37,8 +46,10 @@ fn save_a_copy_as_ai_keeps_the_path() {
     app.session.doc_mut().unwrap().path = Some("/tmp/doc.vectorcraft".into());
     // Save a Copy asks for the .ai options like Save As (#3141), then writes.
     let r = app.run("file.saveCopy", json!({"compression": {"compressText": false}})).unwrap();
-    assert_eq!(r["pending"], "saveOptions", "{r}");
-    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(r["pending"], "fileDialog", "{r}");
+    picked(&mut app);
+    assert_eq!(options(&app)["format"], "ai");
+    answer(&mut app, &[], true);
     let w = written.borrow();
     assert_eq!(w[0].0, "/tmp/copy.ai");
     assert!(vectorcraft_pdf::editing(&w[0].1).is_some_and(|e| e.intact));
@@ -54,11 +65,10 @@ fn save_a_copy_as_ai_asks_for_the_version() {
     app.run("file.saveAs", json!({"path": "/tmp/legacy.ai", "options": {"aiVersion": "7"}})).unwrap();
     written.borrow_mut().clear();
     let r = app.run("file.saveCopy", Value::Null).unwrap();
-    assert_eq!(r["pending"], "saveOptions", "{r}");
+    assert_eq!(r["pending"], "fileDialog", "{r}");
+    picked(&mut app);
+    assert_eq!(options(&app)["format"], "ai");
     assert!(written.borrow().is_empty());
-    let d = app.ui.dialog.as_mut().unwrap();
-    assert_eq!((d.str("format").as_str(), d.str("__action").as_str()), ("ai", "file.saveCopy"));
-    d.fields.insert("aiVersion".into(), json!("pdf"));
-    crate::dialogs::confirm(&mut app).unwrap();
+    answer(&mut app, &[("aiVersion", json!("pdf"))], true);
     assert!(written.borrow()[0].1.starts_with(b"%PDF"));
 }

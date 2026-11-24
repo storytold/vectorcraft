@@ -17,7 +17,7 @@ struct Counting(Rc<RefCell<usize>>);
 
 impl PrintService for Counting {
     fn printers(&mut self) -> Vec<Printer> {
-        vec![Printer { name: "Office".into(), default: true }]
+        vec![Printer::new("Office").is_default(true)]
     }
 
     fn print(&mut self, _: &PrintJob) -> Result<String, String> {
@@ -31,23 +31,22 @@ fn postscript_is_saved_not_printed() {
     let sent = Rc::new(RefCell::new(0));
     let written: Written = Rc::default();
     let w = written.clone();
-    let services = Services {
-        print: Some(Box::new(Counting(sent.clone()))),
-        pick_save: Some(Box::new(|pick: &crate::FilePick| Some(format!("/tmp/{}", pick.name)))),
-        write: Some(Box::new(move |p: &str, b: &[u8]| {
-            w.borrow_mut().push((p.to_string(), b.to_vec()));
-            Ok(())
-        })),
-        ..Default::default()
-    };
-    let mut app = VectorcraftApp::new(Session::new(), services);
+    let services = Services { print: Some(Box::new(Counting(sent.clone()))), ..Default::default() };
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+    let picker = crate::tests_picks::scripted(&mut app);
+    app.services.write = Some(Box::new(move |p: &str, b: &[u8]| {
+        w.borrow_mut().push((p.to_string(), b.to_vec()));
+        Ok(())
+    }));
     app.run("file.new", json!({"width": 100, "height": 80, "artboards": 2})).unwrap();
     // A .ps path: PostScript, at the level asked for.
     let r = app.run("file.print", json!({"path": "/tmp/job.ps", "level": 2})).unwrap();
     assert_eq!((r["format"].clone(), r["printed"].clone(), r["pages"].clone()), (json!("postscript"), json!(false), json!(2)), "{r}");
     // No path: a picked .ps file.
-    let r = app.run("file.print", json!({"format": "postscript", "settings": {"copies": 2}})).unwrap();
-    assert_eq!(r["pages"], 4);
+    app.run("file.print", json!({"format": "postscript", "settings": {"copies": 2}})).unwrap();
+    picker.answer_saved("/tmp/Untitled-1.ps", None);
+    let ctx = app.ui_ctx.clone().expect("the test app has a window");
+    crate::tests_picks::poll(&mut app, &ctx);
     let w = written.borrow();
     assert_eq!(w.len(), 2);
     assert_eq!(w[0].0, "/tmp/job.ps");

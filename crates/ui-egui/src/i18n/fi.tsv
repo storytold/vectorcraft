@@ -44,6 +44,7 @@
 	Quit VectorCraft	Lopeta VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Pudota kuvitus
+@id	language.name	Suomi
 @msg	{key} must be [x, y] with finite coordinates	{key} on annettava muodossa [x, y] äärellisillä koordinaateilla
 @msg	ids must contain 1–10000 object ids	ids-arvon on sisällettävä 1–10000 objektitunnusta
 
@@ -7390,7 +7391,7 @@ axis	Y Axis	Y-akseli
 @msg	module is {_1} bytes (limit {_2})	moduuli on {_1} tavua (raja {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vaatii hyväksynnän: se pyytää {0}, jotka käyttäjä myöntää asentaessaan sen erikseen
 @msg	not JSON: {e}	ei JSON-muotoa: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	ei WebAssembly-binääri (\0asm-otsake puuttuu)
+@msg	not a WebAssembly binary (missing \\0asm header)	ei WebAssembly-binääri (\\0asm-otsake puuttuu)
 @msg	parameter `{k}`: {what}	parametri `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametri `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	laajennuksen parametrien on oltava JSON-objekti
