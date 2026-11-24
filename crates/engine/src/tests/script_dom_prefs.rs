@@ -384,9 +384,37 @@ fn concatenation_keeps_a_finite_result_whose_products_leave_the_range_of_a_numbe
          vc.log(app.concatenateMatrix(mat([y, y, 0, 1, 0, 0]), mat([z, 0, z, 1, 0, 0])).mValueA === Number.MIN_VALUE);\
          var p = 2.0543170765449965e-57, q = 6.201533916984909e-252;\
          vc.log(app.concatenateMatrix(mat([p, 0, 0, 1, 0, 0]), mat([q, 0, 0, 1, 0, 0])).mValueA === p * q);\
-         vc.log(v(app.concatenateMatrix(mat([-2, 0, 0, -3, 0, 0]), mat([0, 1, -1, 0, 0, 0]))));",
+         vc.log(v(app.concatenateMatrix(mat([-2, 0, 0, -3, 0, 0]), mat([0, 1, -1, 0, 0, 0]))));\
+         var big = mat([1, 0, 0, 1, Number.MAX_VALUE, 0]), up = 1 + Math.pow(2, -52);\
+         try { app.concatenateMatrix(big, mat([up, 0, 0, 1, -Math.pow(2, 971), 0])); vc.log('finite'); }\
+         catch (e) { vc.log(e.name); }\
+         vc.log(app.concatenateMatrix(big, mat([up, 0, 0, 1, -Math.pow(2, 972), 0])).mValueTX === Number.MAX_VALUE);\
+         var h = Math.pow(2, 500), far = mat([1, 0, 0, 1, Math.pow(2, 600), -Math.pow(2, 600)]);\
+         vc.log(app.concatenateMatrix(far, mat([h, 0, h, 1, 1, 0])).mValueTX);\
+         var g = Math.pow(2, 100), farther = mat([1, 0, 0, 1, Math.pow(2, 1000), -Math.pow(2, 1000)]);\
+         vc.log(app.concatenateMatrix(farther, mat([g, 0, g, 1, Math.pow(2, -100), 0])).mValueTX === Math.pow(2, -100));\
+         var tiny = mat([1, 0, 0, 1, y, 0]);\
+         vc.log(app.concatenateMatrix(tiny, mat([z, 0, 0, 1, Number.MIN_VALUE, 0])).mValueTX === 2 * Number.MIN_VALUE);\
+         var least = mat([1, 0, 0, 1, Number.MIN_VALUE, 0]);\
+         vc.log(app.concatenateMatrix(least, mat([0.5 - Math.pow(2, -54), 0, 0, 1, Number.MIN_VALUE, 0])).mValueTX === Number.MIN_VALUE);\
+         vc.log(app.concatenateMatrix(least, mat([0.5 + Math.pow(2, -53), 0, 0, 1, Number.MIN_VALUE, 0])).mValueTX === 2 * Number.MIN_VALUE);",
     );
-    assert_eq!(out, vec![json!([0, true, true, 1, 0, true]), json!(true), json!(true), json!([0, -2, 3, 0, 0, 0])]);
+    assert_eq!(
+        out,
+        vec![
+            json!([0, true, true, 1, 0, true]),
+            json!(true),
+            json!(true),
+            json!([0, -2, 3, 0, 0, 0]),
+            json!("RangeError"),
+            json!(true),
+            json!(1),
+            json!(true),
+            json!(true),
+            json!(true),
+            json!(true)
+        ]
+    );
 }
 
 #[test]

@@ -96,18 +96,95 @@ fn then(m: Matrix, n: Matrix) -> Matrix {
 }
 
 /// `x·y + z·w + t`. When both products and their sum are finite, and a product below the range of
-/// normal numbers is the only one that is not 0, the sum is taken as numbers are. Otherwise the
+/// normal numbers is the only term that is not 0, the sum is taken as numbers are. Otherwise the
 /// products are summed past the range of a number and rounded at the end, so a finite value is not
 /// lost to a product too large or too small for a number.
 fn products_sum(x: f64, y: f64, z: f64, w: f64, t: f64) -> f64 {
     let (p, q) = (x * y, z * w);
     let lost = |v: f64, a: f64, b: f64| a != 0.0 && b != 0.0 && v.abs() < f64::MIN_POSITIVE;
-    let alone = |a: f64, b: f64| a == 0.0 || b == 0.0;
+    let alone = |a: f64, b: f64| (a == 0.0 || b == 0.0) && t == 0.0;
     let plain = p + q;
     if plain.is_finite() && (!lost(p, x, y) || alone(z, w)) && (!lost(q, z, w) || alone(x, y)) {
         return plain + t;
     }
-    products_difference(x, y, 0.0 - z, w).add(Wide::of(t)).value()
+    // Each product is split into its rounded value and the part that rounding drops, both exact.
+    // The five parts are added one at a time into a list of values that do not overlap, smallest
+    // first, whose sum is exact (Shewchuk's expansion).
+    let product = |a: f64, b: f64| {
+        let (a, b) = (Wide::of(a), Wide::of(b));
+        let (hi, e) = (a.m * b.m, a.e.saturating_add(b.e));
+        [Wide::new(hi, e), Wide::new(a.m.mul_add(b.m, 0.0 - hi), e)]
+    };
+    let ([p, p_lost], [q, q_lost]) = (product(x, y), product(z, w));
+    let exact = [p, p_lost, q, q_lost, Wide::of(t)].into_iter().fold(Vec::with_capacity(10), grow);
+    nearest(&exact)
+}
+
+/// `sums` with `part` added: values that do not overlap, smallest first, whose sum is exactly the
+/// sum of `sums` and `part`. The last value is the largest and has the sign of the sum.
+fn grow(sums: Vec<Wide>, part: Wide) -> Vec<Wide> {
+    let mut carry = part;
+    let mut kept = Vec::with_capacity(sums.len() + 1);
+    for h in sums {
+        let (sum, rest) = carry.two_sum(h);
+        if rest.m != 0.0 {
+            kept.push(rest);
+        }
+        carry = sum;
+    }
+    if carry.m != 0.0 {
+        kept.push(carry);
+    }
+    kept
+}
+
+/// The sign of the exact sum of `sums`, `0.0 - v` and `offset`: 1, -1 or 0.
+fn sign_past(sums: &[Wide], v: f64, offset: Wide) -> i32 {
+    let rest = [Wide::of(0.0 - v), offset].into_iter().fold(sums.to_vec(), grow);
+    match rest.last() {
+        Some(w) if w.m > 0.0 => 1,
+        Some(w) if w.m < 0.0 => -1,
+        _ => 0,
+    }
+}
+
+/// The number nearest the exact sum of `sums`, ties to the even one, and infinite when the sum
+/// rounds to 2^1024 or past it. The sum of the values from the smallest up comes within a step of
+/// it; the halfway points to the neighbors of that number are then compared with the exact sum, so
+/// the result is rounded once.
+fn nearest(sums: &[Wide]) -> f64 {
+    let even = |v: f64| v.to_bits() & 1 == 0;
+    let mut v = sums.iter().fold(Wide::of(0.0), |total, &h| total.two_sum(h).0).value().clamp(f64::MIN, f64::MAX);
+    for _ in 0..4 {
+        // Half the step to the next number up, and to the next number down. Past the largest
+        // number the step is to 2^1024, which is 2^971 away.
+        let up = if v == f64::MAX { f64::INFINITY } else { v.next_up() };
+        let down = if v == f64::MIN { f64::NEG_INFINITY } else { v.next_down() };
+        let half_up = if up.is_finite() { Wide::new(up - v, -1) } else { Wide::new(1.0, 970) };
+        let half_down = if down.is_finite() { Wide::new(v - down, -1) } else { Wide::new(1.0, 970) };
+        match sign_past(sums, v, Wide { m: 0.0 - half_up.m, e: half_up.e }) {
+            1 => {
+                v = up;
+                if !v.is_finite() {
+                    return v;
+                }
+                continue;
+            }
+            0 => return if even(v) { v } else { up },
+            _ => {}
+        }
+        match sign_past(sums, v, half_down) {
+            -1 => {
+                v = down;
+                if !v.is_finite() {
+                    return v;
+                }
+            }
+            0 => return if even(v) { v } else { down },
+            _ => return v,
+        }
+    }
+    v
 }
 
 fn translate(dx: f64, dy: f64) -> Matrix {
@@ -217,17 +294,20 @@ impl Wide {
         Self::new(self.m / o.m, self.e.saturating_sub(o.e))
     }
 
-    /// The sum. A number more than 2^60 times smaller than the other is past its precision.
-    fn add(self, o: Self) -> Self {
+    /// The sum and the part of it that rounding drops, so that `self + o` is exactly their sum. A
+    /// number more than 2^110 times smaller than the other is returned whole as the dropped part.
+    fn two_sum(self, o: Self) -> (Self, Self) {
         let (big, small) = if self.m == 0.0 || (o.m != 0.0 && o.e > self.e) { (o, self) } else { (self, o) };
-        if small.m == 0.0 {
-            return big;
-        }
         let gap = small.e.saturating_sub(big.e);
-        if gap < -60 {
-            return big;
+        if small.m == 0.0 || gap < -110 {
+            return (big, small);
         }
-        Self::new(big.m + small.m * pow2(gap), big.e)
+        // Knuth's two-sum: `small` scaled to `big`'s power of 2 is exact, and so is the error.
+        let s = small.m * pow2(gap);
+        let sum = big.m + s;
+        let back = sum - big.m;
+        let rest = (big.m - (sum - back)) + (s - back);
+        (Self::new(sum, big.e), Self::new(rest, big.e))
     }
 
     /// The nearest `f64`: infinite past its range, and 0 or a subnormal number below it.
