@@ -432,6 +432,30 @@ fn a_move_drag_after_a_selection_command_replays_on_its_own_object() {
     }
 }
 
+/// Find Objects with `select` during a drag is a step of its own, as it is journaled: it finds and
+/// selects only the objects outside the drag's preview, as its replay before the drag does.
+#[test]
+fn find_objects_with_select_during_a_drag_skips_the_drag_preview() {
+    for real_time in [true, false] {
+        let at = format!("real time {real_time}");
+        let (mut s, other) = session(real_time);
+        let start = s.journal.len();
+        let find = json!({"intersects": [0, 0, 400, 400], "select": true});
+        pointer(&mut s, PointerKind::Down, 100.0, 100.0);
+        pointer(&mut s, PointerKind::Drag, 150.0, 150.0);
+        let r = s.execute("document.find", &find).unwrap();
+        assert_eq!(r["total"], 1, "{at}: {r}");
+        assert_eq!(r["matches"][0]["id"], other.0, "{at}: {r}");
+        pointer(&mut s, PointerKind::Up, 200.0, 180.0);
+        assert_eq!(objects(&s), 2, "{at}: the release draws the rectangle");
+        assert_eq!(journaled(&s, start), ["document.find", "shape.rectangle"], "{at}");
+        let (mut replayed, _) = session(real_time);
+        replay_from(&s, start, &mut replayed);
+        assert_eq!(objects(&replayed), 2, "{at}");
+        assert_eq!(replayed.doc().unwrap().selection.objects, s.doc().unwrap().selection.objects, "{at}");
+    }
+}
+
 /// A square on a second layer selected with a ruler guide, and a square on the first layer →
 /// the session (with Real-time Drawing `real_time`) and the square on the first layer.
 fn square_and_guide(real_time: bool) -> (Session, NodeId) {
