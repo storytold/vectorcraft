@@ -2117,6 +2117,7 @@ impl Session {
             Ok(expanded) => {
                 *host.script_map.borrow_mut() = expanded.map;
                 realm.set_strict_writes(expanded.strict == Some(true));
+                realm.set_script_name(Some(host.name.to_string()));
                 if fresh {
                     let l = link.clone();
                     realm.set_source_locator(Rc::new(move |tag, line| match current(&l) {
