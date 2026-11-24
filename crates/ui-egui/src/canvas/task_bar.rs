@@ -1,11 +1,11 @@
 use craft::behavior::CanvasView;
 use craft::behavior::{IconId, Mixed};
-use craft::color_ui::ui::PaintChip;
+use craft::color_ui::ui::{PaintChip, PaintChipSize};
 use craft::theme::{Srgba, Variant};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
-use craft::ui::canvas_controls::TaskBar;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::canvas_controls::{TaskBar, TaskBarGrip, TaskBarHang};
+use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::PanelRow;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
@@ -455,10 +455,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
     let has_shape = offer.shape.is_some();
     let mut run: Option<(&'static str, serde_json::Value)> = None;
     let mut show_swatches = false;
-    let shown = TaskBar::new(tl!("Contextual Task Bar"), &offer.anchor, Bind::bound(&mut local)).more_rows(more_rows(&offer)).show(
-        ui,
-        space.view.rect,
-        |ui, _| {
+    let shown = TaskBar::new(tl!("Contextual Task Bar"), &offer.anchor, Bind::bound(&mut local))
+        .grip(TaskBarGrip::Bar)
+        .member_gap(Gap::Item)
+        .hang_gap(TaskBarHang::ClearOfHandles)
+        .more_rows(more_rows(&offer))
+        .show(ui, space.view.rect, |ui, _| {
             for (label, icon, cmd, params) in &offer.actions {
                 if *cmd == TASK_BAR_FIDELITY {
                     // The Smooth tool's Fidelity, labeled, sets the tool's option as it is typed or stepped.
@@ -468,6 +470,11 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                         if let Some(x) = crate::dialogs::freehand::fidelity_field(ui, "task-bar-fidelity", v, "smooth").filter(|x| *x != v) {
                             run = Some(("tool.setOption", json!({"tool": "smooth", "values": {"fidelity": x}})));
                         }
+                    }
+                } else if icon_only(cmd) {
+                    // Convert to Corner and to Smooth show their icon alone, named by their label, as production's did.
+                    if IconButton::new(IconSpec::svg(IconId::new(icon))).label(*label).show(ui).clicked() {
+                        run = Some((*cmd, params.clone()));
                     }
                 } else if Button::new(*label).variant(Variant::SECONDARY).icon(IconSpec::svg(IconId::new(icon))).show(ui).clicked() {
                     run = Some((*cmd, params.clone()));
@@ -488,6 +495,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                         let chip = PaintChip::new(chip.label(has_shape), Bind::given(value), Srgba::BLACK)
                             .popover(false)
                             .ring(stroke)
+                            .chip_size(PaintChipSize::Compact)
                             .selected(app.session.fill_active != stroke)
                             .show(ui);
                         if chip.clicked.is_some() {
@@ -523,8 +531,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                     }
                 }
             }
-        },
-    );
+        });
     let (rect, hide) = (shown.output.rect, shown.output.hide);
     if local != before {
         app.ui.task_bar_place.set(key, local);
@@ -730,6 +737,11 @@ const TASK_BAR_DUPLICATE_ARTBOARDS: &str = "taskBar.duplicateArtboards";
 
 /// The Contextual Task Bar's Rearrange All button with the Artboard tool.
 const TASK_BAR_REARRANGE_ARTBOARDS: &str = "taskBar.rearrangeArtboards";
+
+/// Whether the task bar shows the action `cmd` as its icon alone (its label names it and is its tooltip).
+fn icon_only(cmd: &str) -> bool {
+    matches!(cmd, TASK_BAR_TO_CORNER | TASK_BAR_TO_SMOOTH)
+}
 
 /// The Contextual Task Bar's Convert Selected Anchor Points to Corner button, for direct-selected
 /// anchors or a path selected whole with Direct Selection.

@@ -14,7 +14,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Dimension",
             [],
             None,
-            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: points, a?, b?, vertex?: {node,subpath,anchor}, freeA?, freeB?: a point that is not an anchor, {kind: onSegment, edge: {node,subpath,segment}, t: 0..1 (curve parameter)}|{kind: anchors, node, anchors: [{subpath,anchor,part?: point|in|out (the anchor, default, or its in or out handle),weight}] (2 or 3 points of one path whose weights add up to 1), across?: (2 anchors only: times the first-to-second anchor vector (x,y) turned to (-y,x), which points down when the vector points right)} (an end is an anchor or a free point, not both)}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowHead: null|a built-in stroke.set arrowhead name (Barbed, LineArrow…; drawn at both ends in place of arrowStyle's head; versions that have the stroke arrowhead but do not read arrowHead draw arrowStyle when they draw the dimension again; custom arrowheads are refused), arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
+            "{mode?: linear|angular|radius|diameter, a?: [x,y], b?: [x,y], vertex?: [x,y], source?: {kind: segment, edge: {node,subpath,segment}}|{kind: angle, first: edge, second: edge}|{kind: circle, node}|{kind: arc, edge}|{kind: extent, node} (linear only: a whole path between its outermost points, leftmost and rightmost when horizontal or aligned, topmost and bottommost when vertical)|{kind: points, a?, b?, vertex?: {node,subpath,anchor}, freeA?, freeB?: a point that is not an anchor, {kind: onSegment, edge: {node,subpath,segment}, t: 0..1 (curve parameter)}|{kind: anchors, node, anchors: [{subpath,anchor,part?: point|in|out (the anchor, default, or its in or out handle),weight}] (2 or 3 points of one path whose weights add up to 1), across?: (2 anchors only: times the first-to-second anchor vector (x,y) turned to (-y,x), which points down when the vector points right)} (an end is an anchor or a free point, not both)}, orientation?: aligned|horizontal|vertical (linear only: the distance between the points, or only its horizontal or vertical part; default aligned), offset?: pt (the line's distance from the first point: along the left normal of a → b when aligned, downward when horizontal, leftward when vertical; negative goes the other way), options?: {units: in|mm|pt|pc|px|cm|m|ft|yd, precision: 0-6, scale: drawing:real, hideUnits, lineWeight, lineType: solid|dashed|dotted, lineColor: [r,g,b], arrowStyle: filled|open|tick|none, arrowHead: null|a built-in stroke.set arrowhead name (Barbed, LineArrow…; drawn at both ends in place of arrowStyle's head; versions that have the stroke arrowhead but do not read arrowHead draw arrowStyle when they draw the dimension again; custom arrowheads are refused), arrowScale: %, extensionWeight, extensionType, extensionColor, extensionOffset, extensionLength, hideExtensions, fontFamily, fontStyle, fontSize, textColor, textPosition: away|between, textAlignment: left|center|right, textOffset}} → {id,label}; linked measurements follow source edits",
             has_doc,
             create
         ),
@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Dimensions",
             [],
             None,
-            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on), offset?: pt (as in dimension.create), at?: [x,y] (after offset: puts a linear dimension's line through this point, gives an angular dimension's arc a radius of the point's distance from the vertex, at least 12 pt, or turns a radius or diameter line toward it; what the dimension measures does not change)} restyle, turn or move existing dimensions → {ids}",
+            "{ids?: [dimension ids] (default selection), options?: dimension options, orientation?: aligned|horizontal|vertical (linear dimensions only; the line stays on the side of the points it was on; for an extent source, an error when that would put the line more than 1,000,000 pt from its first point and no offset is given), offset?: pt (as in dimension.create), at?: [x,y] (after offset: puts a linear dimension's line through this point, gives an angular dimension's arc a radius of the point's distance from the vertex, at least 12 pt, or turns a radius or diameter line toward it; what the dimension measures does not change)} restyle, turn or move existing dimensions → {ids}",
             has_doc,
             update
         ),
@@ -80,6 +80,7 @@ fn recipe(s: &Session, p: &Value) -> Result<Dimension> {
                 | (DimensionMode::Angular, DimensionSource::Angle { .. })
                 | (DimensionMode::Radius | DimensionMode::Diameter, DimensionSource::Circle { .. } | DimensionSource::Arc { .. })
                 | (DimensionMode::Linear | DimensionMode::Angular, DimensionSource::Points { .. })
+                | (DimensionMode::Linear, DimensionSource::Extent { .. })
         );
         if !compatible {
             return Err(error("Dimension mode does not match its source"));
@@ -175,7 +176,14 @@ fn update(s: &mut Session, p: &Value) -> Result<Value> {
                 dim.options = o.clone();
             }
             if let Some(orientation) = orientation(p, dim.mode)? {
-                dim.set_orientation(orientation);
+                // An offset given with the orientation replaces the one the orientation would
+                // give: the dimension takes the orientation, and `resolve` reads its points.
+                if let Err(e) = dim.set_orientation(orientation, doc) {
+                    if p.get("offset").is_none() {
+                        return Err(error(e));
+                    }
+                    dim.orientation = orientation;
+                }
             }
             dim.offset = distance(p, dim.offset)?;
             dim.resolve(doc).map_err(error)?;
@@ -457,7 +465,14 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
     for (id, old) in dimensions {
         let mut next = old.clone();
         let moved = next.moved.take();
-        if next.source.as_ref().is_some_and(|s| s.topology_changed(before, doc)) || next.resolve(doc).is_err() {
+        // Whether the path a dimension of a whole path measures changed: when it did not, the
+        // dimension keeps its points without reading the path again, and is only checked.
+        let whole_changed = match &next.source {
+            Some(s @ DimensionSource::Extent { .. }) => Some(s.art_changed(before, doc)),
+            _ => None,
+        };
+        let unreadable = if whole_changed == Some(false) { next.validate().is_err() } else { next.resolve(doc).is_err() };
+        if next.source.as_ref().is_some_and(|s| s.topology_changed(before, doc)) || unreadable {
             // The art it measured was deleted, or rebuilt with other anchors, or no longer fits
             // (an ellipse that was a circle): it stays where it was, no longer linked, in this
             // same undo step, rather than attaching to a different edge.
@@ -470,13 +485,14 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
             changed = true;
             continue;
         }
-        next.keep_gap(&old);
+        next.keep_gap(&old, (whole_changed == Some(true)).then_some((before, doc)));
         if let Some(xf) = next.source.as_ref().and_then(|s| s.reflection(before, doc)) {
-            next.mirror_line(&old, xf * old.handle());
+            next.mirror_line(&old, xf * old.handle(), Some((before, doc)));
         }
         // Moved on its own (the art it measures stayed put): it keeps its new place.
         if let Some(v) = moved
             && (next.a, next.b, next.vertex) == (old.a, old.b, old.vertex)
+            && whole_changed != Some(true)
         {
             next.place(old.handle() + v);
             if next.resolve(doc).is_err() {

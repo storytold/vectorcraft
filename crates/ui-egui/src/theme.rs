@@ -146,8 +146,29 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
 }
 
 /// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
-/// where the sets give pills.
-const SIZES: &[u8] = br#"{"all": {"radius.button": 4}}"#;
+/// where the sets give pills, and the compact set takes the reference app's metrics: 26-point fields and spinners,
+/// 10 points inside panels, 5 between rows, 13-point body type with 12.5-point labels and 11-point captions, 5-point
+/// control corners, 8-point menus and 10-point windows, and 33-point panel tabs.
+const SIZES: &[u8] = br#"{
+    "all": {"radius.button": 4},
+    "compact": {
+        "size.control.md": 26,
+        "size.panel_header": 33,
+        "space.pad.regular": 10,
+        "space.gap.row": 5,
+        "radius.control": 5,
+        "radius.surface": 8,
+        "radius.window": 10,
+        "typography.body.size": 13,
+        "typography.body.line_height": 17,
+        "typography.body_strong.size": 13,
+        "typography.body_strong.line_height": 17,
+        "typography.label.size": 12.5,
+        "typography.label.line_height": 17,
+        "typography.caption.size": 11,
+        "typography.caption.line_height": 15
+    }
+}"#;
 
 /// The app's sizes ([`SIZES`]) as one shared value: the token cache tells a change of sizes by its pointer, so a
 /// new value each frame would resolve the tokens again each frame.

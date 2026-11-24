@@ -804,6 +804,33 @@ fn a_hovered_arc_shows_the_protractor_with_the_rubber_band() {
     }
 }
 
+/// The two arms of a cross centered on `c` among the overlays.
+fn crosses_at(o: &[Overlay], c: Point) -> usize {
+    o.iter().filter(|o| matches!(o, Overlay::Line { a, b, .. } if a.midpoint(*b).distance(c) < 1e-9)).count()
+}
+
+/// While a half circle from (200, 100) to (300, 100) is dragged, or is the piece the next click
+/// adds, the tool shows a cross at its center, (250, 100); while a line is dragged, it shows none.
+#[test]
+fn an_arc_shows_a_cross_at_its_center() {
+    let mut s = session();
+    quick_pen(&mut s);
+    let center = pt(250.0, 100.0);
+    for (action, arms) in [("line", 0), ("sharpArc", 2)] {
+        key(&mut s, ToolKey::Escape);
+        s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "line"})).unwrap();
+        click(&mut s, 100.0, 100.0);
+        click(&mut s, 200.0, 100.0);
+        s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": action})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 100.0), view()).unwrap();
+        assert_eq!(crosses_at(&s.overlays(view()), center), arms, "hovering, {action}");
+        s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 150.0), view()).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 100.0), view()).unwrap();
+        assert_eq!(crosses_at(&s.overlays(view()), center), arms, "dragging, {action}");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 100.0), view()).unwrap();
+    }
+}
+
 /// With Measurement Labels on, hovering after the path's last point shows the distance label
 /// beside the pointer; with them off, no label shows.
 #[test]
