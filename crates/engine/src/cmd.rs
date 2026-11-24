@@ -859,6 +859,10 @@ pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
 
+/// What the fill and stroke proxies read from the selected objects, kept with the selection
+/// ([`crate::doc_state::SelectionRecord`]).
+pub(crate) use paint::SelectionPaints;
+
 /// A date param in Unix seconds that defaults to the clock: `None` when absent (now, see
 /// [`clock_date`]), `Some(None)` for null (no date), else `Some(Some(seconds))`.
 pub(crate) fn date_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Option<i64>>> {

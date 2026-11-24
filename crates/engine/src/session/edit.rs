@@ -1,7 +1,8 @@
 use super::{
-    Arc, Document, EngineError, Interaction, LastTransform, NamedStep, Result, Selection, Session, TOO_DEEP, Value, cmd, deselect_hidden, doc_sane,
-    objects_in_range,
+    Arc, Document, EngineError, Interaction, LastTransform, NamedStep, NodeKind, Result, Selection, Session, TOO_DEEP, Value, cmd, deselect_hidden,
+    doc_sane, objects_in_range,
 };
+use crate::doc_state::objects_only;
 
 impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
@@ -210,14 +211,32 @@ impl Session {
         let st = self.doc_mut()?;
         let before = st.selection.objects.clone();
         let new_art = st.selection.new_art.clone();
+        let record = if st.selection_record().is_some() { st.selection_record.take() } else { None };
         f(&st.doc, &mut st.selection);
-        st.selection.prune(&st.doc);
-        // Lock Guides locks the paths made into guides too (#1534), and Lock Slices and Hide
-        // Slices keep the slices out, whatever selects them.
-        deselect_hidden(&menu, &st.doc, &mut st.selection);
-        // The art on a locked artboard can't be selected, whatever selects it, except new art
-        // that was selected and still is.
-        st.protect_locked_artboards(&before, &new_art, None);
+        let added = objects_only(&st.selection) && st.selection.objects.starts_with(&before);
+        // Objects added to objects this checked in the same document, with Lock Guides as it was
+        // then and no art on a locked artboard to protect, are checked alone, by the rules `prune`
+        // and `deselect_hidden` apply to an object.
+        let settled = record.as_ref().is_some_and(|r| r.settled == Some(menu.guides_locked))
+            && st.selection.new_art.is_empty()
+            && st.doc.new_art.get().is_empty()
+            && !st.doc.artboards.iter().any(|a| a.locked);
+        if added && settled {
+            let doc = &st.doc;
+            let tail = st.selection.objects.split_off(before.len());
+            st.selection.objects.extend(tail.into_iter().filter(|id| {
+                doc.node(*id).is_some_and(|n| !n.is_ruler_guide() && !(menu.guides_locked && matches!(n.kind, NodeKind::Path { guide: true, .. })))
+            }));
+        } else {
+            st.selection.prune(&st.doc);
+            // Lock Guides locks the paths made into guides too (#1534), and Lock Slices and Hide
+            // Slices keep the slices out, whatever selects them.
+            deselect_hidden(&menu, &st.doc, &mut st.selection);
+            // The art on a locked artboard can't be selected, whatever selects it, except new art
+            // that was selected and still is.
+            st.protect_locked_artboards(&before, &new_art, None);
+        }
+        st.record_selection(record, menu.guides_locked);
         // Selecting art makes its layer (or sublayer) the current one, as in the Layers panel of
         // the reference app: new art then goes beside it.
         if st.selection.objects != before
