@@ -246,9 +246,12 @@ pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Nod
 
 /// The icon the command catalog gives command `id`: the Align panel's align, distribute and Align
 /// To buttons' and the Pathfinder panel's, so a bar or menu row of the command shows the panel's
-/// glyph. `None` for every other command.
+/// glyph, and each tool's, which the tool rail and its flyouts show. `None` for every other command.
 pub(crate) fn command_icon(id: &str) -> Option<&'static str> {
     use align::{AlignTo, Button};
+    if let Some(tool) = id.strip_prefix("tool:") {
+        return vectorcraft_tools::tool_info(tool).map(|t| crate::icons::tool_icon(t.icon));
+    }
     if let Some(op) = id.strip_prefix("object.pathfinder.") {
         return pathfinder::SHAPE_MODES.iter().chain(&pathfinder::PATHFINDERS).find(|(_, _, o)| *o == op).map(|(icon, _, _)| *icon);
     }
