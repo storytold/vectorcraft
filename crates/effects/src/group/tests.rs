@@ -306,6 +306,25 @@ fn outline_strokes_a_compound_shapes_area_in_its_fill() {
     }
 }
 
+/// Outline of a compound shape with no fill gives the edges no paint of their own when Remove
+/// Unpainted Artwork is off. The shape's own appearance strokes the result, so the shape's stroke
+/// is not copied onto the edges.
+#[test]
+fn outline_of_an_unfilled_compound_shape_adds_no_stroke() {
+    let mut g = compound_shape(ShapeMode::Add);
+    let mut a = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 4.0);
+    if let Some(AppearanceItem::Stroke(s)) = a.items.last_mut() {
+        s.opacity = 0.5;
+    }
+    g.appearance = a.into();
+    g.appearance.effects.push(Effect { id: "pathfinder.outline".into(), params: serde_json::json!({"removeUnpainted": false}), visible: true });
+    let out = pathfinder_children(None, &g, None).unwrap();
+    assert!(!out.is_empty(), "{out:#?}");
+    for n in &out {
+        assert!(!n.appearance.items.iter().any(paints), "{n:#?}");
+    }
+}
+
 /// With Remove Unpainted Artwork, Divide keeps the pieces of an unfilled member when its group's
 /// own visible fill paints them and leaves them out when the group has no fill. Outline leaves out
 /// the member's segments either way.

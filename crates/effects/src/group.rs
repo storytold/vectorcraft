@@ -583,9 +583,10 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
     let own_fill = has_visible_fill(group);
     // A compound shape's area has no paint of its own: the shape's own appearance paints it. The
     // shape's top painting fill is the area's fill for Remove Unpainted Artwork and for Outline's
-    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice.
+    // strokes, while Divide pieces stay unpainted so that the fill is not drawn twice. The shape's
+    // strokes stay out: the shape's own appearance already strokes the result.
     let area_style = group.is_compound_shape().then(|| {
-        let items = group.appearance.items.iter().filter(|i| paints(i)).cloned().collect();
+        let items = top_painting_fill(&group.appearance).cloned().into_iter().collect();
         Node::path(group.id, PathData::default(), Appearance { items, ..Default::default() })
     });
     let style_of = |s: &Node| -> Option<Node> {
