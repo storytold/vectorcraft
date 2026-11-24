@@ -637,9 +637,10 @@ impl VectorcraftApp {
         self.flush_clipboard_out();
         crate::cursors::request_busy(self, &ctx);
         // A pass egui will discard and rerun is not a presented frame: it must not become the
-        // frame-time sample.
+        // frame-time sample, and it must not issue a capture of what it drew.
         if !ctx.will_discard() {
             self.perf.frame_ms = monotonic_ms() - t0;
+            self.issue_captures(&ctx);
             // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
             if step_held && !self.viewport_hidden(&ctx) {
                 crate::panels::actions::playback_shown(self, ctx.cumulative_frame_nr());
