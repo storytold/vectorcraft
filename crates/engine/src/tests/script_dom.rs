@@ -1616,12 +1616,152 @@ fn compound_path_items_add_makes_an_empty_compound_path_that_takes_paths() {
     for src in [
         "var d = app.activeDocument, g = d.groupItems.add(); g.move(d.compoundPathItems.getByName('C'));",
         "var d = app.activeDocument, g = d.groupItems.add(); g.move(d.compoundPathItems.getByName('C').pathItems[0], ElementPlacement.PLACEBEFORE);",
-        "app.activeDocument.compoundPathItems.add('x').move(app.activeDocument.compoundPathItems.getByName('C'));",
+        "app.activeDocument.compoundPathItems.add().move(app.activeDocument.compoundPathItems.getByName('C'));",
     ] {
         assert!(failure(&mut s, src).contains("only paths"), "{src}");
     }
     assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
     assert!(s.execute("object.newGroup", &json!({"compound": 1})).unwrap_err().to_string().contains("true or false"));
+}
+
+/// The paint of a compound path's only path is the compound path's: moved into an empty compound
+/// path, the path gives it that paint, not its own default one.
+#[test]
+fn a_path_moved_out_of_a_compound_path_gives_an_empty_one_the_paint_it_was_drawn_with() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let red = s.active().unwrap().doc.node(a).unwrap().appearance.clone();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, old = d.compoundPathItems[0], c = d.compoundPathItems.add(); c.name = 'C';\
+         old.pathItems[0].move(c); vc.log(d.compoundPathItems.getByName('C').pathItems.length);",
+    );
+    assert_eq!(out, [json!(1)]);
+    let d = &s.active().unwrap().doc;
+    let c = d.parent_of(a).and_then(|p| d.node(p)).unwrap();
+    assert_eq!(c.name.as_deref(), Some("C"));
+    assert_eq!(c.appearance, red);
+    assert_ne!(d.node(a).unwrap().appearance, red);
+}
+
+/// `node.move` into a compound path leaves the path without paint or pixel alignment of its own,
+/// as Make Compound Path leaves its paths, and the compound path takes the alignment.
+#[test]
+fn node_move_into_a_compound_path_clears_the_paths_own_paint() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let cid = s.active().unwrap().doc.parent_of(a).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("object.setPixelAligned", &json!({"on": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let painted = s.active().unwrap().doc.node(b).unwrap().appearance.clone();
+    let member = s.active().unwrap().doc.node(a).unwrap().appearance.clone();
+    let steps = undo_steps(&s);
+    s.execute("node.move", &json!({"id": b.0, "parent": cid.0, "index": 1})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(b), Some(cid));
+    let n = d.node(b).unwrap();
+    assert_ne!(n.appearance, painted);
+    assert_eq!(n.appearance, member);
+    assert!(!n.extras().pixel_aligned);
+    assert!(d.node(cid).unwrap().extras().pixel_aligned);
+}
+
+#[test]
+fn node_move_refuses_a_guide_and_a_locked_or_hidden_compound_path() {
+    let (mut s, a, b) = doc();
+    let cid = NodeId(s.execute("object.newGroup", &json!({"compound": true})).unwrap()["id"].as_u64().unwrap());
+    assert!(matches!(s.active().unwrap().doc.node(cid).unwrap().kind, NodeKind::Compound { .. }));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let err = s.execute("node.move", &json!({"id": a.0, "parent": cid.0, "index": 0})).unwrap_err().to_string();
+    assert!(err.contains("only paths"), "{err}");
+    for hide in ["object.lock", "object.hide"] {
+        s.execute("select.set", &json!({"ids": [cid.0]})).unwrap();
+        s.execute(hide, &json!({})).unwrap();
+        let before = format!("{:?}", s.active().unwrap().doc.layers);
+        let err = s.execute("node.move", &json!({"id": b.0, "parent": cid.0, "index": 0})).unwrap_err().to_string();
+        assert!(err.contains("hidden or locked"), "{hide}: {err}");
+        assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+}
+
+/// `duplicate(compoundPath)` puts the copy into the compound path; an empty one takes its paint.
+#[test]
+fn a_path_duplicated_into_an_empty_compound_path_becomes_its_path() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let blue = s.active().unwrap().doc.node(a).unwrap().appearance.clone();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, c = d.compoundPathItems.add(), p = d.layers[0].pageItems[2]; var q = p.duplicate(c);\
+         vc.log(c.pathItems.length); vc.log(q.parent.typename); vc.log(p.parent.typename);",
+    );
+    assert_eq!(out, [json!(1), json!("CompoundPathItem"), json!("Layer")]);
+    let d = &s.active().unwrap().doc;
+    let lid = d.layer_containing(a).unwrap();
+    let c = d.node(lid).unwrap().children().unwrap().iter().find(|n| matches!(n.kind, NodeKind::Compound { .. })).unwrap();
+    assert_eq!(c.appearance, blue);
+    assert_eq!(d.node(a).unwrap().appearance, blue);
+    // The copy keeps no paint, live shape or pixel alignment of its own.
+    let q = &c.children().unwrap()[0];
+    assert_ne!(q.appearance, blue);
+    assert!(matches!(q.kind, NodeKind::Path { live: None, .. }));
+    assert!(!q.extras().pixel_aligned);
+}
+
+/// A compound path's `pathItems` list its topmost path first.
+#[test]
+fn a_compound_paths_path_items_list_the_topmost_path_first() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let cid = s.active().unwrap().doc.parent_of(a).unwrap();
+    let source = "var P = app.activeDocument.compoundPathItems[0].pathItems; vc.log(P[0].width); vc.log(P[1].width);";
+    // `b` (50 pt wide) on top, then `a` (30 pt wide) on top.
+    s.execute("node.move", &json!({"id": b.0, "parent": cid.0, "index": 1})).unwrap();
+    assert_eq!(log(&mut s, source), [json!(50), json!(30)]);
+    s.execute("node.move", &json!({"id": a.0, "parent": cid.0, "index": 1})).unwrap();
+    assert_eq!(log(&mut s, source), [json!(30), json!(50)]);
+}
+
+/// A path that leaves a compound path for a layer is drawn as it was: it takes the compound
+/// path's paint and pixel alignment, as Release Compound Path gives them.
+#[test]
+fn a_path_moved_out_of_a_compound_path_keeps_the_paint_it_was_drawn_with() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("object.setPixelAligned", &json!({"on": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let (cid, red, lid) = {
+        let d = &s.active().unwrap().doc;
+        let cid = d.parent_of(a).unwrap();
+        (cid, d.node(cid).unwrap().appearance.clone(), d.layer_containing(a).unwrap())
+    };
+    assert_ne!(s.active().unwrap().doc.node(a).unwrap().appearance, red);
+    s.execute("node.move", &json!({"id": a.0, "parent": lid.0})).unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(a), Some(lid));
+    let n = d.node(a).unwrap();
+    assert_eq!(n.appearance, red);
+    assert!(n.extras().pixel_aligned);
+    // The path left behind keeps none of its own.
+    assert_eq!(d.parent_of(b), Some(cid));
+    assert_ne!(d.node(b).unwrap().appearance, red);
 }
 
 #[test]
@@ -1737,16 +1877,38 @@ fn new_artboards_get_a_name_no_other_artboard_has() {
 }
 
 #[test]
-fn names_take_numbers_and_artboards_may_share_a_name() {
+fn names_take_numbers_and_booleans() {
     let (mut s, _, _) = doc();
     let out = log(
         &mut s,
-        "var d = app.activeDocument, A = d.artboards, L = d.layers[0]; A.add([500, 300, 700, 100]);\
+        "var d = app.activeDocument, L = d.layers[0];\
          L.name = 5; vc.log(L.name); vc.log(typeof L.name); L.name = 1.5; vc.log(L.name); L.name = true; vc.log(L.name);\
-         A[0].name = 7; vc.log(A[0].name); A[1].name = 'Same'; A[0].name = 'Same'; vc.log([A[0].name, A[1].name]);\
-         vc.log(A.getByName('Same').artboardRect[0]);",
+         d.artboards[0].name = 7; vc.log(d.artboards[0].name); vc.log(typeof d.artboards[0].name);",
     );
-    assert_eq!(out, [json!("5"), json!("string"), json!("1.5"), json!("true"), json!("7"), json!(["Same", "Same"]), json!(0)]);
+    assert_eq!(out, [json!("5"), json!("string"), json!("1.5"), json!("true"), json!("7"), json!("string")]);
+}
+
+#[test]
+fn an_empty_artboard_name_gives_the_default_name() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var A = app.activeDocument.artboards; A.add([500, 300, 700, 100]);\
+         A[0].name = 'Front'; A[1].name = 'Back'; A[0].name = ''; A[1].name = '  ';\
+         vc.log([A[0].name, A[1].name]);",
+    );
+    assert_eq!(out, [json!(["Artboard 1", "Artboard 2"])]);
+}
+
+#[test]
+fn two_artboards_may_share_a_name() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var A = app.activeDocument.artboards; A.add([500, 300, 700, 100]);\
+         A[1].name = 'Same'; A[0].name = 'Same'; vc.log([A[0].name, A[1].name]); vc.log(A.getByName('Same').artboardRect[0]);",
+    );
+    assert_eq!(out, [json!(["Same", "Same"]), json!(0)]);
     let names: Vec<String> = s.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
     assert_eq!(names, ["Same", "Same"]);
 }
@@ -1769,7 +1931,6 @@ fn artboards_reject_bad_arguments_before_any_change() {
         ("app.activeDocument.artboards.insert([0, 0, 10, -10]);", "needs an index"),
         ("app.activeDocument.artboards.remove(2);", "index must be"),
         ("app.activeDocument.artboards.remove(-1);", "index must be"),
-        ("app.activeDocument.artboards[0].name = '';", "cannot be empty"),
         ("app.activeDocument.artboards[0].name = null;", "must be a string"),
         ("app.activeDocument.artboards[0].name = new Array(5000).join('x');", "too long"),
         ("app.activeDocument.artboards[0].rulerPAR = 20;", "from 0.1 to 10"),

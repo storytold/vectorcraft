@@ -131,8 +131,8 @@ pub(super) fn new_group(s: &mut Session, p: &Value) -> Result<Value> {
     if !d.is_editable(parent) {
         return Err(bad(C, "the layer or group is hidden or locked"));
     }
-    let name = if compound { "Compound Path" } else { "Group" };
-    let gid = s.edit(name, |d, _| {
+    let label = if compound { "Compound Path" } else { "Group" };
+    let gid = s.edit(label, |d, _| {
         let gid = d.alloc_id();
         let clips = d.node(parent).is_some_and(Node::clips);
         let index = if clips { index.max(1) } else { index };

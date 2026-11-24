@@ -14,9 +14,11 @@
 //! not the active one makes it active for the command and makes the other one active again after.
 //!
 //! VectorCraft's own rules, which the help pages do not state:
-//! - Collections list documents in tab order and art in paint order (bottom first), counted from 0.
-//!   `pageItems` lists every object, with the objects inside groups and compound paths after the
-//!   group or compound path, and leaves out layers and ruler guides. An index out of range gives
+//! - Collections list documents in tab order and the document's art in paint order (bottom first),
+//!   counted from 0; the `layers` module gives the order of a layer's, a group's and a compound
+//!   path's lists. The document's `pageItems` lists every object, with the objects inside groups
+//!   and compound paths after the group or compound path, and leaves out layers and ruler guides.
+//!   An index out of range gives
 //!   `undefined`; `index` and `getByName` throw `Not found` when nothing matches.
 //! - Script coordinates are points with Y up from the bottom of the first artboard
 //!   (`DOCUMENTCOORDINATESYSTEM`, the default) or points with Y down from the top-left corner of

@@ -13,8 +13,8 @@
 //! VectorCraft's own rules, which the help pages do not state:
 //! - `layers` lists layers top first, as the Layers panel shows them. A layer's or group's
 //!   `pageItems`, `groupItems` and `compoundPathItems`, and a compound path's `pathItems`, list the
-//!   objects directly in it, topmost first. The document's `groupItems` and `compoundPathItems` hold every group or compound path at
-//!   any depth, in the order of the document's `pageItems`.
+//!   objects directly in it, topmost first. The document's `groupItems` and `compoundPathItems`
+//!   hold every group or compound path at any depth, in the order of the document's `pageItems`.
 //! - `layers.add()` on the document makes a layer above every top-level layer; on a layer it makes
 //!   a sublayer on top of that layer's contents. The new layer becomes the current one.
 //! - `locked` true means the layer is locked.
@@ -587,9 +587,9 @@ pub(super) type ArtList = (u64, Arc<Document>, u8, Option<NodeId>, Rc<Vec<NodeId
 pub(super) const ART_LISTS: usize = 4;
 
 /// The objects of `kind` in `container` (directly), topmost first, or in the whole document at any
-/// depth, in the order of the document's `pageItems`. The last [`ART_LISTS`] lists are kept while their documents are unchanged, so a
-/// loop over groups that reads each group's `pageItems` builds each list once. Each new list is
-/// charged by the objects it looks at.
+/// depth, in the order of the document's `pageItems`. The last [`ART_LISTS`] lists are kept while
+/// their documents are unchanged, so a loop over groups that reads each group's `pageItems` builds
+/// each list once. Each new list is charged by the objects it looks at.
 fn art_list(h: &Host, st: &DocState, kind: Kind, container: Option<NodeId>) -> Result<Rc<Vec<NodeId>>> {
     {
         let mut lists = h.dom.art.borrow_mut();
@@ -1048,23 +1048,21 @@ fn board_name(h: &Host, a: &[Data]) -> Answer {
     read_board(h, a, |_, ab, _| Ok(text(ab.name.clone())))
 }
 
-/// A new artboard name: not empty and at most [`MAX_TEXT_BYTES`] bytes; a number or boolean as
-/// `String()` writes it. Another artboard may have the same name. → the name, trimmed as
-/// `artboard.rename` trims it.
-fn board_name_arg(d: &Data) -> Result<String> {
+/// A new artboard name: at most [`MAX_TEXT_BYTES`] bytes; a number or boolean as `String()` writes
+/// it. Another artboard may have the same name. → the name, trimmed as `artboard.setProps` trims
+/// it; an empty one gives the artboard its default name, `Artboard N` for the Nth artboard.
+fn board_name_arg(d: &Data, index: usize) -> Result<String> {
     let name = name_text(d)?;
     if name.len() > MAX_TEXT_BYTES {
         return Err(HostError::Range("the name is too long".into()));
     }
     let name = name.trim();
-    if name.is_empty() {
-        return Err(HostError::Range("an artboard's name cannot be empty".into()));
-    }
-    Ok(name.to_string())
+    Ok(if name.is_empty() { format!("Artboard {}", index + 1) } else { name.to_string() })
 }
 
 fn board_set_name(h: &Host, a: &[Data]) -> Answer {
-    let name = board_name_arg(arg(a, 1))?;
+    let (_, i) = this_board(h, a)?;
+    let name = board_name_arg(arg(a, 1), i)?;
     set_board(h, a, |ab| ab.name == name, json!({"name": &name}))
 }
 

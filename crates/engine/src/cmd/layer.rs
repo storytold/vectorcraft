@@ -120,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also in a shown, unlocked compound path, and an empty compound path takes the paint of the first path that goes in; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; a path also goes into a shown, unlocked compound path and gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with; a path that leaves a compound path for a layer or a group takes its paint and pixel alignment; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
             has_doc,
             move_node
         ),
@@ -930,8 +930,15 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     } else if !accepts(d, parent, n) {
         return Err(bad(C, "layers go only at the top level or in layers, objects in layers and groups"));
     }
-    // An empty compound path takes the paint of the first path that goes into it.
-    let paint = compound.filter(|c| c.children().is_some_and(Vec::is_empty)).map(|c| (c.id, n.appearance.clone()));
+    // An empty compound path takes the paint of the first path that goes into it: the path's own,
+    // or the paint of the compound path it leaves, which is what painted it.
+    let from_compound = d.parent_of(id).and_then(|p| d.node(p)).filter(|p| matches!(p.kind, NodeKind::Compound { .. }));
+    let shown = from_compound.map_or(&n.appearance, |p| &p.appearance);
+    let paint = compound.filter(|c| c.children().is_some_and(Vec::is_empty)).map(|c| (c.id, shown.clone()));
+    let into = compound.map(|c| c.id);
+    // A path that leaves a compound path for a layer or a group takes the compound path's paint and
+    // pixel alignment, as Release Compound Path gives them to its paths.
+    let out_of = from_compound.filter(|_| compound.is_none()).map(|c| (c.appearance.clone(), c.extras().pixel_aligned));
     if let Some(what) = super::intertwine::refused_in(d, parent, n) {
         return Err(bad(C, format!("{what} can't be intertwined")));
     }
@@ -945,6 +952,30 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
             && let Some(n) = d.node_mut(c)
         {
             n.appearance = appearance;
+        }
+        // A path in a compound path keeps no paint, live shape or pixel alignment of its own, as
+        // Make Compound Path leaves its paths; the compound path becomes pixel-aligned instead.
+        if let Some(c) = into {
+            let mut aligned = false;
+            if let Some(m) = d.node_mut(id) {
+                m.appearance = vectorcraft_doc::Appearance::default().into();
+                aligned = std::mem::take(&mut m.extras_mut().pixel_aligned);
+                if let NodeKind::Path { live, .. } = &mut m.kind {
+                    *live = None;
+                }
+            }
+            if aligned && let Some(cn) = d.node_mut(c) {
+                cn.extras_mut().pixel_aligned = true;
+                super::object::snap_if_aligned(cn);
+            }
+        }
+        if let Some((appearance, aligned)) = out_of
+            && let Some(m) = d.node_mut(id)
+        {
+            m.appearance = appearance;
+            if aligned {
+                m.extras_mut().pixel_aligned = true;
+            }
         }
         super::intertwine::settle_members(d, &[(id, from)], &left)?;
         live_paint.finish(d, sel, &[id])?;

@@ -2657,9 +2657,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
-  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
-  group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
-  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's, a
+  group's or a compound path's contents, `PLACEATEND` under them (a compound path takes only paths), `PLACEBEFORE`
+  directly above the relative object and `PLACEAFTER` directly below it. An object of another document throws `Cross-document placement is not available`, and when
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
@@ -2671,8 +2671,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
   `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
   `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
-  VectorCraft's own rules: documents are listed in tab order, and page items in paint order from the bottom, with the
-  objects inside groups and compound paths after their group and without layers and ruler guides. Script coordinates
+  VectorCraft's own rules: documents are listed in tab order, and the document's page items in paint order from the
+  bottom, with the objects inside groups and compound paths after their group and without layers and ruler guides
+  (the layers paragraph below gives the order of a layer's, a group's and a compound path's lists). Script coordinates
   are points with Y up from the bottom-left corner of the first artboard, or, with
   `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`
   is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
@@ -2738,14 +2739,17 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   path; `false` releases the mask; the group keeps its id. `groupItems.add()` makes an empty group on top of the
   layer's or group's contents, or of the current layer's for the document's collection, and `compoundPathItems.add()`
   makes an empty compound path in the same place
-  (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItems/). A path that `move` puts into a compound path
-  becomes one of its paths, and an empty compound path takes the paint of the first path that goes in; other objects
-  are refused. `artboards.add` and `insert` stop
-  at 100 artboards in a document, the limit `Documents.add` uses. An artboard's rectangle is
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItems/). A path that `move` or `duplicate` puts into a
+  compound path becomes one of its paths and gives up its own paint, as Make Compound Path leaves its paths. An empty
+  compound path takes the paint the first path that goes in was drawn with: the path's own, or the paint of the
+  compound path it leaves. Other objects are refused. A path that `move` takes out of a compound path into a layer or
+  a group takes the compound path's paint and pixel alignment, as Release Compound Path gives them to its paths.
+  `artboards.add` and `insert` stop at 100 artboards in a document, the limit `Documents.add` uses. An artboard's rectangle is
   `[left, top, right, bottom]` in script coordinates, with its right side right of its left side, its bottom below
   its top, each side from 1 to 3,999,856 points and every edge at most 4,000,000 points from the document origin.
-  Artboard names are trimmed and cannot be empty, and two artboards may have the same name. `add` and `insert` name the new artboard `Artboard N`, with N the first number from one
-  past the artboard count that no other artboard's name uses. `rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down.
+  Artboard names are trimmed, an empty name gives the artboard its default name (`Artboard N` for the Nth artboard),
+  and two artboards may have the same name. `add` and `insert` name the new artboard `Artboard N`, with N the first number from one past the artboard count that no other artboard's
+  name uses. `rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down.
   `setActiveArtboardIndex` changes the view's active artboard with no undo step, and `script.run`'s report lists the
   change in `activeArtboards` (`[{document, artboard}]`, both indexes, with each document's active artboard as the
   run leaves it). The report also lists a document whose active artboard has another index when the run ends because
@@ -2757,8 +2761,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   default: the current layer), on top of its contents or at `index` (0 is the bottom; in a clipping layer or group,
   index 0 puts it directly above the clipping path), as one undo step named Group, and
   gives `{id}`. With `compound: true` it adds an empty compound path instead, as one undo step named Compound Path.
-  The selection stays as it is. `node.move` also puts a path into a shown, unlocked compound path, and an empty
-  compound path takes the paint of the first path that goes in.
+  The selection stays as it is. `node.move` also puts a path into a shown, unlocked compound path, where the path
+  gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with. A
+  path that `node.move` takes out of a compound path into a layer or a group takes the compound path's paint and pixel
+  alignment.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -6463,7 +6469,8 @@ and `layerRows`, the rows highlighted in the panel.
   bottom layer's into the empty space under the list) places them, unless objects are copied with a top-level layer
   that is the target, which would put them inside it (#8237). Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
-  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group. A row that
+  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group, and it puts
+  a path into a shown, unlocked compound path (see `object.newGroup` for the paint the path keeps or takes). A row that
   either command puts into a Live Paint group from elsewhere (inside it, or above or below one of its rows) joins the
   group's paths as `livePaint.merge` adds them, in one "Merge Live Paint" undo step, and the group is selected and
   listed in `layer.move`'s `ids` in its place; paths, compound paths, groups of them and Live Paint groups can join,
