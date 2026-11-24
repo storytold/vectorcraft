@@ -62,7 +62,7 @@ use craft::color_ui::ui::{PaintChip, PairWell, SwatchPair, SwatchPairOutput, Swa
 use craft::keymap::CommandRef;
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
-use craft::ui::buttons::{IconButton, PopupMark};
+use craft::ui::buttons::{IconButton, Link, PopupMark};
 use craft::ui::choice::SwatchSpacing;
 use craft::ui::contract::{Bind, CommandSet as _, Entry, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger};
 use craft::ui::display::{Divider, Shade, Text};
@@ -905,6 +905,12 @@ pub(crate) fn section<'a>(title: impl Into<Label>) -> Section<'a> {
 /// with no rule, as the reference app drew them.
 pub(crate) fn subheading<'a>(title: impl Into<Label>) -> Section<'a> {
     Section::fixed(title).strength(HeaderStrength::Subheading)
+}
+
+/// A link to a control's options ("Stroke", "Opacity:", "Character:"): underlined in the normal ink, as the reference
+/// app drew them; links that leave the panel's subject (a file, more results) keep the accent.
+pub(crate) fn option_link(label: impl Into<Label>) -> Link {
+    Link::new(label).tone(Tone::Neutral)
 }
 
 /// The empty state of a panel with nothing to show: `icon` over the title and the message,
