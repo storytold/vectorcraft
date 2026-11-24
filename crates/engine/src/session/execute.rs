@@ -59,6 +59,30 @@ impl Session {
 
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
+        self.revealing(|s| s.execute_unwatched(id, params))
+    }
+
+    /// Run `f`, a top-level entry that changes the active document's rows, current layer or
+    /// selection, then ask the Layers panel to reveal what it changed ([`DocState::request_reveal`]).
+    /// Nothing is asked inside a command, while an interaction is open or while a tool is busy: the
+    /// entry that ends them asks.
+    pub(super) fn revealing<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let before = (self.depth == 0 && !self.tool_busy()).then(|| self.active().map(crate::DocState::layers_view)).flatten();
+        let r = f(self);
+        if let Some(before) = before {
+            self.reveal_since(&before);
+        }
+        r
+    }
+
+    /// Ask the Layers panel of the active document to reveal what changed since `before`.
+    pub(super) fn reveal_since(&mut self, before: &crate::doc_state::LayersView) {
+        if let Some(st) = self.active_mut() {
+            st.request_reveal(before);
+        }
+    }
+
+    fn execute_unwatched(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
         // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
         if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {

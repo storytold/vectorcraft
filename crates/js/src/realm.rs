@@ -498,10 +498,10 @@ impl Realm {
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
-    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `pick` (the file
-    /// dialogs, where a run may wait), `encode`, `decode`, `encodingAvailable`, `current` and
-    /// `locations`, with the values `system` and `lineFeed` and the messages `text.notOpen`,
-    /// `text.badMode`, `text.noAlias` and `text.noHidden`. Each object keeps its path, its `error`
+    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `setHidden`,
+    /// `createAlias`, `pick` (the file dialogs, where a run may wait), `encode`, `decode`,
+    /// `encodingAvailable`, `current` and `locations`, with the values `system` and `lineFeed` and
+    /// the messages `text.notOpen` and `text.badMode`. Each object keeps its path, its `error`
     /// text, its open file's id, its encoding and its line feed in properties that are not
     /// enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
