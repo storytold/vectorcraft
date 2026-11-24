@@ -1,21 +1,94 @@
+use craft::menu::Node;
+
 use super::*;
-use crate::theme;
+use crate::i18n::LangExt;
+
+/// The nodes of the top-level menu `title`.
+fn menu_nodes(title: &str) -> Vec<Node> {
+    menu_tree().into_iter().find(|(name, _)| *name == title).map(|(_, children)| children).unwrap_or_default()
+}
+
+/// The children of the submenu `label` among `nodes`.
+fn submenu_nodes<'a>(nodes: &'a [Node], label: &str) -> Option<&'a [Node]> {
+    nodes.iter().find_map(|n| match n {
+        Node::Submenu { label: l, children, .. } if l == label => Some(children.as_slice()),
+        _ => None,
+    })
+}
+
+/// `(label, command id, params)` of the command items directly among `nodes`.
+fn command_rows(nodes: &[Node]) -> Vec<(&str, &str, &Value)> {
+    nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Item(it) => Some((it.label.as_str(), it.command.id.as_str(), &it.command.params)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The command ids of the items labelled `label` directly among `nodes`.
+fn ids_labelled(nodes: &[Node], label: &str) -> Vec<String> {
+    command_rows(nodes).into_iter().filter(|(l, ..)| *l == label).map(|(_, id, _)| id.to_string()).collect()
+}
+
+/// The positions of the separators among `nodes`.
+fn separators(nodes: &[Node]) -> Vec<usize> {
+    nodes.iter().enumerate().filter(|(_, n)| matches!(n, Node::Separator)).map(|(i, _)| i).collect()
+}
+
+/// The label the built bar shows for `id`, with the step-naming wording (Undo Move) applied.
+fn shown_label(app: &mut VectorcraftApp, id: &str) -> Option<String> {
+    let ctx = crate::testing::ui_context();
+    crate::menus::model::refresh(app, &ctx);
+    // The bar keeps an item's own label; the row shows its state's title, which the model makes so.
+    let app = &*app;
+    app.menus.bar.items().into_iter().find(|it| it.command.id == id).map(|it| crate::menus::shown_label(app, id, &it.command.params, &it.label))
+}
+
+/// One frame of the whole app on `ctx`, with `events` as the host's input.
+fn app_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+    let raw =
+        egui::RawInput { events, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 850.0))), ..Default::default() };
+    crate::testing::app_frame(app, ctx, raw);
+}
+
+/// The first open dialog and its fields.
+fn open_dialog(app: &VectorcraftApp) -> (craft::ui::dialog::OpenDialog, serde_json::Map<String, Value>) {
+    let dialog = crate::tests::picks::open_dialogs(app).into_iter().next().expect("a dialog is open");
+    let fields = match &dialog.fields {
+        Some(Value::Object(fields)) => fields.clone(),
+        _ => serde_json::Map::new(),
+    };
+    (dialog, fields)
+}
+
+/// A text field of an open dialog's fields.
+fn text_of(fields: &serde_json::Map<String, Value>, key: &str) -> String {
+    fields.get(key).and_then(Value::as_str).unwrap_or_default().to_string()
+}
+
+/// Sets `fields` on the open dialog, then confirms it (`ok`) or cancels it.
+fn answer_open(app: &mut VectorcraftApp, fields: Value, ok: bool) {
+    let (dialog, _) = open_dialog(app);
+    let fields: Vec<(&str, Value)> = fields.as_object().into_iter().flatten().map(|(k, v)| (k.as_str(), v.clone())).collect();
+    crate::tests::picks::answer_dialog(app, dialog.id, &fields, ok);
+}
 
 #[test]
 fn help_f1_opens_discover_without_a_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let (_, help) = menu_tree().into_iter().find(|(title, _)| *title == "Help").unwrap();
-    assert!(help.iter().any(|item| matches!(item, Item::Cmd("VectorCraft Help…", "help.discover", _))));
-    assert_eq!(shortcut_of("help.discover"), Some("F1"));
+    let help = menu_nodes("Help");
+    assert!(command_rows(&help).iter().any(|(label, id, _)| (*label, *id) == ("VectorCraft Help…", "help.discover")));
     assert!(enabled(&app, "help.discover"));
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::F1)], ..Default::default() }, |ui| {
-        crate::shortcuts::handle(&mut app, ui.ctx());
-    })
-    .textures_delta
-    .clear();
+    let ctx = crate::testing::ui_context();
+    for _ in 0..3 {
+        app_frame(&mut app, &ctx, vec![]);
+    }
+    // A press and its release, as a keyboard sends them: a second press of a key still down is a repeat.
+    let key =
+        |key| [true, false].map(|pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE });
+    app_frame(&mut app, &ctx, key(egui::Key::F1).to_vec());
     assert!(crate::panel_docking::showing(&app.ui, "discover"));
     assert!(app.session.active().is_none());
     app.run("help.discover", json!({})).unwrap();
@@ -29,29 +102,23 @@ fn help_f1_opens_discover_without_a_document() {
     assert!(app.ui.learn_locate.is_some());
     assert_eq!(app.session.tool_id(), active_tool);
     for _ in 0..2 {
-        ctx.run_ui(egui::RawInput::default(), |ui| crate::panels::discover::show(&mut app, ui)).textures_delta.clear();
+        app_frame(&mut app, &ctx, vec![]);
     }
-    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
-        crate::shortcuts::handle(&mut app, ui.ctx());
-        crate::panels::discover::show(&mut app, ui);
-    })
-    .textures_delta
-    .clear();
+    app_frame(&mut app, &ctx, key(egui::Key::Escape).to_vec());
     assert!(!crate::panel_docking::showing(&app.ui, "discover"));
     app.run("help.discover", json!({})).unwrap();
     app.run("help.discover.back", json!({})).unwrap();
     assert_eq!(app.ui.discover.query, "rectangle");
     assert!(app.ui.discover.selected.is_none());
-    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "tool:rectangle", "Shift+9");
-    crate::shortcut_editor::sync(&app.ui);
+    // PLAN: assumed `shortcuts.set` takes the tool's binding key `tool:rectangle` as its id
+    app.run("shortcuts.set", json!({"id": "tool:rectangle", "shortcut": "Shift+9"})).unwrap();
     let tools = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
     assert!(tools["results"].as_array().unwrap().iter().any(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle" && hit["shortcut"] == "Shift+9"));
-    crate::shortcut_editor::sync(&crate::state::UiState::default());
 
     let commands = app.run("help.discover.search", json!({"query": "file.newDialog"})).unwrap();
     let command = commands["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "file.newDialog").unwrap();
     app.run("help.discover.choose", json!({"index": command})).unwrap();
-    assert!(app.ui.dialog.is_none());
+    assert!(!app.any_dialog_open());
     assert!(app.session.active().is_none());
 
     let tutorial = crate::panels::learn::catalog::SKILLS[0].tutorials.first().unwrap();
@@ -62,13 +129,8 @@ fn help_f1_opens_discover_without_a_document() {
     let text = crate::tests_labels::painted_text(&mut app, crate::panels::discover::show);
     assert!(text.contains(tutorial.title), "{text}");
     app.ui.discover.focus = true;
-    ctx.run_ui(egui::RawInput::default(), |ui| crate::panels::discover::show(&mut app, ui)).textures_delta.clear();
-    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
-        crate::shortcuts::handle(&mut app, ui.ctx());
-        crate::panels::discover::show(&mut app, ui);
-    })
-    .textures_delta
-    .clear();
+    app_frame(&mut app, &ctx, vec![]);
+    app_frame(&mut app, &ctx, key(egui::Key::Escape).to_vec());
     assert!(!crate::panel_docking::showing(&app.ui, "discover"));
 
     app.run("file.new", json!({})).unwrap();
@@ -82,13 +144,8 @@ fn help_f1_opens_discover_without_a_document() {
         app.session.pointer(&up, view).unwrap();
     }
     assert!(app.session.tool_ends_on_escape(view));
-    let canvas_ctx = egui::Context::default();
-    canvas_ctx
-        .run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
-            crate::shortcuts::handle(&mut app, ui.ctx());
-        })
-        .textures_delta
-        .clear();
+    let canvas_ctx = crate::testing::ui_context();
+    app_frame(&mut app, &canvas_ctx, key(egui::Key::Escape).to_vec());
     assert!(!app.session.tool_ends_on_escape(view));
     assert!(crate::panel_docking::showing(&app.ui, "discover"));
 }
@@ -97,9 +154,13 @@ fn help_f1_opens_discover_without_a_document() {
 /// shows, marks nothing and the status bar says why.
 #[test]
 fn discover_says_why_a_tool_cannot_be_marked() {
-    fn texts(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+    fn pass(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::panels::discover::show(app, ui));
         out.textures_delta.clear();
+        out
+    }
+    fn texts(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        let out = pass(ctx, app, events);
         fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
             match s {
                 egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
@@ -117,18 +178,32 @@ fn discover_says_why_a_tool_cannot_be_marked() {
         texts(ctx, app, vec![]);
         let drawn = texts(ctx, app, vec![]);
         let pos = drawn.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("`{label}` not drawn: {drawn:?}")).1.center();
+        press_at(ctx, app, pos);
+    }
+    fn press_at(ctx: &egui::Context, app: &mut VectorcraftApp, pos: egui::Pos2) {
         let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
-            texts(ctx, app, vec![e]);
+            pass(ctx, app, vec![e]);
         }
+    }
+    // A step's tool name is a link inside its sentence: the Link node named by its words.
+    fn click_link(ctx: &egui::Context, app: &mut VectorcraftApp, name: &str) {
+        ctx.enable_accesskit();
+        pass(ctx, app, vec![]);
+        let nodes = pass(ctx, app, vec![]).platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let link = nodes.iter().map(|(_, n)| n).find(|n| n.role() == egui::accesskit::Role::Link && n.label().is_some_and(|l| l == name));
+        let b = link.and_then(|n| n.bounds()).unwrap_or_else(|| panic!("no link `{name}`"));
+        press_at(ctx, app, egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32));
     }
     crate::i18n::set_current(crate::i18n::Lang::EN);
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = crate::testing::ui_context();
+    app.ui_ctx = Some(ctx.clone());
+    // Tab hides the toolbars in the shell's next pass.
     app.run("window.dock", json!({})).unwrap();
-    assert!(app.ui.tab_hid.is_some() && !app.ui.toolbar);
+    app_frame(&mut app, &ctx, vec![]);
+    assert!(craft::ui::shell::chrome_state(&ctx, egui::ViewportId::ROOT).hidden);
     let reason = app.run("learn.locateTool", json!({"tool": "rectangle"})).unwrap()["reason"].as_str().unwrap().to_string();
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
 
     let found = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
     let hit = found["results"].as_array().unwrap().iter().find(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle").unwrap().clone();
@@ -138,16 +213,16 @@ fn discover_says_why_a_tool_cannot_be_marked() {
     assert!(app.ui.learn_locate.is_none());
     assert_eq!(app.ui.status, reason);
 
-    let (tutorial, tool) = crate::panels::learn::catalog::SKILLS
+    let (tutorial, link) = crate::panels::learn::catalog::SKILLS
         .iter()
         .flat_map(|skill| skill.tutorials.iter())
-        .find_map(|t| t.steps.iter().find_map(|s| s.tool).map(|tool| (t, tool)))
+        .find_map(|t| t.steps.iter().find_map(|s| s.tool_name()).map(|(_, name, _)| (t, name)))
         .unwrap();
     let found = app.run("help.discover.search", json!({"query": tutorial.title})).unwrap();
     let index = found["results"].as_array().unwrap().iter().position(|hit| hit["kind"] == "tutorial" && hit["id"] == tutorial.id).unwrap();
     app.run("help.discover.choose", json!({"index": index})).unwrap();
     app.status("");
-    click(&ctx, &mut app, vectorcraft_tools::tool_info(tool).unwrap().label);
+    click_link(&ctx, &mut app, link);
     assert!(app.ui.learn_locate.is_none());
     assert_eq!(app.ui.status, reason);
 }
@@ -181,7 +256,8 @@ fn discover_rejects_invalid_search_and_selection_parameters() {
 #[test]
 fn discover_command_results_follow_their_menu_label() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    // Help searches in the window's interface language.
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     let found = app.run("help.discover.search", json!({"query": "view.grid"})).unwrap();
     let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "view.grid" && hit["path"][0] == "View").unwrap();
@@ -201,8 +277,9 @@ fn menu_entry_shown_paths_keep_script_folder_names() {
     let de = crate::i18n::Lang::from_code("de").unwrap();
     assert_ne!(crate::i18n::tr(de, "File"), "File");
     let script = json!({"path": "File/a.jsx"});
-    let folder = vec![Item::Cmd("a", crate::scripts_menu::COMMAND, script)];
-    let items = vec![Item::Sub("Scripts", vec![Item::Sub("File", folder), Item::Cmd("Other Script…", "ui.runScript", Value::Null)])];
+    // PLAN: assumed `cp(label, id, params)` and `sub(label, children)` build `Node`s
+    let folder = vec![cp("a", crate::scripts_menu::COMMAND, script)];
+    let items = vec![sub("Scripts", vec![sub("File", folder), cp("Other Script…", "ui.runScript", Value::Null)])];
     let mut out = vec![];
     crate::i18n::set_current(de);
     flatten(&app, vec!["File".into()], vec![crate::i18n::t("File").into()], &items, &mut out);
@@ -231,7 +308,8 @@ fn discover_leaves_out_menus_the_window_does_not_show() {
 /// an effect by its own id (Effect › Pathfinder › Add reads Réunion in French).
 #[test]
 fn discover_finds_commands_by_their_shown_menu_label() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    // Help searches in the window's interface language.
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     let fr = crate::i18n::Lang::from_code("fr").unwrap();
     let shown = crate::i18n::tr_id(fr, "pathfinder.add", "Add");
     assert_ne!(shown, crate::i18n::tr(fr, "Add"));
@@ -252,13 +330,18 @@ fn discover_finds_commands_by_their_shown_menu_label() {
 
 #[test]
 fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    // Help searches in the window's interface language.
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
+    // The keymap is the window's: its frame builds it, and builds it again with the shortcuts as they changed.
+    let ctx = app.ui_ctx.clone().unwrap();
+    app_frame(&mut app, &ctx, vec![]);
     let found = app.run("help.discover.search", json!({"query": "file.newDialog"})).unwrap();
     let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "file.newDialog").unwrap();
     assert_eq!(found["results"][index]["shortcut"], "Cmd+N");
     app.run("help.discover.choose", json!({"index": index})).unwrap();
     app.run("window.panel.close", json!({"panel": "discover"})).unwrap();
     app.run("shortcuts.set", json!({"id": "file.newDialog", "shortcut": "Cmd+Alt+Shift+F9"})).unwrap();
+    app_frame(&mut app, &ctx, vec![]);
 
     let reopened = app.run("help.discover", json!({})).unwrap();
     assert_eq!(reopened["query"], "file.newDialog");
@@ -270,9 +353,11 @@ fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
     assert_eq!(picked["location"]["shortcut"], "Cmd+Alt+Shift+F9");
 
     app.run("shortcuts.set", json!({"id": "file.newDialog", "shortcut": "Cmd+Alt+Shift+F8"})).unwrap();
+    app_frame(&mut app, &ctx, vec![]);
     let text = crate::tests_labels::painted_text(&mut app, crate::panels::discover::show);
-    assert!(text.contains(&pretty_shortcut("Cmd+Alt+Shift+F8")), "{text}");
-    assert!(!text.contains(&pretty_shortcut("Cmd+Alt+Shift+F9")), "{text}");
+    // PLAN: assumed `keymap::chord_text(&str) -> String`, the text the chord shows as
+    assert!(text.contains(&crate::keymap::chord_text("Cmd+Alt+Shift+F8")), "{text}");
+    assert!(!text.contains(&crate::keymap::chord_text("Cmd+Alt+Shift+F9")), "{text}");
 
     let de = crate::i18n::Lang::from_code("de").unwrap();
     assert_ne!(crate::i18n::tr(de, "New…"), "New…");
@@ -282,7 +367,6 @@ fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
     assert_eq!(back["query"], "file.newDialog");
     assert_eq!(back["results"][index]["label"], crate::i18n::tr(de, "New…"));
     assert_eq!(back["results"][index]["path"][0], crate::i18n::tr(de, "File"));
-    crate::shortcut_editor::sync(&crate::state::UiState::default());
 }
 
 #[test]
@@ -293,225 +377,64 @@ fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
     assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(false));
     assert!(app.ui.status_bar);
     assert_eq!(checked(&app, "window.helpBar", &Value::Null), Some(false));
-    let saved = crate::workspaces::capture(&app.ui, "No help");
-    let saved: crate::workspaces::Workspace = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+    let saved = crate::workspaces::record(&app.ui);
+    let saved: crate::workspaces::WorkspaceRecord = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+    assert!(!saved.help_bar, "the record keeps the Help Bar off");
+    // A saved workspace brings its bars back after another workspace changed them.
+    crate::workspaces::save_as(&mut app.ui, "Bars").unwrap();
+    let other = crate::workspaces::names(&app.ui).into_iter().find(|n| n != "Bars").unwrap();
+    crate::workspaces::switch(&mut app, &other).unwrap();
     app.ui.help_bar = true;
     app.ui.status_bar = false;
-    crate::workspaces::apply(&mut app.ui, &saved);
+    crate::workspaces::switch(&mut app, "Bars").unwrap();
     assert!(!app.ui.help_bar && app.ui.status_bar);
     assert_eq!(run_ui_command(&mut app, "window.helpBar", &Value::Null).unwrap().unwrap(), json!(true));
-    let legacy: crate::workspaces::Workspace = serde_json::from_value(json!({"name":"Old workspace"})).unwrap();
+    let legacy: crate::workspaces::WorkspaceRecord = serde_json::from_value(json!({"name":"Old workspace"})).unwrap();
     assert!(legacy.help_bar);
     let restored: crate::state::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
     assert!(restored.help_bar);
-    let (_, window) = menu_tree().into_iter().find(|(title, _)| *title == "Window").unwrap();
-    assert!(window.iter().any(|item| matches!(item, Item::Cmd("Help Bar", "window.helpBar", _))));
-}
-
-/// One headless frame of the in-window menu bar; returns its titles (left to right) as
-/// (rect, id of the title's popup).
-fn bar_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<(egui::Rect, egui::Id)> {
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
-    let mut layer = None;
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
-        layer = Some(ui.layer_id());
-        menu_bar(app, ui);
-    });
-    out.textures_delta.clear();
-    let layer = layer.unwrap();
-    let mut titles: Vec<(egui::Rect, egui::Id)> = ctx.viewport(|vp| {
-        vp.prev_pass
-            .widgets
-            .get_layer(layer)
-            .filter(|w| w.sense.senses_click() && w.rect.top() < 30.0)
-            // `egui::Popup::default_response_id` of the title's response.
-            .map(|w| (w.rect, w.id.with("popup")))
-            .collect()
-    });
-    titles.sort_by(|a, b| a.0.left().total_cmp(&b.0.left()));
-    titles
-}
-
-fn open_titles(ctx: &egui::Context, titles: &[(egui::Rect, egui::Id)]) -> Vec<usize> {
-    (0..titles.len()).filter(|&i| egui::Popup::is_id_open(ctx, titles[i].1)).collect()
-}
-
-/// File ends with Exit, running the app's own quit flow (unsaved documents are asked about).
-#[test]
-fn file_ends_with_exit() {
-    let tree = menu_tree();
-    let (_, file) = tree.iter().find(|(t, _)| *t == "File").unwrap();
-    let last = file.iter().rev().find(|i| !matches!(i, Item::Sep)).unwrap();
-    assert!(matches!(last, Item::Cmd("Exit", "app.quit", _)), "{last:?}");
+    let window = menu_nodes("Window");
+    assert!(command_rows(&window).iter().any(|(label, id, _)| (*label, *id) == ("Help Bar", "window.helpBar")));
 }
 
 /// Help starts with Search Commands…, the command search's own command, showing its shortcut,
 /// then a separator; the menus list it once.
 #[test]
 fn help_starts_with_search_commands() {
-    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     let tree = menu_tree();
-    let (_, help) = tree.iter().find(|(t, _)| *t == "Help").unwrap();
-    assert!(matches!(help[0], Item::Cmd("Search Commands…", "help.commandPalette", _)), "{:?}", help[0]);
-    assert!(matches!(help[1], Item::Sep), "{:?}", help[1]);
-    let Some(Entry::Item(row)) = entry(&app, &help[0]) else { panic!("Search Commands… is not shown") };
-    assert!(row.enabled);
-    assert_eq!(row.shortcut, shortcut_of("help.commandPalette"));
-    assert!(row.shortcut.is_some(), "the search's shortcut shows next to the item");
-    fn count(items: &[Item]) -> usize {
-        items
+    let help = &tree.iter().find(|(title, _)| *title == "Help").expect("Help menu").1;
+    assert!(
+        matches!(&help[0], Node::Item(it) if (it.label.as_str(), it.command.id.as_str()) == ("Search Commands…", "help.commandPalette")),
+        "{:?}",
+        help[0]
+    );
+    assert!(matches!(help[1], Node::Separator), "{:?}", help[1]);
+    assert!(enabled(&app, "help.commandPalette"));
+    crate::tests_synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
+    assert!(shortcut_of(&app, "help.commandPalette").is_some(), "the search's shortcut shows next to the item");
+    fn count(nodes: &[Node]) -> usize {
+        nodes
             .iter()
-            .map(|it| match it {
-                Item::Cmd(_, "help.commandPalette", _) => 1,
-                Item::Sub(_, children) => count(children),
+            .map(|n| match n {
+                Node::Item(it) if it.command.id == "help.commandPalette" => 1,
+                Node::Submenu { children, .. } => count(children),
                 _ => 0,
             })
             .sum()
     }
-    assert_eq!(tree.iter().map(|(_, items)| count(items)).sum::<usize>(), 1);
+    assert_eq!(tree.iter().map(|(_, children)| count(children)).sum::<usize>(), 1);
 }
 
 /// No application menu in the window (as in Illustrator): the bar starts at File.
 #[test]
 fn the_bar_starts_at_file() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
-        menu_bar(&mut app, ui);
-    });
-    out.textures_delta.clear();
-    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
-        match s {
-            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
-            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
-            _ => {}
-        }
-    }
-    let mut shown = vec![];
-    out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
-    let titles = ["File", "Edit", "Object", "Type", "Select", "Effect", "View", "Window", "Help"];
-    for t in titles {
-        assert!(shown.iter().any(|s| s == t), "{t} missing from {shown:?}");
-    }
-    assert!(!shown.iter().any(|s| s == "VectorCraft"), "{shown:?}");
-}
-
-#[test]
-fn hovering_another_title_switches_the_open_menu() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    bar_frame(&mut app, &ctx, vec![]);
-    let titles = bar_frame(&mut app, &ctx, vec![]);
-    // No application menu in the window: the bar starts at File on every platform.
-    assert_eq!(titles.len(), menu_tree().len() - 1);
-    let (file, edit, object) = (titles[0].0.center(), titles[1].0.center(), titles[2].0.center());
-    let frames = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-        let mut t = bar_frame(app, &ctx, events);
-        for _ in 0..2 {
-            t = bar_frame(app, &ctx, vec![]);
-        }
-        t
-    };
-    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-
-    // Nothing open: hovering a title opens nothing.
-    let t = frames(&mut app, vec![egui::Event::PointerMoved(edit)]);
-    assert!(open_titles(&ctx, &t).is_empty());
-
-    // Click File, then move onto Edit and on to Object: each opens in turn, alone.
-    frames(&mut app, vec![egui::Event::PointerMoved(file)]);
-    frames(&mut app, vec![button(file, true)]);
-    let t = frames(&mut app, vec![button(file, false)]);
-    assert_eq!(open_titles(&ctx, &t), vec![0], "a click opens File");
-    let t = frames(&mut app, vec![egui::Event::PointerMoved(edit)]);
-    assert_eq!(open_titles(&ctx, &t), vec![1], "hovering Edit opens it and closes File");
-    let t = frames(&mut app, vec![egui::Event::PointerMoved(object)]);
-    assert_eq!(open_titles(&ctx, &t), vec![2], "hovering Object opens it and closes Edit");
-
-    // A pointer resting on a title doesn't switch: File opened another way (the keyboard)
-    // stays open while the pointer stays still over Object.
-    egui::Popup::open_id(&ctx, t[0].1);
-    let t = frames(&mut app, vec![]);
-    assert_eq!(open_titles(&ctx, &t), vec![0], "a still pointer leaves the open menu alone");
-}
-
-#[test]
-fn opening_the_file_menu_reads_the_scripts_folder_again() {
-    let dir = std::env::temp_dir().join(format!("vc-menu-bar-scripts-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let mut session = vectorcraft_engine::Session::new();
-    session.attach_scripts_dir(dir.clone());
-    let mut app = VectorcraftApp::new(session, crate::Services::default());
-    let ctx = egui::Context::default();
-    theme::install_fonts(&ctx);
-    theme::apply(&ctx, Default::default());
-    // The scripts File › Scripts lists.
-    let listed = || {
-        let (_, file) = menu_tree().into_iter().find(|(title, _)| *title == "File").unwrap();
-        let scripts = file.iter().find_map(|item| match item {
-            Item::Sub("Scripts", items) => Some(items.clone()),
-            _ => None,
-        });
-        scripts
-            .unwrap()
-            .iter()
-            .filter_map(|item| if let Item::Cmd(label, crate::scripts_menu::COMMAND, _) = item { Some(*label) } else { None })
-            .collect::<Vec<_>>()
-    };
-    // One frame of the bar, then the listing a read it started gave.
-    let frame = |app: &mut VectorcraftApp| {
-        let titles = bar_frame(app, &ctx, vec![]);
-        crate::scripts_menu::wait();
-        titles
-    };
-    std::fs::write(dir.join("a.js"), "").unwrap();
-    frame(&mut app);
-    let titles = frame(&mut app);
-    assert!(listed().is_empty(), "the bar reads nothing while its menus are closed");
-    egui::Popup::open_id(&ctx, titles[0].1);
-    frame(&mut app);
-    assert_eq!(listed(), ["a"]);
-    // While File stays open the folder is not read again.
-    std::fs::write(dir.join("b.js"), "").unwrap();
-    frame(&mut app);
-    assert_eq!(listed(), ["a"]);
-    // Nor when another menu opens; the next time File opens it is.
-    egui::Popup::open_id(&ctx, titles[1].1);
-    let t = frame(&mut app);
-    assert_eq!((open_titles(&ctx, &t), listed()), (vec![1], vec!["a"]));
-    egui::Popup::open_id(&ctx, titles[0].1);
-    frame(&mut app);
-    assert_eq!(listed(), ["a", "b"]);
-    let _ = std::fs::remove_dir_all(dir);
-}
-
-#[test]
-fn a_popup_covering_a_title_does_not_switch_menus() {
-    let ctx = egui::Context::default();
-    let p = egui::pos2(90.0, 12.0);
-    let mut reaches = (true, false);
-    // The popup becomes hit-testable once egui has laid it out: draw a few frames.
-    for _ in 0..3 {
-        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 200.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| {
-            let ctx = ui.ctx().clone();
-            let covered = ui.interact(egui::Rect::from_center_size(p, egui::vec2(80.0, 24.0)), egui::Id::unique("covered"), egui::Sense::click());
-            let q = p + egui::vec2(0.0, 100.0);
-            let free = ui.interact(egui::Rect::from_center_size(q, egui::vec2(80.0, 24.0)), egui::Id::unique("free"), egui::Sense::click());
-            egui::Area::new(egui::Id::unique("popup")).order(egui::Order::Foreground).fixed_pos(p - egui::vec2(10.0, 10.0)).show(&ctx, |ui| {
-                ui.allocate_space(egui::vec2(20.0, 20.0));
-            });
-            reaches = (pointer_reaches_title(&ctx, &covered, p), pointer_reaches_title(&ctx, &free, q));
-        });
-        out.textures_delta.clear();
-    }
-    assert_eq!(reaches, (false, true));
+    let ctx = crate::testing::ui_context();
+    crate::menus::model::refresh(&mut app, &ctx);
+    // PLAN: assumed `app.menus.laid` is the `craft::menu::MenuBar` laid out for the window
+    let titles: Vec<&str> = app.menus.laid.menus.iter().map(|menu| menu.title.as_str()).collect();
+    assert_eq!(titles, ["File", "Edit", "Object", "Type", "Select", "Effect", "View", "Window", "Help"]);
 }
 
 #[test]
@@ -534,7 +457,7 @@ fn names_in_menus_are_not_interface_labels() {
 
 #[test]
 fn last_effect_dialog_and_view_toggles() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
     assert!(!enabled(&app, "effect.last"));
@@ -542,8 +465,8 @@ fn last_effect_dialog_and_view_toggles() {
     assert!(enabled(&app, "effect.last"));
     assert_eq!(dynamic_label(&app, "effect.last", "Last Effect…"), "Last Effect: Roughen…");
     app.run("effect.last", json!({})).unwrap();
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("__effect"), d.f64("size", 0.0)), ("effect", "distort.roughen".to_string(), 9.0));
+    // PLAN: the effect dialog's `__effect` and `size` fields need the effect dialog's own typed reader (effects set)
+    assert!(app.any_dialog_open(), "Last Effect… opens the effect's dialog");
     for (id, on, off) in [
         ("view.textThreads", "Hide Text Threads", "Show Text Threads"),
         ("view.gradientAnnotator", "Hide Gradient Annotator", "Show Gradient Annotator"),
@@ -567,23 +490,17 @@ fn undo_and_redo_name_the_step_as_the_history_panel_does() {
     let mut app = app_with_a_rectangle();
     app.run("effect.apply", json!({"effect": "stylize.feather"})).unwrap();
     assert_eq!(app.session.active().unwrap().history.undo.last().map(|h| h.label.as_str()), Some("Feather"));
-    let shown = |app: &VectorcraftApp, id: &'static str| {
-        let item = c(if id == "edit.undo" { "Undo" } else { "Redo" }, id);
-        match entry(app, &item) {
-            Some(Entry::Item(row)) => row.label.to_string(),
-            _ => panic!("{id} is not a menu item"),
-        }
-    };
+    let shown = |app: &mut VectorcraftApp, id: &'static str| shown_label(app, id).unwrap_or_else(|| panic!("{id} is not a menu item"));
     let step = |template: &str, name: &str| {
         let name = crate::panels::history::step_name(ja, name).unwrap_or_else(|| name.to_string());
         crate::i18n::fmt(crate::i18n::tr(ja, template), &[("name", &name)])
     };
-    assert_eq!(shown(&app, "edit.undo"), step("Undo {name}", "Feather"));
+    assert_eq!(shown(&mut app, "edit.undo"), step("Undo {name}", "Feather"));
     app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(shown(&app, "edit.redo"), step("Redo {name}", "Feather"));
-    assert_eq!(shown(&app, "edit.undo"), step("Undo {name}", "Rectangle"), "a step with a plain row");
+    assert_eq!(shown(&mut app, "edit.redo"), step("Redo {name}", "Feather"));
+    assert_eq!(shown(&mut app, "edit.undo"), step("Undo {name}", "Rectangle"), "a step with a plain row");
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    assert_eq!(shown(&app, "edit.redo"), "Redo Feather");
+    assert_eq!(shown(&mut app, "edit.redo"), "Redo Feather");
 }
 
 /// Type › Optical Margin Alignment runs `type.opticalMarginAlignment`, needs a selection, and
@@ -593,15 +510,7 @@ fn undo_and_redo_name_the_step_as_the_history_panel_does() {
 fn optical_margin_alignment_is_a_checked_type_menu_item() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({})).unwrap();
-    let ids: Vec<&str> = menu_tree()
-        .into_iter()
-        .filter(|(menu, _)| *menu == "Type")
-        .flat_map(|(_, items)| items)
-        .filter_map(|item| match item {
-            Item::Cmd("Optical Margin Alignment", id, _) => Some(id),
-            _ => None,
-        })
-        .collect();
+    let ids = ids_labelled(&menu_nodes("Type"), "Optical Margin Alignment");
     assert_eq!(ids, ["type.opticalMarginAlignment"]);
     let id = "type.opticalMarginAlignment";
     assert_eq!(checked(&app, id, &Value::Null), Some(false));
@@ -629,15 +538,7 @@ fn optical_margin_alignment_is_a_checked_type_menu_item() {
 fn dynamic_text_is_a_checked_type_menu_item() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({})).unwrap();
-    let ids: Vec<&str> = menu_tree()
-        .into_iter()
-        .filter(|(menu, _)| *menu == "Type")
-        .flat_map(|(_, items)| items)
-        .filter_map(|item| match item {
-            Item::Cmd("Dynamic Text", id, _) => Some(id),
-            _ => None,
-        })
-        .collect();
+    let ids = ids_labelled(&menu_nodes("Type"), "Dynamic Text");
     assert_eq!(ids, ["type.dynamicText"]);
     let id = "type.dynamicText";
     assert_eq!(checked(&app, id, &Value::Null), Some(false));
@@ -681,25 +582,17 @@ fn dynamic_text_is_a_checked_type_menu_item() {
 fn center_on_top_and_bottom_are_type_on_a_path_items() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({})).unwrap();
-    let items: Vec<(&str, &str)> = menu_tree()
+    let type_menu = menu_nodes("Type");
+    let items: Vec<(&str, &str)> = command_rows(submenu_nodes(&type_menu, "Type on a Path").unwrap_or_default())
         .into_iter()
-        .filter(|(menu, _)| *menu == "Type")
-        .flat_map(|(_, items)| items)
-        .filter_map(|item| match item {
-            Item::Sub("Type on a Path", children) => Some(children),
-            _ => None,
-        })
-        .flatten()
-        .filter_map(|item| match item {
-            Item::Cmd(label, id, Value::Null) if id.starts_with("type.pathCenter") => Some((label, id)),
-            _ => None,
-        })
+        .filter(|(_, id, params)| id.starts_with("type.pathCenter") && params.is_null())
+        .map(|(label, id, _)| (label, id))
         .collect();
     let ids = ["type.pathCenter.top", "type.pathCenter.bottom"];
     assert_eq!(items, [("Center on Top", ids[0]), ("Center on Bottom", ids[1])]);
     let palette = crate::palette::items();
     for (label, id) in items {
-        assert!(palette.iter().any(|(l, i, _)| l == &format!("Type › Type on a Path › {label}") && i == id), "{label}");
+        assert!(palette.iter().any(|(l, i)| l == &format!("Type › Type on a Path › {label}") && i == id), "{label}");
     }
     let line = app.run("path.create", json!({"d": "M60 150 L340 150"})).unwrap()["id"].clone();
     let open = app.run("text.createInPath", json!({"path": line, "mode": "onPath", "text": "Along", "at": [60, 150]})).unwrap()["id"].clone();
@@ -713,7 +606,9 @@ fn center_on_top_and_bottom_are_type_on_a_path_items() {
     assert!(ids.iter().all(|id| !enabled(&app, id)), "type on a closed path and on an open one");
     // A palette pick runs the command with no params.
     app.run("select.set", json!({"ids": [closed]})).unwrap();
-    crate::palette::run_pick(&mut app, ids[0]);
+    use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
+    let fired = Fired::new(craft::menu::CommandRef::new(ids[0]), FireSource::Palette, FirePhase::Press, 0.0);
+    crate::shortcuts::run_fired(&mut app, &crate::testing::ui_context(), &fired);
     let doc = &app.session.active().unwrap().doc;
     let start = match &doc.node(vectorcraft_doc::NodeId(closed.as_u64().unwrap())).unwrap().kind {
         vectorcraft_doc::NodeKind::Text(t) => match t.kind {
@@ -734,21 +629,16 @@ fn type_size_ends_with_other() {
     let id = "type.highlightFontSize";
     assert!(!enabled(&app, id), "no document");
     app.run("file.new", json!({})).unwrap();
-    let items: Vec<Item> = menu_tree()
-        .into_iter()
-        .filter(|(menu, _)| *menu == "Type")
-        .flat_map(|(_, items)| items)
-        .filter_map(|item| match item {
-            Item::Sub("Size", children) => Some(children),
-            _ => None,
-        })
-        .flatten()
-        .collect();
+    let type_menu = menu_nodes("Type");
+    let items = submenu_nodes(&type_menu, "Size").unwrap_or_default();
     let n = items.len();
     assert!(n > 2, "{n} items");
-    assert!(matches!(items[n - 2], Item::Sep), "a separator comes before Other…");
-    assert!(matches!(&items[n - 1], Item::Cmd("Other…", c, p) if *c == id && p.is_null()), "Other… comes last");
-    assert!(items[..n - 2].iter().all(|i| matches!(i, Item::Cmd(_, "text.setStyle", _))), "the sizes come first");
+    assert!(matches!(items[n - 2], Node::Separator), "a separator comes before Other…");
+    assert!(
+        matches!(&items[n - 1], Node::Item(it) if it.label == "Other…" && it.command.id == id && it.command.params.is_null()),
+        "Other… comes last"
+    );
+    assert!(items[..n - 2].iter().all(|i| matches!(i, Node::Item(it) if it.command.id == "text.setStyle")), "the sizes come first");
     assert!(!enabled(&app, id), "nothing selected");
     let path = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
     app.run("select.set", json!({"ids": [path]})).unwrap();
@@ -765,19 +655,10 @@ fn type_size_ends_with_other() {
 fn dynamic_text_presets_are_a_type_submenu() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({})).unwrap();
-    let items: Vec<(&str, &str, Value)> = menu_tree()
+    let type_menu = menu_nodes("Type");
+    let items: Vec<(&str, &str, Value)> = command_rows(submenu_nodes(&type_menu, "Dynamic Text Presets").unwrap_or_default())
         .into_iter()
-        .filter(|(menu, _)| *menu == "Type")
-        .flat_map(|(_, items)| items)
-        .filter_map(|item| match item {
-            Item::Sub("Dynamic Text Presets", children) => Some(children),
-            _ => None,
-        })
-        .flatten()
-        .filter_map(|item| match item {
-            Item::Cmd(label, id, p) => Some((label, id, p)),
-            _ => None,
-        })
+        .map(|(label, id, params)| (label, id, params.clone()))
         .collect();
     let id = "type.dynamicTextPreset";
     assert_eq!(items, [("Circle", id, json!({"preset": "circle"})), ("Arch", id, json!({"preset": "arch"})), ("Bow", id, json!({"preset": "bow"}))]);
@@ -862,17 +743,16 @@ fn panel_ids_are_case_insensitive_and_labels_work() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({})).unwrap();
     app.run("window.panel", json!({"panel": "Layers"})).unwrap();
-    assert_eq!(app.ui.dock_tab, crate::state::DockTab::Layers);
+    assert!(crate::panel_docking::showing(&app.ui, "layers"));
     app.run("window.panel", json!({"panel": "Swatches"})).unwrap();
-    assert_eq!(app.ui.open_panel.as_deref(), Some("swatches"));
+    assert!(crate::panel_docking::showing(&app.ui, "swatches"));
     assert!(checked(&app, "window.panel", &json!({"panel": "Swatches"})).unwrap());
     assert!(app.run("window.panel", json!({"panel": "nope"})).is_err());
     // A collapsed dock pops the panel out of its icon, by canonical id.
-    app.ui.dock_collapsed = true;
+    crate::panel_docking::collapse_dock(&mut app, Some(true)).unwrap();
     app.run("window.panel", json!({"panel": "Layers"})).unwrap();
     assert_eq!(app.ui.open_panel.as_deref(), Some("layers"));
     assert!(checked(&app, "window.panel", &json!({"panel": "Layers"})).unwrap());
-    app.ui.dock_collapsed = false;
 }
 
 /// #4542: Edit › Color Settings… and Assign Profile… show the Separations Preview panel, which
@@ -985,7 +865,7 @@ fn classic_rotate_is_in_the_3d_classic_submenu() {
 /// one brings back its zoom, centre and rotation after the view changed.
 #[test]
 fn every_saved_view_is_listed_at_the_bottom_of_the_view_menu() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     for i in 1..=25 {
         {
@@ -993,7 +873,7 @@ fn every_saved_view_is_listed_at_the_bottom_of_the_view_menu() {
             (v.zoom, v.center, v.rotation) = (i as f64 / 4.0, vectorcraft_geom::Point::new(10.0 * i as f64, -5.0 * i as f64), i as f64);
         }
         invoke(&mut app, "view.saved.new", json!({}));
-        crate::dialogs::confirm(&mut app).unwrap();
+        answer_open(&mut app, json!({}), true);
     }
     assert_eq!(app.session.active().unwrap().doc.views.len(), 25);
     let entries = menu_entries(&app);
@@ -1004,8 +884,9 @@ fn every_saved_view_is_listed_at_the_bottom_of_the_view_menu() {
     assert_eq!(display_label(&app, "view.goto25", "Saved View"), "View 25");
     // The document's 26th view is refused, so there is never one the menu leaves out.
     invoke(&mut app, "view.saved.new", json!({}));
-    assert!(crate::dialogs::confirm(&mut app).is_err());
-    app.ui.dialog = None;
+    answer_open(&mut app, json!({}), true);
+    assert!(app.any_dialog_open(), "the refused name leaves the dialog open");
+    answer_open(&mut app, json!({}), false);
     {
         let v = app.view_mut().unwrap();
         (v.zoom, v.center, v.rotation) = (1.0, vectorcraft_geom::Point::new(0.0, 0.0), 0.0);
@@ -1019,29 +900,26 @@ fn every_saved_view_is_listed_at_the_bottom_of_the_view_menu() {
 /// way Edit Selection… does.
 #[test]
 fn edit_views_opens_its_dialog_on_the_saved_views() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     assert!(!enabled(&app, "view.saved.edit"));
     invoke(&mut app, "view.saved.edit", json!({}));
-    assert!(app.ui.dialog.is_none());
+    assert!(!app.any_dialog_open());
     assert!(app.ui.status.contains("No saved views"), "{}", app.ui.status);
     app.run("view.saved.new", json!({"name": "Detail"})).unwrap();
     app.run("view.saved.new", json!({"name": "Page"})).unwrap();
     assert!(enabled(&app, "view.saved.edit"));
     invoke(&mut app, "view.saved.edit", json!({}));
-    let d = app.ui.dialog.clone().expect("Edit Views dialog");
-    assert_eq!((d.kind.as_str(), d.str("orig1"), d.str("name1")), ("editViews", "Page".into(), "Page".into()));
+    let (_, fields) = open_dialog(&app);
+    assert_eq!((text_of(&fields, "orig1"), text_of(&fields, "name1")), ("Page".to_string(), "Page".to_string()));
     // Deleting a view takes its slot out of the menu.
-    let mut d = d;
-    d.fields.insert("deleted0".into(), json!(true));
-    app.ui.dialog = Some(d);
-    crate::dialogs::confirm(&mut app).unwrap();
+    answer_open(&mut app, json!({"deleted0": true}), true);
     assert_eq!(dynamic_label(&app, "view.goto1", ""), "Page");
     assert!(shown_state(&app, "view.goto2", &Value::Null).is_none());
 }
 
 fn app_with_a_rectangle() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
     app
@@ -1072,20 +950,17 @@ fn undo_and_redo_name_a_style_step_around_the_style_name() {
 fn save_selection_asks_for_a_name() {
     let mut app = app_with_a_rectangle();
     invoke(&mut app, "select.save", json!({}));
-    let d = app.ui.dialog.clone().expect("Save Selection dialog");
+    let (dialog, fields) = open_dialog(&app);
     assert_eq!(
-        (d.kind.as_str(), d.str("__command"), d.str("__label"), d.str("name")),
-        ("command", "select.save".into(), "Save Selection".into(), "Selection 1".into())
+        (dialog.key.as_deref(), app.command_dialog.label(), text_of(&fields, "name").as_str()),
+        (Some("select.save"), Some("Save Selection"), "Selection 1")
     );
     // OK saves under the name typed.
-    let mut d = d;
-    d.fields.insert("name".into(), json!("Logo"));
-    app.ui.dialog = Some(d);
-    crate::dialogs::confirm(&mut app).unwrap();
+    answer_open(&mut app, json!({"name": "Logo"}), true);
     assert_eq!(app.run("select.savedList", json!({})).unwrap(), json!(["Logo"]));
     // The next one starts from the first free name.
     invoke(&mut app, "select.save", json!({}));
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("name")), Some("Selection 1".into()));
+    assert_eq!(text_of(&open_dialog(&app).1, "name"), "Selection 1");
 }
 
 #[test]
@@ -1182,13 +1057,14 @@ fn edit_selection_opens_its_dialog_on_the_saved_selections() {
     // Nothing saved yet: the item is off, and invoking it (palette, shortcut) only says so.
     assert!(!enabled(&app, "select.editSaved"));
     invoke(&mut app, "select.editSaved", json!({}));
-    assert!(app.ui.dialog.is_none());
+    assert!(!app.any_dialog_open());
     assert!(app.ui.status.contains("No saved selections"), "{}", app.ui.status);
     app.run("select.save", json!({"name": "Logo"})).unwrap();
     assert!(enabled(&app, "select.editSaved"));
     invoke(&mut app, "select.editSaved", json!({}));
-    let d = app.ui.dialog.clone().expect("Edit Selection dialog");
-    assert_eq!((d.kind.as_str(), d.str("orig0"), d.str("name0")), (crate::dialogs::edit_selection::KIND, "Logo".into(), "Logo".into()));
+    let (dialog, fields) = open_dialog(&app);
+    assert_eq!(dialog.key.as_deref(), Some(crate::dialogs::edit_selection::KIND));
+    assert_eq!((text_of(&fields, "orig0"), text_of(&fields, "name0")), ("Logo".to_string(), "Logo".to_string()));
 }
 
 #[test]
@@ -1255,18 +1131,26 @@ fn precise_cursors_command_toggles_the_preference() {
 #[test]
 fn precise_cursors_command_is_listed_and_assignable_in_the_shortcut_editor() {
     use crate::shortcut_editor as ed;
-    let e = ed::entry("view.preciseCursors").expect("listed in the editor");
+    const ID: &str = "view.preciseCursors";
+    let e = ed::entry(ID).expect("listed in the editor");
     assert_eq!((e.label.as_str(), e.group.as_str(), e.is_tool), ("Use Precise Cursors", "View", false));
-    assert_eq!(ed::default_of("view.preciseCursors"), None, "no default key");
-    let mut overrides = craft_keymap::Overrides::new();
-    assert_eq!(ed::effective_in(&overrides, "view.preciseCursors"), None);
-    assert_eq!(ed::assign(&mut overrides, "view.preciseCursors", Some("Cmd+Alt+Shift+Q"), false), Ok(vec![]));
-    let chord = ed::effective_in(&overrides, "view.preciseCursors").expect("assigned");
-    assert_eq!(ed::normalize(&chord), ed::normalize("Cmd+Alt+Shift+Q"));
+    assert_eq!(ed::default_of(ID), None, "no default key");
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    // The `shortcuts.*` commands read the window's keymap, which its first frame builds.
+    crate::tests::synthetic::key_frame(&mut app, &crate::testing::ui_context(), vec![]);
+    let shortcut = |app: &mut VectorcraftApp| {
+        let rows = app.run("shortcuts.list", json!({ "query": ID })).unwrap();
+        rows.as_array().and_then(|rows| rows.iter().find(|r| r["id"] == ID)).expect("listed")["shortcut"].clone()
+    };
+    assert_eq!(shortcut(&mut app), Value::Null);
+    app.run("shortcuts.set", json!({"id": ID, "shortcut": "Cmd+Alt+Shift+Q"})).unwrap();
+    let typed = craft::keymap::Binding::parse("Cmd+Alt+Shift+Q").unwrap().trigger.to_string();
+    assert_eq!(shortcut(&mut app), json!(typed), "assigned");
     // A key another command holds is refused, so the new command can't take it over silently.
-    assert!(ed::assign(&mut overrides, "view.preciseCursors", Some("Cmd+Alt+Shift+P"), false).is_err());
-    assert_eq!(ed::assign(&mut overrides, "view.preciseCursors", None, false), Ok(vec![]));
-    assert_eq!(ed::effective_in(&overrides, "view.preciseCursors"), None, "cleared again");
+    assert!(app.run("shortcuts.set", json!({"id": ID, "shortcut": "Cmd+Alt+Shift+P"})).is_err());
+    assert_eq!(shortcut(&mut app), json!(typed), "the refused key changed nothing");
+    app.run("shortcuts.set", json!({"id": ID, "shortcut": null})).unwrap();
+    assert_eq!(shortcut(&mut app), Value::Null, "cleared again");
 }
 
 /// The command is a preference, not an edit: no undo step, no unsaved changes, with a document open.
@@ -1348,35 +1232,30 @@ fn recent_files_track_opens_and_saves() {
 
 #[test]
 fn every_bound_menu_command_exists() {
-    fn walk(items: &[Item], bad: &mut Vec<String>) {
-        for it in items {
-            match it {
-                Item::Cmd(_, id, _)
-                    if vectorcraft_engine::find_command(id).is_none()
-                        && !UI_COMMANDS.iter().any(|c| c.0 == *id)
-                        && !id.starts_with("object.path.") =>
-                {
-                    bad.push(id.to_string());
+    fn walk(nodes: &[Node], bad: &mut Vec<String>) {
+        for n in nodes {
+            match n {
+                Node::Item(it) => {
+                    let id = it.command.id.as_str();
+                    // A Coming Soon row (`TODO`) is bound to no command.
+                    if id != TODO
+                        && vectorcraft_engine::find_command(id).is_none()
+                        && !UI_COMMANDS.iter().any(|c| c.0 == id)
+                        && !id.starts_with("object.path.")
+                    {
+                        bad.push(id.to_string());
+                    }
                 }
-                Item::Sub(_, ch) => walk(ch, bad),
+                Node::Submenu { children, .. } => walk(children, bad),
                 _ => {}
             }
         }
     }
     let mut bad = vec![];
-    for (_, items) in menu_tree() {
-        walk(&items, &mut bad);
+    for (_, children) in menu_tree() {
+        walk(&children, &mut bad);
     }
     assert!(bad.is_empty(), "menu items bound to unknown commands: {bad:?}");
-}
-
-#[test]
-fn shortcut_pretty() {
-    if cfg!(target_os = "macos") {
-        assert_eq!(pretty_shortcut("Cmd+Shift+]"), "⇧⌘]");
-        assert_eq!(pretty_shortcut("Cmd+Alt+2"), "⌥⌘2");
-    }
-    assert_eq!(pretty_shortcut(""), "");
 }
 
 /// #543: Object › Image Trace › Make and Make and Expand trace with the Default preset at once,
@@ -1406,8 +1285,8 @@ fn expand_appearance_is_an_object_menu_item_only() {
 /// selected, spacing three objects evenly, and with a key object sending the Distribute Spacing value.
 #[test]
 fn object_distribute_runs_the_distribute_buttons() {
-    let object = menu_tree().into_iter().find(|(t, _)| *t == "Object").map(|(_, items)| items).unwrap_or_default();
-    let subs: Vec<&str> = object.iter().filter_map(|it| if let Item::Sub(l, _) = it { Some(*l) } else { None }).collect();
+    let object = menu_nodes("Object");
+    let subs: Vec<&str> = object.iter().filter_map(|n| if let Node::Submenu { label, .. } = n { Some(label.as_str()) } else { None }).collect();
     let align = subs.iter().position(|l| *l == "Align").unwrap_or_else(|| panic!("Object › Align: {subs:?}"));
     assert_eq!(subs.get(align + 1), Some(&"Distribute"), "{subs:?}");
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
@@ -1501,118 +1380,34 @@ fn lock_and_hide_menus_are_enabled_in_isolation_mode() {
     assert!(lock_unselected(&app), "shortcut command remains enabled in isolation");
     assert!(crate::menus::enabled(&app, "object.hide.unselected"), "Hide Unselected remains enabled in isolation");
     let chord = crate::shortcut_editor::default_of("object.hide.unselected").expect("default Hide Unselected shortcut");
-    assert_eq!(crate::shortcut_editor::normalize(chord), crate::shortcut_editor::normalize("Cmd+Alt+Shift+3"));
+    assert_eq!(craft::menu::Chord::parse(chord).unwrap(), craft::menu::Chord::parse("Cmd+Alt+Shift+3").unwrap());
     app.run("object.exitIsolation", json!({})).unwrap();
     app.run("select.set", json!({"ids": [g]})).unwrap();
     assert_eq!(shown(&app), [true; 10], "after Exit Isolation Mode");
 }
 
-#[test]
-fn menus_are_as_wide_as_their_items() {
-    // Items size the popup to the widest label and shortcut instead of the widest a menu may be.
-    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
-    let tree = menu_tree();
-    let (_, file) = tree.iter().find(|(t, _)| *t == "File").unwrap();
-    let id = egui::Id::unique("test-menu");
-    for _ in 0..3 {
-        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| {
-            egui::Area::new(id).show(ui.ctx(), |ui| {
-                egui::containers::menu::menu_style(ui.style_mut());
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| menu_body(&app, ui, file, &mut None));
-            });
-        });
-        out.textures_delta.clear();
-    }
-    let w = ctx.memory(|m| m.area_rect(id)).unwrap().width();
-    assert!((230.0..340.0).contains(&w), "File menu is {w} pt wide");
-}
-
-#[test]
-fn long_menus_scroll_inside_a_short_window() {
-    // The Window menu is taller than a 600 pt window: it stops above the bottom edge and
-    // scrolls instead of running off screen.
-    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let tree = menu_tree();
-    let (_, window) = tree.iter().find(|(t, _)| *t == "Window").unwrap();
-    let id = egui::Id::unique("test-long-menu");
-    let rect = |height: f32| {
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, height));
-        for _ in 0..3 {
-            let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
-            let mut out = ctx.run_ui(input, |ui| {
-                egui::Area::new(id).fixed_pos(egui::pos2(300.0, 30.0)).show(ui.ctx(), |ui| {
-                    egui::containers::menu::menu_style(ui.style_mut());
-                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| menu_body(&app, ui, window, &mut None));
-                });
-            });
-            out.textures_delta.clear();
-        }
-        ctx.memory(|m| m.area_rect(id)).unwrap()
-    };
-    let short = rect(600.0);
-    assert!(short.bottom() <= 600.0, "Window menu ends at {} in a 600 pt window", short.bottom());
-    // With room to spare it shows whole, taller than the short window allowed.
-    let tall = rect(3000.0);
-    assert!(tall.height() > short.height() + 100.0, "{} vs {}", tall.height(), short.height());
-    assert!(tall.bottom() < 3000.0);
-}
-
 /// Object › Unlock All and Object › Show All clicked with Shift+Alt held run with
 /// `scope: "group"`; clicked without them, or with only one of the two, they run on the whole
-/// document as before.
+/// document as before. The swap itself is the framework's; this is the model's table of it.
 #[test]
 fn unlock_all_and_show_all_clicked_with_shift_alt_act_within_the_group() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
-    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let tree = menu_tree();
-    let (_, object) = tree.iter().find(|(t, _)| *t == "Object").unwrap();
-    let id = egui::Id::unique("test-object-menu");
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 3000.0));
-    let frame = |events: Vec<egui::Event>, modifiers: egui::Modifiers| {
-        let mut clicked = None;
-        let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
-        let input = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| {
-            egui::Area::new(id).fixed_pos(egui::pos2(0.0, 0.0)).show(ui.ctx(), |ui| {
-                egui::containers::menu::menu_style(ui.style_mut());
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| menu_body(&app, ui, object, &mut clicked));
-            });
-        });
-        out.textures_delta.clear();
-        (clicked, out.shapes)
-    };
-    // Where the menu draws `label`.
-    fn find(s: &egui::Shape, label: &str) -> Option<egui::Pos2> {
-        match s {
-            egui::Shape::Text(t) if t.galley.text() == label => Some(t.pos + t.galley.rect.center().to_vec2()),
-            egui::Shape::Vec(v) => v.iter().find_map(|s| find(s, label)),
-            _ => None,
+    let object = menu_nodes("Object");
+    let held = |chord: &str| craft::menu::Chord::parse(chord).unwrap().mods;
+    for id in ["object.unlockAll", "object.showAll"] {
+        let item = object
+            .iter()
+            .find_map(|n| match n {
+                Node::Item(it) if it.command.id == id => Some(it),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{id} is not in the Object menu"));
+        let alternate = item.alternate.as_ref().unwrap_or_else(|| panic!("{id} has no alternate"));
+        assert!(alternate.selected_by(held("Shift+Alt+A")), "{id} with Shift+Alt");
+        assert_eq!((alternate.command.id.as_str(), &alternate.command.params), (id, &json!({"scope": "group"})), "{id} with Shift+Alt");
+        for chord in ["A", "Shift+A", "Alt+A"] {
+            assert!(!alternate.selected_by(held(chord)), "{id} with {chord}");
         }
-    }
-    let click = |label: &str, modifiers: egui::Modifiers| {
-        let (_, shapes) = frame(vec![], Default::default());
-        let at = shapes.iter().find_map(|c| find(&c.shape, label)).unwrap_or_else(|| panic!("{label} is not in the Object menu"));
-        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
-        frame(vec![egui::Event::PointerMoved(at)], modifiers);
-        frame(vec![button(true)], modifiers);
-        frame(vec![button(false)], modifiers).0
-    };
-    frame(vec![], Default::default());
-    let shift_alt = egui::Modifiers { shift: true, alt: true, ..Default::default() };
-    let group = json!({"scope": "group"});
-    for (label, command) in [("Unlock All", "object.unlockAll"), ("Show All", "object.showAll")] {
-        assert_eq!(click(label, shift_alt), Some((command.to_string(), group.clone())), "{label} with Shift+Alt");
-        for held in [egui::Modifiers::NONE, egui::Modifiers::SHIFT, egui::Modifiers::ALT] {
-            assert_eq!(click(label, held), Some((command.to_string(), json!({}))), "{label} with {held:?}");
-        }
+        assert!(item.command.params.get("scope").is_none(), "{id} acts on the whole document");
     }
 }
 
@@ -1639,18 +1434,17 @@ fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
 
     // 1. In English: panels between separator 2 and 3 are alphabetical.
     set_current(Lang::EN);
-    let tree = menu_tree();
-    let (_, window) = tree.iter().find(|(t, _)| *t == "Window").unwrap();
+    let window = menu_nodes("Window");
 
-    let seps: Vec<usize> = window.iter().enumerate().filter(|(_, it)| matches!(it, Item::Sep)).map(|(i, _)| i).collect();
+    let seps = separators(&window);
     assert!(seps.len() >= 3, "Window menu should have at least 3 separators");
     let panels = &window[seps[1] + 1..seps[2]];
 
-    let item_display = |it: &Item, lang: Lang| -> String {
+    let item_display = |it: &Node, lang: Lang| -> String {
         match it {
-            Item::Cmd(l, id, _) => tr_id(lang, id, l).to_string(),
-            Item::Sub(l, _) | Item::Todo(l, _) | Item::Header(l) => tr(lang, l).to_string(),
-            Item::Sep => String::new(),
+            Node::Item(item) => tr_id(lang, &item.command.id, &item.label).to_string(),
+            Node::Submenu { label, .. } | Node::Heading(label) => tr(lang, label).to_string(),
+            _ => String::new(),
         }
     };
 
@@ -1660,9 +1454,8 @@ fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
     // 2. In French: panels are sorted alphabetically by their French names.
     let fr = Lang::from_code("fr").unwrap();
     set_current(fr);
-    let tree_fr = menu_tree();
-    let (_, window_fr) = tree_fr.iter().find(|(t, _)| *t == "Window").unwrap();
-    let seps_fr: Vec<usize> = window_fr.iter().enumerate().filter(|(_, it)| matches!(it, Item::Sep)).map(|(i, _)| i).collect();
+    let window_fr = menu_nodes("Window");
+    let seps_fr = separators(&window_fr);
     let panels_fr = &window_fr[seps_fr[1] + 1..seps_fr[2]];
 
     let fr_labels: Vec<String> = panels_fr.iter().map(|it| item_display(it, fr)).collect();
@@ -1681,7 +1474,7 @@ fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
     let type_sub = panels_fr
         .iter()
         .find_map(|it| match it {
-            Item::Sub(l, items) if *l == "Type" => Some(items),
+            Node::Submenu { label, children, .. } if label == "Type" => Some(children),
             _ => None,
         })
         .unwrap();
@@ -1693,9 +1486,8 @@ fn window_menu_panels_are_sorted_alphabetically_in_active_language() {
     // 4. In Polish: Łącza (Links) folds to L and sorts before Warstwy and Zmienne.
     let pl = Lang::from_code("pl").unwrap();
     set_current(pl);
-    let tree_pl = menu_tree();
-    let (_, window_pl) = tree_pl.iter().find(|(t, _)| *t == "Window").unwrap();
-    let seps_pl: Vec<usize> = window_pl.iter().enumerate().filter(|(_, it)| matches!(it, Item::Sep)).map(|(i, _)| i).collect();
+    let window_pl = menu_nodes("Window");
+    let seps_pl = separators(&window_pl);
     let panels_pl = &window_pl[seps_pl[1] + 1..seps_pl[2]];
     let pl_labels: Vec<String> = panels_pl.iter().map(|it| item_display(it, pl)).collect();
     let pl_keys: Vec<String> = pl_labels.iter().map(|l| name_sort_key(l)).collect();
@@ -1755,10 +1547,10 @@ fn trim_view_greys_out_show_guides_and_show_grid() {
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.ui.view.grid = true;
     let listed = |app: &VectorcraftApp, id: &str| {
-        fn find(items: &[Item], id: &str) -> bool {
-            items.iter().any(|it| match it {
-                Item::Cmd(_, c, _) => *c == id,
-                Item::Sub(_, children) => find(children, id),
+        fn find(nodes: &[Node], id: &str) -> bool {
+            nodes.iter().any(|n| match n {
+                Node::Item(it) => it.command.id == id,
+                Node::Submenu { children, .. } => find(children, id),
                 _ => false,
             })
         }

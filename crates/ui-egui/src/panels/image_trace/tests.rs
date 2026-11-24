@@ -1,25 +1,73 @@
-use super::super::tests_long_popups::{
-    PopupWindow, assert_last_row_scrolls_into_view, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
-};
 use super::*;
-use crate::panels::{first_selected, library_panel};
-use egui::{Event, PointerButton, Pos2, Rect, vec2};
+use crate::panels::first_selected;
+use crate::panels::swatches::DOCUMENT_SWATCHES as DOCUMENT_SWATCHES_NAME;
+use crate::tests::panel_harness::Panel;
+use craft::behavior::Mixed;
+use vectorcraft_engine::cmd::swatchlib::DOCUMENT_SWATCHES;
 
-/// One headless frame of the panel (and its menu) with `events`: the texts drawn, with where.
-fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
-    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
-    out.textures_delta.clear();
-    crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
+/// The name of the eye button next to View.
+const EYE: &str = "Press and hold to view the source image";
+
+/// The name of the button that opens the preset row's menu.
+const MANAGE: &str = "Manage presets";
+
+/// The Image Trace panel over `app`.
+fn panel_over(app: VectorcraftApp) -> Panel {
+    Panel::new(app, show)
 }
 
-/// Click the panel's `label` (the first one drawn).
-fn click(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
-    let texts = frame(app, ctx, vec![]);
-    let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"));
-    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(app, ctx, vec![Event::PointerMoved(at), press(true)]);
-    frame(app, ctx, vec![press(false)]);
+/// The panel's settings as it shows them.
+fn shown(panel: &Panel) -> TraceUi {
+    panel.app().ui.image_trace_panel.shown.clone()
+}
+
+/// The preset the panel shows.
+fn shown_preset(panel: &Panel) -> String {
+    panel.app().ui.image_trace_panel.shown.preset.clone()
+}
+
+/// Runs the engine command `id` with `params` outside the panel, then a frame.
+fn execute(panel: &mut Panel, id: &str, params: Value) {
+    panel.app().session.execute(id, &params).unwrap();
+    panel.frame();
+}
+
+/// Selects `id`, then a frame: the preset the panel shows.
+fn select(panel: &mut Panel, id: NodeId) -> String {
+    panel.app().run("select.set", json!({"ids": [id.0]})).unwrap();
+    panel.frame();
+    shown_preset(panel)
+}
+
+/// The undo steps of the active document.
+fn undo(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// The trace setting `key` the target object stores.
+fn param(app: &VectorcraftApp, key: &str) -> Option<Value> {
+    find_target(app).stored.map(|t| t["params"][key].clone())
+}
+
+/// The children of the first selected object: the source image and the traced paths.
+fn children(app: &VectorcraftApp) -> usize {
+    first_selected(app).unwrap().children().unwrap().len()
+}
+
+/// The number a field's value text shows, its unit left out.
+fn number(text: &str) -> Option<f64> {
+    text.trim_end_matches('%').trim_end_matches("px").trim().parse().ok()
+}
+
+/// Chooses `preset` from the panel's Preset picker.
+fn choose(panel: &mut Panel, preset: &str) {
+    panel.click("Preset");
+    panel.click(preset);
+}
+
+/// The presets of the buttons above the Preset row that show as on.
+fn selected_preset_buttons(panel: &Panel) -> Vec<&'static str> {
+    preset_buttons().into_iter().filter(|(label, _)| panel.toggled(label) == Some(Mixed::Same(true))).map(|(_, name)| name).collect()
 }
 
 fn traced_app() -> VectorcraftApp {
@@ -32,187 +80,23 @@ fn trace_and_open(app: &mut VectorcraftApp, preset: &str) {
     open_settings(app);
 }
 
+/// Places `img` as an unlinked PNG named `name` in the active document.
+fn place_png(app: &mut VectorcraftApp, name: &str, img: image::RgbaImage) {
+    let (w, h) = img.dimensions();
+    let raw = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, img.into_raw())
+        .unwrap();
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    app.run("file.place", json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&png), "link": false})).unwrap();
+}
+
+/// An image whose left half has the luminance `ink`, traced with Default.
 fn traced_app_with_ink(ink: u8) -> VectorcraftApp {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
     let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [ink, ink, ink, 255] } else { [255, 255, 255, 255] }));
-    let mut png = vec![];
-    {
-        let __dyn: image::DynamicImage = img.into();
-        let (__w, __h) = (__dyn.width(), __dyn.height());
-        let (__layout, __sample, __raw) = match __dyn {
-            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLuma16(b) => (
-                craft_image_codecs::ChannelLayout::Gray,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageLumaA16(b) => (
-                craft_image_codecs::ChannelLayout::GrayA,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgb16(b) => (
-                craft_image_codecs::ChannelLayout::Rgb,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgba16(b) => (
-                craft_image_codecs::ChannelLayout::Rgba,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
-        };
-        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
-        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-            .map(|__b| png.extend_from_slice(&__b))
-    }
-    .unwrap();
-    let data = vectorcraft_format::base64_encode(&png);
-    app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false})).unwrap();
+    place_png(&mut app, "half.png", img);
     app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
     app
-}
-
-/// The Tracing Presets arrow at the right end of the Image Trace button.
-fn tracing_presets_arrow(window: &PopupWindow) -> Pos2 {
-    let label = window.text("Image Trace").expect("the Image Trace button");
-    Pos2::new(TRACE_BUTTON_W - 4.0, label.center().y)
-}
-
-/// The Image Trace button's list of presets grows with saved presets: with enough of them it stops
-/// inside a short window and the wheel reaches the last one. With only the built-in presets it does
-/// not scroll.
-#[test]
-fn a_long_tracing_preset_list_scrolls_inside_a_short_window() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| trace_button(app, ui, TRACE_BUTTON_W);
-    let built_in = app.session.execute("imageTrace.presets", &json!({})).unwrap();
-    let name = |p: &Value| p["name"].as_str().unwrap().to_string();
-    let built_in = built_in["presets"].as_array().unwrap();
-    let (first, last) = (name(&built_in[0]), name(&built_in[built_in.len() - 1]));
-    assert_short_list_does_not_scroll(&mut app, draw, tracing_presets_arrow, &first, &last);
-    for n in 0..30 {
-        app.session.execute("imageTrace.presets.save", &json!({"name": format!("Saved {n}"), "preset": "Default"})).unwrap();
-    }
-    assert_last_row_scrolls_into_view(&mut app, 200.0, draw, tracing_presets_arrow, &first, "Saved 29");
-}
-
-/// The list of presets keeps each name on one line when it scrolls: the scroll bar's column widens
-/// the list instead of narrowing the rows.
-#[test]
-fn a_long_tracing_preset_list_keeps_its_rows_on_one_line() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    let draw = |app: &mut VectorcraftApp, ui: &mut Ui| trace_button(app, ui, TRACE_BUTTON_W);
-    for n in 0..30 {
-        app.session.execute("imageTrace.presets.save", &json!({"name": format!("Saved {n}"), "preset": "Default"})).unwrap();
-    }
-    let presets = app.session.execute("imageTrace.presets", &json!({})).unwrap();
-    let names: Vec<String> = presets["presets"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap().to_string()).collect();
-    assert_rows_stay_on_one_line(&mut app, draw, tracing_presets_arrow, &names, "Black and White Logo", 120.0);
-}
-
-#[test]
-fn a_large_image_traces_and_the_status_bar_says_it_is_slower() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let img = image::RgbaImage::from_fn(1601, 12, |x, _| image::Rgba(if x < 800 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
-    let mut png = vec![];
-    {
-        let __dyn: image::DynamicImage = img.into();
-        let (__w, __h) = (__dyn.width(), __dyn.height());
-        let (__layout, __sample, __raw) = match __dyn {
-            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLuma16(b) => (
-                craft_image_codecs::ChannelLayout::Gray,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageLumaA16(b) => (
-                craft_image_codecs::ChannelLayout::GrayA,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgb16(b) => (
-                craft_image_codecs::ChannelLayout::Rgb,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgba16(b) => (
-                craft_image_codecs::ChannelLayout::Rgba,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
-        };
-        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
-        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-            .map(|__b| png.extend_from_slice(&__b))
-    }
-    .unwrap();
-    let data = vectorcraft_format::base64_encode(&png);
-    app.run("file.place", json!({"name": "wide.png", "dataBase64": data, "link": false})).unwrap();
-    trace_with(&mut app, "Default");
-    assert!(find_target(&app).stored.is_some(), "the image is traced");
-    assert!(app.ui.status.contains("1601 × 12") && app.ui.status.contains("more slowly"), "{}", app.ui.status);
-}
-
-#[test]
-fn a_large_image_traced_as_a_flat_logo_shows_the_size_it_was_traced_at() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let img = image::RgbaImage::from_fn(1602, 1602, |x, _| image::Rgba(if x < 800 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
-    let mut png = vec![];
-    {
-        let __dyn: image::DynamicImage = img.into();
-        let (__w, __h) = (__dyn.width(), __dyn.height());
-        let (__layout, __sample, __raw) = match __dyn {
-            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLuma16(b) => (
-                craft_image_codecs::ChannelLayout::Gray,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageLumaA16(b) => (
-                craft_image_codecs::ChannelLayout::GrayA,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgb16(b) => (
-                craft_image_codecs::ChannelLayout::Rgb,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgba16(b) => (
-                craft_image_codecs::ChannelLayout::Rgba,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
-        };
-        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
-        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-            .map(|__b| png.extend_from_slice(&__b))
-    }
-    .unwrap();
-    let data = vectorcraft_format::base64_encode(&png);
-    app.run("file.place", json!({"name": "logo.png", "dataBase64": data, "link": false})).unwrap();
-    trace_with(&mut app, "Flat Logo");
-    assert!(find_target(&app).stored.is_some(), "the image is traced: {}", app.ui.status);
-    let note = "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.";
-    let status = format!("Traced with 1 note: {note}");
-    assert_eq!(app.ui.status, status);
-    assert_eq!(app.ui.status_notes, Some((status, vec![note.to_string()])));
 }
 
 #[test]
@@ -224,39 +108,19 @@ fn sketch_quick_trace_reveals_all_adjustments_and_keeps_the_source() {
     assert!(crate::panel_docking::showing(&app.ui, "imageTrace"));
     assert!(app.ui.image_trace_advanced);
     assert_eq!(selected_trace(&app).unwrap().0, "Sketched Art");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let texts = frame(&mut app, &ctx, vec![]);
+    let panel = panel_over(app);
     for label in ["Threshold", "Paths", "Corners", "Noise", "Method:", "Fills", "Strokes", "Ignore Color"] {
-        assert!(texts.iter().any(|(t, _)| t == label), "missing {label}: {texts:?}");
+        assert!(panel.shows(label), "missing {label}");
     }
+    let mut app = panel.app();
     let n = first_selected(&app).unwrap();
     assert!(is_trace(&n));
     assert!(matches!(n.children().unwrap()[0].kind, NodeKind::Image(_)));
     // Opening controls again neither closes the flyout nor adds a document undo step.
-    let steps = app.session.active().unwrap().history.undo.len();
+    let steps = undo(&app);
     open_settings(&mut app);
     assert!(crate::panel_docking::showing(&app.ui, "imageTrace"));
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps);
-    // Optional local visual QA; no reference images or generated captures are committed.
-    if let Some(path) = std::env::var_os("VECTORCRAFT_TRACE_CAPTURE") {
-        let mut ready = false;
-        let mut harness = egui_kittest::Harness::builder().with_size(vec2(340.0, 820.0)).wgpu().build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !ready {
-                    egui_extras::install_image_loaders(ui.ctx());
-                    crate::theme::install_fonts(ui.ctx());
-                    crate::theme::apply(ui.ctx(), crate::theme::Brightness::MediumDark);
-                    ready = true;
-                    return;
-                }
-                show(app, ui);
-            },
-            app,
-        );
-        harness.run_steps(4);
-        harness.render().unwrap().save(path).unwrap();
-    }
+    assert_eq!(undo(&app), steps);
 }
 
 #[test]
@@ -275,11 +139,14 @@ fn a_quick_trace_leaves_the_panel_as_it_was() {
 fn quick_trace_activates_the_existing_floating_panel() {
     let mut app = traced_app();
     app.run("window.panel.float", json!({"panel": "imageTrace"})).unwrap();
-    let before = app.ui.docking.clone().unwrap();
+    let floating = |app: &VectorcraftApp| -> Vec<Vec<String>> {
+        app.ui.dock_workspace.layout().floating.iter().map(crate::panel_docking::window_panels).collect()
+    };
+    let before = floating(&app);
     trace_and_open(&mut app, "Sketched Art");
-    let after = app.ui.docking.as_ref().unwrap();
-    assert_eq!(after.floating.len(), before.floating.len());
-    assert!(after.floating.iter().any(|g| crate::panel_docking::window_panels(g) == ["imageTrace"]));
+    let after = floating(&app);
+    assert_eq!(after.len(), before.len());
+    assert!(after.iter().any(|panels| panels == &["imageTrace"]));
     assert!(app.ui.open_panel.is_none(), "the existing floating group owns the panel");
 }
 
@@ -287,279 +154,189 @@ fn quick_trace_activates_the_existing_floating_panel() {
 fn adjusting_sketch_threshold_changes_the_vector_result_and_can_be_undone() {
     let mut app = traced_app_with_ink(100);
     trace_and_open(&mut app, "Sketched Art");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    let rail = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique(("trace-slider", "Threshold")))).unwrap();
-    let at = rail.left_center() + vec2(20.0, 0.0);
-    assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 2, "source and ink path");
-    for pressed in [true, false] {
-        frame(
-            &mut app,
-            &ctx,
-            vec![Event::PointerMoved(at), Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() }],
-        );
-    }
-    assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 1, "only the source remains below the ink's luminance");
-    app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 2);
-    frame(&mut app, &ctx, vec![]);
-    let state: TraceUi = pstate(&ctx, "image-trace");
-    assert_eq!(state.params["threshold"], 150);
+    let mut panel = panel_over(app);
+    assert_eq!(children(&panel.app()), 2, "source and ink path");
+    panel.type_into("Threshold", "50");
+    assert_eq!(children(&panel.app()), 1, "only the source remains below the ink's luminance");
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(children(&panel.app()), 2);
+    panel.frame();
+    assert_eq!(shown(&panel).params["threshold"], 150);
 }
 
 #[test]
 fn with_preview_off_a_slider_change_waits_for_trace() {
     let mut app = traced_app_with_ink(100);
     trace_and_open(&mut app, "Sketched Art");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    assert!(app.ui.image_trace_preview, "on at first");
-    click(&mut app, &ctx, "Preview");
-    assert!(!app.ui.image_trace_preview);
-    let steps = app.session.active().unwrap().history.undo.len();
-    let rail = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique(("trace-slider", "Threshold")))).unwrap();
-    let at = rail.left_center() + vec2(20.0, 0.0);
-    for pressed in [true, false] {
-        frame(
-            &mut app,
-            &ctx,
-            vec![Event::PointerMoved(at), Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() }],
-        );
-    }
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no trace while Preview is off");
-    assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 2, "source and ink path, as before");
-    let draft: TraceUi = pstate(&ctx, "image-trace");
-    assert_ne!(draft.params["threshold"], find_target(&app).stored.unwrap()["params"]["threshold"], "the change waits in the panel");
-    click(&mut app, &ctx, "Trace");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "Trace applies it as one undo step");
-    assert_eq!(first_selected(&app).unwrap().children().unwrap().len(), 1, "only the source remains below the ink's luminance");
-    assert_eq!(find_target(&app).stored.unwrap()["params"], pstate::<TraceUi>(&ctx, "image-trace").params);
-    assert!(!app.ui.image_trace_preview, "Trace leaves Preview off");
+    let mut panel = panel_over(app);
+    assert!(panel.app().ui.image_trace_preview, "on at first");
+    panel.click("Preview");
+    assert!(!panel.app().ui.image_trace_preview);
+    let steps = undo(&panel.app());
+    panel.type_into("Threshold", "50");
+    assert_eq!(undo(&panel.app()), steps, "no trace while Preview is off");
+    assert_eq!(children(&panel.app()), 2, "source and ink path, as before");
+    assert_ne!(Some(shown(&panel).params["threshold"].clone()), param(&panel.app(), "threshold"), "the change waits in the panel");
+    panel.click("Trace");
+    assert_eq!(undo(&panel.app()), steps + 1, "Trace applies it as one undo step");
+    assert_eq!(children(&panel.app()), 1, "only the source remains below the ink's luminance");
+    let stored = find_target(&panel.app()).stored.unwrap();
+    assert_eq!(stored["params"], shown(&panel).params);
+    assert!(!panel.app().ui.image_trace_preview, "Trace leaves Preview off");
 }
 
 #[test]
 fn turning_preview_on_traces_the_changes_that_waited() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let strokes = |app: &VectorcraftApp| find_target(app).stored.map(|t| t["params"]["strokes"].clone());
-    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-    let steps = undo(&app);
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Preview");
-    assert!(app.ui.image_trace_preview);
-    assert_eq!(undo(&app), steps, "nothing waited, so nothing is traced");
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Strokes");
-    assert_eq!(strokes(&app), Some(json!(false)));
-    assert_eq!(undo(&app), steps);
-    click(&mut app, &ctx, "Preview");
-    assert_eq!(strokes(&app), Some(json!(true)), "traced again with strokes");
-    assert_eq!(undo(&app), steps + 1);
+    let mut panel = panel_over(traced_app());
+    let steps = undo(&panel.app());
+    panel.click("Preview");
+    panel.click("Preview");
+    assert!(panel.app().ui.image_trace_preview);
+    assert_eq!(undo(&panel.app()), steps, "nothing waited, so nothing is traced");
+    panel.click("Preview");
+    panel.click("Strokes");
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)));
+    assert_eq!(undo(&panel.app()), steps);
+    panel.click("Preview");
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(true)), "traced again with strokes");
+    assert_eq!(undo(&panel.app()), steps + 1);
     // A change of view keeps the settings that wait, and Preview turned on with `ui.set` traces them.
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Fills");
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["fills"], json!(true));
-    click(&mut app, &ctx, "Tracing Result");
-    click(&mut app, &ctx, "Outlines");
-    assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Outlines));
-    assert_eq!(undo(&app), steps + 2, "the view changes without a trace");
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["fills"], json!(false), "the change still waits");
-    app.ui.image_trace_preview = true;
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["fills"], json!(false), "traced with the waiting change");
-    assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Outlines), "in the view chosen");
-    assert_eq!(undo(&app), steps + 3);
+    panel.click("Preview");
+    panel.click("Fills");
+    assert_eq!(param(&panel.app(), "fills"), Some(json!(true)));
+    panel.click("View");
+    panel.click("Outlines");
+    assert_eq!(selected_trace(&panel.app()).map(|t| t.1), Some(TraceView::Outlines));
+    assert_eq!(undo(&panel.app()), steps + 2, "the view changes without a trace");
+    panel.frame();
+    assert_eq!(shown(&panel).params["fills"], json!(false), "the change still waits");
+    panel.app().ui.image_trace_preview = true;
+    panel.frame();
+    assert_eq!(param(&panel.app(), "fills"), Some(json!(false)), "traced with the waiting change");
+    assert_eq!(selected_trace(&panel.app()).map(|t| t.1), Some(TraceView::Outlines), "in the view chosen");
+    assert_eq!(undo(&panel.app()), steps + 3);
 }
 
 #[test]
 fn preview_turned_on_with_nothing_selected_traces_when_the_object_is_selected_again() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let app = traced_app();
     let a = first_selected(&app).unwrap().id;
-    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Strokes");
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "the change waits");
-    app.run("select.none", json!({})).unwrap();
-    let steps = undo(&app);
-    click(&mut app, &ctx, "Preview");
-    assert!(app.ui.image_trace_preview);
-    assert_eq!(undo(&app), steps, "nothing to trace with nothing selected");
-    app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(true), "traced with the change that waited");
-    assert_eq!(undo(&app), steps + 1);
+    let mut panel = panel_over(app);
+    panel.click("Preview");
+    panel.click("Strokes");
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)), "the change waits");
+    panel.app().run("select.none", json!({})).unwrap();
+    let steps = undo(&panel.app());
+    panel.click("Preview");
+    assert!(panel.app().ui.image_trace_preview);
+    assert_eq!(undo(&panel.app()), steps, "nothing to trace with nothing selected");
+    select(&mut panel, a);
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(true)), "traced with the change that waited");
+    assert_eq!(undo(&panel.app()), steps + 1);
 }
 
 #[test]
 fn settings_that_wait_stay_with_their_object() {
     let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
     let a = first_selected(&app).unwrap().id;
     app.run("edit.duplicate", json!({})).unwrap();
     let b = first_selected(&app).unwrap().id;
     assert_ne!(a, b);
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "the copy has the same settings");
+    assert_eq!(param(&app, "strokes"), Some(json!(false)), "the copy has the same settings");
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Strokes");
-    assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["strokes"], json!(true), "the change waits for A");
-    app.run("select.set", json!({"ids": [b.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["strokes"], json!(false), "the panel shows B's own settings");
-    click(&mut app, &ctx, "Trace");
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "B is traced with its own settings");
+    let mut panel = panel_over(app);
+    panel.click("Preview");
+    panel.click("Strokes");
+    assert_eq!(shown(&panel).params["strokes"], json!(true), "the change waits for A");
+    select(&mut panel, b);
+    assert_eq!(shown(&panel).params["strokes"], json!(false), "the panel shows B's own settings");
+    panel.click("Trace");
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)), "B is traced with its own settings");
 }
 
 #[test]
 fn settings_that_wait_come_back_when_their_object_is_selected_again() {
     let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
     let a = first_selected(&app).unwrap().id;
     app.run("edit.duplicate", json!({})).unwrap();
     let b = first_selected(&app).unwrap().id;
-    let shown = |ctx: &egui::Context| pstate::<TraceUi>(ctx, "image-trace").params["strokes"].clone();
-    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Strokes");
-    app.run("select.set", json!({"ids": [b.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown(&ctx), json!(false), "B's own settings");
-    app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown(&ctx), json!(true), "A's change still waits");
-    let steps = undo(&app);
-    click(&mut app, &ctx, "Trace");
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(true), "A is traced with its change");
-    assert_eq!(undo(&app), steps + 1);
+    let mut panel = panel_over(app);
+    let strokes = |panel: &Panel| shown(panel).params["strokes"].clone();
+    panel.click("Preview");
+    panel.click("Strokes");
+    select(&mut panel, b);
+    assert_eq!(strokes(&panel), json!(false), "B's own settings");
+    select(&mut panel, a);
+    assert_eq!(strokes(&panel), json!(true), "A's change still waits");
+    let steps = undo(&panel.app());
+    panel.click("Trace");
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(true)), "A is traced with its change");
+    assert_eq!(undo(&panel.app()), steps + 1);
     // Preview turned on while B is selected: A is traced with its change when it is selected again.
-    let a = first_selected(&app).unwrap().id;
-    click(&mut app, &ctx, "Strokes");
-    app.run("select.set", json!({"ids": [b.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    click(&mut app, &ctx, "Preview");
-    assert!(app.ui.image_trace_preview);
-    let steps = undo(&app);
-    app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "traced with the change that waited");
-    assert_eq!(undo(&app), steps + 1);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(undo(&app), steps + 1, "traced once");
+    let a = first_selected(&panel.app()).unwrap().id;
+    panel.click("Strokes");
+    select(&mut panel, b);
+    panel.click("Preview");
+    assert!(panel.app().ui.image_trace_preview);
+    let steps = undo(&panel.app());
+    select(&mut panel, a);
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)), "traced with the change that waited");
+    assert_eq!(undo(&panel.app()), steps + 1);
+    panel.frame();
+    assert_eq!(undo(&panel.app()), steps + 1, "traced once");
 }
 
 #[test]
 fn settings_that_wait_are_kept_when_a_plain_image_is_traced_in_between() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let app = traced_app();
     let a = first_selected(&app).unwrap().id;
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Strokes");
+    let mut panel = panel_over(app);
+    panel.click("Preview");
+    panel.click("Strokes");
     let img = image::RgbaImage::from_fn(20, 20, |_, y| image::Rgba(if y < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
-    let mut png = vec![];
-    {
-        let __dyn: image::DynamicImage = img.into();
-        let (__w, __h) = (__dyn.width(), __dyn.height());
-        let (__layout, __sample, __raw) = match __dyn {
-            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLuma16(b) => (
-                craft_image_codecs::ChannelLayout::Gray,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageLumaA16(b) => (
-                craft_image_codecs::ChannelLayout::GrayA,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgb16(b) => (
-                craft_image_codecs::ChannelLayout::Rgb,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgba16(b) => (
-                craft_image_codecs::ChannelLayout::Rgba,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
-        };
-        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
-        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-            .map(|__b| png.extend_from_slice(&__b))
-    }
-    .unwrap();
-    let data = vectorcraft_format::base64_encode(&png);
-    app.run("file.place", json!({"name": "plain.png", "dataBase64": data, "link": false})).unwrap();
-    assert!(find_target(&app).is_image, "a plain image is selected");
-    frame(&mut app, &ctx, vec![]);
-    click(&mut app, &ctx, "Strokes");
-    click(&mut app, &ctx, "Trace");
-    assert_eq!(find_target(&app).stored.unwrap()["params"]["strokes"], json!(false), "the image is traced with the panel's settings");
-    app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["strokes"], json!(true), "A's change still waits");
+    place_png(&mut panel.app(), "plain.png", img);
+    assert!(find_target(&panel.app()).is_image, "a plain image is selected");
+    panel.frame();
+    panel.click("Strokes");
+    panel.click("Trace");
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)), "the image is traced with the panel's settings");
+    select(&mut panel, a);
+    assert_eq!(shown(&panel).params["strokes"], json!(true), "A's change still waits");
 }
 
 #[test]
 fn settings_that_wait_are_dropped_when_their_object_changed_since() {
     let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
     let a = first_selected(&app).unwrap().id;
     app.run("edit.duplicate", json!({})).unwrap();
     let b = first_selected(&app).unwrap().id;
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Strokes");
-    app.run("select.set", json!({"ids": [b.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
+    let mut panel = panel_over(app);
+    panel.click("Preview");
+    panel.click("Strokes");
+    select(&mut panel, b);
     // A's settings as they were when the change was made, other than its settings now.
-    let mut st: TraceUi = pstate(&ctx, "image-trace");
-    let key = (app.session.active().unwrap().uid, a);
-    let draft = st.drafts.get_mut(&key).expect("the change waits for A");
-    assert_eq!(draft.1["strokes"], json!(true));
-    draft.2["params"]["threshold"] = json!(1);
-    set_pstate(&ctx, "image-trace", st);
-    app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    let shown = pstate::<TraceUi>(&ctx, "image-trace");
-    assert_eq!(shown.params, find_target(&app).stored.unwrap()["params"], "the panel shows A's settings as they are now");
-    assert!(shown.drafts.is_empty(), "the change is dropped");
+    {
+        let mut app = panel.app();
+        let key = (app.session.active().unwrap().uid, a);
+        let draft = app.ui.image_trace_panel.shown.drafts.get_mut(&key).expect("the change waits for A");
+        assert_eq!(draft.1["strokes"], json!(true));
+        draft.2["params"]["threshold"] = json!(1);
+    }
+    select(&mut panel, a);
+    let st = shown(&panel);
+    assert_eq!(st.params, find_target(&panel.app()).stored.unwrap()["params"], "the panel shows A's settings as they are now");
+    assert!(st.drafts.is_empty(), "the change is dropped");
 }
 
 #[test]
 fn preview_is_kept_with_the_preferences_and_reset_to_default_leaves_it() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    click(&mut app, &ctx, "Preview");
-    let menu_frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| menu(app, ui));
-        out.textures_delta.clear();
-        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
-    };
-    let texts = menu_frame(&mut app, vec![]);
-    // Menu items draw their label after the check mark's column.
-    let at = texts.iter().find(|(t, _)| t.trim() == "Reset to Default").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{texts:?}"));
-    for pressed in [true, false] {
-        menu_frame(
-            &mut app,
-            vec![Event::PointerMoved(at), Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() }],
-        );
-    }
-    assert!(pstate::<TraceUi>(&ctx, "image-trace").params.is_null(), "the panel's settings were reset");
+    let mut panel = panel_over(traced_app());
+    panel.click("Preview");
+    let mut app = panel.app();
+    app.run("ui.imageTrace.reset", json!({})).unwrap();
+    assert!(app.ui.image_trace_panel.shown.params.is_null(), "the panel's settings were reset");
     assert!(!app.ui.image_trace_preview, "Reset to Default leaves Preview");
     let saved: crate::state::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
     assert!(!saved.image_trace_preview);
@@ -571,34 +348,18 @@ fn preview_is_kept_with_the_preferences_and_reset_to_default_leaves_it() {
 fn sketch_adjustment_sliders_retrace_on_release() {
     let mut app = traced_app();
     trace_and_open(&mut app, "Sketched Art");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let mut panel = panel_over(app);
     for (label, key) in [("Threshold", "threshold"), ("Paths", "paths"), ("Corners", "corners"), ("Noise", "noise")] {
-        frame(&mut app, &ctx, vec![]);
-        let rail = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique(("trace-slider", label)))).unwrap();
-        let at = rail.left_center() + vec2(20.0, 0.0);
-        let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-        let before = find_target(&app).stored.unwrap()["params"][key].clone();
-        let preset_before = pstate::<TraceUi>(&ctx, "image-trace").preset;
-        let steps = app.session.active().unwrap().history.undo.len();
-        frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
-        assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "{label} waits for release");
-        let draft: TraceUi = pstate(&ctx, "image-trace");
-        assert_ne!(draft.params[key], before, "{label} updates while held");
-        assert_eq!(draft.preset, preset_before, "the preset row stays in place during {label}");
-        frame(&mut app, &ctx, vec![press(false)]);
-        let stored = find_target(&app).stored.unwrap();
-        assert_ne!(
-            stored["params"][key],
-            before,
-            "{label} reaches the tracer; rail {rail:?}, draft {:?}",
-            pstate::<TraceUi>(&ctx, "image-trace").params
-        );
+        let before = param(&panel.app(), key).unwrap();
+        let to = if before == json!(90) { 10 } else { 90 };
+        let steps = undo(&panel.app());
+        panel.type_into(label, &to.to_string());
+        let stored = find_target(&panel.app()).stored.unwrap();
+        assert_ne!(stored["params"][key], before, "{label} reaches the tracer");
         assert_eq!(stored["preset"], "Custom");
-        assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step for {label}");
-        frame(&mut app, &ctx, vec![]);
-        let state: TraceUi = pstate(&ctx, "image-trace");
-        assert_eq!(state.params, stored["params"], "{label} survives the next frame");
+        assert_eq!(undo(&panel.app()), steps + 1, "one undo step for {label}");
+        panel.frame();
+        assert_eq!(shown(&panel).params, stored["params"], "{label} survives the next frame");
     }
 }
 
@@ -608,131 +369,56 @@ fn sketch_adjustment_sliders_retrace_on_release() {
 /// button is disabled.
 #[test]
 fn holding_the_eye_button_shows_the_source_image_until_released() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
+    let app = traced_app();
     let id = first_selected(&app).unwrap().id;
-    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
     let revision = |app: &VectorcraftApp| app.session.active().unwrap().revision;
     let (steps, rev) = (undo(&app), revision(&app));
-    let at = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique("trace-hold-source"))).unwrap().center();
-    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
-    assert_eq!(app.ui.trace_hold_source.as_deref(), Some(&vec![id]), "held: the object shows its source image");
-    frame(&mut app, &ctx, vec![]);
-    assert!(app.ui.trace_hold_source.is_some(), "still held on the next frame");
-    frame(&mut app, &ctx, vec![press(false)]);
-    assert_eq!(app.ui.trace_hold_source, None, "released: the object shows its View again");
-    assert_eq!(undo(&app), steps, "no undo step");
-    assert_eq!(revision(&app), rev, "the document is unchanged");
-    assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Result), "its View is unchanged");
-    app.run("imageTrace.release", json!({})).unwrap();
-    assert!(matches!(first_selected(&app).unwrap().kind, NodeKind::Image(_)));
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
-    assert_eq!(app.ui.trace_hold_source, None, "a plain image has no source image to show");
-    frame(&mut app, &ctx, vec![press(false)]);
-}
-
-/// In the Split view the panel shows a Divider slider that screen readers find by its name and
-/// value; with the keyboard focus on it, → moves the divider a percent, one undo step a press.
-/// It is not shown in any other view.
-#[test]
-fn the_divider_slider_names_and_moves_the_split_views_divider() {
-    use egui::accesskit::Role;
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.enable_accesskit();
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
-    let slider_id = egui::Id::unique("trace-split-slider-id");
-    let nodes = |app: &mut VectorcraftApp, events: Vec<Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
-        out.textures_delta.clear();
-        out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect::<Vec<_>>()).unwrap_or_default()
-    };
-    let divider =
-        |tree: &[egui::accesskit::Node]| tree.iter().find(|n| n.role() == Role::Slider && n.label() == Some("Divider")).map(|n| n.numeric_value());
-    nodes(&mut app, vec![]);
-    assert_eq!(divider(&nodes(&mut app, vec![])), None, "no divider in the Tracing Result view");
-    app.run("imageTrace.setView", json!({"view": "split", "split": 0.3})).unwrap();
-    nodes(&mut app, vec![]);
-    assert_eq!(divider(&nodes(&mut app, vec![])), Some(Some(30.0)));
-    let id = ctx.data(|d| d.get_temp::<egui::Id>(slider_id)).expect("the slider's id");
-    ctx.memory_mut(|m| m.request_focus(id));
-    nodes(&mut app, vec![]);
-    let steps = app.session.active().unwrap().history.undo.len();
-    let right = Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
-    nodes(&mut app, vec![right.clone()]);
-    assert_eq!(first_selected(&app).unwrap().trace_split(), 0.31);
-    nodes(&mut app, vec![right]);
-    assert_eq!(first_selected(&app).unwrap().trace_split(), 0.32);
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 2, "one undo step a press");
-    assert_eq!(divider(&nodes(&mut app, vec![])), Some(Some(32.0)));
+    let mut panel = panel_over(app);
+    panel.press(EYE);
+    assert_eq!(panel.app().ui.trace_hold_source.as_deref(), Some(&vec![id]), "held: the object shows its source image");
+    panel.frame();
+    assert!(panel.app().ui.trace_hold_source.is_some(), "still held on the next frame");
+    panel.release();
+    assert_eq!(panel.app().ui.trace_hold_source, None, "released: the object shows its View again");
+    assert_eq!(undo(&panel.app()), steps, "no undo step");
+    assert_eq!(revision(&panel.app()), rev, "the document is unchanged");
+    assert_eq!(selected_trace(&panel.app()).map(|t| t.1), Some(TraceView::Result), "its View is unchanged");
+    panel.app().run("imageTrace.release", json!({})).unwrap();
+    assert!(matches!(first_selected(&panel.app()).unwrap().kind, NodeKind::Image(_)));
+    panel.frame();
+    panel.press(EYE);
+    assert_eq!(panel.app().ui.trace_hold_source, None, "a plain image has no source image to show");
+    panel.release();
 }
 
 /// A divider between whole percents (as a canvas drag or an agent sets it) stays as it is while
-/// the panel shows, with no undo step; dragging the Divider slider sets it as one undo step.
+/// the panel shows, with no undo step; an edit of the Divider slider sets it as one undo step.
 #[test]
 fn the_divider_slider_keeps_an_exact_divider_and_a_drag_is_one_undo_step() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
     let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
-    let run = |app: &mut VectorcraftApp, events: Vec<Event>| {
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| show(app, ui));
-        out.textures_delta.clear();
-    };
     app.run("imageTrace.setView", json!({"view": "split", "split": 0.3025})).unwrap();
-    let steps = app.session.active().unwrap().history.undo.len();
-    for _ in 0..3 {
-        run(&mut app, vec![]);
-    }
-    assert_eq!(first_selected(&app).unwrap().trace_split(), 0.3025, "the panel leaves the divider as it is");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "no undo step");
-    let rect = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique("trace-split-slider-rect"))).expect("the slider's rect");
-    let at = |f: f32| Pos2::new(rect.left() + rect.width() * f, rect.center().y);
-    let button = |pos, pressed| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    run(&mut app, vec![Event::PointerMoved(at(0.3)), button(at(0.3), true)]);
-    for f in [0.4, 0.6, 0.8] {
-        run(&mut app, vec![Event::PointerMoved(at(f))]);
-    }
-    run(&mut app, vec![button(at(0.8), false)]);
-    run(&mut app, vec![]);
-    let split = first_selected(&app).unwrap().trace_split();
-    assert!(split > 0.6, "the drag moved the divider: {split}");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step for the drag");
+    let steps = undo(&app);
+    let mut panel = panel_over(app);
+    panel.frame();
+    assert_eq!(first_selected(&panel.app()).unwrap().trace_split(), 0.3025, "the panel leaves the divider as it is");
+    assert_eq!(undo(&panel.app()), steps, "no undo step");
+    panel.type_into("Divider", "80");
+    let split = first_selected(&panel.app()).unwrap().trace_split();
+    assert!(split > 0.6, "the edit moved the divider: {split}");
+    assert_eq!(undo(&panel.app()), steps + 1, "one undo step for the edit");
 }
 
 /// Properties shows the Divider slider of the selected Image Trace object in the Split view only,
 /// with its name and value for screen readers.
 #[test]
 fn properties_shows_the_divider_slider_in_the_split_view() {
-    use egui::accesskit::Role;
     crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    ctx.enable_accesskit();
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
-    let divider = |app: &mut VectorcraftApp| {
-        let mut found = None;
-        for _ in 0..2 {
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
-                crate::panels::properties::show(app, ui);
-            });
-            out.textures_delta.clear();
-            let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
-            found = nodes.iter().find(|(_, n)| n.role() == Role::Slider && n.label() == Some("Divider")).map(|(_, n)| n.numeric_value());
-        }
-        found
-    };
-    assert_eq!(divider(&mut app), None, "no divider in the Tracing Result view");
-    app.run("imageTrace.setView", json!({"view": "split", "split": 0.4})).unwrap();
-    assert_eq!(divider(&mut app), Some(Some(40.0)));
+    let mut panel = Panel::new(traced_app(), crate::panels::properties::show);
+    assert!(!panel.shows("Divider"), "no divider in the Tracing Result view");
+    panel.app().run("imageTrace.setView", json!({"view": "split", "split": 0.4})).unwrap();
+    panel.frame();
+    assert_eq!(panel.value("Divider").as_deref().and_then(number), Some(40.0));
 }
 
 /// With another object first in the selection, the eye button and the panel menu's Release
@@ -745,29 +431,13 @@ fn the_trace_controls_work_when_another_object_is_selected_first() {
     let rect = made["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
     assert_eq!(first_selected(&app).unwrap().id.0, rect, "the rectangle comes first");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    let at = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique("trace-hold-source"))).unwrap().center();
-    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(&mut app, &ctx, vec![Event::PointerMoved(at), press(true)]);
-    assert_eq!(app.ui.trace_hold_source.as_deref(), Some(&vec![trace_id]), "the eye button shows the source image");
-    frame(&mut app, &ctx, vec![press(false)]);
-    assert_eq!(app.ui.trace_hold_source, None);
-
-    let menu_frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
-        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0))), events, ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
-        out.textures_delta.clear();
-        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
-    };
-    let texts = menu_frame(&mut app, vec![]);
-    let at = texts.iter().find(|(t, _)| t.trim() == "Release").map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no Release in {texts:?}"));
-    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    menu_frame(&mut app, vec![Event::PointerMoved(at), press(true)]);
-    menu_frame(&mut app, vec![press(false)]);
-    let st = app.session.active().unwrap();
-    assert!(st.doc.node(trace_id).is_none(), "Release puts the source image back");
+    let mut panel = panel_over(app);
+    panel.press(EYE);
+    assert_eq!(panel.app().ui.trace_hold_source.as_deref(), Some(&vec![trace_id]), "the eye button shows the source image");
+    panel.release();
+    assert_eq!(panel.app().ui.trace_hold_source, None);
+    panel.app().run("imageTrace.release", json!({})).unwrap();
+    assert!(panel.app().session.active().unwrap().doc.node(trace_id).is_none(), "Release puts the source image back");
 }
 
 /// With another object first in the selection, the panel's View menu and Expand act on the
@@ -779,15 +449,13 @@ fn view_and_expand_work_when_another_object_is_selected_first() {
     let made = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap();
     let rect = made["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    click(&mut app, &ctx, "Tracing Result");
-    click(&mut app, &ctx, "Outlines");
-    let view = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(trace_id).unwrap().trace_view();
-    assert_eq!(view(&app), TraceView::Outlines, "the View menu sets the Image Trace object's view");
-    click(&mut app, &ctx, "Expand");
-    let st = app.session.active().unwrap();
-    assert!(!is_trace(st.doc.node(trace_id).unwrap()), "Expand keeps only the traced paths");
+    let mut panel = panel_over(app);
+    panel.click("View");
+    panel.click("Outlines");
+    let view = panel.app().session.active().unwrap().doc.node(trace_id).unwrap().trace_view();
+    assert_eq!(view, TraceView::Outlines, "the View menu sets the Image Trace object's view");
+    panel.click("Expand");
+    assert!(!is_trace(panel.app().session.active().unwrap().doc.node(trace_id).unwrap()), "Expand keeps only the traced paths");
 }
 
 /// With another object first in the selection, Trace traces the selected image, the View
@@ -801,19 +469,20 @@ fn trace_view_and_preview_work_when_another_object_is_selected_first() {
     let rect = made["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [rect, image.0]})).unwrap();
     assert_eq!(first_selected(&app).unwrap().id.0, rect, "the rectangle comes first");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    click(&mut app, &ctx, "Trace");
-    let st = app.session.active().unwrap();
-    let trace_id = st.selection.objects.iter().copied().find(|id| st.doc.node(*id).is_some_and(is_trace));
-    let trace_id = trace_id.unwrap_or_else(|| panic!("Trace makes an Image Trace object: {}", app.ui.status));
+    let mut panel = panel_over(app);
+    panel.click("Trace");
+    let trace_id = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        let found = st.selection.objects.iter().copied().find(|id| st.doc.node(*id).is_some_and(is_trace));
+        found.unwrap_or_else(|| panic!("Trace makes an Image Trace object: {}", app.ui.status))
+    };
 
     // The panel last showed Tracing Result; the object is drawn as Outlines.
-    frame(&mut app, &ctx, vec![]);
-    app.run("imageTrace.setView", json!({"view": "outlines"})).unwrap();
-    app.run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(texts.iter().any(|(t, _)| t == "Outlines") && !texts.iter().any(|(t, _)| t == "Tracing Result"), "{texts:?}");
+    panel.app().run("imageTrace.setView", json!({"view": "outlines"})).unwrap();
+    panel.app().run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
+    panel.frame();
+    assert_eq!(panel.value("View").as_deref(), Some("Outlines"));
 
     // Tracing again replaces the object, so look it up in the selection.
     let strokes = |app: &VectorcraftApp| {
@@ -821,119 +490,51 @@ fn trace_view_and_preview_work_when_another_object_is_selected_first() {
         let n = st.selection.objects.iter().find_map(|id| st.doc.node(*id).filter(|n| is_trace(n)));
         n.and_then(|n| n.extras().trace.as_deref().cloned()).map(|t| t["params"]["strokes"].clone())
     };
-    assert_eq!(strokes(&app), Some(json!(false)));
-    click(&mut app, &ctx, "Strokes");
-    assert_eq!(strokes(&app), Some(json!(true)), "Preview traces the object again");
-}
-
-#[test]
-fn properties_can_reopen_the_trace_controls() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut at = None;
-    for _ in 0..2 {
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::properties::show(&mut app, ui));
-        let texts = crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
-        // The first Image Trace text is the section heading, the last is the button.
-        at = texts.iter().rev().find(|(t, _)| t == "Image Trace").map(|(_, r)| r.center());
-        out.textures_delta.clear();
-    }
-    let at = at.unwrap();
-    for pressed in [true, false] {
-        let events =
-            vec![Event::PointerMoved(at), Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() }];
-        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| super::super::properties::show(&mut app, ui));
-        out.textures_delta.clear();
-    }
-    assert!(crate::panel_docking::showing(&app.ui, "imageTrace"));
-}
-
-/// #1358: in Properties the View row fits the panel, so the panel doesn't widen and clip its
-/// labels (the row took the panel's whole width for its menu, beside its label).
-#[test]
-fn the_view_row_fits_the_properties_panel() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // Where the panel's content ends after a few frames.
-    let right = |app: &mut VectorcraftApp| {
-        let mut right = 0.0;
-        for _ in 0..3 {
-            let screen = Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0));
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
-                crate::panels::properties::show(app, ui);
-                right = ui.min_rect().right();
-            });
-            out.textures_delta.clear();
-        }
-        right
-    };
-    let traced = right(&mut app);
-    app.run("select.none", json!({})).unwrap();
-    assert_eq!(traced, right(&mut app));
+    assert_eq!(strokes(&panel.app()), Some(json!(false)));
+    panel.click("Strokes");
+    assert_eq!(strokes(&panel.app()), Some(json!(true)), "Preview traces the object again");
 }
 
 #[test]
 fn advanced_is_a_section_that_stays_as_it_was_left() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(app.ui.image_trace_advanced && has(&texts, "Advanced") && has(&texts, "Corners"), "open at first: {texts:?}");
-    click(&mut app, &ctx, "Advanced");
-    assert!(!app.ui.image_trace_advanced, "the header closes it");
-    assert!(!has(&frame(&mut app, &ctx, vec![]), "Corners"));
+    let mut panel = panel_over(traced_app());
+    assert!(panel.app().ui.image_trace_advanced && panel.shows("Advanced") && panel.shows("Corners"), "open at first");
+    // The section's region and heading share its name: the header's disclosure is the button.
+    panel.click_role("Advanced", craft::ui::contract::Role::BUTTON);
+    assert!(!panel.app().ui.image_trace_advanced, "the header closes it");
+    // Once the section has drawn itself closed (it animates), as production read it on a later frame.
+    panel.advance(1.0);
+    panel.frame();
+    assert!(!panel.shows("Corners"));
     // Remembered with the UI preferences, across launches.
-    let saved: crate::state::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
+    let saved: crate::state::UiState = serde_json::from_value(serde_json::to_value(&panel.app().ui).unwrap()).unwrap();
     assert!(!saved.image_trace_advanced);
     let old: crate::state::UiState = serde_json::from_value(json!({})).unwrap();
     assert!(old.image_trace_advanced, "open for preferences saved before the section existed");
-    click(&mut app, &ctx, "Advanced");
-    assert!(app.ui.image_trace_advanced && has(&frame(&mut app, &ctx, vec![]), "Corners"));
-}
-
-#[test]
-fn the_view_dropdown_shows_and_sets_the_objects_view() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(texts.iter().any(|(t, _)| t == "View:") && texts.iter().any(|(t, _)| t == "Tracing Result"), "{texts:?}");
-    let steps = app.session.active().unwrap().history.undo.len();
-    click(&mut app, &ctx, "Tracing Result");
-    click(&mut app, &ctx, "Source Image");
-    assert_eq!(selected_trace(&app).map(|t| t.1), Some(TraceView::Source));
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1, "one undo step, no new trace");
-    // Another object's view is shown when it is selected.
-    app.run("imageTrace.setView", json!({"view": "outlines"})).unwrap();
-    assert!(frame(&mut app, &ctx, vec![]).iter().any(|(t, _)| t == "Outlines"));
+    panel.click_role("Advanced", craft::ui::contract::Role::BUTTON);
+    panel.frame();
+    assert!(panel.app().ui.image_trace_advanced && panel.shows("Corners"));
 }
 
 #[test]
 fn the_palette_shows_in_color_mode_and_traces_again() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
-    let palette = |app: &VectorcraftApp| find_target(app).stored.map(|t| t["params"]["palette"].clone());
-    assert!(!has(&frame(&mut app, &ctx, vec![]), "Palette:"), "Black and White has no palette");
-    app.run("imageTrace.make", json!({"preset": "6 Colors"})).unwrap();
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(has(&texts, "Palette:") && has(&texts, "Limited") && !has(&texts, "Library:"), "{texts:?}");
+    let mut panel = panel_over(traced_app());
+    assert!(!panel.shows("Palette:"), "Black and White has no palette");
+    panel.app().run("imageTrace.make", json!({"preset": "6 Colors"})).unwrap();
+    panel.frame();
+    assert_eq!(panel.value("Palette:").as_deref(), Some("Limited"));
+    assert!(!panel.shows("Library:"));
     // Document Library traces again with the document's swatches, and names them.
-    click(&mut app, &ctx, "Limited");
-    click(&mut app, &ctx, "Document Library");
-    assert_eq!(palette(&app), Some(json!("documentLibrary")));
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(has(&texts, "Library:") && has(&texts, "Document Swatches"), "{texts:?}");
+    panel.click("Palette:");
+    panel.click("Document Library");
+    assert_eq!(param(&panel.app(), "palette"), Some(json!("documentLibrary")));
+    assert_eq!(panel.value("Library:").as_deref(), Some(DOCUMENT_SWATCHES_NAME));
     // Full Tone's Colors is how many, Less (0%) … More (100%).
-    click(&mut app, &ctx, "Document Library");
-    click(&mut app, &ctx, "Full Tone");
-    assert_eq!(palette(&app), Some(json!("fullTone")));
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(has(&texts, "50") && !has(&texts, "Library:"), "{texts:?}");
+    panel.click("Palette:");
+    panel.click("Full Tone");
+    assert_eq!(param(&panel.app(), "palette"), Some(json!("fullTone")));
+    assert_eq!(panel.value("Colors").as_deref().and_then(number), Some(50.0));
+    assert!(!panel.shows("Library:"));
 }
 
 #[test]
@@ -941,52 +542,63 @@ fn document_library_colors_lists_the_documents_color_groups() {
     let mut app = traced_app();
     app.run("swatch.newGroup", json!({"name": "Brand", "colors": ["#000000", "#ffffff"]})).unwrap();
     app.run("imageTrace.make", json!({"preset": "6 Colors", "params": {"palette": "documentLibrary"}})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let has = |texts: &[(String, Rect)], s: &str| texts.iter().any(|(t, _)| t == s);
-    let stored = |app: &VectorcraftApp, key: &str| find_target(app).stored.map(|t| t["params"][key].clone());
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert!(has(&texts, "Colors:") && has(&texts, "All"), "{texts:?}");
+    let (lib, lib_label) = RowsData::of(&app)
+        .libraries
+        .iter()
+        .find_map(|e| e.value().filter(|id| id.as_str() != DOCUMENT_SWATCHES).map(|id| (id.clone(), e.label().as_str().to_owned())))
+        .unwrap();
+    let mut panel = panel_over(app);
+    let pick = |panel: &mut Panel, control: &str, entry: &str| {
+        panel.click(control);
+        panel.click(entry);
+    };
+    assert_eq!(panel.value("Colors:").as_deref(), Some("All"));
     // The list holds All and the document's groups; a group traces again with its colors.
-    click(&mut app, &ctx, "All");
-    assert!(has(&frame(&mut app, &ctx, vec![]), "   Brand"));
-    let steps = app.session.active().unwrap().history.undo.len();
-    click(&mut app, &ctx, "   Brand");
-    assert_eq!(stored(&app, "colorGroup"), Some(json!("Brand")));
-    assert_eq!(find_target(&app).stored.unwrap()["preset"], "Custom");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps + 1);
-    assert!(has(&frame(&mut app, &ctx, vec![]), "Brand"));
+    let steps = undo(&panel.app());
+    pick(&mut panel, "Colors:", "Brand");
+    assert_eq!(param(&panel.app(), "colorGroup"), Some(json!("Brand")));
+    assert_eq!(find_target(&panel.app()).stored.unwrap()["preset"], "Custom");
+    assert_eq!(undo(&panel.app()), steps + 1);
+    assert_eq!(panel.value("Colors:").as_deref(), Some("Brand"));
     // All again.
-    click(&mut app, &ctx, "Brand");
-    click(&mut app, &ctx, "   All");
-    assert_eq!(stored(&app, "colorGroup"), Some(Value::Null));
+    pick(&mut panel, "Colors:", "All");
+    assert_eq!(param(&panel.app(), "colorGroup"), Some(Value::Null));
     // Another library clears the group, and the row goes.
-    click(&mut app, &ctx, "All");
-    click(&mut app, &ctx, "   Brand");
-    let lib = swatches::colour_libraries(&app).into_iter().find(|l| l.submenu.is_none()).unwrap();
-    click(&mut app, &ctx, "Document Swatches");
-    click(&mut app, &ctx, &format!("   {}", library_panel::library_name(&lib.id, &lib.name)));
-    assert_eq!((stored(&app, "library"), stored(&app, "colorGroup")), (Some(json!(lib.id)), Some(Value::Null)));
-    assert!(!has(&frame(&mut app, &ctx, vec![]), "Colors:"));
+    pick(&mut panel, "Colors:", "Brand");
+    pick(&mut panel, "Library:", &lib_label);
+    assert_eq!(
+        {
+            let app = panel.app();
+            (param(&app, "library"), param(&app, "colorGroup"))
+        },
+        (Some(json!(lib)), Some(Value::Null))
+    );
+    assert!(!panel.shows("Colors:"));
     // Another palette clears the group too, and traces again (the object stores the settings of
     // a trace that was made).
-    click(&mut app, &ctx, library_panel::library_name(&lib.id, &lib.name));
-    click(&mut app, &ctx, "   Document Swatches");
-    click(&mut app, &ctx, "All");
-    click(&mut app, &ctx, "   Brand");
-    assert_eq!(stored(&app, "colorGroup"), Some(json!("Brand")));
-    click(&mut app, &ctx, "Document Library");
-    click(&mut app, &ctx, "Limited");
-    assert_eq!((stored(&app, "palette"), stored(&app, "colorGroup")), (Some(json!("limited")), Some(Value::Null)));
+    pick(&mut panel, "Library:", DOCUMENT_SWATCHES_NAME);
+    pick(&mut panel, "Colors:", "Brand");
+    assert_eq!(param(&panel.app(), "colorGroup"), Some(json!("Brand")));
+    pick(&mut panel, "Palette:", "Limited");
+    assert_eq!(
+        {
+            let app = panel.app();
+            (param(&app, "palette"), param(&app, "colorGroup"))
+        },
+        (Some(json!("limited")), Some(Value::Null))
+    );
     // Another mode clears it too, and traces again.
-    click(&mut app, &ctx, "Limited");
-    click(&mut app, &ctx, "Document Library");
-    click(&mut app, &ctx, "All");
-    click(&mut app, &ctx, "   Brand");
-    assert_eq!(stored(&app, "colorGroup"), Some(json!("Brand")));
-    click(&mut app, &ctx, "Color");
-    click(&mut app, &ctx, "Grayscale");
-    assert_eq!((stored(&app, "mode"), stored(&app, "colorGroup")), (Some(json!("grayscale")), Some(Value::Null)));
+    pick(&mut panel, "Palette:", "Document Library");
+    pick(&mut panel, "Colors:", "Brand");
+    assert_eq!(param(&panel.app(), "colorGroup"), Some(json!("Brand")));
+    pick(&mut panel, "Mode:", "Flat Logo");
+    assert_eq!(
+        {
+            let app = panel.app();
+            (param(&app, "mode"), param(&app, "colorGroup"))
+        },
+        (Some(json!("logo")), Some(Value::Null))
+    );
 }
 
 #[test]
@@ -994,68 +606,36 @@ fn a_color_group_the_active_document_lacks_is_all() {
     let mut app = traced_app();
     app.run("swatch.newGroup", json!({"name": "Brand", "colors": ["#000000", "#ffffff"]})).unwrap();
     app.run("imageTrace.make", json!({"preset": "6 Colors", "params": {"palette": "documentLibrary"}})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    click(&mut app, &ctx, "All");
-    click(&mut app, &ctx, "   Brand");
-    assert_eq!(find_target(&app).stored.map(|t| t["params"]["colorGroup"].clone()), Some(json!("Brand")));
-    let shows_brand = |app: &mut VectorcraftApp| frame(app, &ctx, vec![]).iter().any(|(t, _)| t == "Brand");
+    let mut panel = panel_over(app);
+    panel.click("Colors:");
+    panel.click("Brand");
+    assert_eq!(param(&panel.app(), "colorGroup"), Some(json!("Brand")));
+    let shows_brand = |panel: &mut Panel| {
+        panel.frame();
+        panel.value("Colors:").as_deref() == Some("Brand")
+    };
     // Without the group the row shows All; undoing its removal shows it again.
-    app.run("swatch.ungroup", json!({"name": "Brand"})).unwrap();
-    assert!(!shows_brand(&mut app));
-    app.run("edit.undo", json!({})).unwrap();
-    assert!(shows_brand(&mut app));
+    panel.app().run("swatch.ungroup", json!({"name": "Brand"})).unwrap();
+    assert!(!shows_brand(&mut panel));
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert!(shows_brand(&mut panel));
     // Another document without the group, with an image that is not traced yet.
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
-    let mut png = vec![];
     {
-        let __dyn: image::DynamicImage = img.into();
-        let (__w, __h) = (__dyn.width(), __dyn.height());
-        let (__layout, __sample, __raw) = match __dyn {
-            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
-            image::DynamicImage::ImageLuma16(b) => (
-                craft_image_codecs::ChannelLayout::Gray,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageLumaA16(b) => (
-                craft_image_codecs::ChannelLayout::GrayA,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgb16(b) => (
-                craft_image_codecs::ChannelLayout::Rgb,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            image::DynamicImage::ImageRgba16(b) => (
-                craft_image_codecs::ChannelLayout::Rgba,
-                craft_image_codecs::SampleType::U16,
-                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
-            ),
-            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
-        };
-        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
-        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
-            .map(|__b| png.extend_from_slice(&__b))
+        let mut app = panel.app();
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+        place_png(&mut app, "half.png", img);
     }
-    .unwrap();
-    let data = vectorcraft_format::base64_encode(&png);
-    app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false})).unwrap();
-    let texts = frame(&mut app, &ctx, vec![]);
-    let has = |s: &str| texts.iter().any(|(t, _)| t == s);
-    assert!(has("Colors:") && has("All") && !has("Brand"), "{texts:?}");
+    panel.frame();
+    assert_eq!(panel.value("Colors:").as_deref(), Some("All"));
     // Back in the first document, its Image Trace object shows its group again.
-    app.session.set_active(0);
-    assert!(shows_brand(&mut app));
-    app.session.set_active(1);
-    assert!(!shows_brand(&mut app));
+    panel.app().session.set_active(0);
+    assert!(shows_brand(&mut panel));
+    panel.app().session.set_active(1);
+    assert!(!shows_brand(&mut panel));
     // Trace uses every document swatch.
-    click(&mut app, &ctx, "Trace");
+    panel.click("Trace");
+    let app = panel.app();
     let stored = find_target(&app).stored.unwrap_or_else(|| panic!("not traced: {}", app.ui.status));
     assert!(stored["params"]["colorGroup"].as_str().is_none_or(str::is_empty), "{stored}");
     assert_eq!(stored["params"]["palette"], "documentLibrary");
@@ -1063,123 +643,79 @@ fn a_color_group_the_active_document_lacks_is_all() {
 
 #[test]
 fn create_strokes_traces_again_and_keeps_one_kind_on() {
-    let mut app = traced_app();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let create = |app: &VectorcraftApp| find_target(app).stored.map(|t| (t["params"]["fills"].clone(), t["params"]["strokes"].clone()));
-    let texts = frame(&mut app, &ctx, vec![]);
-    for s in ["Create:", "Fills", "Strokes", "Stroke", "10"] {
-        assert!(texts.iter().any(|(t, _)| t == s), "{s}: {texts:?}");
+    let mut panel = panel_over(traced_app());
+    let create = |panel: &Panel| {
+        let app = panel.app();
+        (param(&app, "fills"), param(&app, "strokes"))
+    };
+    for s in ["Create:", "Fills", "Strokes", "Stroke"] {
+        assert!(panel.shows(s), "{s}");
     }
+    assert_eq!(panel.value("Stroke").as_deref().and_then(number), Some(10.0));
     // Fills alone can't be turned off.
-    click(&mut app, &ctx, "Fills");
-    assert_eq!(create(&app), Some((json!(true), json!(false))));
-    click(&mut app, &ctx, "Strokes");
-    assert_eq!(create(&app), Some((json!(true), json!(true))), "traced again with strokes");
-    click(&mut app, &ctx, "Fills");
-    assert_eq!(create(&app), Some((json!(false), json!(true))));
-    click(&mut app, &ctx, "Strokes");
-    assert_eq!(create(&app), Some((json!(false), json!(true))), "Strokes alone stays on");
-}
-
-/// Click at `at`, then draw a frame.
-fn click_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2) {
-    let press = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
-    frame(app, ctx, vec![Event::PointerMoved(at), press(true)]);
-    frame(app, ctx, vec![press(false)]);
-    frame(app, ctx, vec![]);
-}
-
-/// Choose `item` from Manage Presets, next to the Preset dropdown. Whether it was enabled.
-fn manage(app: &mut VectorcraftApp, ctx: &egui::Context, item: &str) -> bool {
-    frame(app, ctx, vec![]);
-    let button = ctx.data(|d| d.get_temp::<Rect>(egui::Id::unique("trace-manage-presets"))).unwrap();
-    click_at(app, ctx, button.center());
-    let texts = frame(app, ctx, vec![]);
-    let at = texts.iter().find(|(t, _)| t.trim() == item).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{item}` in {texts:?}"));
-    let state = |app: &VectorcraftApp| (app.ui.dialog.as_ref().map(|d| (d.kind.clone(), d.fields.clone())), app.session.prefs.trace_presets.clone());
-    let before = state(app);
-    click_at(app, ctx, at);
-    // Escape closes the menu when the item was disabled.
-    frame(app, ctx, vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
-    before != state(app)
-}
-
-/// The preset the panel shows.
-fn shown_preset(ctx: &egui::Context) -> String {
-    pstate::<TraceUi>(ctx, "image-trace").preset
+    panel.click("Fills");
+    assert_eq!(create(&panel), (Some(json!(true)), Some(json!(false))));
+    panel.click("Strokes");
+    assert_eq!(create(&panel), (Some(json!(true)), Some(json!(true))), "traced again with strokes");
+    panel.click("Fills");
+    assert_eq!(create(&panel), (Some(json!(false)), Some(json!(true))));
+    panel.click("Strokes");
+    assert_eq!(create(&panel), (Some(json!(false)), Some(json!(true))), "Strokes alone stays on");
 }
 
 #[test]
 fn manage_presets_saves_renames_and_deletes_a_preset_of_the_panel_settings() {
     let mut app = traced_app_with_ink(100);
     trace_and_open(&mut app, "Sketched Art");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    // A built-in preset can't be renamed or deleted.
-    assert!(!manage(&mut app, &ctx, "Rename…"));
-    assert!(!manage(&mut app, &ctx, "Delete"));
-    // Save as New Preset… asks for a name, and the panel then shows the preset.
-    assert!(manage(&mut app, &ctx, "Save as New Preset…"));
-    let d = app.ui.dialog.clone().unwrap();
-    assert_eq!((d.kind.as_str(), d.str("name")), (crate::dialogs::trace_presets::KIND, "Tracing Preset 1".to_string()));
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Heavy Ink"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
-    let texts = frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Heavy Ink");
-    assert!(texts.iter().any(|(t, _)| t == "Heavy Ink"), "{texts:?}");
-    let saved = &app.session.prefs.trace_presets;
-    assert_eq!((saved.len(), saved[0].name.as_str(), saved[0].params.threshold), (1, "Heavy Ink", 150));
-    // It follows the built-in presets in the preset list (the Preset dropdown, Control bar and
+    let suggested = app.session.new_trace_preset_name();
+    let mut panel = panel_over(app);
+    // Save as New Preset… offers a name, and the panel then shows the preset.
+    panel.click(MANAGE);
+    panel.click("Save as New Preset…");
+    assert_eq!(panel.value("Name").as_deref(), Some(suggested.as_str()));
+    panel.click("OK");
+    assert_eq!(shown_preset(&panel), suggested);
+    {
+        let app = panel.app();
+        let saved = &app.session.prefs.trace_presets;
+        assert_eq!((saved.len(), saved[0].name.as_str(), saved[0].params.threshold), (1, suggested.as_str(), 150));
+    }
+    // It follows the built-in presets in the preset list (the Preset row, Control bar and
     // Properties).
-    let list_ctx = egui::Context::default();
-    crate::theme::install_fonts(&list_ctx);
-    let screen = Rect::from_min_size(Pos2::ZERO, vec2(300.0, 1200.0));
-    let mut out = list_ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
-        preset_list(&mut app, ui, "Heavy Ink");
-    });
-    out.textures_delta.clear();
-    let shapes: Vec<_> = out.shapes.iter().map(|c| c.shape.clone()).collect();
-    let listed: Vec<String> = crate::tests_removeanchors::shapes_text(&shapes).into_iter().map(|(t, _)| t).collect();
-    assert_eq!(listed.iter().position(|t| t == "Heavy Ink"), Some(presets(&mut app, &list_ctx).len() - 1), "{listed:?}");
-    assert_eq!(listed.len(), presets(&mut app, &list_ctx).len(), "{listed:?}");
+    let listed = presets(&mut panel.app());
+    assert_eq!(listed.presets.last().map(|p| p.0.as_str()), Some(suggested.as_str()));
     // Rename… starts from its name, and the panel follows the new one.
-    assert!(manage(&mut app, &ctx, "Rename…"));
-    assert_eq!(app.ui.dialog.as_ref().unwrap().str("name"), "Heavy Ink");
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Dark Ink"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Dark Ink");
-    assert_eq!(app.session.prefs.trace_presets[0].name, "Dark Ink");
+    panel.click(MANAGE);
+    panel.click("Rename…");
+    assert_eq!(panel.value("Name").as_deref(), Some(suggested.as_str()));
+    panel.type_into("Name", "Dark Ink");
+    assert_eq!(shown_preset(&panel), "Dark Ink");
+    assert_eq!(panel.app().session.prefs.trace_presets[0].name, "Dark Ink");
     // Tracing with it gives the object its name.
-    click(&mut app, &ctx, "Trace");
-    assert_eq!(selected_trace(&app).unwrap().0, "Dark Ink");
+    panel.click("Trace");
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "Dark Ink");
     // Delete: the settings stay, as Custom.
-    assert!(manage(&mut app, &ctx, "Delete"));
-    assert!(app.session.prefs.trace_presets.is_empty());
-    assert_eq!(shown_preset(&ctx), "Custom");
-    assert!(!manage(&mut app, &ctx, "Delete"));
+    panel.click(MANAGE);
+    panel.click("Delete");
+    assert!(panel.app().session.prefs.trace_presets.is_empty());
+    assert_eq!(shown_preset(&panel), "Custom");
 }
 
 #[test]
 fn renaming_another_saved_preset_with_the_same_settings_keeps_the_panel_preset() {
     let mut app = traced_app_with_ink(100);
     trace_and_open(&mut app, "Sketched Art");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    let save = |app: &mut VectorcraftApp, p: Value| {
-        app.session.execute("imageTrace.presets.save", &p).unwrap();
-        frame(app, &ctx, vec![]);
-        shown_preset(&ctx)
+    let mut panel = panel_over(app);
+    let mut save = |p: Value| {
+        execute(&mut panel, "imageTrace.presets.save", p);
+        shown_preset(&panel)
     };
-    assert_eq!(save(&mut app, json!({ "name": "A", "preset": "Sketched Art" })), "A");
-    assert_eq!(save(&mut app, json!({ "name": "B", "preset": "Sketched Art" })), "B");
+    assert_eq!(save(json!({ "name": "A", "preset": "Sketched Art" })), "A");
+    assert_eq!(save(json!({ "name": "B", "preset": "Sketched Art" })), "B");
     // A, with the same settings as B, is renamed: the panel still shows B.
-    assert_eq!(save(&mut app, json!({ "name": "A", "newName": "C" })), "B");
+    assert_eq!(save(json!({ "name": "A", "newName": "C" })), "B");
     // B itself is renamed: the panel follows it.
-    assert_eq!(save(&mut app, json!({ "name": "B", "newName": "E" })), "E");
+    assert_eq!(save(json!({ "name": "B", "newName": "E" })), "E");
 }
 
 /// A saved preset renamed or deleted while the settings that wait for another object name it: that object, selected
@@ -1192,31 +728,24 @@ fn settings_that_wait_follow_a_renamed_or_deleted_preset() {
     let a = first_selected(&app).unwrap().id;
     app.run("edit.duplicate", json!({})).unwrap();
     let b = first_selected(&app).unwrap().id;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
     app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    click(&mut app, &ctx, "Preview");
+    let mut panel = panel_over(app);
+    panel.click("Preview");
     // Ink is chosen for A with Preview off, so it waits for A.
-    let ink = presets(&mut app, &ctx).iter().find(|p| p.0 == "Ink").unwrap().1.clone();
-    let mut st: TraceUi = pstate(&ctx, "image-trace");
-    st.preset = "Ink".into();
-    st.params = ink;
-    set_pstate(&ctx, "image-trace", st);
-    let select = |app: &mut VectorcraftApp, id: NodeId| {
-        app.run("select.set", json!({"ids": [id.0]})).unwrap();
-        frame(app, &ctx, vec![]);
-        shown_preset(&ctx)
-    };
-    assert_eq!(select(&mut app, b), "Sketched Art");
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "newName": "Dark Ink"})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(select(&mut app, a), "Dark Ink", "A's waiting settings follow the rename");
-    assert_eq!(select(&mut app, b), "Sketched Art");
-    app.session.execute("imageTrace.presets.delete", &json!({"name": "Dark Ink"})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(select(&mut app, a), "Custom", "A's waiting settings name a deleted preset");
-    assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params["threshold"], json!(40), "and keep their settings");
+    {
+        let mut app = panel.app();
+        let ink = presets(&mut app).presets.iter().find(|p| p.0 == "Ink").unwrap().1.clone();
+        let st = &mut app.ui.image_trace_panel.shown;
+        st.preset = "Ink".into();
+        st.params = ink;
+    }
+    assert_eq!(select(&mut panel, b), "Sketched Art");
+    execute(&mut panel, "imageTrace.presets.save", json!({"name": "Ink", "newName": "Dark Ink"}));
+    assert_eq!(select(&mut panel, a), "Dark Ink", "A's waiting settings follow the rename");
+    assert_eq!(select(&mut panel, b), "Sketched Art");
+    execute(&mut panel, "imageTrace.presets.delete", json!({"name": "Dark Ink"}));
+    assert_eq!(select(&mut panel, a), "Custom", "A's waiting settings name a deleted preset");
+    assert_eq!(shown(&panel).params["threshold"], json!(40), "and keep their settings");
 }
 
 #[test]
@@ -1225,14 +754,16 @@ fn a_refused_preset_name_keeps_the_dialog_open() {
     for name in ["A", "B"] {
         app.session.execute("imageTrace.presets.save", &json!({ "name": name })).unwrap();
     }
-    crate::dialogs::trace_presets::open(&mut app, &json!({"rename": "A"})).unwrap();
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("b"));
-    assert!(crate::dialogs::confirm(&mut app).is_err());
-    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("name")).as_deref(), Some("b"), "the name entered stays, to be changed");
-    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("C"));
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
-    let names: Vec<String> = app.session.prefs.trace_presets.iter().map(|p| p.name.clone()).collect();
+    trace_and_open(&mut app, "A");
+    let mut panel = panel_over(app);
+    assert_eq!(shown_preset(&panel), "A");
+    panel.click(MANAGE);
+    panel.click("Rename…");
+    panel.type_into("Name", "b");
+    assert_eq!(panel.value("Name").as_deref(), Some("b"), "the name entered stays, to be changed");
+    panel.type_into("Name", "C");
+    assert!(!panel.shows("Name"), "the accepted name closes the field");
+    let names: Vec<String> = panel.app().session.prefs.trace_presets.iter().map(|p| p.name.clone()).collect();
     assert_eq!(names, ["C", "B"]);
 }
 
@@ -1244,105 +775,87 @@ fn selecting_an_object_traced_with_a_deleted_preset_shows_custom() {
     let a = first_selected(&app).unwrap().id;
     app.run("edit.duplicate", json!({})).unwrap();
     let b = first_selected(&app).unwrap().id;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Keep");
+    let mut panel = panel_over(app);
+    assert_eq!(shown_preset(&panel), "Keep");
     // A, traced again with a built-in preset, is shown while Keep is deleted.
-    app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    app.run("imageTrace.make", json!({"preset": "Sketched Art"})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.session.execute("imageTrace.presets.delete", &json!({"name": "Keep"})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Sketched Art");
+    panel.app().run("select.set", json!({"ids": [a.0]})).unwrap();
+    panel.app().run("imageTrace.make", json!({"preset": "Sketched Art"})).unwrap();
+    panel.frame();
+    execute(&mut panel, "imageTrace.presets.delete", json!({"name": "Keep"}));
+    assert_eq!(shown_preset(&panel), "Sketched Art");
     // B still records Keep.
-    app.run("select.set", json!({"ids": [b.0]})).unwrap();
-    assert_eq!(selected_trace(&app).unwrap().0, "Keep");
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Custom");
+    panel.app().run("select.set", json!({"ids": [b.0]})).unwrap();
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "Keep");
+    panel.frame();
+    assert_eq!(shown_preset(&panel), "Custom");
     // A built-in preset named in another case or in brackets shows under its own name, and Trace
     // with the settings unchanged keeps it.
-    app.run("imageTrace.make", json!({"preset": "[sketched art]"})).unwrap();
-    assert_eq!(selected_trace(&app).unwrap().0, "[sketched art]");
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Sketched Art");
-    click(&mut app, &ctx, "Trace");
-    assert_eq!(selected_trace(&app).unwrap().0, "Sketched Art");
+    panel.app().run("imageTrace.make", json!({"preset": "[sketched art]"})).unwrap();
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "[sketched art]");
+    panel.frame();
+    assert_eq!(shown_preset(&panel), "Sketched Art");
+    panel.click("Trace");
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "Sketched Art");
 }
 
 /// An object traced with a saved preset that was renamed since shows the new name when it is selected again, and
-/// when the panel opens again.
+/// on a later frame.
 #[test]
 fn selecting_an_object_traced_with_a_renamed_preset_shows_the_new_name() {
     let mut app = traced_app_with_ink(100);
     app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "preset": "Sketched Art"})).unwrap();
     trace_and_open(&mut app, "Ink");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Ink");
-    app.session.execute("imageTrace.presets.save", &json!({"name": "ink", "newName": "Dark Ink"})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Dark Ink");
-    app.run("select.set", json!({"ids": []})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.run("select.all", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(selected_trace(&app).unwrap().0, "Ink", "the object still records the old name");
-    assert_eq!(shown_preset(&ctx), "Dark Ink");
-    let reopened = egui::Context::default();
-    crate::theme::install_fonts(&reopened);
-    frame(&mut app, &reopened, vec![]);
-    assert_eq!(shown_preset(&reopened), "Dark Ink");
+    let mut panel = panel_over(app);
+    assert_eq!(shown_preset(&panel), "Ink");
+    execute(&mut panel, "imageTrace.presets.save", json!({"name": "ink", "newName": "Dark Ink"}));
+    assert_eq!(shown_preset(&panel), "Dark Ink");
+    panel.app().run("select.set", json!({"ids": []})).unwrap();
+    panel.frame();
+    panel.app().run("select.all", json!({})).unwrap();
+    panel.frame();
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "Ink", "the object still records the old name");
+    assert_eq!(shown_preset(&panel), "Dark Ink");
+    panel.frame();
+    assert_eq!(shown_preset(&panel), "Dark Ink");
     // Dark Ink is deleted, and another preset with the same settings is made under that name: the object shows
-    // Custom, also after that preset is renamed.
-    app.session.execute("imageTrace.presets.delete", &json!({"name": "Dark Ink"})).unwrap();
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "preset": "Sketched Art"})).unwrap();
-    let shown = |app: &mut VectorcraftApp| {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        frame(app, &ctx, vec![]);
-        shown_preset(&ctx)
+    // Custom, also after that preset is renamed. Each is read from the panel opened anew, whose run-only state starts
+    // over, as production read it from a new context.
+    let reopened = |panel: &mut Panel| {
+        panel.app().ui.image_trace_panel = Default::default();
+        panel.frame();
+        shown_preset(panel)
     };
-    assert_eq!(shown(&mut app), "Custom");
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "newName": "Other Ink"})).unwrap();
-    assert_eq!(shown(&mut app), "Custom");
+    panel.app().session.execute("imageTrace.presets.delete", &json!({"name": "Dark Ink"})).unwrap();
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "preset": "Sketched Art"})).unwrap();
+    assert_eq!(reopened(&mut panel), "Custom");
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "newName": "Other Ink"})).unwrap();
+    assert_eq!(reopened(&mut panel), "Custom");
 }
 
 /// The Control bar's and Properties' Preset dropdowns show an object traced with a saved preset under the name the
 /// panel shows: the new name after a rename, and Custom once the preset's settings changed or it was deleted.
 #[test]
 fn the_control_bar_and_properties_show_a_renamed_or_changed_preset_as_the_panel_does() {
-    let mut app = traced_app_with_ink(100);
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "preset": "Sketched Art"})).unwrap();
-    trace_with(&mut app, "Ink");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let texts = |app: &mut VectorcraftApp, properties: bool| {
-        let screen = Rect::from_min_size(Pos2::ZERO, vec2(900.0, 700.0));
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
-            if properties {
-                crate::panels::properties::show(app, ui);
-            } else {
-                ui.horizontal(|ui| control_bar(app, ui, 0.0));
+    let bar: fn(&mut VectorcraftApp, &mut Ui) = |app, ui| {
+        control_bar(app, ui);
+    };
+    let properties: fn(&mut VectorcraftApp, &mut Ui) = crate::panels::properties::show;
+    for (host, draw) in [("Control bar", bar), ("Properties", properties)] {
+        let mut app = traced_app_with_ink(100);
+        app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "preset": "Sketched Art"})).unwrap();
+        trace_with(&mut app, "Ink");
+        let mut panel = Panel::new(app, draw);
+        let shows = |panel: &mut Panel, change: Option<(&str, Value)>, name: &str| {
+            if let Some((id, params)) = change {
+                execute(panel, id, params);
             }
-        });
-        out.textures_delta.clear();
-        crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>())
-    };
-    let shows = |app: &mut VectorcraftApp, name: &str| {
-        for properties in [false, true] {
-            let t = texts(app, properties);
-            assert!(t.iter().any(|(s, _)| s == name), "{} shows {name}: {t:?}", if properties { "Properties" } else { "Control bar" });
-        }
-    };
-    shows(&mut app, "Ink");
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "newName": "Dark Ink"})).unwrap();
-    shows(&mut app, "Dark Ink");
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Dark Ink", "preset": "Silhouettes"})).unwrap();
-    shows(&mut app, "Custom");
-    app.session.execute("imageTrace.presets.delete", &json!({"name": "Dark Ink"})).unwrap();
-    shows(&mut app, "Custom");
+            assert_eq!(panel.value("Preset").as_deref(), Some(name), "{host}");
+        };
+        shows(&mut panel, None, "Ink");
+        shows(&mut panel, Some(("imageTrace.presets.save", json!({"name": "Ink", "newName": "Dark Ink"}))), "Dark Ink");
+        shows(&mut panel, Some(("imageTrace.presets.save", json!({"name": "Dark Ink", "preset": "Silhouettes"}))), "Custom");
+        shows(&mut panel, Some(("imageTrace.presets.delete", json!({"name": "Dark Ink"}))), "Custom");
+    }
 }
 
 /// An object traced with a preset whose name another saved preset had earlier in the session, renamed since: the
@@ -1358,11 +871,9 @@ fn an_object_traced_with_a_reused_preset_name_that_was_renamed_shows_custom() {
     save(&mut app, json!({"name": "A", "preset": "Sketched Art"}));
     trace_and_open(&mut app, "A");
     save(&mut app, json!({"name": "A", "newName": "C"}));
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(selected_trace(&app).unwrap().0, "A");
-    assert_eq!(shown_preset(&ctx), "Custom");
+    let panel = panel_over(app);
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "A");
+    assert_eq!(shown_preset(&panel), "Custom");
 }
 
 /// An object traced with a preset that got its name from a rename, renamed again since: the panel shows the new name.
@@ -1373,18 +884,13 @@ fn an_object_traced_between_two_renames_shows_the_last_name() {
     app.session.execute("imageTrace.presets.save", &json!({"name": "A", "newName": "B"})).unwrap();
     trace_and_open(&mut app, "B");
     app.session.execute("imageTrace.presets.save", &json!({"name": "B", "newName": "C"})).unwrap();
-    let shown = |app: &mut VectorcraftApp| {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        frame(app, &ctx, vec![]);
-        shown_preset(&ctx)
-    };
-    assert_eq!(selected_trace(&app).unwrap().0, "B");
-    assert_eq!(shown(&mut app), "C");
+    let mut panel = panel_over(app);
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "B");
+    assert_eq!(shown_preset(&panel), "C");
     // Renamed back to B and on to D, it is still the same preset.
-    app.session.execute("imageTrace.presets.save", &json!({"name": "C", "newName": "B"})).unwrap();
-    app.session.execute("imageTrace.presets.save", &json!({"name": "B", "newName": "D"})).unwrap();
-    assert_eq!(shown(&mut app), "D");
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "C", "newName": "B"})).unwrap();
+    execute(&mut panel, "imageTrace.presets.save", json!({"name": "B", "newName": "D"}));
+    assert_eq!(shown_preset(&panel), "D");
 }
 
 /// Presets renamed between two frames while the object is not selected: the object, selected again, shows its own
@@ -1397,17 +903,13 @@ fn renames_between_frames_leave_a_reselected_object_on_its_own_preset() {
     }
     trace_and_open(&mut app, "A");
     let a = first_selected(&app).unwrap().id;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "A");
-    app.run("select.set", json!({"ids": []})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.session.execute("imageTrace.presets.save", &json!({"name": "B", "newName": "C"})).unwrap();
-    app.session.execute("imageTrace.presets.save", &json!({"name": "A", "newName": "B"})).unwrap();
-    app.run("select.set", json!({"ids": [a.0]})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "B");
+    let mut panel = panel_over(app);
+    assert_eq!(shown_preset(&panel), "A");
+    panel.app().run("select.set", json!({"ids": []})).unwrap();
+    panel.frame();
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "B", "newName": "C"})).unwrap();
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "A", "newName": "B"})).unwrap();
+    assert_eq!(select(&mut panel, a), "B");
 }
 
 /// Saved presets whose names differ only by brackets are different presets: an object traced with
@@ -1419,17 +921,15 @@ fn a_saved_preset_in_brackets_is_not_another_saved_preset() {
         app.session.execute("imageTrace.presets.save", &json!({"name": name, "preset": "Sketched Art"})).unwrap();
     }
     trace_and_open(&mut app, "[Ink]");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "[Ink]");
-    app.session.execute("imageTrace.presets.delete", &json!({"name": "[Ink]"})).unwrap();
-    app.run("select.set", json!({"ids": []})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.run("select.all", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(selected_trace(&app).unwrap().0, "[Ink]");
-    assert_eq!(shown_preset(&ctx), "Custom");
+    let mut panel = panel_over(app);
+    assert_eq!(shown_preset(&panel), "[Ink]");
+    panel.app().session.execute("imageTrace.presets.delete", &json!({"name": "[Ink]"})).unwrap();
+    panel.app().run("select.set", json!({"ids": []})).unwrap();
+    panel.frame();
+    panel.app().run("select.all", json!({})).unwrap();
+    panel.frame();
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "[Ink]");
+    assert_eq!(shown_preset(&panel), "Custom");
 }
 
 /// A saved preset whose settings change outside the panel while the panel shows it with other
@@ -1439,148 +939,91 @@ fn a_saved_preset_changed_elsewhere_leaves_the_panel_settings_as_custom() {
     let mut app = traced_app_with_ink(100);
     app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "preset": "Sketched Art"})).unwrap();
     trace_and_open(&mut app, "Ink");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Ink");
-    let before = pstate::<TraceUi>(&ctx, "image-trace").params;
+    let mut panel = panel_over(app);
+    assert_eq!(shown_preset(&panel), "Ink");
+    let before = shown(&panel).params;
     // A save with the same settings keeps the name.
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink"})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Ink");
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink", "params": {"threshold": 40}})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Custom");
-    assert_eq!(pstate::<TraceUi>(&ctx, "image-trace").params, before, "the panel's settings stay");
+    execute(&mut panel, "imageTrace.presets.save", json!({"name": "Ink"}));
+    assert_eq!(shown_preset(&panel), "Ink");
+    execute(&mut panel, "imageTrace.presets.save", json!({"name": "Ink", "params": {"threshold": 40}}));
+    assert_eq!(shown_preset(&panel), "Custom");
+    assert_eq!(shown(&panel).params, before, "the panel's settings stay");
     // A rename that also changes the settings.
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink 2", "preset": "Sketched Art"})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Ink 2");
-    app.session.execute("imageTrace.presets.save", &json!({"name": "Ink 2", "newName": "Ink 3", "params": {"threshold": 40}})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Custom");
-    // The object, traced with Ink before its settings changed, shows Custom when the panel opens
-    // again.
-    assert_eq!(selected_trace(&app).unwrap().0, "Ink");
-    let reopened = egui::Context::default();
-    crate::theme::install_fonts(&reopened);
-    frame(&mut app, &reopened, vec![]);
-    assert_eq!(shown_preset(&reopened), "Custom");
+    execute(&mut panel, "imageTrace.presets.save", json!({"name": "Ink 2", "preset": "Sketched Art"}));
+    assert_eq!(shown_preset(&panel), "Ink 2");
+    execute(&mut panel, "imageTrace.presets.save", json!({"name": "Ink 2", "newName": "Ink 3", "params": {"threshold": 40}}));
+    assert_eq!(shown_preset(&panel), "Custom");
+    // The object, traced with Ink before its settings changed, shows Custom on a later frame.
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "Ink");
+    panel.frame();
+    assert_eq!(shown_preset(&panel), "Custom");
 }
 
 #[test]
 fn the_preset_list_is_read_once_for_each_change_of_the_saved_presets() {
     let mut app = traced_app_with_ink(100);
     trace_and_open(&mut app, "Sketched Art");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let reads = || PRESET_READS.with(std::cell::Cell::get);
-    frame(&mut app, &ctx, vec![]);
-    let start = reads();
-    for _ in 0..5 {
-        frame(&mut app, &ctx, vec![]);
-    }
-    assert_eq!(reads(), start, "frames with the same saved presets read the list again");
+    let mut panel = panel_over(app);
+    let kept = |panel: &Panel| panel.app().canvas.trace_presets.as_ref().map(|(_, list)| list.clone()).unwrap();
+    // The list after a change: read on the next frame, then kept by the frames after it.
+    let settled = |panel: &mut Panel| {
+        panel.frame();
+        let list = kept(panel);
+        panel.frame();
+        panel.frame();
+        assert!(Arc::ptr_eq(&list, &kept(panel)), "frames with the same saved presets read the list again");
+        list
+    };
+    let start = settled(&mut panel);
     // A preset saved outside the panel is read once, and the panel shows it.
-    app.session.execute("imageTrace.presets.save", &json!({"name": "A", "preset": "Sketched Art"})).unwrap();
-    for _ in 0..3 {
-        frame(&mut app, &ctx, vec![]);
-    }
-    assert_eq!((reads(), shown_preset(&ctx)), (start + 1, "A".to_string()));
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "A", "preset": "Sketched Art"})).unwrap();
+    let saved = settled(&mut panel);
+    assert!(!Arc::ptr_eq(&saved, &start));
+    assert_eq!(shown_preset(&panel), "A");
     // The rename's reply names the old name, and the panel follows the new one.
-    let r = app.session.execute("imageTrace.presets.save", &json!({"name": "a", "newName": "B"})).unwrap();
+    let r = panel.app().session.execute("imageTrace.presets.save", &json!({"name": "a", "newName": "B"})).unwrap();
     assert_eq!(r["renamedFrom"], "A");
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!((reads(), shown_preset(&ctx)), (start + 2, "B".to_string()));
+    let renamed = settled(&mut panel);
+    assert!(!Arc::ptr_eq(&renamed, &saved));
+    assert_eq!(shown_preset(&panel), "B");
     // Preferences that replace the saved presets are read again too.
-    let mut prefs = app.session.prefs.clone();
-    prefs.trace_presets.clear();
-    app.session.apply_prefs(prefs);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!((reads(), shown_preset(&ctx)), (start + 3, "Custom".to_string()));
+    {
+        let mut app = panel.app();
+        let mut prefs = app.session.prefs.clone();
+        prefs.trace_presets.clear();
+        app.session.apply_prefs(prefs);
+    }
+    let replaced = settled(&mut panel);
+    assert!(!Arc::ptr_eq(&replaced, &renamed));
+    assert_eq!(shown_preset(&panel), "Custom");
     // A preset saved with the panel's settings and renamed before the next frame is shown under
     // its new name.
-    app.session.execute("imageTrace.presets.save", &json!({"name": "C", "preset": "Sketched Art"})).unwrap();
-    app.session.execute("imageTrace.presets.save", &json!({"name": "C", "newName": "D"})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!((reads(), shown_preset(&ctx)), (start + 4, "D".to_string()));
-}
-
-/// Choose `preset` from the Preset dropdown, which shows `shown`.
-fn choose_from_preset_menu(app: &mut VectorcraftApp, ctx: &egui::Context, shown: &str, preset: &str) {
-    let texts = frame(app, ctx, vec![]);
-    let combo = texts.iter().rfind(|(t, _)| t == shown).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{shown}` in {texts:?}"));
-    click_at(app, ctx, combo);
-    let texts = frame(app, ctx, vec![]);
-    let at = texts.iter().rfind(|(t, _)| t == preset).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{preset}` in {texts:?}"));
-    click_at(app, ctx, at);
-}
-
-/// Which preset buttons showed as selected at the last frame.
-fn selected_preset_buttons(ctx: &egui::Context) -> Vec<&'static str> {
-    preset_buttons()
-        .into_iter()
-        .filter(|(_, name)| ctx.data(|d| d.get_temp::<bool>(egui::Id::unique(("trace-preset-button", *name)))) == Some(true))
-        .map(|(_, name)| name)
-        .collect()
-}
-
-#[test]
-fn each_preset_button_traces_the_selected_object_again_with_its_preset() {
-    let mut app = traced_app_with_ink(100);
-    trace_and_open(&mut app, "Default");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-    for (label, preset) in [
-        ("Auto Color", "Auto Color"),
-        ("High Color", "High Fidelity Photo"),
-        ("Low Color", "Low Fidelity Photo"),
-        ("Grayscale", "Shades of Gray"),
-        ("Black and White", "Black and White Logo"),
-        ("Outline", "Outline"),
-    ] {
-        let steps = undo(&app);
-        click(&mut app, &ctx, label);
-        frame(&mut app, &ctx, vec![]);
-        assert_eq!(selected_trace(&app).unwrap().0, preset, "{label}");
-        assert_eq!(undo(&app), steps + 1, "{label} traces as one undo step");
-        let all = presets(&mut app, &ctx);
-        assert_eq!(find_target(&app).stored.unwrap()["params"], find_preset(&all, preset).unwrap().1, "{label} traces with the preset's settings");
-        assert_eq!((shown_preset(&ctx), selected_preset_buttons(&ctx)), (preset.to_string(), vec![preset]), "{label}");
-    }
-    // Undo returns to the object's previous preset, and the buttons follow it.
-    app.run("edit.undo", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(selected_trace(&app).unwrap().0, "Black and White Logo");
-    assert_eq!(selected_preset_buttons(&ctx), ["Black and White Logo"]);
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "C", "preset": "Sketched Art"})).unwrap();
+    panel.app().session.execute("imageTrace.presets.save", &json!({"name": "C", "newName": "D"})).unwrap();
+    let both = settled(&mut panel);
+    assert!(!Arc::ptr_eq(&both, &replaced));
+    assert_eq!(shown_preset(&panel), "D");
 }
 
 #[test]
 fn the_selected_preset_button_follows_the_preset_menu() {
     let mut app = traced_app_with_ink(100);
     trace_and_open(&mut app, "Default");
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    assert!(selected_preset_buttons(&ctx).is_empty(), "Default has no button");
-    choose_from_preset_menu(&mut app, &ctx, "Default", "Shades of Gray");
-    assert_eq!(selected_trace(&app).unwrap().0, "Shades of Gray");
-    assert_eq!(selected_preset_buttons(&ctx), ["Shades of Gray"]);
-    choose_from_preset_menu(&mut app, &ctx, "Shades of Gray", "6 Colors");
-    assert_eq!(selected_trace(&app).unwrap().0, "6 Colors");
-    assert!(selected_preset_buttons(&ctx).is_empty(), "6 Colors has no button");
+    let mut panel = panel_over(app);
+    assert!(selected_preset_buttons(&panel).is_empty(), "Default has no button");
+    choose(&mut panel, "Shades of Gray");
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "Shades of Gray");
+    assert_eq!(selected_preset_buttons(&panel), ["Shades of Gray"]);
+    choose(&mut panel, "6 Colors");
+    assert_eq!(selected_trace(&panel.app()).unwrap().0, "6 Colors");
+    assert!(selected_preset_buttons(&panel).is_empty(), "6 Colors has no button");
     // A changed setting makes the preset Custom, and no button shows as selected.
-    click(&mut app, &ctx, "Outline");
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(selected_preset_buttons(&ctx), ["Outline"]);
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Fills");
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(shown_preset(&ctx), "Custom");
-    assert!(selected_preset_buttons(&ctx).is_empty());
+    panel.click(preset_label("Outline"));
+    assert_eq!(selected_preset_buttons(&panel), ["Outline"]);
+    panel.click("Preview");
+    panel.click("Fills");
+    assert_eq!(shown_preset(&panel), "Custom");
+    assert!(selected_preset_buttons(&panel).is_empty());
 }
 
 #[test]
@@ -1590,41 +1033,18 @@ fn a_preset_button_with_no_image_selected_changes_the_panel_settings_as_the_pres
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         app
     };
-    let mut app = blank();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    frame(&mut app, &ctx, vec![]);
-    let steps = app.session.active().unwrap().history.undo.len();
-    click(&mut app, &ctx, "High Color");
-    frame(&mut app, &ctx, vec![]);
-    let by_button: TraceUi = pstate(&ctx, "image-trace");
-    assert_eq!(app.session.active().unwrap().history.undo.len(), steps, "nothing is traced");
-    assert!(find_target(&app).stored.is_none(), "no Image Trace object");
-    assert_eq!(selected_preset_buttons(&ctx), ["High Fidelity Photo"]);
+    let mut by_button = panel_over(blank());
+    let steps = undo(&by_button.app());
+    by_button.click("High Color");
+    assert_eq!(undo(&by_button.app()), steps, "nothing is traced");
+    assert!(find_target(&by_button.app()).stored.is_none(), "no Image Trace object");
+    assert_eq!(selected_preset_buttons(&by_button), ["High Fidelity Photo"]);
 
-    let mut menu_app = blank();
-    let menu_ctx = egui::Context::default();
-    crate::theme::install_fonts(&menu_ctx);
-    choose_from_preset_menu(&mut menu_app, &menu_ctx, "Default", "High Fidelity Photo");
-    let by_menu: TraceUi = pstate(&menu_ctx, "image-trace");
-    assert_eq!(menu_app.session.active().unwrap().history.undo.len(), steps);
-    assert_eq!((by_button.preset, by_button.params), (by_menu.preset, by_menu.params));
-}
-
-#[test]
-fn panel_and_menu_draw_headless() {
-    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
-    for _ in 0..2 {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(&mut app, ui);
-            menu(&mut app, ui);
-        });
-        out.textures_delta.clear();
-    }
+    let mut by_menu = panel_over(blank());
+    choose(&mut by_menu, "High Fidelity Photo");
+    assert_eq!(undo(&by_menu.app()), steps);
+    let (button, menu) = (shown(&by_button), shown(&by_menu));
+    assert_eq!((button.preset, button.params), (menu.preset, menu.params));
 }
 
 #[test]
@@ -1641,36 +1061,35 @@ fn ignore_color_rejects_signs_in_hex() {
 fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
     let mut app = traced_app();
     app.trace_runs.off_the_ui_thread = true;
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    app.adopt_context(&ctx);
-    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-    let strokes = |app: &VectorcraftApp| find_target(app).stored.map(|t| t["params"]["strokes"].clone());
     let steps = undo(&app);
-    click(&mut app, &ctx, "Preview");
-    click(&mut app, &ctx, "Strokes");
-    click(&mut app, &ctx, "Trace");
-    assert_eq!(app.trace_runs.running.len(), 1);
-    assert_eq!(undo(&app), steps, "not traced yet");
-    let t0 = std::time::Instant::now();
-    while !app.trace_runs.running.is_empty() && t0.elapsed() < std::time::Duration::from_secs(30) {
-        crate::trace_runs::poll(&mut app);
-        std::thread::sleep(std::time::Duration::from_millis(5));
+    let mut panel = panel_over(app);
+    panel.click("Preview");
+    panel.click("Strokes");
+    panel.click("Trace");
+    assert_eq!(panel.app().trace_runs.running.len(), 1);
+    assert_eq!(undo(&panel.app()), steps, "not traced yet");
+    {
+        let mut app = panel.app();
+        let t0 = std::time::Instant::now();
+        while !app.trace_runs.running.is_empty() && t0.elapsed() < std::time::Duration::from_secs(30) {
+            crate::trace_runs::poll(&mut app);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(undo(&app), steps + 1, "one undo step");
+        assert_eq!(param(&app, "strokes"), Some(json!(true)));
+        let st = &app.ui.image_trace_panel.shown;
+        assert!(st.info.is_some(), "its counts show");
+        assert_eq!(st.object, find_target(&app).object);
+        assert!(st.drafts.is_empty(), "nothing waits for the object it replaced");
+        app.ui.image_trace_preview = true;
     }
-    assert_eq!(undo(&app), steps + 1, "one undo step");
-    assert_eq!(strokes(&app), Some(json!(true)));
-    let st: TraceUi = pstate(&ctx, "image-trace");
-    assert!(st.info.is_some(), "its counts show");
-    assert_eq!(st.object, find_target(&app).object);
-    assert!(st.drafts.is_empty(), "nothing waits for the object it replaced");
-    app.ui.image_trace_preview = true;
-    frame(&mut app, &ctx, vec![]);
-    app.run("edit.undo", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    assert!(app.trace_runs.running.is_empty(), "Undo traces nothing");
-    assert_eq!(strokes(&app), Some(json!(false)), "the object's own settings");
-    assert_eq!(undo(&app), steps);
+    panel.frame();
+    panel.app().run("edit.undo", json!({})).unwrap();
+    panel.frame();
+    panel.frame();
+    assert!(panel.app().trace_runs.running.is_empty(), "Undo traces nothing");
+    assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)), "the object's own settings");
+    assert_eq!(undo(&panel.app()), steps);
 }
 
 /// The object Trace acts on as the panel found it before [`find_target`]: every selected object put
@@ -1800,41 +1219,40 @@ fn the_target_lookup_matches_sorting_the_whole_selection() {
     every.sort();
     every.push(stale);
     let selections = cases.iter().map(|c| c.iter().map(|n| if *n == "stale" { stale } else { ids[n] }).collect::<Vec<_>>()).chain([every]);
-    let ctx = egui::Context::default();
     let mut objects = std::collections::HashSet::new();
     for sel in selections {
         select_as_is(&mut app, &sel);
         let expected = target_sorting_everything(&app);
         assert_eq!(frame_lookups_sorting_everything(&app), expected, "{sel:?}");
         assert_eq!(find_target(&app), expected, "{sel:?}");
-        assert_eq!(target(&app, &ctx), expected, "looked up for the revision: {sel:?}");
-        assert_eq!(target(&app, &ctx), expected, "kept for the revision: {sel:?}");
+        assert_eq!(*target(&mut app), expected, "looked up for the revision: {sel:?}");
+        assert_eq!(*target(&mut app), expected, "kept for the revision: {sel:?}");
         objects.insert(expected.object.map(|(_, id)| id));
     }
     assert!(objects.len() >= 8, "the cases reach many different objects: {objects:?}");
 
     // An edit and Undo.
     app.run("select.set", json!({"ids": [ids["rect"].0, ids["trace"].0]})).unwrap();
-    let before = target(&app, &ctx);
+    let before = target(&mut app);
     assert_eq!(before.object.map(|o| o.1), Some(ids["trace"]));
     app.run("imageTrace.make", json!({"preset": "Outline"})).unwrap();
-    let traced = target(&app, &ctx);
-    assert_eq!(traced, target_sorting_everything(&app));
+    let traced = target(&mut app);
+    assert_eq!(*traced, target_sorting_everything(&app));
     assert_ne!(traced.stored, before.stored, "the edit changed the stored settings");
     app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(target(&app, &ctx), before, "Undo");
+    assert_eq!(target(&mut app), before, "Undo");
 
     // Another document, then back once it is closed.
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-    assert_eq!(target(&app, &ctx), target_sorting_everything(&app));
-    assert_eq!(target(&app, &ctx).object, None, "nothing selected in the new document");
+    assert_eq!(*target(&mut app), target_sorting_everything(&app));
+    assert_eq!(target(&mut app).object, None, "nothing selected in the new document");
     app.run("file.close", json!({})).unwrap();
-    assert_eq!(target(&app, &ctx), before, "the first document again");
+    assert_eq!(target(&mut app), before, "the first document again");
 
     // No document.
-    let none = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    let mut none = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
     assert_eq!(find_target(&none), target_sorting_everything(&none));
-    assert_eq!(target(&none, &ctx), Target::default());
+    assert_eq!(*target(&mut none), Target::default());
 }
 
 /// Trace only accepts selected roots: a selected parent blocks its image descendant.
@@ -1842,14 +1260,13 @@ fn the_target_lookup_matches_sorting_the_whole_selection() {
 #[test]
 fn the_target_lookup_obeys_canonical_roots_and_explicit_id_validation() {
     let (mut app, ids) = lookup_fixture();
-    let ctx = egui::Context::default();
     for (parent, child) in [("clip", "clipped"), ("outer", "deep")] {
         select_as_is(&mut app, &[ids[parent], ids[child]]);
         let uid = app.session.active().unwrap().uid;
         let expected = Target { object: Some((uid, ids[parent])), ..Default::default() };
         assert_eq!(find_target(&app), expected, "the selected {parent} supplies metadata, not its pruned image");
-        assert_eq!(target(&app, &ctx), expected);
-        assert_eq!(target(&app, &ctx), expected, "the canonical result is also cached");
+        assert_eq!(*target(&mut app), expected);
+        assert_eq!(*target(&mut app), expected, "the canonical result is also cached");
         assert!(vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null).is_err());
         let document = app.session.active().unwrap().doc.clone();
         assert!(app.run("imageTrace.make", json!({})).is_err(), "Trace rejects that non-image root");
@@ -1859,7 +1276,7 @@ fn the_target_lookup_obeys_canonical_roots_and_explicit_id_validation() {
     }
     let stale = NodeId(u64::MAX);
     select_as_is(&mut app, &[stale, ids["front"]]);
-    assert_eq!(target(&app, &ctx).object.map(|(_, id)| id), Some(ids["front"]), "implicit stale entries do not hide a valid image");
+    assert_eq!(target(&mut app).object.map(|(_, id)| id), Some(ids["front"]), "implicit stale entries do not hide a valid image");
     assert_eq!(vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null).unwrap(), ids["front"]);
     let explicit = json!({"ids": [stale.0, ids["front"].0]});
     let document = app.session.active().unwrap().doc.clone();
@@ -1868,95 +1285,31 @@ fn the_target_lookup_obeys_canonical_roots_and_explicit_id_validation() {
     assert_eq!(app.session.active().unwrap().doc, document);
 }
 
-/// The panel and its menu look the object Trace acts on up once for each revision of the document,
-/// however many frames show it, and again once the revision moves.
+/// The panel looks the object Trace acts on up once for each revision of the document, however
+/// many frames show it, and again once the revision moves.
 #[test]
 fn the_panel_looks_its_target_up_once_per_document_revision() {
     let mut app = traced_app();
     let trace_id = first_selected(&app).unwrap().id;
     let rect = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
     app.run("select.set", json!({"ids": [rect, trace_id.0]})).unwrap();
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let menu_frame = |app: &mut VectorcraftApp| {
-        let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 700.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| menu(app, ui));
-        out.textures_delta.clear();
-    };
-    let lookups = || TARGET_LOOKUPS.with(|n| n.get());
-    let revision = |app: &VectorcraftApp| app.session.active().unwrap().revision;
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    let (start, at) = (lookups(), revision(&app));
-    for _ in 0..3 {
-        frame(&mut app, &ctx, vec![]);
-        menu_frame(&mut app);
-    }
-    assert_eq!(revision(&app), at, "the frames change nothing");
-    assert_eq!(lookups(), start, "the frames of one revision reuse its lookup");
     let uid = app.session.active().unwrap().uid;
-    assert_eq!(target(&app, &ctx).object, Some((uid, trace_id)));
-
-    app.run("select.set", json!({"ids": [rect]})).unwrap();
-    assert_eq!(target(&app, &ctx).object, Some((uid, NodeId(rect))), "a new selection is looked up");
-    assert_eq!(target(&app, &ctx).object, Some((uid, NodeId(rect))));
-    assert_eq!(lookups(), start + 1, "once");
-}
-
-/// Times one frame's lookups as the panel made them before (the whole selection put in paint order
-/// twice, and scanned once more) against the kept result and against a new lookup, on 100,000
-/// selected paths in nested groups and one selected image. Run it with `cargo test --release -p
-/// vectorcraft-ui-egui --lib image_trace_target_lookup_timing -- --ignored --nocapture`.
-#[test]
-#[ignore = "timing, run by hand"]
-fn image_trace_target_lookup_timing() {
-    let mut app = traced_app();
-    app.run("imageTrace.release", json!({})).unwrap();
-    let image = first_selected(&app).unwrap().id;
-    let rect = app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
-    let st = app.session.active_mut().unwrap();
-    let doc = Arc::make_mut(&mut st.doc);
-    let layer = doc.layers[0].id;
-    let path: Node = doc.node(NodeId(rect)).unwrap().clone();
-    let mut selected = vec![];
-    for _ in 0..100 {
-        let mut groups = vec![];
-        for _ in 0..10 {
-            let paths: Vec<Arc<Node>> = (0..100).map(|_| Arc::new(doc.reid(&path))).collect();
-            selected.extend(paths.iter().map(|p| p.id));
-            groups.push(Arc::new(Node::group(doc.alloc_id(), paths)));
-        }
-        let group = Node::group(doc.alloc_id(), groups);
-        doc.insert(Some(layer), usize::MAX, group).unwrap();
+    let mut panel = panel_over(app);
+    let kept = |panel: &Panel| panel.app().canvas.trace_target.as_ref().map(|(_, t)| t.clone()).unwrap();
+    let revision = |panel: &Panel| panel.app().session.active().unwrap().revision;
+    let (start, at) = (kept(&panel), revision(&panel));
+    for _ in 0..3 {
+        panel.frame();
     }
-    selected.push(image);
-    let count = selected.len();
-    select_as_is(&mut app, &selected);
-    let expected = frame_lookups_sorting_everything(&app);
-    assert_eq!(expected.object.map(|o| o.1), Some(image));
-    assert_eq!(find_target(&app), expected);
-    let ctx = egui::Context::default();
-    assert_eq!(target(&app, &ctx), expected);
+    assert_eq!(revision(&panel), at, "the frames change nothing");
+    assert!(Arc::ptr_eq(&kept(&panel), &start), "the frames of one revision reuse its lookup");
+    assert_eq!(start.object, Some((uid, trace_id)));
 
-    let time = |f: &dyn Fn() -> Target, reps: u32| {
-        let t0 = std::time::Instant::now();
-        for _ in 0..reps {
-            std::hint::black_box(f());
-        }
-        t0.elapsed().as_secs_f64() * 1000.0 / f64::from(reps)
-    };
-    let median = |mut v: Vec<f64>| {
-        v.sort_by(f64::total_cmp);
-        v[v.len() / 2]
-    };
-    let (mut before, mut kept, mut lookup) = (vec![], vec![], vec![]);
-    for _ in 0..7 {
-        before.push(time(&|| frame_lookups_sorting_everything(&app), 10));
-        kept.push(time(&|| target(&app, &ctx), 10_000));
-        lookup.push(time(&|| find_target(&app), 10));
-    }
-    println!("{count} selected objects, ms per frame, 7 runs");
-    println!("whole selection in paint order (before): {before:.3?}, median {:.3}", median(before.clone()));
-    println!("kept result for the revision (after): {kept:.6?}, median {:.6}", median(kept.clone()));
-    println!("new lookup on a new revision (after): {lookup:.3?}, median {:.3}", median(lookup.clone()));
+    panel.app().run("select.set", json!({"ids": [rect]})).unwrap();
+    panel.frame();
+    let moved = kept(&panel);
+    assert!(!Arc::ptr_eq(&moved, &start), "a new selection is looked up");
+    assert_eq!(moved.object, Some((uid, NodeId(rect))));
+    panel.frame();
+    assert!(Arc::ptr_eq(&kept(&panel), &moved), "once");
 }

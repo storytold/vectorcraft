@@ -112,6 +112,26 @@ fn preflight_resolution_follows_placed_size_and_both_axes() {
     assert!(codes(&screen).is_empty(), "{screen}");
 }
 
+/// A distorted image's resolution is measured at its middle, as Image Info measures it.
+#[test]
+fn preflight_resolution_of_a_distorted_image_is_image_infos() {
+    let dir = Folder::new("preflight-resolution-distorted");
+    let path = dir.file("picture.png");
+    std::fs::write(&path, png(100, 100, [200, 50, 10])).unwrap();
+    let mut s = new();
+    let id = s.execute("file.place", &json!({ "path": path, "link": false, "at": [200, 200] })).unwrap()["ids"][0].clone();
+    s.execute("select.set", &json!({ "ids": [id] })).unwrap();
+    s.execute("object.setBounds", &json!({ "width": 24, "height": 24 })).unwrap();
+    assert!(codes(&s.execute("document.preflight", &json!({ "minPpi": 200 })).unwrap()).is_empty());
+    // The top stays 24 pt wide; the bottom is 120 pt wide.
+    s.execute("object.distort", &json!({ "corners": [[188, 188], [212, 188], [260, 212], [140, 212]] })).unwrap();
+    assert!(s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().is_distorted_image());
+    let info = s.execute("image.info", &json!({ "id": id })).unwrap();
+    let r = s.execute("document.preflight", &json!({ "minPpi": 200 })).unwrap();
+    let f = r["findings"].as_array().unwrap().iter().find(|f| f["code"] == "lowResolution").expect("a low resolution finding");
+    assert_eq!(f["effectivePpi"], info["ppi"], "{info}");
+}
+
 #[test]
 fn preflight_resolution_accepts_the_exact_threshold_but_rejects_a_real_shortfall() {
     let dir = Folder::new("preflight-resolution-boundary");

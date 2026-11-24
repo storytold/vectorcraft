@@ -629,16 +629,15 @@ fn perceptual() -> (Vec<Swatch>, Vec<SwatchGroup>) {
 
 /// Colour-wheel harmonies of a few base colours (the Color Guide's rules).
 fn harmony_sets() -> (Vec<Swatch>, Vec<SwatchGroup>) {
-    use crate::harmony::Harmony;
+    use crate::harmony::{self, Harmony};
     let bases = [("Coral", Color::from_hsb(8.0, 0.68, 0.94)), ("Teal", Color::from_hsb(176.0, 0.72, 0.62))];
     let rules = [Harmony::Complementary, Harmony::SplitComplementary, Harmony::Analogous, Harmony::Triad, Harmony::Tetrad, Harmony::Pentagram];
     let mut groups = vec![];
     for (bn, base) in bases {
         for rule in rules {
-            let name = format!("{} {bn}", rule.label());
+            let name = format!("{} {bn}", harmony::label(rule));
             // Rounded to 8 bits like the other libraries.
-            let swatches = rule
-                .apply(base)
+            let swatches = harmony::apply(rule, base)
                 .into_iter()
                 .enumerate()
                 .map(|(i, c)| {

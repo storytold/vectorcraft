@@ -1,66 +1,9 @@
 use super::context::context_items;
-use super::invoke::click_target;
 use super::labels::{display_label, dynamic_label, effect_item_label, item_shortcut, spelling_item_label, unlock_item_label};
 use super::slots::{recent_readable, recent_slot};
 use super::state::{shortcut_of, shown_state};
-use super::tree::menu_tree_named;
-use super::{Entry, Item, Serialize, Value, VectorcraftApp};
-
-/// A menu item as it shows now ([`entry`]).
-pub struct Row<'a> {
-    /// The command and its params; `None` for an item not implemented yet (always disabled).
-    pub command: Option<(&'static str, &'a Value)>,
-    /// The tree's own English label, which [`click_target`] reads.
-    pub source: &'static str,
-    /// The label in the UI language, as it reads now (Undo *Move*, Show/Hide…, a recent file).
-    pub label: std::borrow::Cow<'static, str>,
-    /// The shortcut as the registry writes it (`Cmd+Shift+Z`), the user's overrides applied.
-    pub shortcut: Option<&'static str>,
-    pub enabled: bool,
-    /// `Some` for an item that is on or off.
-    pub checked: Option<bool>,
-}
-
-impl Row<'_> {
-    /// What choosing it runs ([`click_target`]); `None` for an item not implemented yet.
-    pub fn target(&self) -> Option<(String, Value)> {
-        self.command.map(|(id, p)| click_target(self.source, id, p))
-    }
-}
-
-/// Item `it` as the menus show it now, or `None` while they leave it out ([`shown_state`]).
-pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
-    use crate::i18n::t;
-    Some(match it {
-        Item::Sep => Entry::Sep,
-        Item::Header(h) => Entry::Header(t(h)),
-        // A plug-in's submenu shows its name as it is, as its items do, and so does a subfolder of
-        // the Scripts folder.
-        Item::Sub(label, children) if super::labels::holds_plugin_commands(children) || crate::scripts_menu::is_folder(children) => {
-            Entry::Sub(label, children)
-        }
-        Item::Sub(label, children) => Entry::Sub(t(label), children),
-        Item::Todo(label, sc) => Entry::Item(Row {
-            command: None,
-            source: label,
-            label: t(label).into(),
-            shortcut: Some(*sc).filter(|s| !s.is_empty()),
-            enabled: false,
-            checked: None,
-        }),
-        Item::Cmd(label, id, p) => {
-            let (enabled, checked) = shown_state(app, id, p)?;
-            Entry::Item(Row {
-                command: Some((id, p)),
-                source: label,
-                label: shown_label(app, id, p, label).into(),
-                shortcut: item_shortcut(id, p),
-                enabled,
-                checked,
-            })
-        }
-    })
-}
+use super::tree::{Listed, menu_tree_named};
+use super::{Node, Serialize, TODO, Value, VectorcraftApp};
 
 /// The label of the menu item that runs `id` with `p` and reads `label` in English, as the menus
 /// draw it in the UI language: an effect's own name (Pathfinder › Add), an object's name, a
@@ -70,41 +13,6 @@ pub fn shown_label(app: &VectorcraftApp, id: &str, p: &Value, label: &str) -> St
         .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
         .or_else(|| spelling_item_label(id, p))
         .unwrap_or_else(|| display_label(app, id, label))
-}
-
-/// `Cmd+Shift+]` → `⇧⌘]` on macOS, `Ctrl+Shift+]` elsewhere.
-pub fn pretty_shortcut(s: &str) -> String {
-    if s.is_empty() {
-        return String::new();
-    }
-    if cfg!(target_os = "macos") {
-        let mut mods = String::new();
-        let parts: Vec<&str> = s.split('+').collect();
-        let (key, ms): (&str, &[&str]) = if s.ends_with("++") {
-            ("+", parts.get(..parts.len().saturating_sub(2)).unwrap_or_default())
-        } else {
-            parts.split_last().map_or(("", &[][..]), |(k, rest)| (*k, rest))
-        };
-        for m in ["Ctrl", "Alt", "Shift", "Cmd"] {
-            if ms.contains(&m) {
-                mods.push_str(match m {
-                    "Ctrl" => "⌃",
-                    "Alt" => "⌥",
-                    "Shift" => "⇧",
-                    _ => "⌘",
-                });
-            }
-        }
-        format!("{mods}{key}")
-    } else {
-        s.replace("Cmd", "Ctrl")
-    }
-}
-
-/// [`pretty_shortcut`] with the backtick key shown as the character it types on the layout in use
-/// (`"` on Turkish Q), as Edit › Keyboard Shortcuts shows it.
-pub fn shown_shortcut(s: &str) -> String {
-    pretty_shortcut(&crate::shortcut_editor::as_typed(s))
 }
 
 #[derive(Serialize)]
@@ -124,7 +32,7 @@ pub struct MenuEntry {
 /// Flattened menu for `ui.menu.list`.
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
-    for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english) {
+    for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english, &Listed::of(app)) {
         flatten(app, vec![title.to_string()], vec![crate::i18n::t(title).to_string()], &items, &mut out);
     }
     out
@@ -142,10 +50,10 @@ pub fn context_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct InsertableItem {
     /// The menu title and the submenus that hold the item, as the tree names them in English.
-    pub path: Vec<&'static str>,
+    pub path: Vec<String>,
     /// The item's label in the tree, in English.
-    pub label: &'static str,
-    pub command: &'static str,
+    pub label: String,
+    pub command: String,
     /// The item's params; `{}` for an item that has none.
     pub params: Value,
 }
@@ -229,19 +137,21 @@ pub fn insertable(title: &str, label: &str, id: &str, p: &Value) -> bool {
 }
 
 /// Every menu item that can be a step of an action ([`insertable`]), in menu order. An item that
-/// shows in two places is listed in both. `english_names` is as [`menu_tree_named`] takes it.
-pub fn insertable_items(english_names: bool) -> Vec<InsertableItem> {
-    fn walk(title: &'static str, path: &mut Vec<&'static str>, items: &[Item], out: &mut Vec<InsertableItem>) {
-        for it in items {
-            match it {
-                Item::Cmd(label, id, p) if insertable(title, label, id, p) => out.push(InsertableItem {
+/// shows in two places is listed in both. `english_names` and `listed` are as [`menu_tree_named`]
+/// takes them.
+pub fn insertable_items(english_names: bool, listed: &Listed) -> Vec<InsertableItem> {
+    fn walk(title: &'static str, path: &mut Vec<String>, nodes: &[Node], out: &mut Vec<InsertableItem>) {
+        for node in nodes {
+            match node {
+                Node::Item(it) if insertable(title, &it.label, &it.command.id, &it.command.params) => out.push(InsertableItem {
                     path: path.clone(),
-                    label,
-                    command: id,
-                    params: if p.is_null() { serde_json::json!({}) } else { p.clone() },
+                    label: it.label.clone(),
+                    command: it.command.id.clone(),
+                    params: if it.command.params.is_null() { serde_json::json!({}) } else { it.command.params.clone() },
                 }),
-                Item::Sub(label, children) => {
-                    path.push(label);
+                // A submenu with a role is a piece of the Mac application menu, not a menu of the tree.
+                Node::Submenu { label, children, role: None, .. } => {
+                    path.push(label.clone());
                     walk(title, path, children, out);
                     path.pop();
                 }
@@ -250,18 +160,28 @@ pub fn insertable_items(english_names: bool) -> Vec<InsertableItem> {
         }
     }
     let mut out = vec![];
-    for (title, items) in menu_tree_named(english_names) {
-        walk(title, &mut vec![title], &items, &mut out);
+    for (title, nodes) in menu_tree_named(english_names, listed) {
+        walk(title, &mut vec![title.to_string()], &nodes, &mut out);
     }
     out
 }
 
-pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
-    for it in items {
-        match it {
-            Item::Cmd(l, id, p) => {
+pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String>, nodes: &[Node], out: &mut Vec<MenuEntry>) {
+    for node in nodes {
+        match node {
+            Node::Item(it) if it.command.id == TODO => out.push(MenuEntry {
+                path: path.clone(),
+                label: it.label.clone(),
+                command: None,
+                params: Value::Null,
+                enabled: false,
+                shortcut: String::new(),
+                shown_path: shown.clone(),
+            }),
+            Node::Item(it) => {
+                let (l, id, p) = (it.label.as_str(), it.command.id.as_str(), &it.command.params);
                 // A listed script or saved proof setup outside an automation read root is left out.
-                if matches!(*id, crate::scripts_menu::COMMAND | crate::dialogs::proof_setup::LOAD) && !crate::scripts_menu::readable(p) {
+                if matches!(id, crate::scripts_menu::COMMAND | crate::dialogs::proof_setup::LOAD) && !crate::scripts_menu::readable(p) {
                     continue;
                 }
                 // The other rows keep their ids: `file.openRecent3` still opens the third file.
@@ -277,27 +197,19 @@ pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String
                     command: Some(id.to_string()),
                     params: p.clone(),
                     enabled,
-                    shortcut: item_shortcut(id, p).or_else(|| shortcut_of(id)).unwrap_or("").to_string(),
+                    shortcut: item_shortcut(app, id, p).or_else(|| shortcut_of(app, id)).map(|c| c.to_string()).unwrap_or_default(),
                     shown_path: shown.clone(),
                 })
             }
-            Item::Todo(l, sc) => out.push(MenuEntry {
-                path: path.clone(),
-                label: l.to_string(),
-                command: None,
-                params: Value::Null,
-                enabled: false,
-                shortcut: sc.to_string(),
-                shown_path: shown.clone(),
-            }),
-            Item::Sub(l, ch) => {
+            // A submenu with a role is a piece of the Mac application menu, not a menu of the tree.
+            Node::Submenu { label, children, role: None, .. } => {
                 let mut p = path.clone();
-                p.push(l.to_string());
-                // The menus draw a plug-in's submenu and a Scripts folder by their own names ([`entry`]).
+                p.push(label.clone());
+                // The menus draw a plug-in's submenu and a Scripts folder by their own names.
                 let mut s = shown.clone();
-                let own = super::labels::holds_plugin_commands(ch) || crate::scripts_menu::is_folder(ch);
-                s.push(if own { l.to_string() } else { crate::i18n::t(l).to_string() });
-                flatten(app, p, s, ch, out);
+                let own = super::labels::holds_plugin_commands(children) || crate::scripts_menu::is_folder(children);
+                s.push(if own { label.clone() } else { crate::i18n::tr(crate::i18n::current(), label).to_string() });
+                flatten(app, p, s, children, out);
             }
             _ => {}
         }
