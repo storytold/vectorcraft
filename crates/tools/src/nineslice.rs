@@ -105,7 +105,7 @@ mod tests {
     use super::*;
     use crate::select::SelectionTool;
     use crate::testutil::*;
-    use crate::{Cursor, Mods, PointerKind, Tool, ToolKey};
+    use crate::{PointerKind, Tool};
     use vectorcraft_doc::{Appearance, Document, Node, Selection, Symbol, SymbolEdit, SymbolNineSlice};
     use vectorcraft_geom::{Affine, Rect, shapes};
 
@@ -172,44 +172,45 @@ mod tests {
         assert!(!over_guide(&cx(&out, &s, &p), Point::new(125.0, 150.0)));
     }
 
-    /// With the Selection tool, a press on a guide over the art takes the guide, not the art: the
-    /// pointer shows the Move cursor, the drag previews that guide alone, and the release commits
-    /// it as one step. A click without a drag sends nothing.
+    /// A press on a guide, as the canvas control gives it.
+    fn press(c: &ToolContext, x: f64, y: f64) -> GuideDrag {
+        GuideDrag::hit(c, &ev(PointerKind::Down, x, y)).expect("a guide within reach")
+    }
+
+    /// A press on a guide over the art takes the guide, not the art between the guides: the drag
+    /// previews that guide alone, and the release commits it as one step. A click without a drag
+    /// sends nothing.
     #[test]
     fn dragging_a_guide_moves_that_guide_in_one_step() {
         let d = editing(Some(SymbolNineSlice::default()));
         let (s, p) = (Selection::default(), paint());
         let c = cx(&d, &s, &p);
-        let mut t = SelectionTool::default();
-        assert_eq!(t.cursor(&c, Point::new(126.0, 150.0), Mods::default()), Cursor::Move);
-        assert_ne!(t.cursor(&c, Point::new(150.0, 150.0), Mods::default()), Cursor::Move, "the art between the guides");
-        assert!(t.pointer(&c, &ev(PointerKind::Down, 126.0, 150.0)).is_empty(), "the art is not selected");
-        assert!(t.busy());
-        assert_eq!(t.cursor(&c, Point::new(300.0, 300.0), Mods::default()), Cursor::Move, "kept during the drag");
-        let a = t.pointer(&c, &ev(PointerKind::Drag, 110.0, 400.0));
+        assert!(GuideDrag::hit(&c, &ev(PointerKind::Down, 150.0, 150.0)).is_none(), "the art between the guides");
+        let mut g = press(&c, 126.0, 150.0);
+        assert!(!g.adjusting());
+        let a = g.drag(&c, Point::new(110.0, 400.0));
+        assert!(g.adjusting());
         assert_eq!(a[0], Action::Begin("Symbol Options".into()));
         let (cmd, v) = preview(&a[1]);
         assert_eq!(cmd, "symbol.options");
         assert_eq!(v, json!({ "name": "S", "nineSliceGuides": [0.1, 0.25, 0.25, 0.25] }));
-        // Past the opposite guide it stops short of it; modifiers change nothing.
-        let shifted = PointerEvent { mods: Mods { shift: true, alt: true, ..Mods::default() }, ..ev(PointerKind::Drag, 190.0, 150.0) };
-        let (_, v) = preview(&t.pointer(&c, &shifted)[0]);
+        // Past the opposite guide it stops short of it.
+        let (_, v) = preview(&g.drag(&c, Point::new(190.0, 150.0))[0]);
         let left = v["nineSliceGuides"][0].as_f64().unwrap();
         assert!((left - (0.75 - vectorcraft_doc::MIN_CENTER_BAND)).abs() < 1e-12, "{v}");
-        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 190.0, 150.0)), vec![Action::Commit]);
-        assert!(!t.busy());
+        assert_eq!(g.finish(), vec![Action::Commit]);
         // A click on a guide without moving.
-        assert!(t.pointer(&c, &ev(PointerKind::Down, 175.0, 150.0)).is_empty());
-        assert!(t.pointer(&c, &ev(PointerKind::Drag, 176.0, 150.0)).is_empty());
-        assert!(t.pointer(&c, &ev(PointerKind::Up, 176.0, 150.0)).is_empty());
+        let mut g = press(&c, 175.0, 150.0);
+        assert!(g.drag(&c, Point::new(176.0, 150.0)).is_empty());
+        assert!(g.finish().is_empty());
         // The top guide moves up and down only.
-        t.pointer(&c, &ev(PointerKind::Down, 150.0, 125.0));
-        let a = t.pointer(&c, &ev(PointerKind::Drag, 10.0, 140.0));
+        let mut g = press(&c, 150.0, 125.0);
+        let a = g.drag(&c, Point::new(10.0, 140.0));
         assert_eq!(preview(&a[1]).1["nineSliceGuides"], json!([0.25, 0.4, 0.25, 0.25]));
     }
 
     /// A guide outside the art is taken beside the art, along its height, and a drag may take a
-    /// guide past the art's edge and back; Escape puts it back where it was.
+    /// guide past the art's edge and back; a cancel puts it back where it was.
     #[test]
     fn a_guide_outside_the_art_is_taken_and_dragged_past_the_arts_edge() {
         let d = editing(SymbolNineSlice::new(-0.25, 0.25, 0.25, 0.25));
@@ -219,55 +220,37 @@ mod tests {
         assert_eq!(at(75.0, 150.0), Some(NineSliceGuide::Left), "25 % left of the art at x = 100");
         assert_eq!(at(77.0, 110.0), Some(NineSliceGuide::Left));
         assert_eq!(at(75.0, 95.0), None, "the guide ends with the art's height");
-        let mut t = SelectionTool::default();
-        assert_eq!(t.cursor(&c, Point::new(75.0, 150.0), Mods::default()), Cursor::Move);
-        t.pointer(&c, &ev(PointerKind::Down, 75.0, 150.0));
-        let a = t.pointer(&c, &ev(PointerKind::Drag, 50.0, 150.0));
+        let mut g = press(&c, 75.0, 150.0);
+        let a = g.drag(&c, Point::new(50.0, 150.0));
         assert_eq!(a[0], Action::Begin("Symbol Options".into()));
         assert_eq!(preview(&a[1]).1["nineSliceGuides"], json!([-0.5, 0.25, 0.25, 0.25]));
-        let (_, v) = preview(&t.pointer(&c, &ev(PointerKind::Drag, 110.0, 150.0))[0]);
+        let (_, v) = preview(&g.drag(&c, Point::new(110.0, 150.0))[0]);
         assert_eq!(v["nineSliceGuides"], json!([0.1, 0.25, 0.25, 0.25]), "back inside the art");
-        assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+        assert_eq!(g.cancel(), vec![Action::Cancel]);
         // From inside the art, the default bottom guide passes the art's bottom edge at y = 200.
         let d = editing(Some(SymbolNineSlice::default()));
         let c = cx(&d, &s, &p);
-        let mut t = SelectionTool::default();
-        t.pointer(&c, &ev(PointerKind::Down, 150.0, 175.0));
-        let a = t.pointer(&c, &ev(PointerKind::Drag, 150.0, 250.0));
+        let mut g = press(&c, 150.0, 175.0);
+        let a = g.drag(&c, Point::new(150.0, 250.0));
         assert_eq!(preview(&a[1]).1["nineSliceGuides"], json!([0.25, 0.25, 0.25, -0.5]));
-        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, 150.0, 250.0)), vec![Action::Commit]);
+        assert_eq!(g.finish(), vec![Action::Commit]);
     }
 
-    /// A guide drag reads where it is released, and a tool switch cancels it.
-    #[test]
-    fn a_guide_drag_reads_its_release_and_a_tool_switch_cancels_it() {
-        let d = editing(Some(SymbolNineSlice::default()));
-        let (s, p) = (Selection::default(), paint());
-        let c = cx(&d, &s, &p);
-        check_widget_release_and_tool_switch(&c, Point::new(126.0, 150.0), Point::new(115.0, 150.0), Point::new(105.0, 150.0));
-    }
-
-    /// Escape during a guide drag cancels it and is the tool's; the release after it commits
-    /// nothing. A double-click on a guide neither edits the art nor leaves the mode.
+    /// A cancel during a guide drag gives one Cancel; after a click that did not move it cancels
+    /// nothing. A double-click on a guide lands on the guide, which the canvas control takes
+    /// before the tool; away from the guides a double-click outside the art still leaves
+    /// isolation.
     #[test]
     fn escape_cancels_a_guide_drag_and_a_double_click_stays_on_the_guide() {
         let d = editing(Some(SymbolNineSlice::default()));
         let (s, p) = (Selection::default(), paint());
         let c = ToolContext { isolation: d.symbol_edit.as_ref().map(|e| e.layer), ..cx(&d, &s, &p) };
+        let mut g = press(&c, 175.0, 150.0);
+        assert_eq!(g.drag(&c, Point::new(160.0, 150.0))[0], Action::Begin("Symbol Options".into()));
+        assert_eq!(g.cancel(), vec![Action::Cancel]);
+        assert!(press(&c, 175.0, 150.0).cancel().is_empty(), "a click that did not move");
+        assert!(over_guide(&c, Point::new(175.0, 150.0)));
         let mut t = SelectionTool::default();
-        t.pointer(&c, &ev(PointerKind::Down, 175.0, 150.0));
-        assert_eq!(t.pointer(&c, &ev(PointerKind::Drag, 160.0, 150.0))[0], Action::Begin("Symbol Options".into()));
-        assert!(t.claims_key(&c, ToolKey::Escape));
-        assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
-        assert!(!t.busy() && !t.claims_key(&c, ToolKey::Escape));
-        assert!(t.pointer(&c, &ev(PointerKind::Up, 160.0, 150.0)).is_empty());
-        // Escape after a click that did not move cancels nothing.
-        t.pointer(&c, &ev(PointerKind::Down, 175.0, 150.0));
-        assert!(t.key(&c, ToolKey::Escape, Mods::default()).is_empty());
-        for k in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
-            assert!(t.pointer(&c, &ev(k, 175.0, 150.0)).is_empty(), "{k:?}");
-        }
-        // Away from the guides a double-click outside the art still leaves isolation.
         assert_eq!(t.pointer(&c, &ev(PointerKind::DoubleClick, 400.0, 400.0)), vec![Action::Exec("object.exitIsolation".into(), json!({}))]);
     }
 }
