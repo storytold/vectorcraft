@@ -161,6 +161,36 @@ fn numbered_labels_translate_the_name_before_the_number() {
 }
 
 #[test]
+fn arabic_resolves_locales_and_preferences() {
+    let ar = Lang::from_code("ar").expect("ar registered");
+    assert_eq!(ar.name(), "العربية");
+    assert!(ar.complete_menus());
+    assert_eq!(Lang::from_pref("ar"), ar);
+    for tag in ["ar", "AR", "ar-SA", "ar_EG", "ar_EG.UTF-8", "ar-AE", "ar-MA"] {
+        assert_eq!(i18n().match_tag(tag), Some(ar), "{tag}");
+    }
+    for (en, want) in [
+        ("Artboards", "لوحات العمل"),
+        ("Swatches", "عينات الألوان"),
+        ("Stroke", "الحد"),
+        ("Direct Selection", "تحديد مباشر"),
+        ("Save As…", "حفظ باسم…"),
+        ("Undo", "تراجع"),
+    ] {
+        assert_eq!(tr(ar, en), want, "{en}");
+    }
+}
+
+#[test]
+fn arabic_plural_rule_has_six_forms() {
+    let ar = Lang::from_code("ar").expect("ar registered");
+    for (n, want) in [(0, "0 إيداع"), (1, "1 إيداع"), (2, "2 إيداعين"), (3, "3 إيداعات"), (11, "11 إيداعًا"), (100, "100 إيداع")]
+    {
+        assert_eq!(trn(ar, n, "{n} commit", "{n} commits"), want, "for n={n}");
+    }
+}
+
+#[test]
 fn current_language_is_a_frame_setting() {
     set_current(ZH());
     assert_eq!(current(), ZH());
@@ -711,8 +741,8 @@ fn message_dump_lists_the_reported_messages() {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 20] =
-    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
+const KEEPS_MENU_NAMES: [&str; 21] =
+    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca", "ar"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
