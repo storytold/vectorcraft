@@ -471,6 +471,11 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                             run = Some(("tool.setOption", json!({"tool": "smooth", "values": {"fidelity": x}})));
                         }
                     }
+                } else if icon_only(cmd) {
+                    // Convert to Corner and to Smooth show their icon alone, named by their label, as production's did.
+                    if IconButton::new(IconSpec::svg(IconId::new(icon))).label(*label).show(ui).clicked() {
+                        run = Some((*cmd, params.clone()));
+                    }
                 } else if Button::new(*label).variant(Variant::SECONDARY).icon(IconSpec::svg(IconId::new(icon))).show(ui).clicked() {
                     run = Some((*cmd, params.clone()));
                 }
@@ -732,6 +737,11 @@ const TASK_BAR_DUPLICATE_ARTBOARDS: &str = "taskBar.duplicateArtboards";
 
 /// The Contextual Task Bar's Rearrange All button with the Artboard tool.
 const TASK_BAR_REARRANGE_ARTBOARDS: &str = "taskBar.rearrangeArtboards";
+
+/// Whether the task bar shows the action `cmd` as its icon alone (its label names it and is its tooltip).
+fn icon_only(cmd: &str) -> bool {
+    matches!(cmd, TASK_BAR_TO_CORNER | TASK_BAR_TO_SMOOTH)
+}
 
 /// The Contextual Task Bar's Convert Selected Anchor Points to Corner button, for direct-selected
 /// anchors or a path selected whole with Direct Selection.
