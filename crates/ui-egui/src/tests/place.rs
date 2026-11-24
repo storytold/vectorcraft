@@ -676,11 +676,12 @@ fn the_control_bar_and_properties_trace_a_selected_image() {
     assert_eq!(selected_preset(&app).as_deref(), Some("Default"));
     // An Image Trace object: its preset (another traces it again), view, the panel and Expand.
     let bar = control_frame(&mut app, &ctx, vec![]);
-    for s in ["Image Tracing", "Preset:", "Default", "View:", "Tracing Result", "Expand"] {
+    // A field's colon is drawn as a text run of its own, after its label.
+    for s in ["Image Tracing", "Preset", "Default", "View", "Tracing Result", "Expand"] {
         assert!(has(&bar, s), "{s}");
     }
     let props = properties_frame(&mut app, 260.0);
-    assert!(has(&props, "Release") && has(&props, "View:"));
+    assert!(has(&props, "Release") && has(&props, "View"));
     // Another view redraws it without tracing again.
     let traced = app.session.active().unwrap().selection.objects.clone();
     click_control(&mut app, &ctx, at(&bar, "Tracing Result"));
