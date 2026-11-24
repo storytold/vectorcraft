@@ -11,7 +11,6 @@ use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::runtime::env::Label;
-use craft::ui::style::Variant;
 use vectorcraft_doc::NodeKind;
 use vectorcraft_doc::text::TextKind;
 use vectorcraft_geom::{Point, Rect};
@@ -470,7 +469,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                             run = Some(("tool.setOption", json!({"tool": "smooth", "values": {"fidelity": x}})));
                         }
                     }
-                } else if Button::new(*label).icon(IconSpec::svg(IconId::new(icon))).variant(Variant::GHOST).show(ui).clicked() {
+                } else if Button::new(*label).icon(IconSpec::svg(IconId::new(icon))).show(ui).clicked() {
                     run = Some((*cmd, params.clone()));
                 }
             }
