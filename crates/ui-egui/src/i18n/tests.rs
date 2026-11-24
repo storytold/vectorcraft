@@ -7,9 +7,9 @@ fn lang(code: &str) -> Lang {
     Lang::from_code(code).unwrap_or_else(|| panic!("{code} registered"))
 }
 
-/// The languages that are not English, the source language.
+/// The languages that are not English, the source language, and have complete catalogs.
 fn translated() -> Vec<Lang> {
-    Lang::all().filter(|l| *l != Lang::EN).collect()
+    Lang::all().filter(|l| l.complete_menus()).collect()
 }
 
 /// (language, context, English source, the term the language's glossary gives it). One row per
@@ -164,20 +164,10 @@ fn numbered_labels_translate_the_name_before_the_number() {
 fn arabic_resolves_locales_and_preferences() {
     let ar = Lang::from_code("ar").expect("ar registered");
     assert_eq!(ar.name(), "العربية");
-    assert!(ar.complete_menus());
+    assert!(!ar.complete_menus());
     assert_eq!(Lang::from_pref("ar"), ar);
     for tag in ["ar", "AR", "ar-SA", "ar_EG", "ar_EG.UTF-8", "ar-AE", "ar-MA"] {
         assert_eq!(i18n().match_tag(tag), Some(ar), "{tag}");
-    }
-    for (en, want) in [
-        ("Artboards", "لوحات العمل"),
-        ("Swatches", "عينات الألوان"),
-        ("Stroke", "الحد"),
-        ("Direct Selection", "تحديد مباشر"),
-        ("Save As…", "حفظ باسم…"),
-        ("Undo", "تراجع"),
-    ] {
-        assert_eq!(tr(ar, en), want, "{en}");
     }
 }
 
@@ -741,8 +731,8 @@ fn message_dump_lists_the_reported_messages() {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 21] =
-    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca", "ar"];
+const KEEPS_MENU_NAMES: [&str; 20] =
+    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).

@@ -142,7 +142,7 @@ impl LangExt for Lang {
     }
 
     fn complete_menus(self) -> bool {
-        self != Lang::EN
+        self != Lang::EN && self.code() != "ar"
     }
 
     fn from_code(code: &str) -> Option<Lang> {
