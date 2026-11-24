@@ -124,10 +124,12 @@ pub fn missing_fonts_of(st: &DocState, rules: Option<&findfiles::Rules>) -> Valu
         })
         .collect();
     let mut out = json!({ "count": fonts.len(), "fonts": fonts });
-    // File › Package puts the fonts in a `Fonts` folder next to the packaged document. The folder
-    // is made absolute against the working folder when the document's path is relative. It is
+    // File › Package puts the fonts in a `Fonts` folder next to the packaged document. A document
+    // with no file of its own (a `.ai` file another app wrote) looks beside the file it was read
+    // from. The folder is made absolute against the working folder when the path is relative. It is
     // offered when a search may start there, as far as the rules tell without listing a folder.
-    if let Some(dir) = st.path.as_deref().and_then(|p| Path::new(p).parent()).map(|d| d.join("Fonts")).filter(|d| d.is_dir()) {
+    let beside = st.path.as_deref().or(st.links_from.as_deref());
+    if let Some(dir) = beside.and_then(|p| Path::new(p).parent()).map(|d| d.join("Fonts")).filter(|d| d.is_dir()) {
         let dir = super::fileio::absolute_path(&dir.to_string_lossy());
         let system;
         let rules = match rules {

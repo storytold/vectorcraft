@@ -135,6 +135,22 @@ fn the_fonts_folder_next_to_a_document_in_another_apps_folder_isnt_offered() {
     }
 }
 
+/// A document read from a file of another app (a `.ai`) has no path of its own: the Fonts folder
+/// is looked for beside the file it was read from, as its links are.
+#[test]
+fn the_fonts_folder_next_to_the_file_a_document_was_read_from_is_offered() {
+    let (_dir, root) = folder("read-from");
+    std::fs::create_dir_all(root.join("pkg/Fonts")).unwrap();
+    let mut s = session_for(&root);
+    let mut doc = vectorcraft_doc::Document::new(100.0, 100.0);
+    doc.title = "doc".into();
+    s.add_document(doc, None);
+    s.doc_mut().unwrap().links_from = Some(root.join("pkg/art.ai").to_string_lossy().into_owned());
+    text(&mut s, 20.0, "No Such Font Family", "Regular");
+    let r = s.execute("text.missingFonts", &json!({})).unwrap();
+    assert_eq!(r["fontsNextToDocument"].as_str().map(std::fs::canonicalize).transpose().unwrap(), Some(root.join("pkg/Fonts")), "{r}");
+}
+
 /// A document opened by a relative path gives the Fonts folder next to it as an absolute path,
 /// which `text.findFontFiles` takes.
 #[cfg(unix)]
