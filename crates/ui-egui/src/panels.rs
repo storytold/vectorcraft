@@ -901,6 +901,12 @@ pub(crate) fn section<'a>(title: impl Into<Label>) -> Section<'a> {
     Section::fixed(title).strength(HeaderStrength::Normal)
 }
 
+/// A sub-heading over a group of a panel's controls ("Align Objects:", "Shape Modes:"): label text in the normal ink,
+/// with no rule, as the reference app drew them.
+pub(crate) fn subheading<'a>(title: impl Into<Label>) -> Section<'a> {
+    Section::fixed(title).strength(HeaderStrength::Subheading)
+}
+
 /// The empty state of a panel with nothing to show: `icon` over the title and the message,
 /// centred in the panel.
 pub(crate) fn empty_state(ui: &mut Ui, icon: &'static str, title: &str, body: &str) {
