@@ -894,6 +894,23 @@ pub(crate) fn opened_by_panel(app: &mut VectorcraftApp) {
     }
 }
 
+/// The key under which [`show`] marks a dialog that has just opened: its first field is to take the
+/// keyboard focus, until a field takes it.
+fn focus_pending_id() -> egui::Id {
+    egui::Id::unique("dialog-focus-pending")
+}
+
+/// Whether a dialog drawn by its own window (`DialogSpec::window`) has just opened and its field
+/// is to take the keyboard focus this frame: not in the frame of a click, as in [`show`].
+pub(crate) fn window_focus_pending(ctx: &egui::Context) -> bool {
+    !ctx.input(|i| i.pointer.any_click()) && ctx.data(|m| m.get_temp::<bool>(focus_pending_id())).unwrap_or(false)
+}
+
+/// The field of a dialog drawn by its own window has taken the keyboard focus.
+pub(crate) fn window_focus_taken(ctx: &egui::Context) {
+    ctx.data_mut(|m| m.remove::<bool>(focus_pending_id()));
+}
+
 /// Draws the active dialog and handles shared initial focus, keyboard shortcuts and actions.
 /// Inline actions and footer buttons use the same confirmation and preview rollback paths.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -904,7 +921,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     confirm::show_waiting(app);
     // The kind of dialog shown last frame: a different one (or none) means this one just opened, and
     // its first field is to take the keyboard focus (`focus_id`, until a field takes it).
-    let (shown_id, focus_id) = (egui::Id::unique("dialog-shown"), egui::Id::unique("dialog-focus-pending"));
+    let (shown_id, focus_id) = (egui::Id::unique("dialog-shown"), focus_pending_id());
     let Some(mut d) = app.ui.dialog.clone() else {
         revolve_gizmo::clear(ctx);
         app.ui.dialog_file = None;

@@ -1281,7 +1281,17 @@ fn rename_button_in_the_context_menu_renames_it() {
     let d = app.ui.dialog.clone().expect("the dialog opens");
     assert_eq!(d.kind, crate::custom_toolbars::RENAME);
     assert_eq!((d.str("toolbar"), d.str("command"), d.str("label")), ("Mine".into(), "object.group".into(), String::new()));
-    app.ui.dialog.as_mut().unwrap().fields.insert("label".into(), json!("Grp"));
+    // The Label field has the keyboard focus: typing right away goes into it.
+    let dialog_frame = |app: &mut VectorcraftApp, time: f64, events: Vec<Event>| {
+        let input = RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)), ..Default::default() };
+        ctx.run_ui(input, |ui| crate::dialogs::show(app, ui.ctx())).textures_delta.clear();
+    };
+    for k in 0..3 {
+        dialog_frame(&mut app, 3.0 + 0.1 * f64::from(k), vec![]);
+    }
+    assert_eq!(ctx.memory(|m| m.focused()), Some(crate::custom_toolbars::rename_label_id()), "the Label field has the focus");
+    dialog_frame(&mut app, 3.5, vec![Event::Text("Grp".into())]);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("label")).as_deref(), Some("Grp"), "typed into the Label field");
     crate::custom_toolbars::confirm_rename(&mut app).unwrap();
     assert!(app.ui.dialog.is_none(), "OK closes it");
     assert_eq!(mine_labels(&app).get("object.group").map(String::as_str), Some("Grp"));
@@ -1293,4 +1303,33 @@ fn rename_button_in_the_context_menu_renames_it() {
     assert!(app.ui.dialog.is_some(), "the dialog stays open");
     assert_eq!(mine_labels(&app).get("object.group").map(String::as_str), Some("Grp"), "unchanged");
     assert!(app.run("toolbar.renameCommand", json!({"command": "object.ungroup", "toolbar": "Mine"})).is_err(), "no such button");
+}
+
+/// Switching workspaces closes the Rename Button dialog, so OK cannot rename a button of the same
+/// name on a toolbar of the same name in the workspace switched to. Reset Workspace keeps the
+/// toolbars, and the dialog stays open. New Workspace closes it like a switch.
+#[test]
+fn switching_workspaces_closes_rename_button() {
+    let mut app = app();
+    app.run("window.toolbar.new", json!({"name": "Mine"})).unwrap();
+    app.run("toolbar.addCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    // Drawing starts with a copy of Mine, so both workspaces have Mine with a Group button.
+    app.run("window.workspace.new", json!({"name": "Drawing"})).unwrap();
+    app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("label".into(), json!("Grp"));
+    app.run("window.workspace.reset", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("label")).as_deref(), Some("Grp"), "Reset Workspace keeps the dialog open");
+    app.run("window.workspace", json!({"name": "Essentials"})).unwrap();
+    assert!(app.ui.dialog.is_none(), "the dialog closes");
+    assert!(crate::custom_toolbars::confirm_rename(&mut app).is_err());
+    assert!(mine_labels(&app).is_empty(), "Essentials' Mine keeps its command's label");
+    app.run("window.workspace", json!({"name": "Drawing"})).unwrap();
+    assert!(mine_labels(&app).is_empty(), "and so does Drawing's");
+    // New Workspace leaves the workspace as well, and its copy of Mine keeps its command's label.
+    app.run("toolbar.renameCommand", json!({"command": "object.group", "toolbar": "Mine"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("label".into(), json!("Grp"));
+    app.run("window.workspace.new", json!({"name": "Inking"})).unwrap();
+    assert!(app.ui.dialog.is_none(), "New Workspace closes the dialog");
+    assert!(crate::custom_toolbars::confirm_rename(&mut app).is_err());
+    assert!(mine_labels(&app).is_empty(), "Inking's Mine keeps its command's label");
 }

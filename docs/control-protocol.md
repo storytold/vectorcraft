@@ -492,7 +492,8 @@ no longer installed keeps its button, dimmed, and `toolbar.removeCommand` still 
 dialog; without `label` the command opens that dialog and returns null) gives a button a label of its own, and
 `toolbar.addCommand` takes the same optional `label`. The label loses the spaces at its ends and has at most 64
 characters; an empty one, on either command, gives the button its command's label again. The hover text still shows
-the command's name and shortcut, and a screen reader says the label and then the command's name. A longer label, a
+the command's name and shortcut, and a screen reader says the label and then the command's name, or only the label
+when it is the command's label or name. A longer label, a
 label that is not text or a button the toolbar does not have is an error and changes nothing. `toolbar.removeCommand`
 and `toolbar.reset` drop a button's label with it.
 `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with it.

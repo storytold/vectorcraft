@@ -3697,7 +3697,8 @@ own.
 `toolbar.renameCommand {command, toolbar, label?}` (Rename Button… in the button's context menu) gives a button a
 label of its own, and `toolbar.addCommand` takes the same optional `label`. Spaces at the ends of the label are
 dropped, and it has at most 64 characters; an empty label, on either command, gives the button its command's label
-again. Without `label`, `toolbar.renameCommand` opens the Rename Button dialog and answers null. Otherwise it answers
+again. Without `label`, or with a null one, `toolbar.renameCommand` opens the Rename Button dialog and answers null.
+The dialog's Label field takes the keyboard focus, and switching workspaces or New Workspace closes the dialog. Otherwise it answers
 `{command, label}`, with `label` null for the command's own, and `window.toolbar.list` reports `labels`
 ({command: label}) for each toolbar. The hover text still shows the command's name and shortcut, and a screen reader
 says the label and then the command's name, or only the label when it is the command's label or name. Control

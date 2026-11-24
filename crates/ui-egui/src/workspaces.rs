@@ -276,8 +276,19 @@ pub fn apply(ui: &mut UiState, w: &Workspace) {
     if ui.drawer_toolbar.take().is_some() {
         ui.tools_drawer = false;
     }
+    // Reset Workspace stays in the same workspace and keeps its toolbars, so Rename Button stays open.
+    if !ui.workspace.eq_ignore_ascii_case(&w.name) {
+        close_rename_button(ui);
+    }
     ui.flyout = None;
     ui.workspace = w.name.clone();
+}
+
+/// Closes the Rename Button dialog, which names a button on a toolbar of the workspace being left.
+fn close_rename_button(ui: &mut UiState) {
+    if ui.dialog.as_ref().is_some_and(|d| d.kind == crate::custom_toolbars::RENAME) {
+        ui.dialog = None;
+    }
 }
 
 /// Keep the layout of the current workspace as it is now, so switching back brings it back.
@@ -358,6 +369,7 @@ pub fn save_as(ui: &mut UiState, name: &str) -> Result<(), String> {
     // saved starts with a copy of.
     if !ui.workspace.eq_ignore_ascii_case(name) {
         keep_toolbars(ui);
+        close_rename_button(ui);
     }
     // A user workspace of that name in another case is replaced, as `find_saved` would find it.
     let w = capture(ui, name);

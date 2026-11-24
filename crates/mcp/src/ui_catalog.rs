@@ -629,7 +629,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "toolbar.renameCommand",
         "Toolbar: Rename Button",
         "",
-        "{command: id, toolbar: name, label?: text} give the button for `command` on the toolbar made with New Toolbar called `toolbar` the label `label` (spaces at its ends dropped, at most 64 characters; empty: the command's own label again), as Rename Button… in the button's context menu does; without `label`, opens the Rename Button dialog and returns null; the hover text still shows the command's name and shortcut, and a screen reader says the label and then the command's name; a button the toolbar does not have, or a label that is not text or is longer, is an error and changes nothing; kept with the workspace; returns {command, label} (`label` null for the command's own)",
+        "{command: id, toolbar: name, label?: text} give the button for `command` on the toolbar made with New Toolbar called `toolbar` the label `label` (spaces at its ends dropped, at most 64 characters; empty: the command's own label again), as Rename Button… in the button's context menu does; without `label` (or with null), opens the Rename Button dialog and returns null; the hover text still shows the command's name and shortcut, and a screen reader says the label and then the command's name, or only the label when it is the command's label or name; a button the toolbar does not have, or a label that is not text or is longer, is an error and changes nothing; kept with the workspace; returns {command, label} (`label` null for the command's own)",
     ),
     (
         "toolbar.reset",

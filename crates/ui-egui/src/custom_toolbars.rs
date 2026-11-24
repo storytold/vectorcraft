@@ -682,11 +682,18 @@ pub(crate) fn confirm_rename(app: &mut VectorcraftApp) -> Result<Value, String> 
     Ok(done)
 }
 
-/// The Rename Button dialog: the button's label, empty for its command's own, OK and Cancel.
+/// The Label field of the Rename Button dialog.
+pub(crate) fn rename_label_id() -> egui::Id {
+    egui::Id::unique("rename-toolbar-button-label")
+}
+
+/// The Rename Button dialog: the button's label, empty for its command's own, OK and Cancel. Just
+/// opened, its Label field takes the keyboard focus with its text selected.
 pub(crate) fn show_rename(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
     let (mut ok, mut cancel) = (false, false);
+    let focus = crate::dialogs::window_focus_pending(ctx);
     crate::dialogs::modal::show(ctx, "Rename Button", egui::Id::unique("dialog-rename-toolbar-button"), -40.0, 22, |ui| {
         ui.set_width(320.0);
         crate::dialogs::modal::heading(ui, tl!("Rename Button"));
@@ -694,9 +701,14 @@ pub(crate) fn show_rename(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(tl!("Label:")).color(t.text_dim));
             let mut label = d.str("label");
-            let field = ui.add(egui::TextEdit::singleline(&mut label).desired_width(220.0));
+            let field = ui.add(egui::TextEdit::singleline(&mut label).id(rename_label_id()).desired_width(220.0));
             if field.changed() {
                 d.fields.insert("label".into(), json!(label));
+            }
+            // A new window's first frame only measures it: the field takes the focus on the next.
+            if focus && !ui.is_sizing_pass() {
+                widgets::focus_field(ui, rename_label_id(), &label);
+                crate::dialogs::window_focus_taken(ctx);
             }
         });
         ui.add_space(6.0);
