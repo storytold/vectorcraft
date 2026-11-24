@@ -972,11 +972,11 @@ pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTa
 }
 
 /// The dialog of style `name` over `opening`, which `title` heads, kept open by a held OK.
-pub(crate) fn hosted(key: &str, title: &'static str, opening: &Arc<Opening>, name: &str) -> HostedPropertiesDialog {
+pub(crate) fn hosted(key: &'static str, title: &'static str, opening: &Arc<Opening>, name: &str) -> HostedPropertiesDialog {
     let rows_of = Arc::clone(opening);
     HostedPropertiesDialog::new(key, opening.fields(name), move |values| {
         let now = values.value().cloned().unwrap_or_else(DialogFields::new);
-        PropertiesDialog::new(title, tabs(&now, &rows_of), values).tab_layout(TabLayout::List)
+        PropertiesDialog::new(key, title, tabs(&now, &rows_of), values).tab_layout(TabLayout::List)
     })
     .held_ok()
 }
