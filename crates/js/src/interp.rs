@@ -740,6 +740,14 @@ impl Interp {
         self.heap.bytes = self.heap.bytes.saturating_sub(released).saturating_add(flattened);
     }
 
+    /// The heap's total with the released and flattened bytes taken into account, without a
+    /// collection.
+    #[cfg(test)]
+    pub(crate) fn settled_heap_bytes(&mut self) -> usize {
+        self.settle_held();
+        self.heap.bytes
+    }
+
     /// Collects garbage now and sets when the next collection runs.
     #[cfg(test)]
     pub(crate) fn collect_for_room(&mut self) {
@@ -2449,22 +2457,52 @@ impl Interp {
     }
 
     /// Whether reading the elements of `o` by index can run code: `o` or an object it inherits
-    /// from has an accessor property with a getter and an index name. Each object, and each
-    /// property inspected, takes a unit of fuel.
+    /// from has an accessor property with a getter and an index name, and no object before it
+    /// in the chain has an own property of that name, which an indexed read would find first.
+    /// Each object, each property inspected and each earlier object a getter is looked up in
+    /// takes a unit of fuel.
     fn has_index_getter(&mut self, o: ObjId) -> JsResult<bool> {
+        // The objects already scanned, whose own properties shadow a getter further along.
+        let mut before: Vec<ObjId> = Vec::new();
         let mut cur = Some(o);
         while let Some(id) = cur {
             // The scan stops where the fuel would run out.
             let budget = usize::try_from(self.fuel).unwrap_or(usize::MAX);
             let object = self.object(id)?;
-            let found =
-                object.props.iter().take(budget).position(|(k, p)| matches!(p, Prop::Accessor { get: Some(_), .. }) && array_index(k).is_some());
-            let inspected = found.map_or(object.props.len(), |i| i + 1);
+            let mut used = 0usize;
+            let mut found = false;
+            for (k, p) in object.props.iter() {
+                if used >= budget {
+                    break;
+                }
+                used = used.saturating_add(1);
+                if !matches!(p, Prop::Accessor { get: Some(_), .. }) || array_index(k).is_none() {
+                    continue;
+                }
+                let mut shadowed = false;
+                for &earlier in &before {
+                    // Where the fuel runs out the scan stops, and the charge below fails.
+                    if used >= budget {
+                        shadowed = true;
+                        break;
+                    }
+                    used = used.saturating_add(1);
+                    if self.get_own_property(earlier, k)?.is_some() {
+                        shadowed = true;
+                        break;
+                    }
+                }
+                if !shadowed {
+                    found = true;
+                    break;
+                }
+            }
             let proto = object.proto;
-            crate::regexp_vm::use_fuel_n(self, (inspected as u64).saturating_add(1))?;
-            if found.is_some() {
+            crate::regexp_vm::use_fuel_n(self, (used as u64).saturating_add(1))?;
+            if found {
                 return Ok(true);
             }
+            before.push(id);
             cur = proto;
         }
         Ok(false)
@@ -3279,6 +3317,10 @@ impl Interp {
             self.check_global_functions(code)?;
             self.check_global_vars(code)?;
         }
+        // The room for the names and the declarations is checked before any name is added, so a
+        // run that stops at the heap limit here adds no name to the global scope.
+        let names = lets.iter().fold(0usize, |total, (name, _)| total.saturating_add(binding_bytes(name.len())));
+        self.reserve_heap(names.saturating_add(declaration_bytes(code)))?;
         for (name, constant) in lets {
             let b = Binding::lexical(*constant);
             self.env_insert(lex, name.clone(), b)?;
@@ -3382,7 +3424,8 @@ impl Interp {
             None => env,
         };
         // The caller reserved room for the declarations before the `let` and `const` names took
-        // some of it. Their environment stays reachable if the check collects.
+        // some of it (a script's names in the global scope were checked with the declarations
+        // before they were added). Their environment stays reachable if the check collects.
         self.temp_envs.push(lex);
         let r = self.reserve_heap(declaration_bytes(code));
         self.temp_envs.pop();
