@@ -10,7 +10,6 @@ use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
 use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::NumberField;
 use egui::Ui;
 use serde::Serialize;
@@ -99,6 +98,24 @@ pub const ALIGN: [(&str, &str, &str, &str); 6] = [
     ("dc-al-vcenter", "Vertical Align Center", "vertical", "center"),
     ("dc-al-bottom", "Vertical Align Bottom", "vertical", "bottom"),
 ];
+
+/// The glyphs of [`ALIGN`]'s buttons, in its order, in the Control bar and the Properties panel: the reference app drew
+/// them there with Lucide's align glyphs, and only the Align panel with its own.
+const BAR_ALIGN: [&str; 6] = [
+    "align-start-vertical",
+    "align-center-vertical",
+    "align-end-vertical",
+    "align-start-horizontal",
+    "align-center-horizontal",
+    "align-end-horizontal",
+];
+
+/// The glyph of align button `b` in the Control bar and the Properties panel ([`BAR_ALIGN`]); `None` for the other
+/// buttons, which draw the panel's glyph there too.
+pub(crate) fn bar_glyph(b: Button) -> Option<&'static str> {
+    let Button::Align(axis, v) = b else { return None };
+    ALIGN.iter().position(|r| r.2 == axis && r.3 == v).map(|i| BAR_ALIGN[i])
+}
 
 pub const DISTRIBUTE: [(&str, &str, &str, &str); 6] = [
     ("dc-dist-top", "Vertical Distribute Top", "vertical", "top"),
@@ -289,7 +306,7 @@ fn bar_items(buttons: impl Iterator<Item = Button>) -> BarItems {
 pub(crate) fn align_buttons(_app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         for (icon, b) in align_icons() {
-            command_button(ui, icon, b);
+            command_button(ui, bar_glyph(b).unwrap_or(icon), b);
         }
     });
 }
@@ -479,14 +496,14 @@ pub(crate) fn run_align_to(app: &mut VectorcraftApp, v: AlignTo) -> Result<Value
 /// Spacing with its value and Align To. The buttons are commands, so their state and clicks come
 /// from the command layer ([`button_enabled`], [`run_button`]).
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    Section::fixed(tl!("Align Objects:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::section(tl!("Align Objects:")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
             for (icon, b) in align_icons() {
                 command_button(ui, icon, b);
             }
         });
     });
-    Section::fixed(tl!("Distribute Objects:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::section(tl!("Distribute Objects:")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
             for (icon, b) in distribute_icons() {
                 command_button(ui, icon, b);
@@ -504,7 +521,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let lengths = crate::canvas::general_lengths(app);
     let min_spacing = spacing_min(app);
     let mut edited = None;
-    Section::fixed(tl!("Distribute Spacing:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::section(tl!("Distribute Spacing:")).show(ui, |ui, _| {
         ui.horizontal(|ui| {
             command_button(ui, "dc-dist-vspace", Button::Spacing("vertical"));
             command_button(ui, "dc-dist-hspace", Button::Spacing("horizontal"));
@@ -519,7 +536,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(v) = edited {
         app.ui.align_spacing = v;
     }
-    Section::fixed(tl!("Align To:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::section(tl!("Align To:")).show(ui, |ui, _| {
         // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
         let anchor = key_is_anchor(app);
         ui.horizontal(|ui| {

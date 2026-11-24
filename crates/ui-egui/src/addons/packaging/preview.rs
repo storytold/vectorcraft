@@ -620,7 +620,7 @@ fn status(blanks: usize, folded: Option<(&Blank, &Folded)>, errors: bool) -> Vec
 /// Shows the Fold Preview window: the toolbar, the folded blank, the status lines and the sliders.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else {
-        crate::panels::empty_state(ui, "box", tl!("No document"), tl!("Open a document to preview its folded shape."));
+        crate::panels::empty_state(ui, "dc-cube", tl!("No document"), tl!("Open a document to preview its folded shape."));
         return;
     };
     let (uid, revision, doc) = (st.uid, st.revision, st.doc.clone());

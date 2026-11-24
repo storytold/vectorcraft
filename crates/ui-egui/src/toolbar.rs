@@ -14,18 +14,17 @@ use craft::behavior::overlay::Side;
 use craft::behavior::{EditEvent, IconId, Mixed};
 use craft::color_ui::ui::PaintChip;
 use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, TransformGroups, TransformRow, TransformSource};
-use craft::theme::{ControlSize, Size};
+use craft::theme::ControlSize;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, BodyCx, Entry, Gap, Props as _, Show as _, ShowContainer as _, ThemeScope, Tracked};
+use craft::ui::contract::{Bind, BodyCx, Entry, Gap, Props as _, Show as _, ShowContainer as _, Tracked};
 use craft::ui::display::Divider;
-use craft::ui::docking::{DockGrid, DockSizes, GroupAt};
+use craft::ui::docking::{DockGrid, GroupAt};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::{Anchor9, ReferencePointLook, Select};
 use craft::ui::rails::{LastUsed, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
 use craft::ui::runtime::commands::{self, CommandRef};
-use craft::ui::style::StyleCx;
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, Vec2};
 use serde_json::{Value, json};
@@ -254,28 +253,14 @@ fn strip_tools(app: &VectorcraftApp, parent: &Owner, first: &str) -> Vec<&'stati
     groups_of(app, parent).into_iter().find(|g| g.first().is_some_and(|f| *f == first)).unwrap_or_default()
 }
 
-/// The density the rail of `owner` draws at. The app's chrome is at the compact density: the Tools panel steps up to
-/// the comfortable one unless its own compact setting is on, as production's larger Tools cells did; named toolbars
-/// and strips keep the chrome's.
-fn rail_scope(app: &VectorcraftApp, owner: &Owner) -> ThemeScope {
-    match owner {
-        Owner::Tools => ThemeScope::new().density(if app.ui.toolbar_compact { Size::Compact } else { Size::Comfortable }),
-        _ => ThemeScope::new(),
-    }
-}
-
-/// The dock grid of the rail panel `owner`: a cell for each of its slots and its Edit Toolbar button, in the density
-/// its rail draws at, so the dock column's steps fit its buttons. Without `ctx` the dock resolves it in its own.
-pub(crate) fn dock_grid(app: &VectorcraftApp, owner: &Owner, ctx: Option<&egui::Context>) -> DockGrid {
+/// The dock grid of the rail panel `owner`: a cell for each of its slots and its Edit Toolbar button. Its rail draws at
+/// the chrome's density, so the dock resolves the grid's steps in its own.
+pub(crate) fn dock_grid(app: &VectorcraftApp, owner: &Owner) -> DockGrid {
     let cells = match owner {
         Owner::Strip(parent, first) => strip_tools(app, parent, first).len(),
         _ => groups_of(app, owner).len() + 1,
     };
-    let grid = DockGrid::rail(cells);
-    match ctx {
-        Some(ctx) => grid.resolved(&StyleCx::with_root_scoped(ctx, &rail_scope(app, owner), DockSizes::style)),
-        None => grid,
-    }
+    DockGrid::rail(cells)
 }
 
 /// The groups of several tools of the Tools panel's toolbar (`toolbar` none) or of the toolbar made
@@ -396,14 +381,13 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     let tools_panel = owner == Owner::Tools;
     let own_bar = !matches!(owner, Owner::Strip(..));
     let opens = opens(app, &owner);
-    let scope = rail_scope(app, &owner);
     // A Learn link's tool on this rail wears the mark; the pass that shows the rail scrolls its slot into view and opens
     // its flyout, once.
     let home = Home::Rail(&owner);
     let located = locate::wanted(&app.ui, &home);
     let holds = |tool: &str| model.slots.iter().any(|slot| slot.tools.iter().any(|t| t.id == tool));
     let reveal = matches!(at, GroupAt::Show(_)).then(|| locate::take_reveal(&mut app.ui, &home, holds)).flatten();
-    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).theme(scope).tips(&cards);
+    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).tips(&cards);
     if let Some(tool) = &located {
         rail = rail.mark(tool);
     }

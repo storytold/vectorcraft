@@ -27,7 +27,7 @@ use craft::ui::runtime::env::Label;
 use craft::ui::runtime::measure;
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::runtime::requests::{ColorRequest, HostAnswer};
-use craft::ui::sections::{GroupBox, Section};
+use craft::ui::sections::GroupBox;
 use craft::ui::style::TypeRole;
 use craft::ui::text::{NumberField, TextField};
 use egui::{Rect, Ui};
@@ -689,13 +689,13 @@ pub fn properties_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut next = o.clone();
     let mut edited = Edited::default();
     let e = &mut edited;
-    Section::fixed(tl!("Dimension")).show(ui, |ui, _| {
+    crate::panels::section(tl!("Dimension")).show(ui, |ui, _| {
         units_row(ui, &mut next, e);
         precision_row(ui, &mut next, e);
         line_row(ui, &mut next, e, Line::Dimension, false);
         arrow_style_row(ui, &mut next, e);
-        Section::fixed(tl!("Extension Lines")).show(ui, |ui, _| line_row(ui, &mut next, e, Line::Extension, false));
-        Section::fixed(tl!("Dimension Text")).show(ui, |ui, _| text_rows(ui, &mut next, e, false));
+        crate::panels::section(tl!("Extension Lines")).show(ui, |ui, _| line_row(ui, &mut next, e, Line::Extension, false));
+        crate::panels::section(tl!("Dimension Text")).show(ui, |ui, _| text_rows(ui, &mut next, e, false));
     });
     if edited.set {
         update(app, id, &next);

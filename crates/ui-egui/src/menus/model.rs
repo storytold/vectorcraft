@@ -11,7 +11,9 @@ use craft::menu::{Item, LayoutOptions, Menu, MenuBar, MenuRole, Node, Target, la
 use craft::tracked::Tracked;
 use craft::ui::list::ThumbAspect;
 use craft::ui::menu::Alternate;
-use craft::ui::runtime::commands::{AppCatalog, CommandGate, CommandInput, CommandState, CommandStates};
+use craft::ui::runtime::commands::{
+    AppCatalog, ChromeCommand, CommandGate, CommandInput, CommandSet as _, CommandState, CommandStates, EditCommands,
+};
 use craft::ui::runtime::windows::WindowHost;
 use serde_json::{Value, json};
 
@@ -243,11 +245,13 @@ fn rebuild(app: &mut VectorcraftApp, target: Target) {
     let options = LayoutOptions::new(APP_NAME).label(&translate_label);
     let laid = layout(&bar, target, &options).bar;
     let type_keys = crate::type_editing::app_keys(&defs, &app.shortcut_overrides);
+    let (defs, linked_keys) = without_linked(defs);
     match AppCatalog::new(defs, generation(&listed, &crate::panels::actions::function_keys(&app.ui.actions), &type_keys)) {
         Ok(catalog) => {
             // While a text field has the keys no shortcut runs, as in production; the text-editing chords still edit it,
             // and the Type tool's commands run while it types.
             let catalog = catalog.typing_rule(TypingRule::AllWait);
+            let catalog = linked_keys.into_iter().fold(catalog, |catalog, (id, keys)| catalog.replace_defaults(id, keys));
             let catalog = UNROUTED.iter().fold(catalog, |catalog, id| catalog.replace_defaults(id.as_str(), Vec::new()));
             app.menus.catalog = Some(type_keys.into_iter().fold(catalog, |catalog, (id, keys)| catalog.replace_defaults(id, keys)));
         }
@@ -304,6 +308,38 @@ fn catalog_defs(app: &VectorcraftApp, refs: &[(CommandRef, String, bool)], state
         }
     }
     defs
+}
+
+/// `defs` without the commands a linked framework set defines (Undo, Redo, Cut, Copy, Paste and Tab's panels toggles):
+/// the set's definition is the command's. With them, the keys each has beyond the set's, as the set's keys and those
+/// (Cut, Copy and Paste's F2, F3 and F4 outside macOS).
+fn without_linked(defs: Vec<CommandDef>) -> (Vec<CommandDef>, Vec<(String, Vec<Binding>)>) {
+    let mut own = Vec::with_capacity(defs.len());
+    let mut keys = Vec::new();
+    for def in defs {
+        let Some(mut set_keys) = linked_defaults(&def.command) else {
+            own.push(def);
+            continue;
+        };
+        let extra: Vec<Binding> = def.defaults.into_iter().filter(|key| !set_keys.contains(key)).collect();
+        if !extra.is_empty() {
+            set_keys.extend(extra);
+            keys.push((def.command.id, set_keys));
+        }
+    }
+    (own, keys)
+}
+
+/// The default keys of `command` when a linked framework set defines it.
+fn linked_defaults(command: &CommandRef) -> Option<Vec<Binding>> {
+    let defs = if EditCommands::from_ref(command).is_some() {
+        EditCommands::defs()
+    } else if ChromeCommand::from_ref(command).is_some() {
+        ChromeCommand::defs()
+    } else {
+        return None;
+    };
+    defs.ok()?.into_iter().find(|def| def.command.id == command.id).map(|def| def.defaults)
 }
 
 /// The state of the row `command`, named `label` in the catalog: on or dimmed with its reason, checked, and its title
