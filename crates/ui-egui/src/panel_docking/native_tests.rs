@@ -357,8 +357,9 @@ fn delete_after_a_row_click_in_a_native_appearance_window_removes_the_row() {
     h.frames(20);
     let fill =
         h.host.borrow().windows.get(&viewport).and_then(|w| w.texts.iter().find(|(t, _)| t == "Fill:").map(|(_, r)| *r)).expect("the Fill row");
-    // The row's empty space right of its swatch (its name is a link that opens the Color panel).
-    let at = pos2(fill.left() + 110.0, fill.center().y);
+    // The row's empty space just right of its label, taken from the label so it holds wherever the swatch sits
+    // (the label is a link that opens the Color panel).
+    let at = fill.right_center() + vec2(fill.height(), 0.0);
     for (events, pressed) in [(vec![Event::PointerMoved(at)], None), (vec![], Some(true)), (vec![], Some(false))] {
         let mut events = events;
         if let Some(pressed) = pressed {
