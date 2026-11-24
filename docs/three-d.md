@@ -252,18 +252,27 @@ The rest is our reading:
   uncovered, such as the gaps between dashes. Each face of such a stroke that passes through a face of the fill's
   solid, or through a face of another of the shape's strokes, where the two overlap in the drawing is cut where
   their depths meet, and the faces of the shape's fill and strokes that overlap are drawn in the order of their
-  depths where they overlap, with caps on or off. A fill wall in a gap stays in its own depth order. Inflate's
-  curved surfaces follow this only as closely as their flat facets do. A solid painted with a gradient that has
-  transparent stops under a light that is not white is drawn with an opacity mask: its faces keep their places in
-  this order, in runs that each carry the mask, and a graphic drawn after one of its faces carries the mask too
-  ([Graphics](#graphics)). Such a gradient, and a gradient with transparent stops under the classic effects'
-  shading, is placed once on the whole solid when it has no placement of its own, so its colors and its
-  transparency line up across the faces. A member of a 3D group with its own opacity
-  mask or blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when
-  they are opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the
-  lower item's first. With a light that is not white, a puffed, shaded Inflate surface in a solid color takes its
-  place in this order too, each of its faces drawn with its own light ramps; a lone solid of that kind is still
-  drawn as one composite, and so is each such solid when they hold more than 30,720 faces together.
+  depths where they overlap, with caps on or off. A fill wall in a gap stays in its own depth order. Where such
+  faces lie in front of one another in a ring, so that no order draws them all correctly, a ring that waits for no
+  face outside it gives up its own face that comes first in the order of their depths, and the faces left are
+  looked at afresh, as they may be a smaller ring or none. A face that is only in front of a face of a ring is
+  still drawn after that face. Comparing the faces and looking for rings share one limit of 4,000,000 steps
+  (VectorCraft's own). Rings of a few faces take a few steps a face. A ring that is still a ring after it gives up
+  a face is walked again, so a large ring can cost about the square of its faces (some 4,000 faces tangled at
+  random reach the limit). The lists a ring is looked for in are made only when the steps left are at least a
+  quarter of the pairs, so a solid whose comparing uses nearly all of the limit breaks its rings as before; and a
+  face that waits only for a face drawn last goes in its turn with no search. Past the limit the first face left by
+  depth goes next, ring or not. Inflate's curved surfaces follow this only as closely as their flat facets do. A
+  solid painted with a gradient that has transparent stops under a light that is not white is drawn with an opacity
+  mask: its faces keep their places in this order, in runs that each carry the mask, and a graphic drawn after one
+  of its faces carries the mask too ([Graphics](#graphics)). Such a gradient, and a gradient with transparent stops
+  under the classic effects' shading, is placed once on the whole solid when it has no placement of its own, so its
+  colors and its transparency line up across the faces. A member of a 3D group with its own opacity mask or
+  blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when they are
+  opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the lower
+  item's first. With a light that is not white, a puffed, shaded Inflate surface in a solid color takes its place
+  in this order too, each of its faces drawn with its own light ramps; a lone solid of that kind is still drawn as
+  one composite, and so is each such solid when they hold more than 30,720 faces together.
 - The solids turn, twist and taper about the center of the bounds of all their shapes, Inflate's grid covers
   those bounds, and with Perspective one eye sees every solid. A stroke too narrow to hold a point of Inflate's
   grid stays flat.
@@ -757,6 +766,7 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-17 | Where overlapping faces lie in front of one another in a ring, the ring's own first face by depth is drawn before the faces of the ring it waits for and the rest are looked at afresh, so a face in front of a ring's faces without being one of them is no longer drawn under them (#7023). |
 | 2026-11-13 | Extrude & Bevel cuts its walls into slices only for a twist. A taper alone keeps each wall flat, so it is one face, without the light ticks at the joints between slices or the light line down a wall (#7019). Inflate still slices its sides for a taper. |
 | 2026-11-12 | The seams of Extrude & Bevel, Inflate and Rotate under a white light, and of the faces of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), went from miter to round joins (the seams of Revolve and of colored lights, and 3D (Classic) Wireframe edges, were already round): no thorns on edge-on facets, and facets with no neighbor now have rounded convex corners ([Seams](#seams)). |
 | 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |

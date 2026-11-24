@@ -1180,8 +1180,9 @@ impl Placed {
     }
 }
 
-/// The most pairs of faces [`local_order`] compares, and the most [`cut_stroke_faces`] compares;
-/// the pairs they have not reached by then keep the order of their depths.
+/// The most pairs of faces [`local_order`] compares, together with the steps it takes to break
+/// rings of them ([`drawn_in_pairs_order`]), and the most pairs [`cut_stroke_faces`] compares; the
+/// pairs they have not reached by then keep the order of their depths.
 const MAX_LOCAL_CHECKS: usize = 4_000_000;
 
 /// The polygon of `f` and the sign of its turns, when `f` is a face turned toward the viewer other
@@ -1412,11 +1413,11 @@ fn half(p: &[Point], values: &[f64], sign: f64) -> Vec<Point> {
 /// their depths where they overlap: the face nearer the viewer there goes after the other. A fill
 /// wall and a face of the same shape's covering stroke ([`Paints::Stroke`]) keep their order. Each
 /// face otherwise keeps its place in `order`, so a fill wall in the gap between two dashes stays
-/// where its depth puts it. A cycle of such pairs is broken at the face that comes first in `order`.
+/// where its depth puts it. A cycle of such pairs is broken at one of its own faces
+/// ([`drawn_in_pairs_order`]).
 /// A face drawn last (a planar end turned toward the viewer, at depth `f64::MAX`) keeps its place:
 /// no face moves across it. Otherwise `order` as it is.
 fn local_order(faces: &[Placed], order: Vec<usize>) -> Vec<usize> {
-    use std::cmp::Reverse;
     // The faces of each shape that take part, from left to right for a sweep along x.
     let mut shapes: Vec<Vec<usize>> = vec![];
     for (k, f) in faces.iter().enumerate() {
@@ -1428,7 +1429,7 @@ fn local_order(faces: &[Placed], order: Vec<usize>) -> Vec<usize> {
         }
         shapes[f.member].push(k);
     }
-    if !shapes.iter().any(|list| list.iter().any(|&k| faces[k].paints != Paints::Fill)) {
+    if !shapes.iter().any(|list| list.iter().any(|&k| faces[k].paints != Paints::Fill)) || u32::try_from(faces.len()).is_err() {
         return order;
     }
     for list in &mut shapes {
@@ -1471,9 +1472,9 @@ fn local_order(faces: &[Placed], order: Vec<usize>) -> Vec<usize> {
     // faces with a polygon and a plane that overlap goes in the order of their depths there.
     let mut sweep: Vec<usize> = (0..faces.len()).filter(|&k| faces[k].outline.len() >= 3 && faces[k].plane.is_some()).collect();
     sweep.sort_by(|&a, &b| faces[a].bounds.x0.total_cmp(&faces[b].bounds.x0));
-    // For each face, the faces drawn after it, and for each, how many go before it.
-    let mut after: Vec<Vec<usize>> = vec![vec![]; faces.len()];
-    let mut waits = vec![0usize; faces.len()];
+    // Each pair in its order: a face, and a face drawn after it (as `u32`: there are fewer faces
+    // than that, which is checked above).
+    let mut pairs: Vec<(u32, u32)> = vec![];
     'pairs: for (i, &k) in sweep.iter().enumerate() {
         let a = &faces[k];
         for &j in sweep.iter().skip(i + 1).take_while(|&&j| faces[j].bounds.x0 < a.bounds.x1) {
@@ -1491,38 +1492,117 @@ fn local_order(faces: &[Placed], order: Vec<usize>) -> Vec<usize> {
                 let Some(a_nearer) = nearer_where_overlapping(a, b) else { continue };
                 a_nearer
             };
-            let (back, front) = if a_later { (j, k) } else { (k, j) };
-            after[back].push(front);
-            waits[front] += 1;
+            pairs.push(if a_later { (j as u32, k as u32) } else { (k as u32, j as u32) });
         }
     }
-    // Each step draws the face that comes first in `order` of those whose faces before are drawn.
+    // Breaking rings has what is left of the limit.
+    let last: Vec<bool> = faces.iter().map(|f| f.depth >= f64::MAX).collect();
+    let mut room = MAX_LOCAL_CHECKS.saturating_sub(checks);
+    drawn_in_pairs_order(order, &position, &last, pairs, &mut room)
+}
+
+/// `order` with each face after the faces that go before it: each of `pairs` is a face and a face
+/// drawn after it, `position` is each face's place in `order`, and `last` says of each face
+/// whether it is drawn last. Each step draws the face that comes first in `order` of those whose
+/// faces before are drawn. A face drawn last goes only after every face before it in `order`, so
+/// a face before it never waits for it or for a face after it: those pairs, with the face drawn
+/// last itself or with a face that follows it, are drawn the wrong way round.
+///
+/// When no face can go next, some of the faces left go before each other in a ring, or wait for a
+/// face drawn last or one that follows it. The faces that go before the first face left in `order`
+/// are followed back, among the faces that come before the next face drawn last, to the first
+/// group found that waits for no other of them ([`RingFinder::behind`]): a ring, or one face. That
+/// group gives up its face that comes first in `order`. So when the first face left is in the
+/// group, it goes next, as it would with no ring looked for; when it only waits for the group, a
+/// face of the group goes instead, and the only other pairs drawn the wrong way round are pairs of
+/// a ring.
+///
+/// Every face and pair looked at takes one from `room`. The search is kept from one stop to the
+/// next and goes on from where it stopped, and a face that is drawn is dropped from a list the
+/// next time the list is looked at, so rings of a few faces take a few steps a face whether they
+/// stand apart, all lie behind one face or lie one behind the other. Two costs are not in
+/// proportion to the faces. A ring that is still a ring after it gives up a face is walked again
+/// from the face the search reached it by, so a large ring can cost about its pairs for each face
+/// it gives up: the square of its faces, even when each waits for few others (3,200 faces with
+/// four pairs each at random take about 3,000,000 steps). And a face at or
+/// after the next face drawn last is passed over again each time a face that waits for it is
+/// looked at. Once `room` runs out the first face left in `order` goes next, ring or not.
+/// A first face left that waits only for the next face drawn last or faces after it goes next
+/// with no search, at no cost.
+///
+/// An `order` and `position` that do not agree, or a pair of a face that is not in them, give
+/// `order` back.
+///
+/// The pairs come at 8 bytes each and are dropped once the lists of the faces after each face
+/// are made, 4 bytes a pair; the lists of the faces before each face, as many again, are made
+/// when a ring is first looked for, a step a pair not taken from `room`, and only when the room
+/// left is at least a quarter of the pairs: with less, no ring is looked for and the first face
+/// left goes next. So a solid whose comparing of pairs leaves less than a quarter of its pairs
+/// of the limit breaks its rings as before rings were looked for.
+fn drawn_in_pairs_order(order: Vec<usize>, position: &[usize], last: &[bool], pairs: Vec<(u32, u32)>, room: &mut usize) -> Vec<usize> {
+    use std::cmp::Reverse;
+    let n = order.len();
+    // `order` holds each face once when each face's place in it is the place `position` gives.
+    let agree = position.len() == n && last.len() == n && order.iter().enumerate().all(|(at, &k)| position.get(k) == Some(&at));
+    if !agree || u32::try_from(pairs.len()).is_err() || pairs.iter().any(|&(back, front)| back as usize >= n || front as usize >= n) {
+        return order;
+    }
+    // For each face, how many faces not drawn yet go before it, and the faces drawn after it.
+    let mut waits = vec![0usize; n];
+    for &(_, front) in &pairs {
+        waits[front as usize] += 1;
+    }
+    let after = Lists::from_pairs(n, pairs.iter().map(|&(back, front)| (back as usize, front as usize)));
+    drop(pairs);
     let mut ready: std::collections::BinaryHeap<Reverse<(usize, usize)>> =
-        (0..faces.len()).filter(|&k| waits[k] == 0).map(|k| Reverse((position[k], k))).collect();
+        (0..n).filter(|&k| waits[k] == 0).map(|k| Reverse((position[k], k))).collect();
     // The faces drawn last, in `order`: each goes only after every face before it in `order`.
-    let last: Vec<usize> = order.iter().copied().filter(|&k| faces[k].depth >= f64::MAX).collect();
+    let lasts: Vec<usize> = order.iter().copied().filter(|&k| last[k]).collect();
     let mut next_last = 0usize;
-    let mut drawn = vec![false; faces.len()];
-    let mut out = Vec::with_capacity(order.len());
+    let mut drawn = vec![false; n];
+    let mut out = Vec::with_capacity(n);
     let mut first = 0usize;
-    while out.len() < order.len() {
-        while last.get(next_last).is_some_and(|&k| drawn[k]) {
+    let mut rings: Option<RingFinder> = None;
+    // For each face, how many faces not drawn yet go before it among the first `counted` of
+    // `order`, which keeps up with the next face drawn last.
+    let mut early = vec![0u32; n];
+    let mut counted = 0usize;
+    while out.len() < n {
+        while lasts.get(next_last).is_some_and(|&k| drawn[k]) {
             next_last += 1;
         }
-        let limit = last.get(next_last).map_or(usize::MAX, |&k| position[k]);
+        let limit = lasts.get(next_last).map_or(usize::MAX, |&k| position[k]);
+        while counted < limit.min(n) {
+            if let Some(&back) = order.get(counted).filter(|&&back| !drawn[back]) {
+                for &j in after.list(back) {
+                    early[j as usize] += 1;
+                }
+            }
+            counted += 1;
+        }
         let k = match ready.peek() {
             Some(&Reverse((at, k))) if at < limit => {
                 ready.pop();
                 k
             }
             _ => {
-                // A cycle, or the faces left to draw before a face drawn last wait for faces after
-                // it: the first face in `order` not drawn yet goes next.
                 while order.get(first).is_some_and(|&k| drawn[k]) {
                     first += 1;
                 }
-                let Some(&k) = order.get(first) else { break };
-                k
+                let Some(&next) = order.get(first) else { break };
+                // The face drawn last goes in its turn, and so does a face that waits only for it or
+                // faces after it: no face it waits for can go first. Any other face waits for a
+                // face before the face drawn last: the group behind it gives up a face, while there
+                // is room to look for one. The lists of the faces before each face take a step a
+                // pair to make, which is not taken from `room`: they are made only when the room
+                // left is at least a quarter of the pairs, so making them costs no more than four
+                // times the room left.
+                let mut released = None;
+                let room_for_lists = rings.is_some() || room.saturating_mul(4) >= after.faces.len();
+                if *room > 0 && position[next] < limit && early[next] > 0 && room_for_lists {
+                    released = rings.get_or_insert_with(|| RingFinder::new(&after)).behind(next, &drawn, position, limit, room);
+                }
+                released.unwrap_or(next)
             }
         };
         if drawn[k] {
@@ -1530,14 +1610,230 @@ fn local_order(faces: &[Placed], order: Vec<usize>) -> Vec<usize> {
         }
         drawn[k] = true;
         out.push(k);
-        for &j in &after[k] {
+        let was_counted = position[k] < counted;
+        for &j in after.list(k) {
+            let j = j as usize;
             waits[j] = waits[j].saturating_sub(1);
+            if was_counted {
+                early[j] = early[j].saturating_sub(1);
+            }
             if waits[j] == 0 && !drawn[j] {
                 ready.push(Reverse((position[j], j)));
             }
         }
     }
     out
+}
+
+/// A list of faces for each of some faces, all in one array: the faces after each face, or the
+/// faces before it.
+struct Lists {
+    /// The list of face `k` is `faces[starts[k]..starts[k + 1]]`.
+    starts: Vec<u32>,
+    faces: Vec<u32>,
+}
+
+impl Lists {
+    /// For each of `n` faces, the second faces of the `pairs` it is first in, in the order of
+    /// `pairs`. There are fewer than 2^32 faces and pairs ([`drawn_in_pairs_order`] checks this);
+    /// a pair with a face that is not one of the `n` is left out.
+    fn from_pairs(n: usize, pairs: impl Iterator<Item = (usize, usize)> + Clone) -> Self {
+        let pairs = pairs.filter(move |&(first, second)| first < n && second < n);
+        let mut starts = vec![0u32; n + 1];
+        for (first, _) in pairs.clone() {
+            if let Some(count) = starts.get_mut(first + 1) {
+                *count += 1;
+            }
+        }
+        for k in 1..starts.len() {
+            starts[k] += starts[k - 1];
+        }
+        let mut filled = starts.clone();
+        let mut faces = vec![0u32; starts.last().map_or(0, |&end| end as usize)];
+        for (first, second) in pairs {
+            if let Some(at) = filled.get_mut(first) {
+                if let Some(slot) = faces.get_mut(*at as usize) {
+                    *slot = second as u32;
+                }
+                *at += 1;
+            }
+        }
+        Lists { starts, faces }
+    }
+
+    /// The list of face `k`; none for a face that is not one of them.
+    fn list(&self, k: usize) -> &[u32] {
+        let (Some(&start), Some(&end)) = (self.starts.get(k), self.starts.get(k + 1)) else { return &[] };
+        self.faces.get(start as usize..end as usize).unwrap_or_default()
+    }
+
+    /// Each list's faces and the face it is the list of, as pairs.
+    fn pairs(&self) -> impl Iterator<Item = (usize, usize)> + Clone + '_ {
+        (0..self.starts.len().saturating_sub(1)).flat_map(move |k| self.list(k).iter().map(move |&j| (k, j as usize)))
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The entries of the lists of faces before each face that [`RingFinder`] has read, counted
+    /// where they are read, for tests to hold the reading to the room.
+    pub(super) static LIST_ENTRIES_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// No place among the faces reached, in [`RingFinder`].
+const NONE: usize = usize::MAX;
+
+/// Finds the ring behind a face for [`drawn_in_pairs_order`], and keeps its search from one stop to
+/// the next.
+///
+/// Every index it holds is in range: the faces of its lists are faces of the pairs
+/// [`drawn_in_pairs_order`] checked against the number of faces, which is the length of the
+/// `drawn` and `position` it is given, and the places it keeps are places in its own lists.
+struct RingFinder {
+    /// For each face, the faces that go before it, lowest first.
+    before: Lists,
+    /// For each face, where its list in `before` now ends: the faces found drawn are dropped
+    /// from it, and those left moved up.
+    ends: Vec<u32>,
+    /// For each face, its place in `reached`; [`NONE`] for a face not reached.
+    marks: Vec<usize>,
+    /// The faces reached, in the order reached. Every one is in a group not completed yet.
+    reached: Vec<usize>,
+    /// For each face reached, the earliest place in `reached` it leads back to.
+    low: Vec<usize>,
+    /// The path from the first face reached to the one being looked at.
+    path: Vec<Step>,
+    /// The `limit` the faces reached were reached under; `None` with none reached yet.
+    limit: Option<usize>,
+}
+
+/// A face on the path of [`RingFinder`]: its place in `reached`, and the entry of its list being
+/// looked at.
+struct Step {
+    place: usize,
+    entry: usize,
+}
+
+impl RingFinder {
+    /// A finder for the faces of `after`, the faces drawn after each face.
+    fn new(after: &Lists) -> Self {
+        let n = after.starts.len() - 1;
+        let before = Lists::from_pairs(n, after.pairs().map(|(back, front)| (front, back)));
+        let ends = before.starts.get(1..).unwrap_or_default().to_vec();
+        RingFinder { before, ends, marks: vec![NONE; n], reached: vec![], low: vec![], path: vec![], limit: None }
+    }
+
+    /// The face to draw next when `start`, the first face not `drawn`, whose `position` is before
+    /// `limit`, waits for a face. Of the faces that are not drawn and come before `limit`, those
+    /// that go before `start` are followed back to the first group found whose faces wait for no
+    /// other such face: a ring of faces that go before each other, or one face. The answer is the
+    /// face of that group with the lowest `position`. Every face and every pair looked at takes
+    /// one from `room`; `None` when it runs out.
+    ///
+    /// The faces are followed depth first, each face's faces before it lowest first, and the first
+    /// strongly connected component completed is the group (Tarjan's algorithm, stopped there):
+    /// it leads to no other component. The search is kept, less that group, and the next call
+    /// goes on with it: the faces drawn since are the group's own and faces that waited for
+    /// nothing else, and none of those is in a group with a face still on the path, so what the
+    /// search knows of the faces left still holds. It starts afresh when `limit` moves, which
+    /// brings in faces it passed over.
+    fn behind(&mut self, start: usize, drawn: &[bool], position: &[usize], limit: usize, room: &mut usize) -> Option<usize> {
+        if self.limit != Some(limit) {
+            self.forget(0);
+            self.limit = Some(limit);
+        }
+        // The end of the path may be drawn: faces that only waited for the last group.
+        while let Some(place) = self.path.last().map(|step| step.place).filter(|&place| drawn[self.reached[place]]) {
+            self.forget(place);
+        }
+        if self.reached.first() != Some(&start) {
+            self.forget(0);
+            if !self.reach(start, drawn, room) {
+                return None;
+            }
+        }
+        while let Some(step) = self.path.last_mut() {
+            if *room == 0 {
+                return None;
+            }
+            *room -= 1;
+            let place = step.place;
+            let face = self.reached[place];
+            if step.entry < self.ends[face] as usize {
+                let earlier = self.before.faces[step.entry] as usize;
+                if drawn[earlier] || position[earlier] >= limit {
+                    step.entry += 1;
+                } else if self.marks[earlier] != NONE {
+                    self.low[place] = self.low[place].min(self.marks[earlier]);
+                    step.entry += 1;
+                } else {
+                    // The entry is passed once the faces behind it are looked at.
+                    if !self.reach(earlier, drawn, room) {
+                        return None;
+                    }
+                }
+                continue;
+            }
+            // Every face before this one is looked at: it ends a group when it leads no further
+            // back than itself.
+            let leads = self.low[place];
+            if leads == place {
+                let found = self.reached[place..].iter().copied().min_by_key(|&face| position[face]);
+                // The face before it on the path keeps its entry for this one, to look at what is
+                // left of the group next time.
+                self.forget(place);
+                return found;
+            }
+            self.path.pop();
+            if let Some(parent) = self.path.last_mut() {
+                self.low[parent.place] = self.low[parent.place].min(leads);
+                parent.entry += 1;
+            }
+        }
+        None
+    }
+
+    /// Adds `face` to the faces reached and to the end of the path, at the start of its list, with
+    /// the faces now `drawn` dropped from the list: a step from `room` for each face the list held,
+    /// taken before the list is read. `false`, with `room` emptied and nothing read, when the list
+    /// is longer than the room left.
+    fn reach(&mut self, face: usize, drawn: &[bool], room: &mut usize) -> bool {
+        let (start, end) = (self.before.starts[face] as usize, self.ends[face] as usize);
+        let Some(left) = room.checked_sub(end - start) else {
+            *room = 0;
+            return false;
+        };
+        *room = left;
+        #[cfg(test)]
+        LIST_ENTRIES_READ.with(|read| read.set(read.get() + (end - start)));
+        let mut kept = start;
+        for entry in start..end {
+            let earlier = self.before.faces[entry];
+            if !drawn[earlier as usize] {
+                self.before.faces[kept] = earlier;
+                kept += 1;
+            }
+        }
+        // `kept` is no more than the end it replaces.
+        self.ends[face] = kept as u32;
+        let place = self.reached.len();
+        self.marks[face] = place;
+        self.path.push(Step { place, entry: start });
+        self.low.push(place);
+        self.reached.push(face);
+        true
+    }
+
+    /// Takes out the faces reached from `place` on, and their part of the path.
+    fn forget(&mut self, place: usize) {
+        for face in self.reached.drain(place.min(self.reached.len())..) {
+            self.marks[face] = NONE;
+        }
+        self.low.truncate(place);
+        while self.path.last().is_some_and(|step| step.place >= place) {
+            self.path.pop();
+        }
+    }
 }
 
 /// Whether face `a` is nearer the viewer than face `b` where their polygons overlap on the drawing,
@@ -1673,7 +1969,8 @@ fn draw_order(faces: &[Placed], sealed: bool) -> Vec<usize> {
 /// of overlapping faces with a convex polygon and a plane goes in the order of its depths there,
 /// the face nearer the viewer after the other ([`local_order`]), and each step draws the face that
 /// comes first in the given order of those whose faces before are drawn, so a face without a plane
-/// or a convex polygon can also move. Otherwise the order given.
+/// or a convex polygon can also move. Faces that lie in front of one another in a ring give up one
+/// of the ring's own faces ([`drawn_in_pairs_order`]). Otherwise the order given.
 pub(crate) fn surface_order<'a>(faces: impl IntoIterator<Item = (&'a [Point], Option<DepthPlane>, f64)>) -> Vec<usize> {
     let placed: Vec<Placed> = faces
         .into_iter()
