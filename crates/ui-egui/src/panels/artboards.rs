@@ -41,8 +41,9 @@ pub struct ArtboardsUi {
     pub anchor: Option<(u64, usize)>,
     /// The row whose name field opens at the list's next pass (the panel menu's Rename); taken by [`show`].
     pub rename: Option<usize>,
-    /// Whether key focus is in the list: Select All's keys then select every artboard ([`selects_all`]).
-    pub focused: bool,
+    /// The window and its pass in which key focus was last in the list: while the list keeps it, Select All's keys
+    /// select every artboard ([`selects_all`]).
+    pub focused_pass: Option<(egui::ViewportId, u64)>,
     /// The row whose context menu is open.
     pub menu: Option<usize>,
 }
@@ -420,9 +421,11 @@ pub(crate) fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
 }
 
 /// Whether Select All's shortcut selects every artboard ([`select_all`]) instead of the art: the list has
-/// key focus and the Artboard tool is in use.
-pub(crate) fn selects_all(app: &VectorcraftApp) -> bool {
-    app.session.tool_id() == "artboard" && app.ui.artboards_ui.focused
+/// key focus and the Artboard tool is in use. The list keeps the keys only while its window draws it in every pass, so
+/// a closed panel gives them back to the art; the fired commands run after the frame, a pass after the list's last.
+pub(crate) fn selects_all(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    app.session.tool_id() == "artboard"
+        && app.ui.artboards_ui.focused_pass.is_some_and(|(window, pass)| ctx.cumulative_pass_nr_for(window) <= pass + 1)
 }
 
 /// Ctrl/Cmd+A while [`selects_all`]: the Artboard tool selects every artboard, and the active
@@ -508,7 +511,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         list = list.start_rename(row);
     }
     let output = list.show(ui);
-    app.ui.artboards_ui.focused = output.focused;
+    // A measuring run of the panel has no focus.
+    if !craft::ui::runtime::measure::active(ui.ctx()) {
+        app.ui.artboards_ui.focused_pass = output.focused.then(|| (ui.ctx().viewport_id(), ui.ctx().cumulative_pass_nr()));
+    }
     if let Some(row) = picked.anchor {
         app.ui.artboards_ui.anchor = Some((uid, row));
     }
