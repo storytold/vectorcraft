@@ -3,7 +3,7 @@ use craft::host::{AppInfo, Host, Wake};
 use craft::platform::clipboard::{Clipboard, ClipboardProbe, EventClipboard};
 use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
-use craft::ui::buttons::PushButtonLook;
+use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::contract::{Bind, GlyphColon};
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
@@ -670,6 +670,9 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.values.set(NumberLook::Inline);
     // Push buttons that ask for no look are filled tiles with no edge at rest, as production's were.
     root.values.set(PushButtonLook::Filled);
+    // Every icon button that is on (the current tool, Snap, Guides, a panel toggle) shows production's highlight: the
+    // pressed fill (`tool_active`) with no accent edge.
+    root.values.set(ActiveLook::Pressed);
     // A glyph that stands for a word caption ("X", "W") takes a form's colon as production drew it ("X:"); "#" and
     // the colour channel letters stay bare.
     root.values.set(GlyphColon::Form);
