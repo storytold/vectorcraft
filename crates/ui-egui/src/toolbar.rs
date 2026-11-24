@@ -12,10 +12,10 @@ use craft::behavior::dock::{Action, DockEdge};
 use craft::behavior::geometry::BoxState;
 use craft::behavior::overlay::Side;
 use craft::behavior::{EditEvent, IconId, Mixed};
-use craft::color_ui::ui::PaintChip;
+use craft::color_ui::ui::{PaintChip, PaintChipSize};
 use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, TransformGroups, TransformRow, TransformSource};
 use craft::theme::ControlSize;
-use craft::ui::buttons::{Button, IconButton};
+use craft::ui::buttons::{ActiveLook, Button, IconButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, BodyCx, Entry, Gap, Props as _, Show as _, ShowContainer as _, Tracked};
 use craft::ui::display::Divider;
@@ -387,7 +387,8 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     let located = locate::wanted(&app.ui, &home);
     let holds = |tool: &str| model.slots.iter().any(|slot| slot.tools.iter().any(|t| t.id == tool));
     let reveal = matches!(at, GroupAt::Show(_)).then(|| locate::take_reveal(&mut app.ui, &home, holds)).flatten();
-    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).tips(&cards);
+    // The current tool in production's pressed fill, with no accent edge.
+    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).tips(&cards).active_look(ActiveLook::Pressed);
     if let Some(tool) = &located {
         rail = rail.mark(tool);
     }
@@ -708,7 +709,8 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         Row::new().wrap(true).show(ui, |ui, _| {
             for (label, cmd, paint) in &chips {
                 let shown = Mixed::Same(well_paint(paint, &|_| None));
-                let out = PaintChip::new(*label, Bind::given(shown), fallback).popover(false).size(ControlSize::Sm).tooltip(*label).show(ui);
+                let out =
+                    PaintChip::new(*label, Bind::given(shown), fallback).popover(false).chip_size(PaintChipSize::Swatch).tooltip(*label).show(ui);
                 if let Some(mods) = out.clicked {
                     clicked = Some((*cmd, mods.cmd));
                 }

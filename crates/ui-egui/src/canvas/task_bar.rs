@@ -1,11 +1,11 @@
 use craft::behavior::CanvasView;
 use craft::behavior::{IconId, Mixed};
-use craft::color_ui::ui::PaintChip;
+use craft::color_ui::ui::{PaintChip, PaintChipSize};
 use craft::theme::{Srgba, Variant};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
-use craft::ui::canvas_controls::TaskBar;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::canvas_controls::{TaskBar, TaskBarGrip, TaskBarHang};
+use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::PanelRow;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
@@ -455,10 +455,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
     let has_shape = offer.shape.is_some();
     let mut run: Option<(&'static str, serde_json::Value)> = None;
     let mut show_swatches = false;
-    let shown = TaskBar::new(tl!("Contextual Task Bar"), &offer.anchor, Bind::bound(&mut local)).more_rows(more_rows(&offer)).show(
-        ui,
-        space.view.rect,
-        |ui, _| {
+    let shown = TaskBar::new(tl!("Contextual Task Bar"), &offer.anchor, Bind::bound(&mut local))
+        .grip(TaskBarGrip::Bar)
+        .member_gap(Gap::Item)
+        .hang_gap(TaskBarHang::ClearOfHandles)
+        .more_rows(more_rows(&offer))
+        .show(ui, space.view.rect, |ui, _| {
             for (label, icon, cmd, params) in &offer.actions {
                 if *cmd == TASK_BAR_FIDELITY {
                     // The Smooth tool's Fidelity, labeled, sets the tool's option as it is typed or stepped.
@@ -488,6 +490,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                         let chip = PaintChip::new(chip.label(has_shape), Bind::given(value), Srgba::BLACK)
                             .popover(false)
                             .ring(stroke)
+                            .chip_size(PaintChipSize::Compact)
                             .selected(app.session.fill_active != stroke)
                             .show(ui);
                         if chip.clicked.is_some() {
@@ -523,8 +526,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                     }
                 }
             }
-        },
-    );
+        });
     let (rect, hide) = (shown.output.rect, shown.output.hide);
     if local != before {
         app.ui.task_bar_place.set(key, local);

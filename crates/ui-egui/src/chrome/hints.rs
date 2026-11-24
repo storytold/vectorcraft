@@ -1,8 +1,9 @@
 use super::status_bar::ANIMATED_ZOOM_HINT;
 use super::{Cow, Ui, VectorcraftApp, menus};
 use craft::behavior::IconId;
+use craft::theme::ControlSize;
 use craft::ui::bars::{Bar, BarKind};
-use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Elide, Icon, Text};
 use craft::ui::primitives::IconSpec;
 use craft::ui::style::Span;
@@ -259,7 +260,7 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     };
     Bar::new(tl!("Help Bar"), BarKind::Status).show(ui, |ui, _| {
-        Icon::new(IconSpec::svg(IconId::new("dc-help"))).show(ui);
+        Icon::new(IconSpec::svg(IconId::new("dc-help"))).size(ControlSize::Md).show(ui);
         let spans = segments
             .iter()
             .map(|(text, bold)| {
