@@ -9611,6 +9611,29 @@ fn appearance_commands_given_the_axes_or_legend_group_edit_its_lines_and_labels(
     }
 }
 
+/// Aligned rows copied to `to` given the Legend group, whose labels have the same rows, go to `to` in every label.
+#[test]
+fn aligned_copies_given_the_legend_group_go_to_to_when_its_labels_have_the_same_rows() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let labels = |s: &Session| -> Vec<vectorcraft_doc::Appearance> {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        group(&n, "Legend").children().unwrap().iter().map(|c| (*c.appearance).clone()).collect()
+    };
+    let legend = group(s.doc().unwrap().doc.node(id).unwrap(), "Legend").id;
+    s.execute("appearance.addFill", &json!({"ids": [legend.0]})).unwrap();
+    s.execute("appearance.addStroke", &json!({"ids": [legend.0]})).unwrap();
+    let was = labels(&s);
+    assert!(was.len() >= 2 && was.iter().all(|a| *a == was[0]) && was[0].items.len() >= 2, "{was:?}");
+    let top = was[0].items.len() - 1;
+    s.execute("appearance.duplicateItem", &json!({"ids": [legend.0], "index": top, "to": 0, "aligned": true})).unwrap();
+    for a in labels(&s) {
+        assert_eq!(a.items.len(), was[0].items.len() + 1);
+        assert_eq!(a.items[0], was[0].items[top], "the copy is at the bottom");
+    }
+}
+
 /// A row index given the Axes group, whose lines and labels have different rows, is refused unless it is `aligned`, a row
 /// of the backmost member's stack: then the members that share that row change, the labels keep theirs, and the graph
 /// keeps the change when it is drawn again.

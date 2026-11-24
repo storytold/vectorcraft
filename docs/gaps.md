@@ -8,6 +8,8 @@
 
 > Blend redraw update (#5179; previously: Keyboard Shortcuts: user-bindable Switch Selection Tools (#7645), with no default key; scores and estimates unchanged): renderer bounds include spine-placed keys and steps; both focused CPU regressions pass. Scores and estimates unchanged.
 
+> **File-font hardening status (2026-11-12, #4569):** G8 implementation and synthetic regressions added; compilation and runtime proof pending. Scores and estimates unchanged.
+
 ## Feature submission evidence
 
 Properties panel Quick Actions follow the whole selection (G12). Ungroup (`object.ungroup`) is offered when any selected object is a group, including several groups, a group selected after other objects, and a group that holds another group. Isolate Group (`object.isolate`) is offered only when that group is the whole selection. Several paths, live shapes or compound paths also offer Unite (`object.pathfinder.unite`) with Group and Make Clipping Mask; Unite joins them in one undo step. A path selected with type, or a selection that includes a group, does not offer Unite. Evidence: `panels::properties::tests::two_groups_offer_ungroup_without_isolate_group`, `one_group_offers_ungroup_and_isolate_group` and `several_paths_offer_group_clipping_mask_and_unite` in `crates/ui-egui/src/panels/properties/tests.rs`. Scores and estimates unchanged.
@@ -317,6 +319,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Estimate:** 20–35 h, needs reporters' help on hardware we don't have.
 
 ## G8 Hardening at scale
+
+- **Implementation awaiting runtime proof (#4569):** bind file-font references to owned document blobs, compare candidate face bytes, and reclaim dead live-face slots. Unused blobs do not consume admission; native/PDF/paste report refused resources. Synthetic text, renderer and native/clipboard regressions added; no gap closed before compilation and runtime checks.
 
 - **Done:** PngSuite fetching verifies 175 original PNGs and redistribution notices against a pinned SHA-256/size manifest before publishing; file and total-size budgets, cache verification and no archive extraction (#1729). The real-world corpus and manual QA gaps below remain.
 
@@ -996,6 +1000,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | 2026-11-19 | minor | G12: Brushes panel item right-click context menu offering Brush Options…, Duplicate Brush, and Delete Brush (disabled if the last remaining brush); right-clicking an unselected brush selects it first, and right-clicking within a multi-selection preserves it offering Duplicate Brushes / Delete Brushes; headless tests in `crates/ui-egui/src/panels/brushes/tests.rs`; scores and estimates unchanged. |
 | 2026-11-19 | minor | G12: Links panel row context menu (Relink…, Go To Link, Update Link, Edit Original, Show in Folder, Embed Image / Unembed…); right-clicking an unselected link row selects it first, and right-clicking within a multi-selection preserves it; headless tests in `crates/ui-egui/src/panels/tests_links.rs`; scores and estimates unchanged. |
 | 2026-11-18 | minor | G12: Layers panel context menu on guide rows (Release Guide, Duplicate, Delete Guide, Lock/Unlock, Hide/Show); regression tests in `crates/ui-egui/src/panels/layers/tests.rs`; scores and estimates unchanged. |
+| 2026-11-12 | minor | G8 / #4569: file-font ownership and reclaimable admission implementation; regression sources added, compilation and runtime proof pending. Scores and estimates unchanged. |
 | 2026-11-18 | minor | G4 type: Retype phase 1 (#4934), `type.retype` for outlined text that exactly matches an available font; near matches, the ranked font list and images remain. Scores and estimates unchanged |
 | 2026-11-18 | minor | Production Preflight: output-aware fonts, text overflow, linked files and effective image resolution, clickable findings and automatic rechecking; scores and estimates unchanged. See [production-preflight.md](production-preflight.md) for scope and limits. |
 | 2026-11-16 | minor | Recolor Artwork follow-up (#8031, remaining #4028): native Lab input, picker swatch libraries and Assign-row menus; UI interaction regression coverage; scores and estimates unchanged. |
