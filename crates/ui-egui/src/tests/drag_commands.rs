@@ -8,8 +8,8 @@ use crate::VectorcraftApp;
 
 /// Send a control request → its reply.
 fn control(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, params: Value) -> Value {
-    let (request, _) = crate::control::ControlRequest::new(method, params);
-    let crate::control::Outcome::Done(reply) = crate::control::handle(app, ctx, &request) else { panic!("{method}: not done") };
+    let (request, _) = craft::automation::ControlRequest::new(method, params);
+    let craft::automation::Reply::Done(reply) = crate::control::handle(app, ctx, &request) else { panic!("{method}: not done") };
     reply
 }
 
