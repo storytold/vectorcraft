@@ -921,6 +921,26 @@ fn colour_table_shift_holds_at_most_256_colors() {
     assert_eq!(d.fields["colorTable"]["shifted"]["#123456"], "#000000");
 }
 
+/// Entries the engine drops (a color shifted to itself, a deleted color) do not count toward the
+/// 256 shifts, and a new shift writes the map without them.
+#[test]
+fn colour_table_shift_skips_entries_the_engine_drops() {
+    let mut full: serde_json::Map<String, serde_json::Value> = (0..255).map(|i| (format!("#{i:06x}"), json!(format!("#{i:06x}")))).collect();
+    full.insert("#abcdef".into(), json!("#000000"));
+    let mut d = Dialog::new(save_for_web::KIND, json!({"colorTable": {"shifted": full, "deleted": ["#ABCDEF"]}}));
+    save_for_web::shift_color(&mut d, "#123456", "#000000").unwrap();
+    assert_eq!(d.fields["colorTable"]["shifted"], json!({"#123456": "#000000"}));
+    // A map the engine refuses (a value that is not a color, two keys naming one color) is kept
+    // whole for the engine to refuse.
+    for shifted in [json!({"nope": "NOPE"}), json!({"#abcdef": "nope"}), json!({"#f00": "#f00", "#FF0000": "#00ff00"})] {
+        let mut d = Dialog::new(save_for_web::KIND, json!({"colorTable": {"shifted": shifted.clone(), "deleted": ["#abcdef"]}}));
+        save_for_web::shift_color(&mut d, "#123456", "#000000").unwrap();
+        let mut want = shifted.as_object().cloned().unwrap_or_default();
+        want.insert("#123456".into(), json!("#000000"));
+        assert_eq!(d.fields["colorTable"]["shifted"], serde_json::Value::Object(want), "{shifted}");
+    }
+}
+
 /// One frame of `app` in `ctx`, 50 ms after the last.
 fn tick(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
     let time = ctx.input(|i| i.time) + 0.05;

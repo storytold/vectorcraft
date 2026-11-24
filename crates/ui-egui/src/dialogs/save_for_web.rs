@@ -1479,17 +1479,44 @@ fn take_shift(d: &mut Dialog) -> Result<(), String> {
 /// Shift the source color `source` to `to` (`colorTable.shifted`), wherever it is in the image; it
 /// is no longer web-shifted. Picking the source color itself takes the shift away. The color
 /// becomes the selection. Nothing changes when either is not a color, and a new source when 256
-/// colors are already shifted is an error that changes nothing.
+/// colors are already shifted is an error that changes nothing. Entries the engine drops (a color
+/// shifted to itself, a deleted color) do not count, and a new shift writes the map without them.
 pub(super) fn shift_color(d: &mut Dialog, source: &str, to: &str) -> Result<(), String> {
     let hex = |h: &str| vectorcraft_color::Color::from_hex(h).map(|c| c.to_hex());
     let (Some(source), Some(to)) = (hex(source), hex(to)) else { return Ok(()) };
+    let deleted: Vec<String> = d
+        .fields
+        .get("colorTable")
+        .and_then(|t| t.get("deleted"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(String::from)
+        .collect();
     let map = shifts(d);
-    if to != source && map.len() >= webexport::MAX_TABLE && !map.keys().any(|k| same_color(k, &source)) {
+    // Entries are dropped only from a map the engine accepts (every key and value a color, no two
+    // keys naming one color); any other map is kept whole for the engine to refuse.
+    let mut keys: Vec<String> = Vec::new();
+    let valid = map.iter().all(|(k, v)| match (table_rgb(k), v.as_str().and_then(table_rgb)) {
+        (Some(k), Some(_)) if !keys.contains(&k) => {
+            keys.push(k);
+            true
+        }
+        _ => false,
+    });
+    let live = |k: &str, v: &Value| {
+        let (true, Some(key), Some(to)) = (valid, table_rgb(k), v.as_str().and_then(table_rgb)) else { return true };
+        to != key && !deleted.iter().any(|x| table_rgb(x).is_some_and(|x| x == key))
+    };
+    let count = map.iter().filter(|(k, v)| live(k, v)).count();
+    if to != source && count >= webexport::MAX_TABLE && !map.iter().any(|(k, v)| live(k, v) && same_color(k, &source)) {
         return Err(webexport::too_many("shifted"));
     }
     unshift(d, &source);
     if to != source {
         let mut map = shifts(d);
+        map.retain(|k, v| live(k, v));
         map.insert(source.clone(), json!(to));
         set_table(d, "shifted", Value::Object(map));
     }
