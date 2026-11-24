@@ -456,10 +456,13 @@ fn launch_arguments(nightly: bool, arguments: &[std::ffi::OsString]) -> Vec<Stri
     if nightly { arguments.iter().map(|a| a.to_string_lossy().into_owned()).collect() } else { std::env::args().skip(1).collect() }
 }
 
+/// The control channel's port, and the token's notice with the token itself.
+type ControlChannel = (Option<u16>, Option<(String, String)>);
+
 /// Port and token of the control channel, or the message to print. A nightly is started by the
 /// Launcher, never by an agent, so the channel and its inherited environment stay off: no token
 /// file is read and nothing listens.
-fn control_channel(control: &automation_args::ControlArg, nightly: bool) -> Result<(Option<u16>, Option<(String, String)>), String> {
+fn control_channel(control: &automation_args::ControlArg, nightly: bool) -> Result<ControlChannel, String> {
     if nightly {
         if control.options().port.is_some() || std::env::var_os("VECTORCRAFT_CONTROL_PORT").is_some() {
             eprintln!("vectorcraft: the control channel is off in a nightly build");
