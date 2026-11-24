@@ -42,15 +42,12 @@
 	1 Color Job	1-fargejobb
 	1 Color Job…	1-fargejobb…
 	1 Layer	1 lag
-	1 bit	1 bit
 	1 {unit} on the artboard stands for {real} {unit} in the scene.	1 {unit} på monteringsflaten tilsvarer {real} {unit} i scenen.
 	16 Colors	16 farger
-	16 bit	16 bit
 	16 bits/pixel	16 bits/piksel
 	2 Color Job	2-fargejobb
 	2 Color Job…	2-fargejobb…
 	2-Up	2 opp
-	24 bit	24 bit
 	24 bits/pixel	24 bits/piksel
 	256 Colors	256 farger
 	2K Cinema	2K kino
@@ -60,29 +57,23 @@
 	3 Colors	3 farger
 	3 x 3 Average	3 x 3 gjennomsnitt
 	30° Angles	30°-vinkler
-	32 bit	32 bit
 	32 bits/pixel	32 bits/piksel
 	3D Box	3D-boks
 	3D Box Tool	3D-boks-verktøy
 	3D Lighting Preset	Forhåndsvalg for 3D-lys
 	3D Ribbon	3D-bånd
 	3D and Materials	3D og materialer
-	4 bit	4 bit
 	4-Up	4 opp
 	45° Angles	45°-vinkler
 	4K Cinema	4K kino
-	4K UHD	4K UHD
 	4up	4 opp
 	5 x 5 Average	5 x 5 gjennomsnitt
 	6 Colors	6 farger
 	60° Angles	60°-vinkler
 	8 Colors	8 farger
-	8 bit	8 bit
-	8K UHD	8K UHD
 	90° & 45° & 30° Angles	90° og 45° og 30°-vinkler
 	90° & 45° Angles	90° og 45°-vinkler
 	90° Angles	90°-vinkler
-	:	:
 	< 1 sec	< 1 sek
 	<Opacity Mask>	<Dekkevnemaske>
 	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, +{added} / −{deleted} linjer (Δ {delta}), +{binary_added} / −{binary_deleted} binære ressurser, {first} – {last}
@@ -94,10 +85,6 @@
 	A lower value follows the stroke closely; a higher one gives fewer points and smoother curves.	En lavere verdi følger streken tett; en høyere gir færre punkter og jevnere kurver.
 	A new preset starting from the selected one	Et nytt forhåndsvalg som starter fra det valgte
 	A saved copy of the selected preset	En lagret kopi av det valgte forhåndsvalget
-	A3	A3
-	A4	A4
-	A5	A5
-	A6	A6
 	About	Om
 	About VectorCraft	Om VectorCraft
 	Above Text	Over tekst
@@ -220,12 +207,10 @@
 	All printer's marks	Alle skrivermerker
 	All shortcuts reset to defaults.	Alle hurtigtaster tilbakestilt til standard.
 	All the art	All grafikk
-	Alt	Alt
 	Alt key toggles to Smooth Tool	Alt-tasten veksler til jevne-verktøyet
 	Alt+Click	Alt+klikk
 	Alt+Drag	Alt+dra
 	Alt-click: reset the horizontal scale too	Alt-klikk: tilbakestill også horisontal skalering
-	Alt:	Alt:
 	Alter Paths for Appearance	Endre baner for utseende
 	Alternates for Current Selection	Alternativer for gjeldende utvalg
 	Amber	Ravgul
@@ -367,7 +352,6 @@
 	Attributes	Attributter
 	Author Title:	Forfattertittel:
 	Author:	Forfatter:
-	Auto	Auto
 	Auto Color	Autofarge
 	Auto Grouping	Autogruppering
 	Auto Leading:	Automatisk linjeavstand:
@@ -396,8 +380,6 @@
 	Axis	Akse
 	Axis side	Akseside
 	Axis:	Akse:
-	B4	B4
-	B5	B5
 	BLANK DOCUMENT PRESETS	FORHÅNDSVALG FOR TOMT DOKUMENT
 	Back	Tilbake
 	Background Color:	Bakgrunnsfarge:
@@ -422,16 +404,12 @@
 	Basic Character Formats	Grunnleggende tegnformater
 	Basic Latin	Grunnleggende latin
 	Basic Shapes	Grunnformer
-	Batch	Batch
 	Batch Trace Folder	Mappe for batchsporing
-	Batch…	Batch…
 	Bearing	Retning
 	Before Last:	Før siste:
 	Begin Recording	Start opptak
 	Begin Undo Group	Start angre-gruppe
 	Bend:	Bøy:
-	Bengali	Bengali
-	Best	Best
 	Between Line and Object	Mellom linje og objekt
 	Bevel	Skråkant
 	Bevel Inside	Skråkant inni
@@ -442,7 +420,6 @@
 	Binary assets added	Binære ressurser lagt til
 	Binary assets removed	Binære ressurser fjernet
 	Bind Variable	Bind variabel
-	Bitmap	Bitmap
 	Black	Svart
 	Black & White	Svart-hvitt
 	Black Intensity	Svart intensitet
@@ -546,7 +523,6 @@
 	Bullet	Punktmerke
 	Bullets	Punktmerker
 	Bullets and Numbering	Punktmerker og nummerering
-	Burasagari	Burasagari
 	Burlap	Jutevev
 	Business Card 3.5 × 2 in	Visittkort 3,5 × 2 tommer
 	Business Card 85 × 55 mm	Visittkort 85 × 55 mm
@@ -563,14 +539,11 @@
 	By Rows	Etter rader
 	By Size or Row	Etter størrelse eller rad
 	Byte Order:	Byteorden:
-	CMYK	CMYK
 	CMYK Color	CMYK-farge
 	CMYK Equivalents	CMYK-ekvivalenter
 	CMYK Images	CMYK-bilder
 	CMYK colours print with their own values; off, they go through the colour settings too.	CMYK-farger skrives ut med egne verdier; av, går de også gjennom fargeinnstillingene.
 	CMYK profile in effect	CMYK-profil i bruk
-	CMYK:	CMYK:
-	CRLF (Windows)	CRLF (Windows)
 	CSS Properties	CSS-egenskaper
 	Calligraphic	Kalligrafisk
 	Calligraphic Brush	Kalligrafisk pensel
@@ -657,7 +630,6 @@
 	Choose…	Velg…
 	Chop Design	Del opp design
 	Chosen: {n} of {total}	Valgt: {n} av {total}
-	Chrome	Chrome
 	Chrome…	Krom…
 	Circle	Sirkel
 	Circle (open)	Sirkel (åpen)
@@ -723,7 +695,6 @@
 	Closed	Lukket
 	Closing bracket with no opening one	Avsluttende klamme uten åpningsklamme
 	Clumped	Klumpet
-	Cmd	Cmd
 	Coarse Dots	Grove prikker
 	Coincidence:	Sammenfall:
 	Collapse Panel Group	Slå sammen panelgruppe
@@ -978,7 +949,6 @@
 	Crystallize	Krystalliser
 	Crystallize Tool	Krystalliseringsverktøy
 	Crystallize…	Krystalliser…
-	Ctrl	Ctrl
 	Currency & Symbols	Valuta og symboler
 	Current Brush	Gjeldende pensel
 	Current Colors	Gjeldende farger
@@ -1000,7 +970,6 @@
 	Cut Path at Selected Anchor Points	Klipp bane ved valgte ankepunkter
 	Cutout	Utskjæring
 	Cutout…	Utskjæring…
-	Cyan	Cyan
 	Czech	Tsjekkisk
 	DWG (use DXF)	DWG (bruk DXF)
 	DXF Import Options	Importvalg for DXF
@@ -1032,7 +1001,6 @@
 	Data Set	Datasett
 	Data Set Name	Datasettnavn
 	Data Sets	Datasett
-	Data…	Data…
 	Date (YYYY-MM-DD)	Dato (ÅÅÅÅ-MM-DD)
 	Date (YYYYMMDD)	Dato (ÅÅÅÅMMDD)
 	Dates	Datoer
@@ -1142,15 +1110,12 @@
 	Description	Beskrivelse
 	Description:	Beskrivelse:
 	Deselect	Opphev valg
-	Design…	Design…
 	Desired	Ønsket
 	Destination Folder:	Målmappe:
 	Destination:	Mål:
 	Detail	Detalj
 	Detail:	Detalj:
 	Devices	Enheter
-	Dialog	Dialog
-	Diameter:	Diameter:
 	Diamond	Diamant
 	Diamond (open)	Diamant (åpen)
 	Difference	Differanse
@@ -1183,7 +1148,6 @@
 	Discard Empty Type	Forkast tom tekst
 	Discard Recovered Documents	Forkast gjenopprettede dokumenter
 	Discard White Overprint in Output	Forkast hvit overprint i utdata
-	Discord	Discord
 	Discretionary Hyphen	Valgfri bindestrek
 	Discretionary Ligatures	Valgfrie ligaturer
 	Display	Vis
@@ -1206,8 +1170,6 @@
 	Distribute Objects:	Fordel objekter:
 	Distribute Spacing	Fordel avstand
 	Distribute Spacing:	Fordel avstand:
-	Dither	Dither
-	Dither:	Dither:
 	Divide	Del
 	Divide Horizontally Into	Del horisontalt i
 	Divide Objects Below	Del objekter under
@@ -1308,9 +1270,7 @@
 	Drop here to take it out of its group	Slipp her for å ta det ut av gruppen
 	Dry Brush	Tørrpensel
 	Dry Brush…	Tørrpensel…
-	Duotone	Duotone
 	Duotone Gradients	Duotone-gradienter
-	Duotone…	Duotone…
 	Duplicate	Dupliser
 	Duplicate Action or Action Set	Dupliser handling eller handlingssett
 	Duplicate Anchors	Dupliser ankre
@@ -1405,10 +1365,8 @@
 	Effects	Effekter
 	Effect…	Effekt…
 	Eliminate	Eliminer
-	Ellipse	Ellipse
 	Ellipse Properties:	Egenskaper for ellipse:
 	Ellipse Tool	Ellipseverktøy
-	Ellipse…	Ellipse…
 	Ellipsis	Ellipse
 	Em Box	Em-boks
 	Em Box Bottom/Left	Em-boks bunn/venstre
@@ -1457,12 +1415,10 @@
 	End Undo Group	Avslutt angre-gruppe
 	End arrowhead	Sluttpilspiss
 	End:	Slutt:
-	English	English
 	English: UK	Engelsk: Storbritannia
 	English: USA	Engelsk: USA
 	Enhanced	Forbedret
 	Enlarged	Forstørret
-	Enter	Enter
 	Enter Isolation Mode	Gå inn i isoleringsmodus
 	Entire Font	Hele skriften
 	Envelope	Konvolutt
@@ -1477,7 +1433,6 @@
 	Eraser	Viskelær
 	Eraser Tool	Viskelær-verktøy
 	Error	Feil
-	Esc	Esc
 	Essentials	Grunnleggende
 	Essentials Classic	Grunnleggende klassisk
 	Even	Jevn
@@ -1590,7 +1545,6 @@
 	Eyedropper Tool	Fargepipette-verktøy
 	Eyedropper: click the art to sample the key color	Fargepipette: klikk på grafikken for å måle nøkkelfargen
 	Eyedropper: click the art to sample the stop's colour	Fargepipette: klikk på grafikken for å måle stoppets farge
-	Farsi	Farsi
 	Favorites	Favoritter
 	Feather	Myk kant
 	Feather…	Myk kant…
@@ -1641,7 +1595,6 @@
 	Fills	Fyll
 	Film & Video	Film og video
 	Film Grain…	Filmkorn…
-	Filter	Filter
 	Filter Layers Panel Rows	Filtrer rader i lagpanelet
 	Filters	Filtre
 	Find	Søk
@@ -1746,11 +1699,9 @@
 	Foreground Level	Forgrunnsnivå
 	Forget Import Matches	Glem importkoblinger
 	Fork	Forgrening
-	Format	Format
 	Format Options	Formatvalg
 	Format Presets	Formatforhåndsvalg
 	Format Settings	Formatinnstillinger
-	Format:	Format:
 	Formats:	Formater:
 	Fractional Widths	Brøkbredder
 	Fractions	Brøker
@@ -1767,7 +1718,6 @@
 	Fresco	Freske
 	Fresco…	Freske…
 	From:	Fra:
-	Front	Front
 	Frosted	Frostet
 	Full Document	Hele dokumentet
 	Full Justify	Full justering
@@ -1782,7 +1732,6 @@
 	GIF, 128 colours	GIF, 128 farger
 	GPL palettes keep solid colours only, as RGB.	GPL-paletter beholder bare ensfargede farger, som RGB.
 	GPU Performance	GPU-ytelse
-	Gamma	Gamma
 	Gamut Check	Sjekk av fargerepresentasjon
 	Gamut Warning	Fargerepresentasjonsvarsel
 	Gap	Mellomrom
@@ -1811,9 +1760,6 @@
 	German: Swiss	Tysk: sveitsisk
 	Get Preferences	Hent innstillinger
 	Get Text Range	Hent tekstområde
-	Glass	Glass
-	Glass…	Glass…
-	Global	Global
 	Global Adjust	Global justering
 	Global Brush Dimensions	Globale penseldimensjoner
 	Global Edit Options	Globale redigeringsvalg
@@ -1832,7 +1778,6 @@
 	Go to Conflict	Gå til konflikt
 	Good	God
 	Grab bag	Samlebag
-	Gradient	Gradient
 	Gradient (. or Shift+.)	Gradient (. eller skift+.)
 	Gradient Fill: click to apply, drag onto art	Gradientfyll: klikk for å bruke, dra over grafikk
 	Gradient Finishes	Gradientfinisher
@@ -1906,16 +1851,10 @@
 	Guide	Hjelpelinje
 	Guides	Hjelpelinjer
 	Guides & Grid	Hjelpelinjer og rutenett
-	Gujarati	Gujarati
 	Gutter	Midtstillas
 	Gutter:	Midtstillas:
 	H Spacing:	H-avstand:
-	H:	H:
-	HDTV 1080p	HDTV 1080p
-	HDTV 720p	HDTV 720p
-	HEX	HEX
 	HTML and Images	HTML og bilder
-	Ha	Ha
 	Hair Space	Hårmellomrom
 	Half Arrow (left)	Halvpil (venstre)
 	Half Arrow (right)	Halvpil (høyre)
@@ -1927,7 +1866,6 @@
 	Hand Tool	Håndverktøy
 	Hand-Drawn	Håndtegnet
 	Handles	Håndtak
-	Hard	Hard
 	Hard Light	Hart lys
 	Hard Mix	Hard blanding
 	Harmony Rules	Harmoniregler
@@ -2002,11 +1940,9 @@
 	Highlight Variable	Uthev variabel
 	Highlight anchors on mouse over	Uthev ankre ved museover
 	Highlight:	Uthev:
-	Hindi	Hindi
 	History	Historikk
 	History Options…	Historikkvalg…
 	History States	Historikktilstander
-	Hold	Hold
 	Hollow	Hul
 	Hollow Circle	Hul sirkel
 	Home	Hjem
@@ -2115,7 +2051,6 @@
 	Increase Font Size	Øk skriftstørrelse
 	Increase Font Size by Five Steps	Øk skriftstørrelse med fem trinn
 	Inflate…	Blås opp…
-	Info	Info
 	Ink	Blekk
 	Ink Limit	Blekk­grense
 	Ink Outlines	Blekkonturer
@@ -2180,7 +2115,6 @@
 	Japanese Envelope #4	Japansk konvolutt nr. 4
 	Japanese Postcard	Japansk postkort
 	JavaScript Files	JavaScript-filer
-	JavaScript:	JavaScript:
 	Join	Slå sammen
 	Join Our Discord	Bli med i vår Discord
 	Join Point Text	Føy sammen punkttekst
@@ -2200,7 +2134,6 @@
 	Justify with last line aligned right	Juster med siste linje høyrejustert
 	Kaku #2	Kaku nr. 2
 	Kaku #3	Kaku nr. 3
-	Kannada	Kannada
 	Kashidas	Kashidaer
 	Keep Formatting	Behold formatering
 	Keep Handles	Behold håndtak
@@ -2230,9 +2163,7 @@
 	Kite	Drage
 	Knife	Kniv
 	Knockout Group	Utslukingsgruppe
-	LF (macOS, Linux)	LF (macOS, Linux)
 	LZW Compression	LZW-komprimering
-	Lab	Lab
 	Lab Spot Colors	Lab-spotfarger
 	Lab Spot Colors:	Lab-spotfarger:
 	Lab Values	Lab-verdier
@@ -2251,7 +2182,6 @@
 	Large Thumbnails	Store miniatyrer
 	Large to Small	Stor til liten
 	Largest:	Største:
-	Lasso	Lasso
 	Lasso Tool	Lassoverktøy
 	Last	Siste
 	Last Artboard	Siste monteringsflate
@@ -2261,17 +2191,13 @@
 	Last Page	Siste side
 	Last commit	Siste innsending
 	Latin	Latinsk
-	Latin Extended	Latin Extended
-	Latin-1 Supplement	Latin-1 Supplement
 	Layer	Lag
 	Layer Names	Lagnavn
 	Layer Options	Lagvalg
 	Layer Options…	Lagvalg…
 	Layers	Lag
 	Layers Panel Options	Valg for lagpanel
-	Layout	Layout
 	Layout Order:	Layoutrekkefølge:
-	Layout:	Layout:
 	Leader:	Leder:
 	Leading	Linjeavstand
 	Leaf	Blad
@@ -2293,7 +2219,6 @@
 	Legacy Macintosh RGB (Gamma 1.8)	Eldre Macintosh RGB (gamma 1,8)
 	Legacy vector clipboard	Eldre vektorutklippstavle
 	Legacy vector clipboard (no transparency)	Eldre vektorutklippstavle (ingen gjennomsiktighet)
-	Legal	Legal
 	Legends in Wedges	Forklaringer i sektorer
 	Length	Lengde
 	Length X-Axis:	Lengde X-akse:
@@ -2370,7 +2295,6 @@
 	Linked Files	Koblede filer
 	Links	Koblinger
 	Linux Display Server	Linux-skjermtjener
-	Liquify	Liquify
 	List Data Sets	Liste datasett
 	List Folder	List mappe
 	List Graphic Styles	Liste grafiske stiler
@@ -2426,7 +2350,6 @@
 	Lock Station Point	Lås stasjonspunkt
 	Lock Variables	Lås variabler
 	Locked	Låst
-	Logo 1000×1000	Logo 1000×1000
 	Long	Lang
 	Long Lines	Lange linjer
 	Long Strokes	Lange strøk
@@ -2438,8 +2361,6 @@
 	Low Resolution	Lav oppløsning
 	Low resolution (150 ppi)	Lav oppløsning (150 ppi)
 	Luminosity	Lyshet
-	Mac	Mac
-	Magenta	Magenta
 	Magic Wand	Tryllestav
 	Magic Wand Options	Tryllestav-valg
 	Magic Wand Settings	Innstillinger for tryllestav
@@ -2477,14 +2398,12 @@
 	Make with Top Object	Lag med øverste objekt
 	Make with Warp…	Lag med forvregning…
 	Make/Release Clipping Mask	Lag/frigjør klippemaske
-	Malayalam	Malayalam
 	Manage Presets	Administrer forhåndsvalg
 	Manage Toolbars	Administrer verktøylinjer
 	Manage Toolbars…	Administrer verktøylinjer…
 	Manage Workspaces	Administrer arbeidsområder
 	Manage Workspaces…	Administrer arbeidsområder…
 	Manually	Manuelt
-	Marathi	Marathi
 	Mark Older Files as [Converted] When Opened	Merk eldre filer som [konvertert] når de åpnes
 	Mark as trapped	Merk som fanget
 	Marker…	Markør…
@@ -2541,21 +2460,15 @@
 	Mesh Point Color	Nettpunktfarge
 	Mesh Tool	Nettverktøy
 	Message:	Melding:
-	Metadata:	Metadata:
 	Metallic Gradients	Metalliske gradienter
 	Meters	Meter
 	Method	Metode
 	Method:	Metode:
-	Mezzotint	Mezzotint
-	Mezzotint…	Mezzotint…
 	Millimeters	Millimeter
 	Minify	Forminsk
-	Minimal	Minimal
 	Minimize	Minimer
-	Minimum	Minimum
 	Minimum angle	Minste vinkel
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum må ikke overstige ønsket, heller ikke ønsket maksimum.
-	Minimum:	Minimum:
 	Minus Back	Minus bak
 	Minus Front	Minus foran
 	Mirror	Speil
@@ -2584,10 +2497,8 @@
 	Modified since it was read: {path}	Endret siden den ble lest: {path}
 	Modified:	Endret:
 	Modify	Endre
-	Mojikumi	Mojikumi
 	Mojikumi Set	Mojikumi-sett
 	Monitor RGB	Skjerm-RGB
-	Mono	Mono
 	Monochromatic	Monokromatisk
 	Monochrome	Monokrom
 	Monochrome images	Monokrome bilder
@@ -2644,7 +2555,6 @@
 	Multiply	Multipliser
 	Muted	Dempet
 	My Themes	Mine temaer
-	N pt per	N pt per
 	N slices …, evenly spaced	N oppdelinger …, jevnt fordelt
 	NTSC Colors	NTSC-farger
 	Name	Navn
@@ -2655,7 +2565,6 @@
 	Name:	Navn:
 	Names the script builds as it runs: {count}	Navn skriptet bygger mens det kjører: {count}
 	Navigate	Naviger
-	Navigator	Navigator
 	Navigator Panel Options	Valg for navigatorpanel
 	Nearly Closed Paths	Nesten lukkede baner
 	Nearly Coincident Anchors	Nesten sammenfallende ankre
@@ -2804,7 +2713,6 @@
 	None (Color Preview)	Ingen (fargeforhåndsvisning)
 	None (keep transparency)	Ingen (behold gjennomsiktighet)
 	None.	Ingen.
-	Normal	Normal
 	Normal Screen Mode	Normal skjermmodus
 	Norwegian	Norsk
 	Not a script for the reference app	Ikke et skript for referanseprogrammet
@@ -2819,7 +2727,6 @@
 	Nothing is selected. Select the art to export, then open this tab again.	Ingenting er valgt. Velg grafikken som skal eksporteres, og åpne denne fanen igjen.
 	Nothing matches the Show filter.	Ingenting samsvarer med visningsfilteret.
 	Nothing to print	Ingenting å skrive ut
-	Nudge	Nudge
 	Nudge in Perspective	Nudge i perspektiv
 	Number (####)	Tall (####)
 	Number of Artboards:	Antall monteringsflater:
@@ -2831,7 +2738,6 @@
 	Numbered List	Nummerert liste
 	Numbers Without Units Are Points	Tall uten enheter er punkter
 	Numerator	Teller
-	OK	OK
 	Object	Objekt
 	Object Highlighting	Objektutheving
 	Object IDs:	Objekt-ID-er:
@@ -2850,7 +2756,6 @@
 	Ocean Ripple…	Havbølger…
 	Odd Fields	Oddetallsfelt
 	Odd-Numbered Anchors	Oddetallsnumrete ankre
-	Odia	Odia
 	Off	Av
 	Off-Artboard Art	Grafikk utenfor monteringsflaten
 	Off-Axis Back	Utenfor akse bak
@@ -2865,7 +2770,6 @@
 	Offset Path…	Forskjøvet bane…
 	Offset X	Forskyvning X
 	Offset:	Forskyvning:
-	Ogee	Ogee
 	Omit	Utelat
 	On	På
 	On Artboards	På monteringsflater
@@ -2954,7 +2858,6 @@
 	Open the URL in the web browser	Åpne URL-en i nettleseren
 	Open this dialog with these settings next time	Åpne denne dialogen med disse innstillingene neste gang
 	Open this setting's help page	Åpne hjelpesiden for denne innstillingen
-	OpenType	OpenType
 	OpenType Features	OpenType-funksjoner
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Da den ble åpnet, ble det VectorCraft ikke kan lese ennå ({what}), utelatt, så å erstatte den mister det for godt. Lagre under et annet navn for å beholde det.
 	Opens files in other apps	Åpner filer i andre programmer
@@ -3008,13 +2911,11 @@
 	Output:	Utdata:
 	Outside	Utenfor
 	Outside the document	Utenfor dokumentet
-	Oval	Oval
 	Overlap	Overlapp
 	Overlap:	Overlapp:
 	Overlapping	Overlappende
 	Overlay	Overlegg
 	Overlay Edge	Overleggskant
-	Overprint	Overprint
 	Overprint Black	Overprint svart
 	Overprint Black…	Overprint svart…
 	Overprint Fill	Overprint fyll
@@ -3023,16 +2924,13 @@
 	Overprint Stroke	Overprint strek
 	Overprint and Transparency Flattener	Overprint og utflating av gjennomsiktighet
 	Overprint and Transparency Flattener Options	Valg for overprint og utflating av gjennomsiktighet
-	Overprint:	Overprint:
 	Overprints:	Overprint:
 	Override Action "Export" Commands	Overstyr "Eksporter"-kommandoer i handlinger
 	Override Action "Open" Commands	Overstyr "Åpne"-kommandoer i handlinger
 	Override Action "Save" Commands	Overstyr "Lagre"-kommandoer i handlinger
 	Override Character Color	Overstyr tegnfarge
 	Overrides	Overstyringer
-	PDF	PDF
 	PDF 1.3 files have no transparency: the preset flattens it.	PDF 1.3-filer har ingen gjennomsiktighet: forhåndsvalget flater den ut.
-	PDF 1.7	PDF 1.7
 	PDF File	PDF-fil
 	PDF Info	PDF-info
 	PDF Preset	PDF-forhåndsvalg
@@ -3044,10 +2942,6 @@
 	PDF-compatible	PDF-kompatibel
 	PDF/A files carry their own output intent.	PDF/A-filer har sin egen utdatahensikt.
 	PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged.	PDF/X-1a-filer er CMYK: hver farge konverteres til målet (tomt: utdatahensiktens CMYK-profil), umerket.
-	PDF/X-1a:2001	PDF/X-1a:2001
-	PDF/X-3:2002	PDF/X-3:2002
-	PDF/X-4:2010	PDF/X-4:2010
-	PPI	PPI
 	PRESET DETAILS	FORHÅNDSVALGDETALJER
 	PRs	PR-er
 	Package	Pakke
@@ -3130,7 +3024,6 @@
 	Pen Tool	Pennverktøy
 	Pencil	Blyant
 	Pencil Tool	Blyantverktøy
-	Pentagram	Pentagram
 	Percent:	Prosent:
 	Perceptual	Perseptuell
 	Perceptual Scales	Perseptuelle skalaer
@@ -3167,7 +3060,6 @@
 	Pie Start Angle:	Startvinkel for sektor:
 	Pin Bar Position	Plassering av nålestolpe
 	Pink	Rosa
-	Pivot:	Pivot:
 	Pixel	Piksel
 	Pixel Preview	Pikselforhåndsvisning
 	Pixelate	Pikseler
@@ -3215,7 +3107,6 @@
 	Polar Grid Tool	Polar­rutenett-verktøy
 	Polar Grid Tool Options	Valg for polar­rutenett-verktøy
 	Polish	Polsk
-	Polygon	Polygon
 	Polygon Properties:	Egenskaper for polygon:
 	Polygon Tool	Polygonverktøy
 	Portrait	Stående
@@ -3225,7 +3116,6 @@
 	Position Panel Above Text	Plasser panel over teksten
 	Position:	Posisjon:
 	Positive	Positiv
-	PostScript:	PostScript:
 	Postcard	Postkort
 	Poster 18 × 24 in	Plakat 18 × 24 tommer
 	Poster 24 × 36 in	Plakat 24 × 36 tommer
@@ -3334,13 +3224,11 @@
 	Pucker Tool	Rynkeverktøy
 	Punctuation	Tegnsetting
 	Punctuation Space	Tegnsettingsmellomrom
-	Punjabi	Punjabi
 	Puppet Warp	Dukke-forvregning
 	Puppet Warp Pins	Nåler for dukke-forvregning
 	Puppet Warp Tool	Dukke-forvregningsverktøy
 	Purple	Lilla
 	Put back in the toolbar	Sett tilbake i verktøylinjen
-	Q	Q
 	Quality	Kvalitet
 	Quality {quality}	Kvalitet {quality}
 	Quality:	Kvalitet:
@@ -3350,26 +3238,18 @@
 	Quit VectorCraft	Avslutt VectorCraft
 	RECENT	NYLIG
 	RECENT (1)	NYLIG (1)
-	RGB	RGB
 	RGB Color	RGB-farge
 	RGB Images	RGB-bilder
-	RGB:	RGB:
 	Radar Graph Tool	Radargraf-verktøy
-	Radial	Radial
 	Radial Blur	Radialuskarp
 	Radial Blur…	Radialuskarp…
 	Radial Dividers:	Radiale skiller:
 	Radial Glows	Radiale glød
 	Radial Gradient	Radialgradient
 	Radial Repeat	Radial gjentakelse
-	Radius	Radius
-	Radius 1	Radius 1
-	Radius 2	Radius 2
 	Radius1	Radius 1
 	Radius2	Radius 2
-	Radius:	Radius:
 	Rainbow	Regnbue
-	Ramp:	Ramp:
 	Random	Tilfeldig
 	Randomize Colors	Tilfeldige farger
 	Randomize Opacity	Tilfeldig dekkevne
@@ -3664,7 +3544,6 @@
 	Right-click an item to move it into this group.	Høyreklikk et element for å flytte det inn i denne gruppen.
 	Right-to-Left Paragraph Direction	Høyre-til-venstre avsnittsretning
 	Right:	Høyre:
-	Ring	Ring
 	Rings	Ringer
 	Ripple Magnitude	Bølgemagnitude
 	Ripple Size	Bølgestørrelse
@@ -3705,8 +3584,6 @@
 	Roundness:	Rundhet:
 	Row Size:	Radstørrelse:
 	Rows:	Rader:
-	Ruby	Ruby
-	Ruby…	Ruby…
 	Rule:	Linjal:
 	Ruler Origin	Linjalorigo
 	Rulers	Linjaler
@@ -3716,7 +3593,6 @@
 	Runs code the checker can't read	Kjører kode kontrolløren ikke kan lese
 	Russian	Russisk
 	SAVED	LAGRET
-	SVG 1.1	SVG 1.1
 	SVG Filters	SVG-filtre
 	SVG Interactivity	SVG-interaktivitet
 	SVG Options	SVG-valg
@@ -3963,7 +3839,6 @@
 	Serbian: Cyrillic	Serbisk: kyrillisk
 	Serbian: Latin	Serbisk: latinsk
 	Serialize Document	Serialiser dokument
-	Serif / Mincho	Serif / Mincho
 	Server-side (.map)	Tjener­side (.map)
 	Services	Tjenester
 	Set 1	Sett 1
@@ -4029,7 +3904,6 @@
 	Shear…	Skjær…
 	Shell Lower…	Nedre skall…
 	Shell Upper…	Øvre skall…
-	Shift	Shift
 	Shift to Color…	Skift til farge…
 	Shift+Click	Skift+klikk
 	Shift+Drag	Skift+dra
@@ -4131,8 +4005,6 @@
 	Show:	Vis:
 	Shown with the optimised preview.	Vises med den optimaliserte forhåndsvisningen.
 	Shrink Text to Fit	Krymp tekst så det passer
-	Side 1:	Side 1:
-	Side 2:	Side 2:
 	Side Length:	Sidelengde:
 	Side Tile	Sideflis
 	Sides:	Sider:
@@ -4250,7 +4122,6 @@
 	Sort by Status	Sorter etter status
 	Source Folder:	Kildemappe:
 	Source Image	Kildefil
-	Source Sans 3	Source Sans 3
 	Source code on GitHub	Kildekode på GitHub
 	Space After Paragraph	Mellomrom etter avsnitt
 	Space Before Paragraph	Mellomrom før avsnitt
@@ -4272,7 +4143,6 @@
 	Spelling	Staving
 	Spike	Pigg
 	Spin	Spinn
-	Spiral	Spiral
 	Spiral Tool	Spiralverktøy
 	Split Complementary	Delt komplementær
 	Split Freeform Line	Del frihåndslinje
@@ -4305,7 +4175,6 @@
 	Stacked Column Graph Tool	Stablet kolonnegraf-verktøy
 	Stained Glass	Farget glass
 	Stamp	Stempel
-	Standard	Standard
 	Standard Ligatures	Standardligaturer
 	Star	Stjerne
 	Step Backward	Trinn bakover
@@ -4329,14 +4198,10 @@
 	Subdivisions	Underdelinger
 	Subscript	Senketekst
 	Subtract	Trekk fra
-	Sumi-e	Sumi-e
 	Superscript	Hevetekst
-	Swash	Swash
 	Swatches	Fargeprøver
 	Symbols	Symboler
-	System	System
 	Table	Tabell
-	Tabloid	Tabloid
 	Taper	Avsmalning
 	Target	Mål
 	Target:	Mål:
@@ -4370,12 +4235,8 @@
 	Trap	Felle
 	Trap…	Felle…
 	Triangle	Trekant
-	Trim	Trim
 	Twirl	Virvel
 	Twist	Vri
-	Type	Type
-	Type:	Type:
-	Type…	Type…
 	Underline	Understrek
 	Underpainting	Underliggende maling
 	Undo	Angre
@@ -4394,7 +4255,6 @@
 	Vertical	Vertikal
 	Vertical Type Tool	Vertikalt tekstverktøy
 	Very High	Svært høy
-	Video	Video
 	View	Vis
 	Violet	Fiolett
 	Visibility	Synlighet
@@ -4404,7 +4264,6 @@
 	Water Paper	Vått papir
 	Watercolor	Akvarell
 	Wave…	Bølge…
-	Web	Web
 	Weight	Vekt
 	Weight:	Vekt:
 	White	Hvit
@@ -4420,11 +4279,9 @@
 	Workspace	Arbeidsområde
 	Yellow	Gul
 	Yes	Ja
-	Zoom	Zoom
 	Zoom In	Zoom inn
 	Zoom Out	Zoom ut
 	Zoom Tool	Zoom-verktøy
-	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	“{name}” already exists. Replace it?	«{name}» finnes allerede. Erstatte den?
 3d	Bevel	Skråkant
 3d	Cap	Ende
@@ -4459,12 +4316,6 @@ axis	Horizontal	Horisontal
 axis	Vertical	Vertikal
 breakText	Glyphs	Glyfer
 breakText	Lines	Linjer
-digits	Bengali	Bengali
-digits	Gujarati	Gujarati
-digits	Hindi	Hindi
-digits	Kannada	Kannada
-digits	Malayalam	Malayalam
-digits	Odia	Odia
 effect	Horizontal	Horisontal
 effect	Points	Punkter
 effect	Regular	Normal
@@ -4473,7 +4324,6 @@ effect	Vertical	Vertikal
 file-filter	Flattener presets	Forhåndsvalg for utflating
 file-filter	Print presets	Utskriftsforhåndsvalg
 font-script	Japanese	Japansk
-gradient-kind	Radial	Radial
 imageTrace	Outline	Omriss
 lighting	Light	Lys
 mark-style	Japanese	Japansk
@@ -4485,11 +4335,8 @@ swatch	Blue	Blå
 swatch	Brights	Lyse toner
 swatch	Brown	Brun
 swatch	Copper	Kobber
-swatch	Cyan	Cyan
 swatch	Grays	Gråtoner
 swatch	Green	Grønn
-swatch	Indigo	Indigo
-swatch	Magenta	Magenta
 swatch	Orange	Oransje
 swatch	Pink	Rosa
 swatch	Purple	Lilla
@@ -4499,10 +4346,6 @@ swatch	White	Hvit
 swatch	Yellow	Gul
 theme	Appearance	Utseende
 	x-Height	x-høyde
-digits	Devanagari	Devanagari
-digits	Gurmukhi	Gurmukhi
-digits	Tamil	Tamil
-digits	Telugu	Telugu
 @plural	Result: {n}|Results: {n}	Resultat: {n}|Resultater: {n}
 	Marquee Selection	Rektangelmarkering
 	Touching	Berørte objekter
@@ -4526,54 +4369,6 @@ digits	Telugu	Telugu
 @msg	fonts not copied: {fonts}	skrifter som ikke ble kopiert: {fonts}
 @msg	(fonts not copied: {fonts})	(skrifter som ikke ble kopiert: {fonts})
 @msg	a new document refuses this file because of these variables: {names}	et nytt dokument avviser denne filen på grunn av disse variablene: {names}
-	a pin to warp  |	a pin to warp  |
-	a point to edit it  |	a point to edit it  |
-	a stroke to add a width point  |	a stroke to add a width point  |
-	across a selected object to set the gradient direction	across a selected object to set the gradient direction
-	across paths to push them along  |	across paths to push them along  |
-	an anchor or path segment to select it  |	an anchor or path segment to select it  |
-	an object to copy its attributes  |	an object to copy its attributes  |
-	an object, then another to blend them  |	an object, then another to blend them  |
-	cancels  |  Double-click the tool for options	cancels  |  Double-click the tool for options
-	for exact size	for exact size
-	for exact values	for exact values
-	from center  |	from center  |
-	keeps its proportions)	keeps its proportions)
-	near a selected pin to rotate  |	near a selected pin to rotate  |
-	on the canvas to create one (	on the canvas to create one (
-	out from a highlighted edge to place its dimension  |	out from a highlighted edge to place its dimension  |
-	over paths to roughen their outlines  |	over paths to roughen their outlines  |
-	over paths, and hold still to keep going  |	over paths, and hold still to keep going  |
-	right or left to zoom in or out  |	right or left to zoom in or out  |
-	selects several, or draws one inside an artboard)	selects several, or draws one inside an artboard)
-	the art to add a pin  |	the art to add a pin  |
-	the object to duplicate	the object to duplicate
-	the object to select  |	the object to select  |
-	to add	to add
-	to add a corner point  |	to add a corner point  |
-	to add a smooth point  |	to add a smooth point  |
-	to add smooth points  |	to add smooth points  |
-	to apply the selection's to it  |	to apply the selection's to it  |
-	to blend from it  |	to blend from it  |
-	to change one side  |	to change one side  |
-	to close  |	to close  |
-	to constrain proportions  |	to constrain proportions  |
-	to copy  |	to copy  |
-	to create area type  |	to create area type  |
-	to create point type  |	to create point type  |
-	to draw  |	to draw  |
-	to move  |	to move  |
-	to move in perspective  |	to move in perspective  |
-	to select an artboard  |	to select an artboard  |
-	to select more pins  |	to select more pins  |
-	to select more points  |	to select more points  |
-	to select multiple objects  |	to select multiple objects  |
-	to set the reference point  |	to set the reference point  |
-	to toggle corner  |	to toggle corner  |
-	to transform  |	to transform  |
-	to zoom in  |	to zoom in  |
-	to zoom out  |	to zoom out  |
-	while dragging to move perpendicular to the plane  |	while dragging to move perpendicular to the plane  |
 	3D Export Format	3D-exportformat
 	Align to Pixel Grid	Justera mot pixelrutnät
 	Clear Plug-in Cache	Töm pluginets cache
@@ -4683,7 +4478,6 @@ digits	Telugu	Telugu
 	Straight or Curved Segment	Rakt eller böjt segment
 	Stray Points	Lösa punkter
 	Stroke Weight	Konturtjocklek
-	Sumi-e…	Sumi-e…
 	Swap Fill and Stroke	Byt plats på fylling og strek
 	Swap Objects	Byt plats på objekt
 	Swap Objects and Sizes	Byt plats og størrelse på objekt
@@ -4715,10 +4509,8 @@ digits	Telugu	Telugu
 	Tab	Tabb
 	Tab Stops	Tabbstopp
 	Tabs	Tabbstopp
-	Tamil	Tamil
 	Target Contents	Målets innehåll
 	Tate-chu-yoko Settings…	Inställningar for Tate-chu-yoko…
-	Telugu	Telugu
 	Temperature/Tint…	Temperatur/färgton…
 	Template	Mall
 	Templates Folder	Mallmapp
@@ -4756,10 +4548,8 @@ digits	Telugu	Telugu
 	Toolbar: Show Controls	Verktygsfält: Visa kontroller
 	Toolbar: Single/Double Column	Verktygsfält: En/två kolumner
 	Torn Edges…	Riviga kanter…
-	Touch	Touch
 	Touch Type	Beröringstext
 	Touch Type Tool	Beröringstextverktyg
-	Tracing	Tracing
 	Trackpad Gesture to Rotate View	Rotera vyn med en gest på styrplattan
 	Trademark Symbol	Varumärkessymbol
 	Transform Again	Transformera igen
@@ -4795,7 +4585,6 @@ digits	Telugu	Telugu
 	Type on a Path	Text på bana
 	Type on a Path Options…	Alternativ for text på bana…
 	Type on a Path Tool	Verktyg for text på bana
-	Typography	Typography
 	UI Brightness	Gränssnittets ljusstyrka
 	UI Scaling	Gränssnittsskalning
 	UPPERCASE	VERSALER
@@ -4818,7 +4607,6 @@ digits	Telugu	Telugu
 	Update Links	Uppdatera länkar
 	Update Selection	Uppdatera markering
 	Update While Dragging	Uppdatera ved dragning
-	Urdu	Urdu
 	Use Compression	Använd komprimering
 	Use Japanese Crop Marks	Använd japanska beskärningsmärken
 	Use Library Item	Använd biblioteksobjekt
@@ -4871,7 +4659,6 @@ digits	Telugu	Telugu
 	User Symbol Library 9	Användarbibliotek for symboler 9
 	Vector Effects	Vektoreffekter
 	Vector Halftone…	Vektorrastrering…
-	VectorCraft	VectorCraft
 	VectorCraft Help…	VectorCraft-hjälp…
 	VectorCraft Title Bar on Every Desktop	VectorCrafts namnlist på alla skrivbord
 	VectorCraft on GitHub	VectorCraft på GitHub
@@ -4897,25 +4684,13 @@ digits	Telugu	Telugu
 	Width Profiles	Breddprofiler
 	Width Tool	Breddverktyg
 	Wrinkle Tool	Skrynkelverktyg
-	X11 (XWayland)	X11 (XWayland)
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) när en penna er ansluten
 	XML ID	XML-id
 	Yards	Yard
 	Zig Zag…	Sicksack…
 	Zoom to Selection	Zooma til markering
 	Zoom with Mouse Wheel	Zooma med mushjulet
-	[1P-High View]	[1P-High View]
-	[1P-Low View]	[1P-Low View]
-	[1P-Normal View]	[1P-Normal View]
-	[2P-High View]	[2P-High View]
-	[2P-Low View]	[2P-Low View]
-	[2P-Normal View]	[2P-Normal View]
-	[3P-Low View]	[3P-Low View]
-	[3P-Normal View]	[3P-Normal View]
 	lowercase	gemener
-	— missing	— missing
-	— substituted by {style}	— substituted by {style}
-	— {n} characters from another font	— {n} characters from another font
 	Change how the objects its effect is applied to are drawn	Ändra hur objekten som dess effekt används på tegnes
 	Change, add and delete objects in the document	Ändra, lägga til og ta bort objekt i dokumentet
 	Continue	Fortsätt
@@ -4927,12 +4702,9 @@ digits	Telugu	Telugu
 	Extrude	Extrudera
 	File SHA-256: {hash}	Filens SHA-256: {hash}
 	Find In	Sök i
-	ID: {id}	ID: {id}
 	Inflate	Blås upp
 	Install “{name}” in place of the plug-in with the same ID?	Installera ”{name}” i stället for det plugin som har samma id?
 	Install “{name}”, which asks for these permissions?	Installera ”{name}”, som begär disse behörigheter?
-	Kana	Kana
-	Kanji	Kanji
 	Keep a cache of its own, which you can clear	Spara en egen cache, som du kan tömma
 	Keep data of its own with the document	Spara egna data med dokumentet
 	Keep settings of its own	Spara egna inställningar
@@ -4940,7 +4712,6 @@ digits	Telugu	Telugu
 	No settings found	Inga inställningar hittades
 	Numerals	Siffror
 	Plane	Plan
-	Press	Press
 	Press Play Current Selection in the Actions panel to go on.	Fortsätt gjennom å trycka på Spela upp aktuell markering i panelen Åtgärder.
 	Read the objects it is given	Läsa objekten den får
 	Record Stop	Spela in stopp
@@ -4950,13 +4721,10 @@ digits	Telugu	Telugu
 	Select objects, then pick an object type to give them a 3D effect.	Markera objekt og velg sedan en objekttyp for å ge dem en 3D-effekt.
 	Show its progress, see Cancel and write log lines	Visa sitt förlopp, se när det avbryts og skriva loggrader
 	Standard Vertical Roman Alignment	Standardjustering for vertikal romersk text
-	Standard:	Standard:
 	Start Tile	Startruta
 	Start arrowhead	Startpilspets
 	Start from VectorCraft Defaults	Utgå fra standardvärdena i VectorCraft
-	Start:	Start:
 	Static Symbol	Statisk symbol
-	Status	Status
 	Step	Steg
 	Step by Step	Steg for steg
 	Steps:	Steg:
@@ -4979,7 +4747,6 @@ digits	Telugu	Telugu
 	Stylistic Sets	Stilistiska uppsättningar
 	Subscript:	Nedsänkt:
 	Subset fonts below:	Skapa delmängd av skrift under:
-	Suffix	Suffix
 	Superscript:	Upphöjd:
 	Swap Fill and Stroke (Shift+X)	Byt plats på fylling og strek (Shift+X)
 	Swap start and end arrowheads	Byt plats på start- og slutpilspets
@@ -4995,16 +4762,13 @@ digits	Telugu	Telugu
 	Symbolism Tools Options	Alternativ for symbolverktyg
 	Syntax newer than ES3	Syntax nyare än ES3
 	System Title Bar takes precedence over this option while it is on.	Systemets namnlist har företräde framför det här alternativet så länge den er på.
-	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings	Inställningar for Tate-chu-yoko
 	Template literal not closed	Mallsträngen er ikke avslutad
 	Templates…	Mallar…
-	Text	Text
 	Text Displayed in Cell:	Text som visas i cellen:
 	Text Export Options	Alternativ for textexport
 	Text Flow	Textflöde
 	Text Import Options	Alternativ for textimport
-	Text:	Text:
 	Thai	Thailändska
 	The Print Tiling tool placed the pages.	Verktyget Utskriftsuppdelning placerade sidorna.
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljövariabeln VECTORCRAFT_TITLEBAR väljer namnlisten så länge den er angiven.
@@ -5042,7 +4806,6 @@ digits	Telugu	Telugu
 	Tiles are numbered across, then down; leave the range empty for every tile.	Rutorna numreras fra venstre til høyre og sedan nedåt. Lämna omfånget tomt for å få med alla rutor.
 	Tints	Ljusare toner
 	Tints and Shades	Ljusare og mörkare toner
-	Tips	Tips
 	To:	Till:
 	Toggle single/double column	Växla mellom en og två kolumner
 	Tone 1	Ton 1
@@ -5077,7 +4840,6 @@ digits	Telugu	Telugu
 	Type becomes outlines, and strokes a CAD line can't draw become filled shapes.	Text blir konturlinjer, og streker som en CAD-linje ikke kan tegne blir fyllda former.
 	Type on a Path Options	Alternativ for text på bana
 	Type stays text, and every stroke is a line with its lineweight and dashes.	Text förblir text, og varje strek blir en linje med sin linjetjocklek og sina streck.
-	URL:	URL:
 	Undo {name}	Ångra {name}
 	Unembed…	Ta bort inbäddning…
 	Uniformly Scaled	Likformigt skalad
@@ -5093,7 +4855,6 @@ digits	Telugu	Telugu
 	Up/Down:	Upp/ned:
 	Update Link	Uppdatera länk
 	Update Modified Links	Uppdatera ändrade länkar
-	Use	Use
 	Use Artboards	Använd tegneflater
 	Use Black Point Compensation	Använd svartpunktskompensering
 	Use Document Raster Effects Resolution	Använd upplösningen fra inställningarna for rastereffekter i dokument
@@ -5109,12 +4870,10 @@ digits	Telugu	Telugu
 	User Defined Libraries	Användardefinierade bibliotek
 	Uses every data set of the open document.	Använder alla datasett i det åpne dokumentet.
 	V Spacing:	V-avstånd:
-	V:	V:
 	Variable	Variabel
 	Variable Font	Variabelt skrift
 	Variable Options…	Variabelalternativ…
 	Variable Width Profile	Profil for variabel bredd
-	Variation:	Variation:
 	Vector Halftone	Vektorrastrering
 	Vector illustration — fast, open, scriptable.	Vektorillustration – snabb, åpen, skriptbar.
 	VectorCraft Updates	Uppdateringar for VectorCraft
@@ -5126,8 +4885,6 @@ digits	Telugu	Telugu
 	VectorCraft {release} and later (version {n})	VectorCraft {release} og senare (version {n})
 	Vectors	Vektorer
 	Version {version} — open-source vector illustration in pure Rust.	Version {version} – vektorillustration med åpen källkod i ren Rust.
-	Version:	Version:
-	Version: {version}	Version: {version}
 	Vertical Dividers:	Vertikala avdelare:
 	Vertical Guide	Vertikal hjelpelinje
 	Vertical Scale	Vertikal skala
@@ -5189,7 +4946,6 @@ digits	Telugu	Telugu
 	{folders} and {files} searched	{folders} og {files} genomsökta
 	{format} Options	{format}-alternativ
 	{kind} Gradient	{kind} gradient
-	{kind}, {model}	{kind}, {model}
 	{name} (spot)	{name} (dekor)
 	{pages} in all, {count} per copy	{pages} totalt, {count} per exemplar
 	{page} of {count}	{page} av {count}
@@ -5203,9 +4959,6 @@ digits	Telugu	Telugu
 	{tool} Tool Options	Alternativ for verktyget {tool}
 	{warning}: click to correct to the closest color ({hex})	{warning}: klicka for å korrigera til närmaste farge ({hex})
 	“{file}” is protected by a password.	”{file}” er lösenordsskyddad.
-	Load All Styles	Load All Styles
-	Load Character Styles	Load Character Styles
-	Load Paragraph Styles	Load Paragraph Styles
 	Symbol Screener	Symbolopacitet
 	Symbol Scruncher	Dra ihop symboler
 	Symbol Shifter	Flytta symboler
@@ -5216,23 +4969,8 @@ digits	Telugu	Telugu
 	Temperature/Tint	Temperatur/färgton
 	Text Orientation	Textorientering
 	Text Wrap Options	Alternativ for textombrytning
-	Tweak	Tweak
 	Typing	Skrivning
 	Wrinkle	Skrynkla
-	Zig Zag	Zig Zag
-	@plural: {n} PR|{n} PRs	@plural: {n} PR|{n} PRs
-	@plural: {n} commit|{n} commits	@plural: {n} commit|{n} commits
-	diagnostics: render	diagnostics: render
-	diagnostics: ui	diagnostics: ui
-	file-filter: All placeable files	file-filter: All placeable files
-	file-filter: All readable files	file-filter: All readable files
-	file-filter: Export presets	file-filter: Export presets
-	file-filter: PDF presets	file-filter: PDF presets
-	file-filter: PDF-compatible .ai	file-filter: PDF-compatible .ai
-	file-filter: SVG Compressed	file-filter: SVG Compressed
-	file-filter: Swatch libraries	file-filter: Swatch libraries
-	file-filter: Templates	file-filter: Templates
-	file-filter: VectorCraft Template	file-filter: VectorCraft Template
 swatch	Azure	Azurblå
 swatch	Bright Blue	Klarblå
 swatch	Bright Green	Klargrön
@@ -5243,14 +4981,10 @@ swatch	Chocolate	Choklad
 swatch	Coffee	Kaffe
 swatch	Cyan Green	Cyangrön
 swatch	Emerald	Smaragd
-swatch	Espresso	Espresso
-swatch	Lime	Lime
-swatch	Ocean	Ocean
 swatch	Orange Red	Orangeröd
 swatch	Radial White, Black	Radiell vit, svart
 swatch	Rose	Rosa
 swatch	Rust	Rost
-swatch	Sand	Sand
 swatch	Sunset	Solnedgång
 swatch	Tan	Sandbrun
 swatch	Teal	Blågrön
@@ -5275,14 +5009,12 @@ swatch	[Registration]	[Passmärke]
 @msg	Create needs fills, strokes or both	Skapa behöver fyllningar, streker eller båda
 @msg	DXF options: {e}	DXF-alternativ: {e}
 @msg	DXF scale must be a positive number up to {_1}, not {scale}	DXF-skalan må være ett positivt tall upp til {_1}, ikke {scale}
-@msg	DXF {field} `{s}`: {allowed}	DXF {field} `{s}`: {allowed}
 @msg	Dimension is locked or hidden	Måttet er låst eller skjult
 @msg	Dimension mode does not match its source	Måttets läge matchar ikke dess källa
 @msg	Draw Inside needs exactly one selected path, compound path or text	Rita inuti kräver exakt en markerad bana, sammansatt bana eller text
 @msg	EPS Save retains the artboard and all artwork: use document.export for cropped or selected-only EPS	När du lagrer som EPS behålls ritytan og allt bildmaterial: använd document.export for beskuren EPS eller EPS med bare det merkede
 @msg	EPS flattener: {e}	EPS-utplattning: {e}
 @msg	EPS options: {e}	EPS-alternativ: {e}
-@msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	Exportera for skärmar skriver png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai eller vectorcraft
 @msg	Flare click coordinates must be finite numbers	Klickkoordinaterna for Ljusreflex må være ändliga tall
 @msg	HTML Text applies to object slices of type only	HTML-text gäller endast objektskivor av texttyp
@@ -5318,7 +5050,6 @@ swatch	[Registration]	[Passmärke]
 @msg	`asset` is the asset id (see assets.list)	`asset` er resursens id (se assets.list)
 @msg	`at` must be a byte offset	`at` må være en byteförskjutning
 @msg	`autoLeading` must be a number	`autoLeading` må være ett tall
-@msg	`background` must be "", "matte" or #rrggbb	`background` must be "", "matte" or #rrggbb
 @msg	`burasagari` must be "none", "standard" or "forced"	`burasagari` må være "none", "standard" eller "forced"
 @msg	`center` must be [x, y]	`center` må være [x, y]
 @msg	`charAlign` must be "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" or "icfBottom"	`charAlign` må være "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" eller "icfBottom"
@@ -5335,7 +5066,6 @@ swatch	[Registration]	[Passmärke]
 @msg	`contents` goes with `to`	`contents` används tillsammans med `to`
 @msg	`corners` must be sharp, round or square, not `{other}`	`corners` må være sharp, round eller square, ikke `{other}`
 @msg	`corners` must list anchor indices (0, 1, 2…), not {v}	`corners` må liste ankarpunktsindex (0, 1, 2…), ikke {v}
-@msg	`count` must be a whole number from 1 to 100	`count` must be a whole number from 1 to 100
 @msg	`dataBase64` is larger than the module limit	`dataBase64` er større än modulgränsen
 @msg	`dataBase64` is not valid base64	`dataBase64` er ikke giltig base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan ikke kombineras med `ids`, `reverse` eller `append`
@@ -5344,7 +5074,6 @@ swatch	[Registration]	[Passmärke]
 @msg	`design` is a design name, or null for the default marker	`design` er ett designnamn, eller null for standardmarkören
 @msg	`destinationFolder` is required when destination is `folder`	`destinationFolder` krävs när destination er `folder`
 @msg	`destination` must be `none`, `saveAndClose` or `folder`	`destination` må være `none`, `saveAndClose` eller `folder`
-@msg	`diameter` must be from 0.1 to 2500 pt	`diameter` must be from 0.1 to 2500 pt
 @msg	`digits` must be one of {_1}	`digits` må være något av {_1}
 @msg	`dimImages` is a percentage or false	`dimImages` er en procentsats eller false
 @msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction` må være "auto", "leftToRight" eller "rightToLeft"
@@ -5456,7 +5185,6 @@ swatch	[Registration]	[Passmärke]
 @msg	`tint` needs a global or spot colour	`tint` kräver en global farge eller spesialfarge
 @msg	`to` is already threaded	`to` er allerede sammenlenket
 @msg	`to` is the design's new name	`to` er designens nya navn
-@msg	`to` must be [x, y]	`to` must be [x, y]
 @msg	`to` must be a closed path, area type or type on a path other than `from`	`to` må være en sluten bana, områdestext eller text på bana som ikke er `from`
 @msg	`to` must be a whole number	`to` må være ett heltall
 @msg	`to` takes the rows of one object's stack, not aligned rows	`to` tar raderna i ett objekts stapel, ikke justerade rader
@@ -5503,10 +5231,7 @@ swatch	[Registration]	[Passmärke]
 @msg	`{k}` must be a byte offset	`{k}` må være en byteförskjutning
 @msg	`{k}` must be a number	`{k}` må være et tall
 @msg	`{k}` must be a number of points	`{k}` må være ett antal punkter
-@msg	`{k}` must be a string	`{k}` must be a string
-@msg	`{k}` must be a whole number	`{k}` must be a whole number
 @msg	`{k}` must be from {lo} to {hi} for {key}	`{k}` må være fra {lo} til {hi} for {key}
-@msg	`{k}` must be one of {_1}	`{k}` must be one of {_1}
 @msg	`{k}` must be {what}	`{k}` må være {what}
 @msg	`{k}` must be {what}, not {v}	`{k}` må være {what}, ikke {v}
 @msg	`{l}` isn't a global or spot colour	`{l}` er ikke en global farge eller spesialfarge
@@ -5524,7 +5249,6 @@ swatch	[Registration]	[Passmärke]
 @msg	`{name}` in the Word document nests elements more than {MAX_NESTING} deep	`{name}` i Word-dokumentet nästlar element djupare än {MAX_NESTING} nivåer
 @msg	`{name}` is a built-in preset and is read-only: save it under another name	`{name}` er en inbyggd förinställning og er skrivebeskyttet: lagre den under ett annat navn
 @msg	`{name}` is a built-in preset: save under another name	`{name}` er en inbyggd förinställning: lagre under ett annat navn
-@msg	`{name}` is a built-in profile and stays	`{name}` is a built-in profile and stays
 @msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` er en färgton av `{base}`: redigera `{base}` (en färgtonsfärgruta kan bare få ett nytt navn)
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` er en arbetsfärgrymd: velg en annan med edit.colorSettings först
 @msg	`{name}` is built in and stays	`{name}` er inbyggd og finnes kvar
@@ -5573,7 +5297,6 @@ swatch	[Registration]	[Passmärke]
 @msg	a pattern layer's colors hold something else	ett mönsterlagers farger innehåller något annat
 @msg	a pattern named `{n}` exists	det finnes allerede ett mønster med navnet `{n}`
 @msg	a plug-in with id {_1} is already installed	ett plugin med id {_1} er allerede installerat
-@msg	a preset named `{n}` exists	a preset named `{n}` exists
 @msg	a print presets file with over {_1} presets	en fil med utskriftsförinställningar med flere än {_1} förinställningar
 @msg	a profile is already called {n}	det finnes allerede en profil som heter {n}
 @msg	a row can't go into itself	en rad kan ikke placeras i sig själv
@@ -5600,7 +5323,6 @@ swatch	[Registration]	[Passmärke]
 @msg	an image is too large for DXF and was left out	en bild er for stor for DXF og utelämnades
 @msg	an image of {_1} MB, at most {_2} MB	en bild på {_1} MB, høyst {_2} MB
 @msg	an image of {declared_w} × {declared_h} pixels is too large to draw	en bild på {declared_w} × {declared_h} pixlar er for stor for å tegnes
-@msg	an image of {width} × {height} pixels is too large to draw	an image of {width} × {height} pixels is too large to draw
 @msg	an index must be a whole number	ett index må være ett heltall
 @msg	an inline graphic has no glyphs	en grafik i texten har inga glyfer
 @msg	an invisible text form can't be read	ett formobjekt med osynlig text kan ikke läsas
@@ -5638,23 +5360,19 @@ swatch	[Registration]	[Passmärke]
 @msg	at most {MAX_POINTS} points	høyst {MAX_POINTS} punkter
 @msg	at most {MAX_QUEUE} files	høyst {MAX_QUEUE} filer
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	høyst {MAX_UNGROUPED} parametrar utenfor grupper: ge de övriga en `group`
-@msg	at must be [x, y]	at must be [x, y]
 @msg	at/rect lie outside the canvas	at/rect ligger utenfor arbetsytan
 @msg	attribute must be size|leading|tracking|kerning|baselineShift	attribute må være size|leading|tracking|kerning|baselineShift
 @msg	attrs must be an object	attrs må være ett objekt
 @msg	automation path rejected: the folder's name isn't valid text	automatiseringssökvägen avvisades: mappens navn er ikke giltig text
 @msg	automation path rejected: {_1} isn't valid text	automatiseringssökvägen avvisades: {_1} er ikke giltig text
 @msg	automation path rejected: {why}: {path}	automatiseringssökvägen avvisades: {why}: {path}
-@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`
 @msg	backgroundContents must be transparent or white	backgroundContents må være transparent eller white
 @msg	bad AES key	ugyldig AES-nyckel
 @msg	bad `runs`: {e}	ugyldig verdi for `runs`: {e}
 @msg	bad arrowScale	ugyldig arrowScale
 @msg	bad base64	ugyldig base64
-@msg	bad color {c}	bad color {c}
 @msg	bad colour	ugyldig farge
 @msg	bad colour in `colors`	ugyldig farge i `colors`
-@msg	bad colour {v}	bad colour {v}
 @msg	bad colour {v} in groupColors	ugyldig farge {v} i groupColors
 @msg	bad cross-reference entry	ugyldig korsreferenspost
 @msg	bad cross-reference table	ugyldig korsreferenstabell
@@ -5757,7 +5475,6 @@ swatch	[Registration]	[Passmärke]
 @msg	dxf must be an object of DXF import options	dxf må være ett objekt med importalternativ for DXF
 @msg	dxf scale must be a positive number up to {_1}, not {s}	dxf scale må være ett positivt tall upp til {_1}, ikke {s}
 @msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf-enhet `{u}`: en enhet som mm, cm, in eller pt
-@msg	dxf: {e}	dxf: {e}
 @msg	each format is an object {format, scale?, suffix?}	varje format er ett objekt {format, scale?, suffix?}
 @msg	each item needs an id	varje objekt behöver ett id
 @msg	each match needs `kind`	varje matchning behöver `kind`
@@ -5927,7 +5644,6 @@ swatch	[Registration]	[Passmärke]
 @msg	manifest is not UTF-8	manifestet er ikke UTF-8
 @msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	manifestet er for langt (gränsen er {MAX_MANIFEST_BYTES} byte)
 @msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	manifestet er {_1} byte (gränsen er {MAX_MANIFEST_BYTES})
-@msg	manifest: {e}	manifest: {e}
 @msg	margin: a {m} pt margin leaves no imageable area on the paper	margin: en marginal på {m} pt lämnar ingen tryckbar yta på papperet
 @msg	matrix must be finite and invertible, depth finite	matrix må være ändlig og inverterbar, depth ändligt
 @msg	matte: {e}	bakgrundsfärg: {e}
@@ -5940,12 +5656,9 @@ swatch	[Registration]	[Passmärke]
 @msg	missing `colors`	`colors` mangler
 @msg	missing `commands`	`commands` mangler
 @msg	missing `destinationFolder`	`destinationFolder` mangler
-@msg	missing `effect` id	missing `effect` id
 @msg	missing `family`	`family` mangler
-@msg	missing `find`	missing `find`
 @msg	missing `gid` (a glyph id, or null for the default glyph)	`gid` mangler (ett glyf-id, eller null for standardglyfen)
 @msg	missing `group`	`group` mangler
-@msg	missing `id`	missing `id`
 @msg	missing `id`: give one, or select one type object	`id` mangler: ange ett, eller merk ett textobjekt
 @msg	missing `index` (a point index, or null to clear)	`index` mangler (ett punktindex, eller null for å rensa)
 @msg	missing `index` (a stop index, or null to clear)	`index` mangler (ett stoppindex, eller null for å rensa)
@@ -5966,7 +5679,6 @@ swatch	[Registration]	[Passmärke]
 @msg	missing `status`: linked, embedded, missing or modified	`status` mangler: linked, embedded, missing eller modified
 @msg	missing `target` id	`target`-id mangler
 @msg	missing `text`	`text` mangler
-@msg	missing `to`	missing `to`
 @msg	missing `to` (an index)	`to` mangler (ett index)
 @msg	missing `to`: a non-negative integer	`to` mangler: ett icke-negativt heltall
 @msg	missing `type`	`type` mangler
@@ -5984,10 +5696,7 @@ swatch	[Registration]	[Passmärke]
 @msg	missing from	from mangler
 @msg	missing group	grupp mangler
 @msg	missing id or ids	id eller id:n mangler
-@msg	missing ids	missing ids
-@msg	missing indexes	missing indexes
 @msg	missing matrix [a,b,c,d,e,f]	matris mangler [a,b,c,d,e,f]
-@msg	missing name	missing name
 @msg	missing op	op mangler
 @msg	missing or invalid `color`	`color` mangler eller er ugyldig
 @msg	missing or unknown `tool`	`tool` mangler eller er ukjent
@@ -6017,7 +5726,6 @@ swatch	[Registration]	[Passmärke]
 @msg	name (a toolbar's name) is required	name (ett verktygsfälts navn) krävs
 @msg	name (a toolbar's name) must be a string	name (ett verktygsfälts navn) må være en streng
 @msg	name must be a toolbar's name	name må være navnet på ett verktygsfält
-@msg	names is empty	names is empty
 @msg	names must be an array of symbol names	names må være en array av symbolnamn
 @msg	need `anchor` or `segment` + `t`	`anchor` eller `segment` + `t` krävs
 @msg	need at least one anchor	minst en ankarpunkt krävs
@@ -6031,15 +5739,12 @@ swatch	[Registration]	[Passmärke]
 @msg	no active data set	ingen aktiv datasett
 @msg	no appearance item {index}	inget utseendeobjekt {index}
 @msg	no artboard {_1}	ingen tegneflate {_1}
-@msg	no artboard {artboard} (0-based; the document has {_1})	no artboard {artboard} (0-based; the document has {_1})
 @msg	no asset {id}	ingen resurs {id}
 @msg	no asset {id} (see assets.list)	ingen resurs {id} (se assets.list)
 @msg	no assets to export	inga resurser å exportera
 @msg	no assets yet: collect art for export first (assets.add)	inga resurser än: samla grafik for export först (assets.add)
-@msg	no brush named `{n}`	no brush named `{n}`
 @msg	no character at byte {start}	inget tegn ved byte {start}
 @msg	no colour	ingen farge
-@msg	no colour group `{group}`	no colour group `{group}`
 @msg	no colour group `{name}`	ingen farggruppe `{name}`
 @msg	no data sets	inga datasett
 @msg	no dataset named `{from}`	ingen datasett med navnet `{from}`
@@ -6049,10 +5754,8 @@ swatch	[Registration]	[Passmärke]
 @msg	no design named `{n}`	ingen design med navnet `{n}`
 @msg	no design named `{old}`	ingen design med navnet `{old}`
 @msg	no encoder for {_1} yet	ingen kodare for {_1} än
-@msg	no export preset `{name}` (see document.exportPresets.list)	no export preset `{name}` (see document.exportPresets.list)
 @msg	no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder	ingen mapp: ange `path` eller ställ in Inställningar › Plugins & arbetsdiskar › Mapp for ytterligare plugins
 @msg	no fonts to look for: they are all available	inga skrift å leta etter: alla er tillgängliga
-@msg	no formats to export	no formats to export
 @msg	no gradient preset `{name}` (see gradient.presets.list)	ingen gradientförinställning `{name}` (se gradient.presets.list)
 @msg	no graphic style `{n}` in `{_1}`	ingen grafisk stil `{n}` i `{_1}`
 @msg	no graphic style library `{key}` (see graphicStyle.libraries)	inget grafikstilbibliotek `{key}` (se graphicStyle.libraries)
@@ -6072,26 +5775,20 @@ swatch	[Registration]	[Passmärke]
 @msg	no objects	inga objekt
 @msg	no parent layer	inget overordnet lager
 @msg	no perspective grid preset named `{b}` (see perspective.presets.list)	ingen förinställning for perspektivrutnät med navnet `{b}` (se perspective.presets.list)
-@msg	no perspective grid preset named `{n}`	no perspective grid preset named `{n}`
 @msg	no point selected (give `index`)	ingen punkt markerad (ange `index`)
 @msg	no preset called `{from}` (see file.newPresets)	ingen förinställning med navnet `{from}` (se file.newPresets)
 @msg	no preset called `{name}` (see file.newPresets)	ingen förinställning med navnet `{name}` (se file.newPresets)
 @msg	no preset named `{n}`	ingen förinställning med navnet `{n}`
 @msg	no print preset named `{b}` (see print.presets.list)	ingen utskriftsförinställning med navnet `{b}` (se print.presets.list)
 @msg	no print preset named `{name}` (presets: {_1})	ingen utskriftsförinställning med navnet `{name}` (förinställningar: {_1})
-@msg	no print preset named `{n}`	no print preset named `{n}`
 @msg	no profile named `{name}`	ingen profil med navnet `{name}`
 @msg	no readable files in the folder	inga läsbara filer i mappen
 @msg	no recovery copy `{f}` (see file.recovery.list)	ingen återställningskopia `{f}` (se file.recovery.list)
 @msg	no rows	inga rader
-@msg	no saved PDF preset named `{name}`	no saved PDF preset named `{name}`
 @msg	no saved export preset `{name}`	ingen lagret exportförinställning `{name}`
 @msg	no saved gradient preset called {name}	ingen lagret gradientförinställning med navnet {name}
 @msg	no saved gradient presets	inga lagrede gradientförinställningar
-@msg	no saved preset called `{name}`	no saved preset called `{name}`
 @msg	no saved presets to export (name [Default] in `names` to export it)	inga lagrede förinställningar å exportera (ange [Standard] i `names` for å exportera den)
-@msg	no saved presets to export (name built-in ones in `names`)	no saved presets to export (name built-in ones in `names`)
-@msg	no saved print preset named `{name}`	no saved print preset named `{name}`
 @msg	no saved profile called {name}	ingen lagret profil med navnet {name}
 @msg	no saved selection `{name}`	ingen lagret markering `{name}`
 @msg	no saved theme called {name} (see colorTheme.list)	inget sparat tema med navnet {name} (se colorTheme.list)
@@ -6107,15 +5804,12 @@ swatch	[Registration]	[Passmärke]
 @msg	no such path anchor, or the path would reach past the canvas	inget sådant ankare for banan, eller så ville banan nå utenfor arbetsytan
 @msg	no such rows	inga sådana rader
 @msg	no swatch `{keep}`	ingen fargerute `{keep}`
-@msg	no swatch `{n}`	no swatch `{n}`
 @msg	no swatch `{n}` (swatches and colour groups move separately)	ingen fargerute `{n}` (fargeruter og färggrupper flyttas separat)
-@msg	no swatch library `{key}` (see swatch.library.list)	no swatch library `{key}` (see swatch.library.list)
 @msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	inget färgrutebibliotek `{key}` (se swatch.library.list; "document": dokumentets fargeruter)
 @msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	inget färgrutebibliotek `{key}` (se swatch.library.list; "{DOCUMENT_SWATCHES}": dokumentets fargeruter)
 @msg	no swatch named `{n}`	ingen fargerute med navnet `{n}`
 @msg	no swatch or colour group `{n}`	ingen fargerute eller farggruppe `{n}`
 @msg	no swatch or colour group `{n}` in `{_1}`	ingen fargerute eller farggruppe `{n}` i `{_1}`
-@msg	no symbol named `{name}`	no symbol named `{name}`
 @msg	no text objects selected	inga textobjekt merkede
 @msg	no toolbar named `{_1}`	inget verktygsfält med navnet `{_1}`
 @msg	no toolbar named `{name}`	inget verktygsfält med navnet `{name}`
@@ -6128,7 +5822,6 @@ swatch	[Registration]	[Passmärke]
 @msg	no view named `{name}`	ingen vy med navnet `{name}`
 @msg	node {_1} is not a graph	nod {_1} er ikke ett diagram
 @msg	node {_1} is not an image	nod {_1} er ikke en bild
-@msg	node {_1} is not type	node {_1} is not type
 @msg	not JSON: {e}	ikke JSON: {e}
 @msg	not a PDF presets file (format `{_1}`)	ikke en fil med PDF-förinställningar (format `{_1}`)
 @msg	not a PDF presets file: {e}	ikke en fil med PDF-förinställningar: {e}
@@ -6161,7 +5854,6 @@ swatch	[Registration]	[Passmärke]
 @msg	nothing to change: give dx, dy, hScale, vScale or rotation	inget å ändra: ange dx, dy, hScale, vScale eller rotation
 @msg	nothing to crop	inget å beskära
 @msg	nothing to export	inget å exportera
-@msg	nothing to export: the document has no visible art	nothing to export: the document has no visible art
 @msg	nothing to mark	inget å märka
 @msg	nothing to print: every artboard picked is blank	inget å skriva ut: alla valda tegneflater er tomma
 @msg	nothing to print: the document has no art that prints	inget å skriva ut: dokumentet har inget bildmaterial som skrivs ut
@@ -6184,7 +5876,6 @@ swatch	[Registration]	[Passmärke]
 @msg	objects must be none, move or copy	objects må være none, move eller copy
 @msg	objects were left out	objekt utelämnades
 @msg	offset out of range	förskjutningen ligger utenfor intervallet
-@msg	on must be true or false	on must be true or false
 @msg	only an exporter declares `extensions`	endast en exportfunktion deklarerar `extensions`
 @msg	only groups, layers, type and images have a Contents (Characters) row	endast grupper, lager, text og bilder har en rad for Innehåll (Tecken)
 @msg	only interior mesh lines can be deleted	endast inre nätlinjer kan raderas
@@ -6204,7 +5895,6 @@ swatch	[Registration]	[Passmärke]
 @msg	output size ({what} is {len} bytes, limit {max})	utdatastorlek ({what} er {len} byte, gräns {max})
 @msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: ingen RGB- eller CMYK-profil heter ”{name}”
 @msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1}-filer er CMYK, og ”{name}” er en RGB-profil
-@msg	output.destination: {e}	output.destination: {e}
 @msg	output.inks: no ink is set to print	output.inks: ingen tryckfärg er inställd for utskrift
 @msg	output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile	output.outputIntent: ingen profil heter ”{name}”, og en {std}-utgångsavsikt bäddar in sin profil
 @msg	output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)	output.outputIntent: ingen profil heter ”{name}”: en {std}-utgångsavsikt bäddar in en profil eller anger ett registrerat tryckvillkor (outputConditionId og registry)
@@ -6227,10 +5917,7 @@ swatch	[Registration]	[Passmärke]
 @msg	pages must be a range such as "2-3" or a page number, not {v}	pages må være ett intervall som "2-3" eller ett sidnummer, ikke {v}
 @msg	pages: {e}	sidor: {e}
 @msg	panel position must be finite	panelens position må være ändlig
-@msg	parameter `{k}`: {what}	parameter `{k}`: {what}
-@msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	parameters must be an object	parametrarna må være ett objekt
-@msg	params must be an object	params must be an object
 @msg	passwords can have up to {MAX_PASSWORD} bytes	passord får vara høyst {MAX_PASSWORD} byte
 @msg	path has no open end	banan har ingen åpen ände
 @msg	paths must be strings	paths må være strängar
@@ -6283,14 +5970,12 @@ swatch	[Registration]	[Passmärke]
 @msg	replace keeps the replaced object's place and transform: drop template, at and rect	replace behåller det ersatta objektets placering og transformering: ta bort template, at og rect
 @msg	replace: select the one object to replace	replace: merk det objekt som ska ersättas
 @msg	resolution must be a number or screen|medium|high	resolution må være ett tall eller screen|medium|high
-@msg	resolution must be between 1 and 2400 ppi	resolution must be between 1 and 2400 ppi
 @msg	rotation must be a number of degrees	rotation må være ett antal grader
 @msg	rotation must be finite	rotation må være ändlig
 @msg	rows and cols must be 1..50	rows og cols må være 1..50
 @msg	rows and columns must be 1..500	rader og kolumner må være 1..500
 @msg	rows of objects whose appearances differ can't be reordered together	rader med objekt vars utseende skiljer sig åt kan ikke ordnas om tillsammans
 @msg	save the document first: copy puts the file in its folder	lagre dokumentet först: copy lägger filen i dess mapp
-@msg	savedPreset: {e}	savedPreset: {e}
 @msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	scale `{s}`: en faktor som 2x, en bredd (100w), en höjd (100h) eller en upplösning (72ppi)
 @msg	scale must be a number above 0, at most 64	scale må være ett tall over 0, høyst 64
 @msg	scale must be non-zero	scale får ikke vara noll
@@ -6321,7 +6006,6 @@ swatch	[Registration]	[Passmärke]
 @msg	select members of a compound shape	merk medlemmar i en sammansatt form
 @msg	select objects or give ids	merk objekt eller ange id:n
 @msg	select objects to align to the guide	merk objekt å juster mot stödlinjen
-@msg	select one Intertwine group	select one Intertwine group
 @msg	select one image or pass id	merk en bild eller ange id
 @msg	select paths	merk banor
 @msg	select paths or compound paths	merk banor eller sammansatta banor
@@ -6375,7 +6059,6 @@ swatch	[Registration]	[Passmärke]
 @msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces må være ett heltall fra 2 til 100
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: använd "{_1}" eller "{_2}"
 @msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: ange {path} eller {name, dataBase64} for en bildfil, eller en textur så som effect.list anger den
-@msg	textureImage: {e}	textureImage: {e}
 @msg	that makes more than {MAX_PIECES} slices	det ger flere än {MAX_PIECES} skivor
 @msg	that object is not in the overlap	det objektet ingår ikke i överlappningen
 @msg	the Affinity document has no page with a size	Affinity-dokumentet har ingen sida med en størrelse
@@ -6428,7 +6111,6 @@ swatch	[Registration]	[Passmärke]
 @msg	the graphic is empty	grafiken er tom
 @msg	the graphic's data is damaged	grafikens data er skadade
 @msg	the graphic's document has no artboard	grafikens dokument har ingen tegneflate
-@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them
 @msg	the image `{path}` isn't followed: {r}	bilden `{path}` följs ikke: {r}
 @msg	the image has no embedded pixels	bilden har inga innebygde pixlar
 @msg	the image is empty	bilden er tom
@@ -6436,7 +6118,6 @@ swatch	[Registration]	[Passmärke]
 @msg	the image is not on an artboard; pass rect	bilden ligger ikke på en tegneflate; ange rect
 @msg	the image's pixels are missing	bildens pixlar mangler
 @msg	the image's pixels aren't in the document	bildens pixlar finnes ikke i dokumentet
-@msg	the image's pixels can't be read: {e}	the image's pixels can't be read: {e}
 @msg	the image's transparency doesn't fit it	bildens gjennomsiktighet passar ikke bilden
 @msg	the job would print more than {MAX_PAGES} pages	jobbet ville skriva ut flere än {MAX_PAGES} sidor
 @msg	the job would print more than {_1} pages	jobbet ville skriva ut flere än {_1} sidor
@@ -6475,7 +6156,6 @@ swatch	[Registration]	[Passmärke]
 @msg	the selection draws nothing	markeringen ritar ingenting
 @msg	the selection has no area	markeringen har ingen area
 @msg	the selection has no art to export	markeringen innehåller inget å exportera
-@msg	the selection has no bounds	the selection has no bounds
 @msg	the selection has no graphic style	markeringen har ingen grafikstil
 @msg	the slice would leave the canvas	skivan ville hamna utenfor arbetsytan
 @msg	the spot colour couldn't be added	dekorfärgen kunde ikke läggas til
@@ -6554,7 +6234,6 @@ swatch	[Registration]	[Passmärke]
 @msg	unknown category `{c}` ({_1})	ukjent kategori `{c}` ({_1})
 @msg	unknown character `{c}`	ukjent tegn `{c}`
 @msg	unknown character style number field	ukjent nummerfält i teckenstil
-@msg	unknown effect `{e}`	unknown effect `{e}`
 @msg	unknown end {e}	ukjent ände {e}
 @msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	ukjent flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution eller en lagret: se flattener.presets.list)
 @msg	unknown format `{f}` (vcswatches, gpl, ase or css)	ukjent format `{f}` (vcswatches, gpl, ase eller css)
@@ -6562,7 +6241,6 @@ swatch	[Registration]	[Passmärke]
 @msg	unknown graph type `{t}`	ukjent diagramtyp `{t}`
 @msg	unknown grid colours `{name}` (one of {_1})	ukjente rutnätsfärger `{name}` (en av {_1})
 @msg	unknown gridType `{t}`	ukjent gridType `{t}`
-@msg	unknown highlight `{v}`	unknown highlight `{v}`
 @msg	unknown intent `{i}`	ukjent återgivningsmetod `{i}`
 @msg	unknown issue kind {id}	ukjent problemtyp {id}
 @msg	unknown issue kind {v}	ukjent problemtyp {v}
@@ -6580,13 +6258,11 @@ swatch	[Registration]	[Passmärke]
 @msg	unknown model `{other}` (keep, new or document)	ukjent modell `{other}` (keep, new eller document)
 @msg	unknown op {o}	ukjent operation {o}
 @msg	unknown order `{o}`: toggle, front, forward, backward or back	ukjent ordning `{o}`: toggle, front, forward, backward eller back
-@msg	unknown overprints `{v}` (preserve, simulate or discard)	unknown overprints `{v}` (preserve, simulate or discard)
 @msg	unknown panel	ukjent panel
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	ukjent pieLegend `{v}` (none, standard eller wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	ukjent piePosition `{v}` (even, ratio eller stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	ukjent pieSort `{v}` (none, all eller first)
 @msg	unknown plate `{n}`	ukjent plåt `{n}`
-@msg	unknown preference `{k}`	unknown preference `{k}`
 @msg	unknown profile {id} (see stroke.widthProfile.list)	ukjent profil {id} (se stroke.widthProfile.list)
 @msg	unknown proof target `{t}`	ukjent korrekturmål `{t}`
 @msg	unknown quotes key `{k}` (double, single)	ukjent quotes-nyckel `{k}` (double, single)
@@ -6660,21 +6336,16 @@ swatch	[Registration]	[Passmärke]
 @msg	{_1}: belongs to another account	{_1}: tillhör ett annat konto
 @msg	{_1}: not a folder of its own	{_1}: ikke en egen mapp
 @msg	{_1}: not a plain file	{_1}: ikke en vanlig fil
-@msg	{at}: {msg}	{at}: {msg}
-@msg	{dest}: {e}	{dest}: {e}
 @msg	{doc} has no folder	{doc} har ingen mapp
 @msg	{file} isn't linked	{file} er ikke lenket
 @msg	{folder} is not a package folder	{folder} er ikke en pakkemappe
 @msg	{folder}: more than {max} files and folders	{folder}: flere än {max} filer og mappar
-@msg	{folder}: {e}	{folder}: {e}
 @msg	{g} is not a Live Paint group	{g} er ikke en direktmålningsgrupp
 @msg	{id} is not a slice	{id} er ikke en skiva
 @msg	{key} must be 0–{MAX_ADD_AROUND} pt	{key} må være 0–{MAX_ADD_AROUND} pt
-@msg	{key} must be [x,y]	{key} must be [x,y]
 @msg	{key} must be a percentage {min}..100	{key} må være en procentsats {min}..100
 @msg	{key} must be a positive number, not {n}	{key} må være ett positivt tall, ikke {n}
 @msg	{key} must be a positive number, not {v}	{key} må være ett positivt tall, ikke {v}
-@msg	{key} must be one of {_1}	{key} must be one of {_1}
 @msg	{key} must be {_1}, got {s}	{key} må være {_1}, fikk {s}
 @msg	{key} must name a floating panel	{key} må være navnet på en flytande panel
 @msg	{key} must name a panel in another group	{key} må være navnet på en panel i en annan grupp
@@ -6689,20 +6360,16 @@ swatch	[Registration]	[Passmärke]
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} må være ett tall (pt) eller en längd som "210 mm"
 @msg	{k} must be a number from {min} to {max}	{k} må være et tall fra {min} til {max}
 @msg	{k} must be a number or "auto"	{k} må være ett tall eller "auto"
-@msg	{k} must be a string	{k} must be a string
 @msg	{k} must be text	{k} må være text
-@msg	{k} must be true or false	{k} must be true or false
 @msg	{k} must be {{size?, position?}}	{k} må være {{size?, position?}}
 @msg	{k}: can't read `{s}` as a length	{k}: kan ikke läsa `{s}` som en längd
 @msg	{label} must be a number at most {max}	{label} må være ett tall på høyst {max}
 @msg	{label} must be a number from -1296 to 1296	{label} må være ett tall fra -1296 til 1296
 @msg	{label} must be a number from 1 to 10000	{label} må være ett tall fra 1 til 10 000
-@msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} er inbyggd og kan ikke tas bort
 @msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} må være {lo}–{hi}{unit} (fikk {v})
 @msg	{name}: CRC or size mismatch	{name}: CRC eller størrelse stämmer ikke
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: endast den innebygde förhandsgranskningen i den här Affinity-filen kunde läsas; använd Arkiv › Öppna for å se den med dess varning, eller exportera SVG eller PDF fra Affinity innan du placerar den
-@msg	{name}: {e}	{name}: {e}
 @msg	{native}; its embedded preview can't be read either ({e})	{native}; dess innebygde förhandsgranskning kan ikke heller läsas ({e})
 @msg	{std} files are CMYK, and the file would have colours in {_1}	{std}-filer er CMYK, og filen ville innehålla farger i {_1}
 @msg	{std} files embed their fonts, and the file would have one that isn't	{std}-filer bäddar in sina skrift, og filen ville innehålla ett som ikke er inbäddat
@@ -6744,97 +6411,12 @@ swatch	[Registration]	[Passmärke]
 	Import SVG Filter…	Importer SVG-filter…
 	New SVG Filter	Nytt SVG-filter
 	SVG Filter	SVG-filter
-	Sanskrit	Sanskrit
 	Select Symbol Instance Part	Velg del av symboleforekomst
 	Stroke Weight Down	Reduser strekvekt
 	Stroke Weight Up	Øk strekvekt
 	Reading the file…	Leser filen…
-	Edit SVG Filter	Edit SVG Filter
-	Import SVG Filter	Import SVG Filter
-	Import SVG Filter reads SVG files, not SVGZ	Import SVG Filter reads SVG files, not SVGZ
-	`alignOn` cannot be empty	`alignOn` cannot be empty
-	`alignOn` must be a string	`alignOn` must be a string
-	`align` must be a string	`align` must be a string
-	`artboardsAt` must be [x, y]	`artboardsAt` must be [x, y]
-	`beside` needs `side`	`beside` needs `side`
-	`code` must be a whole number	`code` must be a whole number
-	`id` is an object id, not {v}	`id` is an object id, not {v}
-	`leader` must be a string	`leader` must be a string
-	`name` must be a string	`name` must be a string
-	`name` must not be empty	`name` must not be empty
-	`origin` must be [x, y] in points	`origin` must be [x, y] in points
-	`replace` must be a string	`replace` must be a string
 	`scale` must be a number from 0.001 to 1000	`scale` må være et tall fra 0,001 til 1000
-	`scope.{key}` must be a non-empty array	`scope.{key}` must be a non-empty array
-	`scope` must be "document", {artboards} or {layers}	`scope` must be "document", {artboards} or {layers}
-	`side` must be "left", "right", "top" or "bottom"	`side` must be "left", "right", "top" or "bottom"
-	`side` places the artboard: leave out x, y, width and height	`side` places the artboard: leave out x, y, width and height
-	`xml` must be a string	`xml` must be a string
-	`{_1}` can't name a composite font	`{_1}` can't name a composite font
-	`{_1}` is the name of an installed font	`{_1}` is the name of an installed font
-	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} is set in `{font}`, a composite font
-	`{name}`: give the kanji part	`{name}`: give the kanji part
-	`{name}`: parts must be an object	`{name}`: parts must be an object
-	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals
-	`{name}`: unknown key `{k}` in {_1}	`{name}`: unknown key `{k}` in {_1}
-	`{name}`: {_1} must be an object	`{name}`: {_1} must be an object
-	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
-	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)
-	`{u}` is no Unicode character	`{u}` is no Unicode character
-	a document holds at most {_1} SVG filters	a document holds at most {_1} SVG filters
-	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts
-	an SVG filter is named by its id: give `xml` with `name`	an SVG filter is named by its id: give `xml` with `name`
-	dataBase64 is not base64	dataBase64 is not base64
-	each font must be {name, parts}	each font must be {name, parts}
-	each font needs a name	each font needs a name
-	fonts must be a list of composite fonts	fonts must be a list of composite fonts
-	give `char`, `text`, `code` or `unicode`	give `char`, `text`, `code` or `unicode`
-	give `name`, an SVG filter's name	give `name`, an SVG filter's name
-	give `path`, an SVG file, or `svg`, SVG text	give `path`, an SVG file, or `svg`, SVG text
-	give `xml`, one SVG <filter> element	give `xml`, one SVG <filter> element
-	give exactly one of `path`, `data` and `dataBase64`	give exactly one of `path`, `data` and `dataBase64`
-	give fonts: [{name, parts}…]	give fonts: [{name, parts}…]
-	give one <filter> element	give one <filter> element
-	give one of path, data or dataBase64	give one of path, data or dataBase64
-	hvcC	hvcC
-	names must be a list of names	names must be a list of names
-	names must be strings	names must be strings
-	no SVG filter at index {k}	no SVG filter at index {k}
-	no character has code {code}	no character has code {code}
-	no composite font	no composite font
-	no composite font named `{n}`	no composite font named `{n}`
-	no composite fonts to export	no composite fonts to export
-	no layer to rename	no layer to rename
-	no such artboard {v}	no such artboard {v}
-	node {_1} already has the text variable `{_2}`	node {_1} already has the text variable `{_2}`
-	not a composite fonts file: no compositeFonts list	not a composite fonts file: no compositeFonts list
-	not a composite fonts file: {e}	not a composite fonts file: {e}
 	not an action set: the text doesn't start with /version and a number	ikke et handlingssett: teksten begynner ikke med /version og et tall
-	path is empty	path is empty
-	select an SVG filter	select an SVG filter
-	select one layer, group or object to rename	select one layer, group or object to rename
-	table must be true or false	table must be true or false
-	the Layers panel is not shown	the Layers panel is not shown
-	the Layers panel's search, filter or Show Layers Only hides its row	the Layers panel's search, filter or Show Layers Only hides its row
-	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	the SVG file is larger than {MAX_IMPORT_BYTES} bytes
-	the document already has an SVG filter named {name}	the document already has an SVG filter named {name}
-	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it
-	the document has no SVG filter named {name}	the document has no SVG filter named {name}
-	the document has no SVG filter named {r}	the document has no SVG filter named {r}
-	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts
-	the file holds no composite fonts	the file holds no composite fonts
-	the file holds two composite fonts named `{_1}`	the file holds two composite fonts named `{_1}`
-	the file is larger than 4 MB	the file is larger than 4 MB
-	the file isn't valid SVG: {e}	the file isn't valid SVG: {e}
-	two composite fonts are named `{_1}`	two composite fonts are named `{_1}`
-	unknown key `{k}`; a font takes name and parts	unknown key `{k}`; a font takes name and parts
-	{k}: baseline must be {_1} to {_2}%	{k}: baseline must be {_1} to {_2}%
-	{k}: give a font	{k}: give a font
-	{k}: only kana can be scaled at the center	{k}: only kana can be scaled at the center
-	{k}: only kana, roman and numerals can be scaled	{k}: only kana, roman and numerals can be scaled
-	{k}: scale must be {_1} to {_2}%	{k}: scale must be {_1} to {_2}%
-	{k}: size must be {_1} to {_2}%	{k}: size must be {_1} to {_2}%
-	{v} names no layer or sublayer	{v} names no layer or sublayer
 @msg	`{key}` must be a number, not {v}	`{key}` må være et tall, ikke {v}
 @msg	invalid object id {value}: expected a non-negative integer	ugyldig objekt-id {value}: forventet et ikke-negativt heltall
 	Chinese Big 5	Kinesisk Big 5
@@ -6853,528 +6435,4 @@ swatch	[Registration]	[Passmärke]
 
 # Built-in library content names kept in English: gradients, brushes, styles and
 # symbols are matched against tutorials and other apps, so they are not translated.
-	Amber Corona	Amber Corona
-	Amber Glow	Amber Glow
-	Amber Tube	Amber Tube
-	Amber to Lime	Amber to Lime
-	Analogous Coral	Analogous Coral
-	Analogous Coral 1	Analogous Coral 1
-	Analogous Coral 2	Analogous Coral 2
-	Analogous Coral 3	Analogous Coral 3
-	Analogous Teal	Analogous Teal
-	Analogous Teal 1	Analogous Teal 1
-	Analogous Teal 2	Analogous Teal 2
-	Analogous Teal 3	Analogous Teal 3
-	Angled Flat	Angled Flat
-	Angled Round	Angled Round
-	Arrows	Arrows
-	Attack	Attack
-	Aurora Foil	Aurora Foil
-	Azure Glow	Azure Glow
-	Azure to Violet	Azure to Violet
-	Beads	Beads
-	Bloom	Bloom
-	Blue Glow	Blue Glow
-	Blue to Magenta	Blue to Magenta
-	Boss Alert	Boss Alert
-	Brass	Brass
-	Bristle Brushes	Bristle Brushes
-	Bristle Ochre	Bristle Ochre
-	Broad Nib	Broad Nib
-	Bronze	Bronze
-	Brush Pen	Brush Pen
-	Brushed Metal	Brushed Metal
-	Buff	Buff
-	Bulge	Bulge
-	Burlap Sack	Burlap Sack
-	Burn Aura	Burn Aura
-	Burst	Burst
-	Burst Ray	Burst Ray
-	Bus Lines	Bus Lines
-	Button	Button
-	Canvas Weave	Canvas Weave
-	Chalk Grain	Chalk Grain
-	Charcoal Dust	Charcoal Dust
-	Charcoal Shade	Charcoal Shade
-	Charge Wave	Charge Wave
-	Checkerboard	Checkerboard
-	Checkpoint	Checkpoint
-	Chevron Arrow	Chevron Arrow
-	Chevron Pulse	Chevron Pulse
-	Chisel	Chisel
-	Chisel Flow	Chisel Flow
-	Chrome Rim	Chrome Rim
-	Circuit Trace	Circuit Trace
-	Clay	Clay
-	Clay 1	Clay 1
-	Clay 2	Clay 2
-	Clay 3	Clay 3
-	Clay 4	Clay 4
-	Clay 5	Clay 5
-	Clay 6	Clay 6
-	Clay to Teal	Clay to Teal
-	Clay to Teal 1	Clay to Teal 1
-	Clay to Teal 2	Clay to Teal 2
-	Clay to Teal 3	Clay to Teal 3
-	Clay to Teal 4	Clay to Teal 4
-	Clay to Teal 5	Clay to Teal 5
-	Clay to Teal 6	Clay to Teal 6
-	Clay to Teal 7	Clay to Teal 7
-	Clay to Teal 8	Clay to Teal 8
-	Clay to Teal 9	Clay to Teal 9
-	Cloud	Cloud
-	Coarse Grit	Coarse Grit
-	Cobalt Phosphor	Cobalt Phosphor
-	Coin Shine	Coin Shine
-	Complementary Coral	Complementary Coral
-	Complementary Coral 1	Complementary Coral 1
-	Complementary Coral 2	Complementary Coral 2
-	Complementary Teal	Complementary Teal
-	Complementary Teal 1	Complementary Teal 1
-	Complementary Teal 2	Complementary Teal 2
-	Cool Gray	Cool Gray
-	Cool Gray 1	Cool Gray 1
-	Cool Gray 2	Cool Gray 2
-	Cool Gray 3	Cool Gray 3
-	Cool Gray 4	Cool Gray 4
-	Cool Gray 5	Cool Gray 5
-	Cool Gray 6	Cool Gray 6
-	Cool Gray 7	Cool Gray 7
-	Cool Gray 8	Cool Gray 8
-	Cool Gray 9	Cool Gray 9
-	Cool Grays	Cool Grays
-	Copper	Copper
-	Coral and Navy	Coral and Navy
-	Cracked Glaze	Cracked Glaze
-	Crosses	Crosses
-	Crosshair	Crosshair
-	Cyan Glow	Cyan Glow
-	Cyan Neon	Cyan Neon
-	Cyan to Blue	Cyan to Blue
-	Damage Flash	Damage Flash
-	Damp Paper	Damp Paper
-	Dark Grays	Dark Grays
-	Darken Veil	Darken Veil
-	Dash Dot	Dash Dot
-	Dash Trail	Dash Trail
-	Dashed Arrow	Dashed Arrow
-	Dashed Border	Dashed Border
-	Dawn	Dawn
-	Deep	Deep
-	Deep Amber	Deep Amber
-	Deep Azure	Deep Azure
-	Deep Blue	Deep Blue
-	Deep Cyan	Deep Cyan
-	Deep Green	Deep Green
-	Deep Lime	Deep Lime
-	Deep Magenta	Deep Magenta
-	Deep Orange	Deep Orange
-	Deep Red	Deep Red
-	Deep Teal	Deep Teal
-	Deep Violet	Deep Violet
-	Deep Yellow	Deep Yellow
-	Defend	Defend
-	Dense Flecks	Dense Flecks
-	Dew	Dew
-	Diagonal Stripes	Diagonal Stripes
-	Diamonds	Diamonds
-	Dotted Border	Dotted Border
-	Double Line	Double Line
-	Double Rule	Double Rule
-	Driftwood	Driftwood
-	Dry Media	Dry Media
-	Dry Scrub	Dry Scrub
-	Dusk	Dusk
-	Dusk 1	Dusk 1
-	Dusk 2	Dusk 2
-	Dusk 3	Dusk 3
-	Dusk 4	Dusk 4
-	Dusk 5	Dusk 5
-	Dusk 6	Dusk 6
-	Dusk 7	Dusk 7
-	Dusk 8	Dusk 8
-	Dusk 9	Dusk 9
-	Echo	Echo
-	Electric Lime	Electric Lime
-	Ember	Ember
-	Ember 1	Ember 1
-	Ember 2	Ember 2
-	Ember 3	Ember 3
-	Ember 4	Ember 4
-	Ember 5	Ember 5
-	Ember 6	Ember 6
-	Ember 7	Ember 7
-	Ember 8	Ember 8
-	Ember 9	Ember 9
-	Energy Beams	Energy Beams
-	Fade to Transparent	Fade to Transparent
-	Fan Blender	Fan Blender
-	Feathered	Feathered
-	Fern	Fern
-	Filbert	Filbert
-	Fine Grain	Fine Grain
-	Fine Liner	Fine Liner
-	Fine Nib	Fine Nib
-	Fine Pen	Fine Pen
-	Flag	Flag
-	Flag Wave	Flag Wave
-	Flex Ribbon	Flex Ribbon
-	Forest and Rose	Forest and Rose
-	Freeze Edge	Freeze Edge
-	Frost Spectrum	Frost Spectrum
-	Game Trails	Game Trails
-	Gem	Gem
-	Ghosted	Ghosted
-	Glossy	Glossy
-	Glow Orb	Glow Orb
-	Gold	Gold
-	Golden	Golden
-	Golden 1	Golden 1
-	Golden 2	Golden 2
-	Golden 3	Golden 3
-	Golden 4	Golden 4
-	Golden 5	Golden 5
-	Golden 6	Golden 6
-	Golden 7	Golden 7
-	Golden 8	Golden 8
-	Graphite Pencil	Graphite Pencil
-	Grass Fan	Grass Fan
-	Green Glow	Green Glow
-	Green to Cyan	Green to Cyan
-	Greige	Greige
-	Gunmetal	Gunmetal
-	Hard Shadow	Hard Shadow
-	Haze	Haze
-	Heal	Heal
-	Health Fill	Health Fill
-	Highlighter	Highlighter
-	Honey	Honey
-	Horizontal Stripes	Horizontal Stripes
-	Indigo and Peach	Indigo and Peach
-	Ink Contour	Ink Contour
-	Ink Wash	Ink Wash
-	Ink and Wash	Ink and Wash
-	Inner Light	Inner Light
-	Inset Keyline	Inset Keyline
-	Interference Rings	Interference Rings
-	Iris Sheen	Iris Sheen
-	Ivory	Ivory
-	Key	Key
-	Lagoon	Lagoon
-	Lagoon 1	Lagoon 1
-	Lagoon 2	Lagoon 2
-	Lagoon 3	Lagoon 3
-	Lagoon 4	Lagoon 4
-	Lagoon 5	Lagoon 5
-	Lagoon 6	Lagoon 6
-	Lagoon 7	Lagoon 7
-	Lagoon 8	Lagoon 8
-	Lagoon 9	Lagoon 9
-	Laser Bolt	Laser Bolt
-	Lavender	Lavender
-	Leaded Glass	Leaded Glass
-	Lichen	Lichen
-	Lifted Card	Lifted Card
-	Light Grays	Light Grays
-	Lime Glow	Lime Glow
-	Lime to Teal	Lime to Teal
-	Linen	Linen
-	Magenta Glow	Magenta Glow
-	Magenta Laser	Magenta Laser
-	Magenta to Orange	Magenta to Orange
-	Mana Glow	Mana Glow
-	Mint Halo	Mint Halo
-	Mist	Mist
-	Moon	Moon
-	Moonstone Shift	Moonstone Shift
-	Mosaic Floor	Mosaic Floor
-	Moss	Moss
-	Moss 1	Moss 1
-	Moss 2	Moss 2
-	Moss 3	Moss 3
-	Moss 4	Moss 4
-	Moss 5	Moss 5
-	Moss 6	Moss 6
-	Moss 7	Moss 7
-	Moss 8	Moss 8
-	Moss 9	Moss 9
-	Multiply Tint	Multiply Tint
-	Neon Tube	Neon Tube
-	Neutral	Neutral
-	Neutral 1	Neutral 1
-	Neutral 2	Neutral 2
-	Neutral 3	Neutral 3
-	Neutral 4	Neutral 4
-	Neutral 5	Neutral 5
-	Neutral 6	Neutral 6
-	Neutral 7	Neutral 7
-	Neutral 8	Neutral 8
-	Neutrals	Neutrals
-	Night	Night
-	Noon	Noon
-	Notched Ribbon	Notched Ribbon
-	Oat	Oat
-	Ochre	Ochre
-	Ochre 1	Ochre 1
-	Ochre 2	Ochre 2
-	Ochre 3	Ochre 3
-	Ochre 4	Ochre 4
-	Ochre 5	Ochre 5
-	Ochre 6	Ochre 6
-	Offset Keyline	Offset Keyline
-	Offset Rings	Offset Rings
-	Olive	Olive
-	Olive 1	Olive 1
-	Olive 2	Olive 2
-	Olive 3	Olive 3
-	Olive 4	Olive 4
-	Olive 5	Olive 5
-	Olive 6	Olive 6
-	Olive 7	Olive 7
-	Olive 8	Olive 8
-	Opal Ribbon	Opal Ribbon
-	Open Arrow	Open Arrow
-	Orange Glow	Orange Glow
-	Orange to Yellow	Orange to Yellow
-	Outside Stroke	Outside Stroke
-	Overcast	Overcast
-	Overlay Glaze	Overlay Glaze
-	Panel	Panel
-	Pastel	Pastel
-	Pastel Amber	Pastel Amber
-	Pastel Azure	Pastel Azure
-	Pastel Blue	Pastel Blue
-	Pastel Cyan	Pastel Cyan
-	Pastel Green	Pastel Green
-	Pastel Heather	Pastel Heather
-	Pastel Lime	Pastel Lime
-	Pastel Magenta	Pastel Magenta
-	Pastel Orange	Pastel Orange
-	Pastel Orbit	Pastel Orbit
-	Pastel Red	Pastel Red
-	Pastel Teal	Pastel Teal
-	Pastel Violet	Pastel Violet
-	Pastel Yellow	Pastel Yellow
-	Pearl	Pearl
-	Pearl Flash	Pearl Flash
-	Pentagram Coral	Pentagram Coral
-	Pentagram Coral 1	Pentagram Coral 1
-	Pentagram Coral 2	Pentagram Coral 2
-	Pentagram Coral 3	Pentagram Coral 3
-	Pentagram Coral 4	Pentagram Coral 4
-	Pentagram Coral 5	Pentagram Coral 5
-	Pentagram Teal	Pentagram Teal
-	Pentagram Teal 1	Pentagram Teal 1
-	Pentagram Teal 2	Pentagram Teal 2
-	Pentagram Teal 3	Pentagram Teal 3
-	Pentagram Teal 4	Pentagram Teal 4
-	Pentagram Teal 5	Pentagram Teal 5
-	Petal	Petal
-	Pewter	Pewter
-	Pill Badge	Pill Badge
-	Pin	Pin
-	Pinched Stripes	Pinched Stripes
-	Plasma Arc	Plasma Arc
-	Platinum	Platinum
-	Plum and Lime	Plum and Lime
-	Plum to Olive	Plum to Olive
-	Plum to Olive 1	Plum to Olive 1
-	Plum to Olive 2	Plum to Olive 2
-	Plum to Olive 3	Plum to Olive 3
-	Plum to Olive 4	Plum to Olive 4
-	Plum to Olive 5	Plum to Olive 5
-	Plum to Olive 6	Plum to Olive 6
-	Plum to Olive 7	Plum to Olive 7
-	Plum to Olive 8	Plum to Olive 8
-	Plum to Olive 9	Plum to Olive 9
-	Pointed Flat	Pointed Flat
-	Pointer	Pointer
-	Poison Tint	Poison Tint
-	Polar Glint	Polar Glint
-	Polka Dots	Polka Dots
-	Pollen	Pollen
-	Pooling Wash	Pooling Wash
-	Potion	Potion
-	Pressure Pen	Pressure Pen
-	Pressure Sensitive	Pressure Sensitive
-	Prism Veil	Prism Veil
-	Puffy	Puffy
-	Pulse Stroke	Pulse Stroke
-	Pulse Violet	Pulse Violet
-	Quest Outline	Quest Outline
-	Quilted Squares	Quilted Squares
-	Radiating Lenses	Radiating Lenses
-	Rain	Rain
-	Red Glow	Red Glow
-	Red to Amber	Red to Amber
-	Ripple Lines	Ripple Lines
-	Rose Gold	Rose Gold
-	Rose Quartz Gleam	Rose Quartz Gleam
-	Rosy	Rosy
-	Rosy 1	Rosy 1
-	Rosy 2	Rosy 2
-	Rosy 3	Rosy 3
-	Rosy 4	Rosy 4
-	Rosy 5	Rosy 5
-	Rosy 6	Rosy 6
-	Rosy 7	Rosy 7
-	Rosy 8	Rosy 8
-	Round Badge	Round Badge
-	Round Flow	Round Flow
-	Round Pen	Round Pen
-	Rounded Square	Rounded Square
-	Sand	Sand
-	Sand 1	Sand 1
-	Sand 2	Sand 2
-	Sand 3	Sand 3
-	Sand 4	Sand 4
-	Sand 5	Sand 5
-	Sand 6	Sand 6
-	Scallops	Scallops
-	Scratches	Scratches
-	Screen Light	Screen Light
-	Scribble Fill	Scribble Fill
-	Sea Glass	Sea Glass
-	Seafoam	Seafoam
-	Shield	Shield
-	Shield Buff	Shield Buff
-	Silver	Silver
-	Silver Tide	Silver Tide
-	Sine Bands	Sine Bands
-	Sketchy Line	Sketchy Line
-	Slate	Slate
-	Smoke	Smoke
-	Snow	Snow
-	Soft Amber	Soft Amber
-	Soft Azure	Soft Azure
-	Soft Blue	Soft Blue
-	Soft Cyan	Soft Cyan
-	Soft Dome	Soft Dome
-	Soft Green	Soft Green
-	Soft Light Wash	Soft Light Wash
-	Soft Lime	Soft Lime
-	Soft Magenta	Soft Magenta
-	Soft Orange	Soft Orange
-	Soft Red	Soft Red
-	Soft Shadow	Soft Shadow
-	Soft Spectrum	Soft Spectrum
-	Soft Teal	Soft Teal
-	Soft Violet	Soft Violet
-	Soft Wash	Soft Wash
-	Soft Yellow	Soft Yellow
-	Solid Arrow	Solid Arrow
-	Spark Trail	Spark Trail
-	Sparkles	Sparkles
-	Sparse Flecks	Sparse Flecks
-	Speed Line	Speed Line
-	Spiral Copies	Spiral Copies
-	Split Complementary Coral	Split Complementary Coral
-	Split Complementary Coral 1	Split Complementary Coral 1
-	Split Complementary Coral 2	Split Complementary Coral 2
-	Split Complementary Coral 3	Split Complementary Coral 3
-	Split Complementary Teal	Split Complementary Teal
-	Split Complementary Teal 1	Split Complementary Teal 1
-	Split Complementary Teal 2	Split Complementary Teal 2
-	Split Complementary Teal 3	Split Complementary Teal 3
-	Spotlight	Spotlight
-	Starburst	Starburst
-	Stars	Stars
-	Stealth Fade	Stealth Fade
-	Stipple	Stipple
-	Stone	Stone
-	Striped Ribbon	Striped Ribbon
-	Stubby Round	Stubby Round
-	Stun Pulse	Stun Pulse
-	Sun	Sun
-	Sunset	Sunset
-	Sunset Band	Sunset Band
-	Sword	Sword
-	Tapered Ink	Tapered Ink
-	Taupe	Taupe
-	Teal Glow	Teal Glow
-	Teal and Gold	Teal and Gold
-	Teal to Azure	Teal to Azure
-	Teardrop	Teardrop
-	Tech Circuit	Tech Circuit
-	Terminal Nodes	Terminal Nodes
-	Terracotta	Terracotta
-	Terracotta 1	Terracotta 1
-	Terracotta 2	Terracotta 2
-	Terracotta 3	Terracotta 3
-	Terracotta 4	Terracotta 4
-	Terracotta 5	Terracotta 5
-	Terracotta 6	Terracotta 6
-	Tetrad Coral	Tetrad Coral
-	Tetrad Coral 1	Tetrad Coral 1
-	Tetrad Coral 2	Tetrad Coral 2
-	Tetrad Coral 3	Tetrad Coral 3
-	Tetrad Coral 4	Tetrad Coral 4
-	Tetrad Teal	Tetrad Teal
-	Tetrad Teal 1	Tetrad Teal 1
-	Tetrad Teal 2	Tetrad Teal 2
-	Tetrad Teal 3	Tetrad Teal 3
-	Tetrad Teal 4	Tetrad Teal 4
-	Thunder	Thunder
-	Tide	Tide
-	Triad Coral	Triad Coral
-	Triad Coral 1	Triad Coral 1
-	Triad Coral 2	Triad Coral 2
-	Triad Coral 3	Triad Coral 3
-	Triad Teal	Triad Teal
-	Triad Teal 1	Triad Teal 1
-	Triad Teal 2	Triad Teal 2
-	Triad Teal 3	Triad Teal 3
-	Triangles	Triangles
-	Triple Rule	Triple Rule
-	Twisted	Twisted
-	Two Tone	Two Tone
-	Ult	Ult
-	Umber	Umber
-	Umber 1	Umber 1
-	Umber 2	Umber 2
-	Umber 3	Umber 3
-	Umber 4	Umber 4
-	Umber 5	Umber 5
-	Umber 6	Umber 6
-	Vertical Stripes	Vertical Stripes
-	Vignette	Vignette
-	Violet Edge	Violet Edge
-	Violet Glow	Violet Glow
-	Violet to Red	Violet to Red
-	Vivid	Vivid
-	Vivid Amber	Vivid Amber
-	Vivid Azure	Vivid Azure
-	Vivid Blue	Vivid Blue
-	Vivid Cyan	Vivid Cyan
-	Vivid Green	Vivid Green
-	Vivid Lime	Vivid Lime
-	Vivid Magenta	Vivid Magenta
-	Vivid Orange	Vivid Orange
-	Vivid Red	Vivid Red
-	Vivid Teal	Vivid Teal
-	Vivid Violet	Vivid Violet
-	Vivid Yellow	Vivid Yellow
-	Warm Gray	Warm Gray
-	Warm Gray 1	Warm Gray 1
-	Warm Gray 2	Warm Gray 2
-	Warm Gray 3	Warm Gray 3
-	Warm Gray 4	Warm Gray 4
-	Warm Gray 5	Warm Gray 5
-	Warm Gray 6	Warm Gray 6
-	Warm Gray 7	Warm Gray 7
-	Warm Gray 8	Warm Gray 8
-	Warm Gray 9	Warm Gray 9
-	Warm Grays	Warm Grays
-	Warped Checks	Warped Checks
-	Washed Blue	Washed Blue
 	Wave	Wave
-	Wavy Edge	Wavy Edge
-	Wax Crayon	Wax Crayon
-	Wet Ink	Wet Ink
-	White Fade	White Fade
-	White to Black	White to Black
-	Wobble	Wobble
-	Yellow Glow	Yellow Glow
-	Yellow to Green	Yellow to Green
-	Zig Zag Edge	Zig Zag Edge
-	Zigzag	Zigzag
