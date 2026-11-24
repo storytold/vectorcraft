@@ -31,6 +31,7 @@ use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::commands::CommandRef;
 use craft::ui::runtime::frame::{ChromeToggle, request_chrome_toggle};
 use craft::ui::shell::chrome_state;
+use craft::ui::tabs::PanelTabLook;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
@@ -1316,7 +1317,12 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
             Bind::bound(&mut workspace),
             &specs,
             &mut panels,
-            DockConfig::default().panel_menu_always(true).panel_menu_icon(IconId::new("menu")).column_cards(true),
+            DockConfig::default()
+                .panel_menu_always(true)
+                .panel_menu_icon(IconId::new("menu"))
+                .column_cards(true)
+                .tab_look(PanelTabLook::Pill)
+                .floating_rounded_body(true),
         )
         .hide(hide)
         .flyout(Bind::bound(&mut flyout));
