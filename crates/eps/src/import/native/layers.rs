@@ -173,7 +173,8 @@ pub fn layered_ai_from(
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
     // layers can't be used (`why`).
     let structure = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new));
-    let private_layers = structure.as_ref().ok().map(|s| s.doc.layers.clone()).unwrap_or_default();
+    let private_layers: Vec<LockTree> =
+        structure.as_ref().ok().map(|s| s.doc.layers.iter().map(|l| LockTree::from_node(l)).collect()).unwrap_or_default();
     let from_pdf_part = |mut visible: Document, mut warnings: Vec<String>, why: &str| {
         let mut read = ai::Names::new(names);
         let mut board_names = ai::Names::new(names);
@@ -241,13 +242,38 @@ fn holds_type_envelope(nodes: &[Arc<Node>]) -> bool {
     })
 }
 
+/// Lightweight lock metadata snapshot of a node hierarchy, preserving names and lock states
+/// without holding `Arc<Node>` references to the artwork tree.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LockTree {
+    pub name: Option<String>,
+    pub locked: bool,
+    pub children: Vec<LockTree>,
+}
+
+impl LockTree {
+    pub fn from_node(node: &Node) -> Self {
+        Self {
+            name: node.name.clone(),
+            locked: node.locked,
+            children: node.children().map(|kids| kids.iter().map(|k| Self::from_node(k)).collect()).unwrap_or_default(),
+        }
+    }
+}
+
 /// Apply lock states from private data layers to visible PDF layers.
-pub(crate) fn apply_private_layer_locks(visible_layers: &mut [Arc<Node>], private_layers: &[Arc<Node>]) {
+pub(crate) fn apply_private_layer_locks(visible_layers: &mut [Arc<Node>], private_layers: &[LockTree]) {
     if private_layers.is_empty() || visible_layers.is_empty() {
         return;
     }
 
-    // Index private layers: name -> (count, first_index)
+    // A document with a single visible layer and a single private layer pairs them directly.
+    if visible_layers.len() == 1 && private_layers.len() == 1 {
+        apply_node_locks(Arc::make_mut(&mut visible_layers[0]), &private_layers[0]);
+        return;
+    }
+
+    // Otherwise, match only layers with identifiable correspondence (matching unique names).
     let mut priv_names: std::collections::HashMap<&str, (usize, usize)> = std::collections::HashMap::new();
     for (i, p) in private_layers.iter().enumerate() {
         if let Some(name) = p.name.as_deref() {
@@ -256,7 +282,6 @@ pub(crate) fn apply_private_layer_locks(visible_layers: &mut [Arc<Node>], privat
         }
     }
 
-    // Index visible layers: name -> count
     let mut vis_names: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     for v in visible_layers.iter() {
         if let Some(name) = v.name.as_deref() {
@@ -264,96 +289,62 @@ pub(crate) fn apply_private_layer_locks(visible_layers: &mut [Arc<Node>], privat
         }
     }
 
-    let mut matched_vis = vec![false; visible_layers.len()];
-    let mut matched_priv = vec![false; private_layers.len()];
     let mut pairs = Vec::new();
-
-    // Pass 1: Unique named matches
     for (v_idx, vis) in visible_layers.iter().enumerate() {
         if let Some(name) = vis.name.as_deref()
             && vis_names.get(name).copied() == Some(1)
             && let Some(&(1, p_idx)) = priv_names.get(name)
-            && !matched_priv[p_idx]
         {
-            matched_vis[v_idx] = true;
-            matched_priv[p_idx] = true;
             pairs.push((v_idx, p_idx));
         }
     }
-
-    // Pass 2: Pair remaining unmatched layers in relative order when counts match
-    let unmatched_v: Vec<usize> = (0..visible_layers.len()).filter(|&i| !matched_vis[i]).collect();
-    let unmatched_p: Vec<usize> = (0..private_layers.len()).filter(|&i| !matched_priv[i]).collect();
-    if unmatched_v.len() == unmatched_p.len() {
-        for (&v_idx, &p_idx) in unmatched_v.iter().zip(unmatched_p.iter()) {
-            pairs.push((v_idx, p_idx));
-        }
-    } else if unmatched_v.len() == 1 && unmatched_p.len() == 1 {
-        pairs.push((unmatched_v[0], unmatched_p[0]));
-    }
+    drop(vis_names);
 
     for (v_idx, p_idx) in pairs {
         apply_node_locks(Arc::make_mut(&mut visible_layers[v_idx]), &private_layers[p_idx]);
     }
 }
 
-fn apply_node_locks(vis: &mut Node, priv_: &Node) {
+fn apply_node_locks(vis: &mut Node, priv_: &LockTree) {
     if priv_.locked {
         vis.locked = true;
     }
-    if let (Some(vis_kids), Some(priv_kids)) = (vis.children_mut(), priv_.children()) {
-        if vis_kids.is_empty() || priv_kids.is_empty() {
-            return;
-        }
+    let Some(vis_kids) = vis.children_mut() else { return };
+    if vis_kids.is_empty() || priv_.children.is_empty() {
+        return;
+    }
 
-        // Index private children: name -> (count, first_index)
-        let mut priv_names: std::collections::HashMap<&str, (usize, usize)> = std::collections::HashMap::new();
-        for (i, p) in priv_kids.iter().enumerate() {
-            if let Some(name) = p.name.as_deref() {
-                let entry = priv_names.entry(name).or_insert((0, i));
-                entry.0 += 1;
-            }
+    // Index private children: name -> (count, first_index)
+    let mut priv_names: std::collections::HashMap<&str, (usize, usize)> = std::collections::HashMap::new();
+    for (i, p) in priv_.children.iter().enumerate() {
+        if let Some(name) = p.name.as_deref() {
+            let entry = priv_names.entry(name).or_insert((0, i));
+            entry.0 += 1;
         }
+    }
 
-        // Index visible children: name -> count
-        let mut vis_names: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-        for v in vis_kids.iter() {
-            if let Some(name) = v.name.as_deref() {
-                *vis_names.entry(name).or_insert(0) += 1;
-            }
+    // Index visible children: name -> count
+    let mut vis_names: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for v in vis_kids.iter() {
+        if let Some(name) = v.name.as_deref() {
+            *vis_names.entry(name).or_insert(0) += 1;
         }
+    }
 
-        let mut matched_vis = vec![false; vis_kids.len()];
-        let mut matched_priv = vec![false; priv_kids.len()];
-        let mut pairs = Vec::new();
-
-        // Pass 1: resolve unique named matches first.
-        for (v_idx, v) in vis_kids.iter().enumerate() {
-            if let Some(v_name) = v.name.as_deref()
-                && vis_names.get(v_name).copied() == Some(1)
-                && let Some(&(1, p_idx)) = priv_names.get(v_name)
-                && !matched_priv[p_idx]
-            {
-                matched_vis[v_idx] = true;
-                matched_priv[p_idx] = true;
-                pairs.push((v_idx, p_idx));
-            }
+    // Resolve unique named matches without positional blind pairing
+    let mut pairs = Vec::new();
+    for (v_idx, v) in vis_kids.iter().enumerate() {
+        if let Some(v_name) = v.name.as_deref()
+            && vis_names.get(v_name).copied() == Some(1)
+            && let Some(&(1, p_idx)) = priv_names.get(v_name)
+        {
+            pairs.push((v_idx, p_idx));
         }
+    }
+    drop(vis_names);
 
-        // Pass 2: pair remaining unmatched children in relative order when counts match.
-        let unmatched_v: Vec<usize> = (0..vis_kids.len()).filter(|&i| !matched_vis[i]).collect();
-        let unmatched_p: Vec<usize> = (0..priv_kids.len()).filter(|&i| !matched_priv[i]).collect();
-        if unmatched_v.len() == unmatched_p.len() {
-            for (&v_idx, &p_idx) in unmatched_v.iter().zip(unmatched_p.iter()) {
-                pairs.push((v_idx, p_idx));
-            }
-        } else if unmatched_v.len() == 1 && unmatched_p.len() == 1 {
-            pairs.push((unmatched_v[0], unmatched_p[0]));
-        }
-
-        for (v_idx, p_idx) in pairs {
-            apply_node_locks(Arc::make_mut(&mut vis_kids[v_idx]), &priv_kids[p_idx]);
-        }
+    for (v_idx, p_idx) in pairs {
+        apply_node_locks(Arc::make_mut(&mut vis_kids[v_idx]), &priv_.children[p_idx]);
     }
 }
 

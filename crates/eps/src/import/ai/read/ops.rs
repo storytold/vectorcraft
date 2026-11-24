@@ -953,6 +953,7 @@ impl<'a> Reader<'a> {
             (look.opacity, look.blend, look.isolate, look.knockout, look.knockout_shape) = (1.0, BlendMode::Normal, false, Knockout::Neutral, false);
             let (visible, locked) = (object.visible, object.locked);
             (object.opacity, object.blend, object.isolate, object.knockout_shape) = (1.0, BlendMode::Normal, false, false);
+            object.locked = false;
             let mut group = Node::group(self.doc.alloc_id(), vec![Arc::new(look), Arc::new(object)]);
             (group.opacity, group.blend, group.isolate, group.knockout, group.knockout_shape) = state;
             group.visible = visible;

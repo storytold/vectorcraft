@@ -8338,7 +8338,7 @@ fn ai_locked_layers_and_groups_preserve_locks() {
 #[test]
 fn ai_fallback_to_pdf_part_preserves_private_stream_layer_and_group_locks() {
     use std::sync::Arc;
-    let art_locked_group = format!("1 A\nu\n%_/ArtDictionary :\n%(Locked Subgroup) /String (AIArtName) ,\n%_;\n{}\nU\n0 A", square(10, 10));
+    let art_locked_group = format!("1 A\nu\n{}\nU\n%_/ArtDictionary :\n%_(Locked Subgroup) /String (AIArtName) ,\n%_;\n0 A", square(10, 10));
     let locked_l = locked_layer("Map Layer", &art_locked_group);
     let n = native(&locked_l);
     let file = private(&n);
@@ -8366,8 +8366,8 @@ fn ai_fallback_to_pdf_part_preserves_private_stream_layer_and_group_locks() {
 #[test]
 fn ai_duplicate_group_names_under_different_layers_preserve_individual_lock_states() {
     use std::sync::Arc;
-    let art_locked_group = format!("1 A\nu\n%_/ArtDictionary :\n%(SharedGroup) /String (AIArtName) ,\n%_;\n{}\nU\n0 A", square(10, 10));
-    let art_unlocked_group = format!("0 A\nu\n%_/ArtDictionary :\n%(SharedGroup) /String (AIArtName) ,\n%_;\n{}\nU\n0 A", square(10, 10));
+    let art_locked_group = format!("1 A\nu\n{}\nU\n%_/ArtDictionary :\n%_(SharedGroup) /String (AIArtName) ,\n%_;\n0 A", square(10, 10));
+    let art_unlocked_group = format!("0 A\nu\n{}\nU\n%_/ArtDictionary :\n%_(SharedGroup) /String (AIArtName) ,\n%_;\n0 A", square(10, 10));
     let layer_a = layer("Layer A", true, &art_locked_group);
     let layer_b = layer("Layer B", true, &art_unlocked_group);
     let n = native(&format!("{layer_a}{layer_b}"));
@@ -8433,7 +8433,7 @@ fn ai_reordered_mixed_named_and_unnamed_children_preserve_locks() {
     }
 
     let mut visible_layers = vec![Arc::new(vis_layer)];
-    let private_layers = vec![Arc::new(priv_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
     super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
 
     let roads = visible_layers[0].children().unwrap()[0].clone();
@@ -8478,15 +8478,15 @@ fn ai_reordered_three_children_roads_triangle_circle_preserve_locks() {
     }
 
     let mut visible_layers = vec![Arc::new(vis_layer)];
-    let private_layers = vec![Arc::new(priv_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
     super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
 
     let vis_tri = visible_layers[0].children().unwrap()[0].clone();
     let vis_circ = visible_layers[0].children().unwrap()[1].clone();
     let vis_rd = visible_layers[0].children().unwrap()[2].clone();
 
-    assert!(vis_tri.locked, "triangle matched to locked private triangle in relative order");
-    assert!(!vis_circ.locked, "circle matched to unlocked private circle in relative order");
+    assert!(!vis_tri.locked, "unnamed triangle does not pair blindly with private triangle");
+    assert!(!vis_circ.locked, "unnamed circle remains unlocked");
     assert!(!vis_rd.locked, "Roads matched to unlocked private Roads by unique name");
 }
 
@@ -8500,15 +8500,15 @@ fn ai_fallback_with_generated_page_name_preserves_private_layer_lock() {
     vis_layer.locked = false;
 
     let mut visible_layers = vec![Arc::new(vis_layer)];
-    let private_layers = vec![Arc::new(priv_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
     super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
 
     assert_eq!(visible_layers[0].name.as_deref(), Some("Page 1"));
-    assert!(visible_layers[0].locked, "Page 1 layer matched to locked private layer Map positionally");
+    assert!(visible_layers[0].locked, "single-layer document pairs visible and private layers");
 }
 
 #[test]
-fn ai_named_locked_private_child_pairs_with_unnamed_visible_child() {
+fn ai_unnamed_visible_child_does_not_pair_with_private_node() {
     use std::sync::Arc;
     let mut doc = Document::new(100.0, 100.0);
     let mut priv_layer = Node::layer(doc.alloc_id(), "Layer", LayerColor::Preset(0));
@@ -8533,13 +8533,33 @@ fn ai_named_locked_private_child_pairs_with_unnamed_visible_child() {
     }
 
     let mut visible_layers = vec![Arc::new(vis_layer)];
-    let private_layers = vec![Arc::new(priv_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
     super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
 
     let first = visible_layers[0].children().unwrap()[0].clone();
     let second = visible_layers[0].children().unwrap()[1].clone();
     assert!(!first.locked, "first unnamed visible group is unlocked");
-    assert!(second.locked, "second unnamed visible group pairs positionally with locked Roads group");
+    assert!(!second.locked, "second unnamed visible group does not pair positionally with locked Roads group");
+}
+
+#[test]
+fn ai_multi_page_unlayered_pdf_does_not_blindly_pair_with_private_layers() {
+    use std::sync::Arc;
+    let mut doc = Document::new(100.0, 100.0);
+    let mut priv_1 = Node::layer(doc.alloc_id(), "Layer 1", LayerColor::Preset(0));
+    priv_1.locked = true;
+    let mut priv_2 = Node::layer(doc.alloc_id(), "Layer 2", LayerColor::Preset(0));
+    priv_2.locked = false;
+
+    let vis_1 = Node::layer(doc.alloc_id(), "Page 1", LayerColor::Preset(0));
+    let vis_2 = Node::layer(doc.alloc_id(), "Page 2", LayerColor::Preset(0));
+
+    let mut visible_layers = vec![Arc::new(vis_1), Arc::new(vis_2)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_1), super::native::layers::LockTree::from_node(&priv_2)];
+    super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
+
+    assert!(!visible_layers[0].locked, "Page 1 does not pair with private Layer 1");
+    assert!(!visible_layers[1].locked, "Page 2 does not pair with private Layer 2");
 }
 
 #[test]
@@ -8571,11 +8591,32 @@ fn ai_duplicate_visible_name_does_not_lock_multiple_from_single_private_node() {
     }
 
     let mut visible_layers = vec![Arc::new(vis_layer)];
-    let private_layers = vec![Arc::new(priv_layer)];
+    let private_layers = vec![super::native::layers::LockTree::from_node(&priv_layer)];
     super::native::layers::apply_private_layer_locks(&mut visible_layers, &private_layers);
 
     let r1 = visible_layers[0].children().unwrap()[0].clone();
     let r2 = visible_layers[0].children().unwrap()[1].clone();
-    assert!(r1.locked, "first Roads group receives the lock from private Roads");
-    assert!(!r2.locked, "second Roads group remains unlocked, avoiding duplicate private lock propagation");
+    assert!(!r1.locked, "ambiguous duplicate visible name does not receive private lock");
+    assert!(!r2.locked, "second duplicate visible name remains unlocked");
+}
+
+#[test]
+fn ai_wrapped_group_places_lock_only_on_wrapper_group_not_children() {
+    let text = "1 A\n0 0.5 0 0 0 Xy\n(Styled Text) 10 50 Tt\n0 A";
+    let art = native(&layer("Live", true, text));
+    let (doc, _notes, read) = crate::layered_ai(&private(&art), pdf_two_squares(), vec![], false, true, 1.0);
+    assert!(read);
+    for layer in &doc.layers {
+        if let Some(kids) = layer.children() {
+            for kid in kids {
+                if kid.locked
+                    && let Some(subkids) = kid.children()
+                {
+                    for sub in subkids {
+                        assert!(!sub.locked, "inner child of locked wrapper group must not be locked");
+                    }
+                }
+            }
+        }
+    }
 }

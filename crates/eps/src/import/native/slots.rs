@@ -341,6 +341,9 @@ pub(super) fn fill_slots(
                             let p = Arc::make_mut(p);
                             (p.opacity, p.blend, p.isolate, p.knockout, p.knockout_shape) = (state.0, state.1, state.2, state.3, shape);
                         } else if transparent {
+                            for p in &mut parts {
+                                Arc::make_mut(p).locked = false;
+                            }
                             let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
                             group.visible = visible;
                             group.locked = locked;
@@ -352,6 +355,9 @@ pub(super) fn fill_slots(
                     // A wrap object stays one: the page's parts of it in a group, when there are several.
                     if wrap.is_some() {
                         if parts.len() > 1 {
+                            for p in &mut parts {
+                                Arc::make_mut(p).locked = false;
+                            }
                             let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
                             group.visible = visible;
                             group.locked = locked;
