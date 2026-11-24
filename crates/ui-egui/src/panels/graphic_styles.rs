@@ -20,16 +20,18 @@ use craft::behavior::{EditEvent, GesturePhase, IconId, Selection};
 use craft::ui::contract::{
     Bind, DropAt, DropPayload, DropPlace, Entry, ListDrag, MemoProps, PopupKind, ReorderMove, SelectMode, Show as _, ShowContainer as _, Trigger,
 };
-use craft::ui::display::Divider;
+use craft::ui::display::{Divider, Picture};
+use craft::ui::list::ThumbAspect;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::presets::{
     PickerField, PresetBrowser, PresetDrop, PresetEvent, PresetFns, PresetPicker, PresetReorder, PresetRow, PresetSource, PresetState, PresetView,
 };
 use craft::ui::primitives::{
-    ContentPainterCx, IconSpec, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
+    ContentPainterCx, IconSpec, PaintShape, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
 };
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::sections::{FooterAction, FooterBar, FooterOutput, Panel};
+use craft::ui::style::DataColor;
 use egui::{Color32, Rect, Sense, TextureHandle, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
@@ -337,7 +339,7 @@ fn paint_thumb(cx: &ContentPainterCx<'_>, rect: Rect, thumbs: &Thumbnails<StyleK
     let request = ThumbRequest::for_cell(rect.width().max(rect.height()), ctx.pixels_per_point());
     let state = thumbs.state(&ctx, source, key, &request, Priority::VISIBLE);
     if !thumbs.paint(cx, rect, &state, &ThumbPaint::default().checker(false)) {
-        cx.painter.rect_filled(rect, 0.0, Color32::WHITE);
+        cx.with_draw(|draw| draw.data_fill(&PaintShape::Rect(rect, egui::CornerRadius::ZERO), DataColor::new(Color32::WHITE)));
     }
 }
 
@@ -389,10 +391,15 @@ fn large_tip(app: &VectorcraftApp, thumbs: &StyleThumbs, ui: &mut Ui, key: &Styl
     let look = thumbs.looks.get(i).copied().unwrap_or_default();
     let tex = object_preview(app, ui.ctx(), &thumbs.d.graphic_styles[i], look, thumbs.look.preview, px);
     let (r, _) = ui.allocate_exact_size(vec2(LARGE, LARGE), Sense::hover());
-    match &tex {
-        Some(tex) => ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE),
-        None => ui.painter().rect_filled(r, 0.0, Color32::WHITE),
-    };
+    let texture = tex.as_ref().map(TextureHandle::id);
+    // Decorative: the style's name below it says what it shows.
+    Picture::painter("", ThumbAspect::SQUARE, move |cx, rect| {
+        cx.with_draw(|draw| match texture {
+            Some(id) => draw.texture(rect, id, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))),
+            None => draw.data_fill(&PaintShape::Rect(rect, egui::CornerRadius::ZERO), DataColor::new(Color32::WHITE)),
+        })
+    })
+    .show_at(ui, r);
     ui.label(key);
 }
 

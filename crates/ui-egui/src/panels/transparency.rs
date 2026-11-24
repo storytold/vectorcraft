@@ -19,13 +19,14 @@ use craft::ui::list::{List, ListRow, RowEvent, ThumbSize, ThumbTarget};
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
 use craft::ui::primitives::{
-    ContentPainterCx, IconSpec, LoadFailure, LoadedPicture, Priority, ThumbJob, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails,
+    ContentPainterCx, IconSpec, LoadFailure, LoadedPicture, PaintShape, Priority, StrokeWidth, ThumbJob, ThumbRender, ThumbRequest, ThumbSource,
+    ThumbnailOptions, Thumbnails,
 };
 use craft::ui::primitives::{Revision, ThumbPaint};
 use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::text::NumberField;
-use egui::{Color32, Stroke, Ui};
+use egui::{Color32, Ui};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Knockout, Node, NodeId, OpacityMask};
 use vectorcraft_engine::cmd::TransparencyInfo;
@@ -183,8 +184,7 @@ fn mask_row(
         if !object_state.as_ref().is_some_and(|s| store.paint(cx, rect, s, plain))
             && let Some(c) = fill
         {
-            // PLAN: a colour from data should go through the content painter's data path, not the raw painter.
-            cx.painter.rect_filled(rect.shrink(rect.width() * 0.2), 0.0, c);
+            cx.data_shapes([egui::Shape::rect_filled(rect.shrink(rect.width() * 0.2), 0.0, c)]);
         }
     };
     let paint_mask = move |cx: &ContentPainterCx, rect: egui::Rect| {
@@ -193,9 +193,12 @@ fn mask_row(
                 store.paint(cx, rect, s, paper);
             }
             if disabled {
-                let red = Stroke::new(2.0, Color32::from_rgb(220, 40, 40));
-                cx.painter.line_segment([rect.left_top(), rect.right_bottom()], red);
-                cx.painter.line_segment([rect.right_top(), rect.left_bottom()], red);
+                let red = craft::ui::style::DataColor::new(super::swatches::OFF_MARK);
+                cx.with_draw(|draw| {
+                    for line in [[rect.left_top(), rect.right_bottom()], [rect.right_top(), rect.left_bottom()]] {
+                        draw.stroke(&PaintShape::Path(line.to_vec()), StrokeWidth::Thick, red);
+                    }
+                });
             }
         } else {
             cx.icon(rect, &IconSpec::svg(IconId::new("dc-mask-none")));
