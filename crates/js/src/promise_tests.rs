@@ -205,6 +205,28 @@ fn a_long_rejection_reason_is_reported_cut_to_its_first_500_characters() {
 }
 
 #[test]
+fn an_interpreter_error_given_a_long_message_is_reported_as_the_scripts_text_without_copying_it() {
+    let mut r = realm();
+    r.run(
+        "var ab = 'ab'; for (var i = 0; i < 16; i++) ab = ab + ab;\n\
+         var e; try { null.x; } catch (x) { e = x; }\n\
+         e.message = ab;\n\
+         Promise.reject(e);\n\
+         try { null.x; } catch (x) { Promise.reject(x); }",
+    )
+    .unwrap();
+    let got: Vec<(String, bool)> = r.unhandled_rejections().iter().map(|j| (j.message.clone(), j.authored)).collect();
+    assert_eq!(got.len(), 2);
+    assert_eq!(got[0], (format!("TypeError: {}a…", "ab".repeat(244)), true));
+    assert!(!got[1].1, "an error the interpreter threw, unchanged: {:?}", got[1]);
+    let interp = r.interp();
+    match interp.find_property(interp.global, &crate::heap::key("ab")) {
+        Ok(Some(crate::heap::Prop::Data { value: crate::value::Value::String(s), .. })) => assert!(s.is_rope(), "the message was flattened"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn a_rejection_handled_in_a_later_job_is_not_reported() {
     let mut r = realm();
     r.run("var p = Promise.reject(1); Promise.resolve().then(function () { p.catch(function () {}); });").unwrap();

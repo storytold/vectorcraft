@@ -219,6 +219,21 @@ impl Str {
         }
         String::from_utf16_lossy(&units)
     }
+
+    /// Calls `f` with each run of code units in order, read along the rope without flattening it.
+    pub(crate) fn for_each_chunk(&self, mut f: impl FnMut(&[u16])) {
+        let mut stack = vec![self.clone()];
+        while let Some(s) = stack.pop() {
+            match &*s.0.borrow() {
+                Node::Flat(units) => f(units),
+                Node::Concat { left, right, .. } => {
+                    stack.push(right.clone());
+                    stack.push(left.clone());
+                }
+                Node::Taken => {}
+            }
+        }
+    }
 }
 
 impl PartialEq for Str {
