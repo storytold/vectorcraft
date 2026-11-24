@@ -24,6 +24,10 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Direct Selection picks and outlines the parts of a dynamic symbol's instance where the
+        // effects of the instance's fill and stroke draw them.
+        vectorcraft_doc::hit::set_instance_row_art(vectorcraft_render::effects::add_instance_row_effects_to_parts);
+        vectorcraft_doc::hit::set_instance_reshapes(vectorcraft_render::effects::has_item_geometry);
         // Clicks inside a clip group fall in the region its clipping path's effects give it.
         vectorcraft_doc::hit::set_clip_region(vectorcraft_render::effects::reshaped_clip_outline);
         // Clicks and marquees find paths, compound paths, groups and layers where their geometry
@@ -214,9 +218,14 @@ impl Session {
         let _ = self.give_back_tool(view);
         let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
-        // the rest of the batch; anything else in progress (a drag) is cancelled.
+        // the rest of the batch; one that keeps on a switch is kept; anything else in progress (a
+        // drag) is cancelled.
         if self.batch_stash.is_none() {
-            let _ = self.cancel_interaction();
+            let _ = if self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.keep_on_switch) {
+                self.commit_interaction()
+            } else {
+                self.cancel_interaction()
+            };
         }
         self.keep_tool_settings();
         self.tool = self.make_tool(self.tool.id());
@@ -289,7 +298,9 @@ impl Session {
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
     /// not only in the layers (#1738).
-    pub(crate) fn refresh_text_bounds(doc: &mut Document) {
+    pub(crate) fn refresh_text_bounds(doc: &mut Document) -> Vec<String> {
+        // The fonts files carried for their type draw it ([`vectorcraft_doc::FileFonts`]).
+        let warnings = vectorcraft_text::FontDb::global().bind_document_file_fonts(doc);
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
         let mut uncached = |t: &TextObject| t.cached_bounds.is_none();
@@ -299,6 +310,7 @@ impl Session {
         // The symbols' type is measured now: the inline graphics showing those symbols take their
         // art's measured size, a symbol's type before the type that shows that symbol inline.
         doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
+        warnings
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -340,6 +352,8 @@ impl Session {
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
         cmd::compositefonts::filter_loaded(&mut doc);
+        // Importers report binding failures; programmatic additions still need owned resources.
+        let _ = vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc);
         // Inline graphics in text take their size from their symbols' art (not saved).
         doc.resolve_inline_art();
         // Ruler guides a reader left in the saved list become nodes on their layers.

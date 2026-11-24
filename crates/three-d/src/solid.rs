@@ -575,3 +575,6 @@ mod tests_inflate_shading;
 
 #[cfg(test)]
 mod tests_limits;
+
+#[cfg(test)]
+mod tests_curves;

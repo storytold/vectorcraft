@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unembed",
             [],
             None,
-            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path and link the image to it, keeping its bounds (an image changed by Perspective Distort or Free Distort keeps its corners). The image is written as stored (PNG, JPEG, GIF, WebP or TIFF; as PNG when that format is not one of VectorCraft's raster file formats) when path has no extension or names the stored format, and converted when path ends in another of .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp. Written as stored (here and with folder), an image from a PSD or PSB file keeps the clip group of the clipping path that file names, and the file written keeps the path, so Open, Place, Relink and Update Links read the file with that clip group (drawn through a distorted image's corners); a converted file holds no clipping path, and the clip group becomes a plain group. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds (a distorted image its corners). One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
+            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path and link the image to it, keeping its bounds (an image changed by Perspective Distort or Free Distort keeps its corners). The image is written as stored (PNG, JPEG, GIF, WebP or TIFF; as PNG when that format is not one of VectorCraft's raster file formats) when path has no extension or names the stored format, and converted when path ends in another of .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp. Written as stored (here and with folder), an image from a PSD or PSB file keeps the clip group of the clipping path that file names, and the file written keeps the path, so Open, Place, Relink and Update Links read the file with that clip group (drawn through a distorted image's corners); a converted file holds no clipping path, and the clip group becomes a plain group. A clipping mask released, edited or made in the document stays as it is, in either case. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds (a distorted image its corners). One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
             has_doc,
             unembed
         ),
@@ -563,7 +563,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
             Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
             _ => img.blob.mime.clone(),
         };
-        out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview });
+        out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview, file_font: Default::default() });
     }
     let mut warnings = vec![];
     match previews.len() {
@@ -1264,7 +1264,31 @@ fn warped(path: &PathData, map: &Homography) -> Option<PathData> {
 /// placed as its Placement Options say (`force`: as that Preserve choice says, whatever they say);
 /// with `also` (a file's path and the content shown), so do the images outside the layer tree that
 /// show that content.
-fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Option<Preserve>, also: Option<(&str, &str)>) -> Result<()> {
+fn install(d: &mut Document, ids: &[NodeId], read: FileRead, force: Option<Preserve>, also: Option<(&str, &str)>) -> Result<()> {
+    install_with(d, ids, read, force, also, false)
+}
+
+/// What Unembed (`unembed`) does with the clip `to` of an image whose clip group holding just it
+/// has a clipping path (`held`): a clipping mask released, edited or made in the document stays as
+/// it is, and only a clip group of the old file's own clipping path follows the file written.
+fn unembed_clip(to: ClipTo, held: bool) -> ClipTo {
+    match to {
+        ClipTo::Nest(_) => ClipTo::Keep,
+        ClipTo::File(_) if !held => ClipTo::Keep,
+        to => to,
+    }
+}
+
+/// As [`install`]; with `unembed`, each clip goes through [`unembed_clip`].
+fn install_with(
+    d: &mut Document,
+    ids: &[NodeId],
+    (link, img): FileRead,
+    force: Option<Preserve>,
+    also: Option<(&str, &str)>,
+    unembed: bool,
+) -> Result<()> {
+    let keep = |to: ClipTo, held: bool| if unembed { unembed_clip(to, held) } else { to };
     let new_pt = super::place::pt_per_px(img.ppi);
     let mut clips = vec![];
     let nested = nested_ids(d, ids);
@@ -1290,7 +1314,7 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
                     _ => None,
                 };
                 let clip = refill_distorted(&mut n, old_clip.as_ref(), &link, &img, held);
-                return (n, clip);
+                return (n, keep(clip, held.is_some()));
             }
             if let NodeKind::Image(im) = &mut n.kind {
                 let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
@@ -1300,7 +1324,7 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
                     None => (super::place::pt_per_px(None), None),
                 };
                 let (xf, c) = placed_xf(im.xf, size(im.width, im.height), old_pt, size(img.width, img.height), new_pt, o);
-                clip = clip_to(im.xf, old_clip, c, &img, xf, held);
+                clip = keep(clip_to(im.xf, old_clip, c, &img, xf, held), held.is_some());
                 (im.key, im.width, im.height, im.xf, im.link) = (img.key.clone(), img.width, img.height, xf, Some(link.clone()));
             }
             (n, clip)
@@ -1315,7 +1339,8 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
             };
             let held = clip_path_of(d, *id).map(|(path, rule)| (path.clone(), rule));
             if let Some(n) = d.node_mut(*id) {
-                clips.push((*id, refill_distorted(n, old_clip.as_ref(), &link, &img, held.as_ref().map(|(path, rule)| (path, *rule)))));
+                let clip = refill_distorted(n, old_clip.as_ref(), &link, &img, held.as_ref().map(|(path, rule)| (path, *rule)));
+                clips.push((*id, keep(clip, held.is_some())));
             }
             continue;
         }
@@ -1326,7 +1351,8 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         // Placement Options' clip, else the clipping path of a DCS file (read again with its
         // plates) or of a PSD or PSB file.
         let old_clip = d.images.get(&im.key).and_then(file_clip);
-        clips.push((*id, clip_to(im.xf, old_clip.as_ref(), clip, &img, xf, clip_path_of(d, *id))));
+        let held = clip_path_of(d, *id);
+        clips.push((*id, keep(clip_to(im.xf, old_clip.as_ref(), clip, &img, xf, held), held.is_some())));
         if let Some(n) = d.node_mut(*id)
             && let NodeKind::Image(im) = &mut n.kind
         {
@@ -2829,7 +2855,7 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     write_file(&path, &bytes)?;
     let read = (link_info(&path, &bytes), img);
     drop(doc);
-    s.edit("Unembed", |d, _| editing_brush_art(d, |d| install(d, &[id], read, Some(Preserve::Bounds), None)))?;
+    s.edit("Unembed", |d, _| editing_brush_art(d, |d| install_with(d, &[id], read, Some(Preserve::Bounds), None, true)))?;
     Ok(json!({ "id": id.0, "path": path }))
 }
 
@@ -2896,7 +2922,7 @@ fn unembed_to_folder(s: &mut Session, p: &Value, ids: Option<Vec<NodeId>>) -> Re
     drop(doc);
     let done: Vec<Value> = reads.iter().map(|(id, (l, _))| json!({ "id": id.0, "path": l.path })).collect();
     let edited = s.edit("Unembed", |d, _| {
-        editing_brush_art(d, |d| reads.into_iter().try_for_each(|(id, read)| install(d, &[id], read, Some(Preserve::Bounds), None)))
+        editing_brush_art(d, |d| reads.into_iter().try_for_each(|(id, read)| install_with(d, &[id], read, Some(Preserve::Bounds), None, true)))
     });
     if let Err(e) = edited {
         remove_written(&written);

@@ -12,18 +12,31 @@
 //! point closes the path, a click on an end of an open path goes on drawing from it, and Escape
 //! or Enter ends the path. The path's points show as circles, without handles, and a preview
 //! shows the piece the next click adds. Points snap to Smart Guides. Each piece is one undo step.
+//!
+//! While an arc is drawn, by a drag or as the piece the next click adds, the tool shows a
+//! protractor around the arc's center: a tick across its circle every 15° from where the arc
+//! starts, a longer one every 90°, and one where it ends. The piece the next click adds shows its
+//! protractor only while the Pen tool's rubber band preference shows that piece. With Smart Guides
+//! on, the end of a continuous arc goes onto the nearest tick of that protractor when the tick lies
+//! within the snapping tolerance of the pointer, no other Smart Guide snaps the point, and neither
+//! the grid nor pixels snap drawn points. A sharp-corner arc, and a continuous arc that has no
+//! direction to follow, sweep the arc size, so their ends are not snapped to a tick. After a snap
+//! setting changes under a still pointer, the hover's preview, protractor, distance label and
+//! Smart Guides are hidden until the pointer moves; when the view, the document or the selection
+//! changes, the canvas hovers the still pointer again. Shift does not constrain Quick Pen points,
+//! so it does not change the snapping.
 
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
+use vectorcraft_doc::{Document, MAX_COORD, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Anchor, AnchorKind, BezPath, Point, SubPath, Vec2};
 
 use crate::draw2::FEEDBACK;
-use crate::guides::{DrawSnap, Leave};
+use crate::guides::{DrawSnap, Leave, SnapSettings};
 use crate::pen::{continue_from, open_end_at};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// The tool's id.
 pub const ID: &str = "quickPen";
@@ -36,6 +49,10 @@ pub const TURN_STEP: f64 = 15.0;
 /// The smallest and largest arc size (degrees).
 pub const MIN_TURN: f64 = 1.0;
 pub const MAX_TURN: f64 = 359.0;
+/// Degrees between the protractor's ticks, and the steps a continuous arc's sweep snaps to.
+pub const TICK_STEP: f64 = 15.0;
+/// Half the length (screen points) of a protractor tick; the ticks every 90° are twice as long.
+const TICK_PX: f64 = 4.0;
 /// Screen points the pointer moves after a press before the press drags.
 const DRAG_PX: f64 = 3.0;
 /// A continuous arc whose end lies within this angle (radians) of straight ahead, or of straight
@@ -190,6 +207,82 @@ pub fn append(sp: &mut SubPath, piece: &Piece) -> bool {
     true
 }
 
+/// The circle an arc piece lies on: its center and radius, the point the arc starts from, and the
+/// arc's signed sweep (radians; positive bulges to the left of the direction drawn).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ArcCircle {
+    pub center: Point,
+    pub radius: f64,
+    pub start: Point,
+    pub sweep: f64,
+}
+
+/// The circle of the arc `piece` adds at the end of `sp`, as [`append`] draws it. None for a line,
+/// a piece that ends where `sp` does, and a circle whose center or radius is past the document's
+/// coordinate limit.
+pub fn arc_circle(sp: &SubPath, piece: &Piece) -> Option<ArcCircle> {
+    let a = sp.anchors.last()?.p;
+    let c = piece.to - a;
+    let l = c.hypot();
+    if l <= 1e-9 || !l.is_finite() {
+        return None;
+    }
+    let s = turn_of(sp, piece, a, piece.to)?;
+    let half = s.abs() / 2.0;
+    let radius = l / (2.0 * half.sin());
+    // The center lies on the chord's perpendicular bisector, on the side away from the bulge for
+    // less than a half circle and on the bulge's side for more.
+    let center = a + c / 2.0 + rot(c / l, FRAC_PI_2) * (radius * half.cos() * s.signum());
+    (radius <= MAX_COORD && center.x.abs() <= MAX_COORD && center.y.abs() <= MAX_COORD).then_some(ArcCircle { center, radius, start: a, sweep: s })
+}
+
+/// The protractor tick nearest the end of a continuous arc ending at `piece.to`: the point on the
+/// arc's circle ([`arc_circle`]) where the sweep is a whole number of [`TICK_STEP`]s. None for
+/// other pieces, a continuous arc with no direction to follow (it sweeps the arc size, as a
+/// sharp-corner arc does), an arc without a circle, a sweep that rounds to nothing or to a whole
+/// circle, and a tick past the document's coordinate limit.
+pub fn tick_end(sp: &SubPath, piece: &Piece) -> Option<Point> {
+    if piece.stroke != Stroke::ContinuousArc {
+        return None;
+    }
+    arrival(sp)?;
+    let arc = arc_circle(sp, piece)?;
+    let step = TICK_STEP.to_radians();
+    let s = (arc.sweep / step).round() * step;
+    (s.abs() > step / 2.0 && s.abs() < 2.0 * PI - step / 2.0)
+        .then(|| arc.center + rot(arc.start - arc.center, s))
+        .filter(|b| b.x.abs() <= MAX_COORD && b.y.abs() <= MAX_COORD)
+}
+
+/// The protractor around `arc`'s center: a tick across its circle every [`TICK_STEP`] from where
+/// the arc starts, twice as long every 90°, and one where the arc ends.
+fn protractor(cx: &ToolContext, arc: &ArcCircle) -> BezPath {
+    let step = TICK_STEP.to_radians();
+    let out = (arc.start - arc.center) / arc.radius;
+    let ticks = (arc.sweep.abs() / step + 1e-9).floor() as usize;
+    let mut bp = BezPath::new();
+    let mut tick = |angle: f64, long: bool| {
+        let d = rot(out, angle);
+        let half = cx.tol(if long { 2.0 * TICK_PX } else { TICK_PX });
+        bp.move_to(arc.center + d * (arc.radius - half));
+        bp.line_to(arc.center + d * (arc.radius + half));
+    };
+    let per_right_angle = (90.0 / TICK_STEP).round() as usize;
+    for k in 0..=ticks {
+        tick(arc.sweep.signum() * k as f64 * step, k % per_right_angle == 0);
+    }
+    if arc.sweep.abs() - ticks as f64 * step > 1e-6 {
+        tick(arc.sweep, false);
+    }
+    bp
+}
+
+/// The last two of the first `kept` points of `sp`: where the piece after them starts, and the
+/// direction it arrives in.
+fn tail(sp: &SubPath, kept: usize) -> Option<SubPath> {
+    Some(SubPath::new(sp.anchors.get_range(kept.saturating_sub(2)..kept)?, false))
+}
+
 /// Closes `sp`: a last point that lies on the first joins it (the first point takes its incoming
 /// handle); otherwise a straight segment closes the path. Fewer than two points stay open.
 pub fn close(sp: &mut SubPath) {
@@ -269,12 +362,14 @@ impl Drawing {
 }
 
 /// The press in progress: where it went down, whether it has dragged, and whether it began an undo
-/// step (a piece it adds).
+/// step (a piece it adds). `end` is the pointer for the end of the piece it adds and where the
+/// snap put that end, before the protractor's tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Press {
     at: Point,
     dragged: bool,
     begun: bool,
+    end: Option<(Point, Point)>,
 }
 
 pub struct QuickPenTool {
@@ -284,11 +379,16 @@ pub struct QuickPenTool {
     press: Option<Press>,
     hover: Option<Point>,
     snap: DrawSnap,
+    /// The pointer while it hovers, whether it lies on a Smart Guide target ([`Self::landed`]), and
+    /// the snap settings then; `hover` is where Smart Guides put it. The protractor's tick is
+    /// applied when the point is used ([`Self::hover_end`]), for the action chosen then. A press
+    /// clears it.
+    pointer: Option<(Point, bool, SnapSettings)>,
 }
 
 impl Default for QuickPenTool {
     fn default() -> Self {
-        Self { action: Stroke::Line, turn: DEFAULT_TURN, drawing: None, press: None, hover: None, snap: DrawSnap::default() }
+        Self { action: Stroke::Line, turn: DEFAULT_TURN, drawing: None, press: None, hover: None, snap: DrawSnap::default(), pointer: None }
     }
 }
 
@@ -375,17 +475,75 @@ impl QuickPenTool {
             return vec![];
         }
         // The snapping leaves from the point before the piece being dragged, as the press found it.
-        let from = self.drawing.as_ref().and_then(|dr| {
-            let sp = dr.before_press.as_ref()?.path_data()?.subpaths.get(dr.si)?;
-            sp.anchors.get(dr.kept.last()?.checked_sub(1)?).map(|a| Leave::segment(cx, a.p, false).without_contact())
-        });
+        let before = self.before_piece();
+        let from = before.as_ref().and_then(|sp| sp.anchors.last()).map(|a| Leave::segment(cx, a.p, false).without_contact());
         let q = self.snap.drag(cx, p, from.as_ref());
+        if let Some(pr) = self.press.as_mut() {
+            pr.end = Some((p, q));
+        }
+        let q = match self.drawing.as_ref().and_then(|dr| dr.pieces.last()) {
+            Some(piece) => self.press_end(cx, piece, p, q),
+            None => q,
+        };
         let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) else { return vec![] };
         if last.to == q {
             return vec![];
         }
         last.to = q;
         vec![Action::Preview(COMMAND.into(), self.params(false)), drawn()]
+    }
+
+    /// Where `piece`, which a press draws, ends with the pointer at `p` that the snap put at `q`:
+    /// on the protractor's tick when [`Self::on_tick`] puts it there for the piece's action.
+    fn press_end(&self, cx: &ToolContext, piece: &Piece, p: Point, q: Point) -> Point {
+        let Some(sp) = self.before_piece() else { return q };
+        let from = sp.anchors.last().map(|a| Leave::segment(cx, a.p, false).without_contact());
+        let landed = piece.stroke == Stroke::ContinuousArc && self.landed(cx, p, q, from.as_ref());
+        self.on_tick(cx, &sp, *piece, p, q, landed)
+    }
+
+    /// `q`, where the last snap put the end of `piece` drawn after `sp` (the pointer being at `p`),
+    /// moved onto the protractor's nearest tick ([`tick_end`]) when Smart Guides are on, the tick
+    /// lies within the snapping tolerance of the pointer, and nothing else snapped the point: the
+    /// snap left it where the pointer is, the pointer is on no Smart Guide target (shown or not,
+    /// `landed`), and neither the grid nor pixels snap drawn points.
+    fn on_tick(&self, cx: &ToolContext, sp: &SubPath, piece: Piece, p: Point, q: Point, landed: bool) -> Point {
+        if landed || !cx.smart_guides || q != p || cx.snap_to_grid || cx.snaps_to_pixel(PixelOp::Drawing) {
+            return q;
+        }
+        tick_end(sp, &Piece { to: q, ..piece }).filter(|b| b.distance(q) <= cx.tol(cx.snapping_tolerance)).unwrap_or(q)
+    }
+
+    /// Whether the pointer at `p`, which the last snap left in place at `q`, lies on a Smart Guide
+    /// target leaving `from`, shown or not ([`DrawSnap::lands_on_target`]). A point the snap moved
+    /// is not asked about, since a tick applies only to a point left in place.
+    fn landed(&self, cx: &ToolContext, p: Point, q: Point, from: Option<&Leave>) -> bool {
+        q == p && self.snap.lands_on_target(cx, p, from)
+    }
+
+    /// Where the next click's piece after `sp` ends while the pointer hovers: the hover's snapped
+    /// point, on the protractor's tick when [`Self::on_tick`] puts it there. None before the
+    /// pointer moves after a press, and while the hover is stale ([`Self::hover_stale`]).
+    fn hover_end(&self, cx: &ToolContext, sp: &SubPath) -> Option<Point> {
+        let (&(p, landed, _), q) = (self.pointer.as_ref()?, self.hover?);
+        if self.hover_stale(cx) {
+            return None;
+        }
+        Some(self.on_tick(cx, sp, self.piece_to(q), p, q, landed))
+    }
+
+    /// Whether the snap settings changed since the pointer last moved: the hover's snapped point
+    /// and its tick may then not be where a click puts the point, so the hover shows nothing until
+    /// the pointer moves again.
+    fn hover_stale(&self, cx: &ToolContext) -> bool {
+        self.pointer.as_ref().is_some_and(|(_, _, at)| *at != SnapSettings::of(cx))
+    }
+
+    /// During a press that adds a piece: the points before that piece, as the press found them
+    /// (the last two, see [`tail`]).
+    fn before_piece(&self) -> Option<SubPath> {
+        let dr = self.drawing.as_ref()?;
+        tail(dr.before_press.as_ref()?.path_data()?.subpaths.get(dr.si)?, *dr.kept.last()?)
     }
 
     /// Draws the path again after its last piece changed: a preview while a press draws that
@@ -433,13 +591,15 @@ impl QuickPenTool {
                 return vec![];
             }
             let from = self.leave(cx).map(|l| l.1);
-            let q = self.snap.press(cx, p, &[id], from.as_ref());
+            let snapped = self.snap.press(cx, p, &[id], from.as_ref());
+            let landed = self.action == Stroke::ContinuousArc && self.landed(cx, p, snapped, from.as_ref());
+            let q = self.on_tick(cx, sp, self.piece_to(snapped), p, snapped, landed);
             let (piece, kept) = (self.piece_to(q), sp.anchors.len());
             if let Some(dr) = self.drawing.as_mut() {
                 dr.push(piece, kept);
                 dr.before_press = shared_node(cx.doc, id).cloned();
             }
-            self.press = Some(Press { at: p, dragged: false, begun: true });
+            self.press = Some(Press { at: p, dragged: false, begun: true, end: Some((p, snapped)) });
             return vec![Action::Begin("Quick Pen".into()), Action::Preview(COMMAND.into(), self.params(false)), drawn()];
         }
         if let Some((id, si, at_first)) = open_end_at(cx, p, tol, None)
@@ -459,6 +619,7 @@ impl QuickPenTool {
     /// Ends the path being drawn; a press that added a piece is taken back.
     fn end(&mut self) -> Vec<Action> {
         self.drawing = None;
+        self.pointer = None;
         self.snap.clear();
         match self.press.take() {
             Some(pr) if pr.begun => vec![Action::Cancel],
@@ -498,13 +659,23 @@ impl Tool for QuickPenTool {
         match ev.kind {
             PointerKind::Move => {
                 let (on, from) = self.leave(cx).unzip();
-                self.hover = Some(self.snap.hover(cx, p, on.as_slice(), from.as_ref()));
+                let q = self.snap.hover(cx, p, on.as_slice(), from.as_ref());
+                self.hover = Some(q);
+                self.pointer = Some((p, on.is_some() && self.landed(cx, p, q, from.as_ref()), SnapSettings::of(cx)));
                 vec![]
             }
             PointerKind::Down => {
                 if self.press.is_some() {
                     return vec![];
                 }
+                // The hover shows again when the pointer moves after the press: the point the press
+                // places can lie on a tick away from it. A stale hover's guides stay hidden, also
+                // when the press snaps nothing.
+                if self.hover_stale(cx) {
+                    self.snap.clear();
+                }
+                self.hover = None;
+                self.pointer = None;
                 self.press_down(cx, p)
             }
             PointerKind::Drag => {
@@ -638,11 +809,17 @@ impl Tool for QuickPenTool {
             }
             ToolKey::AltTap => {
                 self.action = self.action.next();
-                // A drag under way draws its piece with the new action.
+                // A drag under way draws its piece with the new action. Its end goes through the
+                // protractor's tick again for that action: a continuous arc's end on a tick goes
+                // back to where the snap put the pointer for another action, and the other way.
                 if self.press.is_some_and(|pr| pr.begun) && self.held(cx) {
-                    let (action, turn) = (self.action, self.turn);
-                    if let Some(last) = self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut()) {
-                        (last.stroke, last.turn, last.flip) = (action, turn, false);
+                    let (action, turn, end) = (self.action, self.turn, self.press.and_then(|pr| pr.end));
+                    let piece = self.drawing.as_ref().and_then(|dr| dr.pieces.last()).map(|&pc| {
+                        let pc = Piece { stroke: action, turn, flip: false, ..pc };
+                        end.map_or(pc, |(p, q)| Piece { to: self.press_end(cx, &pc, p, q), ..pc })
+                    });
+                    if let (Some(piece), Some(last)) = (piece, self.drawing.as_mut().and_then(|dr| dr.pieces.last_mut())) {
+                        *last = piece;
                     }
                     return vec![Action::Preview(COMMAND.into(), self.params(false)), drawn()];
                 }
@@ -670,13 +847,34 @@ impl Tool for QuickPenTool {
 
     fn hover_ended(&mut self, _cx: &ToolContext) {
         self.hover = None;
+        self.pointer = None;
+    }
+
+    /// A hover's snapped point and its tick depend on the art and the view under a still pointer.
+    fn wants_rehover(&self) -> bool {
+        self.pointer.is_some()
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let mut o = self.snap.guides().to_vec();
+        // A stale hover's Smart Guides go with its preview.
+        let mut o = if self.hover_stale(cx) { vec![] } else { self.snap.guides().to_vec() };
         let Some((id, sp)) = self.active(cx) else { return o };
+        let end = if self.press.is_none() { self.hover_end(cx, sp) } else { None };
+        // The arc being drawn: the piece a press drags, or the piece the next click adds while the
+        // rubber band shows it.
+        let arc = match self.press {
+            Some(pr) if pr.begun => {
+                self.before_piece().zip(self.drawing.as_ref().and_then(|dr| dr.pieces.last())).and_then(|(sp, piece)| arc_circle(&sp, piece))
+            }
+            Some(_) => None,
+            None => end.filter(|_| cx.pen_rubber_band).and_then(|h| arc_circle(sp, &self.piece_to(h))),
+        };
+        if let Some(arc) = arc {
+            o.push(Overlay::Path { path: protractor(cx, &arc), color: FEEDBACK, width: 1.0, dashed: false });
+        }
         if self.press.is_none()
-            && let Some(h) = self.hover
+            && !self.hover_stale(cx)
+            && let Some(h) = end.or(self.hover)
         {
             if cx.pen_rubber_band
                 && let Some(path) = self.rubber_band(sp, h)
