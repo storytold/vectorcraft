@@ -1037,7 +1037,9 @@ fn ruby_panel_typing_a_size_reapplies_the_ruby() {
 /// changing Position leaves them alone until Apply replaces them over the selection.
 #[test]
 fn ruby_panel_option_edits_do_not_merge_overlapping_readings() {
-    use super::super::tests_appearance::{click, frame_events, text_rect};
+    use crate::tests::panel_harness::Panel;
+    use craft::behavior::PartKey;
+    use egui::Modifiers;
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     let id = NodeId(app.run("text.create", json!({"x": 20, "y": 50, "text": "漢字", "size": 12})).unwrap()["id"].as_u64().unwrap());
@@ -1048,21 +1050,20 @@ fn ruby_panel_option_edits_do_not_merge_overlapping_readings() {
         NodeKind::Text(t) => t.ruby.iter().map(|r| (r.start, r.end, r.text.clone(), r.position)).collect::<Vec<_>>(),
         _ => panic!("text"),
     };
-    let ctx = egui::Context::default();
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    // Open Position and pick Below: the field shows it, but both readings stay.
-    click(&ctx, &mut app, text_rect(&texts, "Above").center(), show);
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Below").center(), show);
+    let mut panel = Panel::new(app, show);
+    // Open Position at its chevron, the part that toggles the list; the field's own text is its text
+    // part, which takes the caret instead.
+    panel.click_part("Position", PartKey::new("chevron"), Modifiers::NONE);
+    // Pick Below: the field shows it, but both readings stay.
+    panel.click("Below");
     assert_eq!(
-        readings(&app),
+        readings(&panel.app()),
         [(0, 3, "かん".to_string(), RubyPosition::Above), (3, 6, "じ".to_string(), RubyPosition::Above)],
         "no option edit collapses the readings"
     );
     // Apply still replaces the ruby over the whole selection.
-    let texts = frame_events(&ctx, &mut app, vec![], show);
-    click(&ctx, &mut app, text_rect(&texts, "Apply").center(), show);
-    assert_eq!(readings(&app), [(0, 6, "かん".to_string(), RubyPosition::Below)]);
+    panel.click("Apply");
+    assert_eq!(readings(&panel.app()), [(0, 6, "かん".to_string(), RubyPosition::Below)]);
 }
 
 /// #4232: the panel menu's Show Snap to Glyph Options shows the Snap to Glyph section (with no
