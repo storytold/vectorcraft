@@ -369,6 +369,19 @@ fn built_in_names_that_do_not_fit_the_heap_end_the_run_and_wait_for_room() {
     assert_eq!(realm.run("Math.max.name === 'max' && Function.prototype.name === ''"), Ok(JsValue::Bool(true)));
 }
 
+#[test]
+fn a_new_realm_names_the_built_ins_under_its_own_heap_limit() {
+    let used = es().interp().heap.bytes;
+    let limits = Limits { heap_bytes: used + 4096, ..Limits::default() };
+    let mut realm = Realm::with_options(es_options(), limits);
+    assert_eq!(realm.interp().heap.bytes, used);
+    let e = realm.run("1").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{e:?}");
+    assert!(realm.interp().heap.bytes <= used + 4096);
+    realm.set_limits(Limits::default());
+    assert_eq!(realm.run("Math.max.name === 'max' && Function.prototype.name === ''"), Ok(JsValue::Bool(true)));
+}
+
 // ---- function names ----
 
 #[test]

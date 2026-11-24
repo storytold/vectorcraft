@@ -78,8 +78,8 @@ pub(crate) fn pausable_method(interp: &mut Interp, on: ObjId, name: &'static str
 /// Gives the built-in functions the `name` and `length` of ECMA-262 2015 section 17: each one's
 /// `length` becomes configurable, and it gets a `name` that is not writable, not enumerable and
 /// configurable: the name it is installed under, with `get ` or `set ` before it for an accessor's
-/// function, and `""` for `Function.prototype`. A realm does this once, when it is made with
-/// [`crate::Options::es2015`] or at the start of its first run with it; [`native`] and
+/// function, and `""` for `Function.prototype`. A realm does this once, at the start of its first
+/// run with [`crate::Options::es2015`], under the limits set for that run; [`native`] and
 /// [`pausable_method`] do it for the functions made after that. The bytes of the new properties
 /// are checked against the heap limit first: when they do not fit, nothing changes and the error
 /// is returned, and the next run with the option tries again.

@@ -621,6 +621,19 @@ fn declarations_stay_within_the_heap_limit() {
 }
 
 #[test]
+fn code_stopped_by_the_frame_limit_declares_nothing() {
+    let mut realm = es();
+    realm.set_limits(Limits { frames: 0, ..Limits::default() });
+    let e = realm.run("let kept = 1; var also = 2;").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Frames), "{e:?}");
+    realm.set_limits(Limits { frames: 1, ..Limits::default() });
+    let e = realm.run("eval('var leaked = 1; let inner = 2;')").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Frames), "{e:?}");
+    realm.set_limits(Limits::default());
+    assert_eq!(realm.run("let kept = 3; typeof also === 'undefined' && typeof leaked === 'undefined' && kept === 3"), Ok(JsValue::Bool(true)));
+}
+
+#[test]
 fn spread_and_templates_stay_within_the_limits() {
     let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
     let endless = "{ [Symbol.iterator]: function () { return { next: function () { return { value: 1, done: false }; } }; } }";
@@ -833,6 +846,29 @@ fn loops_whose_body_never_completes_give_undefined() {
     // ECMAScript 5.1 code keeps the value before the loop.
     assert_eq!(Realm::new().run("42; for (var i = 0; i < 0; i++) {}"), Ok(JsValue::Number(42.0)));
     assert_eq!(Realm::new().run("42; while (false) {}"), Ok(JsValue::Number(42.0)));
+}
+
+#[test]
+fn if_switch_with_and_try_without_a_value_give_undefined() {
+    for src in [
+        "for (let i = 0; i < 2; i++) { if (i === 0) 7; }",
+        "42; if (false) 7;",
+        "42; if (true) {}",
+        "42; switch (1) { case 2: 7; }",
+        "42; with ({}) {}",
+        "42; try {} finally {}",
+        "42; try { 7; throw 1; } catch (e) {}",
+        "42; do { 7; if (true) break; } while (false)",
+    ] {
+        assert_eq!(es().run(src), Ok(JsValue::Undefined), "{src}");
+        assert_eq!(es().run(&format!("eval({src:?})")), Ok(JsValue::Undefined), "{src}");
+    }
+    assert_eq!(es().run("42; ;"), Ok(JsValue::Number(42.0)));
+    assert_eq!(es().run("42; if (true) 7;"), Ok(JsValue::Number(7.0)));
+    assert_eq!(es().run("42; try { 7; } catch (e) {}"), Ok(JsValue::Number(7.0)));
+    // ECMAScript 5.1 code keeps the earlier value.
+    assert_eq!(Realm::new().run("42; if (false) 7;"), Ok(JsValue::Number(42.0)));
+    assert_eq!(Realm::new().run("42; try { 7; throw 1; } catch (e) {}"), Ok(JsValue::Number(7.0)));
 }
 
 #[test]

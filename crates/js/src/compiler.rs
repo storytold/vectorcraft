@@ -535,6 +535,7 @@ impl<'a> FnCompiler<'a> {
                 self.emit_exit(Exit::Return)
             }
             Stmt::With { object, body } => {
+                self.statement_completion_start();
                 self.expr(*object)?;
                 self.emit(Op::PushWith);
                 self.env_depth += 1;
@@ -551,7 +552,10 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::Throw);
                 Ok(())
             }
-            Stmt::Try { block, handler, finalizer } => self.try_stmt(block, handler.as_ref(), finalizer.as_deref()),
+            Stmt::Try { block, handler, finalizer } => {
+                self.statement_completion_start();
+                self.try_stmt(block, handler.as_ref(), finalizer.as_deref())
+            }
             Stmt::DefaultXmlNamespace(e) => {
                 self.expr(*e)?;
                 self.emit(Op::SetDefaultNamespace);
@@ -600,6 +604,7 @@ impl<'a> FnCompiler<'a> {
         let saved = self.depth;
         let end = self.new_label();
         let mut cur = id;
+        self.statement_completion_start();
         while let Some(Stmt::If { test, consequent, alternate }) = self.ast.stmt(cur) {
             self.at(self.ast.stmt_span(cur).start);
             self.expr(*test)?;
@@ -676,6 +681,14 @@ impl<'a> FnCompiler<'a> {
             self.emit(Op::Undefined);
             self.emit(Op::SetCompletion);
         }
+    }
+
+    /// With [`crate::Options::es2015`], in script and eval code, sets the completion value to
+    /// `undefined` before an `if`, `switch`, `with` or `try` statement, which completes with
+    /// `undefined` when its body gives no value (ECMA-262 2015 sections 13.6.7, 13.11.7, 13.12.11
+    /// and 13.15.8). An empty statement keeps the earlier value.
+    fn statement_completion_start(&mut self) {
+        self.loop_completion_start();
     }
 
     fn loop_stmt(&mut self, id: StmtId, labels: Vec<String>) -> CResult<()> {
@@ -957,6 +970,7 @@ impl<'a> FnCompiler<'a> {
 
     fn switch_stmt(&mut self, id: StmtId, labels: Vec<String>) -> CResult<()> {
         let Some(Stmt::Switch { discriminant, cases }) = self.ast.stmt(id) else { return internal("not a switch") };
+        self.statement_completion_start();
         self.expr(*discriminant)?;
         let all: Vec<StmtId> = cases.iter().flat_map(|c| c.body.iter().copied()).collect();
         let scope = self.list_scope(&all, true)?;
@@ -1146,6 +1160,8 @@ impl<'a> FnCompiler<'a> {
             self.handlers.push((start, end, catch, try_depth, env_depth));
             self.bind(catch);
             self.depth = try_depth + 1;
+            // A caught exception drops the value the try block gave (ECMA-262 2015 section 13.15.8).
+            self.statement_completion_start();
             match &h.param {
                 Binding::Name(name) => {
                     self.at(name.span.start);

@@ -410,11 +410,17 @@ thread_local! {
 
 /// The estimated bytes of the index names `0` to `len - 1` while `for-in` lists them.
 fn index_keys_bytes(len: usize) -> usize {
+    index_names_bytes(len, KEY_ENTRY_BYTES)
+}
+
+/// The bytes of the index names `0` to `len - 1`, each with `per_entry` bytes more, counted by
+/// the number of digits without making the names.
+fn index_names_bytes(len: usize, per_entry: usize) -> usize {
     let mut total = 0usize;
     let (mut lo, mut hi, mut digits) = (0usize, 10usize, 1usize);
     while lo < len {
         let count = hi.min(len) - lo;
-        total = total.saturating_add(count.saturating_mul(string_bytes(digits) + KEY_ENTRY_BYTES));
+        total = total.saturating_add(count.saturating_mul(string_bytes(digits) + per_entry));
         lo = hi;
         hi = hi.saturating_mul(10);
         digits += 1;
@@ -590,18 +596,9 @@ impl Interp {
             strict_writes: false,
             symbols: crate::symbol::Symbols::default(),
         };
+        // With `Options::es2015`, the first run names the built-in functions, under the limits
+        // the caller gives ([`crate::builtins::es2015_names`]).
         crate::builtins::install(&mut interp);
-        if interp.options.es2015
-            && interp.install_error.is_none()
-            && let Err(e) = crate::builtins::es2015_names(&mut interp)
-        {
-            let reason = match e {
-                Abrupt::Throw(v) => interp.describe(&v),
-                Abrupt::Limit(kind) => format!("limit reached: {kind:?}"),
-                Abrupt::Internal(message) => message,
-            };
-            interp.install_error = Some(format!("the built-in function names could not be set: {reason}"));
-        }
         interp.fuel = limits.fuel;
         interp.limits = limits;
         interp.gc_threshold = interp.next_threshold();
@@ -2544,13 +2541,10 @@ impl Interp {
         let Some(t) = code.templates.get(i as usize) else { return internal("template out of range") };
         // Both arrays with their index properties and keys, and the cooked array's `raw`, as
         // [`Self::define`] counts them.
-        let elements = |n: usize| {
-            (0..n).map(|i| PROP_BYTES + string_bytes(index_key(u32::try_from(i).unwrap_or(u32::MAX)).len())).fold(0usize, usize::saturating_add)
-        };
         let bytes = OBJECT_BYTES
             .saturating_mul(2)
-            .saturating_add(elements(t.cooked.len()))
-            .saturating_add(elements(t.raw.len()))
+            .saturating_add(index_names_bytes(t.cooked.len(), PROP_BYTES))
+            .saturating_add(index_names_bytes(t.raw.len(), PROP_BYTES))
             .saturating_add(PROP_BYTES + string_bytes("raw".len()));
         self.reserve_heap(bytes)?;
         let raw = self.frozen_array(&t.raw)?;
@@ -3231,6 +3225,7 @@ impl Interp {
             (caller_env, caller_var_env)
         };
         self.stack.truncate(start);
+        self.check_frame_room()?;
         let env = self.instantiate_pending(&code, env, var_env, true)?;
         self.push_code_frame(code, env, var_env, this, false)
     }
@@ -3277,6 +3272,9 @@ impl Interp {
         } else {
             (scope, self.global_env)
         };
+        // The frame limit is checked before anything is declared, so a script that cannot start
+        // leaves the global scope as it was.
+        self.check_frame_room()?;
         let env = self.instantiate_pending(&code, env, var_env, is_eval)?;
         self.push_code_frame(code, env, var_env, Value::Object(global), true)
     }
@@ -3369,10 +3367,16 @@ impl Interp {
         Ok(())
     }
 
-    fn push_code_frame(&mut self, code: Rc<Code>, env: EnvId, var_env: EnvId, this: Value, boundary: bool) -> JsResult<()> {
+    /// A [`LimitKind::Frames`] error when no other frame fits under the frame limit.
+    fn check_frame_room(&self) -> JsResult<()> {
         if self.frames.len() >= self.limits.frames {
             return Err(Abrupt::Limit(LimitKind::Frames));
         }
+        Ok(())
+    }
+
+    fn push_code_frame(&mut self, code: Rc<Code>, env: EnvId, var_env: EnvId, this: Value, boundary: bool) -> JsResult<()> {
+        self.check_frame_room()?;
         let base = self.stack.len();
         self.frames.push(Frame {
             code,

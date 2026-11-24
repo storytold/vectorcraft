@@ -109,6 +109,23 @@ fn code_run_without_the_option_reads_no_to_string_tag() {
 }
 
 #[test]
+fn code_run_without_the_option_calls_no_to_primitive_or_has_instance_method() {
+    let mut realm = es2015(Limits::default());
+    let setup = "var o = { valueOf: function () { return 1; } }; o[Symbol.toPrimitive] = function () { return 2; }; \
+                 var c = {}; c[Symbol.hasInstance] = function () { return true; }; \
+                 function F() {} var B = F.bind(); \
+                 Object.defineProperty(F, Symbol.hasInstance, { value: function () { return true; } }); \
+                 o + 1 === 3 && ({} instanceof c) && ({} instanceof B)";
+    assert_eq!(realm.run(setup), Ok(JsValue::Bool(true)));
+    realm.set_es2015(false);
+    assert_eq!(realm.run("o + 1 === 2 && !({} instanceof B)"), Ok(JsValue::Bool(true)));
+    match realm.run("({} instanceof c)") {
+        Err(RunError { kind: RunErrorKind::Thrown, message, .. }) => assert!(message.starts_with("TypeError"), "{message}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn well_known_symbols_hook_the_operations_that_read_them() {
     truth("var o = {}; o[Symbol.toStringTag] = 'Thing'; Object.prototype.toString.call(o) === '[object Thing]'");
     truth("var o = {}; o[Symbol.toPrimitive] = function (h) { return h === 'number' ? 7 : 'str'; }; +o === 7 && String(o) === 'str'");
