@@ -10428,6 +10428,20 @@ DSC: `%%Pages` is the page count (copies included), each `%%Page` sets its paper
 (`setflat`), negatives invert the transfer, and the marks print in Registration. PostScript has no transparency: it
 is flattened first with `flattenerPreset` (`medium` by default; `high`, `low` or a saved one), with a warning.
 
+The Graphics section's Fonts setting (`settings.graphics.fonts`) sets how the PostScript file carries type in a solid
+fill, as [the help page](https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=418)
+describes the three choices. `subset` (the default) defines, in each page's setup, Type 3 fonts drawn from the face's
+outlines that hold only the glyphs that page shows; copies and plates of a page define them again. `complete` defines
+every glyph of each face the job shows once, in the job's setup, before the first page, and the job fails with an
+error when those definitions would take more than 64 MB. `none` sends no font program: each page asks for the printer's
+copy of the font by its PostScript name (`%%DocumentNeededResources`, `%%IncludeResource`) and gives each glyph's name
+in an encoding, and a note names every font the printer needs. The file lists the fonts it sends in
+`%%DocumentSuppliedResources`. Type that the fonts don't carry prints as outlines, as before: type in a gradient or
+pattern, color glyphs, glyphs bent along a curved path, ruby, and with `none` a glyph the font gives no name. So does type in a
+font whose license forbids embedding, and, with `subset`, a font that may only be embedded whole; both with a warning
+naming the font. With any of the three, PDF output embeds subsets of the fonts whose licenses allow it and draws the
+others as outlines, and `none` or `complete` adds a note saying so.
+
 ```json
 {"name":"run_command","arguments":{"command":"file.print","params":{"path":"/tmp/job.ps","level":2,"settings":{"output":{"mode":"separations"}}}}}
 ```

@@ -2,6 +2,7 @@
 //! space (the page's first operator maps it onto PostScript's y-up space). Mirrors the PDF
 //! writer's walk, without transparency.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use vectorcraft_doc::{
 use vectorcraft_effects::stroke::{self, WrittenShape};
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
 
+use crate::print::fonts::{FontJob, UsedGlyphs, font_name};
 use crate::ps::{self, clip_op, fill_op, push_nums, push_path};
 use crate::{EpsOptions, Level, Overprint};
 
@@ -149,6 +151,8 @@ pub(crate) struct Page {
     pub body: String,
     pub custom: Vec<(String, [f32; 4])>,
     pub warnings: Vec<String>,
+    /// The glyphs shown through the print job's fonts ([`Scene::with_fonts`]).
+    pub fonts: UsedGlyphs,
 }
 
 /// The colour spaces process colours are written in.
@@ -287,6 +291,14 @@ pub(crate) struct Scene<'a> {
     /// The gradient being painted overprints on a plate: where it is paper white it puts none of
     /// the plate's ink down, and the plate below it is left as it is ([`Self::inked_spans`]).
     keep_below: bool,
+    /// The print job's fonts: type in a solid fill is shown through them (`None`: drawn as
+    /// outlines).
+    fonts: Option<&'a RefCell<FontJob>>,
+    /// The glyphs shown through `fonts`.
+    used: UsedGlyphs,
+    /// The glyphs `used` gained, in the order it gained them: an object left out for the page
+    /// limit takes its own back out of `used` ([`Self::forget_glyphs`]).
+    used_order: Vec<(usize, u32)>,
 }
 
 impl<'a> Scene<'a> {
@@ -317,7 +329,16 @@ impl<'a> Scene<'a> {
             nest: 0,
             plate: false,
             keep_below: false,
+            fonts: None,
+            used: UsedGlyphs::new(),
+            used_order: vec![],
         }
+    }
+
+    /// This scene showing type through the print job's fonts `fonts`.
+    pub fn with_fonts(mut self, fonts: Option<&'a RefCell<FontJob>>) -> Self {
+        self.fonts = fonts;
+        self
     }
 
     /// This scene drawing a separation's plate when `plate` is true: an overprinting gradient
@@ -400,7 +421,7 @@ impl<'a> Scene<'a> {
             .filter(|(n, ..)| n != vectorcraft_color::swatch::REGISTRATION)
             .map(|(_, colorant, cmyk)| (colorant.clone(), *cmyk))
             .collect();
-        Page { setup: self.setup, body: self.body, custom, warnings: self.warnings }
+        Page { setup: self.setup, body: self.body, custom, warnings: self.warnings, fonts: self.used }
     }
 
     fn warn(&mut self, w: &str) {
@@ -544,7 +565,7 @@ impl<'a> Scene<'a> {
             _ => {}
         }
         self.note_losses(n);
-        let (was, placed, codes) = (self.body.len(), self.placements.len(), self.codes.len());
+        let (was, placed, codes, glyphs) = (self.body.len(), self.placements.len(), self.codes.len(), self.used_order.len());
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 children.iter().for_each(|c| self.node(c, false));
@@ -605,7 +626,20 @@ impl<'a> Scene<'a> {
             self.body.truncate(was);
             self.unplace(placed);
             self.forget_codes(codes);
+            self.forget_glyphs(glyphs);
             self.warn(TOO_LARGE);
+        }
+    }
+
+    /// Take the glyphs `used` gained after its first `n` back out of it.
+    fn forget_glyphs(&mut self, n: usize) {
+        for (face, gid) in self.used_order.drain(n.min(self.used_order.len())..) {
+            if let Some(gids) = self.used.get_mut(&face) {
+                gids.remove(&gid);
+                if gids.is_empty() {
+                    self.used.remove(&face);
+                }
+            }
         }
     }
 
@@ -901,8 +935,18 @@ impl<'a> Scene<'a> {
         let _ = writeln!(self.body, "{} cm", ps::matrix(t.xf));
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();
+            // With the job's fonts, a run in a solid fill shows its glyphs through them; `art`
+            // holds the outlines of those it draws as art.
+            let fonts = if matches!(run.style.fill, Paint::Solid { .. }) { self.fonts } else { None };
+            let mut shown = vec![];
+            let mut art = BezPath::new();
             for g in layout.glyphs.iter().filter(|g| g.run == i) {
                 bp.extend(g.outline.iter());
+                match fonts.and_then(|f| self.font_of(f, g)) {
+                    Some((face, upem)) => shown.push((face, upem, g)),
+                    None if fonts.is_some() => art.extend(g.outline.iter()),
+                    None => {}
+                }
                 // Colour bitmap glyphs (emoji): their images, which the run's paint doesn't paint.
                 if let Some((image, to_text)) = g.placed_image() {
                     let key = format!("\u{0}glyph\u{0}{}", image.blob.content_key());
@@ -916,11 +960,21 @@ impl<'a> Scene<'a> {
             // Ruby (furigana) glyphs in their base text's run's paint, as the canvas draws them.
             for g in layout.ruby.iter().filter(|g| g.run == i) {
                 bp.extend(g.outline.iter());
+                if fonts.is_some() {
+                    art.extend(g.outline.iter());
+                }
             }
             if bp.elements().is_empty() {
                 continue;
             }
-            self.fill(&bp, FillRule::NonZero, &run.style.fill, layout.bounds, run.style.overprint_fill);
+            if fonts.is_none() {
+                self.fill(&bp, FillRule::NonZero, &run.style.fill, layout.bounds, run.style.overprint_fill);
+            } else {
+                self.show(&shown, &run.style.fill, run.style.overprint_fill);
+                if !art.elements().is_empty() {
+                    self.fill(&art, FillRule::NonZero, &run.style.fill, layout.bounds, run.style.overprint_fill);
+                }
+            }
             if run.style.has_stroke() {
                 // Character strokes are drawn in text space, with their cap, join and dashes.
                 self.stroke(&bp, FillRule::NonZero, &run.style.stroke_layer(), layout.bounds);
@@ -946,6 +1000,52 @@ impl<'a> Scene<'a> {
                 _ => {}
             }
         }
+    }
+
+    /// The job's index of the face of glyph `g` and its units per em when `g` is shown through
+    /// the job's fonts `fonts` (recorded in `used`); `None` when it is drawn as an outline: a glyph
+    /// with no outline, a color glyph, one bent along a path, or one its face's fonts don't show.
+    fn font_of(&mut self, fonts: &RefCell<FontJob>, g: &vectorcraft_text::PositionedGlyph) -> Option<(usize, f64)> {
+        if g.outline.elements().is_empty() || g.bend.is_some() || g.image.is_some() || g.colour.is_some() || !invertible(g.xf) {
+            return None;
+        }
+        let (face, upem) = fonts.borrow_mut().glyph(g.font_id, g.gid, g.outline.elements().len())?;
+        if self.used.entry(face).or_default().insert(g.gid) {
+            self.used_order.push((face, g.gid));
+        }
+        Some((face, upem))
+    }
+
+    /// Show `glyphs` (the job's index of each one's face, its units per em, the glyph) through the
+    /// job's fonts in solid paint `p`: each glyph at its own place, through a font made for its
+    /// size and slant.
+    fn show(&mut self, glyphs: &[(usize, f64, &vectorcraft_text::PositionedGlyph)], p: &Paint, overprint: bool) {
+        let Paint::Solid { color, swatch, tint } = p else { return };
+        if glyphs.is_empty() {
+            return;
+        }
+        let on = self.overprint_on(overprint);
+        let ink = self.solid(color, swatch.as_deref(), *tint);
+        self.set_ink(ink);
+        let mut current: Option<(String, [f64; 4])> = None;
+        for (face, upem, g) in glyphs {
+            // Font units (y up) → text space: the glyph's own map after the flip to y down.
+            let [a, b, c, d, e, f] = (g.xf * Affine::scale_non_uniform(*upem, -*upem)).as_coeffs();
+            let name = font_name(*face, g.gid >> 8);
+            let key = (name, [a, b, c, d]);
+            if current.as_ref() != Some(&key) {
+                let _ = write!(self.body, "/{} findfont [", key.0);
+                for v in [a, b, c, d] {
+                    ps::push_num_places(&mut self.body, v, 6);
+                    self.body.push(' ');
+                }
+                self.line("0 0] makefont setfont");
+                current = Some(key);
+            }
+            push_nums(&mut self.body, &[e, f]);
+            let _ = writeln!(self.body, "moveto <{:02x}> show", g.gid & 0xff);
+        }
+        self.overprint_off(on);
     }
 
     // ---------- gradients ----------
