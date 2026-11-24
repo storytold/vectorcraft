@@ -11,9 +11,11 @@ use vectorcraft_tools::ToolKey;
 use crate::VectorcraftApp;
 
 mod held_tool;
+mod labels;
 mod presentation;
 
 pub(crate) use held_tool::{HeldTool, note_tool_use};
+pub(crate) use labels::{leave_to_labels, run_left_by_labels};
 use presentation::escape_resets_rotation;
 pub(crate) use presentation::presentation_step;
 

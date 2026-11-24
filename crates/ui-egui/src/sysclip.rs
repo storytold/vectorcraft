@@ -332,7 +332,7 @@ impl VectorcraftApp {
     /// Hand a queued text copy to the system clipboard. Called after `tick`, after the UI phase's
     /// input and at the end of the pass; the later calls are what an input- or menu-driven fallback
     /// Copy needs, and `take` keeps it single-shot. A Copy or Cut that labels left to the next pass
-    /// hands its text over as soon as it runs ([`crate::shortcuts::handle`]).
+    /// hands its text over as soon as it runs ([`crate::shortcuts::run_left_by_labels`]).
     pub(crate) fn flush_clipboard_out(&mut self) {
         if let Some(text) = self.clipboard_out.take() {
             // Something else is being copied: the formats of an earlier Copy not written yet would replace it.
