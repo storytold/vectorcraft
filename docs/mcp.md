@@ -7261,6 +7261,19 @@ own, and the corner keeps its place and the directions the path arrives and leav
 `fidelity`. A call that changes no anchor returns `{ids: [], before: 0, after: 0}` and adds no undo step. The 57.5°
 threshold is VectorCraft's own value.
 
+`path.smoothRegion` keeps a subpath's result only when it is smoother. It measures the subpath and the result along
+lines between points on each curved segment, spaced about `step` apart along the segment's control polygon, where
+`step` is an eighth of `radius` or 1/512 of the diagonal of the box around the subpath's anchors and handles,
+whichever is smaller. The spacing is a target: each curved segment is cut into at least 4 and at most 1,024 pieces,
+and on a subpath of more than 256 segments into at most 262,144 divided by the number of segments (but never fewer
+than 4). The turning `t` is how far the path's direction turns along its length, in radians, with each turn at an
+anchor counted twice; the bending `b` is the sum of each turn between two pieces squared over their mean length.
+With `t0` and `b0` measured on the subpath, `t1` and `b1` on the result, and `s` the larger of `t0` and 1, the result
+is kept when `t1 <= t0 + 0.001 * s` and at least one of these holds: it has fewer anchors, `t0 - t1 >= 0.000001 * s`,
+or `b0 - b1 > 0.0001 * b0`. Any other result is dropped and the subpath stays as it was. A path none of whose subpaths is kept stays a Live
+Shape if it was one, is left out of `ids` and is not counted in `before` or `after`. The measure and both thresholds
+are VectorCraft's own.
+
 In the desktop app, Object › Path › Smooth, the canvas context menu's Smooth… (listed while the selection holds a
 path) and the Contextual Task Bar's Smooth (with a path selected whole with the Direct Selection tool) open the
 slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at the

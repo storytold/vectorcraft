@@ -837,6 +837,89 @@ impl<T> EditsFromEnd<T> {
     }
 }
 
+/// Most pieces [`roughness`] cuts one curved segment into.
+const ROUGHNESS_SEGMENT_PIECES: usize = 1024;
+
+/// Most pieces [`roughness`] cuts the curved segments of one subpath into, shared equally by them.
+const ROUGHNESS_PIECES: usize = 1 << 18;
+
+/// How rough the subpath `sp` is, measured along the lines between points on each curved segment
+/// about `step` apart along its control polygon (at least 4 and at most
+/// [`ROUGHNESS_SEGMENT_PIECES`] pieces a segment, fewer on a subpath of very many segments): how
+/// much it turns along its length in radians, from the direction each segment leaves its first anchor
+/// along to the one it arrives at its last anchor along, with each turn at an anchor counted twice;
+/// and how much it bends, the sum of each turn between two pieces squared over their mean length.
+/// `None` when a point or a turn is not a number.
+fn roughness(sp: &SubPath, step: f64) -> Option<(f64, f64)> {
+    let segments = sp.segment_count();
+    let most = (ROUGHNESS_PIECES / segments.max(1)).clamp(4, ROUGHNESS_SEGMENT_PIECES);
+    // The directions along the path, each with whether it leaves an anchor, and the pieces' vectors.
+    let (mut dirs, mut pieces): (Vec<(kurbo::Vec2, bool)>, Vec<kurbo::Vec2>) = (vec![], vec![]);
+    for i in 0..segments {
+        let c = sp.segment(i);
+        if sp.segment_is_line(i) {
+            dirs.push((c.p3 - c.p0, true));
+            pieces.push(c.p3 - c.p0);
+            continue;
+        }
+        let leave = [c.p1 - c.p0, c.p2 - c.p0, c.p3 - c.p0].into_iter().find(|d| d.hypot() > 1e-12).unwrap_or_default();
+        let arrive = [c.p3 - c.p2, c.p3 - c.p1, c.p3 - c.p0].into_iter().find(|d| d.hypot() > 1e-12).unwrap_or_default();
+        let len = polygon_len(c);
+        let k = if step > 0.0 && step.is_finite() && len.is_finite() { (len / step).ceil().clamp(4.0, most as f64) as usize } else { most };
+        dirs.push((leave, true));
+        let mut at = c.p0;
+        for j in 1..=k {
+            let q = if j == k { c.p3 } else { c.eval(j as f64 / k as f64) };
+            dirs.push((q - at, false));
+            pieces.push(q - at);
+            at = q;
+        }
+        dirs.push((arrive, false));
+    }
+    // A direction of no length is left out; the turn at an anchor is then taken at the next one.
+    let mut kept: Vec<(kurbo::Vec2, bool)> = Vec::with_capacity(dirs.len());
+    let mut at_anchor = false;
+    for (d, anchor) in dirs {
+        at_anchor |= anchor;
+        if d.hypot() > 1e-12 {
+            kept.push((d, at_anchor));
+            at_anchor = false;
+        }
+    }
+    pieces.retain(|d| d.hypot() > 1e-12);
+    let turn = |u: kurbo::Vec2, v: kurbo::Vec2| u.cross(v).atan2(u.dot(v)).abs();
+    let pairs = |n: usize| if sp.closed { n } else { n.saturating_sub(1) };
+    let mut turning = 0.0;
+    for j in 0..pairs(kept.len()) {
+        let (u, (v, anchor)) = (kept[j].0, kept[(j + 1) % kept.len()]);
+        turning += if anchor { 2.0 } else { 1.0 } * turn(u, v);
+    }
+    let mut bending = 0.0;
+    for j in 0..pairs(pieces.len()) {
+        let (u, v) = (pieces[j], pieces[(j + 1) % pieces.len()]);
+        bending += turn(u, v).powi(2) / (0.5 * (u.hypot() + v.hypot()));
+    }
+    (turning.is_finite() && bending.is_finite()).then_some((turning, bending))
+}
+
+/// Whether the Smooth tool keeps `new`, the subpath `old` smoothed with the reach `radius`
+/// (VectorCraft's own rule). Both are measured with [`roughness`] at one spacing, an eighth of the
+/// reach or 1/512 of the diagonal of `old`'s control points, whichever is smaller. `new` must turn
+/// no more than a thousandth more than `old` (counting a turn of less than 1 radian as 1), and it
+/// must have fewer anchors, turn less, or bend more than a ten-thousandth less. A result that would
+/// leave the path rougher, or that adds anchors or changes the path without smoothing it, is not
+/// kept.
+fn smoother(old: &SubPath, new: &SubPath, radius: f64) -> bool {
+    let size = old.anchors.iter().fold(None, |r: Option<Rect>, a| {
+        let b = Rect::from_points(a.p, a.h_in).union_pt(a.h_out);
+        Some(r.map_or(b, |r| r.union(b)))
+    });
+    let step = (radius / 8.0).min(size.map_or(0.0, |r| r.width().hypot(r.height()) / 512.0));
+    let (Some((t0, b0)), Some((t1, b1))) = (roughness(old, step), roughness(new, step)) else { return false };
+    let scale = t0.max(1.0);
+    t1 <= t0 + 1e-3 * scale && (new.anchors.len() < old.anchors.len() || t0 - t1 >= 1e-6 * scale || b0 - b1 > 1e-4 * b0)
+}
+
 pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.smoothRegion";
     let pts = points_param(p, "points", C)?;
@@ -871,7 +954,10 @@ pub(super) fn smooth_region(s: &mut Session, p: &Value) -> Result<Value> {
                 _ => sp.clone(),
             })
             .collect();
-        if changed {
+        // A subpath whose result would not be smoother stays as it was.
+        let subs: Vec<SubPath> =
+            subs.into_iter().zip(&pd.subpaths).map(|(n, sp)| if n == *sp || smoother(sp, &n, radius) { n } else { sp.clone() }).collect();
+        if changed && subs != pd.subpaths {
             let np = PathData::new(subs);
             before += pd.anchor_count();
             after += np.anchor_count();
@@ -1506,5 +1592,31 @@ mod tests {
         assert!(smooth_corners(&jags, true, 1e-6).iter().all(|c| *c), "each jag turns sharply at its anchor");
         assert_eq!(smooth_corners(&jags, true, 12.0), vec![false; 16]);
         assert_eq!(smooth_corners(&polyline(&[(0.0, 0.0), (6.0, 0.0), (3.0, 5.196)]), true, 12.0), vec![true; 3]);
+    }
+
+    /// `sp` scaled by `k` about the origin.
+    fn scaled(sp: &SubPath, k: f64) -> SubPath {
+        let at = |p: Point| Point::new(p.x * k, p.y * k);
+        SubPath::new(sp.anchors.iter().map(|a| Anchor { p: at(a.p), h_in: at(a.h_in), h_out: at(a.h_out), ..*a }).collect::<Vec<Anchor>>(), sp.closed)
+    }
+
+    /// The Smooth tool keeps a result that turns less, and not one that turns more with as many
+    /// anchors, one that adds an anchor and keeps the outline, or one that is the path itself, at
+    /// any size.
+    #[test]
+    fn the_smooth_tool_keeps_only_a_smoother_result() {
+        let round = ring();
+        let mut bumped = ring();
+        bumped.anchors[1].translate(kurbo::Vec2::new(0.0, -25.0));
+        let split = start_nearest(ring(), round.segment(0).eval(0.3), &round);
+        assert_eq!(split.anchors.len(), 5, "{split:?}");
+        for k in [1e-3, 1.0, 1e3] {
+            let (round, bumped, split) = (scaled(&round, k), scaled(&bumped, k), scaled(&split, k));
+            let reach = 12.0 * k;
+            assert!(smoother(&bumped, &round, reach), "at {k}x a bump smoothed away is kept");
+            assert!(!smoother(&round, &bumped, reach), "at {k}x a bump added is not kept");
+            assert!(!smoother(&round, &split, reach), "at {k}x an anchor added on the outline is not kept");
+            assert!(!smoother(&round, &round.clone(), reach), "at {k}x the same path is not kept");
+        }
     }
 }
