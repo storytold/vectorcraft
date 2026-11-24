@@ -514,6 +514,7 @@
 	Assign profile:	પ્રોફાઇલ સોંપો:
 	Preserve the color numbers	રંગોની સંખ્યાઓ જાળવો
 	Convert to keep the colors' appearance	રંગોનો દેખાવ જાળવવા રૂપાંતરિત કરો
+@id	language.name	ગુજરાતી
 @msg	`{path}` goes with `{key}`: "assign" only	`{path}` ફક્ત `{key}`: "assign" સાથે જ વપરાય છે
 	The pasted colors come from a document whose {model} profile is “{from}”; this document's is “{to}”.	પેસ્ટ કરેલા રંગો એવા દસ્તાવેજમાંથી આવે છે જેની {model} પ્રોફાઇલ “{from}” છે; આ દસ્તાવેજની “{to}” છે.
 	CSS Properties	CSS ગુણધર્મો

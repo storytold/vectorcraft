@@ -123,24 +123,6 @@ pub enum SurroundingUnit {
     Chars,
 }
 
-/// The committed logical text around an IME cursor, or the documented reason it is unavailable.
-///
-/// This type stays free of any UI dependency: offsets are UTF-8 bytes into `text`, `cursor` is the
-/// primary selection end and `anchor` the other (so `cursor > anchor` is a reversed selection).
-/// `text` is already bounded to the caller's request and has the pre-edit removed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ImeSurrounding {
-    Available { text: String, cursor: usize, anchor: usize },
-    Unavailable(&'static str),
-}
-
-impl Default for ImeSurrounding {
-    /// Report surrounding text as unavailable because no document is active.
-    fn default() -> Self {
-        Self::Unavailable("no document is active")
-    }
-}
-
 /// A tool state machine.
 pub trait Tool: Send {
     fn id(&self) -> &'static str;
@@ -244,19 +226,6 @@ pub trait Tool: Send {
     fn text_input(&mut self, _cx: &ToolContext, _s: &str) -> Vec<Action> {
         vec![]
     }
-    /// Would [`Tool::text_input`] insert `text` exactly as given? False when it filters control
-    /// characters, normalizes newlines, applies Typographer's Quotes or otherwise rewrites the
-    /// insertion. An IME commit the application rewrites is an application edit: its receipt must
-    /// be `Other`, never `InputMethod`.
-    fn text_input_is_verbatim(&self, _cx: &ToolContext, _text: &str) -> bool {
-        true
-    }
-    /// Does the tool's open typing session still match the document? False when an external edit
-    /// replaced the text under it: the next IME commit starts a fresh session, which is an
-    /// application-side reset, not an accepted IME insertion.
-    fn ime_session_matches_document(&self, _cx: &ToolContext) -> bool {
-        true
-    }
     /// IME composition (marked text) for the tool that wants text: `text` replaces the previous
     /// marked text (or the selection); an empty `text` ends the composition. `active_chars` is the
     /// clause being converted, in characters of `text`. The committed result arrives through
@@ -277,13 +246,6 @@ pub trait Tool: Send {
     /// epoch changes when the same target is started afresh (a new edit session).
     fn ime_target(&self, _cx: &ToolContext) -> Option<(u64, u64, u64)> {
         None
-    }
-    /// The committed logical text around the IME cursor, with UTF-8 byte offsets (`cursor` is the
-    /// primary end, `anchor` the other): the source for an outgoing surrounding-text payload
-    /// (egui's E21b). Pre-edit text is excluded and the offsets are remapped into the remaining
-    /// text; at most `max_bytes` bytes are copied (a wider selection is explicitly unavailable).
-    fn ime_surrounding(&self, _cx: &ToolContext, _max_bytes: usize) -> ImeSurrounding {
-        ImeSurrounding::Unavailable("the active tool has no IME text context")
     }
     /// Is uncommitted IME text being shown? Keys, shortcuts and Undo wait while it is.
     fn composing(&self) -> bool {

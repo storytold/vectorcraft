@@ -6,7 +6,7 @@ use vectorcraft_geom::Point;
 use vectorcraft_tools::distort::perspective::widget::WidgetPlace;
 use vectorcraft_tools::draw2::FEEDBACK;
 use vectorcraft_tools::shape::MAX_CORNER_RADIUS;
-use vectorcraft_tools::{Action, Cursor, ImeSurrounding, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
+use vectorcraft_tools::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, settings};
 
 use crate::{EngineError, Prefs, Result, Session};
 
@@ -42,6 +42,9 @@ pub struct ViewInfo {
     pub screen: Option<vectorcraft_tools::ScreenFrame>,
     /// The view's active artboard (an index): artboard rulers measure from it.
     pub artboard: usize,
+    /// Precise cursors in this call: the canvas's `CanvasSpace::precise`, the preference toggled by
+    /// Caps Lock. The one source for the tools' crosshair and for hiding the brush tip.
+    pub precise: bool,
 }
 
 impl Default for ViewInfo {
@@ -61,6 +64,7 @@ impl Default for ViewInfo {
             shape_widgets: true,
             screen: None,
             artboard: 0,
+            precise: false,
         }
     }
 }
@@ -502,7 +506,7 @@ impl Session {
             screen: view.screen,
             plane_widget: self.prefs.perspective_widget.show.then_some(self.prefs.perspective_widget.position),
             plane_targets: self.prefs.perspective_widget.targets(),
-            precise_cursors: self.precise_cursors(),
+            precise_cursors: view.precise,
             global_edit: st.global_edit.as_ref().map_or(&[], |g| g.members.as_slice()),
             interaction_doc: st.interaction.as_ref().map(|it| &*it.doc),
         };
@@ -518,6 +522,13 @@ impl Session {
                 R::default()
             }
         }
+    }
+
+    /// Runs `f` with the context the tools read for the active document seen through `view`, for code
+    /// outside the engine that draws on the tools' geometry (the canvas's selection widgets).
+    /// `R::default()` with no document open.
+    pub fn with_tool_context<R: Default>(&mut self, view: ViewInfo, f: impl FnOnce(&ToolContext) -> R) -> R {
+        self.with_tool_cx(view, |_, cx| f(cx))
     }
 
     /// The error of a tool that panicked in the last [`Self::with_tool_cx`] call, if any.
@@ -1095,30 +1106,6 @@ impl Session {
         r
     }
 
-    /// Would [`Session::tool_text`] insert `text` unchanged (no control-character filtering,
-    /// newline normalization or document formatting such as Typographer's Quotes)? An IME commit
-    /// the application rewrites is an application edit, not an accepted IME insertion.
-    pub fn tool_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
-        self.with_tool_cx(view, |t, cx| t.text_input_is_verbatim(cx, text))
-    }
-
-    /// [`Session::tool_text_is_verbatim`] for text typed on the keyboard, as
-    /// [`Session::tool_typed_text`] would insert it: a lone typed `”` that Typographer's Quotes
-    /// turns into an opening quote is not verbatim.
-    pub fn tool_typed_text_is_verbatim(&mut self, text: &str, view: ViewInfo) -> bool {
-        self.keyboard_text = true;
-        let v = self.tool_text_is_verbatim(text, view);
-        self.keyboard_text = false;
-        v
-    }
-
-    /// Does the active tool's open typing session still match the document? An IME commit after
-    /// an external edit starts a fresh session (an application-side reset), so its receipt must
-    /// not be accepted as an unchanged IME insertion.
-    pub fn tool_ime_session_matches(&mut self, view: ViewInfo) -> bool {
-        self.with_tool_cx(view, |t, cx| t.ime_session_matches_document(cx))
-    }
-
     /// Whether the active tool currently owns keyboard text input, as the Type tool does while editing.
     pub fn tool_wants_text(&self) -> bool {
         self.tool.wants_text()
@@ -1153,14 +1140,6 @@ impl Session {
     /// afresh. Ordinary edits and caret moves leave both unchanged.
     pub fn tool_ime_target(&mut self, view: ViewInfo) -> Option<(u64, u64, u64)> {
         self.with_tool_cx(view, |t, cx| t.ime_target(cx))
-    }
-
-    /// The committed logical text around the IME cursor (UTF-8 byte offsets), with any pre-edit
-    /// removed and at most `max_bytes` bytes copied: the app's outgoing surrounding-text producer
-    /// (egui E21b) reads it. An explicit [`ImeSurrounding::Unavailable`] carries the narrow reason
-    /// (no editor, invalid offsets, or a selection wider than the limit).
-    pub fn tool_ime_surrounding(&mut self, max_bytes: usize, view: ViewInfo) -> ImeSurrounding {
-        self.with_tool_cx(view, |t, cx| t.ime_surrounding(cx, max_bytes))
     }
 
     /// Is the active tool showing uncommitted IME text?
@@ -1323,13 +1302,12 @@ impl Session {
         v
     }
 
-    /// The pointer the active tool shows at `p` (General › Use Precise Cursors, or Caps Lock while
-    /// it is on, makes the drawing tools' a crosshair, [`Cursor::precise`]). With Cmd held, the pointer of the selection tool a
+    /// The pointer the active tool shows at `p`. With Cmd held, the pointer of the selection tool a
     /// press would borrow ([`Self::lend_selection_tool`]).
     pub fn cursor(&mut self, p: Point, mods: Mods, view: ViewInfo) -> Cursor {
         // While an edit is computed, a Cmd press is held for the active tool, which shows it is busy.
         let lent = if mods.cmd && self.lender.is_none() && !self.tool_editing() { self.lent_tool(self.tool.id(), &mods) } else { None };
-        let c = match lent {
+        match lent {
             Some(id) => {
                 let lent = self.make_tool(id);
                 let own = std::mem::replace(&mut self.tool, lent);
@@ -1338,13 +1316,7 @@ impl Session {
                 c
             }
             None => self.with_tool_cx(view, |t, cx| t.cursor(cx, p, mods)),
-        };
-        if self.precise_cursors() { c.precise() } else { c }
-    }
-
-    /// General › Use Precise Cursors is on, or Caps Lock is.
-    fn precise_cursors(&self) -> bool {
-        self.prefs.use_precise_cursors || self.caps_lock
+        }
     }
 
     pub fn tool_options(&self) -> Value {

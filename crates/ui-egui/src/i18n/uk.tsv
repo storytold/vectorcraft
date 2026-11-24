@@ -202,6 +202,7 @@
 	Anti-alias Rasters	Згладжувати растрові зображення
 	Anti-aliased Artwork	Згладжений малюнок
 	Anti-aliasing Method	Метод згладжування
+@id	language.name	Українська
 antiAlias	Sharp	Різке
 	Crisp	Чітке
 	Strong	Сильне
@@ -5161,7 +5162,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	PDF settings are not an object	Параметри PDF не є об’єктом
 @msg	PDF security settings are not an object	Параметри безпеки PDF не є об’єктом
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})|Упаковано файли: {n} {folder} ({note})|Упаковано файли: {n} {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	укажіть `desiredK`, бажаний розмір файлу в K (1024 байти): число більше за 0 і не більше 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` має значення `current` або `auto`
@@ -6456,6 +6457,7 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-ефект на заливці або обведенні групи нічого не малює
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Сітка 3D-об’єкта неповна або містить значення, яке не є числом
 @msg	the <filter> element needs an id, the filter's name	елементу <filter> потрібен id, назва фільтра
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id фільтра SVG містить не більше {MAX_NAME} символів
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> не є елементом фільтра SVG
@@ -6874,9 +6876,9 @@ lighting	Light	Світло
 	Slope:	Ухил:
 axis	X Axis	Вісь X
 axis	Y Axis	Вісь Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
 @plural	Packaged {n} file|Packaged {n} files	Упаковано файли: {n}|Упаковано файли: {n}|Упаковано файли: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}|Упаковано файли: {n} {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файли: {n} {note}|Упаковано файли: {n} {note}|Упаковано файли: {n} {note}
@@ -6928,11 +6930,17 @@ axis	Y Axis	Вісь Y
 @msg	module is {_1} bytes (limit {_2})	модуль займає {_1} байтів (межа {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	потрібне схвалення: він запитує {0}, що користувач дозволяє під час окремого встановлення
 @msg	not JSON: {e}	не JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	не двійковий файл WebAssembly (немає заголовка \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	не двійковий файл WebAssembly (немає заголовка \\0asm)
 @msg	parameter `{k}`: {what}	параметр `{k}`: {what}
 @msg	parameter `{name}`: {what}	параметр `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметри модуля мають бути об’єктом JSON
 @msg	the module must export its linear memory as `memory`	модуль має експортувати свою лінійну пам’ять як `memory`
+@msg	the module must export `{name}` with the type {signature}	модуль має експортувати `{name}` з типом {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	модуль має більше ніж один користувацький розділ `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	бюджет пам’яті (початкова пам’ять модуля становить {initial} байтів, межа {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	маніфест у користувацькому розділі `{MANIFEST_SECTION}` має вказувати `abi` як {ABI_VERSION}, версію ABI, яку реалізує цей хост
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	бюджет таблиць (модуль визначає {count} таблиць, найбільша містить {largest} елементів; межа {MAX_TABLES} таблиць по {MAX_TABLE_ELEMENTS} елементів)
+@msg	the module's table section could not be read	не вдалося прочитати розділ таблиць модуля
 @msg	the objects to change are no longer in the document	об’єктів, які треба змінити, більше немає в документі
 @msg	the runtime panicked	середовище виконання аварійно завершилося
 @msg	unexpected host trap	неочікувана пастка (trap) хоста
@@ -7002,6 +7010,8 @@ axis	Y Axis	Вісь Y
 @msg	`plates` requires a stop linked to a spot swatch	для `plates` потрібна точка переходу, пов’язана зі зразком плашкового кольору
 @msg	the output	виведення
 @msg	the path has no anchor points	контур не має опорних точок
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	складений контур {id} має прихований, заблокований або напрямний елемент, тому його елементи не можна замінити
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	складений контур {id} має елемент, який не є контуром, тому його елементи не можна замінити
 @msg	too many anchor points (limit {MAX_ANCHORS})	забагато опорних точок (межа {MAX_ANCHORS})
 @msg	true or false	true або false
 @msg	a number >= {_1}	число >= {_1}
@@ -8677,6 +8687,8 @@ breakText	Glyphs	Гліфи
 @msg	`dataBase64` is larger than the module limit	`dataBase64` перевищує обмеження модуля
 @msg	`dataBase64` is not valid base64	`dataBase64` не є припустимим base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` не можна поєднувати з `ids`, `reverse` або `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` не можна поєднувати з `ids`, `id` або `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` не можна поєднувати з `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` і `childLimit` обмежують зведення: передайте `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` — це назва дизайну або null для звичайних стовпців
 @msg	`design` is a design name, or null for the default marker	`design` — це назва дизайну або null для стандартного маркера

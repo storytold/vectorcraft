@@ -43,6 +43,7 @@
 	Select Object on Path	ტრაექტორიაზე ობიექტის მონიშვნა
 	Weather Icons	ამინდის ხატულები
 	Media Controls	მედია მართვის საშუალებები
+@id	language.name	ქართული
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' და 'arguments' მკაცრი რეჟიმის ფუნქციებში ვერ გამოიყენება
 @msg	3D effects require finite coordinates within 100 million points	3D ეფექტებს სჭირდება სასრული კოორდინატები 100 მილიონი პუნქტის ფარგლებში
 @msg	3D effects require one to ten lights	3D ეფექტებს სჭირდება ერთიდან ათამდე სინათლის წყარო
@@ -217,6 +218,8 @@
 @msg	`dataBase64` is larger than the module limit	`dataBase64` მოდულის ლიმიტზე დიდია
 @msg	`dataBase64` is not valid base64	`dataBase64` სწორი base64 არ არის
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` ვერ გამოიყენება `ids`-თან, `reverse`-თან ან `append`-თან ერთად
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` ვერ გამოიყენება `ids`-თან, `id`-თან ან `item`-თან ერთად
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` ვერ გამოიყენება `brush`-თან ერთად
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` და `childLimit` შეჯამებას ზღუდავს: გადაეცით `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` არის დიზაინის სახელი, ან null — ჩვეულებრივი სვეტებისთვის
 @msg	`design` is a design name, or null for the default marker	`design` არის დიზაინის სახელი, ან null — ნაგულისხმევი მარკერისთვის
@@ -2948,7 +2951,7 @@
 	Show Document Colors	დოკუმენტის ფერების ჩვენება
 	Document Colors	დოკუმენტის ფერები
 	Selection Colors	მონიშნულის ფერები
-@plural	Used {n} time|Used {n} times	გამოყენებულია {n}-ჯერ
+@plural	Used {n} time|Used {n} times	გამოყენებულია {n}-ჯერ|გამოყენებულია {n}-ჯერ
 	Show Harmony	ჰარმონიის ჩვენება
 	Harmony Rule	ჰარმონიის წესი
 	Harmony color	ჰარმონიის ფერი
@@ -2962,7 +2965,7 @@
 	Layers	შრეები
 	Libraries	ბიბლიოთეკა
 	Links	ბმულები
-@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({n}). ვაჩვენო ახალი ვერსიები?
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({n}). ვაჩვენო ახალი ვერსიები?|დისკზე შეიცვალა დაკავშირებული გამოსახულებები ({n}). ვაჩვენო ახალი ვერსიები?
 	Update Changed Links	შეცვლილი ბმულების განახლება
 	Magic Wand	ჯადოსნური ჯოხი
 	Navigator	ნავიგატორი
@@ -3964,8 +3967,8 @@ digits	Malayalam	მალაიალამური
 	Select objects to see their CSS, or Generate CSS for the whole document.	მონიშნეთ ობიექტები მათი CSS-ის სანახავად, ან შექმენით CSS მთელი დოკუმენტისთვის.
 	The selected objects have no CSS of their own (see below).	მონიშნულ ობიექტებს საკუთარი CSS არ აქვს (იხ. ქვემოთ).
 	Units: {units}	ერთეულები: {units}
-@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	კიდევ წესები: {n}. ექსპორტი ყველას ჩაწერს.
-@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	გამოტოვებულია უსახელო ობიექტები: {n}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	კიდევ წესები: {n}. ექსპორტი ყველას ჩაწერს.|კიდევ წესები: {n}. ექსპორტი ყველას ჩაწერს.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	გამოტოვებულია უსახელო ობიექტები: {n}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.|გამოტოვებულია უსახელო ობიექტები: {n}. დაარქვით მათ სახელი ან პანელის მენიუში ჩართეთ „უსახელო ობიექტები“.
 	All Categories	ყველა კატეგორია
 	Repeat Objects	გამეორების ობიექტები
 	Save…	შენახვა…
@@ -4844,20 +4847,20 @@ digits	Malayalam	მალაიალამური
 	Searching…	ძიება…
 	Not found	ვერ მოიძებნა
 	{folders} and {files} searched	მოიძებნა: {folders}, {files}
-@plural	{n} folder|{n} folders	{n} საქაღალდე
-@plural	{n} file|{n} files	{n} ფაილი
-@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	გამოტოვებული საქაღალდეები: {n} — მაგ. სხვა აპლიკაციების, სისტემის და დამალული საქაღალდეები
-@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	საქაღალდეების ან ფაილების წაკითხვა ვერ მოხერხდა: {n}
+@plural	{n} folder|{n} folders	{n} საქაღალდე|{n} საქაღალდე
+@plural	{n} file|{n} files	{n} ფაილი|{n} ფაილი
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	გამოტოვებული საქაღალდეები: {n} — მაგ. სხვა აპლიკაციების, სისტემის და დამალული საქაღალდეები|გამოტოვებული საქაღალდეები: {n} — მაგ. სხვა აპლიკაციების, სისტემის და დამალული საქაღალდეები
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	საქაღალდეების ან ფაილების წაკითხვა ვერ მოხერხდა: {n}|საქაღალდეების ან ფაილების წაკითხვა ვერ მოხერხდა: {n}
 	The search stopped at its limit: search a smaller folder.	ძიება ზღვარზე შეჩერდა: მოძებნეთ უფრო პატარა საქაღალდეში.
 	Copy only fonts you own or are licensed to install.	დააკოპირეთ მხოლოდ ის შრიფტები, რომლებიც გეკუთვნით ან რომელთა დაყენების ლიცენზია გაქვთ.
 	VectorCraft copies the fonts to {folder}.	VectorCraft შრიფტებს აკოპირებს აქ: {folder}.
-@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	ყველაზე გამოყენება (კიდევ დაკარგული: {n})
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	ყველაზე გამოყენება (კიდევ დაკარგული: {n})|ყველაზე გამოყენება (კიდევ დაკარგული: {n})
 	Ignore	უგულებელყოფა
 	Linked File Not Found	დაკავშირებული ფაილი ვერ მოიძებნა
 	Replace it with another file, or ignore it: its images keep showing the preview saved with the document.	ჩაანაცვლეთ სხვა ფაილით ან უგულებელყავით: მისი გამოსახულებები დოკუმენტთან შენახულ წინასწარ ხედს აჩვენებს.
 	Replace…	ჩანაცვლება…
 	Update Modified Links	შეცვლილი ბმულების განახლება
-@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	დოკუმენტის შენახვის შემდეგ შეიცვალა დაკავშირებული გამოსახულებები: {n}. ვაჩვენოთ ახალი ვერსიები?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	დოკუმენტის შენახვის შემდეგ შეიცვალა დაკავშირებული გამოსახულებები: {n}. ვაჩვენოთ ახალი ვერსიები?|დოკუმენტის შენახვის შემდეგ შეიცვალა დაკავშირებული გამოსახულებები: {n}. ვაჩვენოთ ახალი ვერსიები?
 	Dialog	დიალოგი
 	Convert Process to Global	პროცესულის გლობალურად გარდაქმნა
 	Create From:	შექმნის წყარო:
@@ -4893,14 +4896,14 @@ digits	Malayalam	მალაიალამური
 	Fonts whose licence doesn't allow embedding are not copied.	შრიფტები, რომელთა ლიცენზია ჩაშენების უფლებას არ იძლევა, არ კოპირდება.
 	Package collects a saved document with its linked files and fonts.	შეფუთვა აგროვებს შენახულ დოკუმენტს მის დაკავშირებულ ფაილებთან და შრიფტებთან ერთად.
 	Package created	შეფუთვა შეიქმნა
-@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	შეიფუთა ფაილები: {n}, ადგილი: {folder} {note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	შეიფუთა ფაილები: {n}, ადგილი: {folder} {note}|შეიფუთა ფაილები: {n}, ადგილი: {folder} {note}
 	Relink Linked Files to the Document	დაკავშირებული ფაილების დოკუმენტთან ხელახლა დაკავშირება
 	Save the document first?	ჯერ შევინახოთ დოკუმენტი?
-@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
-@plural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
-@msgplural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?|ფაილები: {n}, ადგილი: {folder} {note}. ვაჩვენოთ შეფუთვის საქაღალდე?
+@plural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}|ვერ მოიძებნა დაკავშირებული ფაილები: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	ვერ მოიძებნა დაკავშირებული ფაილები: {n}|ვერ მოიძებნა დაკავშირებული ფაილები: {n}
 @msg	fonts not copied: {fonts}	არ დაკოპირდა შრიფტები: {fonts}
-@msgplural	({n} linked file not found)|({n} linked files not found)	(ვერ მოიძებნა დაკავშირებული ფაილები: {n})
+@msgplural	({n} linked file not found)|({n} linked files not found)	(ვერ მოიძებნა დაკავშირებული ფაილები: {n})|(ვერ მოიძებნა დაკავშირებული ფაილები: {n})
 @msg	(fonts not copied: {fonts})	(არ დაკოპირდა შრიფტები: {fonts})
 @msg	({note}) ({more})	({note}) ({more})
 @msg	{note}) ({more}	{note}) ({more}
@@ -5528,7 +5531,7 @@ theme	Appearance	იერსახე
 	{file}; {embedding}	{file}; {embedding}
 	unknown type	უცნობი ტიპი
 	{type}; {uses}	{type}; {uses}
-@plural	{n} use|{n} uses	{n} გამოყენება
+@plural	{n} use|{n} uses	{n} გამოყენება|{n} გამოყენება
 	substituted: shown in {family} {style} ({detail})	ჩანაცვლებულია: ნაჩვენებია შრიფტით {family} {style} ({detail})
 	missing: shown in {family} {style}	აკლია: ნაჩვენებია შრიფტით {family} {style}
 	missing	აკლია
@@ -5543,9 +5546,9 @@ theme	Appearance	იერსახე
 	Conic gradient	კონუსური გრადიენტი
 	Diamond gradient	რომბისებრი გრადიენტი
 	Freeform gradient	თავისუფალი ფორმის გრადიენტი
-@plural	{n} instance|{n} instances	{n} ეგზემპლარი
-@plural	{n} row|{n} rows	{n} მწკრივი
-@plural	{n} column|{n} columns	{n} სვეტი
+@plural	{n} instance|{n} instances	{n} ეგზემპლარი|{n} ეგზემპლარი
+@plural	{n} row|{n} rows	{n} მწკრივი|{n} მწკრივი
+@plural	{n} column|{n} columns	{n} სვეტი|{n} სვეტი
 	Select art to make a scatter, art or pattern brush.	მონიშნეთ ნახატი გაფანტვის, მხატვრული ან პატერნის ფუნჯის შესაქმნელად.
 	Brush Art	ფუნჯის ნახატი
 	New Symbol	ახალი სიმბოლო
@@ -6478,8 +6481,8 @@ font-technology	Variable	ცვლადი
 	In the menu bar: {path}	მენიუს ზოლში: {path}
 	In the {group} group: press and hold to open it	ჯგუფში {group}: გასახსნელად დააჭირეთ და გეჭიროთ
 	{home}, not shown now	{home}, ახლა არ ჩანს
-@plural	{n} result|{n} results	{n} შედეგი
-@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
+@plural	{n} result|{n} results	{n} შედეგი|{n} შედეგი
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.|{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
 	Recent Commands	ბოლოდროინდელი ბრძანებები
 	No recent commands	ბოლოდროინდელი ბრძანებები არ არის
 	Type to search commands, tools, panels and effects	აკრიფეთ ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების მოსაძებნად
@@ -6848,21 +6851,21 @@ font-technology	Variable	ცვლადი
 	Stroke Direction	შტრიხის მიმართულება
 	Stroke Width	კონტურის სისქე
 	Stroke Pressure	შტრიხის დაწოლა
-@plural	{n} item|{n} items	ელემენტი: {n}
-@plural	Color Table ({n} color)|Color Table ({n} colors)	ფერების ცხრილი (ფერი: {n})
-@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	წაიშალოს გრაფიკული სტილები ({n})?
-@plural	Delete this {n} brush?|Delete these {n} brushes?	წაიშალოს ეს ფუნჯი ({n})?
-@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	წაიშალოს ეს ფერის ნიმუშები და ჯგუფები ({n})?
-@plural	{n} Layer|{n} Layers	შრე: {n}
-@plural	{n} Object|{n} Objects	ობიექტი: {n}
-@plural	{n} area highlighted|{n} areas highlighted	გამოკვეთილი არე: {n}
-@plural	{n} color|{n} colors	ფერი: {n}
-@plural	{n} fill|{n} fills	შევსება: {n}
-@plural	{n} glyph|{n} glyphs	გლიფი: {n}
-@plural	{n} object highlighted|{n} objects highlighted	გამოკვეთილი ობიექტი: {n}
-@plural	{n} star|{n} stars	ვარსკვლავი: {n}
-@plural	{n} step|{n} steps	ნაბიჯი: {n}
-@plural	{n} stroke|{n} strokes	კონტური: {n}
+@plural	{n} item|{n} items	ელემენტი: {n}|ელემენტი: {n}
+@plural	Color Table ({n} color)|Color Table ({n} colors)	ფერების ცხრილი (ფერი: {n})|ფერების ცხრილი (ფერი: {n})
+@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	წაიშალოს გრაფიკული სტილები ({n})?|წაიშალოს გრაფიკული სტილები ({n})?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	წაიშალოს ეს ფუნჯი ({n})?|წაიშალოს ეს ფუნჯი ({n})?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	წაიშალოს ეს ფერის ნიმუშები და ჯგუფები ({n})?|წაიშალოს ეს ფერის ნიმუშები და ჯგუფები ({n})?
+@plural	{n} Layer|{n} Layers	შრე: {n}|შრე: {n}
+@plural	{n} Object|{n} Objects	ობიექტი: {n}|ობიექტი: {n}
+@plural	{n} area highlighted|{n} areas highlighted	გამოკვეთილი არე: {n}|გამოკვეთილი არე: {n}
+@plural	{n} color|{n} colors	ფერი: {n}|ფერი: {n}
+@plural	{n} fill|{n} fills	შევსება: {n}|შევსება: {n}
+@plural	{n} glyph|{n} glyphs	გლიფი: {n}|გლიფი: {n}
+@plural	{n} object highlighted|{n} objects highlighted	გამოკვეთილი ობიექტი: {n}|გამოკვეთილი ობიექტი: {n}
+@plural	{n} star|{n} stars	ვარსკვლავი: {n}|ვარსკვლავი: {n}
+@plural	{n} step|{n} steps	ნაბიჯი: {n}|ნაბიჯი: {n}
+@plural	{n} stroke|{n} strokes	კონტური: {n}|კონტური: {n}
 @msg	no library `{id}`	ბიბლიოთეკა `{id}` არ არსებობს
 @msg	the library has another item of that kind named `{name}`	ბიბლიოთეკას უკვე აქვს ამ ტიპის სხვა ელემენტი სახელით `{name}`
 @msg	select some type first	ჯერ მონიშნეთ ტექსტი
@@ -6949,7 +6952,7 @@ font-technology	Variable	ცვლადი
 @msg	PDF settings are not an object	PDF-ის პარამეტრები ობიექტი არ არის
 @msg	PDF security settings are not an object	PDF-ის უსაფრთხოების პარამეტრები ობიექტი არ არის
 @msg	PDF writer error: {0}	PDF-ის ჩამწერის შეცდომა: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})|შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ბრაუზერში წინასწარ ნახვას დესკტოპის აპი სჭირდება (ვებში ფაილები ჩამოიტვირთება)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	მიუთითეთ `desiredK`, სასურველი ფაილის ზომა K-ში (1024 ბაიტი): 0-ზე მეტი და არაუმეტეს 1048576 რიცხვი
 @msg	`startWith` is `current` or `auto`	`startWith` არის `current` ან `auto`
@@ -7268,8 +7271,8 @@ font-technology	Variable	ცვლადი
 @msg	the action sets changed; nothing was deleted	მოქმედებების ნაკრებები შეიცვალა; არაფერი წაშლილა
 @msg	no action set to save	შესანახი მოქმედებების ნაკრები არ არის
 @msg	the action set file can't be read in full	მოქმედებების ნაკრების ფაილის სრულად წაკითხვა შეუძლებელია
-@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
-@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}|ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`|ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: ცნობარი {MAX_BYTES} ბაიტზე დიდი იქნებოდა
@@ -7585,40 +7588,40 @@ font-technology	Variable	ცვლადი
 @msg	Placing {_1}	თავსდება: {_1}
 @msg	Pasting	ჩასმა
 @msg	Saving recovery data for {_1}	{_1}-ის აღდგენის მონაცემების შენახვა
-@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	უარყოფილია აღდგენილი დოკუმენტები: {n}
-@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი
-@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	გაიხსნა, შენიშვნები: {n}: {first}
-@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	კოპირებულია, შენიშვნები: {n}: {first}
-@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	ამოჭრილია, შენიშვნები: {n}: {first}
-@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	გამოსახულება ვექტორიზებულია, შენიშვნები: {n}: {first}
-@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. გაიხსნა, შენიშვნები: {n}: {first}
-@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	შენახულია {path}, შენიშვნები: {n}: {first}
-@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა დააკავშირეთ
-@msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}
-@msgplural	Relinked {n} image|Relinked {n} images	ხელახლა მიბმულია გამოსახულებები: {n}
-@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {names}
-@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}
-@msgplural	Updated {n} image|Updated {n} images	განახლებულია გამოსახულებები: {n}
-@msgplural	Replaced {n} image|Replaced {n} images	ჩანაცვლებულია გამოსახულებები: {n}
-@msgplural	Broke {n} link|Broke {n} links	გაწყვეტილია ბმულები: {n}
-@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	გაწყვეტილია ბმულები: {n}; ვერ იკითხება {missing}: ჯერ ხელახლა დააკავშირეთ ან განაახლეთ
-@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	დაკავშირებული ფაილების წაკითხვა აქ ვერ ხერხდება ({n}): ჩანს მათი გადახედვა
-@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
-@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	დაკავშირებული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
-@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	უარყოფილია აღდგენილი დოკუმენტები: {n}|უარყოფილია აღდგენილი დოკუმენტები: {n}
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი|აღდგენილია დოკუმენტები: {n}: შესანარჩუნებლად შეინახეთ ისინი
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	გაიხსნა, შენიშვნები: {n}: {first}|გაიხსნა, შენიშვნები: {n}: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	კოპირებულია, შენიშვნები: {n}: {first}|კოპირებულია, შენიშვნები: {n}: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	ამოჭრილია, შენიშვნები: {n}: {first}|ამოჭრილია, შენიშვნები: {n}: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	გამოსახულება ვექტორიზებულია, შენიშვნები: {n}: {first}|გამოსახულება ვექტორიზებულია, შენიშვნები: {n}: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. გაიხსნა, შენიშვნები: {n}: {first}|{notice}. გაიხსნა, შენიშვნები: {n}: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	შენახულია {path}, შენიშვნები: {n}: {first}|შენახულია {path}, შენიშვნები: {n}: {first}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა დააკავშირეთ|ჩაშენებულია გამოსახულებები: {n}; აკლია {missing}: ჯერ ხელახლა დააკავშირეთ
+@msgplural	Embedded {n} image|Embedded {n} images	ჩაშენებულია გამოსახულებები: {n}|ჩაშენებულია გამოსახულებები: {n}
+@msgplural	Relinked {n} image|Relinked {n} images	ხელახლა მიბმულია გამოსახულებები: {n}|ხელახლა მიბმულია გამოსახულებები: {n}
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {names}|ხელახლა მიბმულია გამოსახულებები: {n}; იმ საქაღალდეში არ არის: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}|ხელახლა დაკავშირდა გამოსახულება: {n}; {name} ვერ დაკავშირდა: {reason}
+@msgplural	Updated {n} image|Updated {n} images	განახლებულია გამოსახულებები: {n}|განახლებულია გამოსახულებები: {n}
+@msgplural	Replaced {n} image|Replaced {n} images	ჩანაცვლებულია გამოსახულებები: {n}|ჩანაცვლებულია გამოსახულებები: {n}
+@msgplural	Broke {n} link|Broke {n} links	გაწყვეტილია ბმულები: {n}|გაწყვეტილია ბმულები: {n}
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	გაწყვეტილია ბმულები: {n}; ვერ იკითხება {missing}: ჯერ ხელახლა დააკავშირეთ ან განაახლეთ|გაწყვეტილია ბმულები: {n}; ვერ იკითხება {missing}: ჯერ ხელახლა დააკავშირეთ ან განაახლეთ
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	დაკავშირებული ფაილების წაკითხვა აქ ვერ ხერხდება ({n}): ჩანს მათი გადახედვა|დაკავშირებული ფაილების წაკითხვა აქ ვერ ხერხდება ({n}): ჩანს მათი გადახედვა
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს|სურათების დეკოდირება ვერ მოხერხდა ({n}): ისინი ჯვრით გადახაზული ჩარჩოებით ჩანს
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	დაკავშირებული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს|დაკავშირებული გამოსახულებები შეიცვალა დისკზე ({n}): ბმულების განახლება აჩვენებს ახალ ვერსიებს
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}|განახლდა დისკზე შეცვლილი დაკავშირებული ფაილები: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	დოკუმენტი ადგენს ჭრისპირა არეს, რომელსაც ეს PDF/X ფაილი გამოტოვებს: ჩართეთ „დოკუმენტის ჭრისპირა არის პარამეტრების გამოყენება“
-@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	ობიექტები, რომლებიც ჭრის კიდეს აღწევს, მაგრამ ჭრისპირა არემდე ვერა: {n}
-@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
-@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
-@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
-@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს
-@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	კოპირებულია ობიექტის CSS ({n})
-@msgplural	Downloaded {n} file|Downloaded {n} files	ჩამოტვირთულია ფაილი ({n})
-@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	ობიექტები, რომლებიც ჭრის კიდეს აღწევს, მაგრამ ჭრისპირა არემდე ვერა: {n}|ობიექტები, რომლებიც ჭრის კიდეს აღწევს, მაგრამ ჭრისპირა არემდე ვერა: {n}
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	ექსპორტირებულია {what}, შენიშვნები: {n}: {first}|ექსპორტირებულია {what}, შენიშვნები: {n}: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}|შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}|შრიფტის ფაილები ({n}) ახლა აქ არის: {folder}; ვერ დაემატა {failed}: {reason}
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს|შრიფტები ({n}) აქ მიუწვდომელია: მათი ტექსტი სხვა შრიფტით ჩანს
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	კოპირებულია ობიექტის CSS ({n})|კოპირებულია ობიექტის CSS ({n})
+@msgplural	Downloaded {n} file|Downloaded {n} files	ჩამოტვირთულია ფაილი ({n})|ჩამოტვირთულია ფაილი ({n})
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}|ექსპორტირებულია ფაილი ({n}) საქაღალდეში {folder}
 @msg	All colors are within the CMYK gamut	ყველა ფერი CMYK-ის გამის ფარგლებშია
-@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	CMYK-ის გამის ფარგლებს გარეთაა ფერი ({n})
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	CMYK-ის გამის ფარგლებს გარეთაა ფერი ({n})|CMYK-ის გამის ფარგლებს გარეთაა ფერი ({n})
 @msg	Unembedded to {_1}	ჩაშენება მოხსნილია: {_1}
-@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	ჩაშენება მოხსნილია, გამოსახულებები: {n}, საქაღალდე: {folder}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	ჩაშენება მოხსნილია, გამოსახულებები: {n}, საქაღალდე: {folder}|ჩაშენება მოხსნილია, გამოსახულებები: {n}, საქაღალდე: {folder}
 @msg	every numbered name for {name} is taken in that folder	იმ საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	Reset {_1}	ჩამოყრილია: {_1}
 @msg	Sent to {_1}	გაგზავნილია: {_1}
@@ -7891,7 +7894,7 @@ font-technology	Variable	ცვლადი
 	Imported. Press OK to keep the imported set.	შემოტანილია. შემოტანილი ნაკრების შესანარჩუნებლად დააჭირეთ OK-ს.
 	⚠ {chord} was already used by {names} — it has been removed there.	{chord} უკვე გამოიყენებოდა აქ: {names} — იქიდან მოცილებულია.
 	VectorCraft Defaults	VectorCraft-ის ნაგულისხმევი
-@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	ერთზე მეტჯერ მინიჭებული მალსახმობები: {n}
+@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	ერთზე მეტჯერ მინიჭებული მალსახმობები: {n}|ერთზე მეტჯერ მინიჭებული მალსახმობები: {n}
 	Simulate prints overprints as Overprint Preview shows them; separations always keep them. A preset flattens transparency before printing (PostScript files always flatten it).	„სიმულაცია“ ბეჭდავს ზედდაბეჭდვებს ისე, როგორც ზედდაბეჭდვის გადახედვა აჩვენებს; სეპარაცია მათ ყოველთვის ინარჩუნებს. პრესეტი ბეჭდვამდე აბრტყელებს გამჭვირვალობას (PostScript ფაილები მას ყოველთვის აბრტყელებს).
 	Preserve	შენარჩუნება
 	Simulate	სიმულაცია
@@ -8200,6 +8203,7 @@ arrowhead	Feather	ბუმბული
 @msg	a 3D effect on a group's fill or stroke draws nothing	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი არაფერს ხატავს
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D ობიექტის ბადე არასრულია ან შეიცავს მნიშვნელობას, რომელიც რიცხვი არ არის
 @msg	feConvolveMatrix's order	feConvolveMatrix-ის order
 @msg	feMorphology's radius	feMorphology-ის radius
 @msg	a blur's stdDeviation	გაბუნდოვნების stdDeviation
@@ -8292,8 +8296,8 @@ diagnostics	ui	ინტერფეისი
 	Preset {number}	პრესეტი {number}
 	PRs	PR-ები
 	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, +{added} / −{deleted} სტრიქონი (Δ {delta}), +{binary_added} / −{binary_deleted} ბინარული რესურსი, {first} – {last}
-@plural	{n} PR|{n} PRs	PR: {n}
-@plural	{n} commit|{n} commits	კომიტი: {n}
+@plural	{n} PR|{n} PRs	PR: {n}|PR: {n}
+@plural	{n} commit|{n} commits	კომიტი: {n}|კომიტი: {n}
 gradient-kind	Radial	რადიალური
 mark-style	Japanese	იაპონური
 	2-Up	2 ხედი
@@ -8560,8 +8564,8 @@ imageTrace	Outline	კონტური
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის უკუძახილში, getter-ში, გარდაქმნაში ან ფაილში, რომელსაც $.evalFile უშვებს; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: შემდეგი პასუხი `answers`-ში არის {_1}-ისთვის და არა {name}-ისთვის
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`-ში ამ დიალოგისთვის პასუხი აღარ დარჩა
-@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია
-@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	ხელსაწყომ „{_1}“ ფუნჯის ქვეშ {n} ობიექტი უცვლელად დატოვა ({_2}): ის მხოლოდ ტრაექტორიების ფორმას ცვლის
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია|`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	ხელსაწყომ „{_1}“ ფუნჯის ქვეშ {n} ობიექტი უცვლელად დატოვა ({_2}): ის მხოლოდ ტრაექტორიების ფორმას ცვლის|ხელსაწყომ „{_1}“ ფუნჯის ქვეშ {n} ობიექტი უცვლელად დატოვა ({_2}): ის მხოლოდ ტრაექტორიების ფორმას ცვლის
 liquify-tool	Warp	გაღუნვა
 liquify-tool	Twirl	დახვევა
 liquify-tool	Pucker	შეკუმშვა
@@ -9239,10 +9243,10 @@ variable-list-end	{0}, {1}	{0} და {1}
 @msg	{id} opens another app: only the person at the keyboard can run it	{id} სხვა აპს ხსნის: მისი გაშვება მხოლოდ კლავიატურასთან მყოფ ადამიანს შეუძლია
 @msg	“{name}” is not a file	„{name}“ ფაილი არ არის
 	Cancel Export	ექსპორტირების გაუქმება
-@plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}
+@plural	{n} more export waiting|{n} more exports waiting	რიგში მომლოდინე სხვა ექსპორტირება: {n}|რიგში მომლოდინე სხვა ექსპორტირება: {n}
 @msg	Export cancelled	ექსპორტირება გაუქმდა
 	Cancel Save	შენახვის გაუქმება
-@plural	{n} more save waiting|{n} more saves waiting	რიგში მომლოდინე სხვა შენახვა: {n}
+@plural	{n} more save waiting|{n} more saves waiting	რიგში მომლოდინე სხვა შენახვა: {n}|რიგში მომლოდინე სხვა შენახვა: {n}
 @msg	Save canceled	შენახვა გაუქმდა
 	Clear History	ისტორიის გასუფთავება
 	New Document from State	ახალი დოკუმენტი მდგომარეობიდან
@@ -9371,13 +9375,13 @@ variable-list-end	{0}, {1}	{0} და {1}
 	Slope:	დახრა:
 axis	X Axis	X ღერძი
 axis	Y Axis	Y ღერძი
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}
-@msgplural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})
-@plural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})
-@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
-@plural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}
-@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	ფაილები: {n}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}|შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}|შეფუთულია ფაილი ({n}) {note}
+@msgplural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})|შეფუთულია ფაილი ({n})
+@plural	Packaged {n} file|Packaged {n} files	შეფუთულია ფაილი ({n})|შეფუთულია ფაილი ({n})
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder}|შეფუთულია ფაილი ({n}) საქაღალდეში {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	შეფუთულია ფაილი ({n}) {note}|შეფუთულია ფაილი ({n}) {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	ფაილები: {n}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?|ფაილები: {n}, ადგილი: {folder}. ვაჩვენოთ შეფუთვის საქაღალდე?
 	Create PDF layers from top-level layers	PDF-ის ფენების შექმნა ზედა დონის ფენებიდან
 @msg	this kind of brush has no options dialog yet	ამ ტიპის ფუნჯს პარამეტრების დიალოგი ჯერ არ აქვს
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	გადმოათრიეთ აქ გრაფიკა, ფერები და ტექსტის სტილები, რომ სხვა დოკუმენტებშიც გამოიყენოთ. ბიბლიოთეკები ამ კომპიუტერზე ინახება — ანგარიში არ არის საჭირო.
@@ -9426,11 +9430,17 @@ axis	Y Axis	Y ღერძი
 @msg	module is {_1} bytes (limit {_2})	მოდული {_1} ბაიტია (ლიმიტი {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	საჭიროებს დამტკიცებას: ითხოვს {0}-ს, რასაც მომხმარებელი მისი ცალკე დაყენებისას აძლევს
 @msg	not JSON: {e}	არ არის JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	არ არის WebAssembly-ის ბინარული ფაილი (აკლია \0asm სათაური)
+@msg	not a WebAssembly binary (missing \\0asm header)	არ არის WebAssembly-ის ბინარული ფაილი (აკლია \\0asm სათაური)
 @msg	parameter `{k}`: {what}	პარამეტრი `{k}`: {what}
 @msg	parameter `{name}`: {what}	პარამეტრი `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	პლაგინის პარამეტრები JSON ობიექტი უნდა იყოს
 @msg	the module must export its linear memory as `memory`	მოდულმა თავისი წრფივი მეხსიერების ექსპორტი `memory` სახელით უნდა გააკეთოს
+@msg	the module must export `{name}` with the type {signature}	მოდულმა `{name}`-ის ექსპორტი {signature} ტიპით უნდა გააკეთოს
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	მოდულს ერთზე მეტი `{MANIFEST_SECTION}` მორგებული სექცია აქვს
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	მეხსიერების ბიუჯეტი (მოდულის საწყისი მეხსიერება {initial} ბაიტია, ზღვარი {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` მორგებული სექციის მანიფესტში `abi` უნდა იყოს {ABI_VERSION}, ABI-ის ვერსია, რომელსაც ეს ჰოსტი ახორციელებს
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	ცხრილების ბიუჯეტი (მოდული განსაზღვრავს {count} ცხრილს, უდიდესი {largest} ელემენტით; ზღვარი {MAX_TABLES} ცხრილი, თითოეულში {MAX_TABLE_ELEMENTS} ელემენტი)
+@msg	the module's table section could not be read	მოდულის ცხრილების სექციის წაკითხვა ვერ მოხერხდა
 @msg	the objects to change are no longer in the document	შესაცვლელი ობიექტები დოკუმენტში აღარ არის
 @msg	the runtime panicked	გაშვების გარემო ავარიულად შეჩერდა
 @msg	unexpected host trap	ჰოსტის მოულოდნელი ავარიული შეჩერება (trap)
@@ -9501,6 +9511,8 @@ axis	Y Axis	Y ღერძი
 @msg	`plates` requires a stop linked to a spot swatch	`plates` მოითხოვს გადასვლის წერტილს, რომელიც სპოტ-ფერის ნიმუშთანაა დაკავშირებული
 @msg	the output	გამოტანა
 @msg	the path has no anchor points	ტრაექტორიას საყრდენი წერტილები არ აქვს
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	შედგენილ ტრაექტორიას {id} აქვს დამალული, ჩაკეტილი ან დამხმარე ხაზის წევრი, ამიტომ მისი წევრების ჩანაცვლება შეუძლებელია
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	შედგენილ ტრაექტორიას {id} აქვს წევრი, რომელიც ტრაექტორია არ არის, ამიტომ მისი წევრების ჩანაცვლება შეუძლებელია
 @msg	too many anchor points (limit {MAX_ANCHORS})	ძალიან ბევრი საყრდენი წერტილი (ლიმიტი {MAX_ANCHORS})
 @msg	true or false	true ან false
 @msg	a number >= {_1}	რიცხვი >= {_1}
@@ -9696,7 +9708,7 @@ axis	Y Axis	Y ღერძი
 	On Artboards	სამუშაო დაფებზე
 	All Artboards	ყველა სამუშაო დაფა
 	Include Objects On Canvas	ტილოზე არსებული ობიექტების გათვალისწინება
-@plural	Result: {n}|Results: {n}	შედეგი: {n}
+@plural	Result: {n}|Results: {n}	შედეგი: {n}|შედეგი: {n}
 @msg	select one object	მონიშნეთ ერთი ობიექტი
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	გლობალური რედაქტირება მუშაობს ტრაექტორიებზე, შედგენილ ტრაექტორიებზე, სიმბოლოს ეგზემპლარებსა და მათ ჯგუფებზე
 @msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	მსგავსი ობიექტები ვერ მოიძებნა (არეკლილი ასლები არ ემთხვევა); შეცვალეთ გლობალური რედაქტირების პარამეტრები და სცადეთ ხელახლა
@@ -10696,13 +10708,13 @@ breakText	Glyphs	გლიფები
 	Export All Open Documents as PDF	ყველა ღია დოკუმენტის ექსპორტი PDF-ად
 	Export All Open Documents as SVG	ყველა ღია დოკუმენტის ექსპორტი SVG-ად
 	Export All Open Documents	ყველა ღია დოკუმენტის ექსპორტირება
-@msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})
-@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
+@msgplural	Exported {n} document|Exported {n} documents	ექსპორტირებულია დოკუმენტი ({n})|ექსპორტირებულია დოკუმენტი ({n})
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}|ექსპორტირებულია დოკუმენტი ({n}); {title} არ ჩაიწერა: {error}
 # Document Tools add-on: Batch Trace Folder (#4921).
 	Batch Trace Folder	საქაღალდის პაკეტური ვექტორიზაცია
-@msgplural	Traced {n} image|Traced {n} images	ვექტორიზებულია გამოსახულება ({n})
-@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	ვერ მოხერხდა გამოსახულების ვექტორიზაცია ({n})
-@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	ვექტორიზებულია გამოსახულება ({n}); ვერ მოხერხდა: {failed}
+@msgplural	Traced {n} image|Traced {n} images	ვექტორიზებულია გამოსახულება ({n})|ვექტორიზებულია გამოსახულება ({n})
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	ვერ მოხერხდა გამოსახულების ვექტორიზაცია ({n})|ვერ მოხერხდა გამოსახულების ვექტორიზაცია ({n})
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	ვექტორიზებულია გამოსახულება ({n}); ვერ მოხერხდა: {failed}|ვექტორიზებულია გამოსახულება ({n}); ვერ მოხერხდა: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	სიმბოლოს ტიპი:
 	Dynamic Symbol	დინამიკური სიმბოლო
@@ -10868,15 +10880,15 @@ font-script	Japanese	იაპონური
 	Select by Link Status…	კავშირის მდგომარეობით არჩევა…
 	Search images	გამოსახულებების ძებნა
 	No images match.	შესაბამისი გამოსახულება არ არის.
-@msgplural	Selected {n} linked image|Selected {n} linked images	არჩეულია დაკავშირებული გამოსახულებები: {n}
-@msgplural	Selected {n} embedded image|Selected {n} embedded images	არჩეულია ჩაშენებული გამოსახულებები: {n}
-@msgplural	Selected {n} missing image|Selected {n} missing images	არჩეულია დაკარგული გამოსახულებები: {n}
-@msgplural	Selected {n} modified image|Selected {n} modified images	არჩეულია შეცვლილი გამოსახულებები: {n}
-@msgplural	Selected {n} image|Selected {n} images	არჩეულია გამოსახულებები: {n}
-@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; დამალული ან ჩაკეტილია კიდევ: {n}
-@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; შაბლონის ფენაზეა კიდევ: {n}
-@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; იზოლირებული ჯგუფის გარეთაა კიდევ: {n}
-@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ახლა ვერ აირჩევა კიდევ: {n}
+@msgplural	Selected {n} linked image|Selected {n} linked images	არჩეულია დაკავშირებული გამოსახულებები: {n}|არჩეულია დაკავშირებული გამოსახულებები: {n}
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	არჩეულია ჩაშენებული გამოსახულებები: {n}|არჩეულია ჩაშენებული გამოსახულებები: {n}
+@msgplural	Selected {n} missing image|Selected {n} missing images	არჩეულია დაკარგული გამოსახულებები: {n}|არჩეულია დაკარგული გამოსახულებები: {n}
+@msgplural	Selected {n} modified image|Selected {n} modified images	არჩეულია შეცვლილი გამოსახულებები: {n}|არჩეულია შეცვლილი გამოსახულებები: {n}
+@msgplural	Selected {n} image|Selected {n} images	არჩეულია გამოსახულებები: {n}|არჩეულია გამოსახულებები: {n}
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; დამალული ან ჩაკეტილია კიდევ: {n}|{selected}; დამალული ან ჩაკეტილია კიდევ: {n}
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; შაბლონის ფენაზეა კიდევ: {n}|{selected}; შაბლონის ფენაზეა კიდევ: {n}
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; იზოლირებული ჯგუფის გარეთაა კიდევ: {n}|{selected}; იზოლირებული ჯგუფის გარეთაა კიდევ: {n}
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; ახლა ვერ აირჩევა კიდევ: {n}|{selected}; ახლა ვერ აირჩევა კიდევ: {n}
 
 # Compound Shapes add-on
 	Compound Shapes	შედგენილი ფიგურები
@@ -10963,9 +10975,9 @@ font-script	Japanese	იაპონური
 	{time}, {calls}	{time}, {calls}
 	slowest: {commands}	ყველაზე ნელი: {commands}
 	{dropped}, {cut}	{dropped}, {cut}
-@plural	{n} host call|{n} host calls	ჰოსტის {n} გამოძახება
-@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ძველი სტრიქონი წაიშალა
-@plural	{n} line cut|{n} lines cut	{n} სტრიქონი შემოკლდა
+@plural	{n} host call|{n} host calls	ჰოსტის {n} გამოძახება|ჰოსტის {n} გამოძახება
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} ძველი სტრიქონი წაიშალა|{n} ძველი სტრიქონი წაიშალა
+@plural	{n} line cut|{n} lines cut	{n} სტრიქონი შემოკლდა|{n} სტრიქონი შემოკლდა
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` და `last` უნდა იყოს კონსოლში შენახული სტრიქონების ნომრები და `first` უნდა იყოს `last`-ზე წინ
 
 # Learn panel
@@ -11009,7 +11021,7 @@ font-script	Japanese	იაპონური
 	Refresh Deferred Effects	გადადებული ეფექტების განახლება
 	Deferred Effects	გადადებული ეფექტები
 @msg	no plug-in effect is deferred	პლაგინის ეფექტი არ არის გადადებული
-@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.|გაიხსნა, გადადებული პლაგინის ეფექტები: {n}. ეფექტი › გადადებული ეფექტების განახლება მათ გაუშვებს.
 
 # Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
 	Cutting Tools	ჭრის ხელსაწყოები

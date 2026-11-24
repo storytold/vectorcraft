@@ -196,6 +196,7 @@
 	Anti-alias Rasters	Kantutjämna rasterbilder
 	Anti-aliased Artwork	Kantutjämnad grafik
 	Anti-aliasing Method	Kantutjämningsmetod
+@id	language.name	Svenska
 antiAlias	Sharp	Skarp
 	Crisp	Klar
 	Strong	Kraftig
@@ -6339,6 +6340,7 @@ lighting	Light	Ljus
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en grupps fyllning eller linje ritar ingenting
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D-objektets nät är ofullständigt eller innehåller ett värde som inte är ett tal
 @msg	give one <filter> element	ange ett <filter>-element
 @msg	the <filter> element needs an id, the filter's name	<filter>-elementet behöver ett id, filtrets namn
 @msg	an SVG filter's id is at most {MAX_NAME} characters	ett SVG-filters id har högst {MAX_NAME} tecken
@@ -7410,6 +7412,8 @@ axis	Y Axis	Y-axel
 @msg	`plates` requires a stop linked to a spot swatch	`plates` kräver ett gradientstopp som är länkat till en dekorfärgruta
 @msg	the output	utdata
 @msg	the path has no anchor points	banan har inga ankarpunkter
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	den sammansatta banan {id} har en dold, låst eller stödlinjemedlem, så dess medlemmar kan inte ersättas
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	den sammansatta banan {id} har en medlem som inte är en bana, så dess medlemmar kan inte ersättas
 @msg	too many anchor points (limit {MAX_ANCHORS})	för många ankarpunkter (gräns {MAX_ANCHORS})
 @msg	true or false	true eller false
 @msg	a number >= {_1}	ett tal >= {_1}
@@ -8871,6 +8875,8 @@ digits	Hindi	Hindi
 @msg	`dataBase64` is larger than the module limit	`dataBase64` är större än modulgränsen
 @msg	`dataBase64` is not valid base64	`dataBase64` är inte giltig base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan inte kombineras med `ids`, `reverse` eller `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` kan inte kombineras med `ids`, `id` eller `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` kan inte kombineras med `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` och `childLimit` begränsar sammanfattningen: ange `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` är ett designnamn, eller null för vanliga kolumner
 @msg	`design` is a design name, or null for the default marker	`design` är ett designnamn, eller null för standardmarkören
@@ -9618,7 +9624,7 @@ digits	Hindi	Hindi
 @msg	not a print presets file: {e}	inte en fil med utskriftsförinställningar: {e}
 @msg	not a stored or deflated central record	inte en central katalogpost av typen stored eller deflated
 @msg	not a valid SVGZ file: {e}	inte en giltig SVGZ-fil: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	inte en WebAssembly-binärfil (huvudet \0asm saknas)
+@msg	not a WebAssembly binary (missing \\0asm header)	inte en WebAssembly-binärfil (huvudet \\0asm saknas)
 @msg	not a Word document: its compound file has no WordDocument stream	inte ett Word-dokument: dess sammansatta fil saknar WordDocument-ström
 @msg	not a Word document: its main part is not a WordprocessingML document	inte ett Word-dokument: dess huvuddel är inte ett WordprocessingML-dokument
 @msg	not a Word document: its package has no main document part	inte ett Word-dokument: dess paket saknar huvuddokumentdel
@@ -9917,6 +9923,12 @@ digits	Hindi	Hindi
 @msg	the library holds {MAX_GROUPS} groups already	biblioteket innehåller redan {MAX_GROUPS} grupper
 @msg	the library holds {MAX_ITEMS} items of this kind already	biblioteket innehåller redan {MAX_ITEMS} objekt av den här typen
 @msg	the module must export its linear memory as `memory`	modulen måste exportera sitt linjära minne som `memory`
+@msg	the module must export `{name}` with the type {signature}	modulen måste exportera `{name}` med typen {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modulen har mer än ett anpassat avsnitt `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	minnesbudget (modulens startminne är {initial} byte, gräns {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifestet i det anpassade avsnittet `{MANIFEST_SECTION}` måste ange `abi` som {ABI_VERSION}, den ABI-version som den här värden implementerar
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabellbudget (modulen definierar {count} tabeller, den största med {largest} element; gräns {MAX_TABLES} tabeller med {MAX_TABLE_ELEMENTS} element)
+@msg	the module's table section could not be read	modulens tabellavsnitt kunde inte läsas
 @msg	the name is empty	namnet är tomt
 @msg	the object has no fill, stroke or effect	objektet har ingen fyllning, kontur eller effekt
 @msg	the object has no graphic style (pass `name`)	objektet har ingen grafikstil (ange `name`)

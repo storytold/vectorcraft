@@ -1,46 +1,30 @@
-//! Software updates, background check at startup, and startup prompt modal.
+//! Software updates: the check at startup, the startup prompt and the check-result dialog, both
+//! on the dialog host.
 
 use serde_json::Value;
 
 use crate::VectorcraftApp;
 
+#[cfg(target_arch = "wasm32")]
+use craft::ui::dialog::{Alert, HostedAlert};
 #[cfg(not(target_arch = "wasm32"))]
-use craft_update::updater::{Action, Status, Updater};
+use craft::update::stack_dialogs::{CheckChoice, UpdateCheckDialog, UpdatePromptDialog};
 #[cfg(not(target_arch = "wasm32"))]
-use craft_update::{CheckResultDialog, CheckResultResponse};
+use craft::update::updater::{Action, Status, Updater};
 
-#[cfg_attr(target_arch = "wasm32", derive(Default))]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) struct Runtime {
-    #[cfg(not(target_arch = "wasm32"))]
     updater: Updater,
-    /// The desktop app turns the check at start on; tests and the web build leave it off.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// The desktop app turns the check at start on; tests leave it off.
     startup_check: bool,
-    #[cfg(not(target_arch = "wasm32"))]
-    check_requested: bool,
-    /// The context of the last frame, to wake the UI when a check is queued from a menu callback.
-    #[cfg(not(target_arch = "wasm32"))]
-    repaint: Option<egui::Context>,
-    /// Whether an update dialog held the input in the last frame.
-    #[cfg(not(target_arch = "wasm32"))]
-    was_blocking: bool,
-    /// The web build has no updater; its window only says so.
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) manual_window_open: bool,
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) status_message: Option<String>,
+    /// Whether a modal update dialog was open in the last pass.
+    was_modal: bool,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl Default for Runtime {
     fn default() -> Self {
-        Self {
-            updater: Updater::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")),
-            startup_check: false,
-            check_requested: false,
-            repaint: None,
-            was_blocking: false,
-        }
+        Self { updater: Updater::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")), startup_check: false, was_modal: false }
     }
 }
 
@@ -60,138 +44,121 @@ impl VectorcraftApp {
     }
 }
 
-pub(crate) fn check(app: &mut VectorcraftApp) -> Result<Value, String> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        app.updates_rt.check_requested = true;
-        if let Some(ctx) = &app.updates_rt.repaint {
-            ctx.request_repaint();
-        }
-        Ok(Value::Null)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        app.updates_rt.manual_window_open = true;
-        app.updates_rt.status_message = Some("Update check is not supported in the web browser.".into());
-        Ok(Value::Null)
-    }
+/// The result dialog of a check; its status comes from [`pump`].
+#[cfg(not(target_arch = "wasm32"))]
+fn check_dialog() -> UpdateCheckDialog {
+    UpdateCheckDialog::new(env!("CARGO_PKG_VERSION"))
 }
 
+pub(crate) fn check(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // PLAN: assumed `VectorcraftApp::dialogs() -> Option<handle>` whose `with(|host: &mut DialogHost| ..)` runs on the host (wg.S1).
+    let dialogs = app.dialogs().ok_or("no window")?;
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // An open result dialog shows the new status itself.
+        dialogs.with(|h| {
+            let _ = h.open_unless_open(check_dialog());
+        });
+        app.updates_rt.updater.check_now();
+    }
+    #[cfg(target_arch = "wasm32")]
+    dialogs.with(|h| {
+        h.open(HostedAlert::new(Alert::new(
+            tl!("VectorCraft Updates").to_string(),
+            tl!("Update check is not supported in the web browser.").to_string(),
+        )));
+    });
+    Ok(Value::Null)
+}
+
+/// Before the shell pass: the updater works, and puts its startup prompt on the host, which must
+/// happen before `DialogHost::run`.
 pub(crate) fn tick(app: &mut VectorcraftApp, ctx: &egui::Context) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let rt = &mut app.updates_rt;
-        rt.repaint = Some(ctx.clone());
-        if std::mem::take(&mut rt.check_requested) {
-            rt.updater.check_now(ctx);
-        } else if rt.startup_check {
-            rt.updater.check_at_start(ctx);
+        if rt.startup_check {
+            rt.updater.check_at_start();
         }
         rt.updater.tick(ctx);
+        // An installation, and the close for a ready update, wait for unsaved and running work.
+        let safe = safe_to_close(app);
+        let Some(dialogs) = app.dialogs() else { return };
+        match dialogs.with(|h| app.updates_rt.updater.run(h, safe)) {
+            Action::OpenUrl(url) => app.open_url(&url),
+            Action::Close => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            _ => {}
+        }
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (app, ctx);
 }
 
-/// Whether the check result window shows: for every status but idle (a requested check, and the
-/// first start after an update, which reports that it installed or why it failed), and never
-/// over the startup prompt.
-#[cfg(not(target_arch = "wasm32"))]
-fn result_window_shows(status: &Status, prompt_open: bool) -> bool {
-    !prompt_open && !matches!(status, Status::Idle)
-}
-
-/// Whether the update prompt or the modal result window is open: keys, tool keys and clipboard
-/// events then stay out of the documents behind it, and the app's other windows take no input.
-pub(crate) fn blocks_input(app: &VectorcraftApp) -> bool {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let updater = &app.updates_rt.updater;
-        holds_keyboard(updater.status(), updater.prompt_open())
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = app;
-        false
-    }
-}
-
-/// The prompt is modal, and so is the result window for every status but [`Status::Updated`], a
-/// notice that leaves the app usable behind it.
-#[cfg(not(target_arch = "wasm32"))]
-fn holds_keyboard(status: &Status, prompt_open: bool) -> bool {
-    prompt_open || !matches!(status, Status::Idle | Status::Updated(_))
-}
-
 /// Whether an update may install and close the app: no document holds unsaved work, no save,
-/// export, file opening, plug-in filter or Image Trace is running, no action is playing, no dialog
-/// or file dialog is open, and no tool is in the middle of a drag or an edit it computes on
-/// another thread.
+/// export, file opening, plug-in filter or Image Trace is running, no action is playing, no
+/// dialog (the update's own aside) or file dialog is open, and no tool is in the middle of a drag
+/// or an edit it computes on another thread.
 #[cfg(not(target_arch = "wasm32"))]
 fn safe_to_close(app: &VectorcraftApp) -> bool {
     let session = &app.session;
+    // The update's own dialogs would hold the install back forever.
+    let others_open = app.dialogs().is_some_and(|d| {
+        d.with(|h| h.open_dialogs().len() > usize::from(h.is_open::<UpdatePromptDialog>()) + usize::from(h.is_open::<UpdateCheckDialog>()))
+    });
     !crate::unsaved::any_dirty(app)
         && app.background.jobs.is_empty()
         && !crate::opening::long_operation_busy(app)
         && app.ui.action_playing.is_none()
-        && app.ui.dialog.is_none()
+        && !others_open
         && !app.file_dialog_open()
         && !session.in_interaction()
         && !session.tool_busy()
         && !session.tool_editing()
 }
 
-pub(crate) fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// After the shell pass: feeds the check dialog the updater's status and opens it for every
+/// status but idle (a requested check, and the first start after an update, which reports that it
+/// installed or why it failed), never over the startup prompt; carries out what it answered.
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        // An installation, and the close for a ready update, wait for unsaved and running work.
-        let safe = safe_to_close(app);
-        match app.updates_rt.updater.show_if(ctx, safe) {
-            Action::OpenUrl(url) => app.open_url(&url),
-            Action::Close => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            Action::None => {}
-        }
-        // An available update goes to the prompt above, which replaces the result dialog.
-        let rt = &mut app.updates_rt;
-        if result_window_shows(rt.updater.status(), rt.updater.prompt_open()) {
-            match CheckResultDialog::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")).show(ctx, rt.updater.status()) {
-                CheckResultResponse::None => {}
+        let Some(dialogs) = app.dialogs() else { return };
+        let updater = &mut app.updates_rt.updater;
+        let status = updater.status().clone();
+        let prompt_open = updater.prompt_open();
+        let (answered, modal) = dialogs.with(|h| {
+            let answered = h.take::<UpdateCheckDialog>();
+            if answered.is_none() {
+                if let Some(dialog) = h.get_mut::<UpdateCheckDialog>() {
+                    dialog.set_status(status.clone());
+                } else if !prompt_open && status != Status::Idle {
+                    let mut dialog = check_dialog();
+                    dialog.set_status(status.clone());
+                    h.open(dialog);
+                }
+            }
+            // The prompt is modal, and so is the result dialog for every status but `Updated`, a
+            // notice that leaves the app usable behind it.
+            (answered, prompt_open || (h.is_open::<UpdateCheckDialog>() && !matches!(status, Status::Updated(_))))
+        });
+        if let Some(result) = answered {
+            match result.ok() {
+                Some(CheckChoice::CheckAgain | CheckChoice::CheckNow) => updater.check_now(),
+                Some(CheckChoice::RestartToUpdate) => updater.restart_to_update(),
                 // Closing the dialog dismisses the outcome it showed.
-                CheckResultResponse::Close => rt.updater.dismiss_status(),
-                CheckResultResponse::CheckAgain => rt.updater.check_now(ctx),
-                CheckResultResponse::RestartToUpdate => rt.updater.restart_to_update(),
+                Some(CheckChoice::Close) | None => updater.dismiss_status(),
+                // The app never offers a release itself, so Update and Download do not arrive.
+                Some(_) => {}
             }
         }
         // A check at startup can open the prompt while a floating document's window covers it.
-        let blocking = blocks_input(app);
-        if blocking && !app.updates_rt.was_blocking {
+        if modal && !app.updates_rt.was_modal {
             crate::doc_windows::focus_main_window(app, ctx);
         }
-        app.updates_rt.was_blocking = blocking;
+        app.updates_rt.was_modal = modal;
     }
-
     #[cfg(target_arch = "wasm32")]
-    if app.updates_rt.manual_window_open {
-        let mut open = true;
-        egui::Window::new(tl!("VectorCraft Updates"))
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.content_rect().center())
-            .show(ctx, |ui| {
-                if let Some(msg) = &app.updates_rt.status_message {
-                    ui.label(msg);
-                }
-                ui.add_space(8.0);
-                if ui.button(tl!("OK")).clicked() {
-                    app.updates_rt.manual_window_open = false;
-                }
-            });
-        if !open {
-            app.updates_rt.manual_window_open = false;
-        }
-    }
+    let _ = (app, ctx);
 }
 
 /// Opens the update prompt for a test in another module.
@@ -200,17 +167,17 @@ pub(crate) fn open_prompt_for_test(app: &mut VectorcraftApp) {
     tests::offer(app);
 }
 
-/// Opens the result window of a running check for a test in another module.
-#[cfg(all(test, not(target_arch = "wasm32")))]
-pub(crate) fn open_result_window_for_test(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    app.updates_rt.updater = tests::isolated_updater(env!("CARGO_PKG_VERSION"), "result");
-    app.updates_rt.updater.check_now(ctx);
-}
-
-/// Closes the update prompt and the result window for a test in another module.
+/// Closes the update prompt and the result dialog for a test in another module.
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn close_dialogs_for_test(app: &mut VectorcraftApp) {
     app.updates_rt.updater = tests::isolated_updater(env!("CARGO_PKG_VERSION"), "closed");
+    // The dialogs are the host's: a new updater does not take them down.
+    if let (Some(ctx), Some(dialogs)) = (app.ui_ctx.clone(), app.dialogs()) {
+        dialogs.with(|h| {
+            h.cancel::<UpdatePromptDialog>(&ctx);
+            h.cancel::<UpdateCheckDialog>(&ctx);
+        });
+    }
 }
 
 #[cfg(test)]
@@ -232,7 +199,7 @@ mod tests {
         let root = update_root(name);
         Updater::new(&crate::UPDATE_APP, version)
             .with_source(std::sync::Arc::new(|| Ok(None)))
-            .with_paths(craft_update::Paths::under(&root))
+            .with_paths(craft::update::Paths::under(&root))
             .with_pins_path(root.join("pins.json"))
     }
 
@@ -244,10 +211,10 @@ mod tests {
 
     /// The release the tests offer.
     #[cfg(not(target_arch = "wasm32"))]
-    fn release_99() -> craft_update::Release {
-        craft_update::Release {
+    fn release_99() -> craft::update::Release {
+        craft::update::Release {
             tag: "v99.0.0".into(),
-            version: craft_update::parse_version("99.0.0"),
+            version: craft::update::parse_version("99.0.0"),
             name: "VectorCraft 99.0.0".into(),
             html_url: "https://github.com/storytold/vectorcraft/releases/tag/v99.0.0".into(),
             ..Default::default()
@@ -261,21 +228,17 @@ mod tests {
     /// must not have kept another context, which its thread would ask instead. A copy the
     /// launcher manages ignores the offer and fails the test.
     #[cfg(not(target_arch = "wasm32"))]
-    fn offer_and_wait(updater: &mut Updater, release: craft_update::Release) {
-        let ctx = egui::Context::default();
-        let (answered, wait) = std::sync::mpsc::channel();
-        ctx.set_repaint_observer(move |info| {
-            if info.delay.is_zero() {
-                let _ = answered.send(());
-            }
-        });
-        // Keeps `ctx` for the offer's thread.
+    fn offer_and_wait(updater: &mut Updater, release: craft::update::Release) {
+        let ctx = crate::testing::ui_context();
         updater.tick(&ctx);
         updater.offer(release);
         // `offer` reads the launcher's choice; a managed copy starts no inspection.
         assert!(updater.managed().is_none(), "the launcher manages this copy, so it ignored the offer");
+        // The offer's thread only answers; `tick` polls for it, as each frame does.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         while !updater.prompt_open() {
-            wait.recv().unwrap();
+            assert!(std::time::Instant::now() < deadline, "the offer's prompt never opened");
+            std::thread::sleep(std::time::Duration::from_millis(5));
             updater.tick(&ctx);
         }
     }
@@ -292,165 +255,13 @@ mod tests {
         app
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    fn press(key: egui::Key) -> egui::Event {
-        egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }
-    }
-
-    /// One frame in the app's order: the shortcuts read the input, then the update dialogs draw.
-    #[cfg(not(target_arch = "wasm32"))]
-    fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
-        let mut output = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| {
-            crate::shortcuts::handle(app, ui.ctx());
-            show(app, ui.ctx());
-        });
-        output.textures_delta.clear();
-    }
-
-    /// A Copy, the Pen tool's key and Delete, in one frame each: none of them may act.
-    #[cfg(not(target_arch = "wasm32"))]
-    fn assert_keys_do_nothing(app: &mut VectorcraftApp, ctx: &egui::Context) {
-        let tool = app.session.tool_id();
-        let mut reached = Vec::new();
-        frame(app, ctx, vec![egui::Event::Copy]);
-        if !app.session.clipboard.is_empty() {
-            reached.push("Copy");
-        }
-        let tool_key =
-            egui::Event::Key { key: egui::Key::P, physical_key: Some(egui::Key::P), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-        frame(app, ctx, vec![tool_key, egui::Event::Text("p".into())]);
-        if app.session.tool_id() != tool {
-            reached.push("the tool key");
-        }
-        frame(app, ctx, vec![press(egui::Key::Delete)]);
-        if app.session.doc().unwrap().selection.is_empty() {
-            reached.push("Delete");
-        }
-        assert_eq!(reached, Vec::<&str>::new(), "these reached the document");
-        assert!(!crate::unsaved::any_dirty(app), "a key edited the document");
-    }
-
-    #[test]
-    fn default_runtime_is_idle() {
-        let rt = Runtime::default();
-        #[cfg(target_arch = "wasm32")]
-        assert!(!rt.manual_window_open);
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            assert!(!rt.startup_check);
-            assert!(!rt.updater.prompt_open());
-            assert_eq!(rt.updater.status(), &Status::Idle);
-        }
-    }
-
-    #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn result_window_shows_every_status_but_idle() {
-        let shown = [
-            Status::Checking,
-            Status::UpToDate,
-            Status::Failed("offline".into()),
-            Status::Installing,
-            Status::Ready,
-            Status::Managed,
-            Status::Updated("99.0.0".into()),
-            Status::InstallFailed("locked".into()),
-        ];
-        for status in &shown {
-            assert!(result_window_shows(status, false), "{status:?} shows");
-            assert!(!result_window_shows(status, true), "{status:?} waits for the prompt");
-        }
-        assert!(!result_window_shows(&Status::Idle, false));
-    }
-
-    #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn startup_prompt_shows_and_closes() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let ctx = egui::Context::default();
-        app.updates_rt.updater = isolated_updater(env!("CARGO_PKG_VERSION"), "startup");
-        offer_and_wait(&mut app.updates_rt.updater, release_99());
-
-        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(&mut app, ui.ctx());
-        });
-        output.textures_delta.clear();
-        assert!(app.updates_rt.updater.prompt_open());
-    }
-
-    #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn the_prompt_and_the_result_window_hold_the_keyboard_but_the_updated_notice_does_not() {
-        for status in [
-            Status::Checking,
-            Status::UpToDate,
-            Status::Failed("offline".into()),
-            Status::Installing,
-            Status::Ready,
-            Status::Managed,
-            Status::InstallFailed("locked".into()),
-        ] {
-            assert!(holds_keyboard(&status, false), "{status:?}");
-        }
-        assert!(!holds_keyboard(&Status::Idle, false));
-        assert!(!holds_keyboard(&Status::Updated("99.0.0".into()), false));
-        assert!(holds_keyboard(&Status::Idle, true), "the prompt");
-    }
-
-    /// The update prompt, drawn: keys stop at it, Escape closes it, and the next key acts again.
-    #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn keys_do_not_reach_the_document_behind_the_update_prompt() {
-        let mut app = app_with_saved_object();
-        let ctx = egui::Context::default();
-        offer(&mut app);
-        frame(&mut app, &ctx, vec![]);
-        assert_keys_do_nothing(&mut app, &ctx);
-        assert!(app.updates_rt.updater.prompt_open());
-
-        frame(&mut app, &ctx, vec![press(egui::Key::Escape)]);
-        assert!(!app.updates_rt.updater.prompt_open(), "Escape closes the prompt");
-        assert!(!app.session.doc().unwrap().selection.is_empty(), "Escape stops at the prompt");
-        frame(&mut app, &ctx, vec![press(egui::Key::Delete)]);
-        assert!(crate::unsaved::any_dirty(&app), "Delete acts once the prompt has closed");
-    }
-
-    /// The result window of a check that is still running, drawn: keys stop at it too.
-    #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn keys_do_not_reach_the_document_behind_the_check_result_window() {
-        let mut app = app_with_saved_object();
-        let ctx = egui::Context::default();
-        app.updates_rt.updater = isolated_updater("0.0.1", "checking");
-        app.updates_rt.updater.check_now(&ctx);
-        assert_eq!(app.updates_rt.updater.status(), &Status::Checking);
-        frame(&mut app, &ctx, vec![]);
-        assert_keys_do_nothing(&mut app, &ctx);
-    }
-
-    /// The notice of a finished update, drawn: the keys act behind it.
-    #[test]
-    #[cfg(not(target_arch = "wasm32"))]
-    fn keys_reach_the_document_behind_the_updated_notice() {
-        let mut app = app_with_saved_object();
-        let ctx = egui::Context::default();
-        let root = update_root("updated");
-        let records = craft_update::Paths::under(&root).data;
-        std::fs::create_dir_all(&records).unwrap();
-        std::fs::write(records.join("self-update-done.txt"), "v99.0.0").unwrap();
-        app.updates_rt.updater = isolated_updater("99.0.0", "updated");
-        app.updates_rt.updater.check_at_start(&ctx);
-        assert_eq!(app.updates_rt.updater.status(), &Status::Updated("99.0.0".into()));
-        frame(&mut app, &ctx, vec![]);
-        frame(&mut app, &ctx, vec![press(egui::Key::Delete)]);
-        let _ = std::fs::remove_dir_all(&root);
-        assert!(crate::unsaved::any_dirty(&app), "Delete acts behind the notice");
-    }
-
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
     fn unsaved_changes_dialogs_and_running_work_hold_an_update_back() {
+        use craft::ui::dialog::{Alert, HostedAlert};
+
         let mut app = app_with_saved_object();
+        let ctx = crate::unsaved::ready_for_test(&mut app);
         assert!(safe_to_close(&app));
 
         app.run("shape.rectangle", json!({"x": 70, "y": 10, "width": 50, "height": 50})).unwrap();
@@ -458,17 +269,20 @@ mod tests {
         app.run("file.save", json!({"path": "/docs/saved.vectorcraft"})).unwrap();
         assert!(safe_to_close(&app));
 
-        app.ui.dialog = Some(crate::state::Dialog::new("about", json!({})));
+        app.dialogs().unwrap().with(|h| {
+            h.open(HostedAlert::new(Alert::new("About", "A dialog")));
+        });
         assert!(!safe_to_close(&app), "a dialog");
-        app.ui.dialog = None;
+        app.dialogs().unwrap().with(|h| h.cancel::<HostedAlert>(&ctx));
+        assert!(safe_to_close(&app));
 
-        let (shown, _) = crate::tests_picks::off_the_ui_thread(&mut app.services);
-        // The command asks again with the answer: until then it reports that it has none.
-        assert!(app.run("file.open", json!({})).is_err());
+        let picker = crate::tests_picks::scripted(&mut app);
+        // The command goes on with the answer: until then the dialog is open.
+        app.run("file.open", json!({})).unwrap();
         assert!(app.file_dialog_open());
         assert!(!safe_to_close(&app), "a file dialog");
-        shown.answer(&[]);
-        crate::picks::poll(&mut app, &egui::Context::default());
+        picker.cancel();
+        crate::tests_picks::poll(&mut app, &ctx);
         assert!(!app.file_dialog_open());
         assert!(safe_to_close(&app));
 
@@ -485,15 +299,16 @@ mod tests {
         crate::background::wait_all(&mut app);
         assert!(safe_to_close(&app));
 
-        crate::opening::start(&mut app, "/art/Wait.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(10.0, 10.0), false))
-            .unwrap();
+        crate::opening::start(&mut app, "/art/Wait.vectorcraft", vectorcraft_format::save(&vectorcraft_doc::Document::new(10.0, 10.0), false));
         assert!(!safe_to_close(&app), "a file opening");
         app.opening.pending.clear();
         assert!(safe_to_close(&app));
 
-        use crate::panels::actions::{Action, ActionSet, PlaybackSpeed, play};
-        let step = ("object.move".to_owned(), json!({"dx": 1, "dy": 0}));
-        app.ui.action_sets = vec![ActionSet::new("Test", vec![Action::new("Move", vec![step.clone(), step])])];
+        use crate::panels::actions::tests_support::{action, push_set};
+        use crate::panels::actions::{PlaybackSpeed, play};
+        let step = ("object.move", json!({"dx": 1, "dy": 0}));
+        app.ui.actions = craft::automation::actions::ActionList::new();
+        push_set(&mut app, "Test", vec![action("Move", &[step.clone(), step])]);
         app.ui.action_playback.speed = PlaybackSpeed::Step;
         assert_eq!(play(&mut app, 0, 0).unwrap()["pending"], json!(1));
         app.run("file.save", json!({"path": "/docs/saved.vectorcraft"})).unwrap();

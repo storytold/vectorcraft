@@ -166,6 +166,7 @@
 	Anti-alias Rasters	點陣影像消除鋸齒
 	Anti-aliased Artwork	消除鋸齒的圖稿
 	Anti-aliasing Method	消除鋸齒方法
+@id	language.name	繁體中文
 antiAlias	Sharp	銳利
 	Crisp	清晰
 	Strong	強
@@ -6574,6 +6575,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	群組填色或筆畫上的 3D 效果不會繪製任何內容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 物件的網格不完整，或含有非數字的值
 @msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，也就是濾鏡的名稱
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 濾鏡的 id 最多 {MAX_NAME} 個字元
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 濾鏡的元素
@@ -6977,11 +6979,17 @@ axis	Y Axis	Y 軸
 @msg	module is {_1} bytes (limit {_2})	模組為 {_1} 位元組（上限 {_2}）
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要核准：它要求 {0}，使用者單獨安裝它時授予這些權限
 @msg	not JSON: {e}	不是 JSON：{e}
-@msg	not a WebAssembly binary (missing \0asm header)	不是 WebAssembly 二進位檔（沒有 \0asm 標頭）
+@msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二進位檔（沒有 \\0asm 標頭）
 @msg	parameter `{k}`: {what}	參數 `{k}`：{what}
 @msg	parameter `{name}`: {what}	參數 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效模組參數必須是 JSON 物件
 @msg	the module must export its linear memory as `memory`	模組必須將其線性記憶體匯出為 `memory`
+@msg	the module must export `{name}` with the type {signature}	模組必須以類型 {signature} 匯出 `{name}`
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	模組有多個 `{MANIFEST_SECTION}` 自訂區段
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	記憶體預算（模組的初始記憶體為 {initial} 位元組，上限 {max_memory_bytes}）
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` 自訂區段中的資訊清單必須將 `abi` 設為 {ABI_VERSION}，即此主機實作的 ABI 版本
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	表格預算（模組定義了 {count} 個表格，最大的有 {largest} 個元素；上限為 {MAX_TABLES} 個表格，每個 {MAX_TABLE_ELEMENTS} 個元素）
+@msg	the module's table section could not be read	無法讀取模組的表格區段
 @msg	the objects to change are no longer in the document	要變更的物件已不在文件中
 @msg	the runtime panicked	執行階段當機
 @msg	unexpected host trap	主機發生非預期的 trap
@@ -7051,6 +7059,8 @@ axis	Y Axis	Y 軸
 @msg	`plates` requires a stop linked to a spot swatch	`plates` 需要連結到特別色色票的漸層色標
 @msg	the output	輸出
 @msg	the path has no anchor points	路徑沒有錨點
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	複合路徑 {id} 有隱藏、鎖定或參考線成員，因此無法取代其成員
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	複合路徑 {id} 有不是路徑的成員，因此無法取代其成員
 @msg	too many anchor points (limit {MAX_ANCHORS})	錨點過多（上限 {MAX_ANCHORS}）
 @msg	true or false	true 或 false
 @msg	a number >= {_1}	大於或等於 {_1} 的數字
@@ -8617,7 +8627,7 @@ breakText	Glyphs	字符
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	無法讀取 {name} 描述檔，因此新文件使用預設設定：{reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	補漏白：有超過 {_1} 對物件近到需要補漏白，或有太多物件位於相同的水平範圍；請一次對較少的物件補漏白
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	除廢框與除廢線：圖稿外側放不下任何除廢線，而且除廢框已關閉
-@msg	\ at end of pattern	\ 出現在模式結尾
+@msg	\\ at end of pattern	\\ 出現在模式結尾
 @msg	`alignOn` cannot be empty	`alignOn` 不能為空
 @msg	`alignOn` must be a string	`alignOn` 必須是字串
 @msg	`align` must be a string	`align` 必須是字串
@@ -8718,7 +8728,7 @@ breakText	Glyphs	字符
 @msg	`{u}` is no Unicode character	`{u}` 不是 Unicode 字元
 @msg	`{word}` isn't in the custom dictionary	`{word}` 不在自訂字典中
 @msg	a CMap has too many mappings	CMap 的對應過多
-@msg	a \u escape needs four hexadecimal digits	\u 逸出序列需要四個十六進位數字
+@msg	a \\u escape needs four hexadecimal digits	\\u 逸出序列需要四個十六進位數字
 @msg	a comma in an XPath expression must separate function arguments	XPath 運算式中的逗號必須用來分隔函式引數
 @msg	a document holds at most {_1} SVG filters	一份文件最多包含 {_1} 個 SVG 濾鏡
 @msg	a document with unsaved changes has no recovery copy	有未儲存變更的文件沒有復原副本
@@ -9083,6 +9093,8 @@ breakText	Glyphs	字符
 @msg	`dataBase64` is larger than the module limit	`dataBase64` 大於模組上限
 @msg	`dataBase64` is not valid base64	`dataBase64` 不是有效的 base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` 不能與 `ids`、`reverse` 或 `append` 一起使用
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` 不能與 `ids`、`id` 或 `item` 一起使用
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` 不能與 `brush` 一起使用
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` 和 `childLimit` 用於裁切摘要：請傳入 `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` 是設計名稱，或以 null 表示一般直條
 @msg	`design` is a design name, or null for the default marker	`design` 是設計名稱，或以 null 表示預設標記
@@ -9871,7 +9883,7 @@ breakText	Glyphs	字符
 @msg	not a print presets file: {e}	不是列印預設集檔案：{e}
 @msg	not a stored or deflated central record	不是以儲存或 deflate 方式寫入的中央目錄記錄
 @msg	not a valid SVGZ file: {e}	不是有效的 SVGZ 檔案：{e}
-@msg	not an RTF file: it doesn't start with {\rtf	不是 RTF 檔案：開頭不是 {\rtf
+@msg	not an RTF file: it doesn't start with {\\rtf	不是 RTF 檔案：開頭不是 {\\rtf
 @msg	not an image VectorCraft reads (see document.formats)	不是 VectorCraft 可讀取的影像 (請參閱 document.formats)
 @msg	not area type (text in a frame) outside perspective	不是透視以外的區域文字 (文字框中的文字)
 @msg	not editing an opacity mask	目前不在編輯不透明度遮色片
