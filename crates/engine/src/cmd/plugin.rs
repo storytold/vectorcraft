@@ -701,6 +701,9 @@ thread_local! {
     pub(crate) static BEFORE_GRANT_STORED: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
     /// Tests: runs once on this thread when [`hold_plugin_changes`] finds the lock held and waits.
     pub(crate) static WHILE_WAITING: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+    /// Tests: runs once in the next `plugin.reload` on this thread after its load started and before
+    /// it installs, as another session loading a folder in between would.
+    pub(crate) static BEFORE_RELOAD_INSTALLS: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Held by `plugin.install` from its first read of the grant until the store holds what it
@@ -990,14 +993,17 @@ fn load_path(_: &str) -> Result<(Plugin, Vec<u8>)> {
 }
 
 /// The plug-in folder last loaded, the plug-in store whose grants it was loaded with, what
-/// happened, and the load whose report it is ([`FOLDER_LOADS`]; 0: a `plugin.reload`).
-type FolderRecord = (String, Option<std::path::PathBuf>, Value, u64);
+/// happened, the load whose report it is ([`FOLDER_LOADS`]), and whether a file failed because no
+/// loader thread was left to load it ([`vectorcraft_plugins::loader::NO_THREAD`]), so that the next
+/// [`sync_prefs`] loads the folder again.
+type FolderRecord = (String, Option<std::path::PathBuf>, Value, u64, bool);
 
 /// The [`FolderRecord`] of the plug-in folder last loaded.
 static FOLDER: Mutex<Option<FolderRecord>> = Mutex::new(None);
 
-/// The number of the last folder load [`sync_prefs`] started, which it keeps in [`FOLDER`] while
-/// that load runs, so only that load replaces or clears the record.
+/// The number of the last folder load [`sync_prefs`] or `plugin.reload` started. [`sync_prefs`]
+/// keeps it in [`FOLDER`] while its load runs, so only that load replaces or clears the record, and
+/// a `plugin.reload` keeps its report only when no load started after it.
 static FOLDER_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Loads the Additional Plug-ins Folder preference (`*.wasm`) when it is set and it, or the
@@ -1024,11 +1030,12 @@ pub(crate) fn sync_prefs(s: &mut Session) {
         let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
         // A folder another session is still loading is loaded here too: that load may end with its
         // session, and this one returns once its own plug-ins are installed.
-        if last.as_ref().is_some_and(|(f, store, r, _)| *f == folder && *store == s.plugin_dir && r["loading"] != true) {
+        // A load in which a file found no thread to load it is tried again.
+        if last.as_ref().is_some_and(|(f, store, r, _, retry)| *f == folder && *store == s.plugin_dir && r["loading"] != true && !retry) {
             return;
         }
         let token = FOLDER_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-        *last = Some((folder.clone(), s.plugin_dir.clone(), json!({"folder": folder, "loading": true}), token));
+        *last = Some((folder.clone(), s.plugin_dir.clone(), json!({"folder": folder, "loading": true}), token, false));
         token
     };
     let load = start_folder(s, &folder, Some(token));
@@ -1039,7 +1046,7 @@ pub(crate) fn sync_prefs(s: &mut Session) {
 /// loaded, it is forgotten, so setting the preference to it again loads it again.
 pub(crate) fn forget_prefs_folder(old: &str) {
     let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
-    if last.as_ref().is_some_and(|(f, _, _, _)| f == old.trim()) {
+    if last.as_ref().is_some_and(|(f, _, _, _, _)| f == old.trim()) {
         *last = None;
     }
 }
@@ -1074,6 +1081,9 @@ pub(crate) struct FolderPending {
     /// The load's number in [`FOLDER`] when [`end_folder`] keeps its report as the folder last
     /// loaded ([`sync_prefs`]).
     record: Option<u64>,
+    /// A `plugin.reload`'s load: [`end_folder`] keeps its report as the folder last loaded unless a
+    /// load started after it.
+    reload: bool,
     /// The modules loading, or the report of a folder that can't be loaded; `None` once ended.
     load: Option<std::result::Result<FolderModules, Value>>,
     /// Whether the modules not installed yet were dropped ([`FolderPending::cancel`]).
@@ -1164,7 +1174,7 @@ impl Drop for FolderPending {
     fn drop(&mut self) {
         if let Some(token) = self.record.filter(|_| self.load.is_some()) {
             let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
-            if last.as_ref().is_some_and(|(_, _, _, t)| *t == token) {
+            if last.as_ref().is_some_and(|(_, _, _, t, _)| *t == token) {
                 *last = None;
             }
         }
@@ -1175,7 +1185,8 @@ impl Drop for FolderPending {
 /// the load's number in [`FOLDER`], whose record [`end_folder`] replaces with the report.
 #[cfg(not(target_arch = "wasm32"))]
 fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending {
-    let pending = |load| FolderPending { folder: folder.to_string(), store: s.plugin_dir.clone(), record, load: Some(load), canceled: false };
+    let pending =
+        |load| FolderPending { folder: folder.to_string(), store: s.plugin_dir.clone(), record, reload: false, load: Some(load), canceled: false };
     if let Err(e) = crate::file_access::check_read(folder) {
         return pending(Err(json!({"folder": folder, "error": e})));
     }
@@ -1198,7 +1209,7 @@ fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending
 #[cfg(target_arch = "wasm32")]
 fn start_folder(s: &Session, folder: &str, record: Option<u64>) -> FolderPending {
     let load = Err(json!({"folder": folder, "error": "plug-in folders are not available on the web"}));
-    FolderPending { folder: folder.to_string(), store: s.plugin_dir.clone(), record, load: Some(load), canceled: false }
+    FolderPending { folder: folder.to_string(), store: s.plugin_dir.clone(), record, reload: false, load: Some(load), canceled: false }
 }
 
 /// Installs what `load` has loaded so far, in file-name order up to the first module still
@@ -1228,35 +1239,59 @@ pub(crate) fn install_folder(s: &mut Session, load: &mut FolderPending, turn: &S
 /// the grants of ids whose module lists no permissions are forgotten while no `plugin.install` can
 /// record one for another module → its report; saves the disabled list when loading changed it.
 pub(crate) fn end_folder(s: &mut Session, mut load: FolderPending, turn: &StoreTurn) -> Value {
-    let report = match load.load.take() {
+    let (report, retry) = match load.load.take() {
         #[cfg(not(target_arch = "wasm32"))]
         Some(Ok(modules)) => {
             let r = modules.finish();
             if r.disabled_changed {
                 s.store_disabled_plugins_in(turn);
             }
-            json!({"folder": load.folder, "loaded": r.loaded, "failed": r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>(), "leftOut": r.left_out})
+            let failed = r.failed.iter().map(|(f, e)| json!({"file": f, "error": e})).collect::<Vec<_>>();
+            (json!({"folder": load.folder, "loaded": r.loaded, "failed": failed, "leftOut": r.left_out}), r.no_thread)
         }
         #[cfg(target_arch = "wasm32")]
         Some(Ok(never)) => match never {},
-        Some(Err(report)) => report,
-        None => Value::Null,
+        Some(Err(report)) => (report, false),
+        None => (Value::Null, false),
     };
     if let Some(token) = load.record {
         let mut last = FOLDER.lock().unwrap_or_else(|e| e.into_inner());
         // A later load, or a `plugin.reload`, replaced it meanwhile. A canceled load leaves no
-        // folder reported, so the next session that applies the preference loads it.
-        if last.as_ref().is_some_and(|(_, _, _, t)| *t == token) {
-            *last = if load.canceled { None } else { Some((load.folder.clone(), load.store.clone(), report.clone(), token)) };
+        // folder reported, so the next session that applies the preference loads it. A
+        // `plugin.reload`'s report replaces the record unless a load started after it, or the
+        // folder couldn't be loaded.
+        let current = if load.reload {
+            FOLDER_LOADS.load(std::sync::atomic::Ordering::Relaxed) == token && report.get("error").is_none()
+        } else {
+            last.as_ref().is_some_and(|(_, _, _, t, _)| *t == token)
+        };
+        if current {
+            *last = if load.canceled { None } else { Some((load.folder.clone(), load.store.clone(), report.clone(), token, retry)) };
         }
     }
     report
 }
 
-/// Loads the plug-ins in `folder` and installs them, waiting for every module → the report.
+/// Loads the plug-ins in `folder` and installs them, waiting for every module → the report, which is
+/// kept as the folder last loaded unless a load started after this one.
 fn load_folder_now(s: &mut Session, folder: &str) -> Value {
-    let load = start_folder(s, folder, None);
+    let token = FOLDER_LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let mut load = start_folder(s, folder, Some(token));
+    load.reload = true;
+    #[cfg(test)]
+    if let Some(between) = BEFORE_RELOAD_INSTALLS.take() {
+        between();
+    }
     s.finish_plugin_load(PluginLoad::Folder(load))
+}
+
+/// Tests: the next [`sync_prefs`] treats the folder last loaded as one in which a file found no
+/// loader thread to load it.
+#[cfg(test)]
+pub(crate) fn folder_found_no_thread() {
+    if let Some(record) = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        record.4 = true;
+    }
 }
 
 fn reload(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1274,7 +1309,6 @@ fn reload(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(e) = report.get("error").and_then(Value::as_str) {
         return Err(EngineError::Other(e.to_string()));
     }
-    *FOLDER.lock().unwrap_or_else(|e| e.into_inner()) = Some((folder, s.plugin_dir.clone(), report.clone(), 0));
     Ok(report)
 }
 
@@ -1323,7 +1357,7 @@ fn shown_report(mut report: Value) -> Value {
 }
 
 fn list(_: &mut Session, _: &Value) -> Result<Value> {
-    let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r, _)| shown_report(r.clone()));
+    let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r, _, _)| shown_report(r.clone()));
     let disabled: Vec<Value> = safe_mode::disabled().iter().map(shown_item).collect();
     Ok(
         json!({"plugins": registry::list().iter().map(|p| describe_installed(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),

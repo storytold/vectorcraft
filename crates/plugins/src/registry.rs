@@ -68,7 +68,7 @@ pub fn approved(plugin: &Plugin) -> bool {
 /// Installs `plugin`, replacing one with the same id, when it is [`approved`]: a module that lists
 /// permissions no recorded grant gives this very module is refused ([`Error::NeedsApproval`]), and
 /// the plug-in installed under its id, the grants and the revision stay as they were.
-pub fn install(mut plugin: Plugin) -> Result<Arc<Plugin>> {
+pub fn install(plugin: Plugin) -> Result<Arc<Plugin>> {
     // The revision moves while the write lock is held, so a cache that reads the new revision and
     // then the plug-ins finds the new plug-in among them. The approval is checked while it is held
     // too.
@@ -76,11 +76,53 @@ pub fn install(mut plugin: Plugin) -> Result<Arc<Plugin>> {
     if !approved(&plugin) {
         return Err(Error::NeedsApproval(crate::permissions::names(&plugin.manifest().permissions()).join(", ")));
     }
+    Ok(insert(&mut plugins, plugin))
+}
+
+/// Installs `plugin` in `plugins`, which the plug-ins' write lock holds, with the next revision.
+fn insert(plugins: &mut BTreeMap<String, Arc<Plugin>>, mut plugin: Plugin) -> Arc<Plugin> {
     plugin.set_serial(REVISION.fetch_add(1, Ordering::Relaxed) + 1);
     note_change(plugin.id(), plugin.serial());
     let p = Arc::new(plugin);
     plugins.insert(p.id().to_string(), p.clone());
-    Ok(p)
+    p
+}
+
+/// [`install`] for a load that installs plug-ins one by one, recording `grant` first when it is
+/// given: while the plug-ins' write lock is held, a plug-in whose id was installed or removed
+/// elsewhere since the load started ([`LoadChanges::superseded`]) is not installed (`Ok(None)`), and
+/// neither the plug-ins nor the grants change. A grant that doesn't give this very module every
+/// permission it lists is refused ([`Error::NeedsApproval`]) and not recorded. Otherwise `attach`
+/// runs, then the grant is recorded and the plug-in installed. `attach` runs while the plug-ins are
+/// held, so it may call [`set_storage`] but no function that reads or changes the plug-ins or grants.
+pub fn install_for_load(plugin: Plugin, changes: &LoadChanges, grant: Option<GrantToken>, attach: impl FnOnce()) -> Result<Option<Arc<Plugin>>> {
+    let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
+    if changes.superseded(plugin.id()) {
+        return Ok(None);
+    }
+    let m = plugin.manifest();
+    let approved = match &grant {
+        Some(token) => !m.asks_permissions() || token.grant().covers(&m.id, plugin.hash(), &m.permissions()),
+        None => approved(&plugin),
+    };
+    if !approved {
+        return Err(Error::NeedsApproval(crate::permissions::names(&m.permissions()).join(", ")));
+    }
+    attach();
+    if let Some(token) = grant {
+        let g = token.grant().clone();
+        GRANTS.write().unwrap_or_else(|e| e.into_inner()).insert(g.id.clone(), g);
+    }
+    Ok(Some(insert(&mut plugins, plugin)))
+}
+
+/// Forgets the grant for `id` when the plug-in installed under it is the one that took the revision
+/// `serial` ([`Plugin::serial`]), checked while the plug-ins are held, so a plug-in installed in its
+/// place meanwhile keeps the grant recorded for it → whether a grant was forgotten.
+pub fn revoke_if_installed(id: &str, serial: u64) -> bool {
+    // The same order as `install`, which reads the grants while it holds the plug-ins.
+    let plugins = PLUGINS.read().unwrap_or_else(|e| e.into_inner());
+    plugins.get(id).is_some_and(|p| p.serial() == serial) && GRANTS.write().unwrap_or_else(|e| e.into_inner()).remove(id).is_some()
 }
 
 /// The [`revision`] of each id's last install or removal ([`changed_since`]).
@@ -326,6 +368,9 @@ pub struct FolderReport {
     /// found in a file, which is now disabled too ([`crate::safe_mode::disable_file_of`]). The app
     /// saves the list again.
     pub disabled_changed: bool,
+    /// A file failed because no loader thread was left to load it ([`crate::loader::NO_THREAD`]):
+    /// loading the folder again may load it.
+    pub no_thread: bool,
 }
 
 /// Installs every `*.wasm` directly in `dir` (not recursive), in file-name order, up to the first
@@ -543,17 +588,21 @@ impl FolderLoad {
                     let asked = crate::permissions::names(&p.manifest().permissions()).join(", ");
                     report.failed.push((name, Error::NeedsApproval(asked).to_string()));
                 }
-                // `approve` only narrows what installs: `install` still refuses a module that no
-                // recorded grant covers.
-                Ok(p) => match install(p) {
-                    Ok(p) => {
+                // `approve` only narrows what installs: `install_for_load` still refuses a module that
+                // no recorded grant covers, and one whose id changed elsewhere since the check above.
+                Ok(p) => match install_for_load(p, &self.changes, None, || {}) {
+                    Ok(Some(p)) => {
                         self.changes.installed(&p);
                         report.loaded.push(p.id().to_string());
                         installed.push(p.id().to_string());
                     }
+                    Ok(None) => report.failed.push((name, SUPERSEDED.into())),
                     Err(e) => report.failed.push((name, e.to_string())),
                 },
-                Err(e) => report.failed.push((name, e.to_string())),
+                Err(e) => {
+                    report.no_thread |= matches!(&e, Error::Failed(m) if m == crate::loader::NO_THREAD);
+                    report.failed.push((name, e.to_string()));
+                }
             }
         }
         installed
@@ -587,8 +636,12 @@ impl FolderLoad {
     pub fn finish(self) -> FolderReport {
         let FolderLoad { report, changes, .. } = self;
         for id in &report.loaded {
-            if get(id).is_some_and(|p| changes.own.get(id) == Some(&p.serial()) && !p.manifest().asks_permissions()) {
-                revoke(id);
+            // The serial is checked again while the grant is removed, so a module installed in its
+            // place meanwhile keeps its grant.
+            if let Some(&serial) = changes.own.get(id)
+                && get(id).is_some_and(|p| p.serial() == serial && !p.manifest().asks_permissions())
+            {
+                revoke_if_installed(id, serial);
             }
         }
         report
@@ -936,9 +989,12 @@ mod tests {
             let item = crate::safe_mode::Item::file(p.display().to_string());
             seen.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|s| s == p) && !crate::safe_mode::still_loading().iter().any(|i| i.same(&item))
         };
-        while !(seen.lock().unwrap_or_else(|e| e.into_inner()).contains(&first) && finished(&all[1]) && finished(&all[2])) {
+        // Looked at a bounded number of times, and given up when the load ends first.
+        let reached = (0..10_000_000).any(|_| {
             std::thread::yield_now();
-        }
+            loading.is_finished() || (seen.lock().unwrap_or_else(|e| e.into_inner()).contains(&first) && finished(&all[1]) && finished(&all[2]))
+        });
+        assert!(reached && !loading.is_finished(), "the load ended, or the other files didn't load, while the first one waited");
         assert!(ids.iter().all(|id| get(id).is_none()), "nothing installs before the first file has loaded");
         go.send(()).unwrap();
         let r = loading.join().unwrap();
@@ -1074,5 +1130,77 @@ mod tests {
         for id in [ids[0], ids[2]] {
             assert!(remove(id));
         }
+    }
+
+    /// A folder module isn't installed over a plug-in installed elsewhere with its id while the load
+    /// asked whether it may install: that plug-in stays, and the module is reported as skipped.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_folder_module_doesnt_replace_one_installed_while_it_was_approved() {
+        use crate::permissions::Permission::DocRead;
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("approving");
+        let id = "test.registry.approving";
+        let asking = module(id, Some(r#"["doc.read"]"#), 17);
+        std::fs::write(dir.join("a.wasm"), &asking).unwrap();
+        grant(GrantToken::after_engine_approval(grant_for(id, &asking, vec![DocRead])));
+        let theirs = std::cell::Cell::new(None);
+        let r = load_folder_where(
+            &dir,
+            |_| Ok(()),
+            |_| {
+                theirs.set(Some(install_bytes(&module(id, None, 18)).unwrap().serial()));
+                true
+            },
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+        let now = get(id).map(|p| p.serial());
+        assert!(remove(id));
+        revoke(id);
+        let r = r.unwrap();
+        assert_eq!(now, theirs.get(), "the plug-in installed meanwhile was replaced: {r:?}");
+        assert!(r.loaded.is_empty() && r.failed.len() == 1 && r.failed[0].1 == SUPERSEDED, "{r:?}");
+    }
+
+    /// A grant is forgotten only while the plug-in that took the given revision is installed under
+    /// its id: a plug-in installed in its place keeps the grant recorded for it.
+    #[test]
+    fn a_grant_is_revoked_only_for_the_plugin_still_installed() {
+        use crate::permissions::Permission::DocRead;
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let id = "test.registry.revokeinstalled";
+        let first = install_bytes(&module(id, None, 19)).unwrap().serial();
+        let asking = module(id, Some(r#"["doc.read"]"#), 20);
+        grant(GrantToken::after_engine_approval(grant_for(id, &asking, vec![DocRead])));
+        let second = install_bytes(&asking).unwrap().serial();
+        assert!(!revoke_if_installed(id, first), "the grant of the plug-in installed in its place was forgotten");
+        assert!(granted(id).is_some());
+        assert!(revoke_if_installed(id, second));
+        assert!(granted(id).is_none() && remove(id));
+    }
+
+    /// A folder file that no loader thread was left to load fails with that reason, and the report
+    /// says a file found no thread ([`FolderReport::no_thread`]).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_folder_file_no_thread_was_left_to_load_is_reported() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        let dir = test_dir("nothread");
+        let id = "test.registry.nothread";
+        std::fs::write(dir.join("a.wasm"), module(id, None, 16)).unwrap();
+        let mut load = FolderLoad::list_on(&dir, |_| Ok(()), Some(1)).unwrap();
+        load.loads.refuse_threads = true;
+        load.start();
+        while !load.done() {
+            load.wait();
+            load.install_ready(|_| false);
+        }
+        let r = load.finish();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(get(id).is_none(), "{r:?}");
+        assert_eq!(r.failed.len(), 1, "{r:?}");
+        assert!(r.no_thread && r.failed[0].1.contains(crate::loader::NO_THREAD), "{r:?}");
     }
 }

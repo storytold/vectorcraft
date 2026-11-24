@@ -538,6 +538,9 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
     vectorcraft_engine::file_access::check_read(path)?;
     // A plug-in still loading may be the importer that reads the file, or what installs it.
     app.session.finish_plugin_loads();
+    // The path is checked again after the wait, so a link replaced while the plug-ins loaded
+    // doesn't lead the read outside the folders.
+    vectorcraft_engine::file_access::check_read(path)?;
     // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
     // is already open, or still being read, instead of opening a second copy. While a dialog or
     // a drag acts on the active document, its tab comes to the front once that ends

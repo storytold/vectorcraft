@@ -324,8 +324,6 @@ pub(crate) struct StoredLoad {
     /// What is left of [`MAX_PLUGIN_STORE`]: the listed length of each file in `files` is taken
     /// from it, and what a failed read didn't read of it is given back.
     left: u64,
-    /// When the store was listed.
-    listed: SystemTime,
 }
 
 /// What a stored plug-in's load read of its file, at most its listed length, and the module.
@@ -349,6 +347,22 @@ fn before_stored_load(path: &Path) {
         hook(path);
     }
 }
+
+/// Tests: runs on the worker thread once the stored module at the path it is given has loaded, and
+/// before its file is read again to check that it still holds the module.
+#[cfg(test)]
+pub(crate) static AFTER_STORED_LOAD: Mutex<Option<StoredHook>> = Mutex::new(None);
+
+#[cfg(test)]
+fn after_stored_load(path: &Path) {
+    let hook = AFTER_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Some(hook) = hook {
+        hook(path);
+    }
+}
+
+/// Why a stored plug-in whose file changed between its listing and its install is skipped.
+const CHANGED_WHILE_LOADING: &str = "it changed or went away while it loaded";
 
 #[cfg(test)]
 thread_local! {
@@ -415,6 +429,18 @@ fn list_stored_plugins(rest: &mut VecDeque<StoredFile>, left: &mut u64) -> (Vec<
                 Ok(_) if bytes.len() as u64 > len => Err(vectorcraft_plugins::Error::Io(too_large(len))),
                 Ok(_) => vectorcraft_plugins::Plugin::load(&bytes, limits),
             };
+            #[cfg(test)]
+            after_stored_load(&read);
+            // A file replaced while its module loaded, by one that kept its length and modified time,
+            // is told apart by its content: it is read again here, within the load's deadline. The
+            // install then skips a file whose stamp changed since.
+            let plugin = plugin.and_then(|p| {
+                if std::fs::File::open(&read).is_ok_and(|f| holds(f, &bytes)) {
+                    Ok(p)
+                } else {
+                    Err(vectorcraft_plugins::Error::Io(CHANGED_WHILE_LOADING.into()))
+                }
+            });
             // A read that failed part way read what `bytes` holds.
             Ok(StoredRead { read: (bytes.len() as u64).min(len), plugin })
         }));
@@ -753,9 +779,6 @@ impl Session {
                 rest.push_back((path, Some(Some(stamp))));
             }
         }
-        // The clock is read only when a file was listed: the web build has no wall clock, and no
-        // file to list.
-        let listed = if rest.is_empty() { SystemTime::UNIX_EPOCH } else { SystemTime::now() };
         let mut left = plugin_store_budget();
         let (files, jobs) = list_stored_plugins(&mut rest, &mut left);
         // A change made after the listing, while `held` no longer stops one, is made elsewhere.
@@ -763,18 +786,8 @@ impl Session {
         changes.start();
         // The modules load after the turn, once the loads queued before them are done.
         drop((turn, held));
-        let load = StoredLoad {
-            dir,
-            files,
-            loads: Loads::deferred(jobs),
-            loaded: VecDeque::new(),
-            next: 0,
-            retired: BTreeMap::new(),
-            changes,
-            rest,
-            left,
-            listed,
-        };
+        let load =
+            StoredLoad { dir, files, loads: Loads::deferred(jobs), loaded: VecDeque::new(), next: 0, retired: BTreeMap::new(), changes, rest, left };
         self.queue_plugin_load(PluginLoad::Stored(load));
     }
 
@@ -825,17 +838,13 @@ impl Session {
                 load.left += stamp.flatten().map_or(0, |(len, _)| len).saturating_sub(r.read);
                 r.plugin
             });
+            // The worker read the file again once its module loaded ([`list_stored_plugins`]); one
+            // whose stamp changed since then is skipped too.
             if file_stamp(path).ok() != *stamp {
-                log::warn!("skipping the stored plug-in {}: it changed or went away while it loaded", path.display());
+                log::warn!("skipping the stored plug-in {}: {CHANGED_WHILE_LOADING}", path.display());
                 continue;
             }
             match loaded {
-                // A file modified less than 2 s (the coarsest file-system clock) before the store was
-                // listed may have been replaced by one of the same length that kept its stamp: its
-                // content is compared too.
-                Ok(plugin) if stamp.flatten().is_some_and(|(len, at)| near(at, load.listed) && !holds_module(path, len, plugin.hash())) => {
-                    log::warn!("skipping the stored plug-in {}: it changed or went away while it loaded", path.display());
-                }
                 Ok(plugin) if load.changes.superseded(plugin.id()) => {
                     log::warn!("skipping the stored plug-in {}: {}", path.display(), vectorcraft_plugins::registry::SUPERSEDED);
                 }
@@ -851,21 +860,53 @@ impl Session {
                         .flatten();
                     match stored.or(back.clone()) {
                         Some(g) => {
-                            // A grant this load removed for an earlier file with the id goes back.
+                            // A grant this load removed for an earlier file with the id goes back. When
+                            // it can't be written back, the module isn't installed: the store doesn't
+                            // grant it, so it wouldn't load at the next launch either.
                             if back.is_some() {
-                                load.retired.remove(&m.id);
-                                if self.store_grant_in(turn, &m.id, Some(g.clone())) {
-                                    written.insert(m.id.clone(), true);
-                                    grants.insert(m.id.clone(), g.clone());
-                                } else {
-                                    log::warn!("couldn't put back the grant for the stored plug-in {}", path.display());
+                                if !self.store_grant_in(turn, &m.id, Some(g.clone())) {
+                                    log::warn!("skipping the stored plug-in {}: couldn't put back its grant", path.display());
+                                    continue;
                                 }
+                                load.retired.remove(&m.id);
+                                written.insert(m.id.clone(), true);
+                                grants.insert(m.id.clone(), g.clone());
                             }
-                            vectorcraft_plugins::registry::grant(GrantToken::from_engine_grants_file(g.clone()));
-                            vectorcraft_plugins::registry::set_storage(&m.id, plugin_storage(Some(&dir), &m.id, turn));
-                            match vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
-                                Ok(p) => load.changes.installed(&p),
-                                Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
+                            let id = m.id.clone();
+                            let token = GrantToken::from_engine_grants_file(g.clone());
+                            // The storage is made before the plug-ins are held: making it reads the store.
+                            let storage = plugin_storage(Some(&dir), &id, turn);
+                            let attach = || vectorcraft_plugins::registry::set_storage(&id, storage);
+                            // The id is checked for a change elsewhere again while the plug-ins are held.
+                            let installed = match vectorcraft_plugins::registry::install_for_load(
+                                plugin.with_source(path.display().to_string()),
+                                &load.changes,
+                                Some(token),
+                                attach,
+                            ) {
+                                Ok(Some(p)) => {
+                                    load.changes.installed(&p);
+                                    true
+                                }
+                                Ok(None) => {
+                                    log::warn!("skipping the stored plug-in {}: {}", path.display(), vectorcraft_plugins::registry::SUPERSEDED);
+                                    false
+                                }
+                                Err(e) => {
+                                    log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                                    false
+                                }
+                            };
+                            // A grant put back for a module that didn't install is removed again, so the
+                            // store doesn't grant those bytes at the next launch.
+                            if back.is_some() && !installed {
+                                if self.store_grant_in(turn, &id, None) {
+                                    written.insert(id.clone(), false);
+                                    grants.remove(&id);
+                                    load.retired.insert(id, g);
+                                } else {
+                                    log::warn!("couldn't remove the grant put back for the stored plug-in {}", path.display());
+                                }
                             }
                         }
                         None => {
@@ -875,14 +916,31 @@ impl Session {
                 }
                 Ok(plugin) => {
                     let id = plugin.id().to_string();
-                    vectorcraft_plugins::registry::set_storage(&id, plugin_storage(Some(&dir), &id, turn));
-                    match vectorcraft_plugins::registry::install(plugin.with_source(path.display().to_string())) {
-                        Ok(p) => load.changes.installed(&p),
-                        Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
-                    }
+                    // The storage is made before the plug-ins are held: making it reads the store.
+                    let storage = plugin_storage(Some(&dir), &id, turn);
+                    let attach = || vectorcraft_plugins::registry::set_storage(&id, storage);
+                    // The id is checked for a change elsewhere again while the plug-ins are held.
+                    let p = match vectorcraft_plugins::registry::install_for_load(
+                        plugin.with_source(path.display().to_string()),
+                        &load.changes,
+                        None,
+                        attach,
+                    ) {
+                        Ok(Some(p)) => p,
+                        Ok(None) => {
+                            log::warn!("skipping the stored plug-in {}: {}", path.display(), vectorcraft_plugins::registry::SUPERSEDED);
+                            continue;
+                        }
+                        Err(e) => {
+                            log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                            continue;
+                        }
+                    };
+                    load.changes.installed(&p);
                     // In the same turn: the grants for the id stop counting, the process's and the
-                    // store's, so no session sees the earlier module as approved.
-                    vectorcraft_plugins::registry::revoke(&id);
+                    // store's, so no session sees the earlier module as approved. A module installed
+                    // in its place meanwhile keeps the process's grant recorded for it.
+                    vectorcraft_plugins::registry::revoke_if_installed(&id, p.serial());
                     if let Some(g) = grants.remove(&id) {
                         load.retired.insert(id.clone(), g);
                     }
@@ -1594,17 +1652,6 @@ fn plugin_storage(dir: Option<&Path>, id: &str, turn: &StoreTurn) -> Option<Arc<
 
 /// A file's size and modified time (`None`: there is no file).
 type FileStamp = Option<(u64, SystemTime)>;
-
-/// Does the file at `path` hold, in its first `len` bytes and no more, the module whose SHA-256 is
-/// `hash`?
-fn holds_module(path: &Path, len: u64, hash: &str) -> bool {
-    read_capped(path, len).is_ok_and(|bytes| vectorcraft_plugins::permissions::sha256_hex(&bytes) == hash)
-}
-
-/// Whether the modified time `at` is less than 2 s before `then`, or later.
-fn near(at: SystemTime, then: SystemTime) -> bool {
-    then.duration_since(at).map_or(true, |before| before < std::time::Duration::from_secs(2))
-}
 
 /// The stamp of the file at `path`.
 fn file_stamp(path: &Path) -> Result<FileStamp, StorageError> {

@@ -46,6 +46,9 @@ pub const MAX_STUCK_THREADS: usize = 2 * MAX_WORKERS;
 /// Loader threads in the process running a job past its deadline, across every [`Loads`].
 static STUCK_THREADS: AtomicUsize = AtomicUsize::new(0);
 
+/// The [`Error::Failed`] message of a job that failed because no thread was left to run it.
+pub const NO_THREAD: &str = "no thread was left to load it";
+
 /// One plug-in to load: the item the launch marker names while it loads, and the work, which runs
 /// on a worker thread.
 pub struct Job<T> {
@@ -123,7 +126,7 @@ pub struct Loads<T: Send + 'static> {
     max_stuck: usize,
     /// Tests: no thread can be started from now on.
     #[cfg(test)]
-    refuse_threads: bool,
+    pub(crate) refuse_threads: bool,
 }
 
 impl<T: Send + 'static> Loads<T> {
@@ -244,17 +247,20 @@ impl<T: Send + 'static> Loads<T> {
                     (i, job, at)
                 };
                 let r = run_job(job);
-                let took = clock().saturating_sub(at);
                 // A worker whose job passed its deadline and was replaced ends once the job
-                // returns, unless the workers able to take jobs are fewer than started.
-                let retire = {
+                // returns, unless the workers able to take jobs are fewer than started. The time
+                // the job took is read while the job is marked finished, so a deadline check that
+                // finds it unfinished counts a time that its own outcome reaches too.
+                let (took, retire) = {
                     let mut s = alive.0.lock();
+                    let took = clock().saturating_sub(at);
                     s.finished[i] = true;
-                    s.expired[i] && {
+                    let retire = s.expired[i] && {
                         s.stuck -= 1;
                         stuck_threads.fetch_sub(1, Ordering::SeqCst);
                         s.workers - s.stuck > target
-                    }
+                    };
+                    (took, retire)
                 };
                 let _ = send.send((i, r, took));
                 if retire {
@@ -331,8 +337,10 @@ impl<T: Send + 'static> Loads<T> {
         }
     }
 
-    /// Waits for every outcome → those not taken yet, in the order of the jobs.
+    /// Waits for every outcome → those not taken yet, in the order of the jobs. The outcomes taken
+    /// before ([`Loads::ready`]) count as released, so the jobs after them start.
     pub fn wait(mut self) -> Vec<Result<T>> {
+        self.release(self.next - self.released);
         let mut out = Vec::new();
         while !self.taken() {
             self.wait_next();
@@ -358,16 +366,16 @@ impl<T: Send + 'static> Loads<T> {
 
     /// Fails the jobs still running past their deadline, starting a worker in place of each one's
     /// while the threads alive are fewer than twice the workers started. When no worker is left to
-    /// take the jobs not started (none could be made, or every one is stuck), those fail too, and
-    /// so does a job whose worker ended without an outcome.
+    /// take the jobs not started (none could be made, or every one is stuck), those fail too.
     fn expire(&mut self) {
         if !self.begun {
             return;
         }
-        let now = (self.clock)();
         let mut expired = Vec::new();
         {
             let mut s = self.pool.lock();
+            // Read while the workers can't mark a job finished ([`Loads::spawn_worker`]).
+            let now = (self.clock)();
             for i in 0..self.outcomes.len() {
                 let late = s.started[i].is_some_and(|at| now.saturating_sub(at) >= self.deadline);
                 if late && !s.finished[i] && !s.expired[i] && self.outcomes[i].is_none() {
@@ -390,20 +398,16 @@ impl<T: Send + 'static> Loads<T> {
                 break;
             }
         }
-        let stranded = {
-            let s = self.pool.lock();
-            s.workers <= s.stuck
+        // The jobs not started are taken from the queue under the lock that finds no worker able to
+        // take them, so a stuck worker that returns can't start one of them in between. Only those
+        // fail: a job already started reports its own outcome.
+        let stranded: Vec<usize> = {
+            let mut s = self.pool.lock();
+            if s.workers <= s.stuck { s.queue.drain(..).map(|(i, _)| i).collect() } else { Vec::new() }
         };
-        if stranded && !self.outcomes.iter().all(Option::is_some) {
-            // What the last workers sent before they ended counts.
-            loop {
-                let next = self.results.lock().unwrap_or_else(|e| e.into_inner()).try_recv();
-                let Ok(done) = next else { break };
-                self.record(done);
-            }
-            self.pool.lock().queue.clear();
-            for o in self.outcomes.iter_mut().filter(|o| o.is_none()) {
-                *o = Some(Err(Error::Failed("no thread was left to load it".into())));
+        for i in stranded {
+            if let Some(o @ None) = self.outcomes.get_mut(i) {
+                *o = Some(Err(Error::Failed(NO_THREAD.into())));
             }
         }
     }
@@ -493,6 +497,19 @@ mod tests {
         })
     }
 
+    /// What `rx` receives, looked for 100 million times at most, so a worker that never sends fails the
+    /// test instead of holding it. The test fails at once when every sender is gone.
+    fn recv_soon<V>(rx: &Receiver<V>) -> V {
+        for _ in 0..100_000_000 {
+            match rx.try_recv() {
+                Ok(v) => return v,
+                Err(mpsc::TryRecvError::Disconnected) => panic!("every sender ended without sending"),
+                Err(mpsc::TryRecvError::Empty) => std::thread::yield_now(),
+            }
+        }
+        panic!("nothing was received");
+    }
+
     /// The outcomes come back in the order of the jobs when they finish in the reverse order.
     #[test]
     fn outcomes_keep_the_order_of_the_jobs() {
@@ -507,13 +524,13 @@ mod tests {
         let (_, clock) = manual();
         let mut loads = Loads::start_with(jobs, 3, LOAD_DEADLINE, clock);
         for _ in 0..3 {
-            starts.recv().unwrap();
+            recv_soon(&starts);
         }
         // Each job is let go only once the one after it has finished.
         let mut finished = Vec::new();
         for v in (0..3).rev() {
             go[v].send(()).unwrap();
-            let done = loads.results.lock().unwrap().recv().unwrap();
+            let done = recv_soon(&loads.results.lock().unwrap());
             finished.push(done.0);
             loads.record(done);
         }
@@ -541,7 +558,7 @@ mod tests {
         let jobs = vec![held(0, started.clone(), held_until), Job::new(None, || Ok(1))];
         let (ms, clock) = manual();
         let mut loads = Loads::start_with(jobs, 1, Duration::from_secs(10), clock);
-        assert_eq!(starts.recv().unwrap(), 0);
+        assert_eq!(recv_soon(&starts), 0);
         assert!(!loads.poll(), "the first job is still running and the second waits for a worker");
         ms.store(10_000, Ordering::SeqCst);
         let done = poll_until(&mut loads, |l| l.outcomes.iter().all(Option::is_some));
@@ -562,10 +579,10 @@ mod tests {
         let jobs = vec![held(0, started.clone(), held0), held(1, started, held1), Job::new(None, || Ok(2))];
         let (ms, clock) = manual();
         let mut loads = Loads::start_with(jobs, 1, Duration::from_secs(10), clock);
-        assert_eq!(starts.recv().unwrap(), 0);
+        assert_eq!(recv_soon(&starts), 0);
         ms.store(10_000, Ordering::SeqCst);
         loads.poll();
-        assert_eq!(starts.recv().unwrap(), 1, "a worker took the place of the stuck one");
+        assert_eq!(recv_soon(&starts), 1, "a worker took the place of the stuck one");
         ms.store(20_000, Ordering::SeqCst);
         let done = loads.poll();
         go0.send(()).unwrap();
@@ -614,6 +631,22 @@ mod tests {
         assert_eq!(loads.wait(), vec![Ok(2), Ok(3), Ok(4)]);
     }
 
+    /// `wait` after outcomes were taken and not released still gets the rest: it counts the outcomes
+    /// taken as released, so the job past the window starts.
+    #[test]
+    fn wait_after_outcomes_were_taken_gets_the_jobs_past_the_window() {
+        let jobs: Vec<Job<u32>> = (0..3).map(|v| Job::new(None, move || Ok(v))).collect();
+        let (_, clock) = manual();
+        let mut loads = Loads::start_with(jobs, 1, LOAD_DEADLINE, clock);
+        assert!(poll_until(&mut loads, |l| l.outcomes.iter().filter(|o| o.is_some()).count() == 2), "the first two loaded");
+        assert_eq!(loads.ready(), vec![Ok(0), Ok(1)]);
+        let (done, rest) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = done.send(loads.wait());
+        });
+        assert_eq!(recv_soon(&rest), vec![Ok(2)]);
+    }
+
     /// When no worker can take the jobs left, because the only one is stuck past its deadline and
     /// no thread takes its place, those jobs fail instead of being waited for.
     #[test]
@@ -623,7 +656,7 @@ mod tests {
         let jobs = vec![held(0, started, held_until), Job::new(None, || Ok(1))];
         let (ms, clock) = manual();
         let mut loads = Loads::start_with(jobs, 1, Duration::from_secs(10), clock);
-        starts.recv().unwrap();
+        recv_soon(&starts);
         loads.refuse_threads = true;
         ms.store(10_000, Ordering::SeqCst);
         let done = loads.poll();
@@ -651,7 +684,7 @@ mod tests {
         let (go, held_until) = mpsc::channel();
         let (ms, clock) = manual();
         let mut first = make(vec![held(0, started, held_until)], clock);
-        starts.recv().unwrap();
+        recv_soon(&starts);
         ms.store(10_000, Ordering::SeqCst);
         assert!(first.poll(), "the stuck job failed at its deadline");
         drop(first);
@@ -677,7 +710,7 @@ mod tests {
         let mut loads = Loads::with(vec![held(0, started, held_until)], 1, Duration::from_secs(10), clock);
         loads.stuck_threads = stuck;
         loads.begin();
-        starts.recv().unwrap();
+        recv_soon(&starts);
         ms.store(10_000, Ordering::SeqCst);
         drop(loads);
         assert_eq!(stuck.load(Ordering::SeqCst), 1, "the stuck thread counts");

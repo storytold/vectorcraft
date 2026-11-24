@@ -125,7 +125,10 @@ others install. So is a module whose read and load take 10 s or longer (VectorCr
 finished later, such as a module on a slow network share. The launch marker names every module still loading, so when
 the app stops during the loads, the next launch's Safe Mode choice lists all of them. A module whose load panicked or
 failed is no longer named; one past its 10 s limit is named until its load returns. A module is also skipped when the
-plug-in with its id was installed or removed in another window while it loaded. When the app quits while plug-ins are
+plug-in with its id was installed or removed in another window while it loaded. A module from the `Plug-ins` folder
+installs only when its file, read again on the worker thread after the module loaded, still holds that module, whatever
+the file's modified time. When a file fails because no thread was left to load it, the Additional Plug-ins Folder is
+loaded again the next time the preferences are applied. When the app quits while plug-ins are
 loading, it waits for the modules already loading, for at most 10 s, before it exits. The web build loads one
 module at a time.
 
@@ -320,7 +323,10 @@ capability model proposed for PhotoCraft plug-ins
   and `plugin.remove` removes the plug-in. A `grants.json` that can't be opened or read counts as a grant that can't be
   removed. When VectorCraft loads the `Plug-ins` folder, it forgets any grant for an id whose stored module lists no
   permissions. When it can't remove that grant from `grants.json`, or can't read the file, the grant stops counting,
-  including for the next load, which tries the removal again. A grant that stops counting in either of these cases
+  including for the next load, which tries the removal again. When a later file in the folder holds a module with the
+  same id that the forgotten grant covers, the grant is written back and that module installs. When the grant can't be
+  written back, that module is skipped, and when the module doesn't install, the grant is removed again. A grant that
+  stops counting in either of these cases
   does not count for any session in the same process that uses the same `Plug-ins` folder, by any path to it, until
   `grants.json` can be written for that plug-in, as when the plug-in is granted again. Another process on the same
   folder, for example `vectorcraft-cli` beside the app, still reads `grants.json` as it is written. A grant for the
