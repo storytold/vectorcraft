@@ -145,13 +145,12 @@ fn click(at: Pos2, pressed: bool) -> Event {
 fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     let mut a = App::new();
     assert_eq!(a.selected(), 1);
-    // The W field shows its number, with its unit painted after it.
     let (id, rect) = a.field("37 pt");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);
     a.frame(vec![]);
     assert!(a.has_keyboard(id), "the W field has the keyboard");
-    let all = Some((0, "37".chars().count()));
+    let all = Some((0, "37 pt".chars().count()));
     // The window's Cmd+A (Windows, Linux, the web, macOS without the system menu).
     a.frame(vec![press(Key::End, Modifiers::NONE)]);
     assert_eq!(a.field_selection(id), Some((5, 5)), "End collapses the selection");
@@ -168,7 +167,7 @@ fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     let out = a.menu("edit.copy");
     // A fired command reaches the field in the next pass.
     let after = a.frame(vec![]);
-    assert_eq!([copied(&out), copied(&after)].concat(), ["37"]);
+    assert_eq!([copied(&out), copied(&after)].concat(), ["37 pt"]);
     assert!(a.app.session.clipboard.is_empty(), "no art copied");
     assert!(a.has_keyboard(id), "the field keeps the keyboard");
 }
@@ -537,7 +536,7 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
     a.frame(vec![]);
     let out = menu(&mut a, edit, "Copy");
-    assert_eq!(copied(&out), ["37"], "Copy copied the field's text");
+    assert_eq!(copied(&out), ["37 pt"], "Copy copied the field's text");
     assert!(a.app.session.clipboard.is_empty(), "no art copied");
     // Art on the app's clipboard (Paste is enabled): the field still takes the text.
     a.app.run("edit.copy", json!({})).unwrap();
