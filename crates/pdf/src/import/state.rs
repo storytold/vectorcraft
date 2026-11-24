@@ -213,8 +213,8 @@ pub(super) struct Builder<'p> {
     pub(super) lines: HashMap<NodeId, LineFacts>,
 }
 
-pub(super) fn blend(b: craft_pdf::interpret::BlendMode) -> BlendMode {
-    use craft_pdf::interpret::BlendMode as H;
+pub(super) fn blend(b: craft::pdf::interpret::BlendMode) -> BlendMode {
+    use craft::pdf::interpret::BlendMode as H;
     match b {
         H::Normal => BlendMode::Normal,
         H::Multiply => BlendMode::Multiply,
@@ -235,10 +235,10 @@ pub(super) fn blend(b: craft_pdf::interpret::BlendMode) -> BlendMode {
     }
 }
 
-pub(super) fn fill_rule(r: craft_pdf::interpret::FillRule) -> FillRule {
+pub(super) fn fill_rule(r: craft::pdf::interpret::FillRule) -> FillRule {
     match r {
-        craft_pdf::interpret::FillRule::NonZero => FillRule::NonZero,
-        craft_pdf::interpret::FillRule::EvenOdd => FillRule::EvenOdd,
+        craft::pdf::interpret::FillRule::NonZero => FillRule::NonZero,
+        craft::pdf::interpret::FillRule::EvenOdd => FillRule::EvenOdd,
     }
 }
 

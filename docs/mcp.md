@@ -2778,9 +2778,10 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   the jobs (dialog kind `scriptPrint`, listing each job's document, printer and pages). The dialog does not open
   while a text field or text being typed on the canvas has the keyboard; it opens once neither does. The jobs are
   sent only after the person at the keyboard clicks its Print button, or presses Space once Tab has moved the focus to
-  it: the button takes no click or focus for the first second after the dialog appears (VectorCraft's own value),
-  Enter does not print, and `ui.dialog.confirm` and synthetic input are refused, and the dialog stays open. Cancel, Escape and `ui.dialog.cancel` drop the jobs and keep the
-  run's changes. A run that fails or is stopped sends
+  it: the button takes no click for the first second after the dialog appears (VectorCraft's own value), and Enter
+  does not print. `ui.dialog.set` refuses `answer: "print"`, `ui.dialog.confirm` is refused unless `answer` is
+  `"cancel"`, and a Print that synthetic input gives is refused and the dialog opens again. Cancel, Escape,
+  `ui.dialog.cancel` and `answer: "cancel"` drop the jobs and keep the run's changes. A run that fails or is stopped sends
   nothing. Before it sends them, the app checks that each printer is still installed under that name, and sends none
   when one is not. A run prepares at most 4 jobs, together at most 100 pages, every copy counted, and 32 MiB, and
   none while an earlier run's jobs wait for an answer. The pages are counted from the art as it prints, artboard
@@ -12428,10 +12429,10 @@ default) its fonts join the document's, replacing a font of the same name, as on
 only returns them. Opening a `.vccomposite` file imports it.
 
 Type › Composite Fonts… (shown with Show East Asian Options) opens the Composite Fonts dialog on the document's fonts:
-Font picks one, and a table sets each class's and each custom set's font, style, size, baseline and scales. New adds a
-font based on the one picked, Delete Font takes it out, Import… adds the fonts of a file and Export… writes the one
-picked. Custom shows the font's custom character sets: Character Set picks one, New adds a set based on the one picked,
-Delete Set takes it out, and Name renames it. Character › Direct Entry adds the characters typed, and Character ›
+Composite Font picks one, and a table sets each class's and each custom set's font, style, size, baseline and scales. New adds a
+font based on the one picked, Delete takes it out, Load… adds the fonts of a file, Replace… takes the fonts of a file in
+place of the dialog's and Save… writes the one picked. Custom shows the font's custom character sets: Character Set picks
+one, New adds a set based on the one picked, Delete takes it out, and Rename renames it. Character › Direct Entry adds the characters typed, and Character ›
 Unicode adds the characters of hexadecimal codes (`3042`, `U+3042`, several separated by spaces or commas); Add skips
 characters the set already lists. Delete takes the character picked out of the set. Show Sample (Hide Sample when it
 shows) draws the font picked in a line of sample text, with the first character of each custom set added, and a button

@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Name, Object, Stream};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Name, Object, Stream};
 use serde_json::json;
 use vectorcraft_color::cms::{self, DEVICE_CMYK, GENERIC_CMYK, SRGB};
 use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
@@ -879,7 +879,7 @@ fn group_profiles(bytes: &[u8]) -> Vec<Option<Vec<u8>>> {
             let cs: i32 = cs.trim_start().split(' ').next().unwrap().parse().unwrap();
             let space = text.split(&format!("\n{cs} 0 obj\n")).nth(1).unwrap();
             let stream: i32 = space.strip_prefix("[/ICCBased ").unwrap().split(' ').next().unwrap().parse().unwrap();
-            let profile = file.xref().get::<Stream<'_>>(craft_pdf::syntax::object::ObjectIdentifier::new(stream, 0)).unwrap();
+            let profile = file.xref().get::<Stream<'_>>(craft::pdf::syntax::object::ObjectIdentifier::new(stream, 0)).unwrap();
             Some(profile.decoded().unwrap().into_owned())
         })
         .collect()
@@ -1099,7 +1099,7 @@ fn masked_doc(mask: Vec<u8>, clip: bool, invert: bool) -> Document {
 /// A Press Quality export of `d`: the file, and the decoded soft mask of each CMYK image (`None`:
 /// it has none).
 fn export_smasks(d: &Document) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
-    let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
+    let press = builtin_presets(APP).into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
     let out = export_with_report(d, &PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() }).unwrap();
     let file = Pdf::new(Arc::new(out.bytes.clone())).unwrap();
     let smasks = file
@@ -1549,7 +1549,7 @@ fn press_quality_writes_an_rgb_image_in_a_cmyk_document_as_cmyk() {
     let rgb = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([(x * 60) as u8, (y * 60) as u8, 128]));
     let blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None, file_font: Default::default() };
     let d = image_doc(blob, 4, 4);
-    let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
+    let press = builtin_presets(APP).into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
     assert_eq!(press.output.conversion, ColorConversion::PreserveNumbers);
     let options = PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() };
     let w = written(&export_with_report(&d, &options).unwrap().bytes);
@@ -1564,7 +1564,8 @@ fn press_quality_writes_an_rgb_image_in_a_cmyk_document_as_cmyk() {
 /// out CMYK.
 #[test]
 fn press_quality_writes_cmyk_in_an_rgb_document_too() {
-    let press = || PdfOptions { settings: builtin_preset("Press Quality").unwrap().settings, created: Some(1_700_000_000), ..Default::default() };
+    let press =
+        || PdfOptions { settings: builtin_preset("Press Quality", APP).unwrap().settings, created: Some(1_700_000_000), ..Default::default() };
     assert_eq!(press().settings.output.destination, DOCUMENT_CMYK);
     let ink = [0u8, 102, 255, 0];
     let tiff = ImageBlob::cmyk_tiff(&Inks::new(4, 4, flat(ink, 16)).unwrap()).unwrap();
