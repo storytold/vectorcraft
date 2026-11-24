@@ -15,6 +15,7 @@
 	Anchors:	앵커:
 	Any Kind	모든 종류
 	Font Technology	글꼴 기술
+@id	language.name	한국어
 font-technology	Variable	가변
 	Ascender	어센더
 	Baseline	기준선
@@ -2337,8 +2338,8 @@ antiAlias	Sharp	날카롭게
 	Import Matches	가져오기 대응
 	Remember Import Matches	가져오기 대응 기억
 	Forget Import Matches	가져오기 대응 지우기
-@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치|기본 단축키 {n}개와 일치
-@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개|읽지 않은 파일 부분 {n}개
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	기본 단축키 {n}개와 일치
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	읽지 않은 파일 부분 {n}개
 	Import Transparency Flattener Presets	투명도 병합 프리셋 가져오기
 	Import…	가져오기…
 	In Tangent Handles	안쪽 접선 핸들
@@ -4713,21 +4714,21 @@ file-filter	Templates	템플릿
 	[Normal Character Style]	[기본 문자 스타일]
 	[Normal Paragraph Style]	[기본 단락 스타일]
 imageTrace	Outline	윤곽선
-@plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)|색상 표 ({n}색)
-@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?|그래픽 스타일 {n}개를 삭제하시겠습니까?
-@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?|브러시 {n}개를 삭제하시겠습니까?
+@plural	Color Table ({n} color)|Color Table ({n} colors)	색상 표 ({n}색)
+@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	그래픽 스타일 {n}개를 삭제하시겠습니까?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	브러시 {n}개를 삭제하시겠습니까?
 @plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	견본과 그룹 {n}개를 삭제하시겠습니까?
-@plural	{n} Layer|{n} Layers	레이어 {n}개|레이어 {n}개
-@plural	{n} Object|{n} Objects	개체 {n}개|개체 {n}개
-@plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개|강조된 영역 {n}개
-@plural	{n} color|{n} colors	색상 {n}개|색상 {n}개
-@plural	{n} fill|{n} fills	칠 {n}개|칠 {n}개
-@plural	{n} glyph|{n} glyphs	글리프 {n}개|글리프 {n}개
-@plural	{n} item|{n} items	항목 {n}개|항목 {n}개
-@plural	{n} object highlighted|{n} objects highlighted	강조된 개체 {n}개|강조된 개체 {n}개
-@plural	{n} star|{n} stars	별 {n}개|별 {n}개
-@plural	{n} step|{n} steps	단계 {n}개|단계 {n}개
-@plural	{n} stroke|{n} strokes	선 {n}개|선 {n}개
+@plural	{n} Layer|{n} Layers	레이어 {n}개
+@plural	{n} Object|{n} Objects	개체 {n}개
+@plural	{n} area highlighted|{n} areas highlighted	강조된 영역 {n}개
+@plural	{n} color|{n} colors	색상 {n}개
+@plural	{n} fill|{n} fills	칠 {n}개
+@plural	{n} glyph|{n} glyphs	글리프 {n}개
+@plural	{n} item|{n} items	항목 {n}개
+@plural	{n} object highlighted|{n} objects highlighted	강조된 개체 {n}개
+@plural	{n} star|{n} stars	별 {n}개
+@plural	{n} step|{n} steps	단계 {n}개
+@plural	{n} stroke|{n} strokes	선 {n}개
 	Delete Anchor Points	앵커 포인트 삭제
 	Edit Selection	선택 영역 편집
 	Saved Selection 1	저장된 선택 영역 1
@@ -4771,8 +4772,8 @@ imageTrace	Outline	윤곽선
 	Merged PRs	병합된 PR
 	PRs	PR
 	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, 줄 +{added} / −{deleted} (Δ {delta}), 바이너리 에셋 +{binary_added} / −{binary_deleted}, {first} – {last}
-@plural	{n} PR|{n} PRs	PR {n}개|PR {n}개
-@plural	{n} commit|{n} commits	커밋 {n}개|커밋 {n}개
+@plural	{n} PR|{n} PRs	PR {n}개
+@plural	{n} commit|{n} commits	커밋 {n}개
 	Commits	커밋
 	Lines added	추가된 줄
 	Lines deleted	삭제된 줄
@@ -6916,7 +6917,7 @@ axis	Y Axis	Y축
 @msg	module is {_1} bytes (limit {_2})	모듈이 {_1}바이트입니다(한도 {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	승인이 필요합니다. {0}을(를) 요청하며, 사용자가 따로 설치할 때 허용합니다
 @msg	not JSON: {e}	JSON이 아닙니다: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly 바이너리가 아닙니다(\0asm 헤더 없음)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly 바이너리가 아닙니다(\\0asm 헤더 없음)
 @msg	parameter `{k}`: {what}	매개변수 `{k}`: {what}
 @msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다
@@ -8636,7 +8637,7 @@ breakText	Glyphs	글리프
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	{name} 프로파일을 읽을 수 없어 새 문서에 기본 설정을 사용했습니다: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	트랩: 트랩할 만큼 가까운 개체 쌍이 {_1}개보다 많거나, 같은 가로 범위에 있는 개체가 너무 많습니다. 한 번에 더 적은 개체를 트랩하세요
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	위딩 상자 및 선: 아트웍 바깥에 들어갈 위딩 선이 없고 위딩 상자가 꺼져 있습니다
-@msg	\ at end of pattern	패턴 끝에 \이(가) 있습니다
+@msg	\\ at end of pattern	패턴 끝에 \\이(가) 있습니다
 @msg	`alignOn` cannot be empty	`alignOn`은(는) 비워 둘 수 없습니다
 @msg	`alignOn` must be a string	`alignOn`은(는) 문자열이어야 합니다
 @msg	`align` is start, center or end	`align`은(는) start, center 또는 end입니다
@@ -8962,7 +8963,7 @@ breakText	Glyphs	글리프
 @msg	a CMap has too many mappings	CMap에 매핑이 너무 많습니다
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	DXF 도면에는 원점이 하나입니다: 아트보드마다 도면을 하나씩 만들려면 useArtboards: true를 전달하세요
 @msg	a PDF presets file with over {_1} presets	사전 설정이 {_1}개를 넘는 PDF 사전 설정 파일입니다
-@msg	a \u escape needs four hexadecimal digits	\u 이스케이프에는 16진수 네 자리가 필요합니다
+@msg	a \\u escape needs four hexadecimal digits	\\u 이스케이프에는 16진수 네 자리가 필요합니다
 @msg	a batch preview cannot switch documents	일괄 처리 미리 보기에서는 문서를 전환할 수 없습니다
 @msg	a brush named `{nn}` exists	`{nn}` 브러시가 이미 있습니다
 @msg	a comma in an XPath expression must separate function arguments	XPath 식의 쉼표는 함수 인수를 구분해야 합니다
@@ -9687,7 +9688,7 @@ breakText	Glyphs	글리프
 @msg	not a regular expression	정규식이 아닙니다
 @msg	not a stored or deflated central record	저장 방식이나 deflate 방식의 중앙 레코드가 아닙니다
 @msg	not a valid SVGZ file: {e}	올바른 SVGZ 파일이 아닙니다: {e}
-@msg	not an RTF file: it doesn't start with {\rtf	RTF 파일이 아닙니다: {\rtf(으)로 시작하지 않습니다
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF 파일이 아닙니다: {\\rtf(으)로 시작하지 않습니다
 @msg	not an action set: the text doesn't start with /version and a number	액션 세트가 아닙니다: 텍스트가 /version과 숫자로 시작하지 않습니다
 @msg	not an image VectorCraft reads (see document.formats)	VectorCraft가 읽는 이미지가 아닙니다(document.formats 참조)
 @msg	not area type (text in a frame) outside perspective	원근 밖의 영역 문자(프레임 안의 텍스트)가 아닙니다

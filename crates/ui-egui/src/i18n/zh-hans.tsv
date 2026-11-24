@@ -156,6 +156,7 @@
 	Anti-alias Rasters	栅格消除锯齿
 	Anti-aliased Artwork	图稿抗锯齿
 	Anti-aliasing Method	消除锯齿方法
+@id	language.name	简体中文
 antiAlias	Sharp	锐利
 	Crisp	清晰
 	Strong	强
@@ -7154,7 +7155,7 @@ axis	Y Axis	Y 轴
 @msg	module is {_1} bytes (limit {_2})	模块为 {_1} 字节（上限 {_2}）
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要批准：它请求 {0}，用户单独安装它时授予这些权限
 @msg	not JSON: {e}	不是 JSON：{e}
-@msg	not a WebAssembly binary (missing \0asm header)	不是 WebAssembly 二进制文件（缺少 \0asm 头）
+@msg	not a WebAssembly binary (missing \\0asm header)	不是 WebAssembly 二进制文件（缺少 \\0asm 头）
 @msg	parameter `{k}`: {what}	参数 `{k}`：{what}
 @msg	parameter `{name}`: {what}	参数 `{name}`：{what}
 @msg	plug-in parameters must be a JSON object	增效工具参数必须是 JSON 对象
@@ -8691,7 +8692,7 @@ breakText	Glyphs	字形
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	无法读取配置文件 {name}，因此新文档使用默认设置：{reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	陷印：距离近到需要陷印的对象超过 {_1} 对，或处于同一水平范围的对象过多；请减少每次陷印的对象
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	除废框和除废线：图稿外侧放不下任何除废线，且除废框已关闭
-@msg	\ at end of pattern	模式以 \ 结尾
+@msg	\\ at end of pattern	模式以 \\ 结尾
 @msg	`alignOn` cannot be empty	`alignOn` 不能为空
 @msg	`alignOn` must be a string	`alignOn` 必须是字符串
 @msg	`align` must be a string	`align` 必须是字符串
@@ -8801,7 +8802,7 @@ breakText	Glyphs	字形
 @msg	`{u}` is no Unicode character	`{u}` 不是 Unicode 字符
 @msg	`{word}` isn't in the custom dictionary	`{word}` 不在自定义词典中
 @msg	a CMap has too many mappings	某个 CMap 的映射过多
-@msg	a \u escape needs four hexadecimal digits	\u 转义需要四位十六进制数字
+@msg	a \\u escape needs four hexadecimal digits	\\u 转义需要四位十六进制数字
 @msg	a comma in an XPath expression must separate function arguments	XPath 表达式中的逗号只能用来分隔函数参数
 @msg	a document holds at most {_1} SVG filters	一个文档最多包含 {_1} 个 SVG 滤镜
 @msg	a document with unsaved changes has no recovery copy	有未保存更改的文档没有恢复副本
@@ -9954,7 +9955,7 @@ breakText	Glyphs	字形
 @msg	not a print presets file: {e}	不是打印预设文件：{e}
 @msg	not a stored or deflated central record	不是以存储或 deflate 方式保存的中央记录
 @msg	not a valid SVGZ file: {e}	不是有效的 SVGZ 文件：{e}
-@msg	not an RTF file: it doesn't start with {\rtf	不是 RTF 文件：它不是以 {\rtf 开头
+@msg	not an RTF file: it doesn't start with {\\rtf	不是 RTF 文件：它不是以 {\\rtf 开头
 @msg	not an image VectorCraft reads (see document.formats)	不是 VectorCraft 可读取的图像 (参见 document.formats)
 @msg	not area type (text in a frame) outside perspective	不是透视之外的区域文字 (文本框中的文本)
 @msg	not editing an opacity mask	当前没有在编辑不透明度蒙版

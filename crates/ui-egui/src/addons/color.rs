@@ -9,26 +9,29 @@
 pub mod legend;
 pub mod nearest;
 
+use craft::imaging::ui::adjust::{AdjustContext, AdjustField, AdjustSliders};
+use craft::menu::Node;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::pickers::Select;
+use craft::ui::sections::Section;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 
 use crate::VectorcraftApp;
-use crate::menus::Item;
-use crate::panels::{empty_state, pstate, set_pstate};
-use crate::widgets;
+use crate::menus::{Sep, c, cp, sub};
+use crate::panels::empty_state;
 
 /// The panel's id (`window.panel {panel: "colorEffects"}`).
 pub const ID: &str = "colorEffects";
 
-/// Where the panel keeps its choice and values (panel state).
-const STATE: &str = "color-effects";
-
 /// A value of an adjustment: (parameter, label, range, decimals, default).
-type Field = (&'static str, &'static str, (f64, f64), usize, f64);
+type AdjustValue = (&'static str, &'static str, (f64, f64), usize, f64);
 
 /// The adjustments the panel offers: (effect, label, values). Curves and Shift to Color, which take
 /// a curve or a colour, keep to their dialogs (Effect › Color Adjustments).
-const ADJUSTMENTS: [(&str, &str, &[Field]); 7] = [
+const ADJUSTMENTS: [(&str, &str, &[AdjustValue]); 7] = [
     (
         "adjust.brightnessContrast",
         "Brightness/Contrast",
@@ -84,31 +87,31 @@ fn duotone() -> (&'static str, &'static str, Value) {
 }
 
 /// Adjustment `i` of [`ADJUSTMENTS`] (the first past the end).
-fn adjustment(i: usize) -> (&'static str, &'static str, &'static [Field]) {
+fn adjustment(i: usize) -> (&'static str, &'static str, &'static [AdjustValue]) {
     ADJUSTMENTS.get(i).copied().unwrap_or(ADJUSTMENTS[0])
 }
 
 /// Object › Plug-ins › Color Effects.
-pub fn menu() -> Vec<Item> {
-    let cmd = |(label, id, p): (&'static str, &'static str, Value)| Item::Cmd(label, id, p);
+pub fn menu() -> Vec<Node> {
+    let cmd = |(label, id, p): (&'static str, &'static str, Value)| cp(label, id, p);
     vec![
-        Item::Cmd("Color Effects Panel", "window.panel", json!({ "panel": ID })),
-        Item::Sep,
-        Item::Cmd("Exposure…", "effect.dialog", json!({ "effect": "addon.color.exposure" })),
-        Item::Cmd("Desaturate", "effect.apply", json!({ "effect": "addon.color.desaturate" })),
+        cp("Color Effects Panel", "window.panel", json!({ "panel": ID })),
+        Sep,
+        cp("Exposure…", "effect.dialog", json!({ "effect": "addon.color.exposure" })),
+        cp("Desaturate", "effect.apply", json!({ "effect": "addon.color.desaturate" })),
         cmd(duotone()),
-        Item::Cmd("Invert Colors", "effect.apply", json!({ "effect": "addon.color.invert" })),
-        Item::Cmd("Vector Halftone…", "effect.dialog", json!({ "effect": "addon.color.halftone" })),
-        Item::Sep,
+        cp("Invert Colors", "effect.apply", json!({ "effect": "addon.color.invert" })),
+        cp("Vector Halftone…", "effect.dialog", json!({ "effect": "addon.color.halftone" })),
+        Sep,
         cmd(print_fixes()),
-        Item::Cmd("Find Nearest Swatch…", nearest::COMMAND, Value::Null),
-        Item::Cmd("Create Swatch Legend…", legend::COMMAND, Value::Null),
-        Item::Sep,
+        c("Find Nearest Swatch…", nearest::COMMAND),
+        c("Create Swatch Legend…", legend::COMMAND),
+        Sep,
         // Each selected object's stroke takes its own fill, or the other way (#5530).
-        Item::Cmd("Apply Fill to Stroke", "addon.color.fillToStroke", json!({})),
-        Item::Cmd("Apply Stroke to Fill", "addon.color.strokeToFill", json!({})),
-        Item::Sep,
-        Item::Sub(
+        cp("Apply Fill to Stroke", "addon.color.fillToStroke", json!({})),
+        cp("Apply Stroke to Fill", "addon.color.strokeToFill", json!({})),
+        Sep,
+        sub(
             "Select by Color Kind",
             [
                 ("Objects with Spot Colors", "spotColors"),
@@ -118,15 +121,15 @@ pub fn menu() -> Vec<Item> {
                 ("Grayscale Images", "grayImages"),
             ]
             .into_iter()
-            .map(|(label, kind)| Item::Cmd(label, "addon.color.select", json!({ "kind": kind })))
+            .map(|(label, kind)| cp(label, "addon.color.select", json!({ "kind": kind })))
             .collect(),
         ),
     ]
 }
 
-/// The panel's choice and the values set for each adjustment.
+/// The panel's choice and the values set for each adjustment, kept at `app.addon_panels.color`.
 #[derive(Clone, Default)]
-struct Picked {
+pub(crate) struct Picked {
     /// Index in [`ADJUSTMENTS`].
     index: usize,
     /// Values set, by effect id then parameter.
@@ -149,55 +152,63 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         empty_state(ui, "sun", tl!("No selection"), tl!("Select objects to adjust their colors."));
         return;
     }
-    let mut st: Picked = pstate(ui.ctx(), STATE);
-    let labels: Vec<&str> = ADJUSTMENTS.iter().map(|a| a.1).collect();
-    let (id, label, fields) = adjustment(st.index);
-    const LABEL_W: f32 = 84.0;
-    widgets::label_row(ui, tl!("Adjustment"), LABEL_W, |ui| {
-        if let Some(i) = widgets::dropdown(ui, "color-effects-pick", label, &labels, 150.0) {
-            st.index = i;
-        }
-    });
-    let (_, params) = st.params();
-    for (key, name, (min, max), decimals, _) in fields {
-        let v = params.get(*key).and_then(Value::as_f64);
-        widgets::label_row(ui, tl!(name), LABEL_W, |ui| {
-            if let Some(n) = widgets::range_field(ui, ("color-effects", id, key), v, *min..=*max, "", *decimals, 70.0) {
-                let set = st.values.entry(id).or_insert_with(|| json!({}));
-                if let Some(m) = set.as_object_mut() {
-                    m.insert(key.to_string(), json!(n));
-                }
-            }
+    let mut st = std::mem::take(&mut app.addon_panels.color);
+    let entries: Vec<Entry<usize>> = ADJUSTMENTS.iter().enumerate().map(|(i, a)| Entry::new(i, tl!(a.1).to_string())).collect();
+    FieldGroup::new(tl!("Adjustment").to_string()).show(ui, |ui, _| {
+        Field::new(tl!("Adjustment").to_string()).show(ui, |ui, _| {
+            Select::new(tl!("Adjustment").to_string(), Bind::bound(&mut st.index), &entries).show(ui);
         });
+    });
+    let (id, _, fields) = adjustment(st.index);
+    // An adjustment with no values (Desaturate, Invert Colors) has no table: an empty one cannot be shown.
+    if !fields.is_empty() {
+        let rows: Vec<AdjustField> = fields
+            .iter()
+            .map(|&(key, name, (min, max), decimals, default)| {
+                AdjustField::new(key, tl!(name).to_string(), min..=max, default).step(10f64.powi(-(decimals as i32)))
+            })
+            .collect();
+        let (_, params) = st.params();
+        let mut values: Vec<f64> = fields.iter().map(|f| params[f.0].as_f64().unwrap_or(f.4)).collect();
+        let before = values.clone();
+        AdjustSliders::new(tl!("Values").to_string(), &rows, Bind::bound(&mut values)).context(AdjustContext::properties(true)).show(ui);
+        if values != before
+            && let Some(set) = st.values.entry(id).or_insert_with(|| json!({})).as_object_mut()
+        {
+            set.extend(fields.iter().zip(&values).map(|(f, v)| (f.0.to_string(), json!(v))));
+        }
     }
-    ui.add_space(4.0);
     let (id, params) = st.params();
+    let mut command = None;
     ui.horizontal(|ui| {
-        let run = |app: &mut VectorcraftApp, cmd: &str| {
-            if let Err(e) = app.run(cmd, json!({ "effect": id, "params": params })) {
-                app.status(e);
-            }
-        };
-        if widgets::flat_button(ui, tl!("Add as Effect"), 100.0).clicked() {
-            run(app, "effect.apply");
+        if Button::new(tl!("Add as Effect").to_string()).show(ui).clicked() {
+            command = Some("effect.apply");
         }
-        if widgets::flat_button(ui, tl!("Apply as Filter"), 100.0).clicked() {
-            run(app, "addon.color.filter");
+        if Button::new(tl!("Apply as Filter").to_string()).show(ui).clicked() {
+            command = Some("addon.color.filter");
         }
-        if widgets::flat_button(ui, tl!("Reset"), 56.0).clicked() {
+        if Button::new(tl!("Reset").to_string()).show(ui).clicked() {
             st.values.remove(id);
         }
     });
-    set_pstate(ui.ctx(), STATE, st);
     // Inks: Duotone's and Print Ink Fixes' dialogs, as their menu items open them.
-    ui.add_space(8.0);
-    widgets::subheader(ui, tl!("Inks"));
-    let width = ui.available_width();
-    for (label, id, p) in [duotone(), print_fixes()] {
-        if widgets::flat_button(ui, tl!(label), width).clicked() {
-            let (id, p) = crate::menus::click_target(label, id, &p);
-            crate::menus::invoke(app, &id, p);
+    let mut ink = None;
+    Section::fixed(tl!("Inks").to_string()).show(ui, |ui, _| {
+        for item in [duotone(), print_fixes()] {
+            if Button::new(tl!(item.0).to_string()).show(ui).clicked() {
+                ink = Some(item);
+            }
         }
+    });
+    app.addon_panels.color = st;
+    if let Some(cmd) = command
+        && let Err(e) = app.run(cmd, json!({ "effect": id, "params": params }))
+    {
+        app.status(e);
+    }
+    if let Some((label, id, p)) = ink {
+        let (id, p) = crate::menus::click_target(label, id, &p);
+        crate::menus::invoke(app, &id, p);
     }
 }
 
