@@ -1655,8 +1655,8 @@ pub(crate) fn delete_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     delete_anchors_joined(s, p, false)
 }
 
-/// [`delete_anchors`], and with `keep_joined` (General › Double-Click Adds Anchor Points and Delete
-/// Keeps Paths Joined) a path with direct-selected anchors and no selected segment loses those anchors
+/// [`delete_anchors`], and with `keep_joined` (General › Delete Removes Anchor Points and Keeps
+/// Paths Joined) a path with direct-selected anchors and no selected segment loses those anchors
 /// as Remove Anchor Points takes them, without opening it, and stays selected with the next
 /// anchor along (the one before at an open subpath's end), so the next Delete goes on along the
 /// path. When no subpath it changed keeps two anchors, the path stays selected whole, as Remove

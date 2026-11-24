@@ -6716,7 +6716,7 @@ theme	Appearance	Udseende
 	Data Recovery	Datgendannelse
 	Default Language	Standardsprog
 	Disable Auto Add/Delete	Deaktivér automatisk tilføjelse/sletning
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	Dobbeltklik tilføjer ankerpunkter, og Delete holder stier samlet
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete fjerner ankerpunkter og holder stier samlet
 	Interpolate Control Points When Moving Anchors	Interpolér retningshåndtag ved flytning af ankerpunkter
 	Display All Blacks Accurately	Vis alle sorte nøjagtigt
 	Display All Blacks as Rich Black	Vis alle sorte som rich black
@@ -7277,7 +7277,7 @@ font-technology	Variable	Variable
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsbevægelse med to fingre på en pegeplade roterer visningen af lærredet.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Når du holder en tast nede, køres værktøjet eller kommandoen i dens Hold-kolonne i Tastaturgenveje; et kort tryk kører dens sædvanlige genvej.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hvor mange sekunder en tast skal holdes nede, før dens holdegenvej køres i stedet for dens sædvanlige genvej.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Dobbeltklik på et stisegment med det direkte markeringsværktøj tilføjer et ankerpunkt der. Delete fjerner de markerede ankerpunkter og tilpasser kurven omkring hvert af dem i stedet for at åbne stien der.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete fjerner de markerede ankerpunkter og tilpasser kurven omkring hvert af dem i stedet for at åbne stien der.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Når du flytter ankerpunkter, beholder hver kurve med ét flyttet endepunkt sin form i forhold til sine endepunkter.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Når du holder et værktøjs genvejstast nede, er værktøjet valgt, indtil du slipper, og derefter vælges det forrige værktøj igen.
 	Shows the bounding box while you move the selection or draw a shape.	Viser afgrænsningsboksen, mens du flytter markeringen eller tegner en form.

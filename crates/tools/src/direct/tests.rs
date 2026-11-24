@@ -1367,7 +1367,7 @@ fn double_click_adds(cx: &ToolContext, at: (f64, f64), mods: Mods) -> Option<(u6
     })
 }
 
-/// With General › Double-Click Adds Anchor Points and Delete Keeps Paths Joined on, a plain
+/// With General › Double-Click Adds Anchor Points on, a plain
 /// Direct Selection double-click on a segment of a selected or unselected path adds an anchor at
 /// the clicked point. Off, Group Selection, a modifier, an anchor or the fill add none.
 #[test]

@@ -4579,7 +4579,7 @@ theme	Appearance	Vormgeving
 	Data Recovery	Gegevensherstel
 	Default Language	Standaardtaal
 	Disable Auto Add/Delete	Automatisch toevoegen/verwijderen uitschakelen
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	Dubbelklikken voegt ankerpunten toe en Delete houdt paden verbonden
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete verwijdert ankerpunten en houdt paden verbonden
 	Interpolate Control Points When Moving Anchors	Richtingsgrepen interpoleren bij het verplaatsen van ankerpunten
 	Display All Blacks Accurately	Alle zwarttinten nauwkeurig weergeven
 	Display All Blacks as Rich Black	Alle zwarttinten weergeven als rijk zwart
@@ -5140,7 +5140,7 @@ font-technology	Variable	Variabel
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Als u een toets vasthoudt, wordt het gereedschap of de opdracht uit de kolom Houd in Sneltoetsen uitgevoerd; kort drukken voert de gewone sneltoets uit.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hoeveel seconden u een toets moet vasthouden voordat de vasthoudsneltoets wordt uitgevoerd in plaats van de gewone sneltoets.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Dubbelklikken op een padsegment met het Direct selecteren-gereedschap voegt daar een ankerpunt toe. Delete verwijdert de geselecteerde ankerpunten en past de curve rond elk ervan opnieuw aan, in plaats van het pad daar te openen.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete verwijdert de geselecteerde ankerpunten en past de curve rond elk ervan opnieuw aan, in plaats van het pad daar te openen.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.

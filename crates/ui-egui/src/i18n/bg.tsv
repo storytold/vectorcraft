@@ -896,7 +896,7 @@ font-technology	Variable	Променливи
 	Direct Selection Tool	Инструмент „Директен избор“
 	Direction Handles	Маркери за посока
 	Disable Auto Add/Delete	Изключване на автоматично добавяне/изтриване
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	Двойното щракване добавя опорни точки, а Delete запазва контурите свързани
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete премахва опорните точки и запазва контурите свързани
 	Interpolate Control Points When Moving Anchors	Интерполиране на маркерите за посока при преместване на опорни точки
 	Disable Opacity Mask	Изключване на маска за непрозрачност
 	Discard	Отхвърляне
@@ -3222,7 +3222,7 @@ digits	Malayalam	Малаялам
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Задържането на клавиш изпълнява инструмента или командата от колоната „Задръжте“ в „Клавишни комбинации“; краткото натискане изпълнява обичайната му комбинация.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Колко секунди трябва да се задържи клавиш, преди вместо обичайната му комбинация да се изпълни комбинацията му със задържане.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Двойното щракване върху сегмент на контур с инструмента „Директен избор“ добавя опорна точка там. Delete премахва избраните опорни точки и напасва кривата около всяка от тях, вместо да отваря контура там.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete премахва избраните опорни точки и напасва кривата около всяка от тях, вместо да отваря контура там.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Когато премествате котвени точки, всяка крива с една преместена крайна точка запазва формата си спрямо краищата си.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показва ограничителната рамка, докато премествате селекцията или рисувате форма.

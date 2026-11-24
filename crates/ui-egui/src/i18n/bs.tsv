@@ -4127,7 +4127,7 @@ theme	Appearance	Izgled
 	Data Recovery	Oporavak podataka
 	Default Language	Zadani jezik
 	Disable Auto Add/Delete	Onemogući automatsko dodavanje/brisanje
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	Dvostruki klik dodaje sidrene tačke, a Delete zadržava putanje spojenim
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete uklanja sidrene tačke i zadržava putanje spojenim
 	Interpolate Control Points When Moving Anchors	Interpoliraj ručke smjera pri pomjeranju sidrenih tačaka
 	Display All Blacks Accurately	Prikaži sve crne tačno
 	Display All Blacks as Rich Black	Prikaži sve crne kao bogatu crnu
@@ -4709,7 +4709,7 @@ font-technology	Variable	Varijabilni
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Držanje tipke pokreće alat ili naredbu iz njene kolone „Zadrži“ u Prečicama na tastaturi; kratki pritisak pokreće njenu uobičajenu prečicu.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Koliko sekundi tipka mora biti pritisnuta prije nego što se umjesto uobičajene prečice pokrene njena prečica zadržavanjem.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Dvostruki klik na segment putanje alatom za direktni odabir tamo dodaje sidrenu tačku. Delete uklanja odabrane sidrene tačke i ponovo prilagođava krivu oko svake od njih, umjesto da tamo otvori putanju.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete uklanja odabrane sidrene tačke i ponovo prilagođava krivu oko svake od njih, umjesto da tamo otvori putanju.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.

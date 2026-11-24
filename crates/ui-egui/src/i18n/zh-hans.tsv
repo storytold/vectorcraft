@@ -870,7 +870,7 @@ antiAlias	Sharp	锐利
 	Direct Selection Tool	直接选择工具
 	Direction Handles	方向手柄
 	Disable Auto Add/Delete	禁用自动添加/删除锚点
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	双击添加锚点，Delete 保持路径连接
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete 删除锚点并保持路径连接
 	Interpolate Control Points When Moving Anchors	移动锚点时插值方向手柄
 	Disable Opacity Mask	禁用不透明度蒙版
 	Discard	不存储
@@ -3218,7 +3218,7 @@ digits	Malayalam	马拉雅拉姆数字
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	按住某个键会运行键盘快捷键中其按住列的工具或命令；快速按下则运行其常规快捷键。
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	按住某个键多少秒后，运行其按住快捷键而不是常规快捷键。
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	使用直接选择工具双击路径线段会在该处添加锚点。Delete 会删除所选锚点并重新拟合每个锚点周围的曲线，而不会在该处断开路径。
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete 会删除所选锚点并重新拟合每个锚点周围的曲线，而不会在该处断开路径。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移动锚点时，只有一端移动的每条曲线都会保持其相对于两端的形状。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。

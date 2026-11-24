@@ -906,7 +906,7 @@ font-technology	Variable	Değişken
 	Direct Selection Tool	Doğrudan Seçim Aracı
 	Direction Handles	Yön Kolları
 	Disable Auto Add/Delete	Otomatik Ekleme/Silmeyi Devre Dışı Bırak
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	Çift Tıklama Bağlantı Noktası Ekler ve Delete Yolları Birleşik Tutar
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete Bağlantı Noktalarını Kaldırır ve Yolları Birleşik Tutar
 	Interpolate Control Points When Moving Anchors	Bağlantı Noktalarını Taşırken Yön Kollarını Enterpole Et
 	Disable Opacity Mask	Opaklık Maskesini Devre Dışı Bırak
 	Discard	At
@@ -3093,7 +3093,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Bir tuşu basılı tutmak, Klavye Kısayolları'ndaki Basılı tutun sütununda bulunan aracı veya komutu çalıştırır; kısa basış olağan kısayolunu çalıştırır.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Olağan kısayolu yerine basılı tutma kısayolunun çalışması için bir tuşun kaç saniye basılı tutulması gerektiği.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Doğrudan Seçim Aracı ile bir yol parçasına çift tıklamak oraya bir bağlantı noktası ekler. Delete, seçili bağlantı noktalarını kaldırır ve yolu orada açmak yerine her birinin çevresindeki eğriyi yeniden uydurur.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete, seçili bağlantı noktalarını kaldırır ve yolu orada açmak yerine her birinin çevresindeki eğriyi yeniden uydurur.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Bağlantı noktalarını taşıdığınızda, bir ucu taşınan her eğri uçlarına göre şeklini korur.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
 	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.

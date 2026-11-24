@@ -4111,7 +4111,7 @@ theme	Appearance	Wygląd
 	Data Recovery	Odzyskiwanie danych
 	Default Language	Język domyślny
 	Disable Auto Add/Delete	Wyłącz automatyczne dodawanie/usuwanie
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	Dwukrotne kliknięcie dodaje punkty kontrolne, a Delete zachowuje ścieżki połączone
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete usuwa punkty kontrolne i zachowuje ścieżki połączone
 	Interpolate Control Points When Moving Anchors	Interpoluj uchwyty kierunkowe podczas przesuwania punktów kontrolnych
 	Display All Blacks Accurately	Wyświetlaj wszystkie czernie dokładnie
 	Display All Blacks as Rich Black	Wyświetlaj wszystkie czernie jako czerń głęboką
@@ -4661,7 +4661,7 @@ font-technology	Variable	Zmienne
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gest obrotu dwoma palcami na gładziku obraca widok obszaru roboczego.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Przytrzymanie klawisza uruchamia narzędzie lub polecenie z jego kolumny Przytrzymaj w Skrótach klawiaturowych; krótkie naciśnięcie uruchamia jego zwykły skrót.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Ile sekund trzeba przytrzymać klawisz, zanim zamiast zwykłego skrótu zostanie uruchomiony jego skrót przytrzymania.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Dwukrotne kliknięcie segmentu ścieżki narzędziem Zaznaczanie bezpośrednie dodaje w tym miejscu punkt kontrolny. Delete usuwa zaznaczone punkty kontrolne i ponownie dopasowuje krzywą wokół każdego z nich, zamiast otwierać tam ścieżkę.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete usuwa zaznaczone punkty kontrolne i ponownie dopasowuje krzywą wokół każdego z nich, zamiast otwierać tam ścieżkę.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Podczas przesuwania punktów kontrolnych każda krzywa z jednym przesuniętym końcem zachowuje kształt względem swoich końców.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Przytrzymanie skrótu narzędzia wybiera je do momentu puszczenia klawisza, a potem ponownie wybierane jest poprzednie narzędzie.
 	Shows the bounding box while you move the selection or draw a shape.	Pokazuje obwiednię podczas przesuwania zaznaczenia lub rysowania kształtu.

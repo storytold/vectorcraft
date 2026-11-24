@@ -1196,7 +1196,7 @@ arrowhead	Target	Céltábla
 	Direction Handles	Iránykezelő fogantyúk
 	Direction:	Irány:
 	Disable Auto Add/Delete	Automatikus hozzáadás és törlés kikapcsolása
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	A dupla kattintás horgonypontot ad hozzá, a Delete egyben tartja az útvonalakat
+	Delete Removes Anchor Points and Keeps Paths Joined	A Delete eltávolítja a horgonypontokat, és egyben tartja az útvonalakat
 	Interpolate Control Points When Moving Anchors	Iránykezelő fogantyúk interpolálása horgonypontok mozgatásakor
 	Disable Opacity Mask	Átlátszósági maszk kikapcsolása
 	Discard	Elvetés
@@ -3916,7 +3916,7 @@ mark-style	Japanese	Japán
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Az érintőpadon végzett kétujjas forgató kézmozdulat elforgatja a vászon nézetét.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Egy billentyű nyomva tartása a Billentyűparancsok Nyomva tartás oszlopában lévő eszközt vagy parancsot futtatja; egy rövid lenyomás a szokásos billentyűparancsát futtatja.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Hány másodpercig kell nyomva tartani egy billentyűt, hogy a szokásos billentyűparancsa helyett a nyomva tartásos billentyűparancsa fusson.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Ha a Közvetlen kijelölés eszközzel duplán kattint egy útvonalszakaszra, ott egy horgonypont jön létre. A Delete eltávolítja a kijelölt horgonypontokat, és mindegyik körül újraigazítja a görbét ahelyett, hogy ott megnyitná az útvonalat.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	A Delete eltávolítja a kijelölt horgonypontokat, és mindegyik körül újraigazítja a görbét ahelyett, hogy ott megnyitná az útvonalat.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Horgonypontok mozgatásakor minden olyan görbe, amelynek egyik vége elmozdul, megtartja az alakját a végeihez képest.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Egy eszköz billentyűparancsát lenyomva tartva az eszköz a felengedésig ki van választva, utána ismét az előző eszköz lesz kiválasztva.
 	Shows the bounding box while you move the selection or draw a shape.	Megjeleníti a befoglaló keretet, miközben a kijelölést mozgatja vagy alakzatot rajzol.

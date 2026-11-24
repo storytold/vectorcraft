@@ -1,13 +1,10 @@
-//! General › Double-Click Adds Anchor Points and Delete Keeps Paths Joined
-//! (`deleteKeepsPathsJoined`). With it on, Delete (`edit.clear`) removes the direct-selected
-//! anchors of a path as Remove Anchor Points does, without opening the path, and a Direct Selection
-//! double-click on a segment adds an anchor there. Off (the default), Delete removes them with
-//! their segments and the double-click adds nothing.
+//! General › Delete Removes Anchor Points and Keeps Paths Joined (`deleteKeepsPathsJoined`). With
+//! it on, Delete (`edit.clear`) removes the direct-selected anchors of a path as Remove Anchor
+//! Points does, without opening the path. Off (the default), Delete removes them with their
+//! segments.
 
 use serde_json::json;
-use vectorcraft_geom::kurbo::ParamCurveNearest;
-use vectorcraft_geom::{ParamCurve, PathData, Point};
-use vectorcraft_tools::{PointerEvent, PointerKind};
+use vectorcraft_geom::{PathData, Point};
 
 use super::history;
 use crate::*;
@@ -227,71 +224,4 @@ fn a_replay_removes_anchors_as_the_recorded_step_did() {
     select(&mut s, id, json!([[0, 1]]), "set");
     s.replay("edit.clear", &json!({})).unwrap();
     assert!(!path_of(&s, id).unwrap().subpaths[0].closed);
-}
-
-/// Two clicks and the double-click that follows them, with Direct Selection, at `at`. On a segment
-/// the clicks select it, so the double-click finds its path selected.
-fn double_click(s: &mut Session, at: Point) {
-    let v = ViewInfo::default();
-    s.select_tool("directSelection", v).unwrap();
-    for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
-        s.pointer(&PointerEvent::new(kind, at.x, at.y), v).unwrap();
-    }
-}
-
-/// An open curve from (100, 300) to (300, 300) whose middle, at t = 0.5, is (200, 225).
-fn arch(s: &mut Session) -> NodeId {
-    create(s, json!([{"x": 100, "y": 300, "out": [100, 200]}, {"x": 300, "y": 300, "in": [300, 200]}]), false)
-}
-
-#[test]
-fn with_the_preference_on_a_double_click_on_a_segment_adds_an_anchor_in_one_undo_step() {
-    // The clicks before the double-click select the segment either way; an unselected path at the
-    // double-click is covered by the tools crate's tests.
-    for selected in [true, false] {
-        let mut s = session();
-        keep_joined(&mut s, true);
-        let id = arch(&mut s);
-        if !selected {
-            s.execute("select.none", &json!({})).unwrap();
-        }
-        let curve = path_of(&s, id).unwrap().subpaths[0].segment(0);
-        let before = history(&s).0;
-        double_click(&mut s, Point::new(200.0, 225.0));
-        assert_eq!(history(&s).0, before + 1, "one undo step (selected before the clicks: {selected})");
-        assert_eq!(points(&s, id).len(), 3, "an anchor is added (selected before the clicks: {selected})");
-        assert!(points(&s, id)[1].distance(Point::new(200.0, 225.0)) < 0.5, "at the clicked point: {:?}", points(&s, id));
-        let halves = path_of(&s, id).unwrap().subpaths[0].clone();
-        for seg in 0..2 {
-            for t in [0.25, 0.5, 0.75] {
-                let q = ParamCurve::eval(&halves.segment(seg), t);
-                let d = ParamCurveNearest::nearest(&curve, q, 1e-9).distance_sq;
-                assert!(d < 1e-6, "the curve keeps its shape at {q:?}");
-            }
-        }
-        let st = s.doc().unwrap();
-        assert_eq!(st.selection.objects, vec![id]);
-        assert_eq!(st.selection.anchors.get(&id), Some(&[(0, 1)].into()), "only the new anchor is selected (selected before the clicks: {selected})");
-        assert!(st.selection.segments.get(&id).is_none_or(|s| s.is_empty()), "no segment stays selected");
-        s.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(points(&s, id).len(), 2, "undo removes it");
-    }
-}
-
-#[test]
-fn with_the_preference_off_a_double_click_on_a_segment_adds_nothing() {
-    let mut s = session();
-    let id = arch(&mut s);
-    let before = history(&s).0;
-    double_click(&mut s, Point::new(200.0, 225.0));
-    assert_eq!(history(&s).0, before);
-    assert_eq!(points(&s, id).len(), 2);
-}
-
-#[test]
-fn the_select_anchor_param_must_be_a_boolean() {
-    let mut s = session();
-    let id = arch(&mut s);
-    assert!(s.execute("path.insertAnchor", &json!({"id": id.0, "segment": 0, "selectAnchor": "yes"})).is_err());
-    assert_eq!(points(&s, id).len(), 2, "a refused call changes nothing");
 }

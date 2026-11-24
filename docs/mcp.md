@@ -8438,13 +8438,14 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   as it did when it was recorded. Align and
   Distribute, and the anchors of type paths and area type frames (`text.reshapePath`, `text.reshapeArea`), move as
   before. Off, the handles of a moved anchor move with it and the other handles stay where they are.
-- `deleteKeepsPathsJoined` (General › Double-Click Adds Anchor Points and Delete Keeps Paths Joined, off by default):
-  the default of the `keepJoined` param of `edit.clear` (Delete, Backspace, Edit › Clear, and the Layers panel's Delete
+- `deleteKeepsPathsJoined` (General › Delete Removes Anchor Points and Keeps Paths Joined, off by default): the
+  default of the `keepJoined` param of `edit.clear` (Delete, Backspace, Edit › Clear, and the Layers panel's Delete
   button while no row is highlighted). On, Delete removes the direct-selected anchors of a path as `path.removeAnchors` does, refitting the curve
   around each one, so a closed path stays closed and an open path stays in one piece. The next anchor along (the one
   before at an open path's end) is then selected, so the next Delete goes on along the path. When no subpath that lost
   an anchor keeps two anchors, the path stays selected whole, and the next Delete removes it. Off, Delete deletes the anchors with their segments and opens the path there.
-  With it on, a double-click without modifier keys on a path segment with Direct Selection also adds an anchor at the
+- `doubleClickAddsAnchorPoints` (General › Double-Click Adds Anchor Points, off by default): on, a double-click
+  without modifier keys on a path segment with Direct Selection adds an anchor at the
   clicked point (`path.insertAnchor` with `selectAnchor: true`): the curve keeps its shape, the new anchor alone is
   selected, and the change is one undo step. The double-click takes the path whose stroke or outline is under the
   pointer, selected or not, in a group or in isolation mode, a clipping path included, and the path's own line must

@@ -804,7 +804,7 @@ fn segment_at(cx: &ToolContext, id: NodeId, p: Point) -> Option<SegmentHit> {
     Some(SegmentHit { si, seg, t, curved: a.has_out() || b.has_in() })
 }
 
-/// With General › Double-Click Adds Anchor Points and Delete Keeps Paths Joined on, a plain
+/// With General › Double-Click Adds Anchor Points on, a plain
 /// double-click on a path segment adds an anchor there, the new anchor alone selected. The path is
 /// the one whose stroke or outline a press at `p` hits, a clipping path included. An anchor or a
 /// center point under the pointer comes first, so nothing is added (the caller has already given

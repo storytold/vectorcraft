@@ -284,8 +284,8 @@ pub struct ToolContext<'a> {
     /// General → Double Click To Isolate: a double-click on a group with the Selection tool
     /// isolates it.
     pub double_click_isolate: bool,
-    /// General → Double-Click Adds Anchor Points and Delete Keeps Paths Joined: a plain double-click
-    /// on a path segment with Direct Selection adds an anchor there.
+    /// General → Double-Click Adds Anchor Points: a plain double-click on a path segment with Direct
+    /// Selection adds an anchor there.
     pub double_click_adds_anchor: bool,
     /// Selection & Anchor Display → Command Click to Select Objects Behind: Cmd/Ctrl-click with the
     /// Selection tool selects the object under the selected one, the next click the one under

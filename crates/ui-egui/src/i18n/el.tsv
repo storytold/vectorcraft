@@ -881,7 +881,7 @@ font-technology	Variable	Μεταβλητές
 	Direct Selection Tool	Άμεση επιλογή (Direct Selection Tool)
 	Direction Handles	Λαβές κατεύθυνσης
 	Disable Auto Add/Delete	Απενεργοποίηση αυτόματης προσθήκης/διαγραφής
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	Το διπλό κλικ προσθέτει σημεία αγκύρωσης και το Delete διατηρεί τις διαδρομές ενωμένες
+	Delete Removes Anchor Points and Keeps Paths Joined	Το Delete αφαιρεί σημεία αγκύρωσης και διατηρεί τις διαδρομές ενωμένες
 	Interpolate Control Points When Moving Anchors	Παρεμβολή λαβών κατεύθυνσης κατά τη μετακίνηση σημείων αγκύρωσης
 	Disable Opacity Mask	Απενεργοποίηση μάσκας αδιαφάνειας
 	Discard	Απόρριψη
@@ -4145,7 +4145,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Μια κίνηση περιστροφής με δύο δάχτυλα σε επιφάνεια αφής περιστρέφει την προβολή του καμβά.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Το παρατεταμένο πάτημα ενός πλήκτρου εκτελεί το εργαλείο ή την εντολή της στήλης «Κρατήστε πατημένο» στις Συντομεύσεις πληκτρολογίου· ένα σύντομο πάτημα εκτελεί τη συνηθισμένη συντόμευσή του.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Πόσα δευτερόλεπτα πρέπει να μένει πατημένο ένα πλήκτρο πριν εκτελεστεί η συντόμευση παρατεταμένου πατήματος αντί για τη συνηθισμένη συντόμευσή του.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Το διπλό κλικ σε ένα τμήμα διαδρομής με το εργαλείο Άμεσης επιλογής προσθέτει εκεί ένα σημείο αγκύρωσης. Το Delete αφαιρεί τα επιλεγμένα σημεία αγκύρωσης και προσαρμόζει ξανά την καμπύλη γύρω από το καθένα, αντί να ανοίγει τη διαδρομή εκεί.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Το Delete αφαιρεί τα επιλεγμένα σημεία αγκύρωσης και προσαρμόζει ξανά την καμπύλη γύρω από το καθένα, αντί να ανοίγει τη διαδρομή εκεί.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Όταν μετακινείτε σημεία αγκύρωσης, κάθε καμπύλη με ένα μετακινημένο άκρο διατηρεί το σχήμα της σε σχέση με τα άκρα της.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Όσο κρατάτε πατημένη τη συντόμευση ενός εργαλείου, το εργαλείο είναι επιλεγμένο, και μετά επιλέγεται ξανά το προηγούμενο εργαλείο.
 	Shows the bounding box while you move the selection or draw a shape.	Εμφανίζει το πλαίσιο οριοθέτησης όσο μετακινείτε την επιλογή ή σχεδιάζετε ένα σχήμα.

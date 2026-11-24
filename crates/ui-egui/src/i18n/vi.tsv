@@ -1089,7 +1089,7 @@ font-technology	Variable	Biến thiên
 	Direction Handles	Tay nắm hướng
 	Direction:	Hướng:
 	Disable Auto Add/Delete	Tắt tự động thêm/xóa
-	Double-Click Adds Anchor Points and Delete Keeps Paths Joined	Bấm đúp thêm điểm neo và Delete giữ các đường dẫn liền mạch
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete xóa điểm neo và giữ các đường dẫn liền mạch
 	Interpolate Control Points When Moving Anchors	Nội suy tay nắm hướng khi di chuyển điểm neo
 	Disable Opacity Mask	Tắt mặt nạ độ mờ
 	Discard	Loại bỏ
@@ -3689,7 +3689,7 @@ mark-style	Japanese	Kiểu Nhật
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Giữ một phím sẽ chạy công cụ hoặc lệnh trong cột Giữ của Phím tắt; nhấn nhanh sẽ chạy phím tắt thông thường của phím đó.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Số giây phải giữ một phím trước khi phím tắt nhấn giữ của nó chạy thay cho phím tắt thông thường.
-	Double-clicking a path segment with the Direct Selection tool adds an anchor point there. Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Bấm đúp vào một đoạn của đường dẫn bằng công cụ Chọn trực tiếp sẽ thêm một điểm neo tại đó. Delete xóa các điểm neo đã chọn và khớp lại đường cong quanh từng điểm, thay vì mở đường dẫn tại đó.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete xóa các điểm neo đã chọn và khớp lại đường cong quanh từng điểm, thay vì mở đường dẫn tại đó.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Khi bạn di chuyển điểm neo, mỗi đường cong có một đầu bị di chuyển sẽ giữ hình dạng so với các đầu của nó.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.
 	Shows the bounding box while you move the selection or draw a shape.	Hiển thị hộp giới hạn khi bạn di chuyển vùng chọn hoặc vẽ một hình.

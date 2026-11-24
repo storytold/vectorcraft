@@ -1278,7 +1278,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Does Clear remove direct-selected anchors without opening their paths (`keepJoined` param, else
-/// General › Double-Click Adds Anchor Points and Delete Keeps Paths Joined)? Noted in the journal, so a
+/// General › Delete Removes Anchor Points and Keeps Paths Joined)? Noted in the journal, so a
 /// replay removes them the same way whatever the preference is at the time. A saved step without `keepJoined`
 /// was recorded before the preference existed, so it opens the paths as it did then.
 fn keeps_paths_joined(s: &mut Session, p: &Value) -> Result<bool> {
