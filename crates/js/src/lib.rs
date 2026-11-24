@@ -90,6 +90,7 @@ mod regexp_builtins;
 mod regexp_vm;
 mod string_builtins;
 mod token;
+mod unit_value;
 mod value;
 mod xml;
 mod xml_builtins;
@@ -125,7 +126,8 @@ pub struct Options {
     pub e4x: bool,
     /// Read and run the ECMAScript 2015 forms this engine has: `let` and `const`, arrow functions,
     /// template literals (tagged ones included), default and rest parameters, and spread in array
-    /// literals, calls and `new`. Off, they are syntax errors and the language is ES5.1's. Code a
+    /// literals, calls and `new`, and from ECMAScript 2020 optional chains (`a?.b`, `a?.[k]`,
+    /// `f?.()`) and `??`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
     pub es2015: bool,
 }
@@ -261,6 +263,8 @@ mod builtins_tests;
 #[cfg(test)]
 mod es2015_tests;
 #[cfg(test)]
+mod es2020_tests;
+#[cfg(test)]
 mod extension_tests;
 #[cfg(test)]
 mod host_tests;
@@ -272,5 +276,7 @@ mod module_tests;
 mod tests;
 #[cfg(test)]
 mod text_tests;
+#[cfg(test)]
+mod unit_value_tests;
 #[cfg(test)]
 mod xml_tests;

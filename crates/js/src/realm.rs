@@ -507,6 +507,12 @@ impl Realm {
         self.interp.locator = Some(locate);
     }
 
+    /// Has `$.stack` start with a line `[name]` that names the running script, before its frames;
+    /// `None` leaves the line out.
+    pub fn set_script_name(&mut self, name: Option<String>) {
+        self.interp.script_name = name;
+    }
+
     /// Which source the last error's `line` and `column` are in: 0 for the script last given to
     /// [`Realm::run`] or [`Realm::start`], `n` for the `n`th source a
     /// [`crate::HostItem::Evaluator`] gave since then, and [`UNKNOWN_SOURCE`] otherwise, which
@@ -602,6 +608,18 @@ impl Realm {
     /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
     pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
         match crate::builtins::extensions::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global constructor `UnitValue`, measurements with a magnitude and a unit, and has
+    /// the arithmetic, comparison and unary operators calculate with its objects
+    /// ([`crate::unit_value`]). A realm without it keeps the standard operators. A second call
+    /// after one that succeeded changes nothing; after one that failed, it installs everything
+    /// again.
+    pub fn add_unit_values(&mut self) -> Result<(), RunError> {
+        match crate::unit_value::install(&mut self.interp) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }

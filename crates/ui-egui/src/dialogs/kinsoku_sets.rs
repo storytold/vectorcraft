@@ -1,60 +1,89 @@
 //! Type › Kinsoku Shori Settings… (with Show East Asian Options): the active document's custom
-//! Kinsoku Shori sets, the one picked in Kinsoku shown with its four categories: Cannot Start Line,
+//! Kinsoku Shori sets, the one picked in Kinsoku Set shown with its four categories: Cannot Start Line,
 //! Cannot End Line, Hanging Punctuation and Inseparable Characters. New adds a set based on Hard,
 //! Soft, None or a set of the dialog, Delete takes the one picked out, and Add puts the character
 //! of a Unicode code point into a category. Nothing changes in the document until OK,
 //! which runs `type.kinsokuSets.set` with every set as one undo step; Cancel leaves them as they were.
 //!
-//! Fields: `__doc` (the uid of the document the dialog opened on, which OK sets the sets of),
-//! `__opened` (the names of that document's sets when the dialog opened; OK keeps the sets the
-//! document gained since, after the dialog's own), `sets` (the sets as `type.kinsokuSets.set` takes them, each with the name it had in the
-//! document as `from`), `selected` (the index of the one picked), `name`, `cannotStart`,
-//! `cannotEnd`, `hanging` and `inseparable` (its name and categories as typed, the inseparable
-//! sequences separated by spaces), `base` (what New starts from), `code` (the code point Add
-//! adds), `into` (the category it adds to) and `shown` (the set the name and category fields
-//! were filled from). When `sets` or `selected` is changed so the picked set is no longer `shown`,
-//! the fields are filled from the picked set again and what was typed in them is dropped.
+//! Fields for automation: `sets` (the sets as `type.kinsokuSets.set` takes them, each with the name it
+//! had in the document as `from`), `selected` (the index of the one picked), `name` (renames the one
+//! picked), `cannotStart`, `cannotEnd`, `hanging` and `inseparable` (its categories as typed, the
+//! inseparable sequences separated by spaces), `base` (what New starts from), `code` (the code
+//! point Add adds) and `into` (the category it adds to). A `sets` that is not a list of sets is kept
+//! as it is: no frame or button replaces it, and OK sends it to the command, which refuses it.
 //!
 //! Behavior reference: the help page
 //! <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/use-kinsoku-for-japanese-line-breaking.html>.
 
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
+use craft::ui::display::Text;
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::presets::{
+    NameCheck, NamedPresetEvent, NamedPresetRow, PickerField, PresetError, PresetPicker, PresetRow, PresetSource, PresetState,
+};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::Label;
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::text::TextField;
+use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::KinsokuSet;
+use vectorcraft_doc::{Kinsoku, KinsokuSet};
 
-use super::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use crate::VectorcraftApp;
 
-/// The dialog kind of Kinsoku Shori Settings.
-pub const KIND: &str = "kinsokuSets";
-
-/// The command OK runs, and the menu item's.
+/// The command OK runs, the menu item's, and the key of the dialog on the host.
 pub const COMMAND: &str = vectorcraft_engine::cmd::kinsokusets::SET;
-
-/// The field that holds the uid of the document whose sets the dialog shows (`ui.dialog.set`
-/// refuses `__` fields).
-const DOC: &str = "__doc";
-
-/// The field that holds the names of the document's sets when the dialog opened: OK keeps the
-/// sets the document gained since, which the dialog does not list.
-const OPENED: &str = "__opened";
 
 /// The categories, as the command's keys, in the order the dialog shows them.
 const CATEGORIES: [&str; 4] = ["cannotStart", "cannotEnd", "hanging", "inseparable"];
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Kinsoku Shori Settings").into(), body, confirm, min_width: 560.0, ..DialogSpec::FORM };
+/// The categories with their labels; Add puts a character into the first three.
+fn categories() -> [(&'static str, &'static str); 4] {
+    [
+        ("cannotStart", tl!("Cannot Start Line")),
+        ("cannotEnd", tl!("Cannot End Line")),
+        ("hanging", tl!("Hanging Punctuation")),
+        ("inseparable", tl!("Inseparable Characters")),
+    ]
+}
+
+/// What OK files for the pump: the document the dialog opened on, the names of its sets then, and the sets.
+#[derive(Clone)]
+struct Request {
+    doc: Option<u64>,
+    opened: Vec<String>,
+    sets: Value,
+}
+
+/// The Kinsoku Shori Settings dialog on the host.
+pub(crate) struct KinsokuDialog {
+    id: DialogId,
+    /// The uid of the document the dialog opened on, which OK sets the sets of.
+    doc: Option<u64>,
+    /// The names of that document's sets when the dialog opened: OK keeps the sets the document gained
+    /// since, after the dialog's own, and New's suggestion skips these names.
+    opened: Vec<String>,
+    sets: Value,
+    selected: usize,
+    /// The picked set's categories as typed, in the order of [`CATEGORIES`].
+    cats: [String; 4],
+    base: String,
+    code: String,
+    into: String,
+    picker: PresetState<String>,
+    held: HeldAnswer<Request>,
+    /// Why the last action or the last OK was refused, until a value changes.
+    problem: Option<String>,
+}
 
 /// Open Kinsoku Shori Settings on the active document's custom sets, the first one picked.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
-    let uid = st.uid;
-    let sets: Vec<Value> = st.doc.kinsoku_sets.iter().map(listed).collect();
-    let opened: Vec<&str> = st.doc.kinsoku_sets.iter().map(|k| k.name.as_str()).collect();
-    let mut d =
-        Dialog::new(KIND, json!({ DOC: uid, OPENED: opened, "sets": sets, "selected": 0, "base": "hard", "into": "cannotStart", "code": "" }));
-    show_selected(&mut d);
-    app.ui.dialog = Some(d);
+    let dialog = KinsokuDialog::new(st.uid, st.doc.kinsoku_sets.iter());
+    app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
 
@@ -68,77 +97,46 @@ fn listed(k: &KinsokuSet) -> Value {
     v
 }
 
-/// The sets the dialog holds, as the command takes them.
-fn sets(d: &Dialog) -> Vec<Map<String, Value>> {
-    d.fields.get("sets").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_object().cloned()).collect()).unwrap_or_default()
-}
-
-/// Is the `sets` field a list of sets? One that is not (set with `ui.dialog.set`) is kept as it is:
-/// no frame or button replaces it, and OK sends it to the command, which refuses it.
-fn holds_sets(d: &Dialog) -> bool {
-    d.fields.get("sets").and_then(Value::as_array).is_some_and(|a| a.iter().all(Value::is_object))
-}
-
-fn put_sets(d: &mut Dialog, sets: &[Map<String, Value>]) {
-    d.fields.insert("sets".into(), json!(sets));
-}
-
 fn name_of(set: &Map<String, Value>) -> &str {
     set.get("name").and_then(Value::as_str).unwrap_or_default()
 }
 
-/// The index of the set picked, within the sets (0 when there are none).
-fn selected(d: &Dialog, count: usize) -> usize {
-    d.fields.get("selected").and_then(Value::as_u64).map_or(0, |i| i as usize).min(count.saturating_sub(1))
-}
-
-/// Pick set `i`: its name and categories go into the fields.
-fn select(d: &mut Dialog, i: usize) {
-    d.fields.insert("selected".into(), json!(i));
-    show_selected(d);
-}
-
-fn show_selected(d: &mut Dialog) {
-    let list = sets(d);
-    let set = list.get(selected(d, list.len())).cloned().unwrap_or_default();
-    d.fields.insert("name".into(), json!(name_of(&set)));
-    for key in CATEGORIES {
-        let text = match set.get(key) {
-            Some(Value::Array(seqs)) => seqs.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "),
-            Some(Value::String(s)) => s.clone(),
-            _ => String::new(),
-        };
-        d.fields.insert(key.into(), json!(text));
+/// The text of category `key` of `set` as the field shows it.
+fn category_text(set: &Map<String, Value>, key: &str) -> String {
+    match set.get(key) {
+        Some(Value::Array(seqs)) => seqs.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" "),
+        Some(Value::String(s)) => s.clone(),
+        _ => String::new(),
     }
-    d.fields.insert("shown".into(), Value::Object(set));
 }
 
-/// Do the name and category fields describe the set picked, `set`?
-fn shows(d: &Dialog, set: &Map<String, Value>) -> bool {
-    d.fields.get("shown").and_then(Value::as_object) == Some(set)
-}
-
-/// The set picked with the name and categories as typed: space characters are left out of the
-/// single-character categories, and the inseparable sequences are the words of their field.
-fn take_fields(d: &Dialog, set: &mut Map<String, Value>) {
-    set.insert("name".into(), json!(d.str("name")));
-    for key in CATEGORIES {
-        let text = d.str(key);
-        let v = if key == "inseparable" {
+/// The categories as typed, into `set`: space characters are left out of the single-character
+/// categories, and the inseparable sequences are the words of their field.
+fn take_fields(cats: &[String; 4], set: &mut Map<String, Value>) {
+    for (key, text) in CATEGORIES.iter().zip(cats) {
+        let v = if *key == "inseparable" {
             json!(text.split_whitespace().collect::<Vec<_>>())
         } else {
             json!(text.chars().filter(|c| !c.is_whitespace()).collect::<String>())
         };
-        set.insert(key.into(), v);
+        set.insert((*key).into(), v);
     }
 }
 
-/// "Kinsoku Set N", the first N that no set in `sets` and no set of the document (`doc`) is named.
-/// A set Delete took out keeps its name out of New's, so OK gives its paragraphs Hard instead of
+/// "Kinsoku Set N", the first N that no set in `sets` and none of the document's sets at open (`opened`) is
+/// named. A set Delete took out keeps its name out of New's, so OK gives its paragraphs Hard instead of
 /// the new set's characters.
-fn new_name(sets: &[Map<String, Value>], doc: &[KinsokuSet]) -> String {
-    let taken = |n: &str| sets.iter().any(|s| KinsokuSet::same_name(name_of(s), n)) || doc.iter().any(|k| KinsokuSet::same_name(&k.name, n));
+fn new_name(sets: &[Map<String, Value>], opened: &[String]) -> String {
+    let taken = |n: &str| sets.iter().any(|s| KinsokuSet::same_name(name_of(s), n)) || opened.iter().any(|k| KinsokuSet::same_name(k, n));
     (1..).map(|n| format!("Kinsoku Set {n}")).find(|n| !taken(n)).unwrap_or_default()
+}
+
+/// Why `typed` cannot name a set beside `sets`: the document's naming rule, or another set of the dialog with it.
+fn name_problem(sets: &[Map<String, Value>], typed: &str) -> Option<PresetError> {
+    if KinsokuSet::clean_name(typed).is_none() {
+        return Some(PresetError::InvalidName);
+    }
+    sets.iter().any(|s| KinsokuSet::same_name(name_of(s), typed)).then_some(PresetError::NameTaken)
 }
 
 /// The character `code` names: `U+3001`, `u+3001` or `3001`, in hexadecimal.
@@ -148,213 +146,406 @@ fn code_char(code: &str) -> Option<char> {
     u32::from_str_radix(hex, 16).ok().and_then(char::from_u32).filter(|c| !c.is_control() && !c.is_whitespace())
 }
 
-/// What a button asked for, done once the fields are drawn.
-enum Action {
-    New,
-    Delete,
-    Add,
-}
-
 /// New's starting points: the built-in sets, then the dialog's own.
-fn bases(list: &[Map<String, Value>]) -> Vec<(String, String)> {
+fn bases(list: &[Map<String, Value>]) -> Vec<Entry<String>> {
     let mut v = vec![
-        (tl!("Hard").to_string(), "hard".to_string()),
-        (tl!("Soft").to_string(), "soft".to_string()),
-        (tl!("None").to_string(), "none".to_string()),
+        Entry::new("hard".to_owned(), tl!("Hard").to_owned()),
+        Entry::new("soft".to_owned(), tl!("Soft").to_owned()),
+        Entry::new("none".to_owned(), tl!("None").to_owned()),
     ];
-    v.extend(list.iter().map(|s| (name_of(s).to_string(), name_of(s).to_string())));
+    v.extend(list.iter().map(|s| Entry::new(name_of(s).to_owned(), name_of(s).to_owned())));
     v
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let mut list = sets(d);
-    let i = selected(d, list.len());
-    if list.get(i).is_some_and(|set| !shows(d, set)) {
-        show_selected(d);
+/// The built-in set `base` names, as the dialog holds a set.
+fn built_in(base: &str) -> Result<Map<String, Value>, String> {
+    let kind = match base {
+        "hard" => Kinsoku::Hard,
+        "soft" => Kinsoku::Soft,
+        "none" => Kinsoku::None,
+        _ => return Err("no Kinsoku set to base the new one on".into()),
+    };
+    json!(vectorcraft_text::kinsoku_set_from(kind, "")).as_object().cloned().ok_or_else(|| "no Kinsoku set to base the new one on".into())
+}
+
+/// The text a field of automation holds.
+fn text_of(field: &str, value: &Value) -> Result<String, String> {
+    value.as_str().map(str::to_owned).ok_or_else(|| FieldRefusal::Rejects(value).message(field))
+}
+
+impl KinsokuDialog {
+    fn new<'a>(doc: u64, document_sets: impl Iterator<Item = &'a KinsokuSet> + Clone) -> Self {
+        let mut d = KinsokuDialog {
+            id: dialog_id(COMMAND),
+            doc: Some(doc),
+            opened: document_sets.clone().map(|k| k.name.clone()).collect(),
+            sets: Value::Array(document_sets.map(listed).collect()),
+            selected: 0,
+            cats: Default::default(),
+            base: "hard".into(),
+            code: String::new(),
+            into: "cannotStart".into(),
+            picker: PresetState::default(),
+            held: HeldAnswer::new(),
+            problem: None,
+        };
+        d.load();
+        d
     }
-    let mut act = None;
-    let mut picked = None;
-    let names: Vec<String> = list.iter().map(|s| name_of(s).to_string()).collect();
-    let names: Vec<&str> = names.iter().map(String::as_str).collect();
-    let bases = bases(&list);
-    ui.horizontal(|ui| {
-        widgets::dim_label(ui, tl!("Kinsoku Set"));
-        if names.is_empty() {
-            widgets::dim_label(ui, tl!("None"));
-        } else if let Some(k) = widgets::dropdown_names(ui, "kinsoku-sets-set", names.get(i).copied().unwrap_or_default(), &names, 200.0) {
-            picked = Some(k);
+
+    /// The sets the dialog holds that are sets, as the command takes them.
+    fn list(&self) -> Vec<Map<String, Value>> {
+        self.sets.as_array().map(|a| a.iter().filter_map(|v| v.as_object().cloned()).collect()).unwrap_or_default()
+    }
+
+    /// Is `sets` a list of sets? One that is not is kept as it is.
+    fn holds_sets(&self) -> bool {
+        self.sets.as_array().is_some_and(|a| a.iter().all(Value::is_object))
+    }
+
+    fn require_list(&self) -> Result<Vec<Map<String, Value>>, String> {
+        if self.holds_sets() { Ok(self.list()) } else { Err("the sets must be a list of Kinsoku sets".into()) }
+    }
+
+    /// The index of the set picked, within `count` sets (0 when there are none).
+    fn index(&self, count: usize) -> usize {
+        self.selected.min(count.saturating_sub(1))
+    }
+
+    /// Fills the category fields from the set picked.
+    fn load(&mut self) {
+        let list = self.list();
+        let set = list.get(self.index(list.len()));
+        for (text, key) in self.cats.iter_mut().zip(CATEGORIES) {
+            *text = set.map(|s| category_text(s, key)).unwrap_or_default();
         }
-        ui.add_space(8.0);
-        ui.spacing_mut().item_spacing.x = 4.0;
-        if widgets::flat_button(ui, tl!("New"), 48.0).clicked() {
-            act = Some(Action::New);
+    }
+
+    /// Writes the category fields into the set picked, so `sets` always holds what is typed.
+    fn commit(&mut self) {
+        if !self.holds_sets() {
+            return;
         }
-        widgets::dim_label(ui, tl!("Based on:"));
-        let base = d.str("base");
-        let shown = bases.iter().find(|b| b.1 == base).map_or(base.as_str(), |b| b.0.as_str());
-        let base_names: Vec<&str> = bases.iter().map(|b| b.0.as_str()).collect();
-        if let Some(k) = widgets::dropdown_names(ui, "kinsoku-sets-base", shown, &base_names, 120.0)
-            && let Some(b) = bases.get(k)
+        let mut list = self.list();
+        let i = self.index(list.len());
+        if let Some(set) = list.get_mut(i) {
+            take_fields(&self.cats, set);
+            self.sets = json!(list);
+        }
+    }
+
+    /// A value changed: a refusal shown so far ends.
+    fn edited(&mut self) {
+        self.problem = None;
+        self.held.clear_refusal();
+    }
+
+    /// Picks set `i`, its categories going into the fields.
+    fn pick(&mut self, i: usize) {
+        self.commit();
+        self.selected = i;
+        self.load();
+    }
+
+    fn pick_named(&mut self, name: &str) {
+        if let Some(i) = self.list().iter().position(|s| name_of(s) == name) {
+            self.pick(i);
+        }
+    }
+
+    /// Adds a set named `name` based on the choice in Based On, and picks it.
+    pub(crate) fn create(&mut self, name: &str) -> Result<(), String> {
+        self.commit();
+        let mut list = self.require_list()?;
+        let mut set = match list.iter().find(|s| name_of(s) == self.base) {
+            Some(s) => s.clone(),
+            None => built_in(&self.base)?,
+        };
+        set.remove("from");
+        set.insert("name".into(), json!(name));
+        list.push(set);
+        // The fields are already committed: picking would write them into the new set when the old pick has its index.
+        self.selected = list.len() - 1;
+        self.sets = json!(list);
+        self.load();
+        Ok(())
+    }
+
+    /// Renames the set `from` to `to`; Based On follows the set it names.
+    pub(crate) fn rename(&mut self, from: &str, to: &str) -> Result<(), String> {
+        let mut list = self.require_list()?;
+        let set = list.iter_mut().find(|s| name_of(s) == from).ok_or("no such Kinsoku set")?;
+        set.insert("name".into(), json!(to));
+        if self.base == from {
+            self.base = to.to_owned();
+        }
+        self.sets = json!(list);
+        Ok(())
+    }
+
+    /// Takes the set `name` out; a Based On naming it falls back to Hard.
+    pub(crate) fn delete(&mut self, name: &str) -> Result<(), String> {
+        self.commit();
+        let mut list = self.require_list()?;
+        let i = list.iter().position(|s| name_of(s) == name).ok_or("no such Kinsoku set")?;
+        let picked = self.index(list.len());
+        list.remove(i);
+        if self.base == name {
+            self.base = "hard".into();
+        }
+        self.selected = if i < picked { picked - 1 } else { picked };
+        self.sets = json!(list);
+        self.load();
+        Ok(())
+    }
+
+    /// Puts the character of the Unicode code point into the category Add targets, unless it is there.
+    pub(crate) fn add_code(&mut self) -> Result<(), String> {
+        self.require_list()?;
+        let c = code_char(&self.code).ok_or("give a character's Unicode code point, as U+3001")?;
+        let at = CATEGORIES.iter().take(3).position(|k| *k == self.into).unwrap_or(0);
+        if let Some(text) = self.cats.get_mut(at)
+            && !text.contains(c)
         {
-            d.fields.insert("base".into(), json!(b.1));
+            text.push(c);
         }
-        if ui.add_enabled_ui(!list.is_empty(), |ui| widgets::flat_button(ui, tl!("Delete"), 56.0)).inner.clicked() {
-            act = Some(Action::Delete);
+        self.code.clear();
+        self.commit();
+        Ok(())
+    }
+
+    fn apply(&mut self, events: Vec<NamedPresetEvent<String>>) {
+        for event in events {
+            let done = match event {
+                NamedPresetEvent::Apply(name) => {
+                    self.pick_named(&name);
+                    Ok(())
+                }
+                NamedPresetEvent::Create { name, .. } => self.create(&name),
+                NamedPresetEvent::Rename { key, text, .. } => self.rename(&key, &text),
+                NamedPresetEvent::Delete(key) => self.delete(&key),
+                _ => Ok(()),
+            };
+            self.edited();
+            self.problem = done.err();
+        }
+    }
+
+    /// Files OK's answer for the pump, with what is typed.
+    fn file_ok(&mut self) {
+        if self.held.is_waiting() {
+            return;
+        }
+        self.commit();
+        self.problem = None;
+        self.held.file(Request { doc: self.doc, opened: self.opened.clone(), sets: self.sets.clone() });
+    }
+
+    /// The answer OK filed, once.
+    fn take_ok(&mut self) -> Option<Request> {
+        self.held.take()
+    }
+
+    /// The pump's answer to the filed OK: a refusal keeps the dialog open with its reason.
+    fn answer_ok(&mut self, answer: Result<(), String>) {
+        if let Err(reason) = &answer {
+            self.problem = Some(reason.clone());
+        }
+        self.held.answer(answer.map_err(Label::from));
+    }
+
+    fn body(&mut self, ui: &mut Ui) {
+        let list = self.list();
+        let rows: Vec<PresetRow<String>> = list.iter().map(|s| PresetRow::item(name_of(s).to_owned(), name_of(s), 0)).collect();
+        let mut value = list.get(self.index(list.len())).map(|s| name_of(s).to_owned());
+        let suggestion = new_name(&list, &self.opened);
+        // PLAN: PresetPicker has no placeholder: an empty list shows an empty name field, not "None".
+        let source = PresetSource::listed(&rows);
+        let refuses = |typed: &str| name_problem(&list, typed);
+        let picker = PresetPicker::new(tl!("Kinsoku Set"), Bind::bound(&mut value), &source, Bind::bound(&mut self.picker)).field(PickerField::Name);
+        let out = NamedPresetRow::new(tl!("Kinsoku Set"), picker).suggest_name(suggestion).check_name(NameCheck::of_host(&refuses)).show(ui);
+        self.apply(out.events);
+
+        let list = self.list();
+        let entries = bases(&list);
+        Row::new().show(ui, |ui, _| {
+            Text::new(tl!("Based on:")).show(ui);
+            if let Some(base) = Select::new(tl!("Based on:"), Bind::given(self.base.clone()), &entries).show(ui).value().cloned() {
+                self.base = base;
+                self.edited();
+            }
+        });
+        if list.is_empty() {
+            self.show_problem(ui);
+            return;
+        }
+        let before = self.cats.clone();
+        FieldGroup::new(tl!("Categories")).show(ui, |ui, _| {
+            for ((_, label), text) in categories().into_iter().zip(self.cats.iter_mut()) {
+                Field::new(label).show(ui, |ui, _| {
+                    TextField::new(label, Bind::bound(text)).lines(2).show(ui);
+                });
+            }
+        });
+        if self.cats != before {
+            self.commit();
+            self.edited();
+        }
+        let targets: Vec<Entry<String>> = categories().into_iter().take(3).map(|(key, label)| Entry::new(key.to_owned(), label.to_owned())).collect();
+        let mut add = false;
+        Row::new().show(ui, |ui, _| {
+            Text::new(tl!("Unicode")).show(ui);
+            TextField::new(tl!("Unicode"), Bind::bound(&mut self.code)).show(ui);
+            if let Some(into) = Select::new(tl!("Add to"), Bind::given(self.into.clone()), &targets).show(ui).value().cloned() {
+                self.into = into;
+            }
+            add = Button::new(tl!("Add")).enabled(code_char(&self.code).is_some()).show(ui).clicked();
+        });
+        if add {
+            self.problem = self.add_code().err();
+        }
+        self.show_problem(ui);
+    }
+
+    fn show_problem(&self, ui: &mut Ui) {
+        // PLAN: craft_ui does not re-export `Tone`, which `Notice` needs, so the reason shows as plain text.
+        if let Some(problem) = &self.problem {
+            Text::new(problem.clone()).show(ui);
+        }
+    }
+}
+
+impl StackDialog for KinsokuDialog {
+    type Result = ();
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn show(&mut self, ui: &mut Ui, _stack: &DialogStack) -> Option<DialogResult<()>> {
+        if self.held.finish().is_some() {
+            return Some(DialogResult::Ok(()));
+        }
+        let waiting = self.held.is_waiting();
+        let shown = Dialog::new(tl!("Kinsoku Shori Settings"))
+            .buttons([
+                FooterButton::new(tl!("OK"), DialogRole::Accept).stays_open(true).enabled(!waiting),
+                FooterButton::new(tl!("Cancel"), DialogRole::Cancel),
+            ])
+            .show(ui, |ui, _| {
+                Stack::new().show(ui, |ui, _| self.body(ui));
+            });
+        if shown.output.picked == Some(0) {
+            self.file_ok();
+        }
+        shown.output.closed.map(|_| DialogResult::Cancel)
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(COMMAND)
+    }
+
+    fn confirm(&mut self, _ctx: &Context) -> Option<()> {
+        if self.held.finish().is_some() {
+            return Some(());
+        }
+        self.file_ok();
+        None
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.held.state()
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        let list = self.list();
+        let name = list.get(self.index(list.len())).map(name_of).unwrap_or_default();
+        let mut fields = json!({
+            "sets": self.sets, "selected": self.selected, "name": name,
+            "base": self.base, "code": self.code, "into": self.into,
+        });
+        for (key, text) in CATEGORIES.iter().zip(&self.cats) {
+            fields[*key] = json!(text);
+        }
+        Some(fields)
+    }
+
+    fn set_json_field(&mut self, _ctx: &Context, field: &str, value: Value) -> Result<(), String> {
+        match field {
+            "sets" => {
+                self.sets = value;
+                self.load();
+            }
+            "selected" => {
+                let i = value.as_u64().ok_or_else(|| FieldRefusal::Rejects(&value).message(field))?;
+                self.pick(usize::try_from(i).unwrap_or(usize::MAX));
+            }
+            "name" => {
+                let to = text_of(field, &value)?;
+                let list = self.require_list()?;
+                let from = list.get(self.index(list.len())).map(|s| name_of(s).to_owned()).ok_or("no Kinsoku set is picked")?;
+                self.rename(&from, &to)?;
+            }
+            "base" => self.base = text_of(field, &value)?,
+            "code" => self.code = text_of(field, &value)?,
+            "into" => {
+                let into = text_of(field, &value)?;
+                if !CATEGORIES.iter().take(3).any(|k| *k == into) {
+                    return Err(FieldRefusal::Rejects(&value).message(field));
+                }
+                self.into = into;
+            }
+            key => {
+                let at = CATEGORIES.iter().position(|k| *k == key).ok_or_else(|| FieldRefusal::Unknown.message(field))?;
+                let text = text_of(field, &value)?;
+                if let Some(cat) = self.cats.get_mut(at) {
+                    *cat = text;
+                }
+                self.commit();
+            }
+        }
+        self.edited();
+        Ok(())
+    }
+}
+
+/// Runs the OK the dialog filed: the sets go to the document it opened on, also when another tab is active
+/// by now; a document closed since closes the dialog and changes nothing. Called by `dialogs::host::pump`.
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
+    let Some(host) = app.dialogs() else { return };
+    let Some(request) = host.with(|h| h.get_mut::<KinsokuDialog>().and_then(KinsokuDialog::take_ok)) else { return };
+    let answer = apply(app, &request);
+    let gone = answer.is_err() && !app.session.documents().iter().any(|d| Some(d.uid) == request.doc);
+    // The command ran outside the host's lock, which a dialog's own methods take.
+    host.with(|h| {
+        if let Some(d) = h.get_mut::<KinsokuDialog>() {
+            d.answer_ok(answer);
+        }
+        if gone {
+            h.cancel::<KinsokuDialog>(ctx);
         }
     });
-    if let Some(k) = picked {
-        select(d, k);
-        return false;
-    }
-    ui.add_space(8.0);
-    if let Some(set) = list.get_mut(i) {
-        egui::Grid::new("kinsoku-sets-fields").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-            widgets::dim_label(ui, tl!("Name:"));
-            form::text(ui, d, "name", 260.0);
-            ui.end_row();
-            for (key, label) in [
-                ("cannotStart", tl!("Cannot Start Line")),
-                ("cannotEnd", tl!("Cannot End Line")),
-                ("hanging", tl!("Hanging Punctuation")),
-                ("inseparable", tl!("Inseparable Characters")),
-            ] {
-                widgets::dim_label(ui, label);
-                form::text_area(ui, d, key, 380.0, 2);
-                ui.end_row();
-            }
-        });
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            widgets::dim_label(ui, tl!("Unicode"));
-            form::text(ui, d, "code", 80.0);
-            let into = d.str("into");
-            let targets = [("cannotStart", tl!("Cannot Start Line")), ("cannotEnd", tl!("Cannot End Line")), ("hanging", tl!("Hanging Punctuation"))];
-            let shown = targets.iter().find(|t| t.0 == into).map_or("", |t| t.1);
-            if let Some(k) = widgets::dropdown_names(ui, "kinsoku-sets-into", shown, &targets.map(|t| t.1), 160.0)
-                && let Some(t) = targets.get(k)
-            {
-                d.fields.insert("into".into(), json!(t.0));
-            }
-            if ui.add_enabled_ui(code_char(&d.str("code")).is_some(), |ui| widgets::flat_button(ui, tl!("Add"), 48.0)).inner.clicked() {
-                act = Some(Action::Add);
-            }
-        });
-        let was = name_of(set).to_string();
-        take_fields(d, set);
-        // Based on follows the set it names through a rename.
-        if d.str("base") == was && name_of(set) != was {
-            let now = name_of(set).to_string();
-            d.fields.insert("base".into(), json!(now));
-        }
-        d.fields.insert("shown".into(), Value::Object(set.clone()));
-    }
-    if holds_sets(d) {
-        put_sets(d, &list);
-    }
-    if let Some(a) = act
-        && let Err(e) = run(app, d, a)
-    {
-        app.status(e);
-    }
-    false
 }
 
-/// Do what button `act` asks for on the dialog's sets.
-fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action) -> Result<(), String> {
-    if !holds_sets(d) {
-        return Err("the sets must be a list of Kinsoku sets".into());
-    }
-    let mut list = sets(d);
-    let i = selected(d, list.len());
-    match act {
-        Action::New => {
-            let base = d.str("base");
-            let mut set = match list.iter().find(|s| name_of(s) == base) {
-                Some(s) => s.clone(),
-                None => {
-                    let r = app.run("type.kinsokuSets.base", json!({ "base": base }))?;
-                    r["set"].as_object().cloned().ok_or("no Kinsoku set to base the new one on")?
-                }
-            };
-            set.remove("from");
-            let uid = d.fields.get(DOC).and_then(Value::as_u64);
-            let doc = app.session.documents().iter().find(|t| Some(t.uid) == uid).map(|t| t.doc.kinsoku_sets.to_vec()).unwrap_or_default();
-            set.insert("name".into(), json!(new_name(&list, &doc)));
-            list.push(set);
-            put_sets(d, &list);
-            select(d, list.len() - 1);
-        }
-        Action::Delete => {
-            if i < list.len() {
-                let gone = name_of(&list[i]).to_string();
-                list.remove(i);
-                if d.str("base") == gone {
-                    d.fields.insert("base".into(), json!("hard"));
-                }
-            }
-            put_sets(d, &list);
-            select(d, i.min(list.len().saturating_sub(1)));
-        }
-        Action::Add => {
-            let c = code_char(&d.str("code")).ok_or("give a character's Unicode code point, as U+3001")?;
-            let into = d.str("into");
-            let key = if CATEGORIES.contains(&into.as_str()) && into != "inseparable" { into } else { "cannotStart".into() };
-            let mut text = d.str(&key);
-            if !text.contains(c) {
-                text.push(c);
-            }
-            d.fields.insert(key, json!(text));
-            d.fields.insert("code".into(), json!(""));
-            if let Some(set) = list.get_mut(i) {
-                take_fields(d, set);
-                d.fields.insert("shown".into(), Value::Object(set.clone()));
-            }
-            put_sets(d, &list);
-        }
-    }
-    Ok(())
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    // The fields as typed, also when they were set (`ui.dialog.set`) with no frame drawn since,
-    // while they still describe the set picked.
-    let mut list = sets(d);
-    let i = selected(d, list.len());
-    if let Some(set) = list.get_mut(i)
-        && shows(d, set)
-    {
-        take_fields(d, set);
-    }
-    // The sets go to the document the dialog opened on, also when another tab is active by now; a
-    // document closed since closes the dialog and changes nothing.
-    let uid = d.fields.get(DOC).and_then(Value::as_u64);
-    if app.session.active().map(|st| st.uid) != uid {
-        let Some(index) = app.session.documents().iter().position(|doc| Some(doc.uid) == uid) else {
-            app.ui.dialog = None;
-            return Err("that document is no longer open".into());
-        };
+fn apply(app: &mut VectorcraftApp, request: &Request) -> Result<(), String> {
+    if app.session.active().map(|st| st.uid) != request.doc {
+        let index = app.session.documents().iter().position(|d| Some(d.uid) == request.doc).ok_or("that document is no longer open")?;
         app.run("document.activate", json!({ "index": index }))?;
     }
-    // A `sets` field that is not a list of sets goes to the command as it is, which refuses it.
-    let sets = if holds_sets(d) {
-        // A set the document gained while the dialog was open (a script, another command) is
-        // kept, after the dialog's sets.
-        let opened: Vec<&str> =
-            d.fields.get(OPENED).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-        if let Some(st) = app.session.active() {
-            list.extend(st.doc.kinsoku_sets.iter().filter(|k| !opened.contains(&k.name.as_str())).filter_map(|k| listed(k).as_object().cloned()));
+    // A `sets` that is not a list of sets goes to the command as it is, which refuses it.
+    let sets = match request.sets.as_array().filter(|a| a.iter().all(Value::is_object)) {
+        Some(list) => {
+            // A set the document gained while the dialog was open (a script, another command) is
+            // kept, after the dialog's sets.
+            let mut list = list.clone();
+            if let Some(st) = app.session.active() {
+                list.extend(st.doc.kinsoku_sets.iter().filter(|k| !request.opened.contains(&k.name)).map(listed));
+            }
+            Value::Array(list)
         }
-        json!(list)
-    } else {
-        d.fields.get("sets").cloned().unwrap_or(Value::Null)
+        None => request.sets.clone(),
     };
-    let r = app.run(COMMAND, json!({ "sets": sets }));
-    // A name two sets share, a reserved name or a category too long keeps the dialog open to be
-    // changed, with its document active.
-    if r.is_ok() {
-        app.ui.dialog = None;
-    }
-    r
+    app.run(COMMAND, json!({ "sets": sets })).map(|_| ())
 }
 
 #[cfg(test)]

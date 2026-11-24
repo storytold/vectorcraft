@@ -235,6 +235,11 @@ pub struct Session {
     /// The running top-level query command changed the selection and is journaled like any other
     /// command ([`Session::journal_query`]).
     journal_query: bool,
+    /// The running top-level command changed only the paint defaults, as the Live Paint Bucket
+    /// or `defaultsOnly: true` has a paint command do, when new art would have taken this
+    /// appearance (none: nothing selected): unless a later batch step changes it, the selection's
+    /// appearance does not replace the defaults afterwards ([`Session::inherit_new_art`]).
+    pub(crate) defaults_only_ran: Option<Option<cmd::newart::NewArtSource>>,
     /// From `edit.undoGroup.begin` to `edit.undoGroup.end`: the name of the undo step (`None`: after
     /// its first edit). Each document opened or created meanwhile opens an undo group of its own
     /// ([`Session::add_document`]). `None` otherwise.
@@ -433,7 +438,7 @@ pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
 pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_tool_edit};
-pub use doc_state::{DocState, OpenRows, RecalledSelection};
+pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection};
 pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;
