@@ -32,12 +32,14 @@
 //!   ([`export_ai_editing`], [`ai_private_data`]).
 //! - `ai_ops`: the path and line style operators those two write.
 //! - `ai_graph`: the records of a live graph those two write around its group.
+//! - `gradient_key`: the key those two find gradient definitions by.
 //! - [`dcs`]: DCS files, an EPS file with one program per printing plate, read for placing.
 
 mod ai_editing;
 mod ai_graph;
 mod ai_ops;
 pub mod dcs;
+mod gradient_key;
 mod import;
 mod latin;
 mod legacy_ai;
@@ -52,7 +54,7 @@ pub use import::{
     family_style, import, import_ai, import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
 };
 pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai, writes_image_mask};
-pub use print::{PrintJob, PrintPage, print};
+pub use print::{PrintFonts, PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;
 use vectorcraft_geom::{Point, Rect};

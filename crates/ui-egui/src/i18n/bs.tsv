@@ -28,6 +28,7 @@
 	Light	Svijetlo
 	Quit VectorCraft	Zatvori VectorCraft
 	Drop Artwork	Ispusti crtež
+@id	language.name	Bosanski
 @msg	{key} must be [x, y] with finite coordinates	{key} mora biti [x, y] s konačnim koordinatama
 @msg	ids must contain 1–10000 object ids	ids mora sadržavati 1–10000 ID-ova objekata
 	File	Datoteka
@@ -5171,7 +5172,7 @@ imageTrace	Outline	Obris
 @msg	PDF settings are not an object	PDF postavke nisu objekat
 @msg	PDF security settings are not an object	PDF sigurnosne postavke nisu objekat
 @msg	PDF writer error: {0}	greška PDF zapisivača: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})|Upakovano datoteka u {folder}: {n} ({note})|Upakovano datoteka u {folder}: {n} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pregledaj u pregledniku zahtijeva desktop aplikaciju (web umjesto toga preuzima datoteke)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	navedite `desiredK`, željenu veličinu datoteke u K (1024 bajta): broj veći od 0 i najviše 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` je `current` ili `auto`
@@ -6676,9 +6677,9 @@ mark-style	Japanese	Japanski
 	Slope:	Nagib:
 axis	X Axis	X osa
 axis	Y Axis	Y osa
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}|Upakovano datoteka: {n}|Upakovano datoteka: {n}
 @plural	Packaged {n} file|Packaged {n} files	Upakovano datoteka: {n}|Upakovano datoteka: {n}|Upakovano datoteka: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}|Upakovano datoteka u {folder}: {n}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}|Upakovano datoteka: {n} {note}

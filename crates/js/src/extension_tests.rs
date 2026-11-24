@@ -246,6 +246,21 @@ fn the_line_and_the_stack_give_the_place_the_source_locator_maps_each_frame_to()
 }
 
 #[test]
+fn the_stack_starts_with_the_name_of_the_script() {
+    let mut r = realm();
+    let items = [("stack".to_string(), HostItem::Script(ScriptItem::Stack))].into_iter().collect();
+    r.define_host_object("h", items).unwrap();
+    r.set_script_name(Some("Marks.jsx".to_string()));
+    assert_eq!(text(&mut r, "h.stack"), "[Marks.jsx]\n[global]:1\n");
+    let source = "function outer() {\n  return h.stack;\n}\nouter()";
+    assert_eq!(text(&mut r, source), "[Marks.jsx]\n[global]:4\nouter:2\n", "in a function too");
+    let deep = "function d(n) { return n ? d(n - 1) : h.stack; } var s = d(100).split('\\n'); s.length + ',' + s[0] + ',' + s[1]";
+    assert_eq!(text(&mut r, deep), "67,[Marks.jsx],…", "the name comes before the line for the frames left out");
+    r.set_script_name(None);
+    assert_eq!(text(&mut r, "h.stack"), "[global]:1\n");
+}
+
+#[test]
 fn a_host_property_reads_its_getter_and_gives_assignments_to_its_setter() {
     let mut r = Realm::new();
     let seen: Rc<RefCell<Vec<Data>>> = Rc::default();

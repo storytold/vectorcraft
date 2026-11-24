@@ -208,6 +208,7 @@
 	Anti-alias Rasters	Anti-aliasing per immagini raster
 	Anti-aliased Artwork	Grafica con anti-aliasing
 	Anti-aliasing Method	Metodo di anti-aliasing
+@id	language.name	Italiano
 antiAlias	Sharp	Nitido
 	Crisp	Definito
 	Strong	Forte
@@ -5176,7 +5177,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	PDF settings are not an object	Le impostazioni PDF non sono un oggetto
 @msg	PDF security settings are not an object	Le impostazioni di sicurezza PDF non sono un oggetto
 @msg	PDF writer error: {0}	Errore del generatore PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})|Pacchetto creato con {n} file in {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (sul web i file vengono invece scaricati)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, la dimensione del file desiderata in K (1024 byte): un numero maggiore di 0 e al massimo 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` è `current` o `auto`
@@ -6475,6 +6476,7 @@ lighting	Light	Luce
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla da esportare
 @msg	The 3D object is too complex to export	L'oggetto 3D è troppo complesso per essere esportato
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	La mesh dell'oggetto 3D è incompleta o contiene un valore che non è un numero
 @msg	the <filter> element needs an id, the filter's name	l'elemento <filter> richiede un id, il nome del filtro
 @msg	an SVG filter's id is at most {MAX_NAME} characters	l'id di un filtro SVG ha al massimo {MAX_NAME} caratteri
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> non è un elemento di un filtro SVG
@@ -6891,9 +6893,9 @@ lighting	Light	Luce
 	Slope:	Pendenza:
 axis	X Axis	Asse X
 axis	Y Axis	Asse Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}|Pacchetto creato con {n} file in {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}|Pacchetto creato con {n} file {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file|Pacchetto creato con {n} file
 @plural	Packaged {n} file|Packaged {n} files	Pacchetto creato con {n} file|Pacchetto creato con {n} file
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Pacchetto creato con {n} file in {folder}|Pacchetto creato con {n} file in {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Pacchetto creato con {n} file {note}|Pacchetto creato con {n} file {note}
@@ -6945,11 +6947,17 @@ axis	Y Axis	Asse Y
 @msg	module is {_1} bytes (limit {_2})	il modulo occupa {_1} byte (limite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	richiede approvazione: chiede {0}, che l’utente concede installandolo da solo
 @msg	not JSON: {e}	non è JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	non è un binario WebAssembly (manca l’intestazione \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	non è un binario WebAssembly (manca l’intestazione \\0asm)
 @msg	parameter `{k}`: {what}	parametro `{k}`: {what}
 @msg	parameter `{name}`: {what}	parametro `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	i parametri del plug-in devono essere un oggetto JSON
 @msg	the module must export its linear memory as `memory`	il modulo deve esportare la sua memoria lineare come `memory`
+@msg	the module must export `{name}` with the type {signature}	il modulo deve esportare `{name}` con il tipo {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	il modulo ha più di una sezione personalizzata `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	budget di memoria (la memoria iniziale del modulo è di {initial} byte, limite {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	il manifesto nella sezione personalizzata `{MANIFEST_SECTION}` deve indicare `abi` come {ABI_VERSION}, la versione dell’ABI che questo host implementa
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	budget delle tabelle (il modulo definisce {count} tabelle, la più grande con {largest} elementi; limite {MAX_TABLES} tabelle da {MAX_TABLE_ELEMENTS} elementi)
+@msg	the module's table section could not be read	impossibile leggere la sezione delle tabelle del modulo
 @msg	the objects to change are no longer in the document	gli oggetti da modificare non sono più nel documento
 @msg	the runtime panicked	l’ambiente di esecuzione si è bloccato
 @msg	unexpected host trap	interruzione imprevista (trap) dell’host
@@ -7024,6 +7032,8 @@ axis	Y Axis	Asse Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` richiede un cursore colore collegato a un campione di colore spot
 @msg	the output	l’output
 @msg	the path has no anchor points	il tracciato non ha punti di ancoraggio
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	il tracciato composto {id} ha un membro nascosto, bloccato o guida, quindi i suoi membri non possono essere sostituiti
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	il tracciato composto {id} ha un membro che non è un tracciato, quindi i suoi membri non possono essere sostituiti
 @msg	too many anchor points (limit {MAX_ANCHORS})	troppi punti di ancoraggio (limite {MAX_ANCHORS})
 @msg	true or false	true o false
 @msg	a number >= {_1}	un numero >= {_1}
@@ -8932,6 +8942,8 @@ breakText	Glyphs	Glifi
 @msg	`dataBase64` is larger than the module limit	`dataBase64` supera il limite del modulo
 @msg	`dataBase64` is not valid base64	`dataBase64` non è un base64 valido
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` non può essere combinato con `ids`, `reverse` o `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` non può essere combinato con `ids`, `id` o `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` non può essere combinato con `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` e `childLimit` riducono il riepilogo: passa `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` è il nome di un design, o null per colonne semplici
 @msg	`design` is a design name, or null for the default marker	`design` è il nome di un design, o null per il marcatore predefinito

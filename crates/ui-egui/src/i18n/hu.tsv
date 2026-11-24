@@ -1,6 +1,6 @@
 # Hungarian (hu) catalog. Same format as zh-hant.tsv:  context <TAB> source <TAB> translation
 # (empty context = a plain UI string; `@id` = a command id; `@plural` = "one|other" source, and a
-# single translated form: Hungarian uses the singular after a number, see `plural_none`).
+# translation for each of the one and other forms, the same text twice where Hungarian uses the singular after a number).
 #
 # Clean-room: every entry was written from the meaning of VectorCraft's English label, using the
 # general Hungarian vocabulary of vector illustration (rajztábla, útvonal, horgonypont, fogantyú,
@@ -289,6 +289,7 @@
 	Anti-alias Rasters	Raszterek élsimítása
 	Anti-aliased Artwork	Élsimított grafika
 	Anti-aliasing Method	Élsimítási módszer
+@id	language.name	Magyar
 antiAlias	Sharp	Éles
 	Crisp	Tiszta
 	Strong	Erős
@@ -316,7 +317,7 @@ font-technology	Variable	Változó
 	Apply Paragraph Style	Bekezdésstílus alkalmazása
 	Apply SVG Filter…	SVG-szűrő alkalmazása…
 	Apply to All	Alkalmazás az összesre
-@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Alkalmazás mindegyikre (további hiányzók: {n})
+@plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Alkalmazás mindegyikre (további hiányzók: {n})|Alkalmazás mindegyikre (további hiányzók: {n})
 	Approximate path	Útvonal közelítése
 	Arabic	Arab
 	Arc	Ív
@@ -825,7 +826,7 @@ arrowhead	Target	Céltábla
 	Show Document Colors	Dokumentumszínek megjelenítése
 	Document Colors	Dokumentumszínek
 	Selection Colors	A kijelölés színei
-@plural	Used {n} time|Used {n} times	{n} alkalommal használva
+@plural	Used {n} time|Used {n} times	{n} alkalommal használva|{n} alkalommal használva
 	Show Harmony	Harmónia megjelenítése
 	Harmony Rule	Harmóniaszabály
 	Harmony color	Harmóniaszín
@@ -2509,8 +2510,8 @@ file-filter	Templates	Sablonok
 	Import Matches	Importálási megfeleltetések
 	Remember Import Matches	Importálási megfeleltetések megjegyzése
 	Forget Import Matches	Importálási megfeleltetések elfelejtése
-@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	{n} alapértelmezett billentyűparanccsal egyezik
-@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	Be nem olvasott fájlrész: {n}
+@plural	agrees with {n} default shortcut|agrees with {n} default shortcuts	{n} alapértelmezett billentyűparanccsal egyezik|{n} alapértelmezett billentyűparanccsal egyezik
+@plural	{n} part of the file wasn't read|{n} parts of the file weren't read	Be nem olvasott fájlrész: {n}|Be nem olvasott fájlrész: {n}
 @msg	This shortcut file is in a form VectorCraft can't read.	Ez a billentyűparancsfájl olyan formátumú, amelyet a VectorCraft nem tud beolvasni.
 @msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	nem billentyűparancs-készlet: a szöveg nem perjeles névvel és nyitó kapcsos zárójellel kezdődik
 	Keywords:	Kulcsszavak:
@@ -2807,8 +2808,8 @@ file-filter	Templates	Sablonok
 	Merged PRs	Beolvasztott PR-ek
 	PRs	PR-ek
 	@{login}: {prs}, {commits}, +{added} / −{deleted} lines (Δ {delta}), +{binary_added} / −{binary_deleted} binary assets, {first} – {last}	@{login}: {prs}, {commits}, sorok: +{added} / −{deleted} (Δ {delta}), bináris fájlok: +{binary_added} / −{binary_deleted}, {first} – {last}
-@plural	{n} PR|{n} PRs	{n} PR
-@plural	{n} commit|{n} commits	{n} commit
+@plural	{n} PR|{n} PRs	{n} PR|{n} PR
+@plural	{n} commit|{n} commits	{n} commit|{n} commit
 	Mesh	Háló
 	Mesh Tool	Háló
 	Message:	Üzenet:
@@ -3248,7 +3249,7 @@ file-filter	Templates	Sablonok
 	Package	Csomagolás
 	Package collects a saved document with its linked files and fonts.	A csomagolás egy mentett dokumentumot a csatolt fájljaival és betűtípusaival együtt gyűjt össze.
 	Package created	A csomag elkészült
-@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} {note}
+@plural	Packaged {n} file {note} in {folder}|Packaged {n} files {note} in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} {note}|Becsomagolt fájlok: {n}, mappa: {folder} {note}
 	Package…	Csomagolás…
 	Page	Oldal
 	Page Cover 1640×624	Oldalborító 1640×624
@@ -3310,7 +3311,7 @@ file-filter	Templates	Sablonok
 	{file}; {embedding}	{file}; {embedding}
 	unknown type	ismeretlen típus
 	{type}; {uses}	{type}; {uses}
-@plural	{n} use|{n} uses	{n} használat
+@plural	{n} use|{n} uses	{n} használat|{n} használat
 	substituted: shown in {family} {style} ({detail})	helyettesítve: megjelenítés ezzel: {family} {style} ({detail})
 	missing: shown in {family} {style}	hiányzik: megjelenítés ezzel: {family} {style}
 	missing	hiányzik
@@ -3325,9 +3326,9 @@ file-filter	Templates	Sablonok
 	Conic gradient	Kúpos színátmenet
 	Diamond gradient	Rombusz színátmenet
 	Freeform gradient	Szabad formájú színátmenet
-@plural	{n} instance|{n} instances	{n} példány
-@plural	{n} row|{n} rows	{n} sor
-@plural	{n} column|{n} columns	{n} oszlop
+@plural	{n} instance|{n} instances	{n} példány|{n} példány
+@plural	{n} row|{n} rows	{n} sor|{n} sor
+@plural	{n} column|{n} columns	{n} oszlop|{n} oszlop
 	Pattern Brush Options	Mintázatecset beállításai
 	Pattern Editing	Mintázatszerkesztés
 	Pattern Options	Mintázat beállításai
@@ -4342,8 +4343,8 @@ mark-style	Japanese	Japán
 	In the menu bar: {path}	A menüsorban: {path}
 	In the {group} group: press and hold to open it	A(z) {group} csoportban: a megnyitáshoz nyomja le és tartsa lenyomva
 	{home}, not shown now	{home}, most nem látható
-@plural	{n} result|{n} results	{n} találat
-@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
+@plural	{n} result|{n} results	{n} találat|{n} találat
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.|{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
 	Type to search commands, tools, panels and effects	Gépeljen parancsok, eszközök, panelek és effektusok kereséséhez
@@ -5435,24 +5436,24 @@ mark-style	Japanese	Japán
 	Zoom Tool	Nagyító
 	Zoom with Mouse Wheel	Nagyítás egérgörgővel
 	Scroll Sideways with Cmd/Ctrl + Wheel	Vízszintes görgetés Cmd/Ctrl + görgővel
-@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Fájlok: {n}, mappa: {folder} {note}. Megnyitod a csomag mappáját?
-@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Nem olvasható mappák vagy fájlok: {n}
-@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Kihagyott mappák: {n} (például más alkalmazások, a rendszer és a rejtett mappák)
-@plural	{n} linked file not found|{n} linked files not found	Nem található csatolt fájlok: {n}
-@msgplural	{n} linked file not found|{n} linked files not found	Nem található csatolt fájlok: {n}
+@plural	{n} file in {folder} {note}. Show the package folder?|{n} files in {folder} {note}. Show the package folder?	Fájlok: {n}, mappa: {folder} {note}. Megnyitod a csomag mappáját?|Fájlok: {n}, mappa: {folder} {note}. Megnyitod a csomag mappáját?
+@plural	{n} folder or file couldn't be read|{n} folders or files couldn't be read	Nem olvasható mappák vagy fájlok: {n}|Nem olvasható mappák vagy fájlok: {n}
+@plural	{n} folder skipped, such as another app's or the system's folder or a hidden one|{n} folders skipped, such as other apps' and the system's folders and hidden ones	Kihagyott mappák: {n} (például más alkalmazások, a rendszer és a rejtett mappák)|Kihagyott mappák: {n} (például más alkalmazások, a rendszer és a rejtett mappák)
+@plural	{n} linked file not found|{n} linked files not found	Nem található csatolt fájlok: {n}|Nem található csatolt fájlok: {n}
+@msgplural	{n} linked file not found|{n} linked files not found	Nem található csatolt fájlok: {n}|Nem található csatolt fájlok: {n}
 @msg	fonts not copied: {fonts}	nem másolt betűtípusok: {fonts}
-@msgplural	({n} linked file not found)|({n} linked files not found)	(Nem található csatolt fájlok: {n})
+@msgplural	({n} linked file not found)|({n} linked files not found)	(Nem található csatolt fájlok: {n})|(Nem található csatolt fájlok: {n})
 @msg	(fonts not copied: {fonts})	(nem másolt betűtípusok: {fonts})
 @msg	({note}) ({more})	({note}) ({more})
 @msg	{note}) ({more}	{note}) ({more}
-@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	A lemezen módosult csatolt képek: {n}. Megjelenítsük az új változatokat?
-@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	A dokumentum mentése óta módosult csatolt képek: {n}. Megjelenítsük az új változatokat?
-@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	További szabályok: {n}. Az exportálás mindet kiírja.
-@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Kimaradt névtelen objektumok: {n}. Nevezd el őket, vagy kapcsold be a panelmenüben a Névtelen objektumok elemet.
+@plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	A lemezen módosult csatolt képek: {n}. Megjelenítsük az új változatokat?|A lemezen módosult csatolt képek: {n}. Megjelenítsük az új változatokat?
+@plural	{n} linked image changed since this document was saved. Show the new version?|{n} linked images changed since this document was saved. Show the new versions?	A dokumentum mentése óta módosult csatolt képek: {n}. Megjelenítsük az új változatokat?|A dokumentum mentése óta módosult csatolt képek: {n}. Megjelenítsük az új változatokat?
+@plural	{n} more rule: Export writes it.|{n} more rules: Export writes every one.	További szabályok: {n}. Az exportálás mindet kiírja.|További szabályok: {n}. Az exportálás mindet kiírja.
+@plural	{n} unnamed object left out: name it, or turn on Unnamed Objects in the panel menu.|{n} unnamed objects left out: name them, or turn on Unnamed Objects in the panel menu.	Kimaradt névtelen objektumok: {n}. Nevezd el őket, vagy kapcsold be a panelmenüben a Névtelen objektumok elemet.|Kimaradt névtelen objektumok: {n}. Nevezd el őket, vagy kapcsold be a panelmenüben a Névtelen objektumok elemet.
 	{effect} is already applied	Már alkalmazva: {effect}
 	{folders} and {files} searched	Átkeresve: {folders} és {files}
-@plural	{n} folder|{n} folders	{n} mappa
-@plural	{n} file|{n} files	{n} fájl
+@plural	{n} folder|{n} folders	{n} mappa|{n} mappa
+@plural	{n} file|{n} files	{n} fájl|{n} fájl
 	{format} Options	Formátumbeállítások: {format}
 	{kind} Gradient	Színátmenet: {kind}
 gradient-kind	Radial	Körkörös
@@ -5492,22 +5493,22 @@ theme	Appearance	Kinézet
 
 # Plurals: one|other
 imageTrace	Outline	Körvonal
-@plural	Color Table ({n} color)|Color Table ({n} colors)	Színtábla ({n} szín)
-@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	{n} grafikai stílus törlése?
-@plural	Delete this {n} brush?|Delete these {n} brushes?	{n} ecset törlése?
-@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	{n} színminta és csoport törlése?
-@plural	{n} area highlighted|{n} areas highlighted	Kiemelt terület: {n}
-@plural	{n} color|{n} colors	{n} szín
-@plural	{n} fill|{n} fills	{n} kitöltés
-@plural	{n} glyph|{n} glyphs	{n} glifa
-@plural	{n} item|{n} items	{n} elem
-@plural	{n} Layer|{n} Layers	{n} réteg
-@plural	{n} object highlighted|{n} objects highlighted	Kiemelt objektum: {n}
-@plural	{n} Object|{n} Objects	{n} objektum
-@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	Többször hozzárendelt billentyűparancs: {n}
-@plural	{n} star|{n} stars	{n} csillag
-@plural	{n} step|{n} steps	{n} lépés
-@plural	{n} stroke|{n} strokes	{n} körvonal
+@plural	Color Table ({n} color)|Color Table ({n} colors)	Színtábla ({n} szín)|Színtábla ({n} szín)
+@plural	Delete this {n} graphic style?|Delete these {n} graphic styles?	{n} grafikai stílus törlése?|{n} grafikai stílus törlése?
+@plural	Delete this {n} brush?|Delete these {n} brushes?	{n} ecset törlése?|{n} ecset törlése?
+@plural	Delete this {n} swatch or group?|Delete these {n} swatches and groups?	{n} színminta és csoport törlése?|{n} színminta és csoport törlése?
+@plural	{n} area highlighted|{n} areas highlighted	Kiemelt terület: {n}|Kiemelt terület: {n}
+@plural	{n} color|{n} colors	{n} szín|{n} szín
+@plural	{n} fill|{n} fills	{n} kitöltés|{n} kitöltés
+@plural	{n} glyph|{n} glyphs	{n} glifa|{n} glifa
+@plural	{n} item|{n} items	{n} elem|{n} elem
+@plural	{n} Layer|{n} Layers	{n} réteg|{n} réteg
+@plural	{n} object highlighted|{n} objects highlighted	Kiemelt objektum: {n}|Kiemelt objektum: {n}
+@plural	{n} Object|{n} Objects	{n} objektum|{n} objektum
+@plural	{n} shortcut is assigned more than once|{n} shortcuts are assigned more than once	Többször hozzárendelt billentyűparancs: {n}|Többször hozzárendelt billentyűparancs: {n}
+@plural	{n} star|{n} stars	{n} csillag|{n} csillag
+@plural	{n} step|{n} steps	{n} lépés|{n} lépés
+@plural	{n} stroke|{n} strokes	{n} körvonal|{n} körvonal
 
 # Status and error messages
 @msg	"{0}" is not a colour: write it as #rrggbb	nem szín: "{0}"; #rrggbb alakban add meg
@@ -5858,8 +5859,8 @@ imageTrace	Outline	Körvonal
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: párbeszédpanel nem nyílhat meg beépített függvény visszahívásában, getterben, átalakításban vagy a $.evalFile által futtatott fájlban; hívja a parancsfájl saját kódjából
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a következő válasz az `answers` listában ehhez tartozik: {_1}, nem ehhez: {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: az `answers` listában nem maradt válasz ehhez a párbeszédpanelhez
-@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Az `answers` listában {n} válasz maradt, amelyet a parancsfájl nem használt fel
-@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}: az ecset alatt {n} objektum változatlan maradt ({_2}); csak útvonalakat alakít át
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Az `answers` listában {n} válasz maradt, amelyet a parancsfájl nem használt fel|Az `answers` listában {n} válasz maradt, amelyet a parancsfájl nem használt fel
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}: az ecset alatt {n} objektum változatlan maradt ({_2}); csak útvonalakat alakít át|{_1}: az ecset alatt {n} objektum változatlan maradt ({_2}); csak útvonalakat alakít át
 liquify-tool	Warp	Hajlítás
 liquify-tool	Twirl	Örvénylés
 liquify-tool	Pucker	Összehúzás
@@ -5955,7 +5956,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	Plug-ins can't be loaded from {path}: {e}	Innen nem tölthetők be bővítmények: {path}: {e}
 @msg	decimals must be {_1}–{_2} (got {_3})	a decimals értéke {_1}–{_2} lehet (kapott érték: {_3})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	jelöld ki közvetlen kijelöléssel a vágási horgonypontokat (nyitott útvonal végpontja nem lehet)
-@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Elvetett helyreállított dokumentumok: {n}
+@msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Elvetett helyreállított dokumentumok: {n}|Elvetett helyreállított dokumentumok: {n}
 @msg	divide into 1 to {MAX_PIECES} slices	a felosztás 1 és {MAX_PIECES} közötti szeletre lehetséges
 @msg	Divide Objects Below: select a path	Alatta lévő objektumok felosztása: jelölj ki egy útvonalat
 @msg	select a path	jelölj ki egy útvonalat
@@ -6198,8 +6199,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	the action sets changed; nothing was deleted	a műveletkészletek megváltoztak; semmi sem törlődött
 @msg	no action set to save	nincs menthető műveletkészlet
 @msg	the action set file can't be read in full	a műveletkészlet-fájl nem olvasható be teljesen
-@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” betöltve; kihagyott lépések: {n}
-@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	„{name}” betöltve; megtartott lépések ismeretlen paranccsal: {n}; az első: „{action}”, lépés: {step}, `{command}`
+@msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” betöltve; kihagyott lépések: {n}|„{name}” betöltve; kihagyott lépések: {n}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	„{name}” betöltve; megtartott lépések ismeretlen paranccsal: {n}; az első: „{action}”, lépés: {step}, `{command}`|„{name}” betöltve; megtartott lépések ismeretlen paranccsal: {n}; az első: „{action}”, lépés: {step}, `{command}`
 @msg	not an action set file	nem műveletkészlet-fájl
 @msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: a referencia nagyobb lenne {MAX_BYTES} bájtnál
@@ -6296,11 +6297,11 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	Útvonal eltolása: az eltolás után semmi sem marad a kijelölt útvonalakból (a befelé eltolás nagyobb az alakzatoknál)
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen
 @msg	onto must name a panel floating in another group	az onto egy másik csoportban lebegő panelt kell megnevezzen
-@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Megnyitva; megjegyzések: {n}, az első: {first}
-@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Megnyitva; megjegyzések: {n}, az első: {first}
+@msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Megnyitva; megjegyzések: {n}, az első: {first}|Megnyitva; megjegyzések: {n}, az első: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Megnyitva; megjegyzések: {n}, az első: {first}|{notice}. Megnyitva; megjegyzések: {n}, az első: {first}
 @msg	Opened {url}	Megnyitva: {url}
 @msg	Outline Stroke: no stroked paths selected	Körvonal útvonallá alakítása: nincs kijelölt körvonalas útvonal
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} ({note})|Becsomagolt fájlok: {n}, mappa: {folder} ({note})
 @msg	page size {w} × {h}	oldalméret: {w} × {h}
 @msg	page {0} does not exist (the PDF has {1})	nincs ilyen oldal: {0} (a PDF oldalszáma: {1})
 @msg	thumbnail: no page {n} (the file has 1)	thumbnail: nincs ilyen oldal: {n} (a fájl oldalszáma: 1)
@@ -6342,35 +6343,35 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	recovery copy `{file}`: {e}	helyreállítási másolat (`{file}`): {e}
 @msg	Release Guides: no guides	Segédvonalak visszaalakítása: nincs segédvonal
 @msg	Release: no layer to put the rectangle in	Megszüntetés: nincs réteg, amelybe a téglalap kerülhetne
-@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Beágyazott képek: {n}; hiányzik: {missing}, ezeket előbb csatold újra
-@msgplural	Embedded {n} image|Embedded {n} images	Beágyazott képek: {n}
-@msgplural	Relinked {n} image|Relinked {n} images	Újracsatolt képek: {n}
-@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Újracsatolt képek: {n}; nincs a mappában: {names}
-@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Újracsatolt képek: {n}; nem sikerült újracsatolni: {name}: {reason}
-@msgplural	Updated {n} image|Updated {n} images	Frissített képek: {n}
-@msgplural	Replaced {n} image|Replaced {n} images	Lecserélt képek: {n}
-@msgplural	Broke {n} link|Broke {n} links	Bontott csatolások: {n}
-@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Bontott csatolások: {n}; nem olvasható: {missing}, ezeket előbb csatold újra vagy frissítsd
-@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	Itt nem olvasható csatolt fájlok: {n}; az előnézetük látszik
-@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	Nem dekódolható képek: {n}; áthúzott keretként látszanak
-@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {n}; a Csatolások frissítése az új változatokat mutatja
-@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Frissített, a lemezen módosult csatolt fájlok: {n}
+@msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Beágyazott képek: {n}; hiányzik: {missing}, ezeket előbb csatold újra|Beágyazott képek: {n}; hiányzik: {missing}, ezeket előbb csatold újra
+@msgplural	Embedded {n} image|Embedded {n} images	Beágyazott képek: {n}|Beágyazott képek: {n}
+@msgplural	Relinked {n} image|Relinked {n} images	Újracsatolt képek: {n}|Újracsatolt képek: {n}
+@msgplural	Relinked {n} image; not in that folder: {names}|Relinked {n} images; not in that folder: {names}	Újracsatolt képek: {n}; nincs a mappában: {names}|Újracsatolt képek: {n}; nincs a mappában: {names}
+@msgplural	Relinked {n} image; {name} couldn't be relinked: {reason}|Relinked {n} images; {name} couldn't be relinked: {reason}	Újracsatolt képek: {n}; nem sikerült újracsatolni: {name}: {reason}|Újracsatolt képek: {n}; nem sikerült újracsatolni: {name}: {reason}
+@msgplural	Updated {n} image|Updated {n} images	Frissített képek: {n}|Frissített képek: {n}
+@msgplural	Replaced {n} image|Replaced {n} images	Lecserélt képek: {n}|Lecserélt képek: {n}
+@msgplural	Broke {n} link|Broke {n} links	Bontott csatolások: {n}|Bontott csatolások: {n}
+@msgplural	Broke {n} link; {missing} can't be read: relink or update them first|Broke {n} links; {missing} can't be read: relink or update them first	Bontott csatolások: {n}; nem olvasható: {missing}, ezeket előbb csatold újra vagy frissítsd|Bontott csatolások: {n}; nem olvasható: {missing}, ezeket előbb csatold újra vagy frissítsd
+@msgplural	{n} linked file can't be read here: its preview shows|{n} linked files can't be read here: their previews show	Itt nem olvasható csatolt fájlok: {n}; az előnézetük látszik|Itt nem olvasható csatolt fájlok: {n}; az előnézetük látszik
+@msgplural	{n} image couldn't be decoded and shows as a crossed box|{n} images couldn't be decoded and show as crossed boxes	Nem dekódolható képek: {n}; áthúzott keretként látszanak|Nem dekódolható képek: {n}; áthúzott keretként látszanak
+@msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	A lemezen módosult csatolt képek: {n}; a Csatolások frissítése az új változatokat mutatja|A lemezen módosult csatolt képek: {n}; a Csatolások frissítése az új változatokat mutatja
+@msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Frissített, a lemezen módosult csatolt fájlok: {n}|Frissített, a lemezen módosult csatolt fájlok: {n}
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	a dokumentum kifutót állít be, amelyet ez a PDF/X-fájl kihagy: kapcsolja be „A dokumentum kifutóbeállításainak használata” beállítást
-@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objektum eléri a vágási élt, de nem ér ki a kifutóig
-@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportálva: {what}; megjegyzések: {n}, az első: {first}
-@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	Betűtípusfájlok száma: {n}, mappa: {folder}
-@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})
-@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	Nem elérhető betűtípusok: {n}; a szövegük más betűtípussal jelenik meg
-@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS másolva, objektumok: {n}
-@msgplural	Downloaded {n} file|Downloaded {n} files	Letöltött fájlok: {n}
-@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exportált fájlok: {n}, mappa: {folder}
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objektum eléri a vágási élt, de nem ér ki a kifutóig|{n} objektum eléri a vágási élt, de nem ér ki a kifutóig
+@msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Exportálva: {what}; megjegyzések: {n}, az első: {first}|Exportálva: {what}; megjegyzések: {n}, az első: {first}
+@msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	Betűtípusfájlok száma: {n}, mappa: {folder}|Betűtípusfájlok száma: {n}, mappa: {folder}
+@msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})|Betűtípusfájlok száma: {n}, mappa: {folder}; nem sikerült hozzáadni: {failed} ({reason})
+@msgplural	{n} font isn't available here: its text shows in another font|{n} fonts aren't available here: their text shows in another font	Nem elérhető betűtípusok: {n}; a szövegük más betűtípussal jelenik meg|Nem elérhető betűtípusok: {n}; a szövegük más betűtípussal jelenik meg
+@msgplural	Copied the CSS of {n} object|Copied the CSS of {n} objects	CSS másolva, objektumok: {n}|CSS másolva, objektumok: {n}
+@msgplural	Downloaded {n} file|Downloaded {n} files	Letöltött fájlok: {n}|Letöltött fájlok: {n}
+@msgplural	Exported {n} file to {folder}|Exported {n} files to {folder}	Exportált fájlok: {n}, mappa: {folder}|Exportált fájlok: {n}, mappa: {folder}
 @msg	All colors are within the CMYK gamut	Minden szín a CMYK-színtartományon belül van
-@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} szín a CMYK-színtartományon kívül van
+@msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} szín a CMYK-színtartományon kívül van|{n} szín a CMYK-színtartományon kívül van
 @msg	Reload the page to go on (changes not saved yet may be lost).	A folytatáshoz töltsd újra az oldalt (a még nem mentett módosítások elveszhetnek).
 @msg	Replace Spine: select a blend and a path	Gerinc cseréje: jelölj ki egy összemosást és egy útvonalat
 @msg	Reset {_1}	Visszaállítva: {_1}
 @msg	resolutions must be between 1 and 2400 ppi	a felbontás 1 és 2400 ppi között lehet
-@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Helyreállított dokumentumok: {n}; mentsd őket, ha meg akarod tartani
+@msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Helyreállított dokumentumok: {n}; mentsd őket, ha meg akarod tartani|Helyreállított dokumentumok: {n}; mentsd őket, ha meg akarod tartani
 @msg	result would exceed the canvas (coordinates out of range)	az eredmény túllépné a vásznat (a koordináták tartományon kívül esnek)
 @msg	objects can't be nested more than 32 deep	az objektumok legfeljebb 32 szint mélyen ágyazhatók egymásba
 @msg	the SVG's elements are nested more than {0} deep	az SVG elemei több mint {0} szint mélyen vannak egymásba ágyazva
@@ -6383,10 +6384,10 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	Saved to User Defined: {_1}	Mentve a felhasználóiak közé: {_1}
 @msg	Saved {n} files beside {path}	Mentett fájlok: {n}, a következő mellett: {path}
 @msg	Saved {path}	Mentve: {path}
-@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Másolva; megjegyzések: {n}, az első: {first}
-@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Kivágva; megjegyzések: {n}, az első: {first}
-@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Kép vektorizálva; megjegyzések: {n}, az első: {first}
-@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Mentve: {path}; megjegyzések: {n}, az első: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Másolva; megjegyzések: {n}, az első: {first}|Másolva; megjegyzések: {n}, az első: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Kivágva; megjegyzések: {n}, az első: {first}|Kivágva; megjegyzések: {n}, az első: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Kép vektorizálva; megjegyzések: {n}, az első: {first}|Kép vektorizálva; megjegyzések: {n}, az első: {first}
+@msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Mentve: {path}; megjegyzések: {n}, az első: {first}|Mentve: {path}; megjegyzések: {n}, az első: {first}
 @msg	Saving	Mentés
 @msg	Saving recovery data for {_1}	Helyreállítási adatok mentése: {_1}
 @msg	Saving {_1}	Mentés: {_1}
@@ -6617,7 +6618,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	tool shortcuts must be a single key (optionally with Shift)	eszköz billentyűparancsa egyetlen billentyű lehet (Shifttel vagy anélkül)
 @msg	truncated	csonka
 @msg	Unembedded to {_1}	Beágyazás megszüntetve, ide: {_1}
-@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Beágyazás megszüntetve, képek: {n}, ide: {folder}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Beágyazás megszüntetve, képek: {n}, ide: {folder}|Beágyazás megszüntetve, képek: {n}, ide: {folder}
 @msg	every numbered name for {name} is taken in that folder	abban a mappában minden sorszámozott név foglalt: {name}
 @msg	unknown command `{0}`	ismeretlen parancs: `{0}`
 @msg	step {step} of “{action}” runs the unknown command `{command}`	„{action}”, lépés: {step}: ismeretlen parancsot futtat: `{command}`
@@ -6846,6 +6847,7 @@ variable-list-end	{0}, {1}	{0} és {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmit
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	A 3D objektum hálója hiányos, vagy olyan értéket tartalmaz, amely nem szám
 @msg	the <filter> element needs an id, the filter's name	a <filter> elemnek id kell, a szűrő neve
 @msg	an SVG filter's id is at most {MAX_NAME} characters	egy SVG-szűrő id-je legfeljebb {MAX_NAME} karakter
 @msg	<{_1}> isn't an element of an SVG filter	a(z) <{_1}> nem SVG-szűrő eleme
@@ -7173,12 +7175,12 @@ variable-list-end	{0}, {1}	{0} és {1}
 	Artboard {n} of {total}	Rajztábla: {n} / {total}
 	File {n} of {total}	Fájl: {n} / {total}
 	Encoding and writing the file…	A fájl kódolása és írása…
-@plural	{n} more export waiting|{n} more exports waiting	Még {n} exportálás várakozik
+@plural	{n} more export waiting|{n} more exports waiting	Még {n} exportálás várakozik|Még {n} exportálás várakozik
 	Continue in Background	Folytatás a háttérben
 	Cancel Export	Exportálás megszakítása
 @msg	Export cancelled	Az exportálás megszakítva
 	Cancel Save	Mentés megszakítása
-@plural	{n} more save waiting|{n} more saves waiting	Még {n} mentés várakozik
+@plural	{n} more save waiting|{n} more saves waiting	Még {n} mentés várakozik|Még {n} mentés várakozik
 @msg	Save canceled	A mentés megszakítva
 # Paragraph panel menu › Justification…
 	Desired	Kívánt
@@ -7257,13 +7259,13 @@ variable-list-end	{0}, {1}	{0} és {1}
 	Slope:	Lejtés:
 axis	X Axis	X tengely
 axis	Y Axis	Y tengely
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Becsomagolt fájlok: {n}, mappa: {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Becsomagolt fájlok: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Becsomagolt fájlok: {n}
-@plural	Packaged {n} file|Packaged {n} files	Becsomagolt fájlok: {n}
-@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Becsomagolt fájlok: {n}, mappa: {folder}
-@plural	Packaged {n} file {note}|Packaged {n} files {note}	Becsomagolt fájlok: {n} {note}
-@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	Fájlok: {n}, mappa: {folder}. Megnyitod a csomag mappáját?
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Becsomagolt fájlok: {n}, mappa: {folder}|Becsomagolt fájlok: {n}, mappa: {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Becsomagolt fájlok: {n} {note}|Becsomagolt fájlok: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Becsomagolt fájlok: {n}|Becsomagolt fájlok: {n}
+@plural	Packaged {n} file|Packaged {n} files	Becsomagolt fájlok: {n}|Becsomagolt fájlok: {n}
+@plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Becsomagolt fájlok: {n}, mappa: {folder}|Becsomagolt fájlok: {n}, mappa: {folder}
+@plural	Packaged {n} file {note}|Packaged {n} files {note}	Becsomagolt fájlok: {n} {note}|Becsomagolt fájlok: {n} {note}
+@plural	{n} file in {folder}. Show the package folder?|{n} files in {folder}. Show the package folder?	Fájlok: {n}, mappa: {folder}. Megnyitod a csomag mappáját?|Fájlok: {n}, mappa: {folder}. Megnyitod a csomag mappáját?
 	Clockwise	Óramutató járásával megegyező
 	Dither	Árnyalatkeverés
 	Fine noise hides banding in the gradient fill	A finom zaj elrejti a sávokat a színátmenetes kitöltésben
@@ -7308,11 +7310,17 @@ axis	Y Axis	Y tengely
 @msg	module is {_1} bytes (limit {_2})	a modul mérete {_1} bájt (korlát: {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	jóváhagyás szükséges: ezt kéri: {0}, amit a felhasználó a külön telepítéskor ad meg
 @msg	not JSON: {e}	nem JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	nem WebAssembly bináris (hiányzik a \0asm fejléc)
+@msg	not a WebAssembly binary (missing \\0asm header)	nem WebAssembly bináris (hiányzik a \\0asm fejléc)
 @msg	parameter `{k}`: {what}	`{k}` paraméter: {what}
 @msg	parameter `{name}`: {what}	`{name}` paraméter: {what}
 @msg	plug-in parameters must be a JSON object	a bővítmény paraméterei JSON-objektumot alkossanak
 @msg	the module must export its linear memory as `memory`	a modulnak `memory` néven kell exportálnia a lineáris memóriáját
+@msg	the module must export `{name}` with the type {signature}	a modulnak a(z) `{name}` elemet {signature} típussal kell exportálnia
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	a modulnak több `{MANIFEST_SECTION}` egyéni szakasza van
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	memóriakeret (a modul kezdeti memóriája {initial} bájt, korlát {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	a(z) `{MANIFEST_SECTION}` egyéni szakasz manifesztjének az `abi` értékét {ABI_VERSION} értékként kell megadnia, amely az e gazdaprogram által megvalósított ABI-verzió
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	táblakeret (a modul {count} táblát definiál, a legnagyobb {largest} elemmel; korlát {MAX_TABLES} tábla, egyenként {MAX_TABLE_ELEMENTS} elem)
+@msg	the module's table section could not be read	a modul táblaszakasza nem olvasható
 @msg	the objects to change are no longer in the document	a módosítandó objektumok már nincsenek a dokumentumban
 @msg	the runtime panicked	a futtatókörnyezet összeomlott
 @msg	unexpected host trap	váratlan megszakítás (trap) a gazdaprogramban
@@ -7387,6 +7395,8 @@ axis	Y Axis	Y tengely
 @msg	`plates` requires a stop linked to a spot swatch	a `plates` direktszín-színmintához kapcsolt színátmenet-pontot igényel
 @msg	the output	a kimenet
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	a(z) {id} összetett útvonalnak van rejtett, zárolt vagy segédvonal tagja, ezért a tagjai nem cserélhetők le
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	a(z) {id} összetett útvonalnak van olyan tagja, amely nem útvonal, ezért a tagjai nem cserélhetők le
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
 @msg	true or false	true vagy false
 @msg	a number >= {_1}	szám >= {_1}
@@ -7582,7 +7592,7 @@ axis	Y Axis	Y tengely
 	On Artboards	Rajztáblákon
 	All Artboards	Minden rajztábla
 	Include Objects On Canvas	Vásznon lévő objektumok is
-@plural	Result: {n}|Results: {n}	Eredmény: {n}
+@plural	Result: {n}|Results: {n}	Eredmény: {n}|Eredmény: {n}
 @msg	select one object	jelöljön ki egy objektumot
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A globális szerkesztés útvonalakon, összetett útvonalakon, szimbólumpéldányokon és ezek csoportjain működik
 @msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nem található hasonló objektum (a tükrözött másolatok nem számítanak egyezésnek); módosítsa a globális szerkesztés beállításait, és próbálja újra
@@ -8496,13 +8506,13 @@ breakText	Glyphs	Glifák
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Az összes megnyitott dokumentum exportálása PDF-ként
 	Export All Open Documents as SVG	Az összes megnyitott dokumentum exportálása SVG-ként
-@msgplural	Exported {n} document|Exported {n} documents	Exportált dokumentumok: {n}
-@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportált dokumentumok: {n}; {title} nem lett kiírva: {error}
+@msgplural	Exported {n} document|Exported {n} documents	Exportált dokumentumok: {n}|Exportált dokumentumok: {n}
+@msgplural	Exported {n} document; {title} wasn't written: {error}|Exported {n} documents; {title} wasn't written: {error}	Exportált dokumentumok: {n}; {title} nem lett kiírva: {error}|Exportált dokumentumok: {n}; {title} nem lett kiírva: {error}
 # Document Tools add-on: Batch Trace Folder (#4921).
 	Batch Trace Folder	Mappa kötegelt vektorizálása
-@msgplural	Traced {n} image|Traced {n} images	Vektorizált képek: {n}
-@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	Nem vektorizálható képek: {n}
-@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Vektorizált képek: {n}; nem vektorizálható: {failed}
+@msgplural	Traced {n} image|Traced {n} images	Vektorizált képek: {n}|Vektorizált képek: {n}
+@msgplural	{n} image couldn't be traced|{n} images couldn't be traced	Nem vektorizálható képek: {n}|Nem vektorizálható képek: {n}
+@msgplural	Traced {n} image; not traced: {failed}|Traced {n} images; not traced: {failed}	Vektorizált képek: {n}; nem vektorizálható: {failed}|Vektorizált képek: {n}; nem vektorizálható: {failed}
 # Symbol Options › Symbol Type (dynamic symbols)
 	Symbol Type:	Szimbólum típusa:
 	Dynamic Symbol	Dinamikus szimbólum
@@ -8603,15 +8613,15 @@ breakText	Glyphs	Glifák
 	Select by Link Status…	Kijelölés csatolási állapot szerint…
 	Search images	Képek keresése
 	No images match.	Nincs egyező kép.
-@msgplural	Selected {n} linked image|Selected {n} linked images	Kijelölt csatolt képek: {n}
-@msgplural	Selected {n} embedded image|Selected {n} embedded images	Kijelölt beágyazott képek: {n}
-@msgplural	Selected {n} missing image|Selected {n} missing images	Kijelölt hiányzó képek: {n}
-@msgplural	Selected {n} modified image|Selected {n} modified images	Kijelölt módosított képek: {n}
-@msgplural	Selected {n} image|Selected {n} images	Kijelölt képek: {n}
-@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; további rejtett vagy zárolt: {n}
-@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; további sablonrétegen: {n}
-@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; további az elkülönített csoporton kívül: {n}
-@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; további most nem jelölhető ki: {n}
+@msgplural	Selected {n} linked image|Selected {n} linked images	Kijelölt csatolt képek: {n}|Kijelölt csatolt képek: {n}
+@msgplural	Selected {n} embedded image|Selected {n} embedded images	Kijelölt beágyazott képek: {n}|Kijelölt beágyazott képek: {n}
+@msgplural	Selected {n} missing image|Selected {n} missing images	Kijelölt hiányzó képek: {n}|Kijelölt hiányzó képek: {n}
+@msgplural	Selected {n} modified image|Selected {n} modified images	Kijelölt módosított képek: {n}|Kijelölt módosított képek: {n}
+@msgplural	Selected {n} image|Selected {n} images	Kijelölt képek: {n}|Kijelölt képek: {n}
+@msgplural	{selected}; {n} more is hidden or locked|{selected}; {n} more are hidden or locked	{selected}; további rejtett vagy zárolt: {n}|{selected}; további rejtett vagy zárolt: {n}
+@msgplural	{selected}; {n} more is on a template layer|{selected}; {n} more are on template layers	{selected}; további sablonrétegen: {n}|{selected}; további sablonrétegen: {n}
+@msgplural	{selected}; {n} more is outside the isolated group|{selected}; {n} more are outside the isolated group	{selected}; további az elkülönített csoporton kívül: {n}|{selected}; további az elkülönített csoporton kívül: {n}
+@msgplural	{selected}; {n} more can't be selected now|{selected}; {n} more can't be selected now	{selected}; további most nem jelölhető ki: {n}|{selected}; további most nem jelölhető ki: {n}
 
 # Compound Shapes add-on
 	Compound Shapes	Összetett alakzatok
@@ -8693,9 +8703,9 @@ breakText	Glyphs	Glifák
 	{time}, {calls}	{time}, {calls}
 	slowest: {commands}	leglassabbak: {commands}
 	{dropped}, {cut}	{dropped}, {cut}
-@plural	{n} host call|{n} host calls	{n} gazdahívás
-@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} korábbi sor elvetve
-@plural	{n} line cut|{n} lines cut	{n} sor levágva
+@plural	{n} host call|{n} host calls	{n} gazdahívás|{n} gazdahívás
+@plural	{n} earlier line dropped|{n} earlier lines dropped	{n} korábbi sor elvetve|{n} korábbi sor elvetve
+@plural	{n} line cut|{n} lines cut	{n} sor levágva|{n} sor levágva
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	A `first` és a `last` a konzolban tárolt sorok számai legyenek, a `first` a `last` előtt
 
 # Learn panel
@@ -8739,7 +8749,7 @@ breakText	Glyphs	Glifák
 	Refresh Deferred Effects	Elhalasztott effektusok frissítése
 	Deferred Effects	Elhalasztott effektusok
 @msg	no plug-in effect is deferred	nincs elhalasztott bővítményeffektus
-@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.|Megnyitva, elhalasztott bővítményeffektusok: {n}. Az Effektus › Elhalasztott effektusok frissítése futtatja őket.
 
 # Cutting Tools add-on (Object › Plug-ins › Cutting Tools).
 	Cutting Tools	Vágóeszközök
@@ -8904,6 +8914,8 @@ breakText	Glyphs	Glifák
 @msg	`dataBase64` is larger than the module limit	`dataBase64`: nagyobb a modulok méretkorlátjánál
 @msg	`dataBase64` is not valid base64	`dataBase64`: nem érvényes base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`: nem használható együtt ezekkel: `ids`, `reverse`, `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`: nem használható együtt ezekkel: `ids`, `id`, `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`: nem használható együtt ezzel: `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` és `childLimit`: az összegzést szűkítik; add meg ezt: `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design`: diagramminta neve, vagy null az egyszerű oszlopokhoz
 @msg	`design` is a design name, or null for the default marker	`design`: diagramminta neve, vagy null az alapértelmezett jelölőhöz

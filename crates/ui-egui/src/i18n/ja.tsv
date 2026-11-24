@@ -21,6 +21,7 @@
 	Anchors:	アンカー:
 	Any Kind	すべての種類
 	Font Technology	フォントテクノロジー
+@id	language.name	日本語
 font-technology	Variable	バリアブル
 	Ascender	アセンダ
 	Baseline	ベースライン
@@ -6524,6 +6525,7 @@ lighting	Light	ライト
 @msg	a 3D effect on a group's fill or stroke draws nothing	グループの塗りまたは線にある 3D 効果は何も描画しません
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D オブジェクトのメッシュが不完全か、数値でない値を含んでいます
 @msg	the <filter> element needs an id, the filter's name	<filter> 要素には id (フィルターの名前) が必要です
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG フィルターの id は {MAX_NAME} 文字までです
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> は SVG フィルターの要素ではありません
@@ -7020,11 +7022,17 @@ axis	Y Axis	Y 軸
 @msg	module is {_1} bytes (limit {_2})	モジュールは {_1} バイトです (上限 {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	承認が必要です: {0} を要求しています。これはユーザーが単独でインストールするときに許可します
 @msg	not JSON: {e}	JSON ではありません: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	WebAssembly バイナリではありません (\0asm ヘッダーがありません)
+@msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly バイナリではありません (\\0asm ヘッダーがありません)
 @msg	parameter `{k}`: {what}	パラメーター `{k}`: {what}
 @msg	parameter `{name}`: {what}	パラメーター `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	プラグインのパラメーターは JSON オブジェクトにしてください
 @msg	the module must export its linear memory as `memory`	モジュールは線形メモリを `memory` としてエクスポートする必要があります
+@msg	the module must export `{name}` with the type {signature}	モジュールは `{name}` を型 {signature} でエクスポートする必要があります
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	モジュールにカスタムセクション `{MANIFEST_SECTION}` が複数あります
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	メモリ予算 (モジュールの初期メモリは {initial} バイト、上限は {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	カスタムセクション `{MANIFEST_SECTION}` のマニフェストは `abi` に {ABI_VERSION} (このホストが実装する ABI バージョン) を指定する必要があります
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	テーブル予算 (モジュールが定義するテーブルは {count} 個、最大のものは {largest} 要素、上限はテーブル {MAX_TABLES} 個、各 {MAX_TABLE_ELEMENTS} 要素)
+@msg	the module's table section could not be read	モジュールのテーブルセクションを読み取れませんでした
 @msg	the objects to change are no longer in the document	変更するオブジェクトがドキュメントにもうありません
 @msg	the runtime panicked	ランタイムが異常終了しました
 @msg	unexpected host trap	ホストで予期しないトラップが発生しました
@@ -7099,6 +7107,8 @@ axis	Y Axis	Y 軸
 @msg	`plates` requires a stop linked to a spot swatch	`plates` には特色スウォッチにリンクされた分岐点が必要です
 @msg	the output	出力
 @msg	the path has no anchor points	パスにアンカーポイントがありません
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	複合パス {id} に非表示、ロック、またはガイドのメンバーがあるため、メンバーを置き換えられません
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	複合パス {id} にパスではないメンバーがあるため、メンバーを置き換えられません
 @msg	too many anchor points (limit {MAX_ANCHORS})	アンカーポイントが多すぎます (上限 {MAX_ANCHORS})
 @msg	true or false	true または false
 @msg	a number >= {_1}	{_1} 以上の数値
@@ -7749,6 +7759,8 @@ axis	Y Axis	Y 軸
 @msg	`dataBase64` is larger than the module limit	`dataBase64` がモジュールの上限を超えています
 @msg	`dataBase64` is not valid base64	`dataBase64` が有効な base64 ではありません
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` は `ids`、`reverse`、`append` と同時に使用できません
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` は `ids`、`id`、`item` と同時に使用できません
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` は `brush` と同時に使用できません
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` と `childLimit` はサマリーを絞り込みます: `summary: true` を指定してください
 @msg	`design` is a design name, or null for plain columns	`design` にはデザイン名を指定します。通常の棒にするには null を指定します
 @msg	`design` is a design name, or null for the default marker	`design` にはデザイン名を指定します。初期設定のマーカーにするには null を指定します
