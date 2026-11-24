@@ -74,3 +74,39 @@ Read on 2026-11-24; re-read anything that may have moved (and populate `producer
 - Both callers pin the same immutable `craft-common-actions` commit in `uses` and `tooling-revision`.
 - No nightly schedule is registered, no cache actions or secrets appear in the app callers, and `nightly-sign.yml` retains its literal root `concurrency` block (`group: vectorcraft-nightly-release`, `cancel-in-progress: false`, `queue: max`).
 - Policy v3 schema, platform rows, bounds, required main-push CI workflow, and SonarCloud project identity match `sonar-project.properties`.
+
+## The app side of a Nightly build
+
+The producer and signer call into this repository:
+
+| Platform | Compile step (no secrets) | Trusted signing step (release checkout) | Check |
+|---|---|---|---|
+| Windows x86_64 | `pwsh packaging/windows/package.ps1 -Arch x64 -Nightly -BuildOnly` | `packaging/windows/sign.ps1 -Required` | `nightly.ps1`'s PE, ProductName and version checks |
+| macOS aarch64 | `bash packaging/macos/nightly.sh --arch aarch64` | `packaging/macos/nightly-sign.sh` (with `import-cert.sh`, `entitlements.plist`, `nightly.sh`) | `packaging/macos/nightly-verify.sh --expect signed --team` |
+| Linux x86_64 | `bash packaging/linux/nightly.sh --arch x86_64` | the shared Linux signer | the shared `nightly_unix.py` isolation checks |
+
+The three platform-specific scripts share `packaging/nightly-common.sh` (input checks, the owned
+compile, the notice copier, the exclusive publish) and `packaging/nightly_paths.py` (the private
+build root every helper stays inside). `packaging/nightly-tests.py` runs the synthetic suites
+(`nightly-archive-tests.py`, `macos/nightly_plist_tests.py`, `macos/nightly_sign_tests.py`,
+`nightly-release-tests.py`); `.github/workflows/nightly-check.yml` runs them with the Windows
+PowerShell suites, and `.github/workflows/nightly-macos.yml` builds and verifies the unsigned
+bundle behind the `full-ci` label.
+
+The build switch is `VECTORCRAFT_BUILD_CHANNEL=nightly-v1`, which `apps/vectorcraft/build.rs` turns
+into `cfg(vectorcraft_nightly_v1)`; the identity is `VECTORCRAFT_VERSION`
+(`X.Y.Z-nightly.YYYYMMDD.<run>.<attempt>.g<sha12>`), also accepted from
+`VECTORCRAFT_OVERRIDE_VERSION`, which is the name this repository's packaging scripts already pass
+to cargo. A nightly build without that identity refuses to build.
+
+The executable answers `--version`, `-V` and the Launcher's `--launch-profile nightly-v1
+--profile-root <abs> --version` before root validation, logging, IPC or any window, with exactly
+`VectorCraft <version> (nightly-v1)`. A nightly without a profile is refused (exit 2) with the
+message to open VectorCraft Nightly from ArtCraft Launcher; a stable build refuses the profile.
+
+All user state of a nightly launch lives in the profile root the Launcher passes: `config.toml`,
+`logs`, `Data Recovery`, `Plug-ins`, `Fonts`, the user's libraries and script data, the
+single-instance record, the eframe window state (`app.ron`) and the framework's `window.json`.
+`apps/vectorcraft/src/profile_root.rs` fences it off stable's folders, a portable copy and the
+installation on every platform, and `apps/vectorcraft/src/profile.rs` (`install_data_root`) is the
+one hook every data path follows.

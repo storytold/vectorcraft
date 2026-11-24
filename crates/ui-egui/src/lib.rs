@@ -56,6 +56,7 @@ pub mod layout_migration;
 pub mod menus;
 pub mod opening;
 mod original_editor;
+pub mod os_window;
 #[doc(hidden)]
 pub use original_editor::Choice as OriginalEditorChoice;
 mod page_glyphs;

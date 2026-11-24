@@ -1,5 +1,6 @@
 #[cfg(all(target_os = "macos", feature = "accessibility", feature = "wgpu"))]
 use super::gpu;
+use super::nightly_session;
 use super::prefs::{flush, save_tick};
 #[cfg(not(target_os = "macos"))]
 use super::single_instance;
@@ -95,6 +96,10 @@ impl eframe::App for App {
         // A ready update installs once the process has exited. The macOS exit below skips
         // dropping the app, so the helper is started here.
         self.app.start_pending_update();
+        // Every quit reaches this hook, including a macOS Cmd+Q, which ends the process inside
+        // AppKit's terminate before `run_native` returns: the nightly session record is finished
+        // here, and the return path after the event loop is then a no-op.
+        nightly_session::finish_once();
         // Dropping the app can wait for the clipboard handles to let go: the windows leave the
         // screen first (`quit_windows`).
         #[cfg(not(any(target_os = "macos", windows)))]
