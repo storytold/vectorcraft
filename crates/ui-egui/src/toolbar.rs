@@ -23,7 +23,7 @@ use craft::ui::docking::{DockGrid, GroupAt};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::{Anchor9, ReferencePointLook, Select};
-use craft::ui::rails::{LastUsed, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
+use craft::ui::rails::{LastUsed, RailDensity, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
 use craft::ui::runtime::commands::{self, CommandRef};
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, Vec2};
@@ -260,7 +260,13 @@ pub(crate) fn dock_grid(app: &VectorcraftApp, owner: &Owner) -> DockGrid {
         Owner::Strip(parent, first) => strip_tools(app, parent, first).len(),
         _ => groups_of(app, owner).len() + 1,
     };
-    DockGrid::rail(cells)
+    DockGrid::rail(cells).density(rail_density(app, owner))
+}
+
+/// How tightly the rail of `owner` packs its buttons: the Tools panel's packs them tight under Window › Toolbars ›
+/// Compact.
+fn rail_density(app: &VectorcraftApp, owner: &Owner) -> RailDensity {
+    if matches!(owner, Owner::Tools) && app.ui.toolbar_compact { RailDensity::Dense } else { RailDensity::Regular }
 }
 
 /// The groups of several tools of the Tools panel's toolbar (`toolbar` none) or of the toolbar made
@@ -388,7 +394,11 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     let holds = |tool: &str| model.slots.iter().any(|slot| slot.tools.iter().any(|t| t.id == tool));
     let reveal = matches!(at, GroupAt::Show(_)).then(|| locate::take_reveal(&mut app.ui, &home, holds)).flatten();
     // The current tool in production's pressed fill, with no accent edge.
-    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).tips(&cards).active_look(ActiveLook::Pressed);
+    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used)
+        .opens(opens)
+        .tips(&cards)
+        .active_look(ActiveLook::Pressed)
+        .density(rail_density(app, &owner));
     if let Some(tool) = &located {
         rail = rail.mark(tool);
     }

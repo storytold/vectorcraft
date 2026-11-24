@@ -13,7 +13,7 @@ use craft::draw::ui::transform::{
     FieldArrangement, SizeUnit, TransformField, TransformFields, TransformFieldsOutput, TransformGroups, TransformRow, TransformSource,
 };
 use craft::keymap::CommandRef;
-use craft::ui::buttons::{IconButton, Link};
+use craft::ui::buttons::IconButton;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, GlyphLabel, LabelKind, LabelPress, Props, Show, ShowContainer, SideLabel, Sizing};
 use craft::ui::display::{Shade, Text};
@@ -655,7 +655,7 @@ fn pixel_aligned_ids(app: &VectorcraftApp) -> Vec<u64> {
 /// The Control bar's underlined "Transform" link: a click toggles the Transform panel in a
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub(crate) fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let out = Link::new(tl!("Transform")).tooltip(tl!("Transform options")).show(ui);
+    let out = crate::panels::option_link(tl!("Transform")).tooltip(tl!("Transform options")).show(ui);
     popover(app, ui, &out.response);
 }
 

@@ -5,6 +5,7 @@ use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::contract::{Bind, GlyphColon};
+use craft::ui::menu::MenuTitlePad;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
 use craft::ui::runtime::toast::{self, Toast};
@@ -676,6 +677,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // A glyph that stands for a word caption ("X", "W") takes a form's colon as production drew it ("X:"); "#" and
     // the colour channel letters stay bare.
     root.values.set(GlyphColon::Form);
+    // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
+    root.values.set(MenuTitlePad::Control);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.

@@ -1316,7 +1316,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
             Bind::bound(&mut workspace),
             &specs,
             &mut panels,
-            DockConfig::default().panel_menu_always(true).panel_menu_icon(IconId::new("menu")),
+            DockConfig::default().panel_menu_always(true).panel_menu_icon(IconId::new("menu")).rail_cards(true),
         )
         .hide(hide)
         .flyout(Bind::bound(&mut flyout));

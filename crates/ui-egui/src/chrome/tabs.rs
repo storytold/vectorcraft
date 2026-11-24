@@ -83,7 +83,8 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             // The tab's modified mark shows unsaved changes, so its text has no `*`.
             let whole = window_tab_title(app, w, d, false);
             let tab = if Some(w) == shown {
-                DocumentTab::new(w, whole)
+                // The modified mark follows the document's name, before the view's zoom and mode.
+                DocumentTab::new(w, whole).name_len(view_tab_name(d, doc_windows::label(app, w), false).len())
             } else {
                 DocumentTab::new(w, view_tab_name(d, doc_windows::label(app, w), false)).tooltip(whole)
             };
