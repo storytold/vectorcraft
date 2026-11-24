@@ -3108,10 +3108,11 @@ script reads files with them:
   `%xx` escapes are read as UTF-8, and on Windows `/` and `\` both separate names and `/c/` names drive C. `File(path)`
   without `new` gives a `Folder` for an existing folder, and `Folder(path)` gives a `File` for an existing file. Two
   objects for the same path are different objects.
-- `name`, `displayName`, `fsName`, `absoluteURI`, `fullName`, `relativeURI`, `path`, `parent` and `toString()` come
-  from the path. `exists`, `length`, `created`, `modified`, `hidden`, `readonly` and `alias` read the file system.
-  `exists` is true for a `File` only when the path names something other than a folder, and for a `Folder` only
-  when it names a folder.
+- `name`, `displayName`, `localizedName`, `fsName`, `absoluteURI`, `fullName`, `relativeURI`, `path`, `parent` and
+  `toString()` come from the path. `localizedName` gives the same decoded name as `displayName`: VectorCraft does not
+  look up a name the system shows in another language. `exists`, `length`, `created`, `modified`, `hidden`,
+  `readonly` and `alias` read the file system. `exists` is true for a `File` only when the path names something
+  other than a folder, and for a `Folder` only when it names a folder.
   `File.encode`, `File.decode` and `File.isEncodingAvailable` (and the same on `Folder`), `File.fs`, and the folders
   `Folder.temp`, `Folder.desktop`, `Folder.myDocuments`, `Folder.userData` and the others are there too.
 - `open('r')` opens a file to read, and `read([chars])`, `readln()`, `readch()`, `seek(pos[, mode])`, `tell()`, `eof`

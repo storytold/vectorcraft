@@ -150,6 +150,39 @@ pub struct DocState {
     /// measured: the next refresh checks only the layer trees that differ from it
     /// ([`cmd::inline::refresh`]). Not saved.
     pub(crate) inline_resolved: Option<cmd::inline::Resolved>,
+    /// The selected objects as [`crate::Session::select`] last checked them or the proxies last
+    /// read them, with the document they were checked in ([`SelectionRecord`]). Not saved.
+    pub(crate) selection_record: Option<SelectionRecord>,
+}
+
+/// A selection of objects alone ([`objects_only`]) with the document it was checked or read in:
+/// while the document and the selected objects stay the same, a command that adds objects checks
+/// and reads only the added ones.
+#[derive(Clone, Debug)]
+pub(crate) struct SelectionRecord {
+    /// The document, held as [`EmptyArtboards::doc`] holds it.
+    pub(crate) doc: std::sync::Weak<Document>,
+    pub(crate) objects: Vec<NodeId>,
+    /// Lock Guides as it was when [`crate::Session::select`] left these objects selected; `None`
+    /// when it did not.
+    pub(crate) settled: Option<bool>,
+    /// What the proxies read from these objects; `None` when they were not read.
+    pub(crate) paints: Option<cmd::SelectionPaints>,
+}
+
+/// Whether `sel` holds selected objects and nothing else: no anchors, segments, key, target,
+/// slices, ruler guides, object of a symbol instance's art or object on a path.
+pub(crate) fn objects_only(sel: &Selection) -> bool {
+    sel.anchors.is_empty()
+        && sel.segments.is_empty()
+        && sel.key.is_none()
+        && sel.target.is_none()
+        && sel.slices.is_empty()
+        && sel.guides.is_empty()
+        && sel.key_guide.is_none()
+        && sel.key_anchor.is_none()
+        && sel.symbol_part.is_none()
+        && sel.on_path_member.is_none()
 }
 
 /// What the commands scripts ran did to an open document since the person last opened or saved it
@@ -407,7 +440,45 @@ impl DocState {
             art_to_fit: Default::default(),
             measured_in_own: None,
             inline_resolved: None,
+            selection_record: None,
         }
+    }
+    /// The [`SelectionRecord`] of the selection now: `None` when the document or the selected
+    /// objects changed since it was made, or when anything besides whole objects is selected
+    /// ([`objects_only`]). Only a new [`Document`] makes the record stale: the document's new art
+    /// is the one state that changes in place and matters to it, and [`crate::Session::select`]
+    /// checks the whole selection while there is new art.
+    pub(crate) fn selection_record(&self) -> Option<&SelectionRecord> {
+        self.selection_record
+            .as_ref()
+            .filter(|r| std::ptr::eq(r.doc.as_ptr(), Arc::as_ptr(&self.doc)) && objects_only(&self.selection) && r.objects == self.selection.objects)
+    }
+    /// What the proxies read from the selected objects, when the [`SelectionRecord`] of the
+    /// selection now holds it.
+    pub(crate) fn selection_paints(&self) -> Option<&cmd::SelectionPaints> {
+        self.selection_record().and_then(|r| r.paints.as_ref())
+    }
+    /// Keep the [`SelectionRecord`] of the selection that [`crate::Session::select`] left, with
+    /// Lock Guides `guides_locked`. `record` is the record of the selection before: when the
+    /// selected objects start with its objects, the added objects are read into its paints.
+    pub(crate) fn record_selection(&mut self, record: Option<SelectionRecord>, guides_locked: bool) {
+        if !objects_only(&self.selection) {
+            self.selection_record = None;
+            return;
+        }
+        let objects = &self.selection.objects;
+        self.selection_record = Some(match record {
+            Some(mut r) if objects.starts_with(&r.objects) => {
+                let added = &objects[r.objects.len()..];
+                if let Some(p) = &mut r.paints {
+                    p.add(&self.doc, added);
+                }
+                r.objects.extend_from_slice(added);
+                r.settled = Some(guides_locked);
+                r
+            }
+            _ => SelectionRecord { doc: Arc::downgrade(&self.doc), objects: objects.clone(), settled: Some(guides_locked), paints: None },
+        });
     }
 
     /// The document, its file and the file it was read from as the person last left them, for the
