@@ -10,7 +10,7 @@ use craft::draw::ui::stroke::{self as draw, StrokeEditor, StrokeField, StrokeSec
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, TooltipSpec};
+use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, Sizing, TooltipSpec};
 use craft::ui::form::Field;
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
@@ -348,7 +348,7 @@ pub(crate) fn apply_weight(app: &mut VectorcraftApp, out: &NumberOutput, target:
 /// The weight field in a row labelled `label` with the side label `side`: the output of the number field, none when
 /// the row's body did not run.
 fn weight_row(app: &VectorcraftApp, ui: &mut Ui, label: &'static str, side: SideLabel, weight: Option<f64>) -> Option<NumberOutput> {
-    Field::new(label).side(side).id_salt("weight").show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
+    Field::new(label).side(side).id_salt("weight").sizing(Sizing::Content).show(ui, |ui, _| weight_number(app, weight).show(ui)).inner
 }
 
 /// The weight field whose link side label (`label`: the Control bar's "Stroke:", the Properties panel's "Stroke")

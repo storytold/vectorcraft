@@ -5,7 +5,7 @@ use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::choice::ChoiceLook;
-use craft::ui::contract::{Bind, GlyphColon, LinkLabelInk, SectionRhythm};
+use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, SectionRhythm};
 use craft::ui::list::CommandHighlight;
 use craft::ui::menu::MenuTitlePad;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
@@ -16,6 +16,7 @@ use craft::ui::sections::DialogButtonLook;
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
 use craft::ui::style::TrackFill;
+use craft::ui::tabs::DocumentTabLook;
 use craft::ui::text::{NumberLook, NumberPrecision};
 use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 use vectorcraft_engine::cmd::toast::Level;
@@ -686,6 +687,9 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // A field's label that opens its options ("Opacity:", "Stroke") reads in the normal ink, underlined, as production
     // drew it.
     root.values.set(LinkLabelInk::Neutral);
+    // Other field labels ("X:", "Angle:", "Opacity") read in the normal ink of the values beside them, as production
+    // drew them.
+    root.values.set(CaptionInk::Normal);
     // Menu rows, open menu bar titles and the command palette's active row show production's hover highlight.
     root.values.set(CommandHighlight::Hover);
     // Check boxes, radio buttons and switches that are on take the strong accent with a white mark, sliders fill their
@@ -697,6 +701,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.values.set(SectionRhythm::Spaced);
     // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
     root.values.set(MenuTitlePad::Control);
+    // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
+    root.values.set(DocumentTabLook::Semibold);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.
