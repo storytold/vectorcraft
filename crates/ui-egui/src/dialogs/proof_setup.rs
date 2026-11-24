@@ -426,7 +426,7 @@ pub fn refresh_saved(app: &VectorcraftApp) {
     let mut saved = saved();
     let queue = saved.queue.get_or_insert_with(|| {
         let wake = app.ui_ctx.clone().map_or_else(Wake::none, |ctx| Wake::new(move || ctx.request_repaint()));
-        JobQueue::new(app.host.jobs_shared().clone(), wake, QueueOptions { lanes: 1, name: "vectorcraft-proof-setups" })
+        JobQueue::new(app.host.jobs_shared().clone(), wake, QueueOptions { lanes: 1, name: "vectorcraft-proof-setups", ..QueueOptions::default() })
     });
     queue.submit((), Priority::BACKGROUND, move |_| listing(&dir));
 }
