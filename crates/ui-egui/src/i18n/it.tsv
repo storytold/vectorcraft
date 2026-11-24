@@ -7026,6 +7026,8 @@ axis	Y Axis	Asse Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` richiede un cursore colore collegato a un campione di colore spot
 @msg	the output	l’output
 @msg	the path has no anchor points	il tracciato non ha punti di ancoraggio
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	il tracciato composto {id} ha un membro nascosto, bloccato o guida, quindi i suoi membri non possono essere sostituiti
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	il tracciato composto {id} ha un membro che non è un tracciato, quindi i suoi membri non possono essere sostituiti
 @msg	too many anchor points (limit {MAX_ANCHORS})	troppi punti di ancoraggio (limite {MAX_ANCHORS})
 @msg	true or false	true o false
 @msg	a number >= {_1}	un numero >= {_1}

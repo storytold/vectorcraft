@@ -7259,6 +7259,8 @@ axis	Y Axis	Oś Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` wymaga punktu koloru połączonego z próbką koloru dodatkowego
 @msg	the output	wyjście
 @msg	the path has no anchor points	ścieżka nie ma punktów kontrolnych
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	ścieżka złożona {id} ma ukryty, zablokowany lub będący linią pomocniczą element, więc jej elementów nie można zastąpić
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	ścieżka złożona {id} ma element, który nie jest ścieżką, więc jej elementów nie można zastąpić
 @msg	too many anchor points (limit {MAX_ANCHORS})	za dużo punktów kontrolnych (limit {MAX_ANCHORS})
 @msg	true or false	true lub false
 @msg	a number >= {_1}	liczbą >= {_1}

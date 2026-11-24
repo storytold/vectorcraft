@@ -7410,6 +7410,8 @@ axis	Y Axis	Y-axel
 @msg	`plates` requires a stop linked to a spot swatch	`plates` kräver ett gradientstopp som är länkat till en dekorfärgruta
 @msg	the output	utdata
 @msg	the path has no anchor points	banan har inga ankarpunkter
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	den sammansatta banan {id} har en dold, låst eller stödlinjemedlem, så dess medlemmar kan inte ersättas
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	den sammansatta banan {id} har en medlem som inte är en bana, så dess medlemmar kan inte ersättas
 @msg	too many anchor points (limit {MAX_ANCHORS})	för många ankarpunkter (gräns {MAX_ANCHORS})
 @msg	true or false	true eller false
 @msg	a number >= {_1}	ett tal >= {_1}

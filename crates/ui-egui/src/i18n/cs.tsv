@@ -7404,6 +7404,8 @@ axis	Y Axis	osa Y
 @msg	`plates` requires a stop linked to a spot swatch	`plates` vyžaduje zarážku propojenou se vzorkem přímé barvy
 @msg	the output	výstup
 @msg	the path has no anchor points	cesta nemá žádné kotevní body
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	složená cesta {id} má skrytý, zamčený nebo vodítkový člen, takže její členy nelze nahradit
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	složená cesta {id} má člen, který není cestou, takže její členy nelze nahradit
 @msg	too many anchor points (limit {MAX_ANCHORS})	příliš mnoho kotevních bodů (limit {MAX_ANCHORS})
 @msg	true or false	true nebo false
 @msg	a number >= {_1}	číslo >= {_1}

@@ -7394,6 +7394,8 @@ axis	Y Axis	Άξονας Y
 @msg	`plates` requires a stop linked to a spot swatch	το `plates` απαιτεί σημείο χρώματος συνδεδεμένο με δείγμα πλακάτου χρώματος
 @msg	the output	η έξοδος
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	η σύνθετη διαδρομή {id} έχει κρυφό, κλειδωμένο ή οδηγό μέλος, οπότε τα μέλη της δεν μπορούν να αντικατασταθούν
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	η σύνθετη διαδρομή {id} έχει μέλος που δεν είναι διαδρομή, οπότε τα μέλη της δεν μπορούν να αντικατασταθούν
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
 @msg	true or false	true ή false
 @msg	a number >= {_1}	αριθμός >= {_1}

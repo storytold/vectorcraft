@@ -6581,6 +6581,8 @@ arrowhead	Feather	पंख
 @msg	`plates` requires a stop linked to a spot swatch	`plates` के लिए स्पॉट रंग स्वॉच से जुड़ा स्टॉप आवश्यक है
 @msg	the output	आउटपुट
 @msg	the path has no anchor points	पाथ में कोई एंकर पॉइंट नहीं है
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	कंपाउंड पाथ {id} का कोई सदस्य छिपा हुआ, बंद या गाइड है, इसलिए इसके सदस्य बदले नहीं जा सकते
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	कंपाउंड पाथ {id} का कोई सदस्य पाथ नहीं है, इसलिए इसके सदस्य बदले नहीं जा सकते
 @msg	too many anchor points (limit {MAX_ANCHORS})	बहुत अधिक एंकर पॉइंट (सीमा {MAX_ANCHORS})
 @msg	true or false	true या false
 @msg	a number >= {_1}	एक संख्या >= {_1}

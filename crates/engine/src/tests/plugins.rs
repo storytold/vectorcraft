@@ -182,6 +182,136 @@ fn filters_make_guides_and_locked_objects_left_unselected() {
     assert_eq!(st.history.undo.len(), undo + 1);
 }
 
+/// A compound path handed back with its path as it was keeps its members, hidden and locked ones
+/// included. A changed path replaces its members, and is refused while a member is hidden, locked,
+/// a guide or not a path, as is turning it into a plain path.
+#[test]
+fn a_filter_keeps_or_replaces_a_compound_path_s_members_whole() {
+    use std::sync::Arc;
+    use vectorcraft_doc::{Appearance, Node, NodeKind};
+    use vectorcraft_geom::FillRule;
+    let mut s = session();
+    let compound_of = |s: &mut Session, members: Vec<Node>| {
+        let mut id = NodeId(0);
+        s.edit("Set up", |d, _| {
+            let n = Node::new(d.alloc_id(), NodeKind::Compound { children: members.into_iter().map(Arc::new).collect(), rule: FillRule::NonZero });
+            let layer = d.layers[0].id;
+            id = d.insert(Some(layer), usize::MAX, n).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        id
+    };
+    let members = |s: &Session, id: NodeId| match &node(s, id).kind {
+        NodeKind::Compound { children, .. } => children.iter().map(|c| (c.id, c.visible, c.locked, c.path_data().cloned())).collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    let new_ids = |s: &mut Session| s.edit("Set up", |d, _| Ok([d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id()])).unwrap();
+    let [a, b, c, d] = new_ids(&mut s);
+    let [g, h, i, j] = new_ids(&mut s);
+    let hidden = |id: NodeId, x: f64| {
+        let mut n = Node::path(id, square_at(x), Appearance::default());
+        n.visible = false;
+        n
+    };
+    let locked = |id: NodeId, x: f64| {
+        let mut n = Node::path(id, square_at(x), Appearance::default());
+        n.locked = true;
+        n
+    };
+    // A member with an empty subpath, which plug-in output can't hold, still counts as handed back.
+    let empty = Node::path(g, PathData::single(SubPath::polyline(&[], false)), Appearance::default());
+    let kept = compound_of(&mut s, vec![hidden(a, 40.0), locked(b, 80.0), empty]);
+    let plain =
+        compound_of(&mut s, vec![Node::path(c, square_at(120.0), Appearance::default()), Node::path(d, square_at(160.0), Appearance::default())]);
+    let was = members(&s, kept);
+    install_wat(&mut s, &tpl::module(&tpl::manifest("test.engine.compound.echo", "filter", "{}"), tpl::ECHO, "", 1));
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.echo", "ids": [kept.0]}));
+    assert_eq!(members(&s, kept), was, "handed back as it was, the members stay as they were");
+    // New geometry for a compound with a hidden or a locked member, or the same geometry as a plain
+    // path, is refused, and the document is left alone.
+    let mut moved = square_at(200.0);
+    moved.subpaths.extend(square_at(240.0).subpaths);
+    let reshape = |id: &str, target: NodeId, extra: Value| {
+        let mut o = json!({"id": target.0, "path": moved.clone()});
+        o.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        tpl::returning(&tpl::manifest(id, "filter", "{}"), &json!({ "objects": [o] }).to_string())
+    };
+    let hidden_only = compound_of(&mut s, vec![hidden(h, 360.0)]);
+    let locked_only = compound_of(&mut s, vec![Node::path(i, square_at(360.0), Appearance::default()), locked(j, 380.0)]);
+    // A member that is itself a compound path, shown and unlocked but holding a hidden member: its
+    // geometry isn't in the input, so a new path or a plain path would drop it.
+    let [k, l, m, _] = new_ids(&mut s);
+    let inner = Node::new(k, NodeKind::Compound { children: vec![Arc::new(hidden(l, 400.0))], rule: FillRule::NonZero });
+    let nested = compound_of(&mut s, vec![Node::path(m, square_at(440.0), Appearance::default()), inner]);
+    let was_nested = node(&s, nested).clone();
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.echo", "ids": [nested.0]}));
+    assert_eq!(node(&s, nested).kind, was_nested.kind, "handed back as it was, a nested compound member stays");
+    let flagged = "a hidden, locked or guide member";
+    for (target, why) in [(hidden_only, flagged), (locked_only, flagged), (nested, "a member that isn't a path")] {
+        install_wat(&mut s, &reshape("test.engine.compound.reshape", target, json!({})));
+        let flatten = tpl::returning(
+            &tpl::manifest("test.engine.compound.flatten", "filter", "{}"),
+            &json!({"objects": [{"id": target.0, "type": "path"}]}).to_string(),
+        );
+        install_wat(&mut s, &flatten);
+        let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+        for id in ["test.engine.compound.reshape", "test.engine.compound.flatten"] {
+            let e = s.execute("plugin.run", &json!({"id": id, "ids": [target.0]})).unwrap_err().to_string();
+            assert!(e.contains(&format!("compound path {} has {why}", target.0)), "{id}: {e}");
+            assert_eq!((s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len()), before, "{id}");
+        }
+    }
+    // Without such members, new geometry replaces the members: one per subpath, in the old members' places.
+    install_wat(&mut s, &reshape("test.engine.compound.reshape", plain, json!({})));
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.reshape", "ids": [plain.0]}));
+    let now = members(&s, plain);
+    assert_eq!(now.iter().map(|m| m.3.clone()).collect::<Vec<_>>(), [Some(square_at(200.0)), Some(square_at(240.0))]);
+    assert!(now.iter().all(|m| m.1 && !m.2), "shown and unlocked members: {now:?}");
+    assert_eq!(now.iter().map(|m| m.0).collect::<Vec<_>>(), [c, d], "the members keep their places' ids");
+    // A guide member is refused the same way, unless the output sets `guide` for the whole object.
+    let guide_of = |s: &mut Session| {
+        let [e, f, ..] = new_ids(s);
+        let mut guide_member = Node::path(e, square_at(280.0), Appearance::default());
+        if let NodeKind::Path { guide, .. } = &mut guide_member.kind {
+            *guide = true;
+        }
+        compound_of(s, vec![guide_member, Node::path(f, square_at(320.0), Appearance::default())])
+    };
+    let guides = |s: &Session, id: NodeId| match &node(s, id).kind {
+        NodeKind::Compound { children, .. } => children.iter().map(|c| matches!(c.kind, NodeKind::Path { guide: true, .. })).collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    let guide = guide_of(&mut s);
+    install_wat(&mut s, &reshape("test.engine.compound.reshape", guide, json!({})));
+    let err = s.execute("plugin.run", &json!({"id": "test.engine.compound.reshape", "ids": [guide.0]})).unwrap_err().to_string();
+    assert!(err.contains("guide member"), "{err}");
+    let flatten = tpl::returning(
+        &tpl::manifest("test.engine.compound.flatten.unflagged", "filter", "{}"),
+        &json!({"objects": [{"id": guide.0, "type": "path"}]}).to_string(),
+    );
+    install_wat(&mut s, &flatten);
+    let err = s.execute("plugin.run", &json!({"id": "test.engine.compound.flatten.unflagged", "ids": [guide.0]})).unwrap_err().to_string();
+    assert!(err.contains(&format!("compound path {} has {flagged}", guide.0)), "{err}");
+    assert_eq!(guides(&s, guide), [true, false], "a refused flatten leaves the guide member as it was");
+    for (id, on) in [("test.engine.compound.unguide", false), ("test.engine.compound.reguide", true)] {
+        let target = guide_of(&mut s);
+        install_wat(&mut s, &reshape(id, target, json!({ "guide": on })));
+        run(&mut s, "plugin.run", json!({"id": id, "ids": [target.0]}));
+        assert_eq!(members(&s, target).iter().map(|m| m.3.clone()).collect::<Vec<_>>(), [Some(square_at(200.0)), Some(square_at(240.0))], "{id}");
+        assert_eq!(guides(&s, target), [on, on], "{id}: every new member takes the output's `guide`");
+    }
+    // Turning it into a plain path is allowed the same way when the output sets `guide`.
+    let target = guide_of(&mut s);
+    let flatten = tpl::returning(
+        &tpl::manifest("test.engine.compound.flatten.guide", "filter", "{}"),
+        &json!({"objects": [{"id": target.0, "type": "path", "guide": true}]}).to_string(),
+    );
+    install_wat(&mut s, &flatten);
+    run(&mut s, "plugin.run", json!({"id": "test.engine.compound.flatten.guide", "ids": [target.0]}));
+    assert!(matches!(node(&s, target).kind, NodeKind::Path { guide: true, .. }), "{:?}", node(&s, target).kind);
+}
+
 #[test]
 fn failing_plugins_leave_the_document_and_history_alone() {
     let mut s = session();

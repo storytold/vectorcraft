@@ -517,6 +517,8 @@
 @msg	`plates` requires a stop linked to a spot swatch	`plates` memerlukan perhentian yang ditautkan ke swatch warna spot
 @msg	the output	keluaran
 @msg	the path has no anchor points	jalur tidak memiliki titik jangkar
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang tersembunyi, terkunci, atau garis panduan, sehingga anggotanya tidak dapat diganti
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang bukan jalur, sehingga anggotanya tidak dapat diganti
 @msg	too many anchor points (limit {MAX_ANCHORS})	terlalu banyak titik jangkar (batas {MAX_ANCHORS})
 @msg	true or false	true atau false
 @msg	a number >= {_1}	angka >= {_1}
