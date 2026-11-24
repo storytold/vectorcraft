@@ -29,13 +29,47 @@ pub struct MenuEntry {
     pub shown_path: Vec<String>,
 }
 
-/// Flattened menu for `ui.menu.list`.
+/// Flattened menu for `ui.menu.list`. A row that shows a panel of the Window menu, there or in another menu (Type ›
+/// Glyphs), lists the params a click on it runs: `window.panel` with `toggle: true`, which puts a showing panel away
+/// ([`is_row_of`]).
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
     for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english, &Listed::of(app)) {
         flatten(app, vec![title.to_string()], vec![crate::i18n::t(title).to_string()], &items, &mut out);
     }
+    let window_panels: Vec<Value> = out
+        .iter()
+        .filter(|e| e.path.first().is_some_and(|t| t == "Window") && e.command.as_deref() == Some(PANEL))
+        .map(|e| e.params.clone())
+        .collect();
+    for e in &mut out {
+        if e.command.as_deref() == Some(PANEL)
+            && window_panels.contains(&e.params)
+            && let Some(params) = e.params.as_object_mut()
+        {
+            params.entry("toggle").or_insert(Value::Bool(true));
+        }
+    }
     out
+}
+
+/// The command of the rows that show a panel.
+const PANEL: &str = "window.panel";
+
+/// Whether `e` is the row of the menu item that runs command `id` with `params`: the same command and params, or a
+/// panel row that [`menu_entries`] lists with `toggle: true` added.
+pub fn is_row_of(e: &MenuEntry, id: &str, params: &Value) -> bool {
+    if e.command.as_deref() != Some(id) {
+        return false;
+    }
+    if e.params == *params {
+        return true;
+    }
+    let mut listed = e.params.clone();
+    id == PANEL
+        && params.get("toggle").is_none()
+        && listed.as_object_mut().and_then(|o| o.remove("toggle")) == Some(Value::Bool(true))
+        && listed == *params
 }
 
 /// Flattened canvas context menu for `ui.contextMenu.list` (paths are its submenus).

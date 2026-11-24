@@ -63,7 +63,7 @@ mod ui_commands;
 pub use context::context_items;
 #[cfg(test)]
 use entries::flatten;
-pub use entries::{InsertableItem, MenuEntry, context_entries, insertable, insertable_items, menu_entries, plays_in_app, shown_label};
+pub use entries::{InsertableItem, MenuEntry, context_entries, insertable, insertable_items, is_row_of, menu_entries, plays_in_app, shown_label};
 pub(crate) use invoke::graph_dialog;
 pub use invoke::{click_target, invoke};
 pub(crate) use labels::lists_plugin;

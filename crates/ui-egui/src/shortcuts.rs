@@ -276,7 +276,8 @@ fn menu_target(c: &CommandRef) -> Option<(String, serde_json::Value)> {
 }
 
 /// What a click on the menu bar's or the canvas menu's row `c` runs ([`crate::menus::click_target`]): a "…" row with
-/// params opens its dialog on them (Clean Up…). `None` for a command that no menu fired.
+/// params opens its dialog on them (Clean Up…), and a row of a Window menu panel runs the params it is listed with
+/// (`toggle: true`, [`crate::menus::is_row_of`]). `None` for a command that no menu fired.
 fn clicked_row(app: &VectorcraftApp, source: FireSource, c: &CommandRef) -> Option<(String, serde_json::Value)> {
     if source != FireSource::Menu || c.params.as_object().is_none_or(serde_json::Map::is_empty) {
         return None;
@@ -284,8 +285,8 @@ fn clicked_row(app: &VectorcraftApp, source: FireSource, c: &CommandRef) -> Opti
     let row = crate::menus::menu_entries(app)
         .into_iter()
         .chain(crate::menus::context_entries(app))
-        .find(|e| e.command.as_deref() == Some(c.id.as_str()) && e.params == c.params)?;
-    Some(crate::menus::click_target(&row.label, &c.id, &c.params))
+        .find(|e| crate::menus::is_row_of(e, &c.id, &c.params))?;
+    Some(crate::menus::click_target(&row.label, &c.id, &row.params))
 }
 
 /// Params used when a shortcut invokes its command. The named panel function keys retain their

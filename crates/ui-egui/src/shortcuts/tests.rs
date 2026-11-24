@@ -246,6 +246,65 @@ fn named_panel_default_chords_toggle_their_panels() {
     }
 }
 
+/// Each Window menu row that shows a panel shows the chord of that panel's shortcut, as production's did, and the
+/// rows of the panels with a default key show one.
+#[test]
+fn window_menu_panel_rows_show_their_panels_shortcuts() {
+    let mut app = new_app();
+    let ctx = ready(&mut app);
+    let rows: Vec<craft::keymap::CommandRef> =
+        app.menus.bar.items().into_iter().filter(|it| it.command.id == "window.panel").map(|it| it.command.clone()).collect();
+    assert!(!rows.is_empty(), "the Window menu lists panels");
+    let mut shown = 0;
+    for row in &rows {
+        let panel = row.params["panel"].as_str().expect("a panel row names its panel");
+        let entry = crate::keymap::command_of(&format!("panel:{panel}"));
+        let chord = craft::ui::runtime::commands::chord(&ctx, row);
+        assert_eq!(chord, craft::ui::runtime::commands::chord(&ctx, &entry), "{panel}: the row shows its shortcut's chord");
+        shown += usize::from(chord.is_some());
+    }
+    let with_keys = crate::shortcut_editor::PANEL_SHORTCUTS.iter().filter(|(panel, _)| rows.iter().any(|r| r.params["panel"] == *panel)).count();
+    assert!(with_keys > 0 && shown >= with_keys, "{shown} rows show a chord, {with_keys} panels have a default key");
+}
+
+/// A click on a Window menu row toggles its panel: it puts a showing panel away and shows it again.
+#[test]
+fn a_window_menu_click_toggles_its_panel() {
+    use craft::ui::runtime::commands::{FirePhase, FireSource, Fired};
+    let mut app = new_app();
+    let ctx = ready(&mut app);
+    let row = app
+        .menus
+        .bar
+        .items()
+        .into_iter()
+        .find(|it| it.command.id == "window.panel" && it.command.params["panel"] == "layers")
+        .map(|it| it.command.clone());
+    let row = row.expect("a Window › Layers row");
+    let before = crate::panel_docking::showing(&app.ui, "layers");
+    let click = |app: &mut VectorcraftApp| {
+        crate::shortcuts::run_fired(app, &ctx, &Fired::new(row.clone(), FireSource::Menu, FirePhase::Press, 0.0));
+        key_frame(app, &ctx, vec![]);
+        crate::panel_docking::showing(&app.ui, "layers")
+    };
+    let once = click(&mut app);
+    assert_ne!(once, before, "the first click toggles Layers");
+    assert_eq!(click(&mut app), before, "the second click toggles it back");
+}
+
+/// `ui.menu.list` lists a Window menu panel row with the toggle a click on it runs, and a plug-in's row that shows a
+/// panel the Window menu does not list (Object › Plug-ins › Packaging Tools › Fold Lines) without one.
+#[test]
+fn listed_window_rows_toggle_and_plugin_panel_rows_do_not() {
+    let app = new_app();
+    let entries = crate::menus::menu_entries(&app);
+    let row =
+        |panel: &str| entries.iter().find(|e| e.command.as_deref() == Some("window.panel") && e.params["panel"] == panel).map(|e| e.params.clone());
+    assert_eq!(row("layers").map(|p| p["toggle"].clone()), Some(json!(true)), "Window › Layers toggles");
+    let fold = row(crate::addons::packaging::ID).expect("a Fold Lines row");
+    assert!(fold.get("toggle").is_none(), "Fold Lines shows its panel: {fold}");
+}
+
 /// A shortcut on a panel without a function key of its own runs `window.panel` with the params it has: no toggle is
 /// added, as production checked.
 #[test]
