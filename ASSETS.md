@@ -248,6 +248,8 @@ Generated-in-code art is original and has no file to list. This covers the defau
 | `assets/icons/dc-puppet.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-quick-pen.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a line and a half circle with a dot at each point) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rearrange.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-recolor-arrow.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a right arrow, a Recolor Artwork row that is recolored) | MIT OR Apache-2.0 |  |
+| `assets/icons/dc-recolor-arrow-off.svg` | VectorCraft contributors | Original work, drawn for VectorCraft (a dashed line without a head, a Recolor Artwork row that is excluded) | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rect-cut.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-rect-grid.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |
 | `assets/icons/dc-reference-point.svg` | VectorCraft contributors | Original work, drawn for VectorCraft | MIT OR Apache-2.0 |  |

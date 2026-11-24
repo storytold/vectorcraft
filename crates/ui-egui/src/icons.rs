@@ -114,6 +114,72 @@ mod tests {
         has_icon(&IconId::new(name))
     }
 
+    /// The ways a source line writes an icon id as a literal; a `const` that holds one is read by `const_icon`.
+    const FORMS: [&str; 3] = ["IconId::new(\"", "icon(\"", "icon = \""];
+
+    /// The id a `const NAME: &str = "<id>"` line declares, when `NAME` ends in `ICON` or `code` passes it to
+    /// `IconId::new(NAME)`.
+    fn const_icon<'a>(line: &'a str, code: &str) -> Option<&'a str> {
+        let rest = line.trim_start().trim_start_matches("pub ").trim_start_matches("pub(crate) ").strip_prefix("const ")?;
+        let (name, after) = rest.split_once(':')?;
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_') {
+            return None;
+        }
+        if !name.ends_with("ICON") && !code.contains(&format!("IconId::new({name})")) {
+            return None;
+        }
+        after.trim_start().strip_prefix("&str")?.split_once("= \"")?.1.split('"').next()
+    }
+
+    /// An id that no set has draws nothing and raises no error at build time. Every icon id this crate's code
+    /// writes as a literal or a `const`, and every icon panel's and dock tab's icon, resolves in the catalog or the
+    /// app's set. Other ids built in match arms and tuple tables are not scanned.
+    #[test]
+    fn every_icon_id_literal_and_panel_icon_resolves() {
+        register_app_icons(&APP_ICONS);
+        let resolves = |id: &str| has_icon(&IconId::from(std::borrow::Cow::Owned(id.to_owned())));
+        let (mut seen, mut unknown) = (0, Vec::new());
+        let mut stack = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+        while let Some(dir) = stack.pop() {
+            let entries = std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()));
+            for entry in entries {
+                let path = entry.unwrap_or_else(|e| panic!("{}: {e}", dir.display())).path();
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if path.is_dir() {
+                    if name != "tests" {
+                        stack.push(path);
+                    }
+                    continue;
+                }
+                if !name.ends_with(".rs") || name.starts_with("tests") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+                // Code up to the test module: a test harness's `icon("..")` names a panel, not an icon.
+                let code = text.find("#[cfg(test)]\nmod ").map_or(text.as_str(), |at| &text[..at]);
+                for (number, line) in code.lines().enumerate().filter(|(_, l)| !l.trim_start().starts_with("//")) {
+                    let literal = |form: &&str| {
+                        line.match_indices(*form).filter_map(|(at, form)| line[at + form.len()..].split('"').next()).collect::<Vec<_>>()
+                    };
+                    for id in FORMS.iter().flat_map(literal).chain(const_icon(line, code)) {
+                        seen += 1;
+                        if !resolves(id) {
+                            unknown.push(format!("{}:{}: {id:?}", path.display(), number + 1));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(seen > 50, "the source scan found only {seen} icon ids");
+        let tabs = crate::state::DockTab::ALL.map(crate::state::DockTab::info);
+        for (panel, _, icon) in crate::state::ICON_PANELS.iter().chain(tabs.iter()) {
+            if !resolves(icon) {
+                unknown.push(format!("panel {panel}: {icon:?}"));
+            }
+        }
+        assert!(unknown.is_empty(), "icon ids that no set has: {unknown:#?}");
+    }
+
     /// Appearance (effects) and Pathfinder both lived in the icon column; they used the same
     /// overlapping-squares motif (storytold/vectorcraft#2681).
     #[test]
