@@ -108,6 +108,7 @@ pub static ICONS: &[(&str, &[u8])] = &[
     ("dc-graphic-styles", include_bytes!("../../../assets/icons/dc-graphic-styles.svg")),
     ("dc-grid-view", include_bytes!("../../../assets/icons/dc-grid-view.svg")),
     ("dc-group-select", include_bytes!("../../../assets/icons/dc-group-select.svg")),
+    ("dc-help", include_bytes!("../../../assets/icons/dc-help.svg")),
     ("dc-join", include_bytes!("../../../assets/icons/dc-join.svg")),
     ("dc-join-bevel", include_bytes!("../../../assets/icons/dc-join-bevel.svg")),
     ("dc-join-miter", include_bytes!("../../../assets/icons/dc-join-miter.svg")),

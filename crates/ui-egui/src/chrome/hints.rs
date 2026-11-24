@@ -257,8 +257,7 @@ pub fn hint_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     };
     Bar::new(tl!("Help Bar"), BarKind::Status).show(ui, |ui, _| {
-        // PLAN: assumed the framework icon "help" (document-panels-w1).
-        Icon::new(IconSpec::svg(IconId::new("help"))).show(ui);
+        Icon::new(IconSpec::svg(IconId::new("dc-help"))).show(ui);
         let spans = segments
             .iter()
             .map(|(text, bold)| {
