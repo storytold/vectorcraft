@@ -5957,7 +5957,7 @@ as a value left out.
 ## Graphic style libraries
 
 Graphic style libraries are read-only sets of graphic styles generated in code (Shadows and Glows, Outlines and
-Rules, Hand-Drawn, Textures, Painted and Sketched, Paper Cutouts, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects, Neon & Glow). Textures
+Rules, Hand-Drawn, Textures, Painted and Sketched, Paper Cutouts, Rarity Tiers, Gradient Finishes, Shape Effects, Blends and Transparency, Game HUD, Status Effects, Neon & Glow). Textures
 (`textures`) paints its fills and strokes with the texture effects: Fine Grain (`texture.grain`), Canvas Weave and Burlap
 Sack (`texture.texturizer`), Cracked Glaze (`texture.craquelure`), Mosaic Floor (`texture.mosaicTiles`), Quilted Squares
 (`texture.patchwork`), Leaded Glass (`texture.stainedGlass`) and Damp Paper (`sketch.waterPaper`). `graphicStyle.libraries` lists them

@@ -112,6 +112,39 @@ struct NativeFile {
 }
 
 /// `lib` as a `.vcstyles` file.
+
+/// Rarity Tiers: loot-grade fills and glows for RPG/gamedev art (original, catalogue stylize effects only).
+fn rarity_tiers() -> Vec<GraphicStyle> {
+    vec![
+        style("Common Fill", vec![F(fill("#95a5a6")), S(stroke("#5d6d7e", 1.0))], vec![]),
+        style(
+            "Rare Glow",
+            vec![F(fill("#3498db"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 80.0, "blur": 6.0, "color": "#5dade2"}))],
+        ),
+        style(
+            "Epic Edge",
+            vec![F(fill("#9b59b6")), S(stroke("#6c3483", 2.0))],
+            vec![fx("stylize.innerGlow", json!({"mode": "screen", "opacity": 70.0, "blur": 5.0, "color": "#d2b4de", "source": "edge"}))],
+        ),
+        style(
+            "Legendary Aura",
+            vec![F(fill("#f39c12"))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 85.0, "blur": 8.0, "color": "#f7dc6f"}))],
+        ),
+        style(
+            "Mythic Pulse",
+            vec![F(fill("#e74c3c")), S(round("#922b21", 2.0))],
+            vec![fx("stylize.outerGlow", json!({"mode": "normal", "opacity": 75.0, "blur": 7.0, "color": "#f1948a"}))],
+        ),
+        style(
+            "Unique Shine",
+            vec![F(fill("#1abc9c")), S(stroke("#0e6655", 1.5))],
+            vec![fx("stylize.dropShadow", json!({"mode": "multiply", "opacity": 45.0, "x": 2.0, "y": 3.0, "blur": 4.0, "color": "#1d1b2a"}))],
+        ),
+    ]
+}
+
 pub fn write(lib: &StyleLibrary) -> String {
     let file = NativeFile { format: STYLES_EXT.into(), version: STYLES_VERSION, library: lib.clone() };
     serde_json::to_string_pretty(&file).unwrap_or_default()
@@ -164,6 +197,7 @@ pub const STYLE_LIBRARIES: &[BuiltinStyleLibrary] = &[
     BuiltinStyleLibrary { id: "game-hud", name: "Game HUD", make: game_hud },
     BuiltinStyleLibrary { id: "status-effects", name: "Status Effects", make: status_effects },
     BuiltinStyleLibrary { id: "neon-glow", name: "Neon & Glow", make: neon_glow },
+    BuiltinStyleLibrary { id: "rarity-tiers", name: "Rarity Tiers", make: rarity_tiers },
 ];
 
 /// Built-in library `id`, made once.
