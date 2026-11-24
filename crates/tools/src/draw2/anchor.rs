@@ -2,7 +2,8 @@
 //!
 //! Add: click a segment to insert an anchor without changing the shape (Alt = delete).
 //! Delete: click an anchor to remove it, re-fitting the neighbouring curve (Alt = add).
-//! Anchor Point: click a smooth anchor → corner; drag an anchor → pull out smooth handles; click a
+//! Anchor Point: click a smooth anchor → corner; drag an anchor → pull out smooth handles (Shift
+//! pressed once the drag is under way: at 45° steps round the anchor); click a
 //! handle end → retract that handle only (#2267); drag a handle → move it independently (Shift: at
 //! 45° steps round its anchor; Alt: link it with the opposite handle, the anchor made smooth, except
 //! when the Pen lends the tool); drag a segment → reshape the curve, a selected blend's spine's too,
@@ -276,6 +277,24 @@ impl AnchorTool {
 
     fn anchor_pos(cx: &ToolContext, id: NodeId, si: usize, ai: usize) -> Option<Point> {
         cx.doc.node(id).and_then(|n| n.path_data()).and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai).map(|a| a.p))
+    }
+
+    /// Where a selected blend's spine point `ai` is.
+    fn spine_pos(cx: &ToolContext, id: NodeId, ai: usize) -> Option<Point> {
+        crate::direct::spines(cx)
+            .into_iter()
+            .find(|(blend, _)| *blend == id)
+            .and_then(|(_, path)| path.subpaths.first()?.anchors.get(ai).map(|a| a.p))
+    }
+
+    /// Where handles pulled out of an anchor to `p` go: with Shift held, at 45° steps round the
+    /// anchor (`anchor` finds it) from General › Constrain Angle, as the Pen pulls handles out;
+    /// otherwise, or when the anchor is gone, `p`.
+    fn pulled_out(cx: &ToolContext, p: Point, shift: bool, anchor: impl FnOnce() -> Option<Point>) -> Point {
+        if !shift {
+            return p;
+        }
+        anchor().map_or(p, |a| a + constrain_angle_from(p - a, 45.0, cx.constrain_angle))
     }
 
     /// Nearest point of this eligible spine, in document coordinates.
@@ -582,10 +601,15 @@ impl Tool for AnchorTool {
                 }
                 let preview = match self.state {
                     State::Idle => return out,
-                    State::Convert { id, si, ai, .. } => Action::Preview(
-                        "path.convertAnchor".into(),
-                        json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}),
-                    ),
+                    State::Convert { id, si, ai, .. } => {
+                        // Shift pressed once the drag is under way keeps the pulled-out handles at
+                        // 45° steps; Shift at the press moved the anchor instead (`moving`).
+                        let q = Self::pulled_out(cx, p, ev.mods.shift, || Self::anchor_pos(cx, id, si, ai));
+                        Action::Preview(
+                            "path.convertAnchor".into(),
+                            json!({"id": id.0, "subpath": si, "anchor": ai, "to": "smooth", "x": q.x, "y": q.y}),
+                        )
+                    }
                     State::Move { id, si, ai, from, start, .. } => {
                         let d = Self::move_delta(cx, start, p, ev.mods.shift);
                         self.measure = Some((p, d.x, d.y));
@@ -598,10 +622,13 @@ impl Tool for AnchorTool {
                         let q = from + d;
                         Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": id.0, "anchor": ai, "x": q.x, "y": q.y}))
                     }
-                    State::SpineConvert { id, ai, .. } => Action::Preview(
-                        "object.blend.spine.convertAnchor".into(),
-                        json!({"id": id.0, "anchor": ai, "to": "smooth", "x": p.x, "y": p.y}),
-                    ),
+                    State::SpineConvert { id, ai, .. } => {
+                        let q = Self::pulled_out(cx, p, ev.mods.shift, || Self::spine_pos(cx, id, ai));
+                        Action::Preview(
+                            "object.blend.spine.convertAnchor".into(),
+                            json!({"id": id.0, "anchor": ai, "to": "smooth", "x": q.x, "y": q.y}),
+                        )
+                    }
                     State::SpineHandle { id, ai, out, .. } => {
                         // Shift keeps the handle at 45-degree steps round its anchor, as for
                         // ordinary Anchor Point handles. The spine anchor is a blend point, not
