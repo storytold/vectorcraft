@@ -107,7 +107,7 @@ pub fn tool_icon(name: &str) -> &'static str {
         "tool-graph-pie" => "dc-graph-pie",
         "tool-graph-radar" => "dc-graph-radar",
         "tool-artboard" => "artboard",
-        "tool-slice" => "slice_knife",
+        "tool-slice" => "dc-slice",
         "tool-slice-select" => "dc-slice-select",
         "tool-hand" => "hand",
         "tool-rotate-view" => "dc-rotate-view",
