@@ -7446,7 +7446,8 @@ setting (Smart Guides, Snap to Point, Snap to Grid, Snap to Pixel or a snapping 
 pointer, the hover's preview, its protractor, its distance label and its Smart Guides are hidden until the pointer
 moves. When the view, the document or the selection changes, the canvas hovers the still pointer again. Shift does not constrain Quick Pen points, so it
 does not change the tick snapping. The
-protractor, its 15° step and the tick snapping are VectorCraft's own behavior.
+protractor, its 15° step and the tick snapping are VectorCraft's own behavior. A small cross marks the arc's center
+wherever the protractor shows; the cross is VectorCraft's own behavior too.
 
 Selecting the tool shows its toolbar on the canvas: Straight Line, Continuous Arc and Sharp Corner Arc set `action`,
 Flip Arc flips the last sharp-corner arc as C does (`tool.quickPen.flipArc {}`, which first finishes any pending tool edit,
