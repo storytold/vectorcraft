@@ -650,6 +650,11 @@ pub(crate) fn states_art(page: &Page<'_>) -> bool {
 
 /// Does dictionary `d`'s `PieceInfo` hold a key starting with one of `prefixes`, up to four dictionaries in?
 fn dict_has_piece_info_prefix(d: &Dict<'_>, prefixes: &[&[u8]]) -> bool {
+    if let Some(priv_dict) = d.get::<Dict<'_>>(PRIVATE_DATA_OWNER).and_then(|i| i.get::<Dict<'_>>(b"Private"))
+        && prefixes.iter().any(|p| priv_dict.keys().any(|k| k.starts_with(p)))
+    {
+        return true;
+    }
     const MAX_VISITS: usize = 128;
     fn walk(d: &Dict<'_>, prefixes: &[&[u8]], depth: u32, budget: &mut usize) -> bool {
         if depth >= 4 || *budget == 0 {
