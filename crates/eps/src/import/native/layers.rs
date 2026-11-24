@@ -172,6 +172,8 @@ pub fn layered_ai_from(
     }
     // The PDF part, its pages placed and named as the editing data's artboards are, when the
     // layers can't be used (`why`).
+    let structure = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new));
+    let private_layers = structure.as_ref().ok().map(|s| s.doc.layers.clone()).unwrap_or_default();
     let from_pdf_part = |mut visible: Document, mut warnings: Vec<String>, why: &str| {
         let mut read = ai::Names::new(names);
         let mut board_names = ai::Names::new(names);
@@ -179,6 +181,7 @@ pub fn layered_ai_from(
         if place_pages(&boards, active, &mut visible, unit) {
             read.absorb(board_names);
         }
+        apply_private_layer_locks(&mut visible.layers, &private_layers);
         let have = visible.patterns.len();
         let own_palette = use_palette(&data, &mut visible, &mut read);
         use_brushes(&data, &mut visible, have, &mut warnings, &mut read);
@@ -192,7 +195,7 @@ pub fn layered_ai_from(
     // The envelopes of type the page doesn't hold against layers that don't draw as it, and how many
     // envelopes of type the layers had.
     let (mut free, mut count) = (None, 0);
-    let built = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new)).and_then(|structure| {
+    let built = structure.and_then(|structure| {
         count = structure.warped_type.envelope_count();
         build_weighing(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit, &mut free, &mut text)
     });
@@ -236,6 +239,95 @@ fn holds_type_envelope(nodes: &[Arc<Node>]) -> bool {
         NodeKind::Envelope { content, .. } => content.iter().any(|c| holds_type(c)),
         _ => n.children().is_some_and(|c| holds_type_envelope(c)),
     })
+}
+
+/// Apply lock states from private data layers to visible PDF layers.
+pub(crate) fn apply_private_layer_locks(visible_layers: &mut [Arc<Node>], private_layers: &[Arc<Node>]) {
+    if private_layers.is_empty() {
+        return;
+    }
+    let mut priv_layer_names = std::collections::HashMap::new();
+    for p in private_layers {
+        if let Some(name) = p.name.as_deref() {
+            *priv_layer_names.entry(name).or_insert(0usize) += 1;
+        }
+    }
+
+    let same_len = visible_layers.len() == private_layers.len();
+    for (i, vis) in visible_layers.iter_mut().enumerate() {
+        let priv_node = if let Some(vis_name) = vis.name.as_deref() {
+            if priv_layer_names.get(vis_name).copied() == Some(1) {
+                private_layers.iter().find(|p| p.name.as_deref() == Some(vis_name))
+            } else if same_len && private_layers[i].name.as_deref() == Some(vis_name) {
+                Some(&private_layers[i])
+            } else {
+                None
+            }
+        } else if same_len {
+            Some(&private_layers[i])
+        } else {
+            None
+        };
+
+        if let Some(p) = priv_node {
+            apply_node_locks(Arc::make_mut(vis), p);
+        }
+    }
+}
+
+fn apply_node_locks(vis: &mut Node, priv_: &Node) {
+    if priv_.locked {
+        vis.locked = true;
+    }
+    if let (Some(vis_kids), Some(priv_kids)) = (vis.children_mut(), priv_.children()) {
+        let mut priv_name_counts = std::collections::HashMap::new();
+        for p in priv_kids {
+            if let Some(name) = p.name.as_deref() {
+                *priv_name_counts.entry(name).or_insert(0usize) += 1;
+            }
+        }
+        let mut matched_priv = vec![false; priv_kids.len()];
+        let mut matched_vis = vec![false; vis_kids.len()];
+
+        // Pass 1: resolve unique named matches first.
+        for (v_idx, v) in vis_kids.iter_mut().enumerate() {
+            if let Some(v_name) = v.name.as_deref()
+                && priv_name_counts.get(v_name).copied() == Some(1)
+                && let Some((p_idx, p)) = priv_kids.iter().enumerate().find(|(_, p)| p.name.as_deref() == Some(v_name))
+            {
+                apply_node_locks(Arc::make_mut(v), p);
+                matched_priv[p_idx] = true;
+                matched_vis[v_idx] = true;
+            }
+        }
+
+        // Pass 2: positional match for remaining children when counts match.
+        let same_len = vis_kids.len() == priv_kids.len();
+        if same_len {
+            for (idx, v) in vis_kids.iter_mut().enumerate() {
+                if matched_vis[idx] {
+                    continue;
+                }
+                if !matched_priv[idx] && (priv_kids[idx].name.is_none() || v.name == priv_kids[idx].name) {
+                    apply_node_locks(Arc::make_mut(v), &priv_kids[idx]);
+                    matched_priv[idx] = true;
+                    matched_vis[idx] = true;
+                }
+            }
+        }
+
+        // Pass 3: match remaining unmatched unnamed children.
+        for (v_idx, v) in vis_kids.iter_mut().enumerate() {
+            if matched_vis[v_idx] || v.name.is_some() {
+                continue;
+            }
+            if let Some((p_idx, p)) = priv_kids.iter().enumerate().find(|(i, p)| !matched_priv[*i] && p.name.is_none()) {
+                apply_node_locks(Arc::make_mut(v), p);
+                matched_priv[p_idx] = true;
+                matched_vis[v_idx] = true;
+            }
+        }
+    }
 }
 
 /// The `.ai` whose editing copy is `private` (as [`layered_ai`] takes it) from its layers alone,

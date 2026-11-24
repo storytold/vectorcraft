@@ -469,3 +469,108 @@ fn art_deep_in_tags_inside_a_layer_reaches_it() {
     let shapes = d.layers.iter().find(|l| l.name.as_deref() == Some("Shapes")).unwrap();
     assert_eq!(colors(shapes), [Color::rgb(1.0, 0.0, 0.0)]);
 }
+
+#[test]
+fn ocg_dictionary_locked_flag_is_read() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let objs = ["<< /Type /OCG /Name (Shapes) /Locked true >>".to_string(), "<< /Type /OCG /Name (Plain) >>".to_string()];
+    let catalog = format!("/OCProperties << /OCGs [{a} 0 R {b} 0 R] /D << /Order [{a} 0 R {b} 0 R] >> >> ");
+    let bytes = pdf_with_catalog(&[page([a, b])], &[&objs[0], &objs[1]], &catalog, None);
+    let d = import(&bytes).unwrap();
+    let shapes = d.layers.iter().find(|l| l.name.as_deref() == Some("Shapes")).unwrap();
+    let plain = d.layers.iter().find(|l| l.name.as_deref() == Some("Plain")).unwrap();
+    assert!(shapes.locked, "Shapes has /Locked true in its dictionary");
+    assert!(!plain.locked, "Plain is not locked");
+}
+
+#[test]
+fn ocg_dictionary_usage_locked_is_read() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let objs = ["<< /Type /OCG /Name (Shapes) /Usage << /User << /Type /Locked >> >> >>".to_string(), "<< /Type /OCG /Name (Plain) >>".to_string()];
+    let catalog = format!("/OCProperties << /OCGs [{a} 0 R {b} 0 R] /D << /Order [{a} 0 R {b} 0 R] >> >> ");
+    let bytes = pdf_with_catalog(&[page([a, b])], &[&objs[0], &objs[1]], &catalog, None);
+    let d = import(&bytes).unwrap();
+    let shapes = d.layers.iter().find(|l| l.name.as_deref() == Some("Shapes")).unwrap();
+    let plain = d.layers.iter().find(|l| l.name.as_deref() == Some("Plain")).unwrap();
+    assert!(shapes.locked, "Shapes has /Usage << /User << /Type /Locked >> >>");
+    assert!(!plain.locked, "Plain is not locked");
+}
+
+#[test]
+fn oc_properties_root_locked_is_read_and_configs_locked_is_ignored() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let objs = ["<< /Type /OCG /Name (RootLocked) >>".to_string(), "<< /Type /OCG /Name (ConfigUnlocked) >>".to_string()];
+    let catalog = format!(
+        "/OCProperties << /OCGs [{a} 0 R {b} 0 R] /Locked [{a} 0 R] /Configs [<< /Locked [{b} 0 R] >>] /D << /Order [{a} 0 R {b} 0 R] >> >> "
+    );
+    let bytes = pdf_with_catalog(&[page([a, b])], &[&objs[0], &objs[1]], &catalog, None);
+    let d = import(&bytes).unwrap();
+    let root_locked = d.layers.iter().find(|l| l.name.as_deref() == Some("RootLocked")).unwrap();
+    let config_unlocked = d.layers.iter().find(|l| l.name.as_deref() == Some("ConfigUnlocked")).unwrap();
+    assert!(root_locked.locked, "RootLocked is in /OCProperties /Locked");
+    assert!(!config_unlocked.locked, "ConfigUnlocked is only in alternate /Configs /Locked, so stays unlocked");
+}
+
+#[test]
+fn ocg_noted_from_content_stream_retains_lock() {
+    let (a, b) = (first_extra(1), first_extra(1) + 1);
+    let objs = ["<< /Type /OCG /Name (UnlistedLocked) /Locked true >>".to_string(), "<< /Type /OCG /Name (Listed) >>".to_string()];
+    // /OCGs only lists {b} (Listed). {a} (UnlistedLocked) is not in /OCGs or /Order.
+    let catalog = format!("/OCProperties << /OCGs [{b} 0 R] /D << /Order [{b} 0 R] >> >> ");
+    let content = "/OC /MC0 BDC 1 0 0 rg 10 10 30 30 re f EMC /OC /MC1 BDC 0 1 0 rg 0 0 5 5 re f EMC";
+    let p = PdfPage { resources: format!("/Properties << /MC0 {a} 0 R /MC1 {b} 0 R >>"), ..PdfPage::new(100.0, 100.0, content) };
+    let bytes = pdf_with_catalog(&[p], &[&objs[0], &objs[1]], &catalog, None);
+    let d = import(&bytes).unwrap();
+    let unlisted = d.layers.iter().find(|l| l.name.as_deref() == Some("UnlistedLocked")).unwrap();
+    let listed = d.layers.iter().find(|l| l.name.as_deref() == Some("Listed")).unwrap();
+    assert!(unlisted.locked, "UnlistedLocked has /Locked true in its dictionary");
+    assert!(!listed.locked, "Listed is not locked");
+}
+
+#[test]
+fn ai_fixture_with_locked_group_and_locked_object_imports_with_locks_preserved() {
+    let (a, b, c, d) = (first_extra(1), first_extra(1) + 1, first_extra(1) + 2, first_extra(1) + 3);
+    let order_obj = first_extra(1) + 4;
+    let objs = [
+        "<< /Type /OCG /Name (Layer1) >>".to_string(),
+        "<< /Type /OCG /Name (LockedGroup) /Locked true >>".to_string(),
+        "<< /Type /OCG /Name (UnlockedGroup) >>".to_string(),
+        "<< /Type /OCG /Name (LockedObject) /Locked true >>".to_string(),
+    ];
+    let catalog = format!("/OCProperties << /OCGs [{a} 0 R {b} 0 R {c} 0 R {d} 0 R] /D << /Order {order_obj} 0 R >> >> ");
+    let order_body = format!("[{a} 0 R [{b} 0 R {c} 0 R]]");
+    let content = "/OC /MC0 BDC 1 0 0 rg 10 10 20 20 re f EMC \
+         /OC /MC1 BDC 0 1 0 rg 30 30 20 20 re f EMC \
+         /OC /MC2 BDC 0 0 1 rg 50 50 20 20 re f EMC \
+         /OC /MC3 BDC 1 1 0 rg 70 70 20 20 re f EMC \
+         0 0 0 rg 0 0 10 10 re f";
+    let page = PdfPage {
+        resources: format!("/Properties << /MC0 {a} 0 R /MC1 {b} 0 R /MC2 {c} 0 R /MC3 {d} 0 R >>"),
+        entries: "/PieceInfo << /Illustrator << /Private << /AIPrivateData1 7 /NumBlock 1 >> >> >>".into(),
+        ..PdfPage::new(100.0, 100.0, content)
+    };
+    let bytes = pdf_with_catalog(&[page], &[&objs[0], &objs[1], &objs[2], &objs[3], &order_body], &catalog, None);
+    let doc = import(&bytes).unwrap();
+
+    let layer1 = doc.layers.iter().find(|l| l.name.as_deref() == Some("Layer1")).expect("Layer1 exists");
+    assert!(!layer1.locked, "Layer1 is not locked");
+
+    let children = layer1.children().expect("Layer1 has children");
+    let locked_group = children.iter().find(|n| n.name.as_deref() == Some("LockedGroup")).expect("LockedGroup exists");
+    assert!(locked_group.locked, "LockedGroup has locked: true");
+
+    let unlocked_group = children.iter().find(|n| n.name.as_deref() == Some("UnlockedGroup")).expect("UnlockedGroup exists");
+    assert!(!unlocked_group.locked, "UnlockedGroup has locked: false");
+
+    let locked_obj = doc.layers.iter().find(|l| l.name.as_deref() == Some("LockedObject")).expect("LockedObject exists");
+    assert!(locked_obj.locked, "LockedObject has locked: true");
+
+    if let Some(page_layer) = doc.layers.iter().find(|l| l.name.as_deref() == Some("Page 1")) {
+        assert!(!page_layer.locked, "Page layer is not locked");
+        if let Some(kids) = page_layer.children() {
+            for kid in kids {
+                assert!(!kid.locked, "Non-locked object in page layer remains unlocked");
+            }
+        }
+    }
+}

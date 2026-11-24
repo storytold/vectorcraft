@@ -83,6 +83,8 @@ pub(crate) struct Ocgs {
     view_auto: HashSet<ObjectIdentifier>,
     /// The groups placed in the layer order.
     placed: HashSet<usize>,
+    /// The groups that are locked in configuration or dictionary flags.
+    locked: HashSet<ObjectIdentifier>,
 }
 
 impl Ocgs {
@@ -95,9 +97,13 @@ impl Ocgs {
         };
         let config = props.get::<Dict<'_>>(b"D").unwrap_or_default();
         let refs = |d: &Dict<'_>, key: &[u8]| -> Vec<ObjectIdentifier> {
-            d.get::<Array<'_>>(key)
-                .map(|a| items(&a).filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).take(MAX_GROUPS).collect())
-                .unwrap_or_default()
+            if let Some(a) = d.get::<Array<'_>>(key) {
+                items(&a).filter_map(|i| i.as_obj_ref()).map(ObjectIdentifier::from).take(MAX_GROUPS).collect()
+            } else if let Some(r) = d.get_ref(key) {
+                vec![ObjectIdentifier::from(r)]
+            } else {
+                Vec::new()
+            }
         };
         let all = refs(&props, b"OCGs");
         if config.get::<Name<'_>>(b"BaseState").is_some_and(|n| n.as_ref() == b"OFF") {
@@ -111,10 +117,13 @@ impl Ocgs {
         for d in auto.iter().filter(|d| d.get::<Name<'_>>(b"Event").is_some_and(|e| e.as_ref() == b"View")) {
             o.view_auto.extend(refs(d, b"OCGs"));
         }
-        let locked: HashSet<_> = refs(&config, b"Locked").into_iter().collect();
+        let mut locked: HashSet<_> = refs(&config, b"Locked").into_iter().collect();
+        locked.extend(refs(&props, b"Locked"));
+        o.locked = locked;
         for id in all {
             if let Some(d) = xref.get::<Dict<'_>>(id) {
-                o.add(id, &d, locked.contains(&id));
+                let is_locked = o.is_locked(id, &d);
+                o.add(id, &d, is_locked);
             }
         }
         if let Some(order) = config.get::<Array<'_>>(b"Order") {
@@ -170,6 +179,7 @@ impl Ocgs {
         if let Some(i) = self.index.get(&id) {
             return *i;
         }
+        let locked = locked || self.is_locked(id, d);
         let name = d.get::<craft::pdf::syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
         let print = usage(d, b"Print", b"PrintState") != Some(false);
         // A view state applies when the configuration says so on opening; an off one hides the
@@ -184,6 +194,11 @@ impl Ocgs {
         self.list.push(Ocg { name, on, print, locked, parent: None });
         self.index.insert(id, self.list.len() - 1);
         self.list.len() - 1
+    }
+
+    /// Is group `id` (dictionary `d`) locked according to configuration or dictionary flags?
+    fn is_locked(&self, id: ObjectIdentifier, d: &Dict<'_>) -> bool {
+        self.locked.contains(&id) || is_ocg_dict_locked(d)
     }
 
     /// Does the interpreter leave out the art of some group (off in the default configuration)?
@@ -206,9 +221,47 @@ impl Ocgs {
     fn note(&mut self, id: ObjectIdentifier, d: &Dict<'_>) -> Option<usize> {
         match self.index.get(&id) {
             Some(i) => Some(*i),
-            None => (self.list.len() < MAX_GROUPS).then(|| self.add(id, d, false)),
+            None => {
+                let is_locked = self.is_locked(id, d);
+                (self.list.len() < MAX_GROUPS).then(|| self.add(id, d, is_locked))
+            }
         }
     }
+}
+
+/// Is group dictionary `d` flagged as locked (directly or in its `/Usage`)?
+fn is_ocg_dict_locked(d: &Dict<'_>) -> bool {
+    if d.get::<bool>(b"Locked") == Some(true)
+        || d.get::<Name<'_>>(b"Locked").is_some_and(|n| {
+            let b = n.as_ref();
+            b.eq_ignore_ascii_case(b"true") || b.eq_ignore_ascii_case(b"locked") || b.eq_ignore_ascii_case(b"on")
+        })
+    {
+        return true;
+    }
+    if let Some(usage) = d.get::<Dict<'_>>(b"Usage") {
+        if usage.get::<bool>(b"Locked") == Some(true)
+            || usage.get::<Name<'_>>(b"Locked").is_some_and(|n| {
+                let b = n.as_ref();
+                b.eq_ignore_ascii_case(b"true") || b.eq_ignore_ascii_case(b"locked") || b.eq_ignore_ascii_case(b"on")
+            })
+        {
+            return true;
+        }
+        if let Some(user) = usage.get::<Dict<'_>>(b"User")
+            && (user.get::<bool>(b"Locked") == Some(true)
+                || user.get::<Name<'_>>(b"Type").is_some_and(|n| n.as_ref().eq_ignore_ascii_case(b"locked"))
+                || user.get::<craft::pdf::syntax::object::String<'_>>(b"User").is_some_and(|s| s.as_bytes().eq_ignore_ascii_case(b"locked")))
+        {
+            return true;
+        }
+        if let Some(lock) = usage.get::<Dict<'_>>(b"Lock")
+            && lock.get::<bool>(b"Locked") != Some(false)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// The state (`ON` → true, `OFF` → false) group `d`'s usage `category` gives in `key`.

@@ -342,6 +342,8 @@ pub(super) fn fill_slots(
                             (p.opacity, p.blend, p.isolate, p.knockout, p.knockout_shape) = (state.0, state.1, state.2, state.3, shape);
                         } else if transparent {
                             let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
+                            group.visible = visible;
+                            group.locked = locked;
                             (group.opacity, group.blend, group.isolate, group.knockout, group.knockout_shape) =
                                 (state.0, state.1, state.2, state.3, shape);
                             parts.push(Arc::new(group));
@@ -352,6 +354,7 @@ pub(super) fn fill_slots(
                         if parts.len() > 1 {
                             let mut group = Node::group(doc.alloc_id(), std::mem::take(&mut parts));
                             group.visible = visible;
+                            group.locked = locked;
                             parts.push(Arc::new(group));
                         }
                         for p in &mut parts {
