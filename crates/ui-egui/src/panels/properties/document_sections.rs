@@ -34,7 +34,7 @@ pub(super) fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
         Grid::new(&HALVES).show(ui, |ui, _| {
-            Button::command(CommandRef::new("file.documentSetup")).sizing(Sizing::FillWidth).show(ui);
+            Button::command(CommandRef::new("file.documentSetup")).label(tl!("Document Setup")).sizing(Sizing::FillWidth).show(ui);
             Button::command(CommandRef::with_params("tool.select", json!({ "tool": "artboard" })))
                 .label(tl!("Edit Artboards"))
                 .sizing(Sizing::FillWidth)
@@ -90,8 +90,9 @@ pub(super) fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     super::section(tl!("Quick Actions")).show(ui, |ui, _| {
         Grid::new(&HALVES).show(ui, |ui, _| {
-            for command in ["file.documentSetup", "edit.preferences"] {
-                Button::command(CommandRef::new(command)).sizing(Sizing::FillWidth).show(ui);
+            // The reference panel's buttons name the dialog without the menu's ellipsis.
+            for (command, label) in [("file.documentSetup", tl!("Document Setup")), ("edit.preferences", tl!("Preferences"))] {
+                Button::command(CommandRef::new(command)).label(label).sizing(Sizing::FillWidth).show(ui);
             }
         });
     });
