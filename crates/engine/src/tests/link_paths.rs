@@ -303,3 +303,23 @@ fn svg_images_on_other_computers_are_never_read() {
     assert_eq!(far_reads(&seen), Vec::<&String>::new());
     assert!(!seen.iter().any(|p| near(&p)), "{seen:?}");
 }
+
+/// A file packaged beside its document (`Links/a.png`) is found from a link stored as the absolute
+/// path of the computer that wrote it, on either system's separators.
+#[test]
+fn links_stored_as_absolute_paths_are_found_in_the_documents_links_folder() {
+    let dir = Folder::new("links-folder");
+    std::fs::create_dir_all(dir.0.join("Links")).unwrap();
+    std::fs::write(dir.file("Links/packaged.png"), png(8, 8, RED)).unwrap();
+    let stored = [
+        r"C:\Users\someone\Work\Flyer\Links\packaged.png".to_string(),
+        "/Users/someone/Work/Flyer/Links/packaged.png".to_string(),
+        r"C:\Users\someone\Work\Flyer\Links\absent.png".to_string(),
+    ];
+    let doc = save_linked(&dir, &stored);
+
+    let mut s = Session::new();
+    let r = s.execute("document.open", &json!({"path": doc})).unwrap();
+    // Only the file that isn't in the folder is missing.
+    assert_eq!(names(&r["missingLinks"]), vec![stored[2].as_str()], "{r}");
+}
