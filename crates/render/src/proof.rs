@@ -25,7 +25,8 @@
 //! [`crate::RenderOptions`] with [`active_proof`] and [`overprint_preview_on`].
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 
@@ -400,7 +401,11 @@ pub(crate) struct Prepared {
 /// What [`prepare`] reads besides the art.
 #[derive(PartialEq)]
 struct Inputs {
+    /// Discard White Overprint, with the spot inks a white tint of which still overprints.
     discard_white: DiscardWhite,
+    /// [`images_state`]: which pixels a colorized image shows, and whether they take its color
+    /// ([`ImageBlob::takes_colorize`]), and so whether it darkens, depend on the document's images.
+    images: u64,
     plates: Option<Plates>,
 }
 
@@ -410,6 +415,17 @@ struct Inputs {
 struct SpotSwatches {
     swatches: Shared<Vec<Swatch>>,
     groups: Shared<Vec<SwatchGroup>>,
+}
+
+/// A hash of `images`' keys and the address of each one's bytes and whether they are a preview
+/// ([`ImageBlob::is_proxy`]): it changes when an image is added, removed or given other bytes,
+/// without reading any pixels.
+fn images_state(images: &BTreeMap<String, ImageBlob>) -> u64 {
+    let mut h = DefaultHasher::new();
+    for (key, b) in images {
+        (key, Arc::as_ptr(&b.bytes), b.is_proxy()).hash(&mut h);
+    }
+    h.finish()
 }
 
 /// What the colors of Separations Preview's plates are made from ([`plate_color`]).
@@ -446,17 +462,17 @@ struct How<'a> {
 
 impl How<'_> {
     /// Whether [`Self::apply`] can change `n`: with Separations Preview any node, else a node with
-    /// an overprinting fill or stroke.
+    /// an overprinting fill or stroke, or a colorized image whose color overprints.
     fn changes(&self, n: &Node) -> bool {
-        self.plates.is_some() || n.appearance.items.iter().any(|i| i.overprint()) || self.white_characters(n)
+        self.plates.is_some() || n.appearance.items.iter().any(|i| i.overprint()) || n.colorize_overprints() || self.white_characters(n)
     }
 
     /// Whether type `n` has an overprinting character fill or stroke that Discard White Overprint
-    /// knocks out ([`DiscardWhite::knocks_out`]).
+    /// knocks out ([`DiscardWhite::discards`]).
     fn white_characters(&self, n: &Node) -> bool {
         let white = |r: &vectorcraft_doc::TextRun| {
-            (r.style.overprint_fill && self.discard_white.knocks_out(&r.style.fill))
-                || (r.style.overprint_stroke && self.discard_white.knocks_out(&r.style.stroke))
+            (r.style.overprint_fill && self.discard_white.discards(&r.style.fill))
+                || (r.style.overprint_stroke && self.discard_white.discards(&r.style.stroke))
         };
         matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(white))
     }
@@ -466,13 +482,13 @@ impl How<'_> {
     /// their own colors before Separations Preview maps them to the visible plates; the renderer
     /// darkens the others.
     fn apply(&self, a: &mut Arc<Node>) {
-        darken_overprints(a, self.discard_white);
+        darken_overprints(a, self.discard_white, &self.doc.images);
         if self.white_characters(a)
             && let NodeKind::Text(t) = &mut Arc::make_mut(a).kind
         {
             for r in &mut t.runs {
-                r.style.overprint_fill &= !self.discard_white.knocks_out(&r.style.fill);
-                r.style.overprint_stroke &= !self.discard_white.knocks_out(&r.style.stroke);
+                r.style.overprint_fill &= !self.discard_white.discards(&r.style.fill);
+                r.style.overprint_stroke &= !self.discard_white.discards(&r.style.stroke);
             }
         }
         if let Some((c, proof, visible)) = self.plates {
@@ -496,6 +512,7 @@ pub(crate) fn prepare<'a>(doc: &'a Document, opts: &RenderOptions, kept: &mut Op
     let read = kept.as_ref().filter(|k| k.spots == spots).map(|k| k.inputs.discard_white.clone());
     let inputs = Inputs {
         discard_white: read.unwrap_or_else(|| DiscardWhite::of(doc)),
+        images: images_state(&doc.images),
         plates: seps.map(|(proof, _)| Plates {
             proof: proof.clone(),
             swatches: doc.swatches.clone(),

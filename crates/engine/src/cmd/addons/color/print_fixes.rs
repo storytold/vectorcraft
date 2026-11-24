@@ -3,7 +3,7 @@
 //! ink than the limit are scaled down to it, paper white fills and strokes stop overprinting, and black
 //! ones start to, as Edit › Edit Colors › Overprint Black sets it.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -81,7 +81,7 @@ impl Fixes {
     /// Remove white overprint from `n`'s own fills and strokes and its characters': true when
     /// that changed anything. A white linked to one of the spot inks `inks` is an ink and keeps
     /// overprinting ([`is_paper_white`]).
-    fn unset_white(&self, n: &mut Node, inks: &HashSet<String>) -> bool {
+    fn unset_white(&self, n: &mut Node, inks: &BTreeSet<String>) -> bool {
         let mut changed = false;
         let mut off = |aimed: bool, white: bool, flag: &mut bool| {
             if aimed && white && *flag {
@@ -100,13 +100,18 @@ impl Fixes {
                 off(self.stroke, is_paper_white(&r.style.stroke, inks), &mut r.style.overprint_stroke);
             }
         }
+        // A colorized image's color is its fill.
+        if n.colorize_overprints() {
+            let white = n.extras().colorize.as_deref().is_some_and(|p| is_paper_white(p, inks));
+            off(self.fill, white, &mut n.extras_mut().colorize_overprint);
+        }
         changed
     }
 
     /// The overprint fixes on `n` and everything inside it: (objects whose white overprint was
     /// removed, objects set to overprint black). `spots`: the document's spot swatch names; `inks`:
     /// those that linked colors print as ([`vectorcraft_doc::Document::spot_ink_names`]).
-    fn overprint(&self, n: &mut Node, black: &OverprintBlack, spots: &[String], inks: &HashSet<String>) -> (usize, usize) {
+    fn overprint(&self, n: &mut Node, black: &OverprintBlack, spots: &[String], inks: &BTreeSet<String>) -> (usize, usize) {
         let white = usize::from(self.remove_white_overprint && self.unset_white(n, inks));
         let blacks = self.overprint_black > 0.0 && (!self.text_only || matches!(n.kind, NodeKind::Text(_)));
         let mut counts = (white, usize::from(blacks && black.apply(n, spots)));

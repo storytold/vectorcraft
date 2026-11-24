@@ -1418,3 +1418,25 @@ fn separations_use_the_cmyk_profile_assigned_to_the_document() {
     d.color_profiles.cmyk = Some(vectorcraft_color::cms::DEVICE_CMYK.into());
     assert_eq!(cyan(&d), 0.0, "Device CMYK puts a neutral grey on the black plate only");
 }
+
+/// PDF print embeds font subsets (where the font's license allows it) whatever Fonts says: None
+/// and Complete get a note in the print
+/// and its preview, Subset none. PostScript output, which follows Fonts, gets none.
+#[test]
+fn non_subset_font_choices_report_pdf_subset_output() {
+    let d = doc(200.0, 100.0, &[(Rect::new(10.0, 10.0, 60.0, 60.0), rgb(1.0, 0.0, 0.0))]);
+    for (fonts, label) in [("none", Some("None")), ("subset", None), ("complete", Some("Complete"))] {
+        let v = json!({"graphics": {"fonts": fonts}});
+        let note = |notes: &[String]| notes.iter().filter(|n| n.starts_with("PDF print embeds subsets")).cloned().collect::<Vec<_>>();
+        let want: Vec<String> = label
+            .map(|l| {
+                format!("PDF print embeds subsets of the fonts whose licenses allow it and draws the others as outlines: Fonts: {l} applies to PostScript output")
+            })
+            .into_iter()
+            .collect();
+        assert_eq!(note(&job(&d, v.clone()).setting_notes), want, "{fonts}");
+        assert_eq!(note(&preview(&d, &settings(v.clone())).unwrap().setting_notes), want, "{fonts}");
+        let plan = plan(&d, &PrintOptions { settings: settings(v), postscript: true, ..Default::default() }).unwrap();
+        assert!(note(&plan.setting_notes).is_empty(), "{fonts}: {:?}", plan.setting_notes);
+    }
+}

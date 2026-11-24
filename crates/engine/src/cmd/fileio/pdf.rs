@@ -8,7 +8,10 @@ use std::sync::Arc;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeKind};
-use vectorcraft_pdf::{Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail};
+use vectorcraft_pdf::{
+    APP, ActiveProfiles, Overprint, PdfError, PdfOptions, PdfPreset, PdfSettings, Standard, THUMBNAIL_SIZE, Thumbnail, default_preset_name,
+    leaves_out_bleed, page_bleed,
+};
 
 use super::super::flatten::{FlattenOptions, flatten_document, see_through_images};
 use super::super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
@@ -16,9 +19,6 @@ use super::{ArtboardPick, FormatOption, Note, note_texts, write_or_return};
 use crate::EngineError;
 
 const C: &str = "document.exportPdf";
-
-/// The built-in preset every PDF export starts from.
-pub use vectorcraft_pdf::DEFAULT_PRESET;
 
 /// The PDF options `document.formats` lists; `document.exportPdf` documents every field.
 pub(crate) const OPTIONS: &[FormatOption] = &[
@@ -151,13 +151,13 @@ pub fn presets(s: &Session) -> Vec<String> {
 
 /// The built-in preset names, then those of `saved`.
 fn names(saved: &[PdfPreset]) -> Vec<String> {
-    vectorcraft_pdf::builtin_presets().into_iter().map(|p| p.name).chain(saved.iter().map(|p| p.name.clone())).collect()
+    vectorcraft_pdf::builtin_presets(APP).into_iter().map(|p| p.name).chain(saved.iter().map(|p| p.name.clone())).collect()
 }
 
 /// The preset `name` names: a built-in one (any case; `default` is the app default) or one of
 /// `saved`.
 pub fn find_preset(name: &str, saved: &[PdfPreset]) -> Option<PdfPreset> {
-    vectorcraft_pdf::builtin_preset(name).or_else(|| saved.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim())).cloned())
+    vectorcraft_pdf::builtin_preset(name, APP).or_else(|| saved.iter().find(|p| p.name.eq_ignore_ascii_case(name.trim())).cloned())
 }
 
 fn preset(cmd: &str, name: &str, saved: &[PdfPreset]) -> Result<PdfSettings> {
@@ -166,9 +166,10 @@ fn preset(cmd: &str, name: &str, saved: &[PdfPreset]) -> Result<PdfSettings> {
         .ok_or_else(|| bad(cmd, format!("unknown PDF preset `{name}` (presets: {})", names(saved).join(", "))))
 }
 
-/// The settings of the preset `p` names (default: [`DEFAULT_PRESET`]), before `p`'s options.
+/// The settings of the preset `p` names (default: [`default_preset_name`]), before `p`'s options.
 pub fn preset_settings(cmd: &str, p: &Value, saved: &[PdfPreset]) -> Result<PdfSettings> {
-    preset(cmd, str_param(p, "preset").unwrap_or(DEFAULT_PRESET), saved)
+    let default = default_preset_name(APP);
+    preset(cmd, str_param(p, "preset").unwrap_or(&default), saved)
 }
 
 /// Merge `over` into `base`: objects key by key (recursively), `null` keeps the base (the
@@ -194,7 +195,7 @@ pub(crate) fn pdf_error(cmd: &str, e: PdfError) -> EngineError {
 }
 
 /// The settings `p` asks for: its preset (built-in or one of `saved`; default
-/// [`DEFAULT_PRESET`]) with `p`'s options applied over it. Choosing another standard turns
+/// [`default_preset_name`]) with `p`'s options applied over it. Choosing another standard turns
 /// Preserve Editing off, the layers off where it has none, and sets the latest compatibility it
 /// allows, unless `p` asks for those. Checked as a preset is
 /// ([`PdfSettings::check_values`]): profiles that aren't there pass. Keys that aren't PDF options
@@ -219,14 +220,14 @@ pub fn resolve(cmd: &str, p: &Value, saved: &[PdfPreset]) -> Result<PdfSettings>
             s.compatibility = s.standard.version();
         }
     }
-    s.check_values().map_err(|e| pdf_error(cmd, e))?;
+    s.check_values().map_err(|e| pdf_error(cmd, e.into()))?;
     Ok(s)
 }
 
 /// [`resolve`], refusing what the writer can't honour ([`PdfSettings::check`]).
 pub fn settings_with(cmd: &str, p: &Value, saved: &[PdfPreset]) -> Result<PdfSettings> {
     let s = resolve(cmd, p, saved)?;
-    s.check().map_err(|e| pdf_error(cmd, e))?;
+    s.check(&ActiveProfiles::default()).map_err(|e| pdf_error(cmd, e.into()))?;
     Ok(s)
 }
 
@@ -240,7 +241,7 @@ pub fn settings(cmd: &str, p: &Value) -> Result<PdfSettings> {
 /// built-in presets. Params naming none come back as they are.
 pub fn expand_preset<'a>(s: &Session, cmd: &str, p: &'a Value) -> Result<Cow<'a, Value>> {
     let expanded = match str_param(p, "preset") {
-        Some(name) if vectorcraft_pdf::builtin_preset(name).is_none() => {
+        Some(name) if vectorcraft_pdf::builtin_preset(name, APP).is_none() => {
             let set = settings_with(cmd, p, &s.prefs.pdf_presets)?;
             let mut q = p.clone();
             merge(&mut q, &serde_json::to_value(set).map_err(|e| EngineError::Other(e.to_string()))?);
@@ -316,7 +317,7 @@ pub(super) fn art_page(cmd: &str, doc: &Document, p: &Value) -> Result<Option<(D
 }
 
 /// The warning for a PDF/X file that leaves out the document's bleed
-/// ([`vectorcraft_pdf::PdfSettings::leaves_out_bleed`]).
+/// ([`vectorcraft_pdf::leaves_out_bleed`]).
 pub const BLEED_LEFT_OUT: &str = "the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings";
 
 /// How far, in points, an object's edge may sit inside the trim edge, or short of the bleed edge,
@@ -579,7 +580,7 @@ fn encode_carrying_at(
     // createLayers writes non-printing layers with /PrintState /OFF, so they count only with
     // includeNonPrinting, which writes them as printing art.
     let set = &opts.settings;
-    let short = if bleed_check { short_of_bleed(doc, set.bleed_of(doc), opts.artboards.as_deref(), set.include_non_printing) } else { 0 };
+    let short = if bleed_check { short_of_bleed(doc, page_bleed(&set.bleed, doc), opts.artboards.as_deref(), set.include_non_printing) } else { 0 };
     // The pages' background colors, behind the art (the editing data keeps them as colors).
     let pages = opts.artboards.clone().unwrap_or_else(|| (0..doc.artboards.len()).collect());
     let filled = super::export::with_artboard_fills(doc, p, pages).map_err(|e| bad(cmd, e))?;
@@ -592,7 +593,7 @@ fn encode_carrying_at(
     let mut notes = vec![];
     // A loss, ahead of the flattening note: the PDF/X pages leave out the bleed that Document
     // Setup gives.
-    if opts.settings.leaves_out_bleed(doc) {
+    if leaves_out_bleed(&opts.settings, doc) {
         notes.push(Note::loss(BLEED_LEFT_OUT));
     }
     // Art that reaches the trim edge but leaves part of the page's bleed empty.
@@ -760,7 +761,7 @@ fn pdf_settings(s: &mut Session, p: &Value) -> Result<Value> {
             };
             note_texts(&notes)
         }
-        _ => set.warnings(),
+        _ => set.warnings(&ActiveProfiles::default()).into_iter().map(|w| w.message).collect(),
     };
     let v = serde_json::to_value(&set).map_err(|e| EngineError::Other(e.to_string()))?;
     Ok(json!({ "settings": v, "presets": presets(s), "changed": diff, "warnings": warnings }))
