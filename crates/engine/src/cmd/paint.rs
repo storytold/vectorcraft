@@ -224,7 +224,7 @@ impl Session {
         // A Live Paint group without faces (or edges) shows the next selected object's paint; any other
         // object without a painted object shows the defaults for new art. A face or edge selected with
         // its Live Paint group counts with the group, wherever it is in the selection.
-        let covered = live_paint_covered(&st.doc, st.selection.subjects());
+        let covered = st.selection_live_paint_covered(st.selection.subjects());
         for id in st.selection.subjects().iter().filter(|id| !covered.contains(*id)) {
             let Some(n) = st.doc.node(*id) else { continue };
             let mut nodes = vec![];
@@ -303,6 +303,74 @@ pub(crate) fn painted<'a>(n: &'a Node, top: bool, stroke: bool, out: &mut Vec<&'
     }
 }
 
+/// What the proxies read from selected objects: the first fill, stroke and stroke weight met, and
+/// whether another one differs ([`DocState::proxy_mixed`] without an active Appearance item or
+/// picked mesh points, and [`super::stroke::StrokeMixed::weight`]), and whether an object lies in a
+/// Live Paint group or may hold a gradient mesh. The objects added to a selection are read with
+/// [`SelectionPaints::add`].
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SelectionPaints {
+    fill: Option<Paint>,
+    pub(crate) fill_mixed: bool,
+    stroke: Option<Paint>,
+    pub(crate) stroke_mixed: bool,
+    weight: Option<f64>,
+    pub(crate) weight_mixed: bool,
+    /// An object is a face or edge of a Live Paint group, or lies inside one
+    /// ([`live_paint_covered`]).
+    pub(crate) in_live_paint: bool,
+    /// An object is a gradient mesh or a container ([`Session::fill_mesh_points`]).
+    pub(crate) may_hold_mesh: bool,
+}
+
+impl SelectionPaints {
+    /// Read objects `ids` of `doc`.
+    pub(crate) fn of(doc: &Document, ids: &[NodeId]) -> Self {
+        let mut p = Self::default();
+        p.add(doc, ids);
+        p
+    }
+
+    /// Read objects `ids` of `doc` too.
+    pub(crate) fn add(&mut self, doc: &Document, ids: &[NodeId]) {
+        fn meet<T>(first: &mut Option<T>, mixed: &mut bool, value: T, same: impl Fn(&T, &T) -> bool) {
+            match first {
+                Some(f) => *mixed |= !same(f, &value),
+                None => *first = Some(value),
+            }
+        }
+        // As in `proxy_mixed_with`: every node with an added id, in tree order.
+        let (mut fills, mut strokes) = (vec![], vec![]);
+        for n in doc.nodes_in_order(ids.iter().copied()) {
+            painted(n, true, false, &mut fills);
+            painted(n, true, true, &mut strokes);
+        }
+        for n in fills {
+            meet(&mut self.fill, &mut self.fill_mixed, proxy_paint(n, false, None), same_in_proxy);
+        }
+        for n in strokes {
+            meet(&mut self.stroke, &mut self.stroke_mixed, proxy_paint(n, true, None), same_in_proxy);
+        }
+        // As in `stroke_mixed`: the node each added id names.
+        for id in ids {
+            let Some(n) = doc.node(*id) else { continue };
+            self.in_live_paint |= in_live_paint(doc, *id);
+            self.may_hold_mesh |= matches!(n.kind, NodeKind::Mesh(_)) || n.is_container();
+            let mut nodes = vec![];
+            painted(n, true, true, &mut nodes);
+            for n in nodes {
+                let widths: Vec<f64> = match &n.kind {
+                    NodeKind::Text(t) => t.runs.iter().map(|r| r.style.stroke_layer().width).collect(),
+                    _ => n.appearance.stroke().map(|s| s.width).into_iter().collect(),
+                };
+                for w in widths {
+                    meet(&mut self.weight, &mut self.weight_mixed, w, |a, b| a == b);
+                }
+            }
+        }
+    }
+}
+
 impl DocState {
     /// Whether the selected objects' fills and strokes differ as the proxies show them (a "?"
     /// proxy; a group whose contents differ counts). `item` (the Appearance panel's active item)
@@ -329,7 +397,7 @@ impl DocState {
         let (mut selected, mut fills, mut strokes) = (vec![], vec![], vec![]);
         // The faces and edges of the selected Live Paint groups (or of those inside selected groups): selected as well,
         // they count with their group's.
-        let covered = live_paint_covered(&self.doc, &self.selection.objects);
+        let covered = self.selection_live_paint_covered(&self.selection.objects);
         // Every node with a selected id, in tree order: a repeated id (a damaged file) counts at each
         // place it appears.
         for n in self.doc.nodes_in_order(self.selection.objects.iter().copied()) {
@@ -927,13 +995,28 @@ pub(crate) fn live_paint_split(d: &Document, roots: &[NodeId]) -> LivePaintParts
 /// object: they count with their group, wherever they are in `selected`. The groups are looked for only when an
 /// object in `selected` is inside a Live Paint group.
 pub(crate) fn live_paint_covered(d: &Document, selected: &[NodeId]) -> std::collections::HashSet<NodeId> {
-    let inside = |id: &NodeId| d.ancestry(*id).is_some_and(|up| up.iter().rev().skip(1).filter_map(|a| d.node(*a)).any(is_live_paint));
-    if !selected.iter().any(inside) {
+    if !selected.iter().any(|id| in_live_paint(d, *id)) {
         return std::collections::HashSet::new();
     }
     let (mut parts, edges, _) = live_paint_split(d, selected);
     parts.extend(edges);
     parts
+}
+
+/// Is `id` inside a Live Paint group (one of the groups around it is one)?
+fn in_live_paint(d: &Document, id: NodeId) -> bool {
+    d.ancestry(id).is_some_and(|up| up.iter().rev().skip(1).filter_map(|a| d.node(*a)).any(is_live_paint))
+}
+
+impl DocState {
+    /// [`live_paint_covered`] for `ids`, the selected objects or the selection's subjects: none
+    /// when the [`SelectionPaints`] of the selection say no selected object is in a Live Paint group.
+    pub(crate) fn selection_live_paint_covered(&self, ids: &[NodeId]) -> std::collections::HashSet<NodeId> {
+        if self.selection_paints().is_some_and(|p| !p.in_live_paint) {
+            return std::collections::HashSet::new();
+        }
+        live_paint_covered(&self.doc, ids)
+    }
 }
 
 /// The instance whose object is selected with Direct Selection, and that object's path
@@ -1181,7 +1264,8 @@ impl Session {
         // Only gradient meshes have points to pick: a selection with no mesh and no container that
         // could hold one skips reading the tool's options.
         let may_hold_mesh = |id: &NodeId| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Mesh(_)) || n.is_container());
-        if st.selection.symbol_part.is_some() || !st.selection.subjects().iter().any(may_hold_mesh) {
+        let none_may = || st.selection_paints().map_or_else(|| !st.selection.subjects().iter().any(may_hold_mesh), |p| !p.may_hold_mesh);
+        if st.selection.symbol_part.is_some() || none_may() {
             return vec![];
         }
         let Ok(item) = item_target(self, &Value::Null, "paint.setFill").map(|t| t.of_kind(self, true)) else { return vec![] };
