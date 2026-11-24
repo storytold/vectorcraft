@@ -485,21 +485,32 @@ impl Component for TypeEditor<'_> {
     }
 }
 
-/// Shows the editor part over the Type tool's caret while the tool edits text, before the tool host. A new edit target
-/// is a new IME owner, so a reloaded document interrupts its composition.
-pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+/// Shows the editor part over the Type tool's caret while the tool edits text, before the tool host; returns the part's
+/// id. A new edit target is a new IME owner, so a reloaded document interrupts its composition.
+pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> Option<egui::Id> {
     if !app.session.tool_wants_text() || app.viewport_hidden(ui.ctx()) {
-        return;
+        return None;
     }
     let view = app.view_info();
-    let Some((a, b)) = app.session.tool_ime_caret(view) else { return };
-    let Some(target) = app.session.tool_ime_target(view) else { return };
-    let Some(canvas_view) = app.canvas_view() else { return };
+    let (a, b) = app.session.tool_ime_caret(view)?;
+    let target = app.session.tool_ime_target(view)?;
+    let canvas_view = app.canvas_view()?;
     let caret = Rect::from_two_pos(canvas_view.to_screen(a), canvas_view.to_screen(b)).expand2(egui::vec2(1.0, 0.0));
     let out =
         ui.scope_builder(egui::UiBuilder::new().max_rect(caret), |ui| TypeEditor::new(app, caret, ui.ctx().clone()).id_salt(target).show(ui)).inner;
     // Typing goes to the edit that starts, as a click on the part would take the keys.
     if out.unfocused_start {
         focus::request(ui.ctx(), FocusTarget::Id(out.response.id));
+    }
+    Some(out.response.id)
+}
+
+/// A press on the document canvas focuses the canvas, so during it the keys are the tool's (a held Space moves a zoom
+/// marquee). Called in the pass its press ends, after the tool host: while the edit goes on (the press placed the
+/// caret, or a held Space or Cmd+Space lent a view tool), `editor`, the part shown in this pass, takes the keys back,
+/// so typing goes on in the text as in production.
+pub(crate) fn keep_keys(app: &VectorcraftApp, ctx: &egui::Context, editor: egui::Id) {
+    if app.session.tool_wants_text() {
+        focus::request(ctx, FocusTarget::Id(editor));
     }
 }
