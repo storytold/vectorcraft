@@ -185,7 +185,7 @@ fn seen(app: &VectorcraftApp, id: DialogId) -> Option<Seen> {
     app.dialogs()?.with(|host| {
         let top = host.stack().is_top(id);
         let dialog = host.get_mut_by_id::<HostedParamDialog>(id)?;
-        Some(Seen { top, previewing: dialog.is_previewing(), fields: dialog.fields().clone(), action: dialog.take_footer_action() })
+        Some(Seen { top, previewing: dialog.is_previewing(), fields: dialog.fields().clone(), action: dialog.take_action() })
     })
 }
 
