@@ -28,8 +28,18 @@ impl FontDb {
         #[cfg(not(target_arch = "wasm32"))]
         {
             // The catalog first: the first scan takes the faces' lock, which a guard held here would block.
-            let cataloged: Vec<(String, String, PathBuf)> =
-                self.read_catalog().values().flat_map(|c| c.faces.iter().map(|cf| (c.name.clone(), cf.style.clone(), cf.path.clone()))).collect();
+            // The bundled faces have no file to read. The catalog lists a bundled face ahead of an
+            // installed file of the same face, so each face's file is its first installed version.
+            let cataloged: Vec<(String, String, PathBuf)> = self
+                .catalog
+                .faces()
+                .iter()
+                .filter_map(|f| {
+                    let path =
+                        self.catalog.versions(f).into_iter().filter(|v| v.source != craft::font_catalog::Source::Bundled).find_map(|v| v.path)?;
+                    Some((f.family.clone(), f.style.clone(), path))
+                })
+                .collect();
             let unloaded: Vec<(String, String, PathBuf)> = {
                 let loaded = self.read_faces();
                 let is_loaded =

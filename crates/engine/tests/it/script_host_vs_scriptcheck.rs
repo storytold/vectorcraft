@@ -43,8 +43,10 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it.
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder alert confirm localize prompt toSource"),
+    ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
+    ("UnitValue.", "baseUnit baseUnit= length prototype"),
+    ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
     (

@@ -188,6 +188,7 @@
 	Anti-alias Rasters	Εξομάλυνση ακμών εικόνων ράστερ
 	Anti-aliased Artwork	Γραφικά με εξομαλυμένες ακμές
 	Anti-aliasing Method	Μέθοδος εξομάλυνσης ακμών
+@id	language.name	Ελληνικά
 antiAlias	Sharp	Οξεία
 	Crisp	Καθαρή
 	Strong	Έντονη
@@ -6243,6 +6244,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα για εξαγωγή
 @msg	The 3D object is too complex to export	Το αντικείμενο 3D είναι πολύ σύνθετο για εξαγωγή
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Το πλέγμα του αντικειμένου 3D είναι ελλιπές ή περιέχει τιμή που δεν είναι αριθμός
 @msg	give one <filter> element	δώστε ένα στοιχείο <filter>
 @msg	the <filter> element needs an id, the filter's name	το στοιχείο <filter> χρειάζεται id, το όνομα του φίλτρου
 @msg	an SVG filter's id is at most {MAX_NAME} characters	το id ενός φίλτρου SVG έχει το πολύ {MAX_NAME} χαρακτήρες
@@ -7314,11 +7316,17 @@ axis	Y Axis	Άξονας Y
 @msg	module is {_1} bytes (limit {_2})	η λειτουργική μονάδα έχει {_1} byte (όριο {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	χρειάζεται έγκριση: ζητά {0}, που ο χρήστης παραχωρεί όταν το εγκαθιστά μόνο του
 @msg	not JSON: {e}	δεν είναι JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \\0asm)
 @msg	parameter `{k}`: {what}	παράμετρος `{k}`: {what}
 @msg	parameter `{name}`: {what}	παράμετρος `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	οι παράμετροι του προσθέτου πρέπει να είναι αντικείμενο JSON
 @msg	the module must export its linear memory as `memory`	η λειτουργική μονάδα πρέπει να εξάγει τη γραμμική της μνήμη ως `memory`
+@msg	the module must export `{name}` with the type {signature}	η λειτουργική μονάδα πρέπει να εξάγει το `{name}` με τον τύπο {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	η λειτουργική μονάδα έχει περισσότερες από μία προσαρμοσμένες ενότητες `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	προϋπολογισμός μνήμης (η αρχική μνήμη της λειτουργικής μονάδας είναι {initial} byte, όριο {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	το μανιφέστο στην προσαρμοσμένη ενότητα `{MANIFEST_SECTION}` πρέπει να δίνει `abi` ίσο με {ABI_VERSION}, την έκδοση ABI που υλοποιεί αυτός ο κεντρικός υπολογιστής
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	προϋπολογισμός πινάκων (η λειτουργική μονάδα ορίζει {count} πίνακες, ο μεγαλύτερος με {largest} στοιχεία· όριο {MAX_TABLES} πίνακες των {MAX_TABLE_ELEMENTS} στοιχείων)
+@msg	the module's table section could not be read	δεν ήταν δυνατή η ανάγνωση της ενότητας πινάκων της λειτουργικής μονάδας
 @msg	the objects to change are no longer in the document	τα αντικείμενα προς αλλαγή δεν βρίσκονται πια στο έγγραφο
 @msg	the runtime panicked	το περιβάλλον εκτέλεσης κατέρρευσε
 @msg	unexpected host trap	μη αναμενόμενη παγίδευση του κεντρικού υπολογιστή
@@ -7389,6 +7397,8 @@ axis	Y Axis	Άξονας Y
 @msg	`plates` requires a stop linked to a spot swatch	το `plates` απαιτεί σημείο χρώματος συνδεδεμένο με δείγμα πλακάτου χρώματος
 @msg	the output	η έξοδος
 @msg	the path has no anchor points	η διαδρομή δεν έχει σημεία αγκύρωσης
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	η σύνθετη διαδρομή {id} έχει κρυφό, κλειδωμένο ή οδηγό μέλος, οπότε τα μέλη της δεν μπορούν να αντικατασταθούν
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	η σύνθετη διαδρομή {id} έχει μέλος που δεν είναι διαδρομή, οπότε τα μέλη της δεν μπορούν να αντικατασταθούν
 @msg	too many anchor points (limit {MAX_ANCHORS})	πάρα πολλά σημεία αγκύρωσης (όριο {MAX_ANCHORS})
 @msg	true or false	true ή false
 @msg	a number >= {_1}	αριθμός >= {_1}

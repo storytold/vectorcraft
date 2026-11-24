@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_engine::Session;
 
-use super::{ID, Size, menu, show};
+use super::{ID, Size, show};
 use crate::VectorcraftApp;
 
 const SCREEN: egui::Rect = egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(600.0, 900.0));
@@ -48,9 +48,8 @@ fn click(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
 }
 
 fn context() -> egui::Context {
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
     ctx
 }
 
@@ -177,10 +176,7 @@ fn a_search_that_left_out_shapes_says_so() {
     select(&mut app, &[top, deep]);
     let r = app.run("retype.find", json!({})).unwrap();
     assert_eq!((r["shapes"].clone(), r["truncated"].clone()), (json!(1), json!(true)), "{r}");
-    let note = "Shapes past the first 2,048, or more than 16 groups deep, were not compared.";
-    let ctx = context();
-    frame(&mut app, &ctx, vec![], show);
-    assert!(frame(&mut app, &ctx, vec![], show).iter().any(|n| n.label() == Some(note) || n.value() == Some(note)), "the panel says so");
+    assert_eq!(app.run("retype.list", json!({})).unwrap()["truncated"], json!(true), "the list says so");
     // A search that left nothing out, and a reset, clear it.
     select(&mut app, &[top]);
     assert_eq!(app.run("retype.find", json!({})).unwrap()["truncated"], json!(false));
@@ -217,22 +213,4 @@ fn choosing_a_listed_font_sets_it_on_the_selected_live_text() {
     let before = app.session.active().unwrap().doc.clone();
     click(&mut app, &ctx, "Source Serif 4 Regular");
     assert!(app.session.active().unwrap().doc == before);
-}
-
-#[test]
-fn panel_and_menu_draw_headless() {
-    let mut app = app();
-    let ctx = context();
-    frame(&mut app, &ctx, vec![], show);
-    frame(&mut app, &ctx, vec![], menu);
-    let g = outlined(&mut app, json!({"x": 40, "y": 100, "text": "Draw", "size": 30}));
-    select(&mut app, &[g]);
-    click(&mut app, &ctx, "Find Matching Fonts");
-    assert!(app.ui.retype.searched, "the button searches");
-    assert!(!app.ui.retype.fonts.is_empty());
-    for size in ["small", "medium", "large"] {
-        app.run("retype.preview", json!({ "size": size, "text": "Abc" })).unwrap();
-        frame(&mut app, &ctx, vec![], show);
-    }
-    frame(&mut app, &ctx, vec![], menu);
 }

@@ -1,10 +1,12 @@
 //! Retype in the app ([`crate::retype_runs`]): Type › Retype and the Retype panel's Find Matching
 //! Fonts search the installed fonts off the UI thread, then run their command, unless the document
-//! or its selection changed meanwhile; Cancel stops the search and changes nothing.
+//! or its selection changed meanwhile; Cancel stops the search and changes nothing; its progress
+//! window shows it.
 
 use serde_json::json;
 use vectorcraft_engine::{EngineError, Session};
 
+use crate::export_progress::{self, DELAY};
 use crate::{VectorcraftApp, retype_runs};
 
 /// An app whose searches run off the UI thread, with "Retype me" set in Source Sans 3, outlined and
@@ -31,6 +33,20 @@ fn has_type(app: &VectorcraftApp) -> bool {
     let mut found = false;
     app.session.doc().unwrap().doc.walk(|n| found |= matches!(n.kind, vectorcraft_doc::NodeKind::Text(_)));
     found
+}
+
+/// Draws the progress window at `time` seconds → the texts it drew.
+fn progress(app: &mut VectorcraftApp, ctx: &egui::Context, time: f64) -> String {
+    let mut out = ctx.run_ui(egui::RawInput { time: Some(time), ..Default::default() }, |ui| export_progress::show(app, ui));
+    out.textures_delta.clear();
+    let mut texts = String::new();
+    for shape in out.shapes {
+        if let egui::epaint::Shape::Text(t) = shape.shape {
+            texts.push_str(t.galley.text());
+            texts.push('\n');
+        }
+    }
+    texts
 }
 
 #[test]
@@ -78,6 +94,30 @@ fn cancel_changes_nothing() {
     assert_eq!(undos(&app), before, "canceled: nothing changes, even when the search ended first");
     assert!(!has_type(&app));
     assert_eq!(app.ui.status, EngineError::Cancelled.to_string());
+}
+
+/// The progress window opens after its delay with Cancel and no Continue in Background; its Cancel
+/// stops the search, which then changes nothing.
+#[test]
+fn the_progress_window_shows_a_search() {
+    let (mut app, _) = outlined();
+    let ctx = crate::testing::ui_context();
+    let before = undos(&app);
+    crate::menus::invoke(&mut app, "type.retype", json!({}));
+    assert!(app.retype_runs.running.is_some());
+    assert!(!progress(&mut app, &ctx, 0.0).contains("Finding matching fonts"), "not before the delay");
+    // The delay counts on the monotonic clock: the search started that long ago.
+    if let Some(r) = app.retype_runs.running.as_mut() {
+        r.started -= DELAY;
+    }
+    progress(&mut app, &ctx, DELAY + 0.05); // a new window measures itself unseen first
+    let shown = progress(&mut app, &ctx, DELAY + 0.1);
+    assert!(shown.contains("Finding matching fonts…") && shown.contains("Reading the installed fonts…"), "{shown}");
+    assert!(shown.contains("Cancel") && !shown.contains("Continue in Background"), "{shown}");
+    assert_eq!(app.run("retype.cancelSearch", json!({})).unwrap(), json!({"cancelled": 1}));
+    assert!(!progress(&mut app, &ctx, DELAY + 1.0).contains("Finding matching fonts"), "a canceled search isn't shown");
+    retype_runs::wait(&mut app);
+    assert_eq!(undos(&app), before, "canceled: nothing changes");
 }
 
 #[test]

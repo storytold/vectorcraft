@@ -29,7 +29,7 @@ pub(in crate::cmd) fn specs() -> Vec<CommandSpec> {
         "Find Matching Fonts",
         [],
         None,
-        "{count?: 1..96 (default 10), installed?: bool} the fonts whose glyphs match the selected outlined text, as the Retype panel lists them: each selected shape (paths and compound paths, inside groups too) is compared with the glyphs of up to 96 loaded fonts, those of the document's live type first, by type.retype's matching (exact matches only), and, unless installed is false (true, omitted or null: compared), with the installed fonts not loaded yet, within type.retype's limits on reading them (every file within them is read, and the fonts that match are loaded while the list holds fewer than 96 fonts, loaded ones included); of two versions of a font, only the version its family and style name gives is compared, the one choosing the font sets; the fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style name; the document does not change → {fonts: [{family, style, matched (shapes it matches)}] (the first count), shapes (shapes compared), more (more fonts match than count), truncated (shapes past the limits were left out), installed: {read, skipped} (as type.retype reports them)}; a count that is not a whole number from 1 to 96, or an installed that is not true, false or null, is an error",
+        "{count?: 1..96 (default 10), installed?: bool} the fonts whose glyphs match the selected outlined text, as the Retype panel lists them: each selected shape (paths and compound paths, inside groups too) is compared with the glyphs of up to 96 loaded fonts, those of the document's live type first, by type.retype's matching (exact matches only), a font whose glyphs match the shapes only as combining marks not listed, and, unless installed is false (true, omitted or null: compared), with the installed fonts not loaded yet, within type.retype's limits on reading them (every file within them is read, and the fonts that match are loaded while the list holds fewer than 96 fonts, loaded ones included); of two versions of a font, only the version its family and style name gives is compared, the one choosing the font sets; the fonts rank by how many shapes each matches, then by the mean distance left after fitting, then by family and style name; the document does not change → {fonts: [{family, style, matched (shapes it matches)}] (the first count), shapes (shapes compared), more (more fonts match than count), truncated (shapes past the limits were left out), installed: {read, skipped} (as type.retype reports them)}; a count that is not a whole number from 1 to 96, or an installed that is not true, false or null, is an error",
         has_selected_path,
         retype_fonts
     )]
@@ -47,6 +47,8 @@ pub(super) struct Ranked {
     matched: usize,
     /// The sum of those matches' leftover distances.
     residual: f64,
+    /// Whether some shape matched a glyph of it that is not a combining mark.
+    character: bool,
 }
 
 impl Ranked {
@@ -140,20 +142,25 @@ fn rank(index: &RetypeIndex, shapes: &[&BezPath], ranked: &mut Vec<Ranked>) {
     for shape in shapes {
         // A shape can fit several glyphs or poses of one font: it counts once for the font, at its
         // closest fit.
-        let mut best: Vec<(Arc<FontFace>, f64)> = vec![];
+        let mut best: Vec<(Arc<FontFace>, f64, bool)> = vec![];
         for m in index.all_matches(shape) {
-            match best.iter_mut().find(|(f, _)| f.id() == m.face.id()) {
-                Some(b) => b.1 = b.1.min(m.residual),
-                None => best.push((m.face, m.residual)),
+            let character = !vectorcraft_text::retype::is_combining_mark(m.ch);
+            match best.iter_mut().find(|(f, _, _)| f.id() == m.face.id()) {
+                Some(b) => {
+                    b.1 = b.1.min(m.residual);
+                    b.2 |= character;
+                }
+                None => best.push((m.face, m.residual, character)),
             }
         }
-        for (face, residual) in best {
+        for (face, residual, character) in best {
             match ranked.iter_mut().find(|r| r.face.id() == face.id()) {
                 Some(r) => {
                     r.matched += 1;
                     r.residual += residual;
+                    r.character |= character;
                 }
-                None => ranked.push(Ranked { face, matched: 1, residual }),
+                None => ranked.push(Ranked { face, matched: 1, residual, character }),
             }
         }
     }
@@ -174,6 +181,9 @@ fn retype_fonts_in(s: &mut Session, p: &Value, db: &FontDb) -> Result<Value> {
     // A shape's paint does not change which glyph it is: shapes that would stay outlines count too.
     let shapes: Vec<&BezPath> = pieces.iter().map(|pc| &pc.path).collect();
     let (mut ranked, found) = rank_fonts(db, listed_faces(db, d), &shapes, search_installed, handed)?;
+    // A font whose glyphs match the shapes only as combining marks would retype none of them, as
+    // type.retype starts no line with a mark: it is not listed.
+    ranked.retain(|r| r.character);
     ranked.sort_by(|a, b| {
         b.matched
             .cmp(&a.matched)

@@ -410,12 +410,16 @@ const STACK_FRAMES: usize = 64;
 const STACK_NAME_UNITS: usize = 64;
 
 /// The script's frames, outermost first, one a line: the function's name and the line it is at,
-/// as `name:line`, or as `name@file:line` with the file the realm's locator names.
+/// as `name:line`, or as `name@file:line` with the file the realm's locator names. A first line
+/// `[script]` names the running script when the realm has its name.
 fn stack(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let frames: Vec<(Rc<Code>, usize, bool)> = interp.script_frames().map(|(c, pc, f)| (c.clone(), pc, f)).collect();
     let skip = frames.len().saturating_sub(STACK_FRAMES);
     let locator = interp.locator.clone();
     let mut text = String::new();
+    if let Some(script) = &interp.script_name {
+        text.push_str(&format!("[{script}]\n"));
+    }
     if skip > 0 {
         text.push_str("…\n");
     }

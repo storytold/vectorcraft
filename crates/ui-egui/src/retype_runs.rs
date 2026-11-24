@@ -2,11 +2,12 @@
 //! Find Matching Fonts read installed font files that nothing has loaded yet, which can take
 //! seconds. Asked for by the user, the search is prepared at once, so bad params and a selection
 //! with nothing to match fail before anything runs, and runs on a thread of its own ([`start`]):
-//! the status bar shows it, and after [`DELAY`] a progress window shows how many files are read,
-//! with Cancel (also Esc, `retype.cancelSearch`). When it is done, the command runs with the fonts
-//! it loaded, unless the document or its selection changed meanwhile: then nothing changes and the
-//! status bar says to run it again. The control channel, MCP and scripts run the commands at once,
-//! and so does every search on the web, in unit tests that don't set `off_the_ui_thread`, and with
+//! the status bar shows it, and after the progress window's delay
+//! ([`crate::export_progress::DELAY`]) the window shows how many files are read, with Cancel (also
+//! Esc, `retype.cancelSearch`). When it is done, the command runs with the fonts it loaded, unless
+//! the document or its selection changed meanwhile: then nothing changes and the status bar says to
+//! run it again. The control channel, MCP and scripts run the commands at once, and so does every
+//! search on the web, in unit tests that don't set `off_the_ui_thread`, and with
 //! `VECTORCRAFT_SYNC_OPEN` set ([`available`]).
 
 use std::sync::Arc;
@@ -18,17 +19,15 @@ use vectorcraft_doc::cancel::{self, CancelToken, ProgressSink};
 use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::{RetypeFound, RetypeRun};
 
-use crate::VectorcraftApp;
-use crate::export_progress::{self, Pressed};
-
-pub use crate::export_progress::DELAY;
+use crate::{VectorcraftApp, export_progress};
 
 /// What the status bar and the progress window say.
 const LABEL: &str = "Finding matching fonts";
 
 /// A search running.
 pub struct Running {
-    id: u64,
+    /// [`crate::export_progress::now`] when it started: the progress window's delay counts from it.
+    pub(crate) started: f64,
     run: RetypeRun,
     /// Its Cancel.
     token: CancelToken,
@@ -39,11 +38,19 @@ pub struct Running {
     done: Receiver<Result<RetypeFound, String>>,
 }
 
+impl Running {
+    /// The share of the files read, once they are listed.
+    fn fraction(&self) -> Option<f32> {
+        let [done, total] = &*self.steps;
+        let (done, total) = (done.load(Ordering::Relaxed), total.load(Ordering::Relaxed));
+        (total > 0).then(|| done.min(total) as f32 / total as f32)
+    }
+}
+
 /// The search running, if any.
 #[derive(Default)]
 pub struct RetypeRuns {
     pub running: Option<Running>,
-    next_id: u64,
     /// Set by unit tests whose app searches off the UI thread.
     pub(crate) off_the_ui_thread: bool,
 }
@@ -100,9 +107,8 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
             let _ = tx.send(r);
         })
         .map_err(|e| e.to_string())?;
-    let runs = &mut app.retype_runs;
-    runs.next_id += 1;
-    runs.running = Some(Running { id: runs.next_id, run, token, from_panel, steps, done });
+    let started = export_progress::now();
+    app.retype_runs.running = Some(Running { started, run, token, from_panel, steps, done });
     if let Some(ctx) = &app.ui_ctx {
         ctx.request_repaint();
     }
@@ -124,7 +130,7 @@ fn stop(app: &mut VectorcraftApp) {
 /// Runs the command of the search that is done (each frame). Not while a dialog is open, nor while
 /// an interaction is open or a tool drags with the pointer button held, as [`crate::trace_runs::poll`].
 pub fn poll(app: &mut VectorcraftApp) {
-    if app.ui.dialog.is_some() || app.session.in_interaction() || (app.session.tool_busy() && app.session.pointer_held()) {
+    if app.any_dialog_open() || app.session.in_interaction() || (app.session.tool_busy() && app.session.pointer_held()) {
         return;
     }
     let Some(r) = &app.retype_runs.running else { return };
@@ -212,40 +218,18 @@ pub fn any_running(app: &VectorcraftApp) -> bool {
     app.retype_runs.running.as_ref().is_some_and(|r| !r.token.is_cancelled())
 }
 
-/// The progress window of the search running, once it has run for [`DELAY`]. Not while a dialog
-/// or another progress window is open: never two modals at once.
-pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(r) = app.retype_runs.running.as_ref().filter(|r| !r.token.is_cancelled()) else { return };
-    let now = ctx.input(|i| i.time);
-    let since = ctx.data_mut(|m| {
-        let seen = m.get_temp_mut_or_insert_with(egui::Id::unique("retype-run-seen"), || (r.id, now));
-        if seen.0 != r.id {
-            *seen = (r.id, now);
-        }
-        seen.1
-    });
-    let exporting = app.background.jobs.iter().any(|j| j.progress.is_some() && !j.hidden && !j.cancelled());
-    let other = exporting
-        || crate::plugin_runs::any_shown(app)
-        || crate::trace_runs::any_shown(app)
-        || crate::opening::any_shown(app)
-        || crate::placing::any_shown(app);
-    if now - since < DELAY || app.ui.dialog.is_some() || other {
-        return;
-    }
-    let [done, total] = &*r.steps;
-    let (done, total) = (done.load(Ordering::Relaxed), total.load(Ordering::Relaxed));
-    let heading = format!("{}…", crate::i18n::msg(LABEL));
-    let pressed = export_progress::window_cancel(ctx, "retype-run-progress", &heading, |ui| {
-        if total > 0 {
-            export_progress::share(ui, tl!("Reading the installed fonts…"), done.min(total) as f32 / total as f32);
-        } else {
-            export_progress::busy(ui, tl!("Reading the installed fonts…"));
-        }
-    });
-    if pressed == Some(Pressed::Cancel)
-        && let Err(e) = app.run("retype.cancelSearch", json!({}))
-    {
-        app.status(e);
-    }
+/// The progress window of the search running; `export_progress::show` decides when it shows and
+/// runs `retype.cancelSearch` when Cancel is pressed. The search has no Continue in Background.
+pub(crate) fn shown(app: &VectorcraftApp) -> Option<export_progress::Shown> {
+    let r = app.retype_runs.running.as_ref().filter(|r| !r.token.is_cancelled())?;
+    Some(export_progress::Shown {
+        title: format!("{}…", crate::i18n::msg(LABEL)),
+        step: tl!("Reading the installed fonts…").to_string(),
+        fraction: r.fraction(),
+        counts: None,
+        queued: None,
+        started: r.started,
+        cancel: "retype.cancelSearch",
+        hide: None,
+    })
 }

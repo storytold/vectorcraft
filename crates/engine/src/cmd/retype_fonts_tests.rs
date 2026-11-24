@@ -107,6 +107,21 @@ fn shapes_that_are_no_glyph_list_no_font() {
 }
 
 #[test]
+fn a_font_that_matches_only_combining_marks_is_not_listed() {
+    let mut s = session();
+    // A lone combining mark (a drawn dot, bar or ring is the same shape): type.retype keeps it.
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "\u{312}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = query(&mut s, json!({}), bundled());
+    assert_eq!(r, json!({"fonts": [], "shapes": 1, "more": false, "truncated": false, "installed": {"read": 0, "skipped": 0}}));
+    // After a base, the mark counts with it.
+    let g = outlined(&mut s, json!({"x": 40, "y": 200, "text": "x\u{312}", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = query(&mut s, json!({}), bundled());
+    assert!(names(&r).contains(&("Source Sans 3".into(), "Regular".into(), 2)), "{r}");
+}
+
+#[test]
 fn shapes_past_the_limits_are_reported_as_left_out() {
     let mut s = session();
     let top = outlined(&mut s, json!({"x": 40, "y": 100, "text": "A", "size": 40}));

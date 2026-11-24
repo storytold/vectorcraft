@@ -1135,6 +1135,13 @@ fn is_shape_symbol(c: char) -> bool {
     )
 }
 
+/// Whether `c` is a combining mark (general category Mn, Mc or Me). A mark combines with the
+/// character before it, so no retyped line starts with one.
+pub fn is_combining_mark(c: char) -> bool {
+    use unicode_general_category::{GeneralCategory, get_general_category};
+    matches!(get_general_category(c), GeneralCategory::NonspacingMark | GeneralCategory::SpacingMark | GeneralCategory::EnclosingMark)
+}
+
 /// Complex multiply: `z` (a scaled turn) applied to `p`.
 fn mul(z: (f64, f64), p: Point) -> Point {
     Point::new(z.0 * p.x - z.1 * p.y, z.1 * p.x + z.0 * p.y)
@@ -1789,6 +1796,18 @@ mod tests {
         }
         for c in ['A', 'l', '-', '\u{6F22}', '\u{0915}'] {
             assert!(!is_shape_symbol(c), "{c:?}");
+        }
+    }
+
+    #[test]
+    fn combining_marks_are_told_from_spacing_characters() {
+        // Nonspacing (Mn), spacing (Mc) and enclosing (Me) marks.
+        for c in ['\u{0312}', '\u{05BD}', '\u{0903}', '\u{20DD}'] {
+            assert!(is_combining_mark(c), "{c:?}");
+        }
+        // Spacing forms of the same accents are characters of their own.
+        for c in ['a', '\u{00A8}', '\u{02DC}', '\u{00AF}', '-'] {
+            assert!(!is_combining_mark(c), "{c:?}");
         }
     }
 
