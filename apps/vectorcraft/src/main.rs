@@ -614,8 +614,6 @@ fn main() -> std::process::ExitCode {
                 };
                 embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts()).map_err(|e| e.to_string())?;
                 egui_extras::install_image_loaders(ctx);
-                craft::ui::primitives::register_app_icons(&vectorcraft_ui_egui::icons::APP_ICONS);
-                craft::ui::primitives::register_app_icons(&vectorcraft_ui_egui::cursors::CURSOR_ICONS);
                 let folders = settings.lock().get().ui.last_folders.clone();
                 let wake = {
                     let ctx = ctx.clone();

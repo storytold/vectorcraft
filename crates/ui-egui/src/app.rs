@@ -48,9 +48,12 @@ fn now_secs() -> f64 {
 
 impl VectorcraftApp {
     /// The app around `session`, reaching the platform through `services` (the clipboard, files
-    /// and the like). It starts cataloguing the installed fonts at once, gives Data Recovery the
-    /// host's store and makes a view for each open document.
+    /// and the like). It registers the app's icon sets, starts cataloguing the installed fonts at
+    /// once, gives Data Recovery the host's store and makes a view for each open document.
     pub fn new(mut session: Session, mut services: Services) -> Self {
+        // Every entry point (desktop, web, tests) makes the app before its first pass.
+        craft::ui::primitives::register_app_icons(&super::icons::APP_ICONS);
+        craft::ui::primitives::register_app_icons(&super::cursors::CURSOR_ICONS);
         // The font menus and the first file opened need the installed fonts: catalog them now.
         vectorcraft_text::FontDb::global().scan_in_background();
         if let Some(store) = &services.recovery_store {
