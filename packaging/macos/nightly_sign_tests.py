@@ -245,7 +245,7 @@ class Checks(unittest.TestCase):
         with tempfile.TemporaryDirectory() as work, tempfile.TemporaryDirectory() as elsewhere:
             ours = Path(work) / "vectorcraft-signing.keychain-db"
             ours.write_bytes(b"generated keychain")
-            other_app = Path(work) / "photocraft-signing.keychain-db"
+            other_app = Path(work) / "another-app-signing.keychain-db"
             other_app.write_bytes(b"generated keychain")
             outside = Path(elsewhere) / "vectorcraft-signing.keychain-db"
             outside.write_bytes(b"generated keychain")
