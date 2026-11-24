@@ -6,8 +6,7 @@ use std::cell::RefCell;
 use craft::behavior::IconId;
 use craft::behavior::fit::{FitItem, FitKeep, fit_items};
 use craft::menu::MenuBarUi;
-use craft::ui::bars::BarHome;
-use craft::ui::buttons::{Button, ButtonChord, IconButton, PopupMark};
+use craft::ui::buttons::{Button, ButtonChord, IconButton, PopupMark, ToggleButton};
 use craft::ui::contract::{Bind, BodyCx, Props, Show, ShowContainer, Trigger};
 use craft::ui::display::{Divider, Picture};
 use craft::ui::layout::measure_slot;
@@ -160,7 +159,8 @@ fn leading(ui: &mut Ui, app: &mut VectorcraftApp) {
     }
     let mut home = menus::home_showing(app);
     let before = home;
-    BarHome::new(tl!("Home"), Bind::bound(&mut home)).show(ui);
+    // The title bar's Home has no rule after it, as an options bar's `BarHome` does.
+    ToggleButton::new(tl!("Home"), Bind::bound(&mut home)).icon(IconSpec::svg(IconId::new("home"))).icon_only().show(ui);
     if home != before {
         app.run("app.home", json!({})).ok();
     }
@@ -198,16 +198,19 @@ fn trailing(ui: &mut Ui, app: &mut VectorcraftApp) {
 
 /// The application bar, the body of the shell's title bar: brand mark, Home and menus, then Discord,
 /// tutorials, Arrange Documents, search and the workspace switcher at the end. The title bar draws
-/// the caption buttons, drags the window and shows the title.
+/// the caption buttons and drags the window; it shows the title only while the menus are in the macOS
+/// menu bar, where the bar has the room the menus leave.
 pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {
+    let titled = app.services.native_menu.is_some();
     let app = RefCell::new(app);
     // Both closures need the app; the bar runs them one after the other.
-    let _ = TitleBar::new().show_titled(
-        ui,
-        Title::new(tl!("VectorCraft")),
-        |ui, _| leading(ui, &mut app.borrow_mut()),
-        |ui, _| trailing(ui, &mut app.borrow_mut()),
-    );
+    let start = |ui: &mut Ui, _: &mut BodyCx<'_>| leading(ui, &mut app.borrow_mut());
+    let end = |ui: &mut Ui, _: &mut BodyCx<'_>| trailing(ui, &mut app.borrow_mut());
+    let _ = if titled {
+        TitleBar::new().show_titled(ui, Title::new(tl!("VectorCraft")), start, end)
+    } else {
+        TitleBar::new().trailing(end).show(ui, start).output
+    };
 }
 
 /// The OS window title: the active document's name suffixed with the app name (a `*` prefix
