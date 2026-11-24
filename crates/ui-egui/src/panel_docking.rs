@@ -1234,8 +1234,7 @@ impl DockPanels<String> for Panels<'_> {
 
     fn group_header(&mut self, panels: &[String], active: usize, ui: &mut egui::Ui, _cx: &mut BodyCx<'_>) {
         let Some(panel) = panels.get(active).filter(|p| sizes::has_sizes(p)) else { return };
-        // PLAN: the cycle control's icon (two stacked triangles) is not an app asset yet; `cycle-sizes` names it for whoever draws it.
-        IconButton::command(IconId::new("cycle-sizes"), CommandRef::with_params("window.panel.cycleOptions", json!({"panel": panel}))).show(ui);
+        IconButton::command(IconId::new("dc-cycle-sizes"), CommandRef::with_params("window.panel.cycleOptions", json!({"panel": panel}))).show(ui);
     }
 
     fn panel_rows(&mut self, panel: &String) -> Vec<PanelRow> {

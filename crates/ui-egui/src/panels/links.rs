@@ -586,8 +586,8 @@ fn mask_name(app: &VectorcraftApp, doc: &vectorcraft_doc::Document, cache: &Cach
 /// The icon of a row's status mark.
 fn status_icon(status: &str) -> &'static str {
     match status {
-        "missing" => "circle-help",
-        "modified" => "triangle-alert",
+        "missing" => "dc-help",
+        "modified" => "warning",
         "embedded" => "image",
         _ => "link",
     }
@@ -782,7 +782,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     row = row.trailing(page.to_string());
                 }
                 if r["dcsTransparency"] == true {
-                    row = row.trailing_icon(IconId::new("triangle-alert"), tip.clone());
+                    row = row.trailing_icon(IconId::new("warning"), tip.clone());
                 }
                 row.trailing_icon(IconId::new(status_icon(r["status"].as_str().unwrap_or_default())), tip)
             });
