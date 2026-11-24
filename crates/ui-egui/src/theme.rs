@@ -1,8 +1,9 @@
 //! The user's interface choices (brightness, accent, colour scheme) and how they select the root theme.
 
-use craft::theme::{ModeChoice, Rgba, ThemeId};
+use craft::theme::{AppSizes, ModeChoice, Rgba, ThemeId};
 use egui::{FontFamily, FontId};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, LazyLock};
 use vectorcraft_engine::Prefs;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,6 +145,17 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
     }
 }
 
+/// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
+/// where the sets give pills.
+const SIZES: &[u8] = br#"{"all": {"radius.button": 4}}"#;
+
+/// The app's sizes ([`SIZES`]) as one shared value: the token cache tells a change of sizes by its pointer, so a
+/// new value each frame would resolve the tokens again each frame.
+pub fn app_sizes() -> Arc<AppSizes> {
+    static SHARED: LazyLock<Arc<AppSizes>> = LazyLock::new(|| Arc::new(AppSizes::parse_or_default(SIZES)));
+    Arc::clone(&SHARED)
+}
+
 pub fn semibold(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(craft::ui::fonts::SEMIBOLD.into()))
 }
@@ -162,5 +174,11 @@ mod tests {
             assert_eq!(Brightness::parse(b.id()), Some(b));
             assert_eq!(Brightness::parse(b.label()), Some(b));
         }
+    }
+
+    /// A size `app_sizes` cannot read is only logged and dropped, which brings the pill buttons back unnoticed.
+    #[test]
+    fn the_app_sizes_are_read_whole() {
+        assert!(AppSizes::parse(SIZES).is_ok_and(|sizes| !sizes.is_empty()));
     }
 }

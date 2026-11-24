@@ -659,6 +659,7 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // A hand-edited preferences file must not scale the interface to nothing.
     let scaling = if prefs.ui_scaling.is_finite() && prefs.ui_scaling > 0.0 { prefs.ui_scaling as f32 } else { 1.0 };
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
+    root.sizes = theme::app_sizes();
     root.values.set(view::zoom_scheme(prefs, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
