@@ -53,10 +53,18 @@ use crate::objects_on_path::{MemberDrag, MoveAllDrag, RotateAllDrag, SpaceDrag, 
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
-use crate::shaperwidget;
+
 use crate::sidewidget::{self, SideDrag};
 use crate::typewidget;
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
+
+/// The release of the widget drag `d`: released away from the last press or drag (`away`), it is
+/// dragged there first (`drag`); then it ends (`finish`).
+fn released<D>(mut d: D, away: bool, drag: impl FnOnce(&mut D) -> Vec<Action>, finish: impl FnOnce(D) -> Vec<Action>) -> Vec<Action> {
+    let mut out = if away { drag(&mut d) } else { vec![] };
+    out.extend(finish(d));
+    out
+}
 
 /// Direction is read on screen, even in a turned view. Within three pixels of the press's
 /// horizontal position, retain the previous rule so hand jitter does not flip it.
@@ -159,18 +167,8 @@ enum State {
     MoveAll(MoveAllDrag),
     /// Pressing or dragging the Select/Move widget of an object of an Objects on Path group.
     Member(MemberDrag),
-    /// Move or rotate a live mirror axis.
-    Mirror(crate::mirror::MirrorDrag),
-    /// Drag a grid repeat's row, column or corner handle or a spacing slider.
-    GridRepeat(crate::repeat_grid::GridDrag),
-    /// Drag a radial repeat's instances or radius handle.
-    RadialRepeat(crate::repeat_radial::RadialDrag),
-    /// Drag the divider of an Image Trace object in the Split view.
-    TraceSplit(crate::trace_split::SplitDrag),
     /// Dragging a bracket of type on a path.
     Bracket(BracketDrag),
-    /// Dragging a 9-slice guide of the symbol being edited.
-    NineSlice(crate::nineslice::GuideDrag),
     /// Loaded with the text of area type or type on a path `from` by a click on its out port, or
     /// on its in port (`before`: the frame it goes into comes before `from` in its thread);
     /// `press`: where the next press went down and where the pointer is now.
@@ -213,6 +211,9 @@ pub struct SelectionTool {
     loaded_at_press: Option<(NodeId, bool)>,
     /// Where the pointer last hovered: the type on a path bracket under it draws thicker.
     bracket_hover: Option<Point>,
+    /// Where the pointer was at the last press or drag: a widget drag released anywhere else is
+    /// dragged there before it ends.
+    held_at: Option<Point>,
 }
 
 /// What Distance Guides measure the selection to.
@@ -595,12 +596,26 @@ pub(crate) fn shown_box(cx: &ToolContext) -> Option<OrientedBox> {
 /// selected, is within `tol` of `p`: (object, where the point is). A press there grabs the object
 /// by that point — it moves the selection even where no art is painted (an unfilled shape) — as
 /// Direct Selection's does (#4891).
-pub(crate) fn hit_center(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, Point)> {
+pub fn hit_center(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, Point)> {
+    shown_centers(cx).into_iter().find(|(_, c)| c.distance(p) <= tol)
+}
+
+/// The selected objects whose centre point is drawn and takes a press ([`hit_center`]), with where it is.
+pub fn shown_centers(cx: &ToolContext) -> Vec<(NodeId, Point)> {
     let (symbols, editable) = (cx.doc.symbol_boxes(), cx.doc.editable());
-    cx.selection.objects.iter().copied().filter(|id| editable(*id) && crate::direct::in_scope(cx.doc, cx.isolation, *id)).find_map(|id| {
-        let c = cx.doc.node(id).filter(|n| n.shows_center())?.geometric_bounds_with(&symbols)?.center();
-        (c.distance(p) <= tol).then_some((id, c))
-    })
+    cx.selection
+        .objects
+        .iter()
+        .copied()
+        .filter_map(|id| {
+            let n = cx.doc.node(id).filter(|n| n.shows_center())?;
+            // After the center: on a locked artboard it measures the art of the layer object holding `id`.
+            if !crate::direct::in_scope(cx.doc, cx.isolation, id) || !editable(id) {
+                return None;
+            }
+            Some((id, n.geometric_bounds_with(&symbols)?.center()))
+        })
+        .collect()
 }
 
 /// The bounds of object `id`, measured as [`selection_bounds`] measures the selection.
@@ -672,8 +687,13 @@ fn box_hit(cx: &ToolContext, b: &OrientedBox, p: Point) -> Option<BoxHit> {
 
 /// Whether the current selection's bounding-box handle is under `p`, using the same geometry as
 /// the Selection tool's press handling.
-pub(crate) fn bbox_handle_at(cx: &ToolContext, p: Point) -> bool {
+pub fn bbox_handle_at(cx: &ToolContext, p: Point) -> bool {
     shown_box(cx).is_some_and(|b| matches!(box_hit(cx, &b, p), Some(BoxHit::Handle(_))))
+}
+
+/// Where the shown bounding box's handles are, in document points: the places [`bbox_handle_at`] answers around.
+pub fn bbox_handle_points(cx: &ToolContext) -> Vec<Point> {
+    shown_box(cx).map(|b| crate::bbox::Handle::ALL.map(|h| b.to_doc() * h.pos(b.rect)).to_vec()).unwrap_or_default()
 }
 
 /// How near (screen points) the pointer must come to an object's centre or anchor for Smart Guides
@@ -784,6 +804,16 @@ impl SelectionTool {
         }
     }
 
+    /// Notes where a press or a drag last held the pointer, and says whether a release lands
+    /// somewhere else.
+    fn note_held_at(&mut self, ev: &PointerEvent) -> bool {
+        let released_away = ev.kind == PointerKind::Up && self.held_at != Some(ev.pos);
+        if matches!(ev.kind, PointerKind::Down | PointerKind::Drag) {
+            self.held_at = Some(ev.pos);
+        }
+        released_away
+    }
+
     /// The pointer loaded with the text of area type or type on a path `from` ([`State::Loaded`]):
     /// a press starts placing it, and its release threads it (`text.thread.add`), into a frame put
     /// `before` `from` or after it. None when `from` can no longer thread: the press is an
@@ -870,8 +900,8 @@ impl Tool for SelectionTool {
 
     /// E during a marquee drag switches the marquee between the objects it touches and only the
     /// objects inside it. Escape during a drag (a move or an Alt-drag copy, a bounding-box scale or
-    /// rotation, a marquee, a corner widget, a pie widget, a polygon's side widget, a blend widget, the Rotate All, Space, Move All or Select/Move widget, the brackets of type on a path, a mirror
-    /// axis, a grid repeat's handles, an Image Trace divider, a ruler guide) cancels it: what it changed goes back, no copy
+    /// rotation, a marquee, a corner widget, a pie widget, a polygon's side widget, a blend widget, the Rotate All, Space, Move All or Select/Move widget, the brackets of type on a path,
+    /// a ruler guide) cancels it: what it changed goes back, no copy
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
@@ -890,35 +920,12 @@ impl Tool for SelectionTool {
             return vec![];
         }
         if key == ToolKey::Escape
-            && matches!(self.state, State::Mirror(_))
-            && let State::Mirror(d) = std::mem::take(&mut self.state)
-        {
-            return d.cancel();
-        }
-        if key == ToolKey::Escape
-            && matches!(self.state, State::GridRepeat(_))
-            && let State::GridRepeat(d) = std::mem::take(&mut self.state)
-        {
-            return d.cancel();
-        }
-        if key == ToolKey::Escape
-            && matches!(self.state, State::RadialRepeat(_))
-            && let State::RadialRepeat(d) = std::mem::take(&mut self.state)
-        {
-            return d.cancel();
-        }
-        if key == ToolKey::Escape
             && matches!(self.state, State::Sides(_))
             && let State::Sides(d) = std::mem::take(&mut self.state)
         {
             return d.cancel();
         }
-        if key == ToolKey::Escape
-            && matches!(self.state, State::NineSlice(_))
-            && let State::NineSlice(d) = std::mem::take(&mut self.state)
-        {
-            return d.cancel();
-        }
+
         if key == ToolKey::Escape && matches!(self.state, State::Loaded { .. }) {
             self.state = State::Idle;
             return vec![];
@@ -945,20 +952,27 @@ impl Tool for SelectionTool {
         out
     }
 
-    /// Switching tools during a drag of a blend widget, a corner widget, a pie widget, a
-    /// polygon's side widget, a mirror axis, a grid or radial repeat's handles or an Image Trace
-    /// divider cancels it, as Escape does: its value goes back.
+    /// Switching tools during a drag of a widget (a blend, corner, pie or side widget, an Objects on
+    /// Path widget or a bracket of type on a path) cancels it, as Escape does: its value goes back.
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         match std::mem::take(&mut self.state) {
             State::BlendWidget(d) if d.adjusting() => vec![Action::Cancel],
             State::Corner(c) if c.adjusting() => vec![Action::Cancel],
             State::Pie(d) if d.adjusting() => vec![Action::Cancel],
+            State::RotateAll(d) if d.adjusting() => vec![Action::Cancel],
+            State::Space(d) if d.adjusting() => vec![Action::Cancel],
+            State::MoveAll(d) if d.adjusting() => vec![Action::Cancel],
+            State::Member(d) if d.adjusting() => vec![Action::Cancel],
+            State::Bracket(b) if b.adjusting() => vec![Action::Cancel],
             State::Sides(d) => d.cancel(),
-            State::Mirror(d) => d.cancel(),
-            State::GridRepeat(d) => d.cancel(),
-            State::RadialRepeat(d) => d.cancel(),
-            State::TraceSplit(d) => d.cancel(),
-            State::BlendWidget(_) | State::Corner(_) | State::Pie(_) => vec![],
+            State::BlendWidget(_)
+            | State::Corner(_)
+            | State::Pie(_)
+            | State::RotateAll(_)
+            | State::Space(_)
+            | State::MoveAll(_)
+            | State::Member(_)
+            | State::Bracket(_) => vec![],
             other => {
                 self.state = other;
                 vec![]
@@ -971,9 +985,7 @@ impl Tool for SelectionTool {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
             State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
             State::BlendWidget(_) => matches!(key, ToolKey::Up | ToolKey::Down | ToolKey::Left | ToolKey::Right),
-            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::RadialRepeat(_) | State::TraceSplit(_) | State::NineSlice(_) => {
-                key == ToolKey::Escape
-            }
+            State::Loaded { .. } => key == ToolKey::Escape,
             _ => false,
         }
     }
@@ -1014,10 +1026,7 @@ impl Tool for SelectionTool {
             State::MoveAll(d) => d.adjusting(),
             State::Member(d) => d.adjusting(),
             State::Bracket(b) => b.adjusting(),
-            State::Mirror(d) => d.adjusting(),
-            State::GridRepeat(d) => d.adjusting(),
-            State::RadialRepeat(d) => d.adjusting(),
-            State::TraceSplit(d) => d.adjusting(),
+
             _ => false,
         }
     }
@@ -1026,6 +1035,7 @@ impl Tool for SelectionTool {
     /// the art; the drags then move, scale, rotate, marquee or drag what it took.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.note_loaded_at_press(ev.kind);
+        let released_away = self.note_held_at(ev);
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
         self.bracket_hover = hovering.then_some(ev.pos);
         self.alt_hover = hovering && ev.mods.alt;
@@ -1033,15 +1043,6 @@ impl Tool for SelectionTool {
         if let State::Loaded { from, before, press } = self.state
             && let Some(out) = self.loaded(cx, ev, from, before, press)
         {
-            return out;
-        }
-        // The edited symbol's 9-slice guides take precedence over every other control and the art.
-        if let Some(out) = self.nine_slice_guides(cx, ev) {
-            return out;
-        }
-        // Mirror and grid repeat controls take precedence over art and ruler guides; the mirror
-        // axis line and the grid's controls yield to the bounding-box handles they overlap.
-        if let Some(out) = self.repeat_controls(cx, ev) {
             return out;
         }
         if let Some(out) = self.guide.pointer(cx, ev) {
@@ -1181,7 +1182,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Corner(c)) => {
                 self.state = State::Idle;
-                c.finish()
+                released(c, released_away, |c| c.drag(cx, p), CornerDrag::finish)
             }
             (PointerKind::Drag, State::Pie(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1190,7 +1191,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Pie(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), PieDrag::finish)
             }
             (PointerKind::Drag, State::Sides(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1210,7 +1211,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::BlendWidget(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), BlendWidgetDrag::finish)
             }
             (PointerKind::Drag, State::RotateAll(mut d)) => {
                 let out = d.drag(cx, p, m.shift);
@@ -1219,7 +1220,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::RotateAll(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p, m.shift), RotateAllDrag::finish)
             }
             (PointerKind::Drag, State::Space(mut d)) => {
                 let out = d.drag(cx, p, m.alt);
@@ -1228,7 +1229,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Space(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p, m.alt), SpaceDrag::finish)
             }
             (PointerKind::Drag, State::MoveAll(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1237,7 +1238,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::MoveAll(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), MoveAllDrag::finish)
             }
             (PointerKind::Drag, State::Member(mut d)) => {
                 let out = d.drag(cx, p);
@@ -1246,7 +1247,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Member(d)) => {
                 self.state = State::Idle;
-                d.finish()
+                released(d, released_away, |d| d.drag(cx, p), MemberDrag::finish)
             }
             (PointerKind::Drag, State::Bracket(mut b)) => {
                 let out = b.drag(cx, p, m.cmd);
@@ -1255,7 +1256,7 @@ impl Tool for SelectionTool {
             }
             (PointerKind::Up, State::Bracket(b)) => {
                 self.state = State::Idle;
-                b.finish()
+                released(b, released_away, |b| b.drag(cx, p, m.cmd), BracketDrag::finish)
             }
             (PointerKind::Up, State::Moving { began, deselect, key, exclude, .. }) => {
                 self.release_move(cx, ev.backquote, began, deselect, key, exclude)
@@ -1341,32 +1342,6 @@ impl Tool for SelectionTool {
     /// The pointer for the drag in progress, else the one for what a press would take: a widget,
     /// a ruler guide, the box's handles or rotate zone, a selected object's centre point or the art.
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
-        if let State::Mirror(d) = &self.state {
-            return d.cursor(cx, p);
-        }
-        if let State::GridRepeat(d) = &self.state {
-            return d.cursor(cx);
-        }
-        if let State::RadialRepeat(d) = &self.state {
-            return d.cursor(cx);
-        }
-        if let State::TraceSplit(d) = &self.state {
-            return d.cursor(cx);
-        }
-        if matches!(self.state, State::NineSlice(_)) || (matches!(self.state, State::Idle) && crate::nineslice::over_guide(cx, p)) {
-            return Cursor::Move;
-        }
-        if matches!(self.state, State::Idle)
-            && !m.cmd
-            && !m.ctrl
-            && !m.alt
-            && let Some(cursor) = crate::mirror::cursor(cx, p)
-                .or_else(|| crate::repeat_grid::cursor(cx, p))
-                .or_else(|| crate::repeat_radial::cursor(cx, p))
-                .or_else(|| crate::trace_split::cursor(cx, p))
-        {
-            return cursor;
-        }
         match self.state {
             State::Rotating { center, .. } => return Cursor::rotate_about_in_view(center, p, cx.view_angle()),
             State::Scaling { handle, bx, .. } => return handle_cursor(handle, bx.angle - cx.view_angle()),
@@ -1647,136 +1622,6 @@ impl SelectionTool {
         }
     }
 
-    /// A press on a 9-slice guide of the edited symbol starts dragging it; the drag and the
-    /// release go to it.
-    fn nine_slice_guides(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
-        if let State::NineSlice(mut d) = self.state.clone() {
-            return Some(match ev.kind {
-                PointerKind::Drag => {
-                    let out = d.drag(cx, ev.pos);
-                    self.state = State::NineSlice(d);
-                    out
-                }
-                PointerKind::Up => {
-                    self.state = State::Idle;
-                    d.finish()
-                }
-                _ => vec![],
-            });
-        }
-        if !matches!(self.state, State::Idle) {
-            return None;
-        }
-        match ev.kind {
-            PointerKind::Down => {
-                let d = crate::nineslice::GuideDrag::hit(cx, ev)?;
-                self.state = State::NineSlice(d);
-                self.hover = None;
-                Some(vec![])
-            }
-            // The clicks of a double-click on a guide belong to it: it neither edits the art nor
-            // leaves symbol editing mode.
-            PointerKind::DoubleClick if crate::nineslice::over_guide(cx, ev.pos) => Some(vec![]),
-            _ => None,
-        }
-    }
-
-    fn repeat_controls(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Option<Vec<Action>> {
-        if let State::Mirror(mut d) = self.state.clone() {
-            match ev.kind {
-                PointerKind::Drag | PointerKind::Up => {
-                    let mut out = d.drag(cx, ev.pos, ev.mods);
-                    if ev.kind == PointerKind::Up {
-                        out.extend(d.finish());
-                        self.state = State::Idle;
-                    } else {
-                        self.state = State::Mirror(d);
-                    }
-                    return Some(out);
-                }
-                _ => return Some(vec![]),
-            }
-        }
-        if let State::GridRepeat(mut d) = self.state.clone() {
-            match ev.kind {
-                PointerKind::Drag | PointerKind::Up => {
-                    let mut out = d.drag(ev.pos);
-                    if ev.kind == PointerKind::Up {
-                        out.extend(d.finish());
-                        self.state = State::Idle;
-                    } else {
-                        self.state = State::GridRepeat(d);
-                    }
-                    return Some(out);
-                }
-                _ => return Some(vec![]),
-            }
-        }
-        if let State::RadialRepeat(mut d) = self.state.clone() {
-            match ev.kind {
-                PointerKind::Drag | PointerKind::Up => {
-                    let mut out = d.drag(ev.pos);
-                    if ev.kind == PointerKind::Up {
-                        out.extend(d.finish());
-                        self.state = State::Idle;
-                    } else {
-                        self.state = State::RadialRepeat(d);
-                    }
-                    return Some(out);
-                }
-                _ => return Some(vec![]),
-            }
-        }
-        if let State::TraceSplit(mut d) = self.state.clone() {
-            match ev.kind {
-                PointerKind::Drag | PointerKind::Up => {
-                    let mut out = d.drag(cx, ev.pos);
-                    if ev.kind == PointerKind::Up {
-                        out.extend(d.finish());
-                        self.state = State::Idle;
-                    } else {
-                        self.state = State::TraceSplit(d);
-                    }
-                    return Some(out);
-                }
-                _ => return Some(vec![]),
-            }
-        }
-        if matches!(self.state, State::Idle)
-            && ev.kind == PointerKind::Down
-            && let Some(d) = crate::mirror::MirrorDrag::hit(cx, ev.pos, ev.mods)
-        {
-            self.state = State::Mirror(d);
-            self.hover = None;
-            return Some(vec![]);
-        }
-        if matches!(self.state, State::Idle)
-            && ev.kind == PointerKind::Down
-            && let Some(d) = crate::repeat_grid::GridDrag::hit(cx, ev.pos, ev.mods)
-        {
-            self.state = State::GridRepeat(d);
-            self.hover = None;
-            return Some(vec![]);
-        }
-        if matches!(self.state, State::Idle)
-            && ev.kind == PointerKind::Down
-            && let Some(d) = crate::repeat_radial::RadialDrag::hit(cx, ev.pos, ev.mods)
-        {
-            self.state = State::RadialRepeat(d);
-            self.hover = None;
-            return Some(vec![]);
-        }
-        if matches!(self.state, State::Idle)
-            && ev.kind == PointerKind::Down
-            && let Some(d) = crate::trace_split::SplitDrag::hit(cx, ev.pos, ev.mods)
-        {
-            self.state = State::TraceSplit(d);
-            self.hover = None;
-            return Some(vec![]);
-        }
-        None
-    }
-
     fn double_click(&mut self, cx: &ToolContext, p: Point, m: Mods) -> Vec<Action> {
         self.state = State::Idle;
         // A threaded port: the thread breaks there. Any other port takes the double-click
@@ -1791,10 +1636,6 @@ impl SelectionTool {
         }
         if let Some(a) = corners::double_click(cx, p, false).or_else(|| pie::double_click(cx, p)).or_else(|| typewidget::double_click(cx, p)) {
             return vec![a];
-        }
-        // The Shaper Group's mode widget answers each click of a double-click on it.
-        if shaperwidget::over_widget(cx, p) {
-            return vec![];
         }
         if let Some(a) = release_guide_at(cx, p, m) {
             return vec![a];
@@ -1877,10 +1718,6 @@ impl SelectionTool {
         if let Some(b) = BracketDrag::hit(cx, ev) {
             self.state = State::Bracket(b);
             return Some(vec![]);
-        }
-        if let Some(a) = shaperwidget::click(cx, p) {
-            self.state = State::Idle;
-            return Some(vec![a]);
         }
         // The type widget answers a double-click only: its clicks neither drag nor deselect.
         if typewidget::over_widget(cx, p) {
@@ -1980,6 +1817,10 @@ impl SelectionTool {
         self.state = State::Moving { start, press, hold, grip, began: true, deselect: None, key: None, exclude: None };
         self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
         let mut params = json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt });
+        // An Alt-drag copy follows Draw Behind.
+        if m.alt {
+            params["drawBehind"] = json!(true);
+        }
         if backquote {
             params["objects"] = json!(false);
             params["patterns"] = json!(true);

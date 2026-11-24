@@ -206,6 +206,7 @@
 	Anti-alias Rasters	Сглаживать растровые изображения
 	Anti-aliased Artwork	Сглаженный рисунок
 	Anti-aliasing Method	Метод сглаживания
+@id	language.name	Русский
 antiAlias	Sharp	Резкое
 	Crisp	Чёткое
 	Strong	Сильное
@@ -5170,7 +5171,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	PDF settings are not an object	параметры PDF не являются объектом
 @msg	PDF security settings are not an object	параметры безопасности PDF не являются объектом
 @msg	PDF writer error: {0}	ошибка записи PDF: {0}
-@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файлов: {n} в {folder} ({note})
+@msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файлов: {n} в {folder} ({note})|Упаковано файлов: {n} в {folder} ({note})|Упаковано файлов: {n} в {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Просмотр в браузере требует настольного приложения (web-версия скачивает файлы)
 @msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	укажите `desiredK`, желаемый размер файла в K (1024 байта): число больше 0 и не больше 1048576
 @msg	`startWith` is `current` or `auto`	`startWith` принимает значения `current` или `auto`
@@ -6889,9 +6890,9 @@ lighting	Light	Свет
 	Slope:	Уклон:
 axis	X Axis	Ось X
 axis	Y Axis	Ось Y
-@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файлов: {n} в {folder}
-@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файлов: {n} {note}
-@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файлов: {n}
+@msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файлов: {n} в {folder}|Упаковано файлов: {n} в {folder}|Упаковано файлов: {n} в {folder}
+@msgplural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файлов: {n} {note}|Упаковано файлов: {n} {note}|Упаковано файлов: {n} {note}
+@msgplural	Packaged {n} file|Packaged {n} files	Упаковано файлов: {n}|Упаковано файлов: {n}|Упаковано файлов: {n}
 @plural	Packaged {n} file|Packaged {n} files	Упаковано файлов: {n}|Упаковано файлов: {n}|Упаковано файлов: {n}
 @plural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	Упаковано файлов: {n} в {folder}|Упаковано файлов: {n} в {folder}|Упаковано файлов: {n} в {folder}
 @plural	Packaged {n} file {note}|Packaged {n} files {note}	Упаковано файлов: {n} {note}|Упаковано файлов: {n} {note}|Упаковано файлов: {n} {note}
@@ -6943,7 +6944,7 @@ axis	Y Axis	Ось Y
 @msg	module is {_1} bytes (limit {_2})	модуль занимает {_1} байт (предел {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	требуется одобрение: он запрашивает {0}, что пользователь разрешает при отдельной установке
 @msg	not JSON: {e}	не JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	не двоичный файл WebAssembly (нет заголовка \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	не двоичный файл WebAssembly (нет заголовка \\0asm)
 @msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	у типа функции больше параметров, чем допускает предел ({MAX_FUNC_TYPE_VALUES})
 @msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	у типа функции больше результатов, чем допускает предел ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	параметр `{k}`: {what}

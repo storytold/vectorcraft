@@ -208,6 +208,7 @@
 	Anti-alias Rasters	Suavizar imágenes ráster
 	Anti-aliased Artwork	Ilustración suavizada
 	Anti-aliasing Method	Método de suavizado
+@id	language.name	Español
 antiAlias	Sharp	Nítido
 	Crisp	Definido
 	Strong	Fuerte
@@ -7297,7 +7298,7 @@ axis	Y Axis	Eje Y
 @msg	module is {_1} bytes (limit {_2})	el módulo ocupa {_1} bytes (límite {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	requiere aprobación: pide {0}, que el usuario concede al instalarlo por separado
 @msg	not JSON: {e}	no es JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	no es un binario WebAssembly (falta el encabezado \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	no es un binario WebAssembly (falta el encabezado \\0asm)
 @msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipo de función supera el límite de {MAX_FUNC_TYPE_VALUES} parámetros
 @msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipo de función supera el límite de {MAX_FUNC_TYPE_VALUES} resultados
 @msg	parameter `{k}`: {what}	parámetro `{k}`: {what}

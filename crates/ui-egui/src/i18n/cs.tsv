@@ -36,6 +36,7 @@
 	Quit VectorCraft	Ukončit VectorCraft
 # Artwork drag between document tabs.
 	Drop Artwork	Umístit grafiku
+@id	language.name	Čeština
 @msg	{key} must be [x, y] with finite coordinates	{key} musí být [x, y] s konečnými souřadnicemi
 @msg	ids must contain 1–10000 object ids	ids musí obsahovat 1–10000 identifikátorů objektů
 
@@ -7322,7 +7323,7 @@ axis	Y Axis	osa Y
 @msg	module is {_1} bytes (limit {_2})	modul má {_1} bajtů (limit {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	vyžaduje schválení: žádá o {0}, což uživatel povolí, když ho instaluje samostatně
 @msg	not JSON: {e}	není JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	není binární soubor WebAssembly (chybí hlavička \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	není binární soubor WebAssembly (chybí hlavička \\0asm)
 @msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	typ funkce má více parametrů, než dovoluje limit ({MAX_FUNC_TYPE_VALUES})
 @msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	typ funkce má více výsledků, než dovoluje limit ({MAX_FUNC_TYPE_VALUES})
 @msg	parameter `{k}`: {what}	parametr `{k}`: {what}
@@ -8978,7 +8979,7 @@ breakText	Glyphs	Glyfy
 @msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Profil {name} nešlo přečíst, takže nový dokument má výchozí nastavení: {reason}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Přesah barev: více než {_1} dvojic objektů leží dost blízko pro přesah, nebo příliš mnoho objektů sdílí vodorovný rozsah; zpracujte najednou méně objektů
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Rámeček a linie pro vybírání: mimo kresbu se nevejde žádná linie pro vybírání a rámeček je vypnutý
-@msg	\ at end of pattern	\ na konci vzoru
+@msg	\\ at end of pattern	\\ na konci vzoru
 @msg	`alignOn` cannot be empty	`alignOn` nesmí být prázdné
 @msg	`alignOn` must be a string	`alignOn` musí být řetězec
 @msg	`align` is start, center or end	`align` je start, center nebo end
@@ -9303,7 +9304,7 @@ breakText	Glyphs	Glyfy
 @msg	a CMap has too many mappings	CMap má příliš mnoho mapování
 @msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	výkres DXF má jeden počátek: předejte useArtboards: true pro jeden výkres na každou pracovní plochu
 @msg	a PDF presets file with over {_1} presets	soubor přednastavení PDF s více než {_1} přednastaveními
-@msg	a \u escape needs four hexadecimal digits	sekvence \u vyžaduje čtyři šestnáctkové číslice
+@msg	a \\u escape needs four hexadecimal digits	sekvence \\u vyžaduje čtyři šestnáctkové číslice
 @msg	a batch preview cannot switch documents	náhled dávky nemůže přepínat dokumenty
 @msg	a brush named `{nn}` exists	štětec s názvem `{nn}` už existuje
 @msg	a comma in an XPath expression must separate function arguments	čárka ve výrazu XPath musí oddělovat argumenty funkce
@@ -10028,7 +10029,7 @@ breakText	Glyphs	Glyfy
 @msg	not a regular expression	nejde o regulární výraz
 @msg	not a stored or deflated central record	nejde o uložený ani komprimovaný centrální záznam
 @msg	not a valid SVGZ file: {e}	nejde o platný soubor SVGZ: {e}
-@msg	not an RTF file: it doesn't start with {\rtf	nejde o soubor RTF: nezačíná na {\rtf
+@msg	not an RTF file: it doesn't start with {\\rtf	nejde o soubor RTF: nezačíná na {\\rtf
 @msg	not an action set: the text doesn't start with /version and a number	nejde o sadu akcí: text nezačíná na /version a číslo
 @msg	not an image VectorCraft reads (see document.formats)	nejde o obrázek, který VectorCraft čte (viz document.formats)
 @msg	not area type (text in a frame) outside perspective	nejde o text v oblasti (text v rámci) mimo perspektivu

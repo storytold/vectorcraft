@@ -10,7 +10,13 @@ fn session() -> Session {
 }
 
 /// Point text, outlined: the id of the outlines' group.
-fn outlined(s: &mut Session, p: serde_json::Value) -> u64 {
+fn outlined(s: &mut Session, mut p: serde_json::Value) -> u64 {
+    // A text without a font is set in the system's default face, which differs from machine to
+    // machine and decides which glyphs a near match can tell apart.
+    if p.get("font").is_none() {
+        p["font"] = json!("Source Sans 3");
+        p["style"] = json!("Regular");
+    }
     let id = s.execute("text.create", &p).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [id]})).unwrap();
     s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap()
@@ -84,7 +90,7 @@ fn a_drawn_shape_is_reported_and_left_alone() {
     let g = outlined(&mut s, json!({"x": 40, "y": 200, "text": "AB", "size": 40}));
     s.execute("select.set", &json!({"ids": [g]})).unwrap();
     let before = s.doc().unwrap().doc.clone();
-    for bad in [json!("Source Sans 3"), json!([1]), json!({"family": "x"})] {
+    for bad in [json!("Source Sans 3"), json!([1]), json!({"family": "x"}), json!(null)] {
         let e = s.execute("type.retype", &json!({"fonts": bad})).unwrap_err().to_string();
         assert!(e.contains("fonts must be a list of family names"), "{e}");
     }
@@ -115,7 +121,7 @@ fn two_words_keep_their_space() {
 
 #[test]
 fn craft_fonts_glyphs_retype_too() {
-    let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.is_japanese()) else {
+    let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.has_script("Jpan")) else {
         eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
         return;
     };
@@ -539,6 +545,118 @@ fn a_long_tracked_line_is_checked_in_time() {
     eprintln!("450 tracked glyphs: {:?}, {} objects", t0.elapsed(), texts.len());
 }
 
+/// Every path in the document flattened into lines `tol` from its curves, each contour started at
+/// its second point and run backwards: outlines simplified and built nothing like the font's.
+fn simplify_every_path(s: &mut Session, tol: f64) {
+    let mut ids = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. }) {
+            ids.push(n.id);
+        }
+    });
+    simplify_paths(s, &ids, tol);
+}
+
+/// [`simplify_every_path`] for the paths `ids` only.
+fn simplify_paths(s: &mut Session, ids: &[NodeId], tol: f64) {
+    s.edit("test", |d, _| {
+        for id in ids {
+            let data = d.node_mut(*id).unwrap().path_data_mut().unwrap();
+            let mut contours: Vec<Vec<kurbo::Point>> = vec![];
+            kurbo::flatten(data.to_bezpath().iter(), tol, |el| match el {
+                kurbo::PathEl::MoveTo(q) => contours.push(vec![q]),
+                kurbo::PathEl::LineTo(q) => contours.last_mut().unwrap().push(q),
+                _ => {}
+            });
+            let mut out = kurbo::BezPath::new();
+            for mut c in contours {
+                if c.len() > 1 && c.first() == c.last() {
+                    c.pop();
+                }
+                c.rotate_left(1);
+                c.reverse();
+                out.move_to(c[0]);
+                for q in &c[1..] {
+                    out.line_to(*q);
+                }
+                out.close_path();
+            }
+            *data = vectorcraft_geom::PathData::from_bezpath(&out);
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn simplified_outlines_retype_only_with_a_tolerance_and_report_their_score() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Rag", "size": 40, "font": "Source Sans 3", "style": "Regular"}));
+    simplify_every_path(&mut s, 0.05);
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("no selected shape matches"), "no exact match: {e}");
+    for bad in [json!(-0.01), json!(0.06), json!("0.02"), json!(true), json!(null)] {
+        let e = s.execute("type.retype", &json!({"tolerance": bad})).unwrap_err().to_string();
+        assert!(e.contains("tolerance must be a number from 0 to 0.05"), "{e}");
+    }
+    assert!(s.doc().unwrap().doc == before, "nothing changes");
+    let r = s.execute("type.retype", &json!({"tolerance": 0.02})).unwrap();
+    assert_eq!(r["texts"], json!(["Rag"]), "{r}");
+    assert_eq!(r["unmatched"], json!([]));
+    assert_eq!((r["fonts"][0]["family"].as_str(), r["fonts"][0]["style"].as_str()), (Some("Source Sans 3"), Some("Regular")));
+    let score = r["fonts"][0]["score"].as_f64().unwrap();
+    assert!(score > 0.5 && score < 1.0, "a near match scores below an exact one: {score}");
+    let t = text_of(&s, r["ids"][0].as_u64().unwrap());
+    assert!(near(t.first_style().size, 40.0, 0.4), "size {}", t.first_style().size);
+    let o = t.xf.translation();
+    assert!(near(o.x, 40.0, 0.4) && near(o.y, 100.0, 0.4), "baseline start {o:?}");
+}
+
+#[test]
+fn exact_matches_score_one() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Rag", "size": 40}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({"tolerance": 0.02})).unwrap();
+    assert_eq!(r["texts"], json!(["Rag"]), "{r}");
+    assert_eq!(r["fonts"][0]["score"], json!(1.0));
+}
+
+#[test]
+fn exact_matches_with_a_small_leftover_still_score_one() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Rag", "size": 40}));
+    // Each glyph stretched 0.1% across its own centre: still within the exact matcher's reach, with
+    // a leftover distance above 0.
+    let mut ids = vec![];
+    s.doc().unwrap().doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. }) {
+            ids.push(n.id);
+        }
+    });
+    s.edit("test", |d, _| {
+        for id in &ids {
+            let data = d.node_mut(*id).unwrap().path_data_mut().unwrap();
+            let p = data.to_bezpath();
+            let c = kurbo::Shape::bounding_box(&p).center();
+            let xf = kurbo::Affine::translate(c.to_vec2()) * kurbo::Affine::scale_non_uniform(1.001, 1.0) * kurbo::Affine::translate(-c.to_vec2());
+            *data = vectorcraft_geom::PathData::from_bezpath(&(xf * p));
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    // Each glyph's size now differs a little, so each is its own line.
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert_eq!(texts.concat(), "Rag", "{r}");
+    for f in r["fonts"].as_array().unwrap() {
+        assert_eq!(f["score"], json!(1.0), "{r}");
+    }
+}
+
 #[test]
 fn two_overlapping_lone_glyphs_beside_art_stay_outlines() {
     // Two M outlines start 0.3 em apart, closer than the first one's advance: a tight-tracking
@@ -580,6 +698,55 @@ fn assert_same_places(a: &TextObject, b: &TextObject) {
     assert_eq!(pa.len(), pb.len());
     for (x, y) in pa.iter().zip(&pb) {
         assert!(x.distance(*y) < 0.05, "{x:?} vs {y:?}");
+    }
+}
+
+#[test]
+fn exact_glyphs_of_another_size_are_another_line_even_with_a_tolerance() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Tia", "size": 40}));
+    // The a (two contours, so not a lone one-contour glyph) made 4% larger about where it starts
+    // on the baseline: still exactly the glyph.
+    let a = *children_of(&s, g).last().unwrap();
+    // The a's paths (a compound path's, or its own).
+    let paths: Vec<u64> = match s.doc().unwrap().doc.node(NodeId(a)).unwrap().children() {
+        Some(c) => c.iter().map(|c| c.id.0).collect(),
+        None => vec![a],
+    };
+    s.edit("test", |d, _| {
+        let x0 = paths
+            .iter()
+            .map(|id| kurbo::Shape::bounding_box(&d.node_mut(NodeId(*id)).unwrap().path_data_mut().unwrap().to_bezpath()).x0)
+            .fold(f64::INFINITY, f64::min);
+        let at = kurbo::Vec2::new(x0, 100.0);
+        let xf = kurbo::Affine::translate(at) * kurbo::Affine::scale(1.04) * kurbo::Affine::translate(-at);
+        for id in &paths {
+            let data = d.node_mut(NodeId(*id)).unwrap().path_data_mut().unwrap();
+            *data = vectorcraft_geom::PathData::from_bezpath(&(xf * data.to_bezpath()));
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({"tolerance": 0.05})).unwrap();
+    assert_eq!(r["texts"], json!(["Ti", "a"]), "{r}");
+    let sizes: Vec<f64> = r["fonts"].as_array().unwrap().iter().map(|f| f["size"].as_f64().unwrap()).collect();
+    assert!(near(sizes[0], 40.0, 0.01) && near(sizes[1], 41.6, 0.01), "{sizes:?}");
+    assert!(r["fonts"].as_array().unwrap().iter().all(|f| f["score"] == json!(1.0)), "{r}");
+}
+
+#[test]
+fn turned_near_matched_round_glyphs_keep_the_line_turn() {
+    // Round glyphs (o, O, the period) and glyphs that look alike half round (N, x, z) fit
+    // simplified outlines at more than one turn: each takes the turn of its line.
+    for (text, rotation) in [("no.", 90), ("no.", 180), ("zoo", 135), ("NOON", 180), ("xoxo", 200), ("on", 120)] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 300, "y": 200, "text": text, "size": 40, "rotation": rotation}));
+        simplify_every_path(&mut s, 0.05);
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        let r = s.execute("type.retype", &json!({"tolerance": 0.02})).unwrap();
+        assert_eq!(r["texts"], json!([text]), "turned {rotation}: {r}");
+        assert_eq!(r["unmatched"], json!([]), "{r}");
     }
 }
 
@@ -871,6 +1038,688 @@ fn spaced_letters_keep_their_spaces_when_type_draws_them() {
 }
 
 #[test]
+fn a_near_glyph_moved_by_more_than_the_tolerance_ends_the_line() {
+    // The m (one path) of simplified outlines moved along the baseline by `shift` of the font
+    // size (40), retyped with a tolerance of 0.03: it may sit 1% + 3% of the size from where the
+    // type draws it.
+    let run = |shift: f64| {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Tim", "size": 40}));
+        simplify_every_path(&mut s, 0.05);
+        let m = *children_of(&s, g).last().unwrap();
+        s.edit("test", |d, _| {
+            let data = d.node_mut(NodeId(m)).unwrap().path_data_mut().unwrap();
+            *data = vectorcraft_geom::PathData::from_bezpath(&(kurbo::Affine::translate((40.0 * shift, 0.0)) * data.to_bezpath()));
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        let r = s.execute("type.retype", &json!({"tolerance": 0.03})).unwrap();
+        let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
+        assert_eq!(texts.concat(), "Tim", "{r}");
+        texts.len()
+    };
+    assert_eq!(run(0.02), 1, "within the tolerance: one line");
+    assert!(run(0.06) > 1, "past it: the line splits where the m was moved");
+}
+
+/// The bounding box of shape `id` (a path, or a compound path's paths), in document space.
+fn shape_box(s: &Session, id: u64) -> kurbo::Rect {
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(NodeId(id)).unwrap();
+    let paths: Vec<&vectorcraft_doc::Node> = match n.children() {
+        Some(c) => c.iter().map(|c| &**c).collect(),
+        None => vec![n],
+    };
+    paths
+        .iter()
+        .filter_map(|p| match &p.kind {
+            NodeKind::Path { path, .. } => Some(kurbo::Shape::bounding_box(&path.to_bezpath())),
+            _ => None,
+        })
+        .reduce(|a, b| a.union(b))
+        .unwrap()
+}
+
+/// The bounding box of each glyph with ink that type `t` draws, in document space.
+fn drawn_boxes(t: &TextObject) -> Vec<kurbo::Rect> {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| kurbo::Shape::bounding_box(&(t.xf * g.outline.clone()))).collect()
+}
+
+#[test]
+fn a_near_glyph_whose_size_and_turn_differ_past_the_tolerance_ends_the_line() {
+    // The m of simplified outlines made 4% larger, and turned 0.04 radians as well, about where it
+    // starts on the baseline, retyped with a tolerance of 0.05. Each change alone is within the
+    // size and turn a near-matched line allows, but drawn at the line's size and turn the m would
+    // lie further than 0.05 of its spread from its outline: it becomes type of its own. Larger
+    // alone, it is still within the tolerance and stays on the line.
+    for (scale, turn, lines) in [(1.04, 0.0, 1), (1.04, 0.04, 2)] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Tim", "size": 40}));
+        simplify_every_path(&mut s, 0.05);
+        let kids = children_of(&s, g);
+        let m = *kids.last().unwrap();
+        let x0 = shape_box(&s, m).x0;
+        s.edit("test", |d, _| {
+            let at = kurbo::Vec2::new(x0, 100.0);
+            let xf = kurbo::Affine::translate(at) * kurbo::Affine::rotate(turn) * kurbo::Affine::scale(scale) * kurbo::Affine::translate(-at);
+            let data = d.node_mut(NodeId(m)).unwrap().path_data_mut().unwrap();
+            *data = vectorcraft_geom::PathData::from_bezpath(&(xf * data.to_bezpath()));
+            Ok(())
+        })
+        .unwrap();
+        let before: Vec<kurbo::Rect> = kids.iter().map(|k| shape_box(&s, *k)).collect();
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        let r = s.execute("type.retype", &json!({"tolerance": 0.05})).unwrap();
+        let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+        assert_eq!(texts.concat(), "Tim", "{r}");
+        assert_eq!(texts.len(), lines, "scale {scale}, turn {turn}: {r}");
+        if lines == 1 {
+            continue;
+        }
+        let drawn: Vec<kurbo::Rect> = r["ids"].as_array().unwrap().iter().flat_map(|id| drawn_boxes(&text_of(&s, id.as_u64().unwrap()))).collect();
+        assert_eq!(drawn.len(), before.len(), "{r}");
+        for b in &before {
+            // The glyph drawn nearest where the outline was.
+            let d = drawn.iter().min_by(|p, q| p.center().distance(b.center()).total_cmp(&q.center().distance(b.center()))).unwrap();
+            let size = b.width().hypot(b.height());
+            assert!(
+                (d.width() - b.width()).abs() < size * 0.01 && (d.height() - b.height()).abs() < size * 0.01,
+                "scale {scale}, turn {turn}: the outline's box {b:?}, the type's {d:?}: {r}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_exact_glyph_moved_splits_the_line_whatever_the_tolerance() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Tim", "size": 40}));
+    let m = *children_of(&s, g).last().unwrap();
+    s.edit("test", |d, _| {
+        let data = d.node_mut(NodeId(m)).unwrap().path_data_mut().unwrap();
+        *data = vectorcraft_geom::PathData::from_bezpath(&(kurbo::Affine::translate((40.0 * 0.03, 0.0)) * data.to_bezpath()));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({"tolerance": 0.05})).unwrap();
+    assert_eq!(r["texts"], json!(["Ti", "m"]), "exact glyphs keep the exact limits: {r}");
+}
+
+#[test]
+fn an_exact_glyph_after_a_near_one_keeps_the_exact_limits() {
+    // T exact, o simplified (a near match), m exact moved by 3% of the size along the baseline.
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Tom", "size": 40}));
+    let kids = children_of(&s, g);
+    let o: Vec<NodeId> = match s.doc().unwrap().doc.node(NodeId(kids[1])).unwrap().children() {
+        Some(c) => c.iter().map(|c| c.id).collect(),
+        None => vec![NodeId(kids[1])],
+    };
+    simplify_paths(&mut s, &o, 0.05);
+    let m = kids[2];
+    s.edit("test", |d, _| {
+        let data = d.node_mut(NodeId(m)).unwrap().path_data_mut().unwrap();
+        *data = vectorcraft_geom::PathData::from_bezpath(&(kurbo::Affine::translate((40.0 * 0.03, 0.0)) * data.to_bezpath()));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({"tolerance": 0.05})).unwrap();
+    assert_eq!(r["texts"], json!(["To", "m"]), "the near o does not loosen the m's limits: {r}");
+}
+
+/// The outlines of `text` made into one compound path: the compound's id.
+fn one_compound(s: &mut Session, text: &str) -> u64 {
+    let g = outlined(s, json!({"x": 40, "y": 100, "text": text, "size": 40}));
+    let glyphs = children_of(s, g);
+    s.execute("select.set", &json!({"ids": glyphs})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap()
+}
+
+#[test]
+fn a_word_outlined_as_one_compound_path_splits_into_its_glyphs() {
+    let mut s = session();
+    let c = one_compound(&mut s, "Tim");
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["Tim"]), "the i's stem and dot are one glyph: {r}");
+    assert_eq!(r["unmatched"], json!([]));
+    assert!(s.doc().unwrap().doc.node(NodeId(c)).is_none(), "the compound becomes the type");
+}
+
+#[test]
+fn a_lone_period_in_a_compound_selected_alone_stays_an_outline() {
+    let mut s = session();
+    // An A and, far below it, a period, made into one compound path and selected alone: the
+    // period, alone on its baseline beside the A, is a dot as much as a period, so it stays an
+    // outline, and so does the A in the same compound.
+    let t = outlined(&mut s, json!({"x": 40, "y": 100, "text": "A", "size": 40}));
+    let dot = outlined(&mut s, json!({"x": 40, "y": 300, "text": ".", "size": 40}));
+    let mut ids = children_of(&s, t);
+    ids.extend(children_of(&s, dot));
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = match s.execute("type.retype", &json!({})) {
+        Ok(r) => panic!("the period became type: {r}"),
+        Err(e) => e.to_string(),
+    };
+    assert!(e.contains("(1 checked)"), "{e}");
+    assert!(s.doc().unwrap().doc == before, "nothing changes");
+}
+
+#[test]
+fn lines_from_one_compound_path_keep_their_order() {
+    let mut s = session();
+    // Two lines of outlines made into one compound path, farther apart than the lines of one
+    // paragraph, so each stays an object of its own.
+    let top = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Tim", "size": 40}));
+    let low = outlined(&mut s, json!({"x": 40, "y": 300, "text": "Ham", "size": 40}));
+    let mut glyphs = children_of(&s, top);
+    glyphs.extend(children_of(&s, low));
+    s.execute("select.set", &json!({"ids": glyphs})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let ids: Vec<u64> = r["ids"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 2, "{r}");
+    let texts: Vec<String> = ids.iter().map(|id| text_of(&s, *id).plain_text()).collect();
+    let d = &s.doc().unwrap().doc;
+    let at: Vec<usize> = ids.iter().map(|id| d.position(NodeId(*id)).unwrap().1).collect();
+    // The lines stack in the order of the compound's contours: the first line behind the second.
+    let first = texts.iter().position(|t| t == "Tim").unwrap();
+    let second = texts.iter().position(|t| t == "Ham").unwrap();
+    assert!(at[first] < at[second], "{texts:?} at {at:?}");
+}
+
+#[test]
+fn stacked_lines_from_one_compound_path_become_one_object() {
+    let mut s = session();
+    // Two lines of one paragraph, outlined and made into one compound path: they join as the
+    // lines of separate outlines do.
+    let text = "Tim\nHam";
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": text, "size": 40}));
+    let glyphs = children_of(&s, g);
+    s.execute("select.set", &json!({"ids": glyphs})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!([text]), "{r}");
+    assert_eq!(r["unmatched"], json!([]), "{r}");
+    assert!(s.doc().unwrap().doc.node(NodeId(c)).is_none(), "the compound becomes the type");
+}
+
+#[test]
+fn a_compound_whose_parts_are_not_all_glyphs_stays_whole() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Ti", "size": 40}));
+    let mut ids = children_of(&s, g);
+    // A shape no glyph is, beside the letters, in the same compound.
+    ids.push(s.execute("shape.star", &json!({"cx": 140, "cy": 85, "radius1": 12, "radius2": 5, "points": 7})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("(1 checked)"), "reported once: {e}");
+    assert!(s.doc().unwrap().doc == before, "nothing changes");
+}
+
+#[test]
+fn glyphs_that_overlap_in_an_even_odd_compound_stay_an_outline() {
+    let mut s = session();
+    // Two o's moved onto each other and made into one compound path: the even-odd rule leaves
+    // the overlap unpainted, and two glyphs set side by side would paint it.
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "oo", "size": 40}));
+    let kids = children_of(&s, g);
+    s.execute("object.move", &json!({"ids": [kids[1]], "dx": -9, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": kids})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = match s.execute("type.retype", &json!({})) {
+        Ok(r) => panic!("the overlapping o's became type: {r}"),
+        Err(e) => e.to_string(),
+    };
+    assert!(e.contains("(1 checked)"), "{e}");
+    assert!(s.doc().unwrap().doc == before, "nothing changes");
+}
+
+#[test]
+fn a_translucent_compound_whose_glyphs_overlap_stays_an_outline() {
+    // Two i's, the second moved half onto the first and down off its baseline, made into one
+    // compound path filled by the nonzero rule with every contour running one way: the parts paint
+    // the shape's area, but on two lines they become two objects, and at 50% opacity their
+    // overlap would be painted twice.
+    for opacity in [1.0f32, 0.5] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "ii", "size": 40}));
+        let kids = children_of(&s, g);
+        let dx = shape_box(&s, kids[0]).x0 - shape_box(&s, kids[1]).x0 + 2.0;
+        s.execute("object.move", &json!({"ids": [kids[1]], "dx": dx, "dy": 6})).unwrap();
+        s.execute("select.set", &json!({"ids": kids})).unwrap();
+        let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let paths = children_of(&s, c);
+        s.edit("test", |d, _| {
+            // Make Compound Path turns the second glyph's contours the other way round.
+            for p in &paths {
+                let data = d.node_mut(NodeId(*p)).unwrap().path_data_mut().unwrap();
+                let b = data.to_bezpath();
+                if kurbo::Shape::area(&b) < 0.0 {
+                    *data = vectorcraft_geom::PathData::from_bezpath(&b.reverse_subpaths());
+                }
+            }
+            let n = d.node_mut(NodeId(c)).unwrap();
+            n.opacity = opacity;
+            if let NodeKind::Compound { rule, .. } = &mut n.kind {
+                *rule = vectorcraft_geom::FillRule::NonZero;
+            }
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        let r = s.execute("type.retype", &json!({}));
+        if opacity == 1.0 {
+            let r = r.unwrap();
+            assert_eq!(r["texts"], json!(["i", "i"]), "opaque, the two lines become type: {r}");
+        } else {
+            assert!(r.is_err(), "translucent, the compound stays an outline: {r:?}");
+        }
+    }
+}
+
+#[test]
+fn overlapping_exact_glyphs_stay_an_outline_when_near_matches_are_allowed() {
+    // Exact parts the even-odd rule rejects stay rejected when the near phase finds them again.
+    for dx in [-9.0, -11.0, -12.0, -13.0, -14.0] {
+        let mut s = session();
+        let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "oo", "size": 40}));
+        let kids = children_of(&s, g);
+        s.execute("object.move", &json!({"ids": [kids[1]], "dx": dx, "dy": 0})).unwrap();
+        s.execute("select.set", &json!({"ids": kids})).unwrap();
+        let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        for tolerance in [0.0, 0.05] {
+            if let Ok(r) = s.execute("type.retype", &json!({"tolerance": tolerance})) {
+                panic!("the overlapping o's became type at dx {dx}, tolerance {tolerance}: {r}");
+            }
+        }
+    }
+}
+
+#[test]
+fn exact_parts_of_a_compound_are_checked_at_tolerance_zero() {
+    let mut s = session();
+    // A T and an o whose boxes overlap by 4 units, one painted area apart (the o sits under the
+    // bar's arm): a strip that the probes of tolerance 0.05 cannot see into but those of an exact
+    // match can. Both parts match exactly, so asking for near matches does not change the result.
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "To", "size": 40}));
+    let kids = children_of(&s, g);
+    let (t, o) = (kids[0], kids[1]);
+    let bounds = |s: &Session, id: u64| s.doc().unwrap().doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let dx = bounds(&s, t).x1 - 4.0 - bounds(&s, o).x0;
+    s.execute("object.move", &json!({"ids": [o], "dx": dx, "dy": 0})).unwrap();
+    s.execute("select.set", &json!({"ids": kids})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    for params in [json!({}), json!({"tolerance": 0.05})] {
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let r = s.execute("type.retype", &params).unwrap();
+        assert_eq!(r["unmatched"], json!([]), "{params}: {r}");
+        assert!(s.doc().unwrap().doc.node(NodeId(c)).is_none(), "{params}: the compound becomes type");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc == before, "{params}: undo restores it");
+    }
+}
+
+#[test]
+fn glyphs_side_by_side_in_an_even_odd_compound_still_become_type() {
+    let mut s = session();
+    let c = one_compound(&mut s, "oo");
+    s.execute("select.set", &json!({"ids": [c]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["oo"]), "{r}");
+}
+
+#[test]
+fn a_glyph_with_only_some_contours_turned_in_an_even_odd_compound_still_becomes_type() {
+    // An even-odd compound paints the same whichever way its contours run, so an o's counter may
+    // run the same way as its outer contour: neither the part as it is nor all its contours turned
+    // is the glyph. Filled by the nonzero rule, the same contours paint the o's counter, and the
+    // compound stays an outline.
+    for turned in [1usize, 2] {
+        let mut s = session();
+        let c = one_compound(&mut s, "do");
+        // One path per contour: the d's two, then the o's two.
+        let paths = children_of(&s, c);
+        assert_eq!(paths.len(), 4, "a d and an o are two contours each");
+        let p = paths[paths.len() - turned];
+        s.edit("test", |d, _| {
+            let data = d.node_mut(NodeId(p)).unwrap().path_data_mut().unwrap();
+            *data = vectorcraft_geom::PathData::from_bezpath(&data.to_bezpath().reverse_subpaths());
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [c]})).unwrap();
+        assert!(s.execute("type.retype", &json!({})).is_err(), "nonzero, contour {turned} turned paints the counter");
+        s.execute("path.setFillRule", &json!({"rule": "evenOdd", "ids": [c]})).unwrap();
+        let r = s.execute("type.retype", &json!({})).unwrap();
+        assert_eq!(r["texts"], json!(["do"]), "contour {turned} turned: {r}");
+        assert_eq!(r["unmatched"], json!([]), "{r}");
+    }
+}
+
+#[test]
+fn a_compound_whose_glyph_stays_an_outline_keeps_its_other_glyphs_too() {
+    let mut s = session();
+    // An A (two contours), and far below it a period: a lone one-contour glyph beside other
+    // shapes stays an outline, so the A, in the same compound, must stay too.
+    let t = outlined(&mut s, json!({"x": 40, "y": 100, "text": "A", "size": 40}));
+    let dot = outlined(&mut s, json!({"x": 40, "y": 300, "text": ".", "size": 40}));
+    let paths = |s: &Session, id: u64| match s.doc().unwrap().doc.node(NodeId(id)).unwrap().children() {
+        Some(c) => c.iter().map(|c| c.id.0).collect(),
+        None => vec![id],
+    };
+    let mut ids: Vec<u64> = paths(&s, t);
+    ids.extend(paths(&s, dot));
+    assert_eq!(ids.len(), 2, "one path each");
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let c = s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 300, "y": 300, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [c, r]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = match s.execute("type.retype", &json!({})) {
+        Ok(r) => panic!("the A became type without its period: {r}"),
+        Err(e) => e.to_string(),
+    };
+    assert!(e.contains("(2 checked)"), "{e}");
+    assert!(s.doc().unwrap().doc == before, "nothing changes");
+}
+
+#[test]
+fn a_split_takes_a_shorter_run_when_the_longest_leaves_a_group_unmatched() {
+    use kurbo::Shape;
+    // Three groups A, B and C side by side. A and B together are a glyph, but then C alone is
+    // none; A alone and B and C together are glyphs, so the split is A, BC.
+    let mut p = kurbo::BezPath::new();
+    for x in [0.0, 100.0, 200.0] {
+        p.extend(kurbo::Rect::new(x, 0.0, x + 40.0, 40.0).path_elements(0.1));
+    }
+    let find = |path: &kurbo::BezPath, part: bool, _near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, b.x0.round() as i64, b.x1.round() as i64) {
+            (true, 0, 140) => vec!["AB"],
+            (true, 0, 40) => vec!["A"],
+            (true, 100, 240) => vec!["BC"],
+            _ => vec![],
+        }
+    };
+    let groups = all_groups(&p);
+    assert_eq!(super::parts(&p, &groups, &find, &|_, _| true), vec![vec!["A"], vec!["BC"]]);
+    // A split the parts' paint does not allow is dropped.
+    assert!(super::parts(&p, &groups, &find, &|_, _| false).is_empty());
+    // With no way to match every group, nothing.
+    let none = |path: &kurbo::BezPath, part: bool, _near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        if part && b.x0.round() as i64 == 0 && b.x1.round() as i64 == 140 { vec!["AB"] } else { vec![] }
+    };
+    assert!(super::parts(&p, &groups, &none, &|_, _| true).is_empty());
+}
+
+#[test]
+fn a_split_the_paint_check_rejects_gives_way_to_another_complete_split() {
+    use kurbo::Shape;
+    let mut p = kurbo::BezPath::new();
+    for x in [0.0, 100.0, 200.0] {
+        p.extend(kurbo::Rect::new(x, 0.0, x + 40.0, 40.0).path_elements(0.1));
+    }
+    let find = |path: &kurbo::BezPath, part: bool, _near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, b.x0.round() as i64, b.x1.round() as i64) {
+            (true, 0, 140) => vec!["AB"],
+            (true, 0, 40) => vec!["A"],
+            (true, 100, 140) => vec!["B"],
+            (true, 200, 240) => vec!["C"],
+            _ => vec![],
+        }
+    };
+    let groups = all_groups(&p);
+    // The longest runs first (AB, C) are rejected; the three single glyphs are kept.
+    let singles = |runs: &[kurbo::BezPath], _near: bool| runs.len() == 3;
+    assert_eq!(super::parts(&p, &groups, &find, &singles), vec![vec!["A"], vec!["B"], vec!["C"]]);
+    // When no complete split is accepted, nothing.
+    assert!(super::parts(&p, &groups, &find, &|_, _| false).is_empty());
+}
+
+#[test]
+fn a_split_between_the_longest_and_the_shortest_runs_is_tried() {
+    use kurbo::Shape;
+    // Four groups A, B, C and D. ABC and D (the longest runs first) and the four single glyphs
+    // (the shortest) are complete splits the paint check rejects; AB and CD is the one it accepts.
+    let mut p = kurbo::BezPath::new();
+    for x in [0.0, 100.0, 200.0, 300.0] {
+        p.extend(kurbo::Rect::new(x, 0.0, x + 40.0, 40.0).path_elements(0.1));
+    }
+    let find = |path: &kurbo::BezPath, part: bool, _near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, b.x0.round() as i64, b.x1.round() as i64) {
+            (true, 0, 240) => vec!["ABC"],
+            (true, 0, 140) => vec!["AB"],
+            (true, 200, 340) => vec!["CD"],
+            (true, 0, 40) => vec!["A"],
+            (true, 100, 140) => vec!["B"],
+            (true, 200, 240) => vec!["C"],
+            (true, 300, 340) => vec!["D"],
+            _ => vec![],
+        }
+    };
+    let groups = all_groups(&p);
+    let pairs = |runs: &[kurbo::BezPath], _near: bool| runs.len() == 2 && runs.first().is_some_and(|r| r.bounding_box().x1.round() as i64 == 140);
+    assert_eq!(super::parts(&p, &groups, &find, &pairs), vec![vec!["AB"], vec!["CD"]]);
+}
+
+#[test]
+fn at_most_max_split_tries_complete_splits_are_checked() {
+    use kurbo::Shape;
+    // Twelve groups, every run of up to three of them a glyph: far more complete splits than the
+    // cap. The paint check is asked about the cap's number of them and no more, and each run is
+    // looked up at most once.
+    let mut p = kurbo::BezPath::new();
+    for i in 0..12 {
+        let x = f64::from(i) * 100.0;
+        p.extend(kurbo::Rect::new(x, 0.0, x + 40.0, 40.0).path_elements(0.1));
+    }
+    let groups = all_groups(&p);
+    assert_eq!(groups.len(), 12);
+    let looked_up = std::cell::Cell::new(0usize);
+    let find = |_: &kurbo::BezPath| -> Vec<&'static str> {
+        looked_up.set(looked_up.get() + 1);
+        vec!["glyph"]
+    };
+    let asked = &std::cell::Cell::new(0usize);
+    let accept_at = |n: usize| {
+        move |_: &[kurbo::BezPath]| {
+            asked.set(asked.get() + 1);
+            asked.get() == n
+        }
+    };
+    // Rejected every time: the search stops at the cap.
+    assert!(super::split_parts(&groups, &find, &accept_at(usize::MAX)).is_empty());
+    assert_eq!(asked.get(), super::MAX_SPLIT_TRIES);
+    assert!(looked_up.get() <= super::MAX_RUN * groups.len(), "{} lookups", looked_up.get());
+    // A first split that is accepted looks up its own runs only: four runs of three groups.
+    asked.set(0);
+    looked_up.set(0);
+    assert_eq!(super::split_parts(&groups, &find, &accept_at(1)).len(), 4);
+    assert_eq!(looked_up.get(), 4);
+    // The last split tried is still taken; the one past the cap is not tried.
+    asked.set(0);
+    assert!(super::split_parts(&groups, &find, &accept_at(super::MAX_SPLIT_TRIES)).len() > 1);
+    asked.set(0);
+    assert!(super::split_parts(&groups, &find, &accept_at(super::MAX_SPLIT_TRIES + 1)).is_empty());
+    assert_eq!(asked.get(), super::MAX_SPLIT_TRIES);
+}
+
+/// `path`'s contour groups, with no limit on the contours grouped.
+fn all_groups(path: &kurbo::BezPath) -> Vec<kurbo::BezPath> {
+    let mut budget = usize::MAX;
+    super::split_groups(path, &mut budget)
+}
+
+#[test]
+fn exact_matches_of_the_parts_come_before_a_near_match_of_the_whole() {
+    use kurbo::Shape;
+    // Two groups side by side, each exactly a glyph (two periods), and the whole only nearly one
+    // (a dieresis): the parts win.
+    let mut p = kurbo::BezPath::new();
+    for x in [0.0, 100.0] {
+        p.extend(kurbo::Rect::new(x, 0.0, x + 40.0, 40.0).path_elements(0.1));
+    }
+    let find = |path: &kurbo::BezPath, part: bool, near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, near, b.x0.round() as i64, b.x1.round() as i64) {
+            (false, true, 0, 140) => vec!["dieresis"],
+            (true, _, 0, 40) | (true, _, 100, 140) => vec!["period"],
+            _ => vec![],
+        }
+    };
+    let groups = all_groups(&p);
+    assert_eq!(super::parts(&p, &groups, &find, &|_, _| true), vec![vec!["period"], vec!["period"]]);
+    // When the parts match only nearly too, the whole near match comes first.
+    let near_only = |path: &kurbo::BezPath, part: bool, near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, near, b.x0.round() as i64, b.x1.round() as i64) {
+            (false, true, 0, 140) => vec!["dieresis"],
+            (true, true, 0, 40) | (true, true, 100, 140) => vec!["period"],
+            _ => vec![],
+        }
+    };
+    assert_eq!(super::parts(&p, &groups, &near_only, &|_, _| true), vec![vec!["dieresis"]]);
+    // The split's paint check is told whether the parts were found nearly: exact parts are
+    // checked at tolerance 0 whatever tolerance the command was given.
+    let seen = std::cell::RefCell::new(vec![]);
+    let record = |_: &[kurbo::BezPath], near: bool| {
+        seen.borrow_mut().push(near);
+        true
+    };
+    assert_eq!(super::parts(&p, &groups, &find, &record), vec![vec!["period"], vec!["period"]]);
+    assert_eq!(*seen.borrow(), vec![false]);
+    seen.borrow_mut().clear();
+    let split_near_only = |path: &kurbo::BezPath, part: bool, near: bool| -> Vec<&'static str> {
+        let b = path.bounding_box();
+        match (part, near, b.x0.round() as i64, b.x1.round() as i64) {
+            (true, true, 0, 40) | (true, true, 100, 140) => vec!["period"],
+            _ => vec![],
+        }
+    };
+    assert_eq!(super::parts(&p, &groups, &split_near_only, &record), vec![vec!["period"], vec!["period"]]);
+    assert_eq!(*seen.borrow(), vec![true]);
+}
+
+#[test]
+fn a_shape_that_lost_a_glyph_drops_the_lines_of_its_other_glyphs() {
+    use std::collections::HashMap;
+    // Shapes 1 and 2 are two glyphs each, shape 3 one. Line 0 sets one glyph of 1 and one of 2;
+    // line 1 sets the other glyph of 2 and shape 3. Shape 1's other glyph is set nowhere.
+    let (a, b, c) = (NodeId(1), NodeId(2), NodeId(3));
+    let glyphs_of: HashMap<NodeId, usize> = [(a, 2), (b, 2), (c, 1)].into();
+    let lines = vec![vec![a, b], vec![b, c]];
+    let dropped = super::partial_lines(&lines, &glyphs_of);
+    assert!(dropped.contains(&0), "shape 1 is set only in part: {dropped:?}");
+    assert!(dropped.contains(&1), "then shape 2 is too: {dropped:?}");
+    // Every glyph set: nothing goes.
+    let whole = vec![vec![a, b], vec![a, b, c]];
+    assert!(super::partial_lines(&whole, &glyphs_of).is_empty());
+}
+
+#[test]
+fn a_compound_of_too_many_path_elements_is_not_grouped() {
+    // Two contours side by side, each a polygon of `k` corners.
+    let two = |k: usize| {
+        let mut p = kurbo::BezPath::new();
+        for x in [0.0, 300.0] {
+            for i in 0..k {
+                let a = i as f64 / k as f64 * std::f64::consts::TAU;
+                let q = kurbo::Point::new(x + 100.0 + 100.0 * a.cos(), 100.0 + 100.0 * a.sin());
+                if i == 0 { p.move_to(q) } else { p.line_to(q) }
+            }
+            p.close_path();
+        }
+        p
+    };
+    let mut budget = usize::MAX;
+    assert_eq!(super::split_groups(&two(100), &mut budget).len(), 2, "a small compound is grouped");
+    let big = two(super::MAX_SPLIT_ELEMENTS / 2);
+    assert!(big.elements().len() > super::MAX_SPLIT_ELEMENTS);
+    let mut budget = usize::MAX;
+    assert!(super::split_groups(&big, &mut budget).is_empty(), "past the element limit it is matched whole only");
+    assert_eq!(budget, usize::MAX, "and takes no contours from the budget");
+}
+
+#[test]
+fn the_runs_and_near_keys_a_selection_is_looked_up_by_are_bounded() {
+    use kurbo::Shape;
+    use vectorcraft_text::retype::MAX_NEAR_KEYS;
+    // A compound path of `n` rectangles side by side, each of another width: every run of up to
+    // three of them has its own near key.
+    let row = |n: usize| {
+        let mut p = kurbo::BezPath::new();
+        for i in 0..n {
+            let x = i as f64 * 100.0;
+            p.extend(kurbo::Rect::new(x, 0.0, x + 10.0 + i as f64 * 0.37, 40.0).path_elements(0.1));
+        }
+        p
+    };
+    // Each shape with its contour groups, as the command looks them up.
+    let with_groups = |shapes: &[kurbo::BezPath]| -> Vec<(kurbo::BezPath, Vec<kurbo::BezPath>)> {
+        let mut budget = super::MAX_SPLIT_TOTAL_CONTOURS;
+        shapes.iter().map(|p| (p.clone(), super::split_groups(p, &mut budget))).collect()
+    };
+    let keys_of = |shapes: &[(kurbo::BezPath, Vec<kurbo::BezPath>)], tolerance: f64| {
+        super::lookup_keys(shapes.iter().map(|(p, g)| (p, g.as_slice())), tolerance)
+    };
+    let few = with_groups(&[row(20)]);
+    assert_eq!(super::runs(&few[0].1).len(), 20 + 19 + 18, "every run of 1 to 3 groups");
+    let (_, keys) = keys_of(&few, 0.01);
+    assert!(keys.len() > 20, "{}", keys.len());
+    assert!(keys_of(&few, 0.0).1.is_empty(), "no near keys without a tolerance");
+    // Past 256 groups the shape is matched whole only, and past 512 contours its contours are not
+    // grouped at all.
+    assert!(all_groups(&row(300)).is_empty());
+    assert_eq!(all_groups(&row(256)).len(), 256);
+    let mut nested = kurbo::BezPath::new();
+    for i in 0..200 {
+        // Each square with two squares inside it: 200 groups of 3 contours.
+        let x = i as f64 * 100.0;
+        nested.extend(kurbo::Rect::new(x, 0.0, x + 90.0, 90.0).path_elements(0.1));
+        nested.extend(kurbo::Rect::new(x + 10.0, 10.0, x + 40.0, 40.0).path_elements(0.1));
+        nested.extend(kurbo::Rect::new(x + 50.0, 50.0, x + 80.0, 80.0).path_elements(0.1));
+    }
+    assert!(all_groups(&nested).is_empty(), "600 contours");
+    assert_eq!(vectorcraft_text::retype::clusters(&nested).len(), 200, "which would make 200 groups");
+    // Many shapes with many runs each: the near keys stop at the cap.
+    let mut shapes: Vec<kurbo::BezPath> = (0..8).map(|k| kurbo::Affine::scale_non_uniform(1.0, 1.0 + k as f64 * 0.5) * row(200)).collect();
+    let (_, keys) = keys_of(&with_groups(&shapes), 0.01);
+    assert_eq!(keys.len(), MAX_NEAR_KEYS);
+    // A plain shape selected after them still gets its own near key: whole shapes come first.
+    let plain = kurbo::Circle::new((0.0, 0.0), 30.0).to_path(0.1);
+    let key = vectorcraft_text::retype::near_key(&plain).unwrap();
+    shapes.push(plain);
+    let (_, keys) = keys_of(&with_groups(&shapes), 0.01);
+    assert!(keys.contains(&key));
+    // One command groups at most MAX_SPLIT_TOTAL_CONTOURS contours: the shapes after them are
+    // matched whole only.
+    let full = vec![row(256); super::MAX_SPLIT_TOTAL_CONTOURS / 256 + 1];
+    let split: Vec<usize> = with_groups(&full).iter().map(|(_, g)| g.len()).collect();
+    assert!(split[..split.len() - 1].iter().all(|n| *n == 256), "{split:?}");
+    assert_eq!(split.last(), Some(&0));
+}
+
+#[test]
 fn slight_tracking_without_spaces_is_kept() {
     // Tracking 3 moves the last glyph less than the layout check notices: both readings draw it.
     // A word space both readings keep does not cost the tracking either.
@@ -886,18 +1735,24 @@ fn slight_tracking_without_spaces_is_kept() {
 /// The lines Retype reads from the outlines in group `g` (all in the face of its first glyph's
 /// first match), before their tracking is measured and their layout checked.
 fn lines_in(s: &Session, g: u64) -> Vec<super::Line> {
+    lines_in_family(s, g, None)
+}
+
+/// [`lines_in`] with the face of the first glyph's match in `family` when given.
+fn lines_in_family(s: &Session, g: u64, family: Option<&str>) -> Vec<super::Line> {
     let d = &s.doc().unwrap().doc;
     let (mut barrier, mut truncated, mut pieces) = (true, false, vec![]);
     super::collect(d.node(NodeId(g)).unwrap(), d.parent_of(NodeId(g)), 0, &mut barrier, &mut truncated, &mut pieces);
     let db = vectorcraft_text::FontDb::global();
     let wanted = pieces.iter().filter_map(|pc| vectorcraft_text::retype::shape_key(&pc.path)).collect();
     let index = super::RetypeIndex::build(db, super::candidate_faces(db, d, &[]), &wanted);
-    let face = index.matches(&pieces[0].path)[0].face.id();
+    let first = index.matches(&pieces[0].path);
+    let face = first.iter().find(|m| family.is_none_or(|f| m.face.family == f)).unwrap_or(&first[0]).face.id();
     let mut lines: Vec<super::Line> = vec![];
     for pc in &pieces {
         let cands: Vec<_> = index.matches(&pc.path).into_iter().filter(|m| m.face.id() == face).collect();
         if !lines.last_mut().is_some_and(|l| super::join(l, pc, &cands)) {
-            lines.extend(super::new_line(pc, &cands));
+            lines.extend(super::new_line(pc, &cands, 0.0));
         }
     }
     lines
@@ -1000,6 +1855,286 @@ fn glyphs_type_cannot_draw_do_not_use_up_the_tracking_measure() {
     assert_eq!(unmatched.len(), 5);
     let last = out.last().unwrap();
     assert_eq!((last.pieces.len(), last.tracking), (95, 300.0), "{:?}", out.iter().map(|l| (l.pieces.len(), l.tracking)).collect::<Vec<_>>());
+}
+
+#[test]
+fn irregular_gaps_before_a_long_tracked_run_do_not_split_the_run() {
+    // The first eight gaps each take another tracking, and the 92 glyphs after them are tracked
+    // 300: measuring the rest after each irregular gap must not use up the budget the run needs,
+    // so the run is one object with its tracking.
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "i".repeat(100), "size": 6})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": 300})).unwrap();
+    for (i, t) in [50, 170, 90, 230, 130, 410, 20, 520].into_iter().enumerate() {
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": i, "end": i + 1, "tracking": t})).unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert_eq!(texts.concat(), "i".repeat(100), "{r}");
+    assert_eq!(r["unmatched"], json!([]));
+    assert!(texts.len() <= 9, "at most one object per irregular gap, then the run: {texts:?}");
+    let run = text_of(&s, r["ids"].as_array().unwrap().last().unwrap().as_u64().unwrap());
+    assert_eq!(run.plain_text().chars().count(), 92, "{texts:?}");
+    assert!(run.runs.iter().all(|r| r.style.tracking == 300.0), "{texts:?}");
+}
+
+#[test]
+fn a_long_run_after_a_split_keeps_the_fraction_of_its_tracking() {
+    // Tracking 300.04 reads as 300 over the 32 glyphs measured, but 400 glyphs apart the two
+    // differ by more than the tolerance: the run after the irregular gaps keeps 300.04 and stays
+    // one object.
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "i".repeat(400), "size": 6})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": 300.04})).unwrap();
+    for (i, t) in [50, 170, 90, 230, 130, 410, 20, 520].into_iter().enumerate() {
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": i, "end": i + 1, "tracking": t})).unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert_eq!(texts.concat(), "i".repeat(400), "{r}");
+    assert!(texts.len() <= 9, "at most one object per irregular gap, then the run: {texts:?}");
+    let run = text_of(&s, r["ids"].as_array().unwrap().last().unwrap().as_u64().unwrap());
+    assert_eq!(run.plain_text().chars().count(), 392, "{texts:?}");
+    assert!(run.runs.iter().all(|r| near(r.style.tracking, 300.04, 1e-3)), "{texts:?}");
+}
+
+#[test]
+fn a_long_spaced_run_after_a_split_keeps_the_fraction_of_its_tracking() {
+    // Tracking 300.04 read as 300 moves the last of the 192 glyphs after the irregular gaps by less
+    // than the tolerance, counting the glyphs alone, but the word spaces between them take the
+    // tracking too: the run keeps 300.04 and stays one object.
+    let mut s = session();
+    let text = vec!["ii"; 100].join(" ");
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 6})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": 300.04})).unwrap();
+    // The first eight glyphs, at 0, 1, 3, 4, 6, 7, 9 and 10 (a space after each two).
+    for (i, t) in [50, 170, 90, 230, 130, 410, 20, 520].into_iter().enumerate() {
+        let at = i + i / 2;
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": at, "end": at + 1, "tracking": t})).unwrap();
+    }
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    let texts: Vec<&str> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert_eq!(texts.concat().replace(' ', ""), "i".repeat(200), "{r}");
+    assert!(texts.len() <= 9, "at most one object per irregular gap, then the run: {texts:?}");
+    let run = text_of(&s, r["ids"].as_array().unwrap().last().unwrap().as_u64().unwrap());
+    assert_eq!(run.plain_text().chars().filter(|c| *c == 'i').count(), 192, "{texts:?}");
+    assert!(run.runs.iter().all(|r| near(r.style.tracking, 300.04, 1e-3)), "{texts:?}");
+}
+
+#[test]
+fn a_long_run_after_a_split_keeps_a_tracking_under_one_unit_that_adds_up() {
+    // Tracking 0.2 moves none of the 32 glyphs measured by more than the tolerance, but moves the
+    // glyphs 399 places on: the rest after a split keeps it and stays one object.
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "M".repeat(400), "size": 6})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": 0.2})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mut budget = 100_000;
+    let mut l = lines_in(&s, g).into_iter().next().unwrap().tracked(false, &mut budget);
+    assert!(near(l.tracking, 0.2, 0.01), "{}", l.tracking);
+    l.matches[0].gid += 1;
+    let mut unmatched = vec![];
+    let out = super::verified(vec![l], false, &mut unmatched);
+    assert_eq!(unmatched.len(), 1);
+    let last = out.last().unwrap();
+    assert!(last.pieces.len() == 399 && near(last.tracking, 0.2, 0.01), "{:?}", out.iter().map(|l| (l.pieces.len(), l.tracking)).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_long_rest_tracked_past_a_negative_space_advance_keeps_its_word_spaces_after_a_split() {
+    // Tracking tighter than the space is wide, by one half to one and a half spaces more, gives the
+    // space a negative advance; the word space past the glyphs the tracking is measured from is
+    // still read.
+    for (unit, times) in
+        [("AV", 1.5), ("AV", 1.7), ("TA", 1.5), ("TA", 1.7), ("To", 1.5), ("To", 1.7), ("MM", 1.5), ("MM", 1.7), ("Wo", 1.6), ("Wo", 1.8)]
+    {
+        let mut s = session();
+        let text = format!("{} {}", unit.repeat(20), unit.repeat(5));
+        let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 10})).unwrap()["id"].as_u64().unwrap();
+        let probe = s.execute("text.create", &json!({"x": 10, "y": 200, "text": unit, "size": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [probe]})).unwrap();
+        let pg = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let pl = lines_in(&s, pg).into_iter().next().unwrap();
+        let tracking = -(super::space_advance(&pl.face) / pl.face.units_per_em() * 1000.0 * times).round();
+        s.execute("text.setRangeStyle", &json!({"id": id, "tracking": tracking})).unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        let mut budget = 100_000;
+        let mut l = lines_in(&s, g).into_iter().next().unwrap().tracked(false, &mut budget);
+        assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking), "{times}");
+        l.matches[0].gid += 1;
+        let mut unmatched = vec![];
+        let out = super::verified(vec![l], false, &mut unmatched);
+        assert_eq!(unmatched.len(), 1, "{times}");
+        let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
+        assert_eq!(texts, vec![(&text[1..], tracking)], "{times}");
+    }
+}
+
+#[test]
+fn a_long_rest_with_a_positive_pair_kerning_that_matches_a_space_gains_no_space_after_a_split() {
+    // The font adds 120 units to each i before an i. Tracking that leaves a space 120 wide makes the
+    // gap a kerned pair leaves the same as the gap a word space leaves; the joined reading wins the
+    // tie, as it does for the glyphs the tracking is measured from.
+    use vectorcraft_text::test_fonts::{POSITIVE_KERNING_FAMILY, POSITIVE_KERNING_UNITS, positive_kerning_font};
+
+    vectorcraft_text::FontDb::global().add_font(positive_kerning_font().unwrap());
+    let mut s = session();
+    let text = "i".repeat(60);
+    let probe = s.execute("text.create", &json!({"x": 10, "y": 200, "text": "i", "size": 10, "font": POSITIVE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [probe]})).unwrap();
+    let pg = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let pl = lines_in_family(&s, pg, Some(POSITIVE_KERNING_FAMILY)).into_iter().next().unwrap();
+    let space = super::space_advance(&pl.face) / pl.face.units_per_em() * 1000.0;
+    let tracking = (f64::from(POSITIVE_KERNING_UNITS) - space).round();
+    assert!(space + tracking >= space / 2.0, "the space must stay at least half its width: {space} {tracking}");
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 10, "font": POSITIVE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": tracking})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mut budget = 100_000;
+    let mut l = lines_in_family(&s, g, Some(POSITIVE_KERNING_FAMILY)).into_iter().next().unwrap().tracked(false, &mut budget);
+    assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking));
+    l.matches[0].gid += 1;
+    let mut unmatched = vec![];
+    let out = super::verified(vec![l], false, &mut unmatched);
+    assert_eq!(unmatched.len(), 1);
+    let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
+    assert_eq!(texts, vec![(&text[1..], tracking)]);
+}
+
+#[test]
+fn a_long_rest_with_a_positive_pair_kerning_that_matches_a_space_gains_no_space_when_the_budget_runs_short() {
+    // As above, with a measuring budget that covers the tracking's measure but not the layout of
+    // the pairs after the glyphs measured: those pairs still read no space.
+    use vectorcraft_text::test_fonts::{POSITIVE_KERNING_FAMILY, POSITIVE_KERNING_UNITS, positive_kerning_font};
+
+    vectorcraft_text::FontDb::global().add_font(positive_kerning_font().unwrap());
+    let mut s = session();
+    let text = "i".repeat(60);
+    let probe = s.execute("text.create", &json!({"x": 10, "y": 200, "text": "i", "size": 10, "font": POSITIVE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [probe]})).unwrap();
+    let pg = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let pl = lines_in_family(&s, pg, Some(POSITIVE_KERNING_FAMILY)).into_iter().next().unwrap();
+    let space = super::space_advance(&pl.face) / pl.face.units_per_em() * 1000.0;
+    let tracking = (f64::from(POSITIVE_KERNING_UNITS) - space).round();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 10, "font": POSITIVE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": tracking})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mut budget = 100_000;
+    let l = lines_in_family(&s, g, Some(POSITIVE_KERNING_FAMILY)).into_iter().next().unwrap().tracked(false, &mut budget);
+    assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking));
+    // What measuring the tracking of the rest's first 32 glyphs takes.
+    let span = super::MEASURE_SPAN;
+    let mut measure = 100_000;
+    let measured = l.respaced(1, 1 + span, 0.0).unwrap().tracked_reaching(false, &mut measure, 59);
+    assert_eq!(measured.tracking, tracking);
+    let measure = 100_000 - measure;
+    // The pairs after the glyphs measured take three characters each.
+    let pairs = (60 - 1 - span + 1) * 3;
+    for short in (0..pairs).step_by(7) {
+        let mut track_budget = (span + measure + short).max(span * 6);
+        let (mut glyphs, mut remeasured) = (100_000, 100_000);
+        let r = super::rest_after_split(&l, 1, false, &mut glyphs, &mut remeasured, &mut track_budget).unwrap();
+        assert_eq!(r.text, text[1..], "a budget {short} short of the pairs");
+    }
+}
+
+#[test]
+fn a_word_space_after_a_glyph_kerned_against_it_reads_as_one_space_past_the_glyphs_measured() {
+    // The font adds 130 units to an i before a space, so the gap before the next glyph is more than
+    // one and a half spaces wide; the distance the pair with one space between them is laid out at
+    // fits one space.
+    use vectorcraft_text::test_fonts::{SPACE_KERNING_FAMILY, space_kerning_font};
+
+    vectorcraft_text::FontDb::global().add_font(space_kerning_font().unwrap());
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "ii ii", "size": 10, "font": SPACE_KERNING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let l = lines_in_family(&s, g, Some(SPACE_KERNING_FAMILY)).into_iter().next().unwrap();
+    assert_eq!(l.pieces.len(), 4);
+    let mut r = l.respaced(0, 2, 0.0).unwrap();
+    let mut budget = 1_000;
+    let steps = r.pair_steps(&l.matches[1..], false, &mut budget).unwrap();
+    for (j, (id, m)) in l.pieces.iter().zip(&l.matches).skip(2).enumerate() {
+        r.push_joined(*id, m, steps.get(j).copied());
+    }
+    assert_eq!(r.text, "ii ii");
+}
+
+#[test]
+fn a_word_space_after_a_glyph_kerned_toward_it_is_kept_past_the_glyphs_measured() {
+    // The font takes 130 units off an i before a space, so the gap before the next glyph is under
+    // half a space wide; the distance the pair with one space between them is laid out at fits it.
+    use vectorcraft_text::test_fonts::{SPACE_NARROWING_FAMILY, space_narrowing_font};
+
+    vectorcraft_text::FontDb::global().add_font(space_narrowing_font().unwrap());
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "ii ii", "size": 10, "font": SPACE_NARROWING_FAMILY})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let l = lines_in_family(&s, g, Some(SPACE_NARROWING_FAMILY)).into_iter().next().unwrap();
+    assert_eq!(l.pieces.len(), 4);
+    let mut r = l.respaced(0, 2, 0.0).unwrap();
+    let mut budget = 1_000;
+    let steps = r.pair_steps(&l.matches[1..], false, &mut budget).unwrap();
+    for (j, (id, m)) in l.pieces.iter().zip(&l.matches).skip(2).enumerate() {
+        r.push_joined(*id, m, steps.get(j).copied());
+    }
+    assert_eq!(r.text, "ii ii");
+}
+
+#[test]
+fn a_long_tightly_tracked_rest_keeps_its_word_spaces_after_a_split() {
+    // Tracking as tight as a space is wide leaves the space no advance, and only the kerning it
+    // breaks shows it is there: the word space past the glyphs the rest's tracking is measured
+    // from is read by that measure too.
+    let mut s = session();
+    let text = format!("{} {}", "AV".repeat(20), "AV".repeat(5));
+    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 10})).unwrap()["id"].as_u64().unwrap();
+    let face = text_of(&s, id).runs[0].style.font_family.clone();
+    let probe = s.execute("text.create", &json!({"x": 10, "y": 200, "text": "AV", "size": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [probe]})).unwrap();
+    let pg = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let pl = lines_in(&s, pg).into_iter().next().unwrap();
+    assert_eq!(pl.face.family, face);
+    let tracking = -(super::space_advance(&pl.face) / pl.face.units_per_em() * 1000.0).round();
+    s.execute("text.setRangeStyle", &json!({"id": id, "tracking": tracking})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+    let mut budget = 100_000;
+    let mut l = lines_in(&s, g).into_iter().next().unwrap().tracked(false, &mut budget);
+    assert_eq!((l.text.as_str(), l.tracking), (text.as_str(), tracking));
+    l.matches[0].gid += 1;
+    let mut unmatched = vec![];
+    let out = super::verified(vec![l], false, &mut unmatched);
+    assert_eq!(unmatched.len(), 1);
+    let texts: Vec<(&str, f64)> = out.iter().map(|l| (l.text.as_str(), l.tracking)).collect();
+    assert_eq!(texts, vec![(&text[1..], tracking)]);
 }
 
 #[test]

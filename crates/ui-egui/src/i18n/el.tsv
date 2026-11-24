@@ -188,6 +188,7 @@
 	Anti-alias Rasters	Εξομάλυνση ακμών εικόνων ράστερ
 	Anti-aliased Artwork	Γραφικά με εξομαλυμένες ακμές
 	Anti-aliasing Method	Μέθοδος εξομάλυνσης ακμών
+@id	language.name	Ελληνικά
 antiAlias	Sharp	Οξεία
 	Crisp	Καθαρή
 	Strong	Έντονη
@@ -7311,7 +7312,7 @@ axis	Y Axis	Άξονας Y
 @msg	module is {_1} bytes (limit {_2})	η λειτουργική μονάδα έχει {_1} byte (όριο {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	χρειάζεται έγκριση: ζητά {0}, που ο χρήστης παραχωρεί όταν το εγκαθιστά μόνο του
 @msg	not JSON: {e}	δεν είναι JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	δεν είναι δυαδικό αρχείο WebAssembly (λείπει η κεφαλίδα \\0asm)
 @msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	ένας τύπος συνάρτησης υπερβαίνει το όριο των {MAX_FUNC_TYPE_VALUES} παραμέτρων
 @msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	ένας τύπος συνάρτησης υπερβαίνει το όριο των {MAX_FUNC_TYPE_VALUES} αποτελεσμάτων
 @msg	parameter `{k}`: {what}	παράμετρος `{k}`: {what}

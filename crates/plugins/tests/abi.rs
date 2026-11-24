@@ -638,9 +638,9 @@ fn charged(
     key: &str,
     meter: &mut Meter,
 ) -> Result<Option<Vec<u8>>, StorageError> {
-    let value = kept.lock().unwrap().get(key).cloned();
-    meter.take(value.as_ref().map_or(0, |v| v.len() as u64))?;
-    Ok(value)
+    let kept = kept.lock().unwrap();
+    meter.take(kept.get(key).map_or(0, |v| v.len() as u64))?;
+    Ok(kept.get(key).cloned())
 }
 
 impl Storage for Kept {
@@ -791,6 +791,224 @@ fn a_read_into_too_small_a_buffer_still_counts_its_bytes() {
     let reading = [vec![expect(read, MAX_CACHE_ENTRY as i32); fits], vec![expect(read, STORAGE_BUDGET)]].concat().concat();
     let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &reading, INPUT)), Limits::default()).unwrap();
     assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes(), "every call returned what it should");
+    registry::set_storage(id, None);
+}
+
+/// Storage calls cost the run one instruction for every 64 bytes they read or write: reading a
+/// 64 MiB cache entry, or writing 1 MiB to the cache 64 times, ends a run of 1 M instructions with
+/// its instruction budget and finishes within 2 M. A call the run can't pay for reads and writes
+/// nothing, a call pays from the budget not yet in the store, a call past the 1 GiB still returns
+/// `STORAGE_BUDGET`, and a small read finishes on a small budget.
+#[test]
+fn storage_calls_pay_instructions_for_the_bytes_they_move() {
+    use vectorcraft_plugins::host::{MAX_STORAGE_BYTES, STORAGE_BUDGET, STORAGE_DONE};
+    use vectorcraft_plugins::storage::MAX_CACHE_ENTRY;
+    let id = "test.storage.fuel";
+    let kept = std::sync::Arc::new(Kept::default());
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    kept.settings.lock().unwrap().insert("zoom".into(), b"hello".to_vec());
+    registry::set_storage(id, Some(kept.clone()));
+    let run = |first: &str, fuel_base: u64| {
+        let limits = Limits { fuel_base, fuel_per_byte: 0, ..Limits::default() };
+        Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), first, INPUT)), limits).unwrap().run(INPUT.as_bytes(), b"{}")
+    };
+    let zoom = "(i32.const 0x2000) (i32.const 4)";
+    let reading = expect(&format!("(call $vc_cache_read {zoom} (i32.const 0x3000) (i32.const 0))"), MAX_CACHE_ENTRY as i32);
+    // 17 more pages of memory, then 1 MiB of them written to the cache 64 times.
+    let write = expect(&format!("(call $vc_cache_write {zoom} (i32.const 0x20000) (i32.const 1048576))"), STORAGE_DONE);
+    let writing = format!(
+        "(local $n i32) (drop (memory.grow (i32.const 17))) (local.set $n (i32.const 64)) \
+         (loop $work {write} (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n)))"
+    );
+    let budget = Err(Error::Limit("instruction budget".into()));
+    let done = Ok(INPUT.as_bytes().to_vec());
+    let small = expect(&format!("(call $vc_settings_get {zoom} (i32.const 0x3000) (i32.const 16))"), 5);
+    assert_eq!(run(&small, 10_000), done, "a small read on 10,000 instructions");
+    // Growing the memory by 17 pages costs about 17,400 instructions and writing 1 MiB 16,384: a
+    // write the run can't pay for writes nothing.
+    let once = format!("(drop (memory.grow (i32.const 17))) {write}");
+    assert_eq!(run(&once, 30_000), budget, "1 MiB written on 30,000 instructions");
+    assert_eq!(kept.cache_bytes(), MAX_CACHE_ENTRY as u64, "the entry is unchanged");
+    assert_eq!(run(&once, 60_000), done, "1 MiB written on 60,000 instructions");
+    assert_eq!(kept.cache_bytes(), 1 << 20, "the entry is written");
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    assert_eq!(run(&reading, 1_000_000), budget, "a 64 MiB read on 1 M instructions");
+    assert_eq!(run(&reading, 2_000_000), done, "a 64 MiB read on 2 M instructions");
+    assert_eq!(run(&writing, 1_000_000), budget, "64 MiB written on 1 M instructions");
+    assert_eq!(run(&writing, 2_000_000), done, "64 MiB written on 2 M instructions");
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    // About 19.7 M instructions of fills leave less of the first 20 M slice than a 64 MiB read
+    // costs; the read pays from the rest of the budget.
+    let burning = format!(
+        "(local $n i32) (drop (memory.grow (i32.const 130))) (local.set $n (i32.const 149)) \
+         (loop $burn (memory.fill (i32.const 0x20000) (i32.const 7) (i32.const 8388608)) \
+         (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $burn (local.get $n))) {reading}"
+    );
+    assert_eq!(run(&burning, 21_000_000), done, "a read across two slices within the budget");
+    assert_eq!(run(&burning, 20_500_000), budget, "a read across two slices over the budget");
+    // What the read took from the rest of the budget is gone: six more 8 MiB fills (about 786,000
+    // instructions) don't fit the 21 M.
+    let more = format!(
+        "{burning} (local.set $n (i32.const 6)) (loop $more (memory.fill (i32.const 0x20000) (i32.const 7) (i32.const 8388608)) \
+         (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $more (local.get $n)))"
+    );
+    assert_eq!(run(&more, 21_000_000), budget, "fills after the read over the budget");
+    // With 8 MiB of the run's 1 GiB of storage bytes left and instructions for less, a 64 MiB read
+    // returns `STORAGE_BUDGET`, since the bytes alone refuse it, and the run goes on.
+    let rest = MAX_STORAGE_BYTES - 15 * MAX_CACHE_ENTRY - (8 << 20);
+    kept.cache.lock().unwrap().insert("x".into(), vec![0; rest]);
+    let x = expect("(call $vc_cache_read (i32.const 0x200d) (i32.const 1) (i32.const 0x3000) (i32.const 0))", rest as i32);
+    let over = expect(&format!("(call $vc_cache_read {zoom} (i32.const 0x3000) (i32.const 0))"), STORAGE_BUDGET);
+    let near = [vec![reading.clone(); 15], vec![x, over]].concat().concat();
+    assert_eq!(run(&near, 16_700_000), done, "a read past the 1 GiB");
+    // Bytes are counted over the run: 9,000 writes of 63 bytes, each under 64, cost about 8,860
+    // instructions more than 9,000 writes of none, not 0 or 9,000 as rounding each write down or up
+    // would. Each run's fewest instructions are found by bisection.
+    let looped = |len: u32| {
+        let write = expect(&format!("(call $vc_cache_write {zoom} (i32.const 0x2000) (i32.const {len}))"), STORAGE_DONE);
+        format!(
+            "(local $n i32) (local.set $n (i32.const 9000)) \
+             (loop $work {write} (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n)))"
+        )
+    };
+    let fewest = |first: &str| {
+        let (mut lo, mut hi) = (10_000, 50_000_000);
+        assert_eq!(run(first, hi), done, "the writes finish");
+        while lo + 1 < hi {
+            let mid = (lo + hi) / 2;
+            match run(first, mid) {
+                Ok(_) => hi = mid,
+                Err(Error::Limit(why)) if why == "instruction budget" => lo = mid,
+                Err(e) => panic!("the writes failed on {mid} instructions: {e:?}"),
+            }
+        }
+        hi
+    };
+    let (none, small) = (fewest(&looped(0)), fewest(&looped(63)));
+    assert!((none + 8_800..=none + 8_900).contains(&small), "63-byte writes take {small} instructions, empty ones {none}");
+    registry::set_storage(id, None);
+}
+
+/// A storage call that needs more of the budget than the store holds takes it only before Cancel
+/// and the deadline: after either, a 32 MiB write near the end of the first 20 M slice writes
+/// nothing and the run ends as canceled or with its time budget.
+#[test]
+fn after_cancel_or_the_deadline_a_storage_call_takes_no_more_of_the_budget() {
+    use vectorcraft_plugins::host::STORAGE_DONE;
+    use vectorcraft_plugins::storage::MAX_CACHE_ENTRY;
+    let id = "test.storage.cancel";
+    let kept = std::sync::Arc::new(Kept::default());
+    kept.cache.lock().unwrap().insert("zoom".into(), vec![0; MAX_CACHE_ENTRY]);
+    registry::set_storage(id, Some(kept.clone()));
+    // Growing by 512 pages and 148 fills of 8 MiB take about 19.9 M instructions; the write costs
+    // 524,288.
+    let write = expect("(call $vc_cache_write (i32.const 0x2000) (i32.const 4) (i32.const 0x20000) (i32.const 33554432))", STORAGE_DONE);
+    let first = format!(
+        "(local $n i32) (drop (memory.grow (i32.const 512))) (local.set $n (i32.const 148)) \
+         (loop $burn (memory.fill (i32.const 0x20000) (i32.const 7) (i32.const 8388608)) \
+         (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $burn (local.get $n))) {write}"
+    );
+    let limits = Limits { fuel_base: 21_000_000, fuel_per_byte: 0, ..Limits::default() };
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &first, INPUT)), limits.clone()).unwrap();
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    let r = vectorcraft_doc::cancel::scope(&token, None, || p.run(INPUT.as_bytes(), b"{}"));
+    assert_eq!(r, Err(Error::Cancelled));
+    assert_eq!(kept.cache_bytes(), MAX_CACHE_ENTRY as u64, "the entry is unchanged");
+    let timed = Limits { wall_time_ms: 0, ..limits };
+    assert_eq!(p.run_limited(INPUT.as_bytes(), b"{}", &timed), Err(Error::Limit("time budget".into())));
+    assert_eq!(kept.cache_bytes(), MAX_CACHE_ENTRY as u64, "the entry is unchanged after the deadline");
+    // With both, the time budget, as between two slices.
+    let r = vectorcraft_doc::cancel::scope(&token, None, || p.run_limited(INPUT.as_bytes(), b"{}", &timed));
+    assert_eq!(r, Err(Error::Limit("time budget".into())));
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}"), Ok(INPUT.as_bytes().to_vec()), "the same run without Cancel");
+    assert_eq!(kept.cache_bytes(), 32 << 20, "the entry is written");
+    registry::set_storage(id, None);
+}
+
+/// The host checks the deadline and Cancel after every storage call, also one the store's
+/// instructions pay for: after either, a 1 MiB cache write is the run's last storage call, and the
+/// write after it doesn't happen.
+#[test]
+fn a_run_past_its_deadline_or_canceled_stops_after_a_storage_call() {
+    use vectorcraft_plugins::host::STORAGE_DONE;
+    let id = "test.storage.after";
+    let kept = std::sync::Arc::new(Kept::default());
+    registry::set_storage(id, Some(kept.clone()));
+    let first = format!(
+        "(drop (memory.grow (i32.const 17))) {} {}",
+        expect("(call $vc_cache_write (i32.const 0x2000) (i32.const 4) (i32.const 0x20000) (i32.const 1048576))", STORAGE_DONE),
+        expect("(call $vc_cache_write (i32.const 0x200d) (i32.const 1) (i32.const 0x20000) (i32.const 1048576))", STORAGE_DONE),
+    );
+    let p = Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &first, INPUT)), Limits::default()).unwrap();
+    let written = || {
+        let cache = kept.cache.lock().unwrap();
+        let names = (cache.contains_key("zoom"), cache.contains_key("x"));
+        drop(cache);
+        kept.cache.lock().unwrap().clear();
+        names
+    };
+    let timed = Limits { wall_time_ms: 0, ..p.limits().clone() };
+    assert_eq!(p.run_limited(INPUT.as_bytes(), b"{}", &timed), Err(Error::Limit("time budget".into())));
+    assert_eq!(written(), (true, false), "after the deadline");
+    let token = vectorcraft_doc::cancel::CancelToken::new();
+    token.cancel();
+    assert_eq!(vectorcraft_doc::cancel::scope(&token, None, || p.run(INPUT.as_bytes(), b"{}")), Err(Error::Cancelled));
+    assert_eq!(written(), (true, false), "after Cancel");
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}"), Ok(INPUT.as_bytes().to_vec()), "the same run before both");
+    assert_eq!(written(), (true, true), "before both");
+    registry::set_storage(id, None);
+}
+
+/// A store that answers every setting with the same value without counting its bytes, as the app's
+/// store answers a get from the settings it keeps in memory.
+struct Remembered(Vec<u8>);
+
+impl Storage for Remembered {
+    fn setting(&self, _: &str, _: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        Ok(Some(self.0.clone()))
+    }
+    fn set_setting(&self, _: &str, _: &[u8], _: &mut Meter) -> Result<(), StorageError> {
+        Ok(())
+    }
+    fn delete_setting(&self, _: &str, _: &mut Meter) -> Result<bool, StorageError> {
+        Ok(false)
+    }
+    fn cache_entry(&self, _: &str, _: &mut Meter) -> Result<Option<Vec<u8>>, StorageError> {
+        Ok(None)
+    }
+    fn set_cache_entry(&self, _: &str, _: &[u8], _: &mut Meter) -> Result<(), StorageError> {
+        Ok(())
+    }
+    fn remove_cache_entry(&self, _: &str) -> Result<bool, StorageError> {
+        Ok(false)
+    }
+    fn clear_cache(&self) -> Result<u64, StorageError> {
+        Ok(0)
+    }
+    fn cache_bytes(&self) -> u64 {
+        0
+    }
+}
+
+/// A settings get the store answers without counting bytes still costs the bytes it copies into
+/// the module's memory: 2,000 gets of a 64 KiB value (128,000 KiB copied) end a run of 1 M
+/// instructions with its instruction budget and finish within 4 M.
+#[test]
+fn settings_gets_answered_from_memory_pay_for_the_bytes_they_copy() {
+    let id = "test.storage.copied";
+    registry::set_storage(id, Some(std::sync::Arc::new(Remembered(vec![7; 65536]))));
+    let get = expect("(call $vc_settings_get (i32.const 0x2000) (i32.const 4) (i32.const 0x20000) (i32.const 65536))", 65536);
+    let first = format!(
+        "(local $n i32) (drop (memory.grow (i32.const 2))) (local.set $n (i32.const 2000)) \
+         (loop $work {get} (local.set $n (i32.sub (local.get $n) (i32.const 1))) (br_if $work (local.get $n)))"
+    );
+    let run = |fuel_base: u64| {
+        let limits = Limits { fuel_base, fuel_per_byte: 0, ..Limits::default() };
+        Plugin::load(&build(&tpl::with_imports(&storing(id), &storage_data(), &first, INPUT)), limits).unwrap().run(INPUT.as_bytes(), b"{}")
+    };
+    assert_eq!(run(1_000_000), Err(Error::Limit("instruction budget".into())), "on 1 M instructions");
+    assert_eq!(run(4_000_000), Ok(INPUT.as_bytes().to_vec()), "on 4 M instructions");
     registry::set_storage(id, None);
 }
 

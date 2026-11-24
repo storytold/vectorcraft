@@ -3493,6 +3493,34 @@ fn live_paint_bucket_keeps_its_colors_through_the_stop_eyedropper_and_a_cmd_clic
     assert_eq!((s.paint.fill.clone(), s.tool_returns_to()), (fill, None), "the pick ended without a sample");
 }
 
+/// A Cmd-drag of a corner widget with the Live Paint Bucket that is cut short by choosing the
+/// bucket again (the Selection tool it lent cancels the drag as it goes back) leaves the bucket's
+/// colors as they were, with New Art Has Basic Appearance off: the selected object's appearance
+/// does not replace them.
+#[test]
+fn live_paint_bucket_keeps_its_colors_when_a_lent_drag_is_cut_short() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    let rect = rect(&mut s, 300.0, 300.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
+    s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let fill = s.paint.fill.clone();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, at.x + 8.0, at.y + 8.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection", "the bucket lent the Selection tool for the drag");
+    assert!(s.in_interaction(), "the corner widget drag is in progress");
+    s.select_tool("livePaintBucket", v).unwrap();
+    assert_eq!(s.tool_id(), "livePaintBucket");
+    assert_eq!(s.paint.fill, fill, "the bucket's fill stays");
+}
+
 /// A gradient stop selected on the selection's gradient is not selected once the Live Paint
 /// Bucket is active (its proxies show the default paint), and one selected on the bucket's
 /// gradient is not selected once another tool is chosen.
@@ -4628,6 +4656,93 @@ fn live_paint_group_with_only_source_paths_ignores_add_fill_and_add_stroke_of_it
     }
     s.execute("select.none", &json!({})).unwrap();
     assert!(s.execute("appearance.addFill", &json!({"target": "contents"})).is_err(), "no selection is still refused");
+}
+
+/// Whether every face of Live Paint group `g` holds only fill rows and every edge only stroke rows.
+fn parts_hold_their_kind(s: &Session, g: NodeId) -> bool {
+    let (faces, edges) = part_looks(s, g);
+    faces.iter().all(|a| a.items.iter().all(|it| it.is_fill())) && edges.iter().all(|a| a.items.iter().all(|it| !it.is_fill()))
+}
+
+/// A graphic style applied to the contents of a Live Paint group, replacing their appearance or added to it, gives
+/// the faces its fills and the edges its strokes, and the faces and edges are not linked to it.
+#[test]
+fn live_paint_group_contents_take_a_graphic_style_by_kind() {
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    let blue = Paint::solid(Color::from_hex("#0000ff").unwrap());
+    for add in [false, true] {
+        let mut s = session();
+        let g = live(&mut s);
+        let r = rect(&mut s, 400.0, 0.0, 50.0, 50.0);
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+        s.execute("graphicStyle.new", &json!({"name": "Both", "id": r.0})).unwrap();
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.execute("graphicStyle.apply", &json!({"name": "Both", "target": "contents", "add": add})).unwrap();
+        assert!(parts_hold_their_kind(&s, g), "add {add}: faces hold fills and edges strokes");
+        let (faces, edges) = part_looks(&s, g);
+        assert!(faces.iter().all(|a| a.items.iter().any(|it| *it.paint() == red)), "add {add}: each face takes the style's fill");
+        assert!(edges.iter().all(|a| a.items.iter().any(|it| *it.paint() == blue)), "add {add}: each edge takes the style's stroke");
+        let n = node(&s, g);
+        let mut parts = vectorcraft_tools::builder::faces(&n).into_iter().chain(vectorcraft_tools::builder::edges(&n));
+        assert!(parts.all(|p| p.extras().graphic_style.is_none()), "add {add}: no face or edge is linked");
+    }
+}
+
+/// A fill-only graphic style added to the contents of a Live Paint group without faces changes nothing and records no
+/// undo step.
+#[test]
+fn live_paint_group_contents_without_faces_take_no_fill_only_style() {
+    let mut s = session();
+    let g = live(&mut s);
+    let faces: Vec<NodeId> = vectorcraft_tools::builder::faces(&node(&s, g)).iter().map(|p| p.id).collect();
+    s.edit("t", |d, _| {
+        d.children_mut(Some(g)).unwrap().retain(|c| !faces.contains(&c.id));
+        Ok(())
+    })
+    .unwrap();
+    let r = rect(&mut s, 400.0, 0.0, 50.0, 50.0);
+    s.edit("t", |d, _| {
+        let fill = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::from_hex("#ff0000").unwrap())));
+        d.node_mut(r).unwrap().appearance = vectorcraft_doc::Appearance { items: vec![fill], ..Default::default() }.into();
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graphicStyle.new", &json!({"name": "Fill", "id": r.0})).unwrap();
+    // The edges are linked to a style of their own, which they keep.
+    let edge = vectorcraft_tools::builder::edges(&node(&s, g))[0].id;
+    s.execute("graphicStyle.new", &json!({"name": "Edge", "id": edge.0})).unwrap();
+    assert!(node(&s, g).children().unwrap().iter().any(|c| c.extras().graphic_style.is_some()), "an edge is linked");
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let (before, undo) = (node(&s, g), s.doc().unwrap().history.undo.len());
+    s.execute("graphicStyle.apply", &json!({"name": "Fill", "target": "contents", "add": true})).unwrap();
+    assert_eq!(node(&s, g), before, "the edges keep their rows and their link");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+}
+
+/// Clear Appearance and Reduce to Basic Appearance on the contents of a Live Paint group leave each face with fill
+/// rows only and each edge with stroke rows only.
+#[test]
+fn live_paint_group_contents_clear_and_reduce_keep_each_part_to_its_kind() {
+    for cmd in ["appearance.clear", "appearance.reduceToBasic"] {
+        let mut s = session();
+        let g = live(&mut s);
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+        s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+        // A face and an edge given rows of the other kind through their own ids.
+        let n = node(&s, g);
+        let (face, edge) = (vectorcraft_tools::builder::faces(&n)[0].id, vectorcraft_tools::builder::edges(&n)[0].id);
+        s.execute("appearance.addStroke", &json!({"ids": [face.0]})).unwrap();
+        s.execute("appearance.addFill", &json!({"ids": [edge.0]})).unwrap();
+        assert!(!parts_hold_their_kind(&s, g), "{cmd}: the face and the edge hold rows of the other kind");
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.execute(cmd, &json!({"target": "contents"})).unwrap();
+        assert!(parts_hold_their_kind(&s, g), "{cmd}: faces hold fills and edges strokes");
+        let (faces, edges) = part_looks(&s, g);
+        assert!(faces.iter().chain(&edges).all(|a| !a.items.is_empty()), "{cmd}: each face and edge keeps a row");
+    }
 }
 
 /// A selected Live Paint group with no part of the edited kind is still a selection: a stroke edit

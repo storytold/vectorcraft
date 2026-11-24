@@ -1,7 +1,8 @@
 //! Object → Transform → Transform Each: scale, move and rotate every selected object about its own
 //! reference point, with reflection, randomness, Transform Objects, Transform Patterns, Scale
-//! Corners and Scale Strokes & Effects (`object.transformEach`), previewed live on the canvas. Its Scale and Move sliders, Rotate dial
-//! and reflection, reference point and Random options are the Transform effect's too.
+//! Corners and Scale Strokes & Effects (`object.transformEach`), previewed live on the canvas. Its
+//! Scale, Move and Rotate rows, the reflection checks and the reference point are the Transform
+//! effect's too ([`rows`], [`reflect_checks`], [`reference_point`]).
 //!
 //! Fields: `scaleH`, `scaleV` (percentages, or with Absolute each object's width and height in pt),
 //! `relative` (Relative or Absolute scaling), `moveH`, `moveV` (pt), `rotate` (°), `reflectX`,
@@ -9,329 +10,542 @@
 //! confirms), `objects`, `patterns`, `corners`, `strokes` (the last two default to the preferences,
 //! which OK updates) and `preview`; `__constrain` is the link that keeps the two scales in
 //! proportion. It opens on the values it was last confirmed with, Copy aside (#1732).
+//!
+//! The dialog is a held-OK [`HostedParamDialog`]: a refused OK keeps it open. The link and mode
+//! rules run in its build closure ([`apply_links`]), so a click, a typed value and an automation
+//! set all follow the same rule.
 
+use craft::behavior::Mixed;
+use craft::ui::choice::{Checkbox, Radio, RadioGroup};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogHost, DialogId, FieldRefusal};
+use craft::ui::display::Text;
+use craft::ui::form::Field;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
+use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::memory::{SaveKey, saved_value, set_saved_value};
+use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::text::{NumberField, follow_ratio, link_toggle};
+use craft::ui::value_drag::{AngleDial, Slider};
+use egui::{Response, Ui};
 use serde_json::{Value, json};
+use std::ops::RangeInclusive;
 
-use super::transform::{add_object_options, add_scale_options, object_options, scale_options_ordered, with_scale_options};
-use super::{DialogSpec, form};
+use super::host::{HeldOptions, open_held_with};
+use super::preview::LivePreview; // PLAN: assumed path of wg.A20's `LivePreview`
+use super::transform::{add_object_options, add_scale_options, with_scale_options}; // PLAN: assumed (app, &DialogFields, ..) forms of od.OS6
 use crate::VectorcraftApp;
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::widgets;
-
-/// The dialog kind of Transform Each.
-pub const KIND: &str = "transformEach";
 
 const CMD: &str = "object.transformEach";
+const KEY: &str = "transformEach";
+/// The footer action and field of the Copy button.
+const COPY: &str = "copy";
 
-/// OK transforms each object; Copy, left of Cancel as in the documented dialog, transforms a copy
-/// of each ([Scale multiple objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/scale-multiple-objects.html)).
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Transform Each").into(),
-    body,
-    confirm,
-    alternate: Some(("Copy", "copy")),
-    preview: true,
-    min_width: 360.0,
-    inputs: |_| &["relative", "absH", "absV", "objects", "patterns", "corners", "strokes"],
-    // Preview sits at the left of the button row, level with Copy, Cancel and OK.
-    footer_left: Some(form::preview_check),
-    ..DialogSpec::FORM
-};
+/// Where the values OK confirmed last are kept. Not `.remember`: that drops custom rows.
+pub(crate) const EACH_KEY: SaveKey = SaveKey::new("vectorcraft.transform_each");
 
-/// The fields a fresh dialog starts with.
-pub fn fields() -> Value {
-    json!({"scaleH": 100, "scaleV": 100, "relative": true, "moveH": 0, "moveV": 0, "rotate": 0, "reflectX": false, "reflectY": false, "random": false, "reference": 4, "copy": false, "__constrain": false})
+/// The open dialog: its id and the live preview of its values.
+pub(crate) struct Open {
+    /// The id of the held dialog.
+    pub id: DialogId,
+    /// The preview OK commits and Cancel rolls back.
+    pub preview: LivePreview,
 }
 
-/// The fields kept from the last OK or Copy (`UiState::transform_each`): all but Copy, Transform
+/// Whether [`rows`] draws the link and the Relative / Absolute choice (Transform Each) or only the
+/// two percentage scales (the Transform effect).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScaleLink {
+    /// Percentages only.
+    None,
+    /// The proportion link and the Relative / Absolute choice.
+    Toggle,
+}
+
+/// The width and height the selected objects share, each none when they differ.
+type Shared = (Option<f64>, Option<f64>);
+
+/// The fields a fresh dialog starts with.
+pub fn fields() -> DialogFields {
+    DialogFields::from_pairs([
+        ("scaleH", FieldValue::Number(100.0)),
+        ("scaleV", FieldValue::Number(100.0)),
+        ("relative", FieldValue::Bool(true)),
+        ("moveH", FieldValue::Number(0.0)),
+        ("moveV", FieldValue::Number(0.0)),
+        ("rotate", FieldValue::Number(0.0)),
+        ("reflectX", FieldValue::Bool(false)),
+        ("reflectY", FieldValue::Bool(false)),
+        ("random", FieldValue::Bool(false)),
+        ("reference", FieldValue::Int(4)),
+        (COPY, FieldValue::Bool(false)),
+        (LINK, FieldValue::Bool(false)),
+    ])
+}
+
+/// The fields kept from the last OK or Copy: all but Copy, Preview (it opens on), Transform
 /// Patterns (the preference it starts from), the scale options (preferences too) and the Absolute
 /// targets (`absH`, `absV`), which the dialog sets from the selection every time it opens.
-const REMEMBERED: [&str; 13] =
-    ["scaleH", "scaleV", "relative", "moveH", "moveV", "rotate", "reflectX", "reflectY", "random", "reference", "objects", "preview", LINK];
+const REMEMBERED: [&str; 12] =
+    ["scaleH", "scaleV", "relative", "moveH", "moveV", "rotate", "reflectX", "reflectY", "random", "reference", "objects", LINK];
 
-/// The fields the menu item opens with: [`fields`], with the values it was last confirmed with.
-/// A kept value of the wrong kind (a hand-edited file) is left out.
-pub fn open_fields(app: &VectorcraftApp) -> Value {
-    let mut out = fields();
-    for k in REMEMBERED {
-        match app.ui.transform_each.get(k) {
-            Some(v @ Value::Number(_)) if out.get(k).is_some_and(Value::is_number) => out[k] = v.clone(),
-            Some(v @ Value::Bool(_)) if out.get(k).is_none_or(Value::is_boolean) => out[k] = v.clone(),
-            _ => {}
-        }
+/// Whether a kept value has the kind of the field it would replace (a hand-edited file may not).
+fn same_kind(current: Option<&FieldValue>, kept: &FieldValue) -> bool {
+    match kept {
+        FieldValue::Bool(_) => current.is_none_or(|c| matches!(c, FieldValue::Bool(_))),
+        FieldValue::Number(_) | FieldValue::Int(_) => matches!(current, Some(FieldValue::Number(_) | FieldValue::Int(_))),
+        _ => false,
     }
-    let relative = out.get("relative").and_then(Value::as_bool).unwrap_or(true);
-    // Absolute shows the size the selected objects share, so a dialog that opens in it has it.
-    if !relative {
-        let (w, h) = shared_size(app, app.session.general_unit());
-        for (key, v) in [("absH", w), ("absV", h)] {
-            if let Some(v) = v {
-                out[key] = json!(v);
+}
+
+/// The values the dialog opens with: [`fields`] and the preferences' options, with the values it
+/// was last confirmed with over them.
+fn opening_fields(app: &VectorcraftApp, ctx: &egui::Context) -> DialogFields {
+    let mut f = fields();
+    let prefs = &app.session.prefs;
+    for (key, on) in
+        [("objects", true), ("patterns", prefs.transform_pattern_tiles), ("strokes", prefs.scale_strokes), ("corners", prefs.scale_corners)]
+    {
+        f.set(key, on);
+    }
+    if let Some(saved) = saved_value::<Option<DialogFields>>(ctx, &EACH_KEY) {
+        for k in REMEMBERED {
+            if let Some(v) = saved.get(k).filter(|v| same_kind(f.get(k), v)) {
+                f.set(k, v.clone());
             }
         }
     }
-    // A link that opens on keeps the proportions of the scales it opens on, so a scale set before
-    // the first frame (`ui.dialog.set`) follows it.
-    if out.get(LINK).and_then(Value::as_bool) == Some(true)
-        && let Some(ratio) = out.as_object().and_then(|f| link_ratio(f, relative))
-    {
-        out[RATIO] = json!(ratio);
-    }
-    out
+    f
 }
 
 /// The command's parameters without the scale options. The scales are the percentages with
 /// Relative and the Absolute targets with Absolute, where a side the objects don't share (Mixed) is
 /// left out, so each object keeps that side.
-fn params(d: &Dialog) -> Value {
-    let f = |k: &str, v: f64| d.f64(k, v);
+fn params(f: &DialogFields) -> Value {
     let mut p = json!({
-        "relative": relative(d),
-        "moveH": f("moveH", 0.0), "moveV": f("moveV", 0.0),
-        "rotate": f("rotate", 0.0), "reflectX": d.bool("reflectX"), "reflectY": d.bool("reflectY"), "random": d.bool("random"),
-        "reference": f("reference", 4.0).clamp(0.0, 8.0) as u64, "copy": d.bool("copy"),
+        "relative": relative(f),
+        "moveH": num(f, "moveH", 0.0), "moveV": num(f, "moveV", 0.0),
+        "rotate": num(f, "rotate", 0.0), "reflectX": flag(f, "reflectX"), "reflectY": flag(f, "reflectY"), "random": flag(f, "random"),
+        "reference": num(f, "reference", 4.0).clamp(0.0, 8.0) as u64, "copy": flag(f, COPY),
     });
-    let (h, v) = scale_keys(d);
+    let (h, v) = scale_keys(f);
     for (key, field) in [("scaleH", h), ("scaleV", v)] {
-        // A field the dialog doesn't hold is Mixed; one kept as text ("10 mm") parses as the
-        // dialog's own fields read it.
-        if d.fields.contains_key(field) {
-            p[key] = json!(d.f64(field, 100.0));
+        if let Some(n) = field_number(f, field) {
+            p[key] = json!(n);
         }
     }
     p
 }
 
+/// [`params`] with the Transform Objects and Transform Patterns options.
+fn command_params(app: &VectorcraftApp, f: &DialogFields) -> Value {
+    let mut p = params(f);
+    add_object_options(app, f, &mut p);
+    p
+}
+
 /// The two Scale fields the dialog edits: the percentages with Relative, the Absolute targets with
 /// Absolute (`absH` and `absV`, absent when the objects differ).
-fn scale_keys(d: &Dialog) -> (&'static str, &'static str) {
-    if relative(d) { ("scaleH", "scaleV") } else { ("absH", "absV") }
+fn scale_keys(f: &DialogFields) -> (&'static str, &'static str) {
+    if relative(f) { ("scaleH", "scaleV") } else { ("absH", "absV") }
 }
 
-/// The proportions the link keeps for the scales `fields` show (vertical ÷ horizontal): none while
-/// a side is Mixed.
-fn link_ratio(fields: &serde_json::Map<String, Value>, relative: bool) -> Option<f64> {
-    let (h, v) = if relative { ("scaleH", "scaleV") } else { ("absH", "absV") };
-    let ratio = field_number(fields, v)? / field_number(fields, h)?;
-    (ratio.is_finite() && ratio != 0.0).then_some(ratio)
+/// The scales `h` and `v` the link keeps in proportion, as they are now: none while a side is
+/// Mixed or zero (the command refuses a scale of 0, and a zero side leaves no proportion).
+fn ratio_base(f: &DialogFields, h: &str, v: &str) -> Option<[f64; 2]> {
+    let (a, b) = (field_number(f, h)?, field_number(f, v)?);
+    let ratio = b / a;
+    (ratio.is_finite() && ratio != 0.0).then_some([a, b])
 }
 
-/// The number `fields[key]` holds: a number, or a distance in text ("10 mm"), as the dialog's own
-/// fields read them; none when the field is absent (Mixed).
-fn field_number(fields: &serde_json::Map<String, Value>, key: &str) -> Option<f64> {
-    match fields.get(key)? {
-        Value::Number(n) => n.as_f64(),
-        Value::String(s) => vectorcraft_doc::Unit::Points.parse(s),
-        _ => None,
-    }
+/// The number `key` holds: a number, or a distance in text ("10 mm"), as the dialog's own fields
+/// read them; none when the field is absent (Mixed).
+fn field_number(f: &DialogFields, key: &str) -> Option<f64> {
+    f.number(key).or_else(|| f.text(key).and_then(|s| vectorcraft_doc::Unit::Points.parse(s)))
+}
+
+/// `key` as a number, or `default` when absent.
+fn num(f: &DialogFields, key: &str, default: f64) -> f64 {
+    field_number(f, key).unwrap_or(default)
+}
+
+/// `key` as a check box, off when absent.
+fn flag(f: &DialogFields, key: &str) -> bool {
+    f.bool(key).unwrap_or(false)
 }
 
 /// Relative scaling (field `relative`, on until switched off): percentages of each object's size,
 /// rather than the width and height it becomes (Absolute).
-fn relative(d: &Dialog) -> bool {
-    d.fields.get("relative").and_then(Value::as_bool).unwrap_or(true)
+fn relative(f: &DialogFields) -> bool {
+    f.bool("relative").unwrap_or(true)
 }
 
-/// Width of the label column and the value fields of [`sections`].
-const LABEL_W: f32 = 72.0;
-const FIELD_W: f32 = 78.0;
-/// Width of the Angle field: the dial leaves it room to be wider than a Scale or Move field.
-const ANGLE_FIELD_W: f32 = 94.0;
-/// Width of the Constrain Width and Height Proportions link's column, at the right of the Scale
-/// rows.
-const LINK_W: f32 = 22.0;
 /// Largest scale (%) the fields take (as `object.transformEach` and the Transform effect).
 const MAX_SCALE: f64 = 100_000.0;
 /// Largest width or height (pt) the Scale fields take with Absolute (as `object.transformEach`).
 const MAX_ABSOLUTE: f64 = 1.0e7;
 /// The Scale sliders' rails: percentages, and points with Absolute (the fields take values past
 /// the rails).
-const SCALE_RAIL: std::ops::RangeInclusive<f64> = 0.0..=200.0;
-const ABSOLUTE_RAIL: std::ops::RangeInclusive<f64> = 0.0..=1000.0;
+const SCALE_RAIL: RangeInclusive<f64> = 0.0..=200.0;
+const ABSOLUTE_RAIL: RangeInclusive<f64> = 0.0..=1000.0;
+/// The Move sliders' rails (pt).
+const MOVE_RAIL: RangeInclusive<f64> = -1000.0..=1000.0;
 
-/// The dialog fields of the Scale link, as the shape dialogs' Width and Height link: its state, the
-/// state the dialog last applied (a change by its button or from outside shows as a difference
-/// from it) and the proportions it keeps (vertical ÷ horizontal).
+/// The dialog fields of the Scale link: its state, the state last applied (a change by its button
+/// or from outside shows as a difference from it), the proportions it keeps, the mode last applied
+/// and the scales last seen (a difference from them is an edit the link follows).
 const LINK: &str = "__constrain";
 const APPLIED: &str = "__constrainApplied";
-const RATIO: &str = "__ratio";
+const BASE: &str = "__ratioBase";
+const MODE: &str = "__mode";
+const SEEN: &str = "__seen";
+/// The width and height the selected objects share ([`shared_size`]), kept for the set-time rule.
+const SHARED: [&str; 2] = ["__sharedH", "__sharedV"];
 
-/// The Scale section: a slider and a field for `scaleH` and for `scaleV`, percentages of each
-/// object's size, or with `absolute` the width and height it becomes, in `units` (Transform Each
-/// alone: the Transform effect scales in percentages), and the link that keeps them in proportion.
-fn scale_section(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc::Unit, absolute: bool) {
-    widgets::subheader(ui, tl!("Scale"));
-    link_changed(d);
-    if let Some(rows) = scale_rows(ui, d, units, false, absolute, true) {
-        scale_link(ui, d, rows);
-    }
-}
-
-/// The two Scale rows, and with `link` the column at their right that [`scale_link`] fills. Returns
-/// the two rows' bounds. While the link is on, a scale that changes sets the other.
-fn scale_rows(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc::Unit, live: bool, absolute: bool, link: bool) -> Option<egui::Rect> {
-    let rail = Tokens::get(ui.ctx()).input_border;
-    let track = move |_| rail;
-    let axes = |h, v| [(h, tl!("Horizontal:")), (v, tl!("Vertical:"))];
-    let mut rows: Option<egui::Rect> = None;
-    for (key, label) in axes(if absolute { "absH" } else { "scaleH" }, if absolute { "absV" } else { "scaleV" }) {
-        let before = d.f64(key, 100.0);
-        let row = ui
-            .scope(|ui| {
-                widgets::label_row(ui, label, LABEL_W, |ui| {
-                    if absolute {
-                        // A side the objects don't share reads "Mixed" until a size is typed.
-                        let shown = form::length_value(d, key, units, ABSOLUTE_RAIL);
-                        form::slider_rail_valued(ui, d, key, label, ABSOLUTE_RAIL, shown, &track);
-                        form::length_mixed(ui, d, key, units, FIELD_W, Some(-MAX_ABSOLUTE..=MAX_ABSOLUTE), tl!("Mixed"));
-                    } else {
-                        let shown = widgets::SliderValue::field(d.f64(key, 100.0).clamp(-MAX_SCALE, MAX_SCALE), SCALE_RAIL, "%", 2);
-                        form::slider_rail_valued(ui, d, key, label, SCALE_RAIL, Some(shown), &track);
-                        let value = if live {
-                            widgets::range_field_live(ui, ("te", key), d.f64(key, 100.0), -MAX_SCALE..=MAX_SCALE, "%", 2, FIELD_W)
-                        } else {
-                            widgets::range_field(ui, ("te", key), d.f64(key, 100.0), -MAX_SCALE..=MAX_SCALE, "%", 2, FIELD_W)
-                        };
-                        if let Some(n) = value {
-                            d.fields.insert(key.into(), json!(n));
-                        }
-                    }
-                    if link {
-                        ui.add_space(LINK_W + ui.spacing().item_spacing.x);
-                    }
-                });
-            })
-            .response
-            .rect;
-        if d.f64(key, 100.0) != before {
-            follow_link(d, key);
+/// The link and mode rules, run before every pass and before a confirm or an automation set: a
+/// switch to Absolute shows the size the objects share, a turned link or a mode switch takes the
+/// proportions the scales show then, and while the link is on an edited scale sets the other from
+/// those proportions (the base is the values when the link turned on, so nothing drifts).
+fn apply_links(f: &mut DialogFields, shared: Shared) {
+    let relative = relative(f);
+    let linked = flag(f, LINK);
+    let switched = f.bool(MODE) != Some(relative);
+    if switched {
+        f.set(MODE, relative);
+        if !relative {
+            set_absolute_targets(f, shared);
         }
-        rows = Some(rows.map_or(row, |rows| rows.union(row)));
     }
-    rows
-}
-
-/// The Constrain Width and Height Proportions link, drawn over the two Scale rows' right end as the
-/// shape dialogs' link is over theirs (field [`LINK`]).
-fn scale_link(ui: &mut egui::Ui, d: &mut Dialog, rows: egui::Rect) {
-    let rect = egui::Rect::from_center_size(egui::pos2(rows.right() - LINK_W / 2.0, rows.center().y), egui::vec2(LINK_W, LINK_W));
-    let resp = ui.interact(rect, ui.scope_id().with("te-scale-link"), egui::Sense::click());
-    let on = d.bool(LINK);
-    let icon = if on { "link" } else { "link-2-off" };
-    if widgets::paint_icon_button(ui, resp, icon, "Constrain Width and Height Proportions", on).clicked() {
-        d.fields.insert(LINK.into(), json!(!on));
-        link_changed(d);
+    let (h, v) = scale_keys(f);
+    let turned = f.bool(APPLIED) != Some(linked);
+    if turned {
+        f.set(APPLIED, linked);
     }
-}
-
-/// When the link's state differs from the one the dialog last applied (or none was applied yet),
-/// apply it and return it: turned on, the link keeps the proportions of the scales the dialog shows
-/// then; turned off, it forgets them. A scale of zero when it turns on leaves nothing to keep, so
-/// typing changes only the side typed until the link is turned off and on again.
-fn link_changed(d: &mut Dialog) -> Option<bool> {
-    let on = d.bool(LINK);
-    if d.fields.get(APPLIED).and_then(Value::as_bool) == Some(on) {
-        return None;
-    }
-    d.fields.insert(APPLIED.into(), json!(on));
-    keep_link_proportions(d);
-    Some(on)
-}
-
-/// The link keeps the proportions of the scales the dialog shows now (none while a side is Mixed).
-fn keep_link_proportions(d: &mut Dialog) {
-    match link_ratio(&d.fields, relative(d)).filter(|_| d.bool(LINK)) {
-        Some(ratio) => {
-            d.fields.insert(RATIO.into(), json!(ratio));
+    let pair = |f: &DialogFields| Some([field_number(f, h)?, field_number(f, v)?]);
+    if switched || turned {
+        match ratio_base(f, h, v).filter(|_| linked) {
+            Some(base) => f.set(BASE, FieldValue::Point(base)),
+            None => {
+                f.remove(BASE);
+            }
         }
+    } else if linked
+        && let (Some(base), Some(seen), Some(now)) = (f.point(BASE), f.point(SEEN), pair(f))
+        && let Some(changed) = (0..2).find(|&i| now[i] != seen[i])
+    {
+        let limit = if relative { MAX_SCALE } else { MAX_ABSOLUTE };
+        let out = follow_ratio(base, changed, now[changed], &[-limit..=limit, -limit..=limit]);
+        f.set(h, out[0]);
+        f.set(v, out[1]);
+    }
+    match pair(f) {
+        Some(now) => f.set(SEEN, FieldValue::Point(now)),
         None => {
-            d.fields.remove(RATIO);
+            f.remove(SEEN);
         }
     }
 }
 
-/// After the scale `typed` ("scaleH" or "scaleV") changed with the link on, set the other one from
-/// the proportions the link keeps, within the range its field takes (so the field shows what the
-/// command applies at the limits).
-fn follow_link(d: &mut Dialog, typed: &str) {
-    let ratio = d.f64(RATIO, 0.0);
-    let (h, v) = scale_keys(d);
-    if !d.bool(LINK) || !ratio.is_finite() || ratio == 0.0 || (typed != h && typed != v) {
-        return;
-    }
-    let (other, value) = if typed == h { (v, d.f64(h, 100.0) * ratio) } else { (h, d.f64(v, 100.0) / ratio) };
-    let limit = if relative(d) { MAX_SCALE } else { MAX_ABSOLUTE };
-    if value.is_finite() {
-        d.fields.insert(other.into(), json!(value.clamp(-limit, limit)));
-    }
+/// [`shared_size`] as the fields keep it under [`SHARED`].
+fn shared_of(f: &DialogFields) -> Shared {
+    (f.number(SHARED[0]), f.number(SHARED[1]))
 }
 
-/// The Scale section's Relative and Absolute radio buttons, under its sliders (field `relative`).
-/// Absolute shows the size the selected objects share, set again each time it is chosen.
-fn scale_mode_radios(ui: &mut egui::Ui, d: &mut Dialog, app: &VectorcraftApp, units: vectorcraft_doc::Unit) {
-    let relative = relative(d);
-    ui.horizontal(|ui| {
-        ui.add_space(LABEL_W + ui.spacing().item_spacing.x);
-        for (label, on) in [(tl!("Relative"), true), (tl!("Absolute"), false)] {
-            if widgets::radio(ui, label, relative == on, true) && relative != on {
-                d.fields.insert("relative".into(), json!(on));
-                if on {
-                    keep_link_proportions(d);
-                } else {
-                    let size = shared_size(app, units);
-                    set_absolute_targets(d, size);
-                }
-            }
-        }
-    });
-}
-
-/// `ui.dialog.set` changed a field the Scale section reads: a switch to Absolute shows the size the
-/// objects share, and the link (`__constrain`) and its two scales follow as a click or a typed
-/// value does.
-pub(super) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) {
-    match field {
-        "relative" => {
-            let size = shared_size(app, app.session.general_unit());
-            let Some(d) = app.ui.dialog.as_mut() else { return };
-            let mode = relative(d);
-            if old.and_then(Value::as_bool) != Some(mode) {
-                if mode {
-                    keep_link_proportions(d);
-                } else {
-                    set_absolute_targets(d, size);
-                }
-            }
-        }
-        LINK => {
-            if let Some(d) = app.ui.dialog.as_mut() {
-                link_changed(d);
-            }
-        }
-        "scaleH" | "scaleV" | "absH" | "absV" => {
-            if let Some(d) = app.ui.dialog.as_mut() {
-                follow_link(d, field);
-            }
-        }
-        _ => {}
+/// The Transform row's set-time rule: automation's value is written as the row keeps it (a size may come as text in a
+/// unit, "10 mm"), then the link and mode rules run as before a pass, so a switch to Absolute shows the shared size and
+/// a scale set with the link on sets the other.
+fn set_from_outside(f: &mut DialogFields, key: &str, value: Value) -> Result<(), String> {
+    let refused = || FieldRefusal::Rejects(&value).message(key);
+    match (&value, matches!(key, "relative" | LINK)) {
+        (Value::Bool(on), true) => f.set(key, *on),
+        (Value::Number(n), false) => f.set(key, n.as_f64().ok_or_else(refused)?),
+        (Value::String(text), false) => f.set(key, vectorcraft_doc::Unit::Points.parse(text).ok_or_else(refused)?),
+        _ => return Err(refused()),
     }
+    apply_links(f, shared_of(f));
+    Ok(())
 }
 
 /// The Absolute targets (`absH`, `absV`) for the selection's [`shared_size`]: the width and height
 /// its objects share, and none (the fields read "Mixed") when they differ.
-fn set_absolute_targets(d: &mut Dialog, (w, h): (Option<f64>, Option<f64>)) {
+fn set_absolute_targets(f: &mut DialogFields, (w, h): Shared) {
     for (key, v) in [("absH", w), ("absV", h)] {
         match v {
-            Some(v) => {
-                d.fields.insert(key.into(), json!(v));
-            }
+            Some(v) => f.set(key, v),
             None => {
-                d.fields.remove(key);
+                f.remove(key);
             }
         }
     }
-    keep_link_proportions(d);
+}
+
+/// What a Scale or Move field counts: percentages, or lengths kept in points and shown in the
+/// document's unit.
+#[derive(Clone, Copy)]
+enum Measure {
+    Percent,
+    Length(LengthUnits),
+}
+
+/// One captioned side: a slider over `rail` and a number field in ±`limit`, `value` being none
+/// while the objects differ (the field reads Mixed). Returns the value the user set this pass.
+fn side(
+    ui: &mut Ui,
+    key: &'static str,
+    label: impl Into<Label>,
+    value: Option<f64>,
+    measure: Measure,
+    rail: &RangeInclusive<f64>,
+    limit: f64,
+) -> Option<f64> {
+    let label: Label = label.into();
+    let mut edit = None;
+    Field::new(label.clone()).id_salt(key).show(ui, |ui, _| {
+        Row::new().show(ui, |ui, _| {
+            let shown = value.map_or(Mixed::Mixed, |v| Mixed::Same(Some(v)));
+            let dragged = Slider::new(Bind::given(value.map_or(Mixed::Mixed, |v| Mixed::Same(v.clamp(*rail.start(), *rail.end())))), rail.clone())
+                .label(label.clone())
+                .id_salt("slider")
+                .show(ui)
+                .value()
+                .copied();
+            let field = match measure {
+                Measure::Percent => NumberField::new(label.clone(), Bind::given(shown)).unit_kind(UnitKind::Percent),
+                Measure::Length(lengths) => NumberField::length(label.clone(), Bind::given(shown), lengths),
+            };
+            let typed = field.range(-limit..=limit).id_salt("field").show(ui).edit.value().cloned().flatten();
+            edit = typed.or(dragged);
+        });
+    });
+    edit
+}
+
+/// The Relative and Absolute radio buttons; the value picked this pass.
+fn mode_radios(ui: &mut Ui, relative: bool) -> Option<bool> {
+    let group = RadioGroup::new(tl!("Scale mode"), Bind::given(relative)).show(ui, |ui, _| {
+        Row::new().show(ui, |ui, _| {
+            Radio::new(true).label(tl!("Relative")).show(ui);
+            Radio::new(false).label(tl!("Absolute")).show(ui);
+        });
+    });
+    group.output.value().copied()
+}
+
+/// The Angle row: a dial and a field in degrees; the angle set this pass.
+fn rotate_row(ui: &mut Ui, angle: f64) -> Option<f64> {
+    let mut edit = None;
+    Field::new(tl!("Angle:")).id_salt("rotate").show(ui, |ui, _| {
+        Row::new().show(ui, |ui, _| {
+            let dialed = AngleDial::new(Bind::given(angle)).label(tl!("Angle:")).range(-360.0..=360.0).show(ui).value().copied();
+            let typed =
+                NumberField::new(tl!("Angle:"), Bind::given(Some(angle))).unit_kind(UnitKind::Degrees).show(ui).edit.value().cloned().flatten();
+            edit = typed.or(dialed);
+        });
+    });
+    edit
+}
+
+/// The Scale, Move and Rotate rows of Transform Each and the Transform effect: sliders and fields
+/// for `scaleH` and `scaleV` (rails 0–200 %; with `link` also the proportion link and the Relative
+/// and Absolute choice, whose Absolute edits `absH` and `absV`), `moveH` and `moveV` (rails
+/// ±1000 pt), and a dial for `rotate`. The fields take values past the rails.
+pub(crate) fn rows(ui: &mut Ui, fields: &mut DialogFields, lengths: LengthUnits, link: ScaleLink) -> Response {
+    let absolute = link == ScaleLink::Toggle && !relative(fields);
+    let (hk, vk) = if absolute { ("absH", "absV") } else { ("scaleH", "scaleV") };
+    let (measure, rail, limit) =
+        if absolute { (Measure::Length(lengths), ABSOLUTE_RAIL, MAX_ABSOLUTE) } else { (Measure::Percent, SCALE_RAIL, MAX_SCALE) };
+    let linked = flag(fields, LINK);
+    let (mut scales, mut moves) = ([None; 2], [None; 2]);
+    let (mut angle, mut toggled, mut mode) = (None, None, None);
+    let read: &DialogFields = fields;
+    let shown = Stack::new().show(ui, |ui, _| {
+        Text::new(tl!("Scale")).show(ui);
+        Row::new().show(ui, |ui, _| {
+            Stack::new().show(ui, |ui, _| {
+                for (at, (key, label)) in [(hk, tl!("Horizontal:")), (vk, tl!("Vertical:"))].into_iter().enumerate() {
+                    scales[at] = side(ui, key, label, field_number(read, key), measure, &rail, limit);
+                }
+            });
+            if link == ScaleLink::Toggle {
+                toggled = link_toggle(tl!("Constrain Width and Height Proportions"), Bind::given(linked)).show(ui).value().copied();
+            }
+        });
+        if link == ScaleLink::Toggle {
+            mode = mode_radios(ui, !absolute);
+        }
+        Text::new(tl!("Move")).show(ui);
+        for (at, (key, label)) in [("moveH", tl!("Horizontal:")), ("moveV", tl!("Vertical:"))].into_iter().enumerate() {
+            moves[at] = side(ui, key, label, Some(num(read, key, 0.0)), Measure::Length(lengths), &MOVE_RAIL, MAX_ABSOLUTE);
+        }
+        Text::new(tl!("Rotate")).show(ui);
+        angle = rotate_row(ui, num(read, "rotate", 0.0));
+    });
+    for (key, edit) in [(hk, scales[0]), (vk, scales[1]), ("moveH", moves[0]), ("moveV", moves[1]), ("rotate", angle)] {
+        if let Some(n) = edit {
+            fields.set(key, n);
+        }
+    }
+    if let Some(on) = toggled {
+        fields.set(LINK, on);
+    }
+    if let Some(on) = mode {
+        fields.set("relative", on);
+    }
+    shown.output
+}
+
+/// The Reflect X, Reflect Y and Random options of Transform Each and the Transform effect.
+pub(crate) fn reflect_checks(ui: &mut Ui, fields: &mut DialogFields) -> Response {
+    const KEYS: [&str; 3] = ["reflectX", "reflectY", "random"];
+    let mut edits = [None; 3];
+    let read: &DialogFields = fields;
+    let shown = Stack::new().show(ui, |ui, _| {
+        for (at, label) in [tl!("Reflect X"), tl!("Reflect Y"), tl!("Random")].into_iter().enumerate() {
+            edits[at] = Checkbox::new(Bind::given(flag(read, KEYS[at]))).label(label).show(ui).value().copied();
+        }
+    });
+    for (key, edit) in KEYS.into_iter().zip(edits) {
+        if let Some(on) = edit {
+            fields.set(key, on);
+        }
+    }
+    shown.output
+}
+
+/// The reference point picker (field `reference`, 0..8 over the 9-point grid).
+pub(crate) fn reference_point(ui: &mut Ui, fields: &mut DialogFields) -> Response {
+    let at = num(fields, "reference", 4.0).clamp(0.0, 8.0) as usize;
+    let anchor = Anchor9::ALL.get(at).copied().unwrap_or(Anchor9::Centre);
+    let shown = ReferencePoint::new(tl!("Reference Point"), Bind::given(Some(anchor))).look(ReferencePointLook::Squares).show(ui);
+    if let Some(i) = shown.value().and_then(|picked| Anchor9::ALL.iter().position(|a| Some(*a) == *picked)) {
+        fields.set("reference", i as i64);
+    }
+    shown.response
+}
+
+/// The dialog's rows: Scale, Move and Rotate in one row, then the options.
+fn dialog_params(lengths: LengthUnits) -> Vec<Param> {
+    vec![
+        Param::custom("scaleH", tl!("Transform"), move |ui, f, _| rows(ui, f, lengths, ScaleLink::Toggle))
+            .companions(["scaleV", "absH", "absV", "relative", LINK, "moveH", "moveV", "rotate"])
+            .on_set(set_from_outside)
+            .full_width(),
+        Param::section(tl!("Options")),
+        Param::new("objects", tl!("Transform Objects"), ParamKind::bool(true)),
+        Param::new("patterns", tl!("Transform Patterns"), ParamKind::bool(true)),
+        Param::new("strokes", tl!("Scale Strokes & Effects"), ParamKind::bool(true)),
+        Param::new("corners", tl!("Scale Corners"), ParamKind::bool(true)),
+        Param::custom("reflectX", tl!("Reflect"), |ui, f, _| reflect_checks(ui, f))
+            .companions(["reflectY", "random"])
+            .on_set(|f, key, value| {
+                f.set(key, value.as_bool().ok_or_else(|| FieldRefusal::Rejects(&value).message(key))?);
+                Ok(())
+            })
+            .full_width(),
+        Param::custom("reference", tl!("Reference Point"), |ui, f, _| reference_point(ui, f))
+            .on_set(|f, key, value| {
+                let at = value.as_i64().filter(|at| (0..=8).contains(at)).ok_or_else(|| FieldRefusal::Rejects(&value).message(key))?;
+                f.set(key, at);
+                Ok(())
+            })
+            .full_width(),
+    ]
+}
+
+/// The dialog over `fields`, after the link and mode rules.
+fn form(fields: &mut DialogFields, shared: Shared, lengths: LengthUnits) -> ParamDialog<'_> {
+    apply_links(fields, shared);
+    ParamDialog::new(KEY, tl!("Transform Each"), dialog_params(lengths))
+        .values(Bind::bound(fields))
+        .previews(true)
+        .extra_buttons(vec![(COPY.to_string(), FooterButton::new(tl!("Copy"), DialogRole::Other))])
+}
+
+/// Opens Transform Each on the values it was last confirmed with.
+pub(crate) fn open(app: &mut VectorcraftApp) {
+    let Some(ctx) = app.ui_ctx.clone() else { return };
+    let shared = shared_size(app, app.session.general_unit());
+    let lengths = crate::canvas::general_lengths(app); // PLAN: assumed path of cv.B5b
+    let mut f = opening_fields(app, &ctx);
+    for (key, side) in SHARED.into_iter().zip([shared.0, shared.1]) {
+        if let Some(side) = side {
+            f.set(key, side);
+        }
+    }
+    apply_links(&mut f, shared);
+    let dialog = HostedParamDialog::new(&ctx, KEY, f, move |fields| form(fields, shared, lengths));
+    let options = HeldOptions { cancel: Some(Box::new(cancel)), ..Default::default() };
+    if let Some(id) = open_held_with(app, dialog, move |app, result| ok(app, &ctx, result), options) {
+        app.object_dialogs.each = Some(Open { id, preview: LivePreview::default() });
+    }
+}
+
+/// Cancel rolls the preview back.
+fn cancel(app: &mut VectorcraftApp) {
+    if let Some(open) = app.object_dialogs.each.take() {
+        open.preview.cancel(app);
+    }
+}
+
+/// Applies the confirmed values as one undo step.
+fn commit(app: &mut VectorcraftApp, f: &DialogFields) -> Result<(), String> {
+    let p = with_scale_options(app, f, command_params(app, f))?;
+    let preview = app.object_dialogs.each.as_mut().map(|o| std::mem::take(&mut o.preview)).unwrap_or_default();
+    preview.commit(app, CMD, p).map(|_| ())
+}
+
+/// OK: transforms each object and keeps the values for the next open. A refusal clears Copy, or the
+/// next plain OK would copy.
+fn ok(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Result<(), String> {
+    if let Err(reason) = commit(app, &result.fields) {
+        if let (Some(id), Some(dialogs)) = (app.object_dialogs.each.as_ref().map(|o| o.id), app.dialogs()) {
+            dialogs.with(|host| {
+                if let Some(d) = host.get_mut_by_id::<HostedParamDialog>(id) {
+                    d.clear_field(COPY);
+                }
+            });
+        }
+        return Err(reason);
+    }
+    let mut kept = DialogFields::new();
+    for k in REMEMBERED {
+        if let Some(v) = result.fields.get(k) {
+            kept.set(k, v.clone());
+        }
+    }
+    set_saved_value(ctx, &EACH_KEY, Some(kept));
+    app.object_dialogs.each = None;
+    Ok(())
+}
+
+/// Each frame: previews the dialog's values while Preview is on, and turns a press of Copy into a
+/// confirm with `copy` set.
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(id) = app.object_dialogs.each.as_ref().map(|o| o.id) else { return };
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some((previewing, fields, action)) =
+        dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone(), d.take_footer_action())))
+    else {
+        return;
+    };
+    let mut p = command_params(app, &fields);
+    add_scale_options(app, &fields, &mut p);
+    if let Some(mut open) = app.object_dialogs.each.take() {
+        // The preview reports its own status; the answer of a run is not needed here.
+        let _ = open.preview.run(app, previewing, "Transform Each", CMD, &p);
+        app.object_dialogs.each = Some(open);
+    }
+    if action.as_deref() == Some(COPY) {
+        dialogs.with(|host: &mut DialogHost| {
+            if let Some(d) = host.get_mut_by_id::<HostedParamDialog>(id) {
+                d.set_field(COPY, FieldValue::Bool(true));
+            }
+            // A refused confirm leaves the dialog as it is: the held OK reports why.
+            let _ = host.confirm_by_id(ctx, id);
+        });
+    }
 }
 
 /// The objects a transform of `ids` acts on, as the command's own selection roots: a compound
@@ -380,7 +594,7 @@ fn shared_side(unit: vectorcraft_doc::Unit, sizes: impl Iterator<Item = f64>) ->
 /// The width and height the selected objects share (each `None` when they differ), measured on
 /// their own geometric bounds and without a preview: with Preview on, the document holds the
 /// transform the dialog has shown so far.
-fn shared_size(app: &VectorcraftApp, unit: vectorcraft_doc::Unit) -> (Option<f64>, Option<f64>) {
+fn shared_size(app: &VectorcraftApp, unit: vectorcraft_doc::Unit) -> Shared {
     // The objects the command transforms (a compound path's member stands for its compound), each
     // measured by its own box, rotated with it, as the Transform panel and the Control bar show it:
     // a rotated circle's axis-aligned bounds run a hair larger than the circle.
@@ -401,274 +615,170 @@ fn shared_size(app: &VectorcraftApp, unit: vectorcraft_doc::Unit) -> (Option<f64
     (shared(|b| b.0), shared(|b| b.1))
 }
 
-/// The Move and Rotate sections of Transform Each and the Transform effect: sliders for `moveH`
-/// and `moveV` (rails ±1000 pt, fields in `units`), and an angle dial for `rotate`
-/// (counter-clockwise). The fields take values past the rails.
-fn move_and_rotate(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc::Unit, live: bool) {
-    let rail = Tokens::get(ui.ctx()).input_border;
-    let track = move |_| rail;
-    let axes = |h, v| [(h, tl!("Horizontal:")), (v, tl!("Vertical:"))];
-    widgets::subheader(ui, tl!("Move"));
-    for (key, label) in axes("moveH", "moveV") {
-        widgets::label_row(ui, label, LABEL_W, |ui| {
-            let shown = form::length_value(d, key, units, -1000.0..=1000.0);
-            form::slider_rail_valued(ui, d, key, label, -1000.0..=1000.0, shown, &track);
-            if live {
-                if let Some(n) = widgets::num_field_live(ui, ("dlg-len", key), Some(d.f64(key, 0.0)), units, FIELD_W) {
-                    d.fields.insert(key.into(), json!(n));
-                }
-            } else {
-                form::length(ui, d, key, units, FIELD_W);
-            }
-        });
-    }
-    widgets::subheader(ui, tl!("Rotate"));
-    widgets::label_row(ui, tl!("Angle:"), LABEL_W, |ui| {
-        let angle = d.f64("rotate", 0.0);
-        let dialed = widgets::angle_dial(ui, "te-dial", angle, 28.0);
-        let typed = if live {
-            widgets::plain_field_live(ui, ("te", "rotate"), angle, "°", 2, ANGLE_FIELD_W)
-        } else {
-            widgets::plain_field(ui, ("te", "rotate"), angle, "°", 2, ANGLE_FIELD_W)
-        };
-        if let Some(a) = typed.or(dialed) {
-            d.fields.insert("rotate".into(), json!(a));
-        }
-    });
-}
-
-/// The Scale, Move and Rotate sections of Transform Each and the Transform effect: sliders for
-/// `scaleH` and `scaleV` (rails 0–200 %), sliders for `moveH` and `moveV` (rails ±1000 pt, fields
-/// in `units`), and an angle dial for `rotate` (counter-clockwise). The Transform effect has no
-/// link between its two scales.
-pub(super) fn sections(ui: &mut egui::Ui, d: &mut Dialog, units: vectorcraft_doc::Unit, live: bool) {
-    widgets::subheader(ui, tl!("Scale"));
-    scale_rows(ui, d, units, live, false, false);
-    move_and_rotate(ui, d, units, live);
-}
-
-/// The Reflect X, Reflect Y and Random options of Transform Each and the Transform effect.
-pub(super) fn reflect_checks(ui: &mut egui::Ui, d: &mut Dialog) {
-    form::check(ui, d, "reflectX", tl!("Reflect X"));
-    form::check(ui, d, "reflectY", tl!("Reflect Y"));
-    form::check(ui, d, "random", tl!("Random"));
-}
-
-/// The reference point locator (field `reference`) and its label.
-pub(super) fn reference_point_row(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.horizontal(|ui| {
-        let cur = d.f64("reference", 4.0).clamp(0.0, 8.0) as usize;
-        if let Some(i) = widgets::reference_point(ui, cur) {
-            d.fields.insert("reference".into(), json!(i));
-        }
-        widgets::dim_label(ui, tl!("Reference Point"));
-    });
-}
-
-/// The Reflect X, Reflect Y, reference point and Random options of the Transform effect.
-pub(super) fn reflect_options(ui: &mut egui::Ui, d: &mut Dialog) {
-    form::check(ui, d, "reflectX", tl!("Reflect X"));
-    form::check(ui, d, "reflectY", tl!("Reflect Y"));
-    reference_point_row(ui, d);
-    form::check(ui, d, "random", tl!("Random"));
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let units = app.session.general_unit();
-    // The rows scroll when the window is shorter than they are, so the heading, Preview and the
-    // buttons stay in view.
-    super::modal::scrolled_rows(ui, "transform-each-rows", |ui| {
-        scale_section(ui, d, units, !relative(d));
-        scale_mode_radios(ui, d, app, units);
-        move_and_rotate(ui, d, units, false);
-        widgets::subheader(ui, tl!("Options"));
-        ui.add_space(4.0);
-        // The options in two columns: the object and scale options, then the reflections and
-        // Random, which start where the Scale and Move fields do.
-        let fields_x = LABEL_W + 2.0 * ui.spacing().item_spacing.x + form::SLIDER_WIDTH;
-        ui.horizontal_top(|ui| {
-            ui.vertical(|ui| {
-                ui.set_width(fields_x - ui.spacing().item_spacing.x);
-                object_options(app, ui, d);
-                scale_options_ordered(app, ui, d, true);
-            });
-            ui.vertical(|ui| reflect_checks(ui, d));
-        });
-        ui.add_space(6.0);
-        reference_point_row(ui, d);
-    });
-    let mut p = params(d);
-    add_object_options(app, d, &mut p);
-    add_scale_options(app, d, &mut p);
-    form::preview_without_check(app, d, "Transform Each", CMD, p);
-    false
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut p = params(d);
-    add_object_options(app, d, &mut p);
-    let p = with_scale_options(app, d, p)?;
-    let mut kept = serde_json::Map::new();
-    for k in REMEMBERED {
-        let v = match k {
-            "preview" | LINK => json!(d.bool(k)),
-            // The percentages stay the dialog's own, whichever mode the scales were applied in.
-            "scaleH" | "scaleV" => json!(d.f64(k, 100.0)),
-            _ => p[k].clone(),
-        };
-        kept.insert(k.into(), v);
-    }
-    let r = form::commit_preview(app, CMD, p)?;
-    app.ui.transform_each = Value::Object(kept);
-    Ok(r)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui_kittest::kittest::Queryable;
     use vectorcraft_doc::NodeId;
     use vectorcraft_engine::Session;
 
-    #[test]
-    fn ok_transforms_each_and_keeps_the_scale_options() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
-        app.run("select.all", json!({})).unwrap();
-        app.run("prefs.set", json!({"key": "scaleStrokes", "value": true})).unwrap();
-        app.run("ui.menuDialog", json!({ "command": CMD })).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
-        // One drawn frame: the checkboxes start from the preferences.
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(&mut app, ui.ctx()));
-        out.textures_delta.clear();
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!(d.fields["strokes"], json!(true));
-        d.fields.insert("scaleH".into(), json!(200));
-        d.fields.insert("scaleV".into(), json!(200));
-        d.fields.insert("strokes".into(), json!(false));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        assert!(!app.session.prefs.scale_strokes, "OK keeps the option as the preference");
-        let n = app.session.doc().unwrap().doc.node(NodeId(id)).unwrap().clone();
-        assert!((n.geometric_bounds().unwrap().width() - 100.0).abs() < 1e-6);
-        assert_eq!(n.appearance.stroke_width(), 1.0, "strokes kept their weight");
-        let (cmd, p) = app.session.journal.last().unwrap();
-        assert_eq!((cmd.as_str(), &p["strokes"], &p["objects"]), (CMD, &json!(false), &json!(true)), "#1448: Transform Objects goes along");
-    }
+    type Harness = egui_kittest::Harness<'static, VectorcraftApp>;
 
     /// An app with a selected 50 × 50 square at (20, 20).
     fn square_app() -> (VectorcraftApp, NodeId) {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
         let id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
         (app, NodeId(id))
     }
 
-    fn open(app: &mut VectorcraftApp) -> &mut Dialog {
-        crate::menus::invoke(app, CMD, json!({}));
-        let d = app.ui.dialog.as_mut().expect("Transform Each is open");
-        assert_eq!(d.kind, KIND);
-        d
+    /// A harness that shows the dialog host and runs the module pumps each frame.
+    // PLAN: assumed `adopt_context(&Context)` and that `DialogHost::run` over the window's host stands for the shell pass.
+    fn start(app: VectorcraftApp) -> Harness {
+        let mut ready = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut ready, true) {
+                    crate::testing::install(ui.ctx());
+                    app.adopt_context(ui.ctx());
+                    return;
+                }
+                if let Some(dialogs) = app.dialogs() {
+                    dialogs.with(|host| host.run(ui));
+                }
+                pump(app, ui.ctx());
+                crate::dialogs::host::pump(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(2);
+        h
+    }
+
+    fn id(h: &Harness) -> DialogId {
+        h.state().object_dialogs.each.as_ref().expect("Transform Each is open").id
+    }
+
+    fn set(h: &mut Harness, key: &str, value: Value) {
+        let (ctx, id) = (h.ctx.clone(), id(h));
+        h.state().dialogs().unwrap().with(|host| host.set_json_field(&ctx, id, key, value)).unwrap();
+    }
+
+    fn field(h: &Harness, key: &str) -> Option<FieldValue> {
+        let id = id(h);
+        h.state().dialogs().unwrap().with(|host| host.get_by_id::<HostedParamDialog>(id).and_then(|d| d.fields().get(key).cloned()))
+    }
+
+    fn number(h: &Harness, key: &str) -> f64 {
+        match field(h, key) {
+            Some(FieldValue::Number(n)) => n,
+            Some(FieldValue::Int(n)) => n as f64,
+            other => panic!("{key} is {other:?}"),
+        }
+    }
+
+    fn confirm(h: &mut Harness) {
+        let (ctx, id) = (h.ctx.clone(), id(h));
+        assert!(h.state().dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id)) || h.state().object_dialogs.each.is_some());
+        h.run_steps(3);
     }
 
     #[test]
-    fn a_fresh_app_opens_on_the_defaults() {
-        let (mut app, _) = square_app();
-        let d = open(&mut app);
-        assert_eq!(Value::Object(d.fields.clone()), fields());
+    fn ok_transforms_each_and_keeps_the_scale_options() {
+        let (mut app, node) = square_app();
+        app.run("prefs.set", json!({"key": "scaleStrokes", "value": true})).unwrap();
+        let mut h = start(app);
+        open(h.state_mut());
+        h.run_steps(2);
+        assert_eq!(field(&h, "strokes"), Some(FieldValue::Bool(true)), "the checkboxes start from the preferences");
+        set(&mut h, "scaleH", json!(200));
+        set(&mut h, "scaleV", json!(200));
+        set(&mut h, "strokes", json!(false));
+        confirm(&mut h);
+        let app = h.state_mut();
+        assert!(app.object_dialogs.each.is_none());
+        assert!(!app.session.prefs.scale_strokes, "OK keeps the option as the preference");
+        let n = app.session.doc().unwrap().doc.node(node).unwrap().clone();
+        assert!((n.geometric_bounds().unwrap().width() - 100.0).abs() < 1e-6);
+        assert_eq!(n.appearance.stroke_width(), 1.0, "strokes kept their weight");
+        let (cmd, p) = app.session.journal.last().unwrap();
+        assert_eq!((cmd.as_str(), &p["strokes"], &p["objects"]), (CMD, &json!(false), &json!(true)), "#1448: Transform Objects goes along");
     }
 
     /// A dialog that opens with the link on keeps the proportions of the scales it opens on, so a
     /// scale set before the first frame (`ui.dialog.set`) follows it.
     #[test]
     fn a_link_that_opens_on_keeps_the_proportions_it_opens_on() {
-        let (mut app, _) = square_app();
-        app.ui.transform_each = json!({"scaleH": 100, "scaleV": 200, "__constrain": true});
-        assert_eq!(open(&mut app).f64("__ratio", 0.0), 2.0);
-        app.ui.transform_each = json!({"scaleH": 100, "scaleV": 200, "__constrain": false});
-        assert_eq!(open(&mut app).fields.get("__ratio"), None);
+        let (app, _) = square_app();
+        let mut h = start(app);
+        let kept =
+            DialogFields::from_pairs([("scaleH", FieldValue::Number(100.0)), ("scaleV", FieldValue::Number(200.0)), (LINK, FieldValue::Bool(true))]);
+        set_saved_value(&h.ctx, &EACH_KEY, Some(kept));
+        open(h.state_mut());
+        set(&mut h, "scaleH", json!(50));
+        h.run_steps(2);
+        assert_eq!(number(&h, "scaleV"), 100.0, "the other scale followed at the proportions it opened on");
     }
 
     /// #1732: the dialog opens on the values it was last confirmed with (as Move and Offset Path
     /// do), but never on Copy.
     #[test]
     fn it_reopens_on_the_values_confirmed_last() {
-        let (mut app, _) = square_app();
-        let d = open(&mut app);
+        let (app, _) = square_app();
+        let mut h = start(app);
+        open(h.state_mut());
+        h.run_steps(2);
         for (k, v) in [
             ("scaleH", json!(150)),
-            ("relative", json!(false)),
             ("moveH", json!(20)),
             ("rotate", json!(15)),
             ("reflectX", json!(true)),
             ("random", json!(true)),
             ("reference", json!(0)),
             ("objects", json!(false)),
-            ("patterns", json!(true)),
-            ("copy", json!(true)),
         ] {
-            d.fields.insert(k.into(), v);
+            set(&mut h, k, v);
         }
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        let d = open(&mut app);
-        for (k, v) in [
-            ("scaleH", json!(150.0)),
-            ("scaleV", json!(100.0)),
-            ("relative", json!(false)),
-            ("moveH", json!(20.0)),
-            ("rotate", json!(15.0)),
-            ("reflectX", json!(true)),
-            ("reflectY", json!(false)),
-            ("random", json!(true)),
-            ("reference", json!(0)),
-            ("objects", json!(false)),
-            ("preview", json!(false)),
-            ("copy", json!(false)),
-        ] {
-            assert_eq!(d.fields.get(k), Some(&v), "{k}");
+        // Copy is a footer button, not a row: the fields hold it as the app's Copy action sets it.
+        let dialog = id(&h);
+        h.state().dialogs().unwrap().with(|host| host.get_mut_by_id::<HostedParamDialog>(dialog).map(|d| d.set_field(COPY, FieldValue::Bool(true))));
+        confirm(&mut h);
+        assert!(h.state().object_dialogs.each.is_none());
+        open(h.state_mut());
+        h.run_steps(2);
+        for (k, v) in [("scaleH", 150.0), ("scaleV", 100.0), ("moveH", 20.0), ("rotate", 15.0), ("reference", 0.0)] {
+            assert_eq!(number(&h, k), v, "{k}");
+        }
+        for (k, v) in [("reflectX", true), ("reflectY", false), ("random", true), ("objects", false), (COPY, false)] {
+            assert_eq!(field(&h, k), Some(FieldValue::Bool(v)), "{k}");
         }
         // Cancel keeps nothing new.
-        d.fields.insert("scaleH".into(), json!(300));
-        super::super::cancel(&mut app);
-        assert_eq!(open(&mut app).fields["scaleH"], json!(150.0));
-        // The remembered values go with the UI state; one saved before they existed loads, and
-        // opens on the defaults.
-        app.ui.dialog = None;
-        app.ui = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
-        assert_eq!(open(&mut app).fields["scaleH"], json!(150.0));
-        app.ui = serde_json::from_value(json!({"move_options": {"copy": true}})).unwrap();
-        assert_eq!(Value::Object(open(&mut app).fields.clone()), fields());
+        set(&mut h, "scaleH", json!(300));
+        let (ctx, id) = (h.ctx.clone(), id(&h));
+        h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id));
+        h.run_steps(3);
+        open(h.state_mut());
+        h.run_steps(2);
+        assert_eq!(number(&h, "scaleH"), 150.0);
     }
 
     /// #1732: the Copy button transforms a copy of each object, in one undo step, and Transform
     /// Again makes a further copy; there is no Copy checkbox.
     #[test]
     fn the_copy_button_transforms_a_copy_of_each_object() {
-        use egui_kittest::kittest::Queryable;
-        let (mut app, id) = square_app();
-        let d = open(&mut app);
-        d.fields.insert("moveH".into(), json!(100));
+        let (app, id) = square_app();
         let undo = app.session.doc().unwrap().history.undo.len();
-        let mut fonts = false;
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
-            move |ui, app: &mut VectorcraftApp| {
-                if !std::mem::replace(&mut fonts, true) {
-                    crate::theme::install_fonts(ui.ctx());
-                    return;
-                }
-                super::super::show(app, ui.ctx());
-            },
-            app,
-        );
-        h.run_steps(4);
+        let mut h = start(app);
+        open(h.state_mut());
+        h.run_steps(2);
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
         assert!(h.query_by_role_and_label(egui::accesskit::Role::CheckBox, "Copy").is_none(), "no Copy checkbox");
         h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
-        h.run_steps(3);
+        h.run_steps(4);
         let app = h.state_mut();
-        assert!(app.ui.dialog.is_none(), "Copy closes the dialog");
+        assert!(app.object_dialogs.each.is_none(), "Copy closes the dialog");
         let xs = |app: &VectorcraftApp| {
             let st = app.session.doc().unwrap();
             let mut xs: Vec<f64> = st.doc.layers[0].children().unwrap().iter().map(|n| n.geometric_bounds().unwrap().x0.round()).collect();
@@ -678,10 +788,11 @@ mod tests {
         assert_eq!(xs(app), vec![20.0, 120.0], "the square stays, its copy moved 100 pt");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
         assert!(app.session.doc().unwrap().doc.node(id).is_some());
-        assert_eq!(open(app).fields["copy"], json!(false), "Copy isn't remembered");
-        app.ui.dialog = None;
         app.run("object.transformAgain", json!({})).unwrap();
         assert_eq!(xs(app), vec![20.0, 120.0, 220.0], "Transform Again copies once more");
+        open(h.state_mut());
+        h.run_steps(2);
+        assert_eq!(field(&h, COPY), Some(FieldValue::Bool(false)), "Copy isn't remembered");
         h.ctx.forget_all_images();
     }
 }
