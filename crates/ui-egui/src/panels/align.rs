@@ -8,6 +8,7 @@ use craft::keymap::CommandRef;
 use craft::ui::bars::{BarItem, BarItems};
 use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
 use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::display::Divider;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::text::NumberField;
@@ -513,6 +514,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     if part_hidden(app, HIDE_OPTIONS) {
         return;
     }
+    Divider::horizontal().show(ui);
     // The Distribute Spacing value is sent while there is a key object or a key guide (#2143), or
     // for artboards while Align to Artboard is chosen.
     let spacing = app.ui.align_spacing;
