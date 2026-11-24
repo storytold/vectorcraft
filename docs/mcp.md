@@ -3054,6 +3054,18 @@ VectorCraft writes files by these rules of its own:
   `Script file access denied` and the path, saving into a user library (swatches, brushes, symbols or graphic
   styles) included; reading the app's own libraries is allowed. A script given as `source` that a person allowed nothing writes only in
   its `Folder.temp` and `Folder.userData` and to the open documents' own files.
+  Such a command also reads the files that the documents open when the run began link to (linked images, placed
+  files, the plate files of a DCS image and the images their data sets name), so an export, save, print or package
+  of them includes the linked art. A link does not let the command write the file it names: it writes a linked file
+  only when the rule above lets it write there. The files are taken as those links led at the run's
+  first `vc.run`, and a path that leads to another file since is refused. A linked file in the folder that holds
+  the settings is not read this way unless it lies in one of the script's own places inside that folder.
+  Both rules count each document as the person last opened or saved it. A document that a script's command opened,
+  in this run or an earlier one, gives the commands no access to its file, and its links give them no file to read.
+  A document opened from a linked file is therefore not saved over that file unless the script may write there. A
+  link or data set value that a script's command adds or changes, and a file that a script's command saves a document
+  to, give later runs no access either. The person's next save of the document ends this. The automation read roots
+  still apply.
   A pick inside the folder that holds the settings gives `null` and sets `error` to `Script file access to the app's
   own folders is not allowed`.
 - A run with nobody to ask, as over MCP or the command line, gives `null` from every file dialog and sets `error` to
