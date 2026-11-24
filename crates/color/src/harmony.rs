@@ -16,8 +16,8 @@ fn srgba(c: Color) -> Srgba {
     Srgba::rgb(r, g, b)
 }
 
-/// `c` in the model of `orig`.
-fn in_model_of(orig: Color, c: Srgba) -> Color {
+/// `c` in the model of `orig`: how [`move_on_wheel`] writes a moved colour.
+pub fn in_model_of(orig: Color, c: Srgba) -> Color {
     keep_model(orig, Color::rgb(c.r, c.g, c.b))
 }
 

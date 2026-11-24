@@ -13,7 +13,7 @@ use std::borrow::Cow;
 use craft::behavior::{DisplayOrder, IconId, ItemSource, Selection, SelectionChange};
 use craft::color_ui::ui::{ChannelRow, ColorPanelMode, HarmonyWheel};
 use craft::theme::variant::Tone;
-use craft::theme::{ModelValues, Rgba};
+use craft::theme::{ModelValues, Rgba, Srgba};
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::{SwatchSpacing, SwatchTable};
 use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _};
@@ -30,7 +30,7 @@ use craft::ui::text::{HexField, TextField};
 use egui::{Rect, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_color::harmony::{self, Harmony, THEME_SIZE, move_on_wheel};
+use vectorcraft_color::harmony::{self, Harmony, THEME_SIZE, in_model_of, move_on_wheel};
 use vectorcraft_engine::cmd::colortheme::ColorTheme;
 
 use super::color::{color_of_values, working_rgb};
@@ -492,7 +492,8 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let shown: Vec<_> = d.colors.iter().map(srgba).collect();
-    let wheel = HarmonyWheel::new(tl!("Harmony wheel"), &shown).selected_marker(Some(d.sel)).show(ui);
+    let stored = |k: usize, c: Srgba| -> Srgba { d.colors.get(k).map_or(c, |&m| srgba(&in_model_of(m, c))) };
+    let wheel = HarmonyWheel::new(tl!("Harmony wheel"), &shown).selected_marker(Some(d.sel)).stored_as(&stored).show(ui);
     if let Some(k) = wheel.pressed {
         d.sel = k;
     }

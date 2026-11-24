@@ -26,7 +26,8 @@ use craft::ui::runtime::env::{Env, Label};
 use egui::{Response, Ui};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_color::harmony::Harmony;
+use vectorcraft_color::harmony::{Harmony, in_model_of};
+use vectorcraft_color::recolor::ColorKey;
 
 use super::prominent::{ProminentBar, ProminentPart, weights};
 use super::{
@@ -96,11 +97,14 @@ pub(super) fn show(ui: &mut Ui, d: &mut Fields, feed: &Feed, rows: &mut Vec<Valu
         changed |= moved;
         (None, opener)
     } else {
-        let colors: Vec<Srgba> = active.iter().map(|&i| srgba(&rows.get(i).and_then(to_color).unwrap_or_default())).collect();
+        let models: Vec<Color> = active.iter().map(|&i| rows.get(i).and_then(to_color).unwrap_or_default()).collect();
+        let colors: Vec<Srgba> = models.iter().map(srgba).collect();
+        // A marker's colour as its row keeps it: in the row's model, to its key's precision.
+        let stored = |k: usize, c: Srgba| -> Srgba { models.get(k).map_or(c, |&m| srgba(&ColorKey::of(&in_model_of(m, c)).color())) };
         let at = |row: Option<usize>| row.and_then(|r| active.iter().position(|&i| i == r));
         let look = if segmented { DiscLook::Segmented } else { DiscLook::Smooth };
         let name = if segmented { tl!("Segmented color wheel") } else { tl!("Color wheel") };
-        let out = HarmonyWheel::new(name, &colors).selected_marker(at(sel)).base(at(base)).look(look).radius(axes).show(ui);
+        let out = HarmonyWheel::new(name, &colors).selected_marker(at(sel)).base(at(base)).look(look).radius(axes).stored_as(&stored).show(ui);
         // A right-click on the disc: a marker's menu, or Add New Color at the point, tied to the spoke it is on.
         if let Some(hit) = out.context {
             let row = |k: Option<usize>| k.and_then(|k| active.get(k)).copied();
