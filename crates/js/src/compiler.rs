@@ -99,6 +99,9 @@ struct FnCompiler<'a> {
     block_funcs: HashSet<StmtId>,
     /// The function declarations in blocks whose names are also var-scoped (Annex B.3.3).
     annex: HashSet<StmtId>,
+    /// The optional chains being compiled, innermost last: where a step that finds `undefined`
+    /// or `null` jumps, and the stack depth the chain started at.
+    optional: Vec<(Label, u32)>,
 }
 
 /// The `var` names and function declarations a body hoists.
@@ -146,6 +149,7 @@ impl<'a> FnCompiler<'a> {
             top_funcs: HashSet::new(),
             block_funcs: HashSet::new(),
             annex: HashSet::new(),
+            optional: Vec::new(),
         }
     }
 
@@ -1237,6 +1241,12 @@ impl<'a> FnCompiler<'a> {
                 self.emit(Op::XmlScopeGet);
             }
             Expr::XmlDescendants { .. } | Expr::XmlFilter { .. } => self.chain(id)?,
+            Expr::OptionalChain(inner) => self.optional_chain(*inner, false)?,
+            Expr::Optional(object) => {
+                self.expr(*object)?;
+                self.at(self.ast.expr_span(id).end);
+                self.nullish_check()?;
+            }
         }
         Ok(())
     }
@@ -1405,53 +1415,95 @@ impl<'a> FnCompiler<'a> {
     /// A run of member accesses and calls (`a.b[c](d).e`), compiled from the innermost object out
     /// with a loop.
     fn chain(&mut self, id: ExprId) -> CResult<()> {
-        let mut suffixes = Vec::new();
+        self.chain_with(id, false)
+    }
+
+    /// [`Self::chain`]; with `keep_this` it leaves `value this`, the object of its last access as
+    /// a call's `this` (or `undefined` when it ends with something else). An [`Expr::Optional`]
+    /// step jumps out of the innermost optional chain being compiled.
+    fn chain_with(&mut self, id: ExprId, keep_this: bool) -> CResult<()> {
+        /// A suffix, or an optional step's check of the value before it.
+        #[derive(Clone, Copy)]
+        enum Link {
+            Suffix(ExprId),
+            Check(ExprId),
+        }
+        let mut links = Vec::new();
         let mut cur = id;
         loop {
             match self.ast.expr(cur) {
                 Some(
                     Expr::Member { object, .. } | Expr::Index { object, .. } | Expr::XmlDescendants { object, .. } | Expr::XmlFilter { object, .. },
                 ) => {
-                    suffixes.push(cur);
+                    links.push(Link::Suffix(cur));
                     cur = self.ast.unparenthesized(*object);
                 }
                 Some(Expr::Call { callee, .. } | Expr::TaggedTemplate { tag: callee, .. }) => {
-                    suffixes.push(cur);
+                    links.push(Link::Suffix(cur));
                     cur = self.ast.unparenthesized(*callee);
+                }
+                Some(Expr::Optional(object)) => {
+                    links.push(Link::Check(cur));
+                    cur = self.ast.unparenthesized(*object);
                 }
                 _ => break,
             }
         }
-        let is_call =
-            |c: &Self, e: Option<&ExprId>| e.is_some_and(|&e| matches!(c.ast.expr(e), Some(Expr::Call { .. } | Expr::TaggedTemplate { .. })));
-        let first_is_call = is_call(self, suffixes.last());
-        let mut base_has_this = false;
+        let is_call = |c: &Self, link: Option<&Link>| matches!(link, Some(Link::Suffix(e)) if matches!(c.ast.expr(*e), Some(Expr::Call { .. } | Expr::TaggedTemplate { .. })));
+        // The first suffix after the base, and for each link the next suffix out from it, with
+        // the checks between them skipped.
+        let first_is_call = is_call(self, links.iter().rev().find(|l| matches!(l, Link::Suffix(_))));
+        let mut receiver = false;
         let mut eval_call = false;
         match self.ast.expr(cur) {
             Some(Expr::Ident(name)) if first_is_call => {
                 self.at(self.ast.expr_span(cur).start);
                 let n = self.var_name(name);
                 self.emit(Op::GetVarThis(n));
-                base_has_this = true;
+                receiver = true;
                 eval_call = name == "eval";
+            }
+            Some(Expr::OptionalChain(inner)) if first_is_call => {
+                self.optional_chain(*inner, true)?;
+                receiver = true;
             }
             _ => self.expr(cur)?,
         }
-        let count = suffixes.len();
+        let count = links.len();
         for j in (0..count).rev() {
-            let Some(&s) = suffixes.get(j) else { return internal("suffix out of range") };
-            let next_is_call = j > 0 && is_call(self, suffixes.get(j - 1));
+            let s = match links.get(j) {
+                Some(&Link::Suffix(s)) => s,
+                Some(&Link::Check(c)) => {
+                    eval_call = false;
+                    self.at(self.ast.expr_span(c).end);
+                    if receiver {
+                        self.emit(Op::Swap);
+                        self.nullish_check()?;
+                        self.emit(Op::Swap);
+                    } else {
+                        self.nullish_check()?;
+                    }
+                    continue;
+                }
+                None => return internal("suffix out of range"),
+            };
+            let next = links.get(..j).and_then(|outer| outer.iter().rev().find(|l| matches!(l, Link::Suffix(_))));
+            let next_is_call = if next.is_some() { is_call(self, next) } else { keep_this };
             let span = self.ast.expr_span(s);
+            let eval = std::mem::take(&mut eval_call);
+            let had_receiver = std::mem::take(&mut receiver);
             match self.ast.expr(s) {
                 Some(Expr::Member { property, .. }) => {
                     self.at(span.start);
                     let n = self.name_key(key_of(&property.name));
                     self.emit(if next_is_call { Op::GetMemberThis(n) } else { Op::GetMember(n) });
+                    receiver = next_is_call;
                 }
                 Some(Expr::Index { index, .. }) => {
                     self.expr(*index)?;
                     self.at(span.start);
                     self.emit(if next_is_call { Op::GetIndexThis } else { Op::GetIndex });
+                    receiver = next_is_call;
                 }
                 Some(Expr::XmlDescendants { name, .. }) => {
                     self.expr(*name)?;
@@ -1463,13 +1515,7 @@ impl<'a> FnCompiler<'a> {
                     self.xml_filter(*predicate)?;
                 }
                 Some(call @ (Expr::Call { .. } | Expr::TaggedTemplate { .. })) => {
-                    let innermost = j + 1 == count;
-                    let has_this = if innermost {
-                        base_has_this
-                    } else {
-                        matches!(suffixes.get(j + 1).and_then(|&e| self.ast.expr(e)), Some(Expr::Member { .. } | Expr::Index { .. }))
-                    };
-                    if !has_this {
+                    if !had_receiver {
                         self.emit(Op::Undefined);
                     }
                     let eval = match call {
@@ -1483,7 +1529,6 @@ impl<'a> FnCompiler<'a> {
                             continue;
                         }
                         Expr::Call { args, .. } => {
-                            let eval = innermost && eval_call;
                             if eval {
                                 self.uses_arguments = true;
                                 self.uses_this = true;
@@ -1508,6 +1553,43 @@ impl<'a> FnCompiler<'a> {
                 _ => return internal("not a member or call"),
             }
         }
+        if keep_this && !receiver {
+            self.emit(Op::Undefined);
+        }
+        Ok(())
+    }
+
+    /// An optional chain: its links, with each `?.` step jumping to its end when it finds
+    /// `undefined` or `null`, the result then `undefined` (`undefined undefined` with
+    /// `keep_this`, for a call of the chain in parentheses).
+    fn optional_chain(&mut self, inner: ExprId, keep_this: bool) -> CResult<()> {
+        self.enter()?;
+        let short = self.new_label();
+        let end = self.new_label();
+        let entry = self.depth;
+        self.optional.push((short, entry));
+        let r = self.chain_with(self.ast.unparenthesized(inner), keep_this);
+        self.optional.pop();
+        self.leave();
+        r?;
+        self.jump(Op::Jump, end);
+        self.bind(short);
+        self.depth = entry;
+        self.emit(Op::Undefined);
+        if keep_this {
+            self.emit(Op::Undefined);
+        }
+        self.bind(end);
+        Ok(())
+    }
+
+    /// An optional step: jumps to the end of the innermost optional chain, dropping what the
+    /// chain has pushed, when the value on top is `undefined` or `null`.
+    fn nullish_check(&mut self) -> CResult<()> {
+        let Some(&(label, entry)) = self.optional.last() else { return internal("an optional step outside its chain") };
+        let Some(drop) = self.depth.checked_sub(entry).filter(|&d| d > 0) else { return internal("an optional step without a value") };
+        self.patches.push((self.ops.len(), label));
+        self.emit(Op::JumpIfNullish { target: 0, drop });
         Ok(())
     }
 
@@ -1576,6 +1658,23 @@ impl<'a> FnCompiler<'a> {
                 self.xml_scope_ref(arg, *name)?;
                 self.emit(Op::DeleteIndex);
             }
+            // `delete a?.b` is true without deleting anything when the chain stops at a `?.` step.
+            Some(Expr::OptionalChain(inner))
+                if matches!(self.ast.expr(self.ast.unparenthesized(*inner)), Some(Expr::Member { .. } | Expr::Index { .. })) =>
+            {
+                let short = self.new_label();
+                let end = self.new_label();
+                let entry = self.depth;
+                self.optional.push((short, entry));
+                let r = self.delete_expr(*inner);
+                self.optional.pop();
+                r?;
+                self.jump(Op::Jump, end);
+                self.bind(short);
+                self.depth = entry;
+                self.emit(Op::True);
+                self.bind(end);
+            }
             _ => {
                 self.expr(arg)?;
                 self.emit(Op::Pop);
@@ -1617,7 +1716,14 @@ impl<'a> FnCompiler<'a> {
                 }
                 Step::Logical(op) => {
                     let end = self.new_label();
-                    self.jump(if op == LogicalOp::And { Op::JumpIfFalseKeep } else { Op::JumpIfTrueKeep }, end);
+                    self.jump(
+                        match op {
+                            LogicalOp::And => Op::JumpIfFalseKeep,
+                            LogicalOp::Or => Op::JumpIfTrueKeep,
+                            LogicalOp::Coalesce => Op::JumpIfNotNullishKeep,
+                        },
+                        end,
+                    );
                     self.expr(right)?;
                     self.bind(end);
                 }
@@ -1759,6 +1865,8 @@ impl<'a> FnCompiler<'a> {
                     | Op::JumpIfTrue(t)
                     | Op::JumpIfFalseKeep(t)
                     | Op::JumpIfTrueKeep(t)
+                    | Op::JumpIfNotNullishKeep(t)
+                    | Op::JumpIfNullish { target: t, .. }
                     | Op::ForInNext(t)
                     | Op::XmlFilterNext(t),
                 ) => *t = target,

@@ -29,7 +29,8 @@
 //! or test file cannot be read, or when no ES5 test runs.
 //!
 //! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
-//! arrow functions, templates, default and rest parameters) without and with that option, and
+//! arrow functions, templates, default and rest parameters, and from ECMAScript 2020 optional
+//! chains and `??`) without and with that option, and
 //! prints both counts; its failures with the option go to `es2015-failures.txt`.
 //!
 //! A sixth test runs the tests under `test/built-ins/Proxy` and `test/built-ins/Reflect` whose
@@ -668,10 +669,13 @@ const ES2015_FOLDERS: &[&str] = &[
     "expressions/template-literal",
     "expressions/tagged-template",
     "rest-parameters",
+    "expressions/optional-chaining",
+    "expressions/coalesce",
 ];
 
 /// The feature tags of the forms [`Options::es2015`] reads.
-const ES2015_FEATURES: &[&str] = &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters"];
+const ES2015_FEATURES: &[&str] =
+    &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters", "optional-chaining", "coalesce-expression"];
 
 #[test]
 fn es2015_subset_runs() {

@@ -1,11 +1,13 @@
 //! Neutral wording in menus and panels: what users read names VectorCraft's own features.
 
+use craft::menu::Node;
+use craft::ui::menu::PanelRow;
 use egui::epaint::Shape;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
 use crate::VectorcraftApp;
-use crate::menus::{self, Item};
+use crate::menus;
 
 fn app() -> VectorcraftApp {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -16,8 +18,7 @@ fn app() -> VectorcraftApp {
 /// Every string painted by `f` in a headless frame (app fonts installed), one per line. The second
 /// of two frames: windows size themselves invisibly in their first.
 pub(crate) fn painted_text(app: &mut VectorcraftApp, mut f: impl FnMut(&mut VectorcraftApp, &mut egui::Ui)) -> String {
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
+    let ctx = crate::testing::ui_context();
     ctx.run_ui(egui::RawInput::default(), |ui| f(app, ui)).textures_delta.clear();
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| f(app, ui));
     out.textures_delta.clear();
@@ -46,8 +47,8 @@ pub(crate) fn shapes_text(out: &egui::FullOutput) -> String {
 #[test]
 fn effect_menu_has_a_vector_effects_section() {
     let tree = menus::menu_tree();
-    let (_, effect) = tree.iter().find(|(t, _)| *t == "Effect").expect("Effect menu");
-    assert!(effect.iter().any(|i| matches!(i, Item::Header("Vector Effects"))));
+    let effect = &tree.iter().find(|(title, _)| *title == "Effect").expect("Effect menu").1;
+    assert!(effect.iter().any(|n| matches!(n, Node::Heading(h) if h == "Vector Effects")));
 }
 
 /// Effect › Path: Offset Path… opens its dialog; Outline Object and Outline Stroke (no options)
@@ -117,14 +118,15 @@ fn effect_menu_lists_the_artistic_filters_before_blur() {
 #[test]
 fn paint_daubs_brush_type_menu_matches_illustrator() {
     use crate::dialogs::PAINT_DAUB_BRUSH_TYPE_LABELS;
-    use serde_json::Map;
+    use crate::dialogs::effect_params::{EffectCx, effect_params};
+    use craft::ui::patterns::form_dialogs::{DialogFields, ParamKind};
     use vectorcraft_effects::pixel::PAINT_DAUB_BRUSH_TYPES;
     let catalog: Vec<&str> = PAINT_DAUB_BRUSH_TYPES.iter().map(|(label, _)| *label).collect();
     assert_eq!(PAINT_DAUB_BRUSH_TYPE_LABELS.as_slice(), catalog.as_slice());
-    let params = Map::new();
-    let shown = crate::dialogs::shown_choices("artistic.paintDaubs", "brushType", &params, false).unwrap();
-    assert_eq!(shown.len(), PAINT_DAUB_BRUSH_TYPES.len());
-    for ((label, value), (english, id)) in shown.iter().zip(PAINT_DAUB_BRUSH_TYPES.iter()) {
+    let rows = effect_params(&EffectCx::new(&app(), "artistic.paintDaubs", false), &DialogFields::new());
+    let Some(ParamKind::Choice { options, .. }) = rows.iter().find(|p| p.key == "brushType").map(|p| &p.kind) else { panic!("no Brush Type row") };
+    assert_eq!(options.len(), PAINT_DAUB_BRUSH_TYPES.len());
+    for ((value, label), (english, id)) in options.iter().zip(PAINT_DAUB_BRUSH_TYPES.iter()) {
         assert_eq!((label.as_str(), value.as_str()), (*english, *id));
     }
 }
@@ -275,13 +277,15 @@ fn effect_menu_lists_glowing_edges_in_the_raster_stylize_between_sharpen_and_tex
 #[test]
 fn effect_menu_keeps_glowing_edges_out_of_the_vector_stylize() {
     let tree = menus::menu_tree();
-    let (_, effect) = tree.iter().find(|(t, _)| *t == "Effect").expect("Effect menu");
-    let raster = effect.iter().position(|i| matches!(i, Item::Header("Raster Effects"))).expect("Raster Effects");
+    let effect = &tree.iter().find(|(title, _)| *title == "Effect").expect("Effect menu").1;
+    let raster = effect.iter().position(|n| matches!(n, Node::Heading(h) if h == "Raster Effects")).expect("Raster Effects");
     let stylize: Vec<(usize, Vec<&str>)> = effect
         .iter()
         .enumerate()
-        .filter_map(|(i, it)| match it {
-            Item::Sub("Stylize", items) => Some((i, items.iter().filter_map(|c| if let Item::Cmd(l, ..) = c { Some(*l) } else { None }).collect())),
+        .filter_map(|(i, n)| match n {
+            Node::Submenu { label, children, .. } if label == "Stylize" => {
+                Some((i, children.iter().filter_map(|c| if let Node::Item(it) = c { Some(it.label.as_str()) } else { None }).collect()))
+            }
             _ => None,
         })
         .collect();
@@ -313,10 +317,23 @@ fn stroke_profiles_have_descriptive_names() {
 
 #[test]
 fn swatches_menu_offers_save_swatch_library() {
-    let mut app = app();
-    let text = painted_text(&mut app, crate::panels::swatches::menu);
-    assert!(text.contains("Save Swatch Library…"), "{text}");
-    assert!(!text.contains("ASE"), "{text}");
+    /// The labels of the command rows: a UI command's, else an engine command's.
+    fn command_labels(rows: &[PanelRow], out: &mut Vec<&'static str>) {
+        for row in rows {
+            match row {
+                PanelRow::Command(c) | PanelRow::Alternated(c, _) => {
+                    let ui = menus::UI_COMMANDS.iter().find(|u| u.0 == c.id).map(|u| u.1);
+                    out.extend(ui.or_else(|| vectorcraft_engine::find_command(&c.id).map(|e| e.label)));
+                }
+                PanelRow::Submenu(_, rows) => command_labels(rows, out),
+                _ => {}
+            }
+        }
+    }
+    let mut labels = vec![];
+    command_labels(&crate::panels::swatches::menu_rows(&app()), &mut labels);
+    assert!(labels.contains(&"Save Swatch Library…"), "{labels:?}");
+    assert!(!labels.iter().any(|l| l.contains("ASE")), "{labels:?}");
 }
 
 #[test]
@@ -339,24 +356,25 @@ fn clipboard_preferences_name_the_legacy_format_neutrally() {
 
 #[test]
 fn shortcut_set_old_name_is_accepted() {
-    use crate::shortcut_editor::{PRESETS, import_json};
+    use crate::shortcut_editor::{BUILTINS, PRESETS, import_json};
     let (old, _) = crate::shortcut_editor::LEGACY_PRESETS[0];
     assert_eq!(PRESETS, ["VectorCraft Defaults", "Classic Defaults"]);
     // UI preferences saved by an earlier version load (and save again) under the current name.
-    let ui: crate::state::UiState = serde_json::from_value(json!({ "shortcut_set": old })).unwrap();
-    assert_eq!(ui.shortcut_set, "Classic Defaults");
+    // A loaded file's old keys become the sets as the settings are sanitized.
+    let ui = serde_json::from_value::<crate::state::UiState>(json!({ "shortcut_set": old })).unwrap().sanitized();
+    assert_eq!(ui.shortcut_sets.active_name(&BUILTINS), "Classic Defaults");
     let saved = serde_json::to_value(&ui).unwrap();
-    assert_eq!(saved["shortcut_set"], "Classic Defaults");
+    assert_eq!(saved["shortcut_sets"]["active"], "Classic Defaults");
     let back: crate::state::UiState = serde_json::from_value(saved).unwrap();
-    assert_eq!(back.shortcut_set, "Classic Defaults");
+    assert_eq!(back.shortcut_sets.active_name(&BUILTINS), "Classic Defaults");
     let default: crate::state::UiState = serde_json::from_value(json!({})).unwrap();
-    assert_eq!(default.shortcut_set, PRESETS[0]);
+    assert_eq!(default.shortcut_sets.active_name(&BUILTINS), PRESETS[0]);
     // The command and imported sets take the old name too.
     let mut app = app();
     app.run("shortcuts.preset", json!({ "name": old })).unwrap();
-    assert_eq!(app.ui.shortcut_set, "Classic Defaults");
+    assert_eq!(app.ui.shortcut_sets.active_name(&BUILTINS), "Classic Defaults");
     app.run("shortcuts.preset", json!({ "name": "VectorCraft Defaults" })).unwrap();
-    assert_eq!(app.ui.shortcut_set, "VectorCraft Defaults");
+    assert_eq!(app.ui.shortcut_sets.active_name(&BUILTINS), "VectorCraft Defaults");
     assert!(app.run("shortcuts.preset", json!({ "name": "Nope" })).is_err());
     let (set, _) = import_json(&json!({ "set": old, "overrides": {} })).unwrap();
     assert_eq!(set, "Classic Defaults");

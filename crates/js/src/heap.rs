@@ -249,6 +249,8 @@ pub(crate) enum Class {
     /// A proxy (ECMA-262 2020 section 9.5), made by `Proxy` in a realm with
     /// [`crate::Options::es2015`].
     Proxy(Box<ProxyData>),
+    /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
+    UnitValue(Box<crate::unit_value::Measure>),
 }
 
 /// A proxy's target and handler, `None` once it is revoked, and whether it can be called and
@@ -337,6 +339,7 @@ impl Class {
             Class::Date(_) => "Date",
             Class::Proxy(p) if p.callable => "Function",
             Class::Proxy(_) => "Object",
+            Class::UnitValue(_) => "UnitValue",
         }
     }
 }
@@ -432,6 +435,8 @@ pub(crate) const XML_REF_BYTES: usize = 8;
 pub(crate) const XML_NS_BYTES: usize = 48;
 /// The estimated bytes of a proxy's target, handler and flags.
 pub(crate) const PROXY_BYTES: usize = 32;
+/// The estimated bytes of the measurement a `UnitValue` object holds.
+pub(crate) const UNIT_VALUE_BYTES: usize = 32;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
 
@@ -729,6 +734,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             work.extend(p.target.iter().chain(&p.handler).map(|o| o.0));
             extra = PROXY_BYTES;
         }
+        Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
         _ => {}
     }
     OBJECT_BYTES + PROP_BYTES * o.props.len() + extra

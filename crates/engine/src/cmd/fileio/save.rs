@@ -1148,10 +1148,14 @@ impl SaveJob {
     /// Once written: Save and Save As (except to a template) make the file `st`'s own: path,
     /// title, format, options, and the snapshot as the saved state (edits made since the job was
     /// made keep the document modified; changes that are not edits to save don't,
-    /// [`DocState::same_content`]).
+    /// [`DocState::same_content`]). Saved outside a command a script runs, from the document's
+    /// content as it is now, the document is as the person left it ([`DocState::by_script`]).
     pub fn finish(self, st: &mut DocState) {
         let retargets = self.plan.retargets();
         if let (true, Some(path)) = (retargets, self.plan.path) {
+            if !crate::file_access::in_script_command() && st.same_content(&self.source) {
+                st.by_script = None;
+            }
             st.path = Some(path);
             st.format = self.plan.format.id;
             st.save_options = self.plan.options;

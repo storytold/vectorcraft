@@ -214,6 +214,11 @@ pub enum Punct {
     Arrow,
     /// `...`, read only with [`crate::Options::es2015`].
     Ellipsis,
+    /// `?.` not followed by a decimal digit (ECMA-262 2020 section 11.7), read only with
+    /// [`crate::Options::es2015`].
+    QuestionDot,
+    /// `??`, read only with [`crate::Options::es2015`].
+    QuestionQuestion,
 }
 
 impl Punct {
@@ -245,6 +250,8 @@ impl Punct {
         ("|=", Punct::PipeEq),
         ("^=", Punct::CaretEq),
         ("/=", Punct::SlashEq),
+        ("??", Punct::QuestionQuestion),
+        ("?.", Punct::QuestionDot),
         ("..", Punct::DotDot),
         ("::", Punct::ColonColon),
         ("@", Punct::At),

@@ -1008,7 +1008,15 @@ impl<'s> Parser<'s> {
                 let default = if self.es2015 && self.eat(Punct::Eq)? { Some(self.parse_assignment(false)?) } else { None };
                 params.push(param);
                 defaults.push(default);
+                // A comma may follow the last parameter (ECMAScript 2017, section 14.1), except in
+                // a setter, which takes one parameter and no comma (section 14.3).
                 if !self.eat(Punct::Comma)? {
+                    break;
+                }
+                if self.at(Punct::RParen) {
+                    if kind == FunctionKind::Setter {
+                        return Err(self.error_at_token(&self.tok, "a setter must have exactly one parameter"));
+                    }
                     break;
                 }
             }
@@ -1254,29 +1262,50 @@ impl<'s> Parser<'s> {
         let mut ops: Vec<(BinKind, u8)> = Vec::new();
         while let Some((op, precedence)) = binary_op(&self.tok, no_in) {
             while ops.last().is_some_and(|&(_, top)| top >= precedence) {
-                self.reduce(&mut operands, &mut ops);
+                self.reduce(&mut operands, &mut ops)?;
             }
             self.bump()?;
             ops.push((op, precedence));
             operands.push(self.parse_unary()?);
         }
         while !ops.is_empty() {
-            self.reduce(&mut operands, &mut ops);
+            self.reduce(&mut operands, &mut ops)?;
         }
         operands.pop().ok_or_else(|| self.unexpected())
     }
 
     /// Joins the top two operands with the top operator.
-    fn reduce(&mut self, operands: &mut Vec<ExprId>, ops: &mut Vec<(BinKind, u8)>) {
+    fn reduce(&mut self, operands: &mut Vec<ExprId>, ops: &mut Vec<(BinKind, u8)>) -> Result<()> {
         let (Some((op, _)), Some(right), Some(left)) = (ops.pop(), operands.pop(), operands.pop()) else {
-            return;
+            return Ok(());
         };
         let span = self.ast.expr_span(left).to(self.ast.expr_span(right));
         let expr = match op {
             BinKind::Binary(op) => Expr::Binary { op, left, right },
-            BinKind::Logical(op) => Expr::Logical { op, left, right },
+            BinKind::Logical(op) => {
+                self.check_coalesce_mix(op, left, right)?;
+                Expr::Logical { op, left, right }
+            }
         };
         operands.push(self.ast.push_expr(expr, span));
+        Ok(())
+    }
+
+    /// `??` and `&&` or `||` written together without parentheses around one of them, which
+    /// ECMA-262 2020 section 12.13 does not allow (`a ?? b || c`, `a && b ?? c`).
+    fn check_coalesce_mix(&self, op: LogicalOp, left: ExprId, right: ExprId) -> Result<()> {
+        let coalesce = op == LogicalOp::Coalesce;
+        for operand in [left, right] {
+            if let Some(Expr::Logical { op: inner, .. }) = self.ast.expr(operand)
+                && (*inner == LogicalOp::Coalesce) != coalesce
+            {
+                return Err(self.error_at_offset(
+                    self.ast.expr_span(operand).start,
+                    "'??' cannot be used with '&&' or '||' without parentheses around one of them",
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Prefix operators, read with a loop and applied innermost first.
@@ -1362,6 +1391,12 @@ impl<'s> Parser<'s> {
                         None => self.ast.push_expr(Expr::Call { callee: expr, args }, span),
                     };
                 }
+                TokenKind::Punct(Punct::QuestionDot) => {
+                    if !news.is_empty() {
+                        return Err(self.error_at_token(&self.tok, "an optional chain cannot follow 'new' without parentheses around it"));
+                    }
+                    expr = self.parse_optional_chain(expr)?;
+                }
                 _ => break,
             }
         }
@@ -1370,6 +1405,63 @@ impl<'s> Parser<'s> {
             expr = self.ast.push_expr(Expr::New { callee: expr, args: Vec::new() }, span);
         }
         Ok(expr)
+    }
+
+    /// An optional chain (ECMA-262 2020 section 12.3.9), from the `?.` after `base` to the last
+    /// access or call that follows it. A `?.` inside it is a step of the same chain; a tagged
+    /// template and the E4X accesses (`..`, `.@`, `.(`) cannot follow one.
+    fn parse_optional_chain(&mut self, base: ExprId) -> Result<ExprId> {
+        let start = self.ast.expr_span(base).start;
+        let mut expr = base;
+        loop {
+            match &self.tok.kind {
+                TokenKind::Punct(Punct::QuestionDot) => {
+                    self.bump()?;
+                    let object = self.ast.push_expr(Expr::Optional(expr), self.ast.expr_span(expr));
+                    expr = match &self.tok.kind {
+                        TokenKind::Punct(Punct::LParen) => {
+                            let args = self.parse_arguments()?;
+                            self.ast.push_expr(Expr::Call { callee: object, args }, Span::new(start, self.prev_end))
+                        }
+                        TokenKind::Punct(Punct::LBracket) => self.optional_index(object, start)?,
+                        _ => self.optional_member(object, start)?,
+                    };
+                }
+                TokenKind::Punct(Punct::Dot) => {
+                    self.bump()?;
+                    if self.e4x && self.at_e4x_member() {
+                        return Err(self.error_at_token(&self.tok, "an E4X access cannot follow an optional chain"));
+                    }
+                    expr = self.optional_member(expr, start)?;
+                }
+                TokenKind::Punct(Punct::LBracket) => expr = self.optional_index(expr, start)?,
+                TokenKind::Punct(Punct::LParen) => {
+                    let args = self.parse_arguments()?;
+                    expr = self.ast.push_expr(Expr::Call { callee: expr, args }, Span::new(start, self.prev_end));
+                }
+                TokenKind::Template { .. } => return Err(self.error_at_token(&self.tok, "a tagged template cannot follow an optional chain")),
+                TokenKind::Punct(Punct::DotDot) => return Err(self.error_at_token(&self.tok, "an E4X access cannot follow an optional chain")),
+                _ => break,
+            }
+        }
+        Ok(self.ast.push_expr(Expr::OptionalChain(expr), Span::new(start, self.prev_end)))
+    }
+
+    /// `.name` in an optional chain, with the `.` (or `?.`) already read.
+    fn optional_member(&mut self, object: ExprId, start: u32) -> Result<ExprId> {
+        let Some(name) = self.tok.identifier_name().map(str::to_string) else {
+            return Err(self.error_at_token(&self.tok, format!("expected a property name but found {}", describe(&self.tok))));
+        };
+        let token = self.bump()?;
+        Ok(self.ast.push_expr(Expr::Member { object, property: Name { name, span: token.span } }, Span::new(start, token.span.end)))
+    }
+
+    /// `[index]` in an optional chain.
+    fn optional_index(&mut self, object: ExprId, start: u32) -> Result<ExprId> {
+        self.expect(Punct::LBracket)?;
+        let index = self.parse_expression(false)?;
+        let close = self.expect(Punct::RBracket)?;
+        Ok(self.ast.push_expr(Expr::Index { object, index }, Span::new(start, close.span.end)))
     }
 
     /// An element of an array literal or an argument list: an assignment expression, or with
@@ -1389,7 +1481,8 @@ impl<'s> Parser<'s> {
         if !self.at(Punct::RParen) {
             loop {
                 args.push(self.parse_element()?);
-                if !self.eat(Punct::Comma)? {
+                // A comma may follow the last argument (ECMAScript 2017, section 12.3).
+                if !self.eat(Punct::Comma)? || self.at(Punct::RParen) {
                     break;
                 }
             }
@@ -1649,6 +1742,7 @@ fn binary_op(token: &Token, no_in: bool) -> Option<(BinKind, u8)> {
         TokenKind::Keyword(Keyword::In) if !no_in => Some((B(BinaryOp::In), 7)),
         TokenKind::Punct(p) => Some(match p {
             Punct::PipePipe => (L(LogicalOp::Or), 1),
+            Punct::QuestionQuestion => (L(LogicalOp::Coalesce), 1),
             Punct::AmpAmp => (L(LogicalOp::And), 2),
             Punct::Pipe => (B(BinaryOp::BitOr), 3),
             Punct::Caret => (B(BinaryOp::BitXor), 4),
