@@ -81,6 +81,21 @@ fn a_run_with_nobody_to_ask_takes_the_steps_of_its_window_answer() {
 }
 
 #[test]
+fn a_dialog_a_handler_opens_is_listed_after_the_window_that_opened_it() {
+    let mut s = one_doc();
+    let source = format!("{FORM} bold.onClick = function () {{ alert('Bolded'); }}; vc.log(w.show());");
+    let answers = json!([
+        {"kind": "window", "value": [{"control": "Bold", "event": "click"}, {"control": "OK", "event": "click"}]},
+        {"kind": "alert", "value": "ok"},
+    ]);
+    let r = headless(&mut s, &source, answers).unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(r["dialogCount"], 2);
+    assert_eq!(r["dialogs"][0], json!({"kind": "window", "title": "Settings", "controls": 8, "events": 2, "answer": 1}), "{r}");
+    assert_eq!((&r["dialogs"][1]["kind"], &r["dialogs"][1]["message"]), (&json!("alert"), &json!("Bolded")), "{r}");
+}
+
+#[test]
 fn a_missing_wrong_or_unused_step_ends_the_run_and_rolls_it_back() {
     let mut s = one_doc();
     let before = art(&s);
