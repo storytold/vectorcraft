@@ -678,7 +678,13 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
                 characters.borrow_mut().push(n.id);
             }
             if index.is_none() && colorized.contains(&n.id) {
-                n.extras_mut().colorize = paint.color().map(|_| Box::new(paint.clone()));
+                let colorize = paint.color().map(|_| Box::new(paint.clone()));
+                // Without a color the image has nothing to overprint, and a later color starts
+                // knocking out.
+                if colorize.is_none() {
+                    n.extras_mut().colorize_overprint = false;
+                }
+                n.extras_mut().colorize = colorize;
                 return Ok(());
             }
             if index.is_none()

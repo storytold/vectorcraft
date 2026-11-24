@@ -40,7 +40,7 @@ use kurbo::{Affine, Rect, Vec2};
 use serde::Serialize;
 use vectorcraft_color::cms::{self, ProfileKind};
 use vectorcraft_doc::marks::PrinterMarks;
-use vectorcraft_doc::overprint::{OverprintBlack, clear_overprints, darken_overprints};
+use vectorcraft_doc::overprint::{DiscardWhite, OverprintBlack, clear_overprints, darken_overprints};
 use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 
 pub use layout::{MAX_COPIES_PER_SHEET, MAX_TILES, TileGrid};
@@ -411,12 +411,12 @@ fn composite_overprints(doc: &mut Document, set: &PrintSettings) {
     if set.output.mode == OutputMode::Separations || how == PrintOverprints::Preserve {
         return;
     }
-    let discard_white = doc.setup.discard_white_overprint;
+    let discard_white = DiscardWhite::of(doc);
     let symbols = doc.symbols.iter_mut().map(|s| &mut s.art);
     let nodes = doc.layers.iter_mut().chain(symbols).chain(doc.patterns.iter_mut().flat_map(|p| p.art.iter_mut()));
     for n in nodes {
         if how == PrintOverprints::Simulate {
-            darken_overprints(n, discard_white);
+            darken_overprints(n, &discard_white, &doc.images);
         }
         clear_overprints(n);
     }
