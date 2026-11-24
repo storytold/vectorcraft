@@ -1219,7 +1219,7 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
         }
         // The transparent entry itself isn't a colour to edit.
         let pickable = !c.transparent || *mapped;
-        let ringed = pickable && picked.iter().any(|h| h.eq_ignore_ascii_case(&hex(c.source)));
+        let ringed = pickable && picked.iter().any(|h| same_color(h, &hex(c.source)));
         p.rect_stroke(r, 0.0, egui::Stroke::new(if ringed { 2.0 } else { 1.0 }, if ringed { t.accent } else { t.border }), egui::StrokeKind::Outside);
         if !pickable {
             continue;
@@ -1242,14 +1242,17 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
         d.fields.insert("__editColor".into(), json!(source));
         d.fields.insert("__editStart".into(), json!(start));
     }
-    let shifted = |c: &str| table.shifted.keys().any(|k| k.eq_ignore_ascii_case(c));
+    let shifted = |c: &str| table.shifted.keys().any(|k| same_color(k, c));
     // The colors the table shows, by source: Lock, Transparent, Web Shift and Delete Color act only
     // on these.
     let palette: Vec<String> =
         shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
-    let shown = palette.iter().any(|p| p.eq_ignore_ascii_case(&selected));
+    // The selected color as the table writes it; the buttons act on that spelling.
+    let shown_as = palette.iter().find(|p| same_color(p, &selected)).map(|p| p.to_ascii_lowercase());
+    let shown = shown_as.is_some();
+    let selected = shown_as.unwrap_or(selected);
     ui.add_space(4.0);
-    let on = |list: &[String]| list.iter().any(|h| h.eq_ignore_ascii_case(&selected));
+    let on = |list: &[String]| list.iter().any(|h| same_color(h, &selected));
     ui.horizontal(|ui| {
         ui.add_enabled_ui(shown, |ui| {
             for (list, on_label, off_label) in [
@@ -1320,9 +1323,18 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
     Ok(())
 }
 
-/// The selected colors (by source) that `palette`, the colors the table shows, holds.
+/// The selected colors (by source) that `palette`, the colors the table shows, holds, each as
+/// `palette` writes it, once.
 pub(super) fn selected_in(d: &Dialog, palette: &[String]) -> Vec<String> {
-    selection(d).into_iter().filter(|c| palette.iter().any(|p| p.eq_ignore_ascii_case(c))).collect()
+    let mut out: Vec<String> = Vec::new();
+    for c in selection(d) {
+        if let Some(p) = palette.iter().find(|p| same_color(p, &c)).map(|p| p.to_ascii_lowercase())
+            && !out.contains(&p)
+        {
+            out.push(p);
+        }
+    }
+    out
 }
 
 /// The colour table's selected colors, by source: `__colors`, else `__color`.
@@ -1342,7 +1354,7 @@ pub(super) fn selection(d: &Dialog) -> Vec<String> {
 /// or taken out, and the anchor moves to the last color left in the selection.
 pub(super) fn pick(d: &mut Dialog, order: &[String], color: &str, shift: bool, command: bool) {
     let color = color.to_ascii_lowercase();
-    let at = |c: &str| order.iter().position(|o| o.eq_ignore_ascii_case(c));
+    let at = |c: &str| order.iter().position(|o| same_color(o, c));
     if shift && let (Some(a), Some(b)) = (at(&d.str("__color")), at(&color)) {
         let range: Vec<String> = order[a.min(b)..=a.max(b)].iter().map(|c| c.to_ascii_lowercase()).collect();
         d.fields.insert("__colors".into(), json!(range));
@@ -1350,15 +1362,13 @@ pub(super) fn pick(d: &mut Dialog, order: &[String], color: &str, shift: bool, c
     }
     let mut set = selection(d);
     let anchor = if command {
-        match set.iter().position(|c| *c == color) {
-            Some(i) => {
-                set.remove(i);
-                set.last().cloned()
-            }
-            None => {
-                set.push(color.clone());
-                Some(color)
-            }
+        if set.iter().any(|c| same_color(c, &color)) {
+            // Every entry that names the color, however it is written.
+            set.retain(|c| !same_color(c, &color));
+            set.last().cloned()
+        } else {
+            set.push(color.clone());
+            Some(color)
         }
     } else {
         set = vec![color.clone()];
@@ -1384,6 +1394,9 @@ pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), St
         d.fields.remove("__color");
         return Ok(());
     }
+    // Each entry as `#rrggbb` when it names a color, so entries written another way compare equal.
+    let norm = |c: &str| table_rgb(c).unwrap_or_else(|| c.to_ascii_lowercase());
+    let picked: Vec<String> = picked.iter().map(|c| norm(c)).collect();
     let list = |d: &Dialog, key: &str| -> Vec<String> {
         d.fields
             .get("colorTable")
@@ -1392,12 +1405,12 @@ pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), St
             .into_iter()
             .flatten()
             .filter_map(Value::as_str)
-            .map(str::to_ascii_lowercase)
+            .map(norm)
             .collect()
     };
     let mut custom = list(d, "customPalette");
     if custom.is_empty() {
-        custom = palette.iter().map(|c| c.to_ascii_lowercase()).collect();
+        custom = palette.iter().map(|c| norm(c)).collect();
     }
     let mut deleted = list(d, "deleted");
     for c in &picked {
@@ -1491,14 +1504,23 @@ fn shifts(d: &Dialog) -> Map<String, Value> {
     d.fields.get("colorTable").and_then(|t| t.get("shifted")).and_then(Value::as_object).cloned().unwrap_or_default()
 }
 
-/// Whether `a` and `b` name one color, however each is written; text that is not a color matches
-/// the same text in any case.
+/// Whether `a` and `b` name one color, however each is written, as the engine reads the table's
+/// colors; other text, a spelling with alpha included (four or eight hex digits), matches only the
+/// same text in any case.
 fn same_color(a: &str, b: &str) -> bool {
-    let rgb = |h: &str| vectorcraft_color::Color::from_hex(h).map(|c| c.to_hex());
-    match (rgb(a), rgb(b)) {
+    match (table_rgb(a), table_rgb(b)) {
         (Some(a), Some(b)) => a == b,
         _ => a.eq_ignore_ascii_case(b),
     }
+}
+
+/// The color `h` names as `#rrggbb`, read as the engine reads the table's colors: `None` for text
+/// that is not a color and for a spelling with alpha (four or eight hex digits).
+fn table_rgb(h: &str) -> Option<String> {
+    let t = h.trim();
+    let digits = t.strip_prefix('#').unwrap_or(t);
+    let alpha = matches!(digits.len(), 4 | 8) && digits.chars().all(|c| c.is_ascii_hexdigit());
+    if alpha { None } else { vectorcraft_color::Color::from_hex(t).map(|c| c.to_hex()) }
 }
 
 /// Take the shift by hand of the source color `source` away: every key that names that color.

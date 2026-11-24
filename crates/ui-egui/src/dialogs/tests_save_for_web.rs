@@ -798,6 +798,51 @@ fn colour_table_selection_and_delete_color() {
     assert_eq!((&d.fields["colorTable"]["deleted"], &d.fields["colorTable"]["customPalette"]), (&json!([]), &json!([])));
 }
 
+/// A selection written another way (`#00F`) is deleted as the table writes it, so deleting the
+/// table's only color is refused with nothing changed; a spelling with alpha names no table color.
+#[test]
+fn delete_color_matches_a_selection_written_another_way() {
+    let mut d = Dialog::new(save_for_web::KIND, json!({}));
+    let shown: Vec<String> = ["#0000ff"].map(String::from).to_vec();
+    d.fields.insert("__colors".into(), json!(["#00F", "#0000FF"]));
+    assert_eq!(save_for_web::selected_in(&d, &shown), ["#0000ff"]);
+    let before = d.fields.clone();
+    assert_eq!(save_for_web::delete_colors(&mut d, &shown), Err(vectorcraft_engine::cmd::webexport::KEEP_ONE.to_string()));
+    assert_eq!(d.fields, before);
+    d.fields.insert("__colors".into(), json!(["#0000ff80"]));
+    assert!(save_for_web::selected_in(&d, &shown).is_empty());
+}
+
+/// A Ctrl-click on a selected color takes out every selection entry that names it, however each is
+/// written (`#00F`, `#0000ff`).
+#[test]
+fn command_click_deselects_every_spelling_of_a_color() {
+    let order: Vec<String> = ["#0000ff", "#ff0000"].map(String::from).to_vec();
+    let mut d = Dialog::new(save_for_web::KIND, json!({}));
+    d.fields.insert("__colors".into(), json!(["#ff0000", "#00F", "#0000ff"]));
+    save_for_web::pick(&mut d, &order, "#0000ff", false, true);
+    assert_eq!(save_for_web::selection(&d), ["#ff0000"]);
+    assert_eq!(d.fields["__color"], json!("#ff0000"));
+}
+
+/// Delete Color compares the table's lists as colors: with blue mapped to transparent as `#00f`,
+/// deleting red (selected as `#f00`), the only other color, is refused with nothing changed, and a
+/// deleted color written another way in `locked` (`blue`, ` #0000FF `) is taken out of the list.
+#[test]
+fn delete_color_compares_lists_written_another_way() {
+    let shown: Vec<String> = ["#0000ff", "#ff0000"].map(String::from).to_vec();
+    let mut d = Dialog::new(save_for_web::KIND, json!({"colorTable": {"transparent": ["#00f"]}}));
+    d.fields.insert("__color".into(), json!("#f00"));
+    let before = d.fields.clone();
+    assert_eq!(save_for_web::delete_colors(&mut d, &shown), Err(vectorcraft_engine::cmd::webexport::KEEP_ONE.to_string()));
+    assert_eq!(d.fields, before);
+    let mut d = Dialog::new(save_for_web::KIND, json!({"colorTable": {"locked": ["blue", " #0000FF ", "#ff0000"]}}));
+    d.fields.insert("__color".into(), json!("#00F"));
+    save_for_web::delete_colors(&mut d, &shown).unwrap();
+    assert_eq!(d.fields["colorTable"]["locked"], json!(["#ff0000"]));
+    assert_eq!(d.fields["colorTable"]["deleted"], json!(["#0000ff"]));
+}
+
 /// Delete Color takes only selected colors the table shows: a selection the table no longer holds
 /// (after a change of reduction or color count, or set through `ui.dialog.set`) deletes nothing,
 /// fixes no palette and is cleared, and a selection partly in the table deletes only what it shows.
@@ -1021,6 +1066,37 @@ fn table_buttons_skip_a_selected_color_the_table_does_not_show() {
     set(&mut app, "__color", json!("#0000ff"));
     click_text(&mut app, "Lock");
     assert!(has(&app, "locked", "#0000ff"), "{}", table(&app));
+}
+
+/// A list entry written another way (`#00F`) names the selected color: the buttons show Unlock,
+/// Unshift and Restore, and a click takes the color out of the list.
+#[test]
+fn table_buttons_match_a_color_written_another_way() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-short-hex");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
+        set(&mut app, k, v);
+    }
+    let table = |app: &VectorcraftApp| app.ui.dialog.as_ref().and_then(|d| d.fields.get("colorTable").cloned()).unwrap_or_default();
+    for (list, label) in [("locked", "Unlock"), ("webShift", "Unshift"), ("transparent", "Restore")] {
+        set(&mut app, "colorTable", json!({ list: ["#00F"] }));
+        set(&mut app, "__color", json!("#0000ff"));
+        click_text(&mut app, label);
+        assert_eq!(table(&app)[list], json!([]), "{list}");
+    }
+    // Selected as `#00F`, a click adds the color as the table writes it.
+    set(&mut app, "colorTable", json!({}));
+    set(&mut app, "__color", json!("#00F"));
+    click_text(&mut app, "Lock");
+    assert_eq!(table(&app)["locked"], json!(["#0000ff"]));
+    // A spelling with alpha names no table color: the buttons stay off and nothing is added.
+    set(&mut app, "colorTable", json!({}));
+    set(&mut app, "__color", json!("#0000ff80"));
+    click_text(&mut app, "Lock");
+    assert_eq!(table(&app).get("locked"), None, "{}", table(&app));
 }
 
 /// Click the dialog's text `label` with the pointer (frames a quarter second apart).
