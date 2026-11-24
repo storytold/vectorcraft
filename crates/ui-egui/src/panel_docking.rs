@@ -1131,7 +1131,7 @@ impl Specs {
         let grids = layout_of(&app.ui)
             .panels()
             .into_iter()
-            .filter_map(|panel| rail_owner(&app.ui, panel).map(|owner| (panel.clone(), crate::toolbar::dock_grid(app, &owner, app.ui_ctx.as_ref()))))
+            .filter_map(|panel| rail_owner(&app.ui, panel).map(|owner| (panel.clone(), crate::toolbar::dock_grid(app, &owner))))
             .collect();
         Specs {
             lang: crate::i18n::current().code(),
