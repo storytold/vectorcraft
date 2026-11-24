@@ -245,9 +245,10 @@ pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Nod
     });
 }
 
-/// The icon the command catalog gives command `id`: the Align panel's align, distribute and Align
-/// To buttons' and the Pathfinder panel's, so a bar or menu row of the command shows the panel's
-/// glyph, and each tool's, which the tool rail and its flyouts show. `None` for every other command.
+/// The icon the command catalog gives command `id`: the Align panel's distribute and Align To
+/// buttons' (its align buttons' as the Control bar draws them, [`align::bar_glyph`]) and the
+/// Pathfinder panel's, so a bar or menu row of the command shows the panel's glyph, and each
+/// tool's, which the tool rail and its flyouts show. `None` for every other command.
 pub(crate) fn command_icon(id: &str) -> Option<&'static str> {
     use align::{AlignTo, Button};
     if let Some(tool) = id.strip_prefix("tool:") {
@@ -265,7 +266,7 @@ pub(crate) fn command_icon(id: &str) -> Option<&'static str> {
     }
     let in_table = |table: &[(&'static str, &str, &str, &str)], axis: &str, v: &str| table.iter().find(|r| r.2 == axis && r.3 == v).map(|r| r.0);
     match align::button(id)? {
-        Button::Align(axis, v) => in_table(&align::ALIGN, axis, v),
+        b @ Button::Align(..) => align::bar_glyph(b),
         Button::AlignCenters => Some("dc-al-center"),
         Button::Distribute(axis, v) => in_table(&align::DISTRIBUTE, axis, v),
         Button::Spacing("vertical") => Some("dc-dist-vspace"),

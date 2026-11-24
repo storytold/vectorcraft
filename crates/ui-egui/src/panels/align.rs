@@ -99,6 +99,24 @@ pub const ALIGN: [(&str, &str, &str, &str); 6] = [
     ("dc-al-bottom", "Vertical Align Bottom", "vertical", "bottom"),
 ];
 
+/// The glyphs of [`ALIGN`]'s buttons, in its order, in the Control bar and the Properties panel: the reference app drew
+/// them there with Lucide's align glyphs, and only the Align panel with its own.
+const BAR_ALIGN: [&str; 6] = [
+    "align-start-vertical",
+    "align-center-vertical",
+    "align-end-vertical",
+    "align-start-horizontal",
+    "align-center-horizontal",
+    "align-end-horizontal",
+];
+
+/// The glyph of align button `b` in the Control bar and the Properties panel ([`BAR_ALIGN`]); `None` for the other
+/// buttons, which draw the panel's glyph there too.
+pub(crate) fn bar_glyph(b: Button) -> Option<&'static str> {
+    let Button::Align(axis, v) = b else { return None };
+    ALIGN.iter().position(|r| r.2 == axis && r.3 == v).map(|i| BAR_ALIGN[i])
+}
+
 pub const DISTRIBUTE: [(&str, &str, &str, &str); 6] = [
     ("dc-dist-top", "Vertical Distribute Top", "vertical", "top"),
     ("dc-dist-vcenter", "Vertical Distribute Center", "vertical", "center"),
@@ -288,7 +306,7 @@ fn bar_items(buttons: impl Iterator<Item = Button>) -> BarItems {
 pub(crate) fn align_buttons(_app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         for (icon, b) in align_icons() {
-            command_button(ui, icon, b);
+            command_button(ui, bar_glyph(b).unwrap_or(icon), b);
         }
     });
 }
