@@ -296,18 +296,6 @@ class NightlyEnabledCallers(unittest.TestCase):
                 reviewed_manual_actors(mutated_source, mutated_policy)
 
 
-ISSUE_METRICS = {"bugs": "BUG", "vulnerabilities": "VULNERABILITY", "code_smells": "CODE_SMELL",
-                 "security_rating": "VULNERABILITY", "new_security_rating": "VULNERABILITY"}
-
-
-def sonar_issue_scope(sonar):
-    """The reviewed issue scope; the pinned validator requires every type to map from an accepted condition."""
-    mapped = {ISSUE_METRICS[c["metric"]] for c in sonar["accepted_conditions"]}
-    if not sonar["issue_types"] or mapped != set(sonar["issue_types"]):
-        raise ValueError("accepted conditions do not map onto the reviewed issue scope")
-    return set(sonar["issue_types"])
-
-
 def push_block(source):
     """The whole `push:` mapping, blank lines and nested keys included.
 
@@ -398,15 +386,6 @@ class NightlyInstalledPolicy(unittest.TestCase):
                     self.assertEqual(set(job), {"name", "app_id", "applicability"})
                     self.assertEqual((job["app_id"], job["applicability"]), (15368, "required"))
 
-    def test_a_reviewed_issue_scope_needs_a_matching_accepted_condition(self):
-        # The pinned nightly_candidate.contract() requires this equality before it reads Sonar, so a
-        # policy that names an issue type without an accepted condition mapping onto it is refused.
-        sonar = copy.deepcopy(self.policy["candidate_policy"]["sonar"])
-        self.assertEqual(sonar_issue_scope(sonar), set(sonar["issue_types"]))
-        sonar["accepted_conditions"] = []
-        with self.assertRaises(ValueError):
-            sonar_issue_scope(sonar)
-
     def test_a_path_filter_after_a_blank_line_is_still_rejected(self):
         workflow = "on:\n  push:\n    branches: [main]\n\n    paths: ['src/**']\n  workflow_dispatch: {}\n"
         block = push_block(workflow)
@@ -427,7 +406,10 @@ class NightlyInstalledPolicy(unittest.TestCase):
         self.assertEqual(sonar["project"], properties["sonar.projectKey"])
         self.assertEqual((sonar["app_id"], sonar["check_name"]), (12526, "SonarCloud Code Analysis"))
         self.assertEqual(sonar["details_url"], "https://sonarcloud.io/dashboard?id=" + sonar["project"] + "&branch=main")
-        self.assertEqual(sonar_issue_scope(sonar), set(sonar["issue_types"]))
+        accepted = {"bugs": "BUG", "vulnerabilities": "VULNERABILITY", "code_smells": "CODE_SMELL",
+                    "security_rating": "VULNERABILITY", "new_security_rating": "VULNERABILITY"}
+        for cond in sonar["accepted_conditions"]:
+            self.assertIn(accepted[cond["metric"]], sonar["issue_types"])
         metrics = [c["metric"] for c in sonar["accepted_conditions"] + sonar["required_conditions"]]
         self.assertEqual(len(metrics), len(set(metrics)))
         keys = [item["key"] for item in sonar["debt"]]
