@@ -306,7 +306,7 @@ fn store(ctx: &craft::egui::Context) -> TextureStore<u8> {
 fn print_queue(ui: &Ui) -> JobQueue<PrintKey, Option<Print>> {
     let ctx = ui.ctx().clone();
     let jobs = Env::of(ui).view().host().map_or_else(default_jobs, |host| Arc::clone(host.jobs_shared()));
-    let options = QueueOptions { lanes: QueueOptions::default_lanes().min(1), name: "fold-print" };
+    let options = QueueOptions { lanes: QueueOptions::default_lanes().min(1), name: "fold-print", ..QueueOptions::default() };
     JobQueue::new(jobs, Wake::new(move || ctx.request_repaint()), options)
 }
 

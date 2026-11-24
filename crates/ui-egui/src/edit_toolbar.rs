@@ -25,7 +25,7 @@ use craft::ui::buttons::ToggleButton;
 use craft::ui::contract::{Bind, Outcome as _, Show as _};
 use craft::ui::menu::PanelRow;
 use craft::ui::primitives::IconSpec;
-use craft::ui::rails::{DrawerGroup, DropAt, ToolRailOutput, ToolSlot, ToolbarDrawer, ToolbarEdit};
+use craft::ui::rails::{DrawerGroup, DropAt, SlotId, ToolRailOutput, ToolSlot, ToolbarDrawer, ToolbarEdit};
 use craft::ui::runtime::commands::CommandRef;
 use egui::Ui;
 use serde_json::{Value, json};
@@ -467,7 +467,15 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ui: &mut Ui, rail_out: &ToolRailO
         });
     });
 
+    // A tool dragged off the toolbar comes by its place there; the toolbar holds each tool once, so its id names it.
+    let tool_at = |slot: SlotId, index: usize| toolbar.iter().find(|s| s.id == slot).and_then(|s| s.tools.get(index)).map(|t| t.id.clone());
     for edit in out.edits {
+        let edit = match edit {
+            ToolbarEdit::RemoveFrom { slot, index, .. } => tool_at(slot, index).map(ToolbarEdit::remove),
+            ToolbarEdit::MoveFrom { slot, index, at, .. } => tool_at(slot, index).map(|tool| ToolbarEdit::move_to(tool, at)),
+            edit => Some(edit),
+        };
+        let Some(edit) = edit else { continue };
         match edit {
             ToolbarEdit::Add { tool, at, .. } => {
                 if let Some(p) = drop_params(app, &tool.id, at, target.as_deref()) {

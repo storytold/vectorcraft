@@ -10,6 +10,7 @@ use craft::ui::runtime::toast::{self, Toast};
 use craft::ui::runtime::windows::WindowHost;
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
+use craft::ui::text::NumberPrecision;
 use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 use vectorcraft_engine::cmd::toast::Level;
 
@@ -662,6 +663,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.sizes = theme::app_sizes();
     root.values.set(view::zoom_scheme(prefs, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
+    // Percentages read whole (60 %), lengths to a thousandth of a point (357.114 pt), as production showed them.
+    root.values.set(NumberPrecision::Measured);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.

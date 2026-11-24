@@ -1188,7 +1188,9 @@ pub(crate) fn controls(app: &mut VectorcraftApp, ui: &mut Ui, rows: CharacterRow
     let sets = font_menu::family_sets(Some(&document[..]), &recent[..]);
     let sample = font_menu::sample_text(app);
     let unit = type_unit(app);
-    let mut source = FontPickerSource::new(catalog, Bind::bound(&mut settings), Bind::bound(&mut app.ui.font_filters))
+    let mut source = FontPickerSource::new(catalog)
+        .settings(Bind::bound(&mut settings))
+        .filters(Bind::bound(&mut app.ui.font_filters))
         .sets(&sets)
         .scripts(&FontScript::ALL)
         .filter_layout(FilterLayout::Chips);

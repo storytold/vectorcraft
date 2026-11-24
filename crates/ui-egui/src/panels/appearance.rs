@@ -21,7 +21,7 @@ use std::hash::Hash;
 use std::sync::{Arc, OnceLock};
 
 use craft::behavior::overlay::{Align, Side};
-use craft::behavior::{ColumnKey, ColumnWidth, DisplayOrder, EditEvent, IconId, ItemSource, Selection};
+use craft::behavior::{ColumnKey, ColumnWidth, CopyKeys, DisplayOrder, EditEvent, IconId, ItemSource, Selection};
 use craft::theme::Srgba;
 use craft::ui::buttons::{Button, ButtonOutput, Link};
 use craft::ui::choice::{Swatch, SwatchOutput};
@@ -541,7 +541,7 @@ fn show_list(
         .can_drag(|key: &RowKey| key.drags());
     if let Some(n) = cx.node.filter(|_| cx.mix.is_none()) {
         list = list
-            .reorder(ReorderRule::new().copy_with_alt().into_groups())
+            .reorder(ReorderRule::new().copy_with(CopyKeys::Alt).into_groups())
             .accepts(move |drag: &ListDrag<RowKey>, over: Option<&RowKey>, insert: usize| accepts(n, order, drag, over, insert, copy));
     }
     list.show_items(ui, rows, &mut |key, item| build_row(cx, *key, item))
