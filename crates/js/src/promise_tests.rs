@@ -316,6 +316,26 @@ fn a_sliced_run_pauses_inside_a_finally_callback() {
 }
 
 #[test]
+fn a_finally_callback_that_returns_a_pending_promise_holds_the_result_until_a_later_run_settles_it() {
+    let mut r = realm();
+    r.run(
+        "var log = [], settle = {};\n\
+         function wait(name) { return function () { return new Promise(function (res, rej) { settle[name] = { res: res, rej: rej }; }); }; }\n\
+         function report(name) { return [function (v) { log.push(name + ' kept ' + v); }, function (e) { log.push(name + ' rejected ' + e); }]; }\n\
+         var a = report('a'), b = report('b'), c = report('c'), d = report('d');\n\
+         Promise.resolve(1).finally(wait('a')).then(a[0], a[1]);\n\
+         Promise.reject(2).finally(wait('b')).then(b[0], b[1]);\n\
+         Promise.resolve(3).finally(wait('c')).then(c[0], c[1]);\n\
+         Promise.reject(4).finally(wait('d')).then(d[0], d[1]);",
+    )
+    .unwrap();
+    assert_eq!(r.run("Object.keys(settle).sort().join(' ') + '|' + log.join(' ')").unwrap(), JsValue::String("a b c d|".into()));
+    r.collect_garbage();
+    r.run("settle.a.res('ignored'); settle.b.res('ignored'); settle.c.rej('new c'); settle.d.rej('new d');").unwrap();
+    assert_eq!(r.run("log.join(', ')").unwrap(), JsValue::String("a kept 1, b rejected 2, c rejected new c, d rejected new d".into()));
+}
+
+#[test]
 fn an_ended_sliced_run_drops_its_jobs() {
     let mut r = realm();
     r.start(
