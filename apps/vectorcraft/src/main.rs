@@ -418,11 +418,9 @@ fn prepare_launch() -> Option<Vec<std::ffi::OsString>> {
             report_launch_profile_error(&error);
             std::process::exit(2)
         });
-    let identity = if early.profile.is_nightly() {
-        vectorcraft_ui_egui::os_window::LaunchIdentity::NightlyV1
-    } else {
-        vectorcraft_ui_egui::os_window::LaunchIdentity::Stable
-    };
+    let nightly = early.profile.is_nightly();
+    let identity =
+        if nightly { vectorcraft_ui_egui::os_window::LaunchIdentity::NightlyV1 } else { vectorcraft_ui_egui::os_window::LaunchIdentity::Stable };
     let install = launch_profile::install(early.profile).and_then(|()| {
         // Every data path follows the selected profile from here on: settings, logs, recovery, the
         // user's libraries, plug-ins, caches and the single-instance record.
@@ -439,7 +437,76 @@ fn prepare_launch() -> Option<Vec<std::ffi::OsString>> {
         report_launch_profile_error(&error);
         std::process::exit(2);
     }
+    // A nightly's taskbar identity, before the first window: otherwise Windows groups it with the
+    // stable app and the Launcher's own entry.
+    if let Err(error) =
+        process_identity::initialize(nightly, vectorcraft_ui_egui::os_window::id_for(vectorcraft_ui_egui::os_window::LaunchIdentity::NightlyV1))
+    {
+        report_launch_profile_error(&error.to_string());
+        // The window's identity, not the profile, failed: main's own failure status (1).
+        std::process::exit(1);
+    }
     Some(early.args)
+}
+
+/// The arguments the rest of `main` reads: a nightly's profile tokens were consumed by
+/// `prepare_launch`, so what is left is `--` and the files to open. A stable launch reads its
+/// arguments exactly as it always did.
+fn launch_arguments(nightly: bool, arguments: &[std::ffi::OsString]) -> Vec<String> {
+    if nightly { arguments.iter().map(|a| a.to_string_lossy().into_owned()).collect() } else { std::env::args().skip(1).collect() }
+}
+
+/// Port and token of the control channel, or the message to print. A nightly is started by the
+/// Launcher, never by an agent, so the channel and its inherited environment stay off: no token
+/// file is read and nothing listens.
+fn control_channel(control: &automation_args::ControlArg, nightly: bool) -> Result<(Option<u16>, Option<(String, String)>), String> {
+    if nightly {
+        if control.options().port.is_some() || std::env::var_os("VECTORCRAFT_CONTROL_PORT").is_some() {
+            eprintln!("vectorcraft: the control channel is off in a nightly build");
+        }
+        return Ok((None, None));
+    }
+    let options = ControlOptions::resolve(control.options(), &EnvNames::for_app("VECTORCRAFT")).map_err(|e| e.to_string())?;
+    let port = options.port;
+    // Read before the window opens: a token file that can't be read keeps the app from starting
+    // rather than leaving the channel open without one.
+    let token = port.map(|_| options.server_token()).transpose().map_err(|e| e.to_string())?;
+    Ok((port, token.map(|token| (options.token_notice(&token), token))))
+}
+
+/// A nightly's own session record: whether the previous session did not finish normally, to be
+/// reported once the window is up. This session is cleared only on a controlled return (`on_exit`,
+/// or the code after the event loop). Stable keeps no record.
+fn previous_nightly_session_was_unclean(nightly: bool) -> bool {
+    if !nightly {
+        return false;
+    }
+    match nightly_session::begin(nightly_root(), vectorcraft_ui_egui::os_window::version(), None) {
+        Ok(unclean) => unclean,
+        Err(e) => {
+            log::warn!("Nightly session health is unavailable: {e}");
+            false
+        }
+    }
+}
+
+/// The first log lines: the version and channel, then a nightly's profile root.
+fn log_startup(nightly: bool) {
+    log::info!("VectorCraft {} ({})", vectorcraft_ui_egui::os_window::version(), channel_name());
+    if nightly {
+        log::info!("nightly profile: {}", nightly_root().map(|root| root.display().to_string()).unwrap_or_default());
+    }
+}
+
+/// Windows: the update helper is a copy of this program started with `--finish-update`. Nightly is
+/// updated by the Launcher, so it never starts one (`build_flavor` keeps its updater off).
+#[cfg(windows)]
+fn finish_pending_update(nightly: bool) {
+    if !nightly
+        && let Some(result) = craft::update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>())
+    {
+        std::process::exit(i32::from(result.is_err()));
+    }
 }
 
 fn main() -> std::process::ExitCode {
@@ -447,22 +514,8 @@ fn main() -> std::process::ExitCode {
     // helper, the logger, fonts or any saved state, and `--version` is answered here too.
     let Some(arguments) = prepare_launch() else { return std::process::ExitCode::SUCCESS };
     let nightly = launch_profile::current().is_nightly();
-    // A nightly's taskbar identity is set before the first window: otherwise Windows groups it with
-    // the stable app and the Launcher's own entry.
-    if let Err(error) =
-        process_identity::initialize(nightly, vectorcraft_ui_egui::os_window::id_for(vectorcraft_ui_egui::os_window::LaunchIdentity::NightlyV1))
-    {
-        report_launch_profile_error(&error.to_string());
-        return std::process::ExitCode::FAILURE;
-    }
-    // Windows: the update helper is a copy of this program started with `--finish-update`. Nightly is
-    // updated by the Launcher, so it never starts one (`build_flavor` keeps its updater off).
     #[cfg(windows)]
-    if !nightly
-        && let Some(result) = craft::update::self_update::finish(&vectorcraft_ui_egui::UPDATE_APP, &std::env::args_os().skip(1).collect::<Vec<_>>())
-    {
-        std::process::exit(i32::from(result.is_err()));
-    }
+    finish_pending_update(nightly);
     // Before any thread starts: the pointer must find a cursor theme on Wayland (#2450).
     #[cfg(target_os = "linux")]
     cursor_theme::apply();
@@ -473,50 +526,21 @@ fn main() -> std::process::ExitCode {
     let mut roots_args =
         automation_args::AutomationArgs::new(root_env("VECTORCRAFT_AUTOMATION_READ_ROOT"), root_env("VECTORCRAFT_AUTOMATION_WRITE_ROOT"));
     let mut presentation = presentation::Overrides::default();
-    // A nightly's profile tokens were consumed by `prepare_launch`: what is left is `--` and the
-    // files to open. A stable launch reads its arguments exactly as it always did.
-    let given: Vec<String> =
-        if nightly { arguments.iter().map(|a| a.to_string_lossy().into_owned()).collect() } else { std::env::args().skip(1).collect() };
+    let given = launch_arguments(nightly, &arguments);
     let CommandLine { files: command_line_files, in_window_menus, new_instance, safe_mode: safe_mode_flag } =
         match read_command_line(given.into_iter(), &mut control, &mut roots_args, &mut presentation) {
             Ok(command_line) => command_line,
             Err(code) => return code,
         };
     let automation_args::AutomationArgs { read_roots, write_roots, .. } = roots_args;
-    // After the arguments: the flags and `--version` win over a bad environment value. A nightly is
-    // started by the Launcher, never by an agent, so the control channel and its inherited
-    // environment stay off: no token file is read and nothing listens.
-    let (control_port, control_token) = if nightly {
-        if control.options().port.is_some() || std::env::var_os("VECTORCRAFT_CONTROL_PORT").is_some() {
-            eprintln!("vectorcraft: the control channel is off in a nightly build");
-        }
-        (None, None)
-    } else {
-        let control_options = match ControlOptions::resolve(control.options(), &EnvNames::for_app("VECTORCRAFT")) {
-            Ok(options) => options,
-            Err(e) => {
-                eprintln!("vectorcraft: {e}");
-                return std::process::ExitCode::FAILURE;
-            }
-        };
-        let control_port = control_options.port;
-        // Read before the window opens: a token file that can't be read keeps the app from starting
-        // rather than leaving the channel open without one.
-        let control_token = match control_port.map(|_| control_options.server_token()).transpose() {
-            Ok(token) => token.map(|token| (control_options.token_notice(&token), token)),
-            Err(e) => {
-                eprintln!("vectorcraft: {e}");
-                return std::process::ExitCode::FAILURE;
-            }
-        };
-        (control_port, control_token)
-    };
+    // After the arguments: the flags and `--version` win over a bad environment value.
+    let (control_port, control_token) = control_channel(&control, nightly).unwrap_or_else(|message| {
+        eprintln!("vectorcraft: {message}");
+        std::process::exit(1)
+    });
     // Before desktop services, so every start-up warning is recorded (`logging`).
     let logger = logging::install();
-    log::info!("VectorCraft {} ({})", vectorcraft_ui_egui::os_window::version(), channel_name());
-    if nightly {
-        log::info!("nightly profile: {}", nightly_root().map(|root| root.display().to_string()).unwrap_or_default());
-    }
+    log_startup(nightly);
     // Files opened from the file manager while VectorCraft runs open in its window (#4892). Before
     // the log file is attached: a launch that hands its files over leaves the running app's log be.
     #[cfg(not(target_os = "macos"))]
@@ -551,20 +575,7 @@ fn main() -> std::process::ExitCode {
             None => logger.no_file(),
         }
     }
-    // A nightly's own session record: the previous session that did not finish normally is reported
-    // once the window is up, and this one is cleared only on a controlled return (`on_exit`, or the
-    // code after the event loop). Stable keeps no record.
-    let previous_nightly_unclean = if nightly {
-        match nightly_session::begin(nightly_root(), vectorcraft_ui_egui::os_window::version(), None) {
-            Ok(unclean) => unclean,
-            Err(e) => {
-                log::warn!("Nightly session health is unavailable: {e}");
-                false
-            }
-        }
-    } else {
-        false
-    };
+    let previous_nightly_unclean = previous_nightly_session_was_unclean(nightly);
     // The report a session left when it was closed while it did not answer (`hang_watch`).
     let previous_hang = log_dir().filter(|_| prefs_enabled()).and_then(|dir| hang_watch::take_previous(&dir));
     if let Some(report) = &previous_hang {
