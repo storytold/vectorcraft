@@ -3,7 +3,7 @@ use craft::behavior::IconId;
 use craft::behavior::kurbo::Size;
 use craft::ui::bars::{Bar, BarKind, StatusMessage, StatusProgress};
 use craft::ui::buttons::{Button, IconButton};
-use craft::ui::contract::{Bind, Entry, Gap, LabelKind, Outcome as _, Props as _, Show as _, ShowContainer as _, SideLabel, Trigger};
+use craft::ui::contract::{Bind, BodyCx, Entry, Gap, LabelKind, Outcome as _, Props as _, Show as _, ShowContainer as _, SideLabel, Trigger};
 use craft::ui::display::{Divider, Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -42,8 +42,28 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let busy = busy_labels(app);
 
     let (mut zoom_to, mut rotate_to, mut go, mut show_pick, mut stop) = (None, None, None, None, false);
+    // The readouts end the bar, the pointer's position and then the timings; a narrow bar leaves out the timings
+    // first, then the position, before the message.
+    let readouts = |ui: &mut Ui, _: &mut BodyCx<'_>| {
+        // With no hover point the axes stay empty and keep their width.
+        let origin = app.ruler_origin();
+        Row::new().gap(Gap::Item).fit_rank(2).show(ui, |ui, _| {
+            for (axis, value) in [("X", app.hover_doc.map(|p| p.x - origin.x)), ("Y", app.hover_doc.map(|p| p.y - origin.y))] {
+                let text = value.map(|v| format!("{axis}: {}", unit.readout(v))).unwrap_or_default();
+                Text::new(text).role(TypeRole::Mono).shade(Shade::Muted).sample(format!("{axis}: -8888.88 {}", unit.suffix())).show(ui);
+            }
+        });
+        let readout = |text: String, sample: String| Text::new(text).shade(Shade::Faint).sample(sample);
+        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
+            readout(format!("{render} {:.1} ms", app.perf.render_ms), format!("{render} 8888.8 ms")).show(ui);
+            readout(format!("{ui_name} {:.1} ms", app.perf.frame_ms), format!("{ui_name} 8888.8 ms")).show(ui);
+            // No rate until the window has drawn continuously for a moment (`frame_rate`).
+            let fps = if app.perf.fps > 0.0 { format!("{:.0} fps", app.perf.fps) } else { "\u{2013} fps".into() };
+            readout(fps, "8888 fps".into()).show(ui);
+        });
+    };
     // PLAN: assumed VectorcraftApp::canvas_view() -> Option<CanvasView> (cv.S4) and the label msgid "Status Bar".
-    Bar::new(tl!("Status Bar"), BarKind::Status).show(ui, |ui, _| {
+    Bar::new(tl!("Status Bar"), BarKind::Status).trailing(readouts).show(ui, |ui, _| {
         let zoom = Field::new(tl!("Zoom"))
             .side(SideLabel::new().kind(LabelKind::Hidden))
             .show(ui, |ui, _| ZoomField::new(tl!("Zoom"), app.canvas_view(), document).scrub(true).show(ui));
@@ -81,23 +101,6 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         Text::new(shown.to_owned()).shade(Shade::Muted).elide(Elide::End).show(ui);
         let more = IconButton::new(IconId::new("chevron_down")).label(tl!("Show")).show(ui);
         show_pick = Menu::new(tl!("Show")).values().opened_by(more.response(), Trigger::Press).pick(ui, &shows).picked;
-        // A narrow bar leaves out the timings first, then the pointer's position, before the message.
-        let readout = |text: String, sample: String| Text::new(text).shade(Shade::Faint).sample(sample);
-        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
-            readout(format!("{render} {:.1} ms", app.perf.render_ms), format!("{render} 8888.8 ms")).show(ui);
-            readout(format!("{ui_name} {:.1} ms", app.perf.frame_ms), format!("{ui_name} 8888.8 ms")).show(ui);
-            // No rate until the window has drawn continuously for a moment (`frame_rate`).
-            let fps = if app.perf.fps > 0.0 { format!("{:.0} fps", app.perf.fps) } else { "\u{2013} fps".into() };
-            readout(fps, "8888 fps".into()).show(ui);
-        });
-        // With no hover point the axes stay empty and keep their width.
-        let origin = app.ruler_origin();
-        Row::new().gap(Gap::Item).fit_rank(2).show(ui, |ui, _| {
-            for (axis, value) in [("X", app.hover_doc.map(|p| p.x - origin.x)), ("Y", app.hover_doc.map(|p| p.y - origin.y))] {
-                let text = value.map(|v| format!("{axis}: {}", unit.readout(v))).unwrap_or_default();
-                Text::new(text).role(TypeRole::Mono).shade(Shade::Muted).sample(format!("{axis}: -8888.88 {}", unit.suffix())).show(ui);
-            }
-        });
         if app.session.script_running() {
             stop = Button::new(tl!("Stop")).show(ui).response().clicked();
         }

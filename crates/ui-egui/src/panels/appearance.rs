@@ -23,7 +23,7 @@ use std::sync::{Arc, OnceLock};
 use craft::behavior::overlay::{Align, Side};
 use craft::behavior::{ColumnKey, ColumnWidth, CopyKeys, DisplayOrder, EditEvent, IconId, ItemSource, Selection};
 use craft::theme::Srgba;
-use craft::ui::buttons::{Button, ButtonOutput, Link};
+use craft::ui::buttons::{Button, ButtonOutput};
 use craft::ui::choice::{Swatch, SwatchOutput};
 use craft::ui::contract::overlay::{Anchor, Place};
 use craft::ui::contract::{
@@ -813,7 +813,7 @@ fn item_row<'r>(cx: &'r RowCx<'_>, key: RowKey, i: usize) -> ListRow<'r> {
     let (name, link) = if fill { (tl!("Fill"), tl!("Fill:")) } else { (tl!("Stroke"), tl!("Stroke:")) };
     let mut row = ListRow::new(name).toggle(ToggleCell::eye(EYE, it.visible())).cell_field(
         NAME,
-        Link::new(link).tooltip(tl!("Click to edit")),
+        crate::panels::option_link(link).tooltip(tl!("Click to edit")),
         link_output(cx.pass, key),
     );
     // The first trailing part added is the outermost: the profile closes the row, the swatch sits
@@ -876,7 +876,7 @@ fn opacity_row<'r>(cx: &'r RowCx<'_>, key: RowKey) -> ListRow<'r> {
     };
     ListRow::new(tl!("Opacity"))
         .toggle(ToggleCell::eye(EYE, true))
-        .cell_field(NAME, Link::new(tl!("Opacity:")).tooltip(tl!("Click to edit")), link_output(cx.pass, key))
+        .cell_field(NAME, crate::panels::option_link(tl!("Opacity:")).tooltip(tl!("Click to edit")), link_output(cx.pass, key))
         // A screen reader reads the shown opacity as the row's description.
         .description(shown.clone())
         .trailing(shown)
@@ -892,7 +892,7 @@ fn contents_row<'r>(cx: &'r RowCx<'_>) -> ListRow<'r> {
     let characters = matches!(n.kind, vectorcraft_doc::NodeKind::Text(_));
     let mut row = ListRow::new(label.clone()).toggle(ToggleCell::eye(EYE, true));
     if characters {
-        row = row.cell_field(NAME, Link::new(label).tooltip(tl!("Click to edit")), link_output(cx.pass, RowKey::Contents));
+        row = row.cell_field(NAME, crate::panels::option_link(label).tooltip(tl!("Click to edit")), link_output(cx.pass, RowKey::Contents));
         // The characters' stroke closes the row, their fill before it.
         for stroke in [true, false] {
             let paint = n.proxy_paint_only(stroke, None).cloned().unwrap_or(Paint::None);
@@ -918,7 +918,7 @@ fn effect_row<'r>(cx: &'r RowCx<'_>, key: RowKey, item: &mut ItemCx<'_, 'r, RowK
     let tip = skipped_effect_tip(&e.id).unwrap_or_else(|| tl!("Click to edit").to_string());
     let row = ListRow::new(label.clone())
         .toggle(ToggleCell::eye(EYE, e.visible))
-        .cell_field(NAME, Link::new(label).tooltip(tip), link_output(cx.pass, key))
+        .cell_field(NAME, crate::panels::option_link(label).tooltip(tip), link_output(cx.pass, key))
         .trailing_icon(fx_icon(), Label::Empty)
         .tooltip(tl!("Double-click to edit"));
     if cx.open.contains(&key) {

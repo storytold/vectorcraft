@@ -19,7 +19,6 @@ use craft::text::ui::character::{
     FontHeightReference as HeightReference, FontPickerSource, Kerning, Leading, SIZE_PRESETS, keys,
 };
 use craft::text::ui::type_options::TextAntiAlias;
-use craft::ui::buttons::Link;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Lazy, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::display::Divider;
@@ -1306,7 +1305,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         return true;
     }
     Divider::vertical().show(ui);
-    let link = Link::new(tl!("Character:")).show(ui).response;
+    let link = crate::panels::option_link(tl!("Character:")).show(ui).response;
     Popover::new(tl!("Character options"), Bind::kept()).overlay(|overlay| overlay.opened_by(&link, Trigger::Click)).show(ui, |ui, _| show(app, ui));
     Row::new().show(ui, |ui, _| {
         font_menu::font_fields(app, ui);
