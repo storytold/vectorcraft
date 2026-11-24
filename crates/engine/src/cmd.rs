@@ -94,6 +94,7 @@ pub(crate) mod slices;
 pub mod spelling;
 mod stroke;
 mod style;
+pub use style::styled_node;
 pub mod stylelib;
 mod svgfilter;
 mod swatch;

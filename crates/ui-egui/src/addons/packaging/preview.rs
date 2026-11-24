@@ -5,15 +5,37 @@
 //! The window folds the blank that the document's shown fold lines make, about its largest panel
 //! or the panel the user double-clicked. Its print is a raster of the document with the fold lines
 //! and the layers that do not print left out ([`vectorcraft_engine::cmd::print_hidden`]), rendered
-//! once per document revision, off the UI thread on native builds ([`crate::thumb_worker`]), and
-//! sampled through each panel's projective map when the fold, the view or the print changes. Dragging turns the view, a Shift-drag
+//! once per document revision on the host's job queue, and sampled through each panel's projective
+//! map when the fold, the view or the print changes. Dragging turns the view, a Shift-drag
 //! keeps to one axis, a middle-drag or a Space-drag moves it, the wheel zooms, a double-click on a
 //! panel makes it the base, and the arrow keys turn the view by 5° when it has the keyboard focus.
 //! The settings live in `UiState::fold_preview` (`ui.inspect`); `ui.foldPreview` sets them.
 
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use egui::{Color32, Rect, Sense, Ui, vec2};
+use craft::behavior::{Metrics, NavMove, PointerButton, PressPhase, Sense};
+use craft::egui::{ColorImage, Pos2, Rect, Response, Ui, Vec2, pos2};
+use craft::host::queue::{JobQueue, Priority, QueueOptions};
+use craft::host::{Wake, default_jobs};
+use craft::keymap::Key;
+use craft::platform::clock::monotonic_ms;
+use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{
+    Bind, Common, Component, Cx, Entry, Focus as _, Input, MeasureCx, NoValue, Outcome, PaintUi, Pointer as _, Props as _, Role, Show as _,
+    ShowContainer as _, Sizing, WordSetCx as _,
+};
+use craft::ui::display::{Shade, Text};
+use craft::ui::form::{SliderField, SliderFieldLayout};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::pickers::Select;
+use craft::ui::primitives::{Revision, TextureStore, TextureStoreOptions};
+use craft::ui::runtime::env::{Env, Label, UnitKind};
+use craft::ui::runtime::focus::{ActivateKeys, KeepKeys, KeyUse};
+use craft::ui::runtime::keys;
+use craft::ui::style::{ComponentStyle, FocusLook, StyleCx, SurfaceKind};
+use craft::ui::value_drag::SliderScale;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_geom::{Point, Rect as DRect};
@@ -21,8 +43,7 @@ use vectorcraft_three_d::fold::raster::{self, Camera, Image, MAX_PIXELS, MAX_SID
 use vectorcraft_three_d::fold::{Blank, Folded, fold, pick};
 
 use crate::VectorcraftApp;
-use crate::thumb_worker::{Settle, ThumbWorker};
-use crate::widgets::{self, dim_label};
+use crate::thumb_worker::Settle;
 
 /// The window's id (`window.panel {panel: "foldPreview"}`).
 pub const ID: &str = "foldPreview";
@@ -48,6 +69,46 @@ const PRINT_SIDE: f64 = 2048.0;
 /// Degrees the view turns for each point dragged, and for each arrow key press.
 const DRAG_TURN: f64 = 0.5;
 const KEY_TURN: f64 = 5.0;
+/// The texture store the drawn image lives in, and its one key.
+const STORE: &str = "fold-preview";
+
+craft::ui::words! {
+    /// The words of the Fold Preview window.
+    pub struct FoldPreviewWords {
+        image: "foldPreview.image" = "Fold Preview";
+        view: "foldPreview.view" = "View";
+        inside: "foldPreview.inside" = "Inside";
+        white: "foldPreview.white" = "White";
+        show_fold_lines: "foldPreview.showFoldLines" = "Show Fold Lines";
+        reset: "foldPreview.reset" = "Reset";
+        perspective: "foldPreview.perspective" = "Perspective";
+        fold: "foldPreview.fold" = "Fold";
+        zoom: "foldPreview.zoom" = "Zoom";
+        front: "foldPreview.front" = "Front";
+        back: "foldPreview.back" = "Back";
+        left: "foldPreview.left" = "Left";
+        right: "foldPreview.right" = "Right";
+        top: "foldPreview.top" = "Top";
+        bottom: "foldPreview.bottom" = "Bottom";
+        three_quarter: "foldPreview.threeQuarter" = "Three-Quarter";
+    }
+}
+
+impl FoldPreviewWords {
+    /// The name of the view preset `id` (see [`VIEWS`]).
+    fn view_label(&self, id: &str) -> Label {
+        let word = match id {
+            "front" => &self.front,
+            "back" => &self.back,
+            "left" => &self.left,
+            "right" => &self.right,
+            "top" => &self.top,
+            "bottom" => &self.bottom,
+            _ => &self.three_quarter,
+        };
+        word.clone()
+    }
+}
 
 /// The window's settings (kept with the UI state).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -119,7 +180,7 @@ fn wrapped(angle: f64) -> f64 {
 
 /// What the print raster shows: the document, its revision, whether the fold lines are drawn, and
 /// the region and size.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct PrintKey {
     uid: u64,
     revision: u64,
@@ -153,34 +214,59 @@ struct DrawKey {
     print: Option<PrintKey>,
 }
 
+impl DrawKey {
+    /// The revision of the image this key draws: the store renders again only when it changes.
+    fn revision(&self) -> Revision {
+        let c = &self.camera;
+        let bits = [c.rotate_x, c.rotate_y, c.scale, c.pan[0], c.pan[1], c.perspective, c.center[0], c.center[1], c.center[2]].map(f64::to_bits);
+        Revision::of(&(self.fold, c.width, c.height, bits, self.inside, self.print))
+    }
+}
+
+/// The last image drawn, where it sat on screen and what it shows, for picking a panel with a
+/// double-click.
+#[derive(Clone)]
+struct Shown {
+    image: Arc<Image>,
+    rect: Rect,
+    fold: FoldKey,
+}
+
+/// What the window draws this pass: the folded blank and the print to put on it.
+#[derive(Clone)]
+struct Folding {
+    doc: Arc<vectorcraft_engine::doc::Document>,
+    blanks: Arc<Vec<Blank>>,
+    blank: usize,
+    folded: Arc<Folded>,
+    key: FoldKey,
+    fold_ms: f64,
+    print: Option<(PrintKey, Arc<Print>)>,
+}
+
+/// The pass's folding, and what the status line says about it.
+struct Scene {
+    blanks: usize,
+    errors: bool,
+    drawn: Option<Folding>,
+}
+
+/// The Fold Preview window's state, kept with the add-on panels.
 #[derive(Default)]
-struct Cache {
+pub(crate) struct View {
     blanks: Option<Blanks>,
     /// The last fold, what it folds and how long it took (ms).
     folded: Option<(FoldKey, Arc<Folded>, f64)>,
-    /// What the texture shows.
-    drawn: Option<DrawKey>,
-    /// Folds worked out and images rendered (tests count them).
-    folds: u64,
-    renders: u64,
     /// The print shown and what it shows.
     print: Option<(PrintKey, Arc<Print>)>,
-    /// Renders the print off the UI thread (None: on this thread).
-    worker: Option<ThumbWorker<(), PrintKey>>,
-    worker_started: bool,
+    /// The print being rendered.
     pending: Option<PrintKey>,
+    /// Renders the print off the UI thread; made on the first pass, when the host is known.
+    prints: Option<JobQueue<PrintKey, Option<Print>>>,
     settle: Settle,
-    tex: Option<egui::TextureHandle>,
-    /// The last frame's image, for double-click picking, and the screen rect it filled.
-    image: Option<(Image, Rect)>,
+    /// The last image drawn.
+    shown: Option<Shown>,
     frame: Option<Frame>,
-    /// Prints rendered (tests count them).
-    prints: u64,
-}
-
-thread_local! {
-    static CACHE: crate::graphics::TexCache<Cache> = crate::graphics::TexCache::default();
-    static RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
 }
 
 /// The board's inside color (straight RGBA) for `inside`: white when it is empty, a swatch of `d`
@@ -210,7 +296,21 @@ fn print_size(region: DRect) -> (u32, u32, f64) {
     (side(region.width()), side(region.height()), scale)
 }
 
-impl Cache {
+/// The texture store the drawn image lives in.
+fn store(ctx: &craft::egui::Context) -> TextureStore<u8> {
+    TextureStore::in_context(ctx, STORE, TextureStoreOptions::default())
+}
+
+/// The queue the print renders on: the host's jobs, else the default ones, with one lane (none on
+/// wasm32, where the pass runs the job).
+fn print_queue(ui: &Ui) -> JobQueue<PrintKey, Option<Print>> {
+    let ctx = ui.ctx().clone();
+    let jobs = Env::of(ui).view().host().map_or_else(default_jobs, |host| Arc::clone(host.jobs_shared()));
+    let options = QueueOptions { lanes: QueueOptions::default_lanes().min(1), name: "fold-print" };
+    JobQueue::new(jobs, Wake::new(move || ctx.request_repaint()), options)
+}
+
+impl View {
     /// The blanks of document `uid` at `revision`, worked out again only when it changed.
     fn blanks(&mut self, uid: u64, revision: u64, d: &vectorcraft_engine::doc::Document) -> (Arc<Vec<Blank>>, bool) {
         if let Some((key, blanks, errors)) = &self.blanks
@@ -233,35 +333,69 @@ impl Cache {
         {
             return Some((f.clone(), *ms));
         }
-        let t0 = crate::now_ms();
+        let t0 = monotonic_ms();
         let f = Arc::new(fold(blank, Some(panel), amount, TOLERANCE)?);
-        let ms = crate::now_ms() - t0;
+        let ms = monotonic_ms() - t0;
         self.folded = Some((key, f.clone(), ms));
-        self.folds += 1;
         Some((f, ms))
     }
 
-    /// Bring the print up to `key`: on the worker when there is one, else here, and not before the
-    /// document has settled unless there is no print of it yet.
-    fn update_print(&mut self, ctx: &egui::Context, doc: &Arc<vectorcraft_engine::doc::Document>, key: PrintKey, region: DRect, scale: f64) {
-        if !self.worker_started {
-            self.worker_started = true;
-            self.worker = ThumbWorker::spawn(ctx, "fold-preview");
-        }
-        let done = match self.worker.as_ref().map(ThumbWorker::poll) {
-            Some(Some(done)) => done,
-            Some(None) => {
-                (self.worker, self.pending) = (None, None);
-                vec![]
-            }
-            None => vec![],
+    /// What the window draws for `doc` at `revision` with `set`: its blanks, the fold and the print.
+    fn scene(&mut self, ui: &Ui, doc: &Arc<vectorcraft_engine::doc::Document>, uid: u64, revision: u64, set: &Settings) -> Scene {
+        let (blanks, errors) = self.blanks(uid, revision, doc);
+        let base = set.base.map(|[x, y]| Point::new(x, y));
+        let picked = pick(&blanks, base).or_else(|| pick(&blanks, None));
+        let drawn = picked.and_then(|(b, panel)| {
+            let blank = blanks.get(b)?;
+            let key = (uid, revision, b, panel, set.amount.to_bits());
+            let (folded, fold_ms) = self.fold(key, blank, panel, set.amount)?;
+            let print = self.print_of(ui, doc, key, blank, set.show_fold_lines);
+            Some(Folding { doc: doc.clone(), blanks: blanks.clone(), blank: b, folded, key, fold_ms, print })
+        });
+        Scene { blanks: blanks.len(), errors, drawn }
+    }
+
+    /// The print to draw for the fold `key` of `blank`, brought up to date first.
+    fn print_of(
+        &mut self,
+        ui: &Ui,
+        doc: &Arc<vectorcraft_engine::doc::Document>,
+        key: FoldKey,
+        blank: &Blank,
+        fold_lines: bool,
+    ) -> Option<(PrintKey, Arc<Print>)> {
+        let region = print_region(blank)?;
+        let (width, height, scale) = print_size(region);
+        let pkey = PrintKey {
+            uid: key.0,
+            revision: key.1,
+            fold_lines,
+            region: [region.x0.to_bits(), region.y0.to_bits(), region.x1.to_bits(), region.y1.to_bits()],
+            width,
+            height,
         };
-        for d in done {
-            if self.pending == Some(d.key) {
+        self.update_print(ui, doc, pkey, region, scale);
+        self.print_for(&pkey)
+    }
+
+    /// Take in the prints that finished, then bring the print up to `key`: queued on the host's
+    /// jobs, and not before the document has settled unless there is no print of it yet.
+    fn update_print(&mut self, ui: &Ui, doc: &Arc<vectorcraft_engine::doc::Document>, key: PrintKey, region: DRect, scale: f64) {
+        let queue = self.prints.get_or_insert_with(|| print_queue(ui));
+        let inline = QueueOptions::default_lanes() == 0;
+        if inline {
+            queue.run_inline(1);
+        }
+        let mut done = Vec::new();
+        while let Some(finished) = queue.try_recv() {
+            done.push(finished);
+        }
+        for finished in done {
+            if self.pending == Some(finished.key) {
                 self.pending = None;
             }
-            if let Some(img) = d.img {
-                self.keep_print(d.key, img);
+            if let Some(print) = finished.result {
+                self.keep_print(finished.key, print);
             }
         }
         let shown = self.print.as_ref().map(|(k, _)| *k);
@@ -269,7 +403,7 @@ impl Cache {
             return;
         }
         let have = shown.is_some_and(|k| k.uid == key.uid);
-        if have && !self.settle.settled(ctx, key.uid, key.revision, ctx.input(|i| i.time)) {
+        if have && !self.settle.settled(ui.ctx(), key.uid, key.revision, monotonic_ms() / 1000.0) {
             return;
         }
         let opts = vectorcraft_render::RenderOptions {
@@ -278,16 +412,18 @@ impl Cache {
             hidden: vectorcraft_engine::cmd::print_hidden(doc, key.fold_lines).into_iter().collect(),
             ..Default::default()
         };
-        if let Some(w) = &self.worker {
-            let (doc, opts) = (doc.clone(), opts.clone());
-            if w.submit((), key, Box::new(move |r| Some(r.render_region_with(&doc, region, scale, &opts)))) {
-                self.pending = Some(key);
-                return;
-            }
-            self.worker = None;
+        let doc = doc.clone();
+        let Some(queue) = &self.prints else { return };
+        // A render of an older revision is of no use once this one is wanted.
+        queue.reprioritize(|_, _| None);
+        queue.submit(key, Priority::VISIBLE, move |_| {
+            let img = vectorcraft_render::Renderer::new().render_region_with(&doc, region, scale, &opts);
+            Print::new(region, img.width, img.height, img.pixels)
+        });
+        self.pending = Some(key);
+        if inline {
+            ui.ctx().request_repaint();
         }
-        let img = RENDERER.with(|r| r.borrow_mut().render_region_with(doc, region, scale, &opts));
-        self.keep_print(key, img);
     }
 
     /// The print to draw for `want`: the one shown when it is of the same document, blank region and
@@ -297,12 +433,23 @@ impl Cache {
         self.print.as_ref().filter(|(k, _)| same(k)).map(|(k, p)| (*k, p.clone()))
     }
 
-    fn keep_print(&mut self, key: PrintKey, img: vectorcraft_render::Rendered) {
-        let region =
-            DRect::new(f64::from_bits(key.region[0]), f64::from_bits(key.region[1]), f64::from_bits(key.region[2]), f64::from_bits(key.region[3]));
-        if let Some(print) = Print::new(region, img.width, img.height, img.pixels) {
-            self.print = Some((key, Arc::new(print)));
-            self.prints += 1;
+    fn keep_print(&mut self, key: PrintKey, print: Print) {
+        self.print = Some((key, Arc::new(print)));
+    }
+
+    /// Keep what the view drew this pass: a new image and its times, or only where the last one sits.
+    fn keep(&mut self, drawn: Option<Drawn>) {
+        let Some(drawn) = drawn else { return };
+        match drawn.fresh {
+            Some((image, frame)) => {
+                self.shown = Some(Shown { image, rect: drawn.rect, fold: drawn.fold });
+                self.frame = Some(frame);
+            }
+            None => {
+                if let Some(shown) = &mut self.shown {
+                    shown.rect = drawn.rect;
+                }
+            }
         }
     }
 }
@@ -392,7 +539,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 
 /// The window's settings and the last frame's size and times.
 fn state(app: &VectorcraftApp) -> Value {
-    let frame = CACHE.with(|c| c.borrow().frame);
+    let frame = app.addon_panels.fold_view.frame;
     let mut out = serde_json::to_value(&app.ui.fold_preview).unwrap_or_default();
     if let Some(o) = out.as_object_mut() {
         o.insert(
@@ -403,122 +550,46 @@ fn state(app: &VectorcraftApp) -> Value {
     out
 }
 
-/// The toolbar: the view presets, Perspective, Inside, Show Fold Lines and Reset.
-fn toolbar(app: &VectorcraftApp, ui: &mut Ui, set: &mut Settings) {
-    ui.horizontal_wrapped(|ui| {
-        let labels: Vec<&str> = VIEWS.iter().map(|v| v.0).collect();
-        let current = set.view().map_or("", |v| v.0);
-        if let Some(i) = widgets::dropdown_named(ui, "fold-preview-view", Some(tl!("View")), current, &labels, 120.0)
-            && let Some(&(_, _, x, y)) = VIEWS.get(i)
+/// The toolbar: the view presets, Inside, Show Fold Lines and Reset.
+fn toolbar(ui: &mut Ui, words: &FoldPreviewWords, doc: &vectorcraft_engine::doc::Document, set: &mut Settings) {
+    let views: Vec<Entry<&'static str>> = VIEWS.iter().map(|v| Entry::new(v.1, words.view_label(v.1))).collect();
+    let solid = |s: &&vectorcraft_color::Swatch| matches!(s.paint, vectorcraft_color::Paint::Solid { .. });
+    let insides: Vec<Entry<String>> = std::iter::once(Entry::new(String::new(), words.white.clone()))
+        .chain(doc.swatches.iter().filter(solid).map(|s| Entry::new(s.name.clone(), s.name.clone())))
+        .collect();
+    Row::new().wrap(true).show(ui, |ui, _| {
+        let current = set.view().map_or("", |v| v.1);
+        if let Some(&id) = Select::new(words.view.clone(), Bind::given(current), &views).show(ui).value()
+            && let Some(&(_, _, x, y)) = VIEWS.iter().find(|v| v.1 == id)
         {
             (set.rotate_x, set.rotate_y, set.pan) = (x, y, [0.0; 2]);
         }
-        let swatches: Vec<String> = app.session.active().map_or_else(Vec::new, |st| {
-            st.doc.swatches.iter().filter(|s| matches!(s.paint, vectorcraft_color::Paint::Solid { .. })).map(|s| s.name.clone()).collect()
-        });
-        let mut names: Vec<&str> = vec![tl!("White")];
-        names.extend(swatches.iter().map(String::as_str));
-        let shown = if set.inside.is_empty() { tl!("White") } else { set.inside.as_str() };
-        ui.label(tl!("Inside"));
-        if let Some(i) = widgets::dropdown_names_named(ui, "fold-preview-inside", Some(tl!("Inside")), shown, &names, 110.0) {
-            set.inside = swatches.get(i.wrapping_sub(1)).cloned().unwrap_or_default();
+        let inside = Select::new(words.inside.clone(), Bind::given(set.inside.clone()), &insides).placeholder(set.inside.clone()).show(ui);
+        if let Some(name) = inside.value() {
+            set.inside.clone_from(name);
         }
-        if widgets::check(ui, tl!("Show Fold Lines"), set.show_fold_lines, true) {
-            set.show_fold_lines = !set.show_fold_lines;
-        }
-        if widgets::flat_button_fit(ui, tl!("Reset"), 48.0).clicked() {
+        Checkbox::new(Bind::bound(&mut set.show_fold_lines)).label(words.show_fold_lines.clone()).show(ui);
+        if Button::new(words.reset.clone()).show(ui).clicks > 0 {
             let fresh = Settings::default();
             (set.rotate_x, set.rotate_y, set.zoom, set.pan, set.perspective) = (fresh.rotate_x, fresh.rotate_y, 1.0, [0.0; 2], 0.0);
         }
     });
-    ui.horizontal(|ui| {
-        ui.label(tl!("Perspective"));
-        widgets::slider(ui, egui::Slider::new(&mut set.perspective, 0.0..=160.0).suffix("°").fixed_decimals(0));
-    });
 }
 
-/// The Fold and Zoom sliders.
-fn sliders(ui: &mut Ui, set: &mut Settings) {
-    ui.horizontal(|ui| {
-        ui.label(tl!("Fold"));
-        let mut percent = set.amount * 100.0;
-        if widgets::slider(ui, egui::Slider::new(&mut percent, 0.0..=100.0).suffix("%").fixed_decimals(0)).changed() {
-            set.amount = (percent / 100.0).clamp(0.0, 1.0);
-        }
-    });
-    ui.horizontal(|ui| {
-        ui.label(tl!("Zoom"));
-        let mut percent = set.zoom * 100.0;
-        if widgets::slider(ui, egui::Slider::new(&mut percent, 10.0..=800.0).suffix("%").fixed_decimals(0).logarithmic(true)).changed() {
-            set.zoom = (percent / 100.0).clamp(0.1, 8.0);
-        }
-    });
-}
-
-/// Turns, moves and zooms the view with the pointer, the wheel and the arrow keys, and picks the
-/// base panel of `blank` (the blank `key` folds) on a double-click.
-fn interact(ui: &Ui, response: &egui::Response, set: &mut Settings, blank: Option<(&Blank, FoldKey)>) {
-    if response.clicked() || response.drag_started() {
-        response.request_focus();
-    }
-    let (shift, space) = ui.input(|i| (i.modifiers.shift, i.key_down(egui::Key::Space)));
-    let delta = response.drag_delta();
-    if delta != egui::Vec2::ZERO {
-        if response.dragged_by(egui::PointerButton::Middle) || (space && response.dragged_by(egui::PointerButton::Primary)) {
-            set.pan[0] += f64::from(delta.x);
-            set.pan[1] += f64::from(delta.y);
-        } else if response.dragged_by(egui::PointerButton::Primary) {
-            let (mut dx, mut dy) = (f64::from(delta.x), f64::from(delta.y));
-            if shift {
-                if dx.abs() >= dy.abs() {
-                    dy = 0.0;
-                } else {
-                    dx = 0.0;
-                }
-            }
-            set.rotate_y = wrapped(set.rotate_y + dx * DRAG_TURN);
-            set.rotate_x = wrapped(set.rotate_x + dy * DRAG_TURN);
-        }
-    }
-    if response.hovered() {
-        let scroll = f64::from(ui.input(|i| i.smooth_scroll_delta.y + (i.zoom_delta() - 1.0) * 200.0));
-        if scroll != 0.0 {
-            set.zoom = (set.zoom * (scroll * 0.002).exp()).clamp(0.1, 8.0);
-        }
-    }
-    if response.has_focus() {
-        // The view keeps the arrow keys, so they turn it rather than move the focus on.
-        ui.memory_mut(|m| {
-            m.set_focus_lock_filter(response.id, egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, ..Default::default() })
-        });
-        let presses = |key| ui.input_mut(|i| i.count_and_consume_key(egui::Modifiers::NONE, key)) as f64 * KEY_TURN;
-        let (left, right, up, down) =
-            (presses(egui::Key::ArrowLeft), presses(egui::Key::ArrowRight), presses(egui::Key::ArrowUp), presses(egui::Key::ArrowDown));
-        if left + right + up + down > 0.0 {
-            set.rotate_y = wrapped(set.rotate_y + right - left);
-            set.rotate_x = wrapped(set.rotate_x + down - up);
-        }
-    }
-    if response.double_clicked()
-        && let Some(pos) = response.interact_pointer_pos()
-        && let Some((blank, key)) = blank
-    {
-        // The image on screen is the last one drawn; its panel numbers are used only while it shows
-        // the same blank of the same document revision.
-        let picked = CACHE.with(|c| {
-            let c = c.borrow();
-            let shown = c.drawn.map(|d| (d.fold.0, d.fold.1, d.fold.2));
-            if shown != Some((key.0, key.1, key.2)) {
-                return None;
-            }
-            let (img, rect) = c.image.as_ref()?;
-            let x = (pos.x - rect.left()) / rect.width() * img.width as f32;
-            let y = (pos.y - rect.top()) / rect.height() * img.height as f32;
-            img.panel_at(x.max(0.0) as u32, y.max(0.0) as u32)
-        });
-        if let Some(p) = picked.and_then(|i| blank.panels.get(i)).and_then(|p| p.point_inside()) {
-            set.base = Some([p.x, p.y]);
-        }
+/// A slider over `value` as a percentage, which keeps `value` within `range` (as fractions).
+// PLAN: the sheet says `Field` + `Slider`; `SliderField` is the one component with the caption, number field and slider, and the percent unit keeps the old window's look.
+fn percent_slider(ui: &mut Ui, label: Label, value: &mut f64, range: RangeInclusive<f64>, scale: SliderScale) {
+    let before = *value * 100.0;
+    let mut shown = before;
+    let bounds = (range.start() * 100.0)..=(range.end() * 100.0);
+    SliderField::new(label, Bind::bound(&mut shown), bounds)
+        .layout(SliderFieldLayout::Inline)
+        .scale(scale)
+        .step(1.0)
+        .unit_kind(UnitKind::Percent)
+        .show(ui);
+    if shown != before {
+        *value = (shown / 100.0).clamp(*range.start(), *range.end());
     }
 }
 
@@ -546,6 +617,7 @@ fn status(blanks: usize, folded: Option<(&Blank, &Folded)>, errors: bool) -> Vec
     out
 }
 
+/// Shows the Fold Preview window: the toolbar, the folded blank, the status lines and the sliders.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else {
         crate::panels::empty_state(ui, "box", tl!("No document"), tl!("Open a document to preview its folded shape."));
@@ -553,152 +625,261 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let (uid, revision, doc) = (st.uid, st.revision, st.doc.clone());
     let mut set = app.ui.fold_preview.clone().clamped();
-    toolbar(app, ui, &mut set);
-    let (blanks, errors) = CACHE.with(|c| c.borrow_mut().blanks(uid, revision, &doc));
-    let base_point = set.base.map(|[x, y]| Point::new(x, y));
-    let picked = pick(&blanks, base_point).or_else(|| pick(&blanks, None));
-    let folded = picked.and_then(|(b, panel)| {
-        let blank = blanks.get(b)?;
-        let key = (uid, revision, b, panel, set.amount.to_bits());
-        let (f, ms) = CACHE.with(|c| c.borrow_mut().fold(key, blank, panel, set.amount))?;
-        Some((blank, f, key, ms))
+    let words = Env::of(ui).words::<FoldPreviewWords>();
+    let view = &mut app.addon_panels.fold_view;
+    let mut drawn = None;
+    Stack::new().fill().show(ui, |ui, _| {
+        toolbar(ui, &words, &doc, &mut set);
+        SliderField::new(words.perspective.clone(), Bind::bound(&mut set.perspective), 0.0..=160.0)
+            .layout(SliderFieldLayout::Inline)
+            .step(1.0)
+            .unit_kind(UnitKind::Degrees)
+            .show(ui);
+        let scene = view.scene(ui, &doc, uid, revision, &set);
+        let out = FoldView::new(words.image.clone(), set.clone(), scene.drawn.clone(), view.shown.clone()).sizing(Sizing::Fill).show(ui);
+        set = out.set;
+        drawn = out.drawn;
+        let folded = scene.drawn.as_ref().and_then(|d| Some((d.blanks.get(d.blank)?, &*d.folded)));
+        for line in status(scene.blanks, folded, scene.errors) {
+            Text::new(crate::i18n::msg(&line)).shade(Shade::Muted).show(ui);
+        }
+        percent_slider(ui, words.fold.clone(), &mut set.amount, 0.0..=1.0, SliderScale::Linear);
+        percent_slider(ui, words.zoom.clone(), &mut set.zoom, 0.1..=8.0, SliderScale::Log);
     });
-
-    let bottom = ui.spacing().interact_size.y * 3.0 + 12.0;
-    let size = vec2(ui.available_width().max(64.0), (ui.available_height() - bottom).max(64.0));
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
-    let view_name = set.view().map_or("", |v| v.0);
-    response.widget_info(|| {
-        let mut info = egui::WidgetInfo::labeled(egui::Role::Image, true, tl!("Fold Preview"));
-        info.current_text_value = Some(crate::i18n::t(view_name).to_string());
-        info
-    });
-    interact(ui, &response, &mut set, folded.as_ref().map(|(b, _, key, _)| (*b, *key)));
-    let t = crate::theme::Tokens::get(ui.ctx());
-    ui.painter().rect_filled(rect, 2.0, t.pasteboard);
-    if let Some((blank, f, key, fold_ms)) = &folded {
-        draw(ui, rect, &doc, *key, blank, f, &set, *fold_ms);
-    }
-    if response.has_focus() {
-        ui.painter().rect_stroke(rect, 2.0, egui::Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
-    }
-    for line in status(blanks.len(), folded.as_ref().map(|(b, f, ..)| (*b, &**f)), errors) {
-        dim_label(ui, &crate::i18n::msg(&line));
-    }
-    sliders(ui, &mut set);
+    view.keep(drawn);
     if set != app.ui.fold_preview {
         app.ui.fold_preview = set;
     }
 }
 
-/// Draws `blank` folded as `f` (the fold `key` names) into `rect`, with the print of `doc`. The image
-/// is rendered again only when the fold, the view, the inside color or the print changed.
-#[allow(clippy::too_many_arguments)]
-fn draw(ui: &Ui, rect: Rect, doc: &Arc<vectorcraft_engine::doc::Document>, key: FoldKey, blank: &Blank, f: &Folded, set: &Settings, fold_ms: f64) {
-    // Pixels per point of the view, lowered when the window has more pixels than the view may have
-    // in all or along either side, so the image keeps the window's proportions.
-    let (w, h) = (f64::from(rect.width()), f64::from(rect.height()));
-    let mut ppp = f64::from(ui.ctx().pixels_per_point());
-    let area = w * h * ppp * ppp;
-    if area > f64::from(MAX_PIXELS) {
-        ppp *= (f64::from(MAX_PIXELS) / area).sqrt();
+/// What the view drew in one pass: where, which fold, and the image when it was rendered anew.
+struct Drawn {
+    rect: Rect,
+    fold: FoldKey,
+    fresh: Option<(Arc<Image>, Frame)>,
+}
+
+/// What the folded view reports in one pass.
+#[derive(Debug)]
+struct FoldViewOutput {
+    response: Response,
+    /// The settings after this pass's gestures.
+    set: Settings,
+    drawn: Option<Drawn>,
+}
+
+impl std::fmt::Debug for Drawn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Drawn").field("rect", &self.rect).field("fold", &self.fold).finish_non_exhaustive()
     }
-    ppp = ppp.min(f64::from(MAX_SIDE) / w.max(h).max(1.0));
-    let width = ((w * ppp).floor() as u32).clamp(1, MAX_SIDE);
-    let height = ((h * ppp).floor() as u32).clamp(1, MAX_SIDE);
-    let Some((lo, hi)) = raster::bounds(blank, f) else { return };
-    let center = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0];
-    let radius = ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2) + (hi[2] - lo[2]).powi(2)).sqrt() / 2.0;
-    let mut fit = FIT * f64::from(width.min(height)) / radius.max(1e-6);
-    if set.perspective > 0.0 {
-        // The eye at two radii from the middle or farther, so at a zoom of 1 the whole blank is in
-        // front of it.
-        let focal = f64::from(width.min(height)) / 2.0 / (set.perspective.to_radians() / 2.0).tan();
-        fit = fit.min(focal / (2.0 * radius.max(1e-6)));
+}
+
+impl Outcome for FoldViewOutput {
+    type Value = NoValue;
+
+    fn response(&self) -> &Response {
+        &self.response
     }
-    let camera = Camera {
-        width,
-        height,
-        rotate_x: set.rotate_x,
-        rotate_y: set.rotate_y,
-        scale: fit * set.zoom,
-        pan: [set.pan[0] * ppp, set.pan[1] * ppp],
-        perspective: set.perspective,
-        center,
-    };
-    let inside = inside_color(doc, &set.inside).unwrap_or([255; 4]);
-    // While the print of a new revision renders, the last one of the same blank and setting is
-    // drawn; a print of another document, blank or Show Fold Lines setting is not.
-    let print = CACHE.with(|c| {
-        let mut c = c.borrow_mut();
-        let region = print_region(blank)?;
-        let (pw, ph, scale) = print_size(region);
-        let pkey = PrintKey {
-            uid: key.0,
-            revision: key.1,
-            fold_lines: set.show_fold_lines,
-            region: [region.x0.to_bits(), region.y0.to_bits(), region.x1.to_bits(), region.y1.to_bits()],
-            width: pw,
-            height: ph,
-        };
-        c.update_print(ui.ctx(), doc, pkey, region, scale);
-        c.print_for(&pkey)
-    });
-    let draw_key = DrawKey { fold: key, camera, inside, print: print.as_ref().map(|(k, _)| *k) };
-    let kept = CACHE.with(|c| {
-        let mut c = c.borrow_mut();
-        let Some(tex) = c.tex.as_ref().filter(|_| c.drawn == Some(draw_key)).map(|t| t.id()) else { return false };
-        ui.painter().image(tex, rect, Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), Color32::WHITE);
-        if let Some((_, at)) = &mut c.image {
-            *at = rect;
-        }
-        true
-    });
-    if kept {
-        return;
+}
+
+/// The style of the folded view: the room it asks for and its focus ring.
+#[derive(Clone, Debug, PartialEq, ComponentStyle)]
+struct FoldViewStyle {
+    #[style(metrics)]
+    metrics: Metrics,
+    #[style(focus)]
+    focus: FocusLook,
+}
+
+/// The folded blank, drawn into the room it is given. A drag turns the view (Shift keeps to one
+/// axis), a middle drag or a drag with Space held moves it, the wheel zooms, the arrow keys turn it by
+/// [`KEY_TURN`], and a double click on a panel picks it as the base. The settings it reports are
+/// the ones it was given with the gestures applied.
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
+#[component(content_painter, sample = FoldView::sample)]
+struct FoldView {
+    #[common]
+    common: Common,
+    set: Settings,
+    folding: Option<Folding>,
+    /// The last image drawn, which a double click picks a panel from.
+    last: Option<Shown>,
+    drawn: Option<Drawn>,
+}
+
+impl FoldView {
+    /// A view of `folding` under `set`, named `label`.
+    fn new(label: impl Into<Label>, set: Settings, folding: Option<Folding>, last: Option<Shown>) -> Self {
+        FoldView { common: Common::new(), set, folding, last, drawn: None }.label(label)
     }
-    let t0 = crate::now_ms();
-    let scene = raster::Scene { blank, folded: f, print: print.as_ref().map(|(_, p)| &**p), inside, outside: [255; 4], camera };
-    let Some(img) = raster::render(&scene) else { return };
-    let draw_ms = crate::now_ms() - t0;
-    let color = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
-    CACHE.with(|c| {
-        let mut c = c.borrow_mut();
-        c.drawn = Some(draw_key);
-        c.renders += 1;
-        match &mut c.tex {
-            Some(tex) => tex.set(color, egui::TextureOptions::LINEAR),
-            None => c.tex = Some(ui.ctx().load_texture("fold-preview", color, egui::TextureOptions::LINEAR)),
+
+    /// An empty view, for the suite.
+    fn sample() -> Self {
+        FoldView::new("Fold Preview", Settings::default(), None, None)
+    }
+
+    /// The base point of the panel at `at` in the last image drawn, while that image shows the
+    /// blank now folded of the same document revision.
+    fn pick(&self, at: Pos2) -> Option<[f64; 2]> {
+        let (folding, shown) = (self.folding.as_ref()?, self.last.as_ref()?);
+        if (shown.fold.0, shown.fold.1, shown.fold.2) != (folding.key.0, folding.key.1, folding.key.2) {
+            return None;
         }
-        if let Some(tex) = &c.tex {
-            let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-            ui.painter().image(tex.id(), rect, uv, Color32::WHITE);
+        let (img, rect) = (&shown.image, shown.rect);
+        let x = (at.x - rect.left()) / rect.width() * img.width as f32;
+        let y = (at.y - rect.top()) / rect.height() * img.height as f32;
+        let panel = img.panel_at(x.max(0.0) as u32, y.max(0.0) as u32)?;
+        let p = folding.blanks.get(folding.blank)?.panels.get(panel)?.point_inside()?;
+        Some([p.x, p.y])
+    }
+
+    /// The camera for `blank` folded as `f` in an image of `width` × `height` pixels at `ppp` pixels
+    /// a point.
+    fn camera(&self, blank: &Blank, f: &Folded, width: u32, height: u32, ppp: f64) -> Option<Camera> {
+        let set = &self.set;
+        let (lo, hi) = raster::bounds(blank, f)?;
+        let center = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0];
+        let radius = ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2) + (hi[2] - lo[2]).powi(2)).sqrt() / 2.0;
+        let mut fit = FIT * f64::from(width.min(height)) / radius.max(1e-6);
+        if set.perspective > 0.0 {
+            // The eye at two radii from the middle or farther, so at a zoom of 1 the whole blank is
+            // in front of it.
+            let focal = f64::from(width.min(height)) / 2.0 / (set.perspective.to_radians() / 2.0).tan();
+            fit = fit.min(focal / (2.0 * radius.max(1e-6)));
         }
-        c.frame = Some(Frame { width: img.width, height: img.height, fold_ms, draw_ms });
-        c.image = Some((img, rect));
-    });
+        Some(Camera {
+            width,
+            height,
+            rotate_x: set.rotate_x,
+            rotate_y: set.rotate_y,
+            scale: fit * set.zoom,
+            pan: [set.pan[0] * ppp, set.pan[1] * ppp],
+            perspective: set.perspective,
+            center,
+        })
+    }
 }
 
-#[cfg(test)]
-pub(crate) fn prints_rendered() -> u64 {
-    CACHE.with(|c| c.borrow().prints)
-}
+impl Component for FoldView {
+    const ROLE: Role = Role::IMAGE;
+    const PARTS: bool = false;
+    const OVERLAYS: bool = false;
+    const SHOWS_LABEL: bool = false;
+    /// The view keeps the arrow keys, so they turn it rather than move the focus on.
+    const KEYS: KeyUse = KeyUse::of(Input::Pointer).with_keep(KeepKeys::BlockArrows).with_activate(ActivateKeys::Neither);
+    type Style = FoldViewStyle;
+    type Output = FoldViewOutput;
 
-#[cfg(test)]
-pub(crate) fn last_image() -> Option<Image> {
-    CACHE.with(|c| c.borrow().image.as_ref().map(|(i, _)| i.clone()))
-}
+    fn style(cx: &StyleCx<'_>, _: FoldViewStyleKey) -> FoldViewStyle {
+        let plot = &cx.tokens.size.plot;
+        FoldViewStyle { metrics: Metrics::new().min_size(Vec2::splat(plot.width.min(plot.height))), focus: cx.focus_look() }
+    }
 
-/// The folds worked out and the images rendered so far.
-#[cfg(test)]
-pub(crate) fn work_done() -> (u64, u64) {
-    CACHE.with(|c| (c.borrow().folds, c.borrow().renders))
-}
+    fn measure(&mut self, _: &MeasureCx<'_, Self>) -> Vec2 {
+        Vec2::ZERO
+    }
 
-/// The screen rect the last image filled.
-#[cfg(test)]
-pub(crate) fn last_rect() -> Option<Rect> {
-    CACHE.with(|c| c.borrow().image.as_ref().map(|(_, r)| *r))
+    fn sense(&self) -> Sense {
+        Sense::CLICK | Sense::DRAG | Sense::FOCUS | Sense::TAKE_FOCUS | Sense::WHEEL
+    }
+
+    fn update(&mut self, cx: &mut Cx<'_, Self>) {
+        let (phase, mods) = (cx.press().phase, cx.press().mods);
+        match phase {
+            PressPhase::Drag { start, delta, .. } => {
+                let (mut dx, mut dy) = (f64::from(delta.x), f64::from(delta.y));
+                let space = keys::held(&cx.response.ctx).contains(&Key::Space);
+                if start.button == PointerButton::Middle || (start.button == PointerButton::Primary && space) {
+                    self.set.pan[0] += dx;
+                    self.set.pan[1] += dy;
+                } else if start.button == PointerButton::Primary {
+                    if mods.shift {
+                        if dx.abs() >= dy.abs() {
+                            dy = 0.0;
+                        } else {
+                            dx = 0.0;
+                        }
+                    }
+                    self.set.rotate_y = wrapped(self.set.rotate_y + dx * DRAG_TURN);
+                    self.set.rotate_x = wrapped(self.set.rotate_x + dy * DRAG_TURN);
+                }
+            }
+            PressPhase::Release { start, pos, click: true, .. } if start.button == PointerButton::Primary && start.clicks == 2 => {
+                if let Some(base) = self.pick(pos) {
+                    self.set.base = Some(base);
+                }
+            }
+            _ => {}
+        }
+        if let Some(wheel) = cx.take_wheel() {
+            let scroll = f64::from(wheel.scroll.y + (wheel.zoom - 1.0) * 200.0);
+            if scroll != 0.0 {
+                self.set.zoom = (self.set.zoom * (scroll * 0.002).exp()).clamp(0.1, 8.0);
+            }
+        }
+        let rtl = cx.flow.is_rtl();
+        let (mut turn_y, mut turn_x) = (0.0, 0.0);
+        while let Some((step, _)) = cx.intents().take_move() {
+            match (step, rtl) {
+                (NavMove::Back, false) | (NavMove::Forward, true) => turn_y -= KEY_TURN,
+                (NavMove::Forward, false) | (NavMove::Back, true) => turn_y += KEY_TURN,
+                (NavMove::Up, _) => turn_x -= KEY_TURN,
+                (NavMove::Down, _) => turn_x += KEY_TURN,
+                _ => {}
+            }
+        }
+        if turn_x != 0.0 || turn_y != 0.0 {
+            self.set.rotate_y = wrapped(self.set.rotate_y + turn_y);
+            self.set.rotate_x = wrapped(self.set.rotate_x + turn_x);
+        }
+    }
+
+    fn value_text(&self, cx: &Cx<'_, Self>) -> Option<String> {
+        let words = cx.words::<FoldPreviewWords>();
+        let view = self.set.view()?;
+        Some(cx.env.resolve(&words.view_label(view.1)).as_str().to_owned())
+    }
+
+    /// The image is rendered at the view's size, lowered when the window has more pixels than the
+    /// view may have in all or along either side, so it keeps the window's proportions; it is
+    /// rendered again only when the fold, the view, the inside color or the print changed.
+    fn paint(&mut self, ui: &mut PaintUi<'_>, cx: &Cx<'_, Self>) {
+        ui.draw().surface(cx.rect, SurfaceKind::Canvas, Default::default());
+        let Some(folding) = &self.folding else { return };
+        let Some(blank) = folding.blanks.get(folding.blank) else { return };
+        let ctx = &cx.response.ctx;
+        let (w, h) = (f64::from(cx.rect.width()), f64::from(cx.rect.height()));
+        let mut ppp = f64::from(ctx.pixels_per_point());
+        let area = w * h * ppp * ppp;
+        if area > f64::from(MAX_PIXELS) {
+            ppp *= (f64::from(MAX_PIXELS) / area).sqrt();
+        }
+        ppp = ppp.min(f64::from(MAX_SIDE) / w.max(h).max(1.0));
+        let width = ((w * ppp).floor() as u32).clamp(1, MAX_SIDE);
+        let height = ((h * ppp).floor() as u32).clamp(1, MAX_SIDE);
+        let Some(camera) = self.camera(blank, &folding.folded, width, height, ppp) else { return };
+        let inside = inside_color(&folding.doc, &self.set.inside).unwrap_or([255; 4]);
+        let print = folding.print.as_ref();
+        let key = DrawKey { fold: folding.key, camera, inside, print: print.map(|(k, _)| *k) };
+        let mut fresh = None;
+        let texture = store(ctx).get_or_put(ctx, 0, key.revision(), || {
+            let t0 = monotonic_ms();
+            let scene = raster::Scene { blank, folded: &folding.folded, print: print.map(|(_, p)| &**p), inside, outside: [255; 4], camera };
+            let Some(img) = raster::render(&scene) else {
+                return ColorImage::from_rgba_premultiplied([1, 1], &[0; 4]);
+            };
+            let color = ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
+            let frame = Frame { width: img.width, height: img.height, fold_ms: folding.fold_ms, draw_ms: monotonic_ms() - t0 };
+            fresh = Some((Arc::new(img), frame));
+            color
+        });
+        ui.draw().texture(cx.rect, texture.id, Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)));
+        self.drawn = Some(Drawn { rect: cx.rect, fold: folding.key, fresh });
+    }
+
+    fn finish(self, cx: Cx<'_, Self>) -> FoldViewOutput {
+        FoldViewOutput { response: cx.response.clone(), set: self.set, drawn: self.drawn }
+    }
 }
 
 #[cfg(test)]

@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Name, Object, Stream};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Name, Object, Stream};
 use vectorcraft_color::{Color, Paint, Swatch};
 use vectorcraft_doc::{ColorMode, Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
@@ -343,7 +343,8 @@ fn separations_colorize_masked_pixels_whose_own_pixels_are_a_preview() {
     let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
     let mut d = doc(ColorMode::Cmyk, Some(spot));
     let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-    d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
+    d.images
+        .insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() });
     let img =
         craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, vec![0, 0, 255, 255])
             .unwrap();
@@ -379,7 +380,8 @@ fn a_colorized_missing_link_placeholder_is_written_in_its_own_colors() {
     let placeholder = || {
         let mut d = doc(ColorMode::Cmyk, None);
         let bytes = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-        d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+        d.images
+            .insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() });
         d
     };
     let plain = placeholder();

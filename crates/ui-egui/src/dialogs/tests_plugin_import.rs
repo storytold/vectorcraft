@@ -8,10 +8,23 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_plugins::wat::{self as tpl, Given};
 
-use super::tests_export::{frame, kind, set};
+use super::tests_export::{fields, frame, kind, set, try_confirm};
 use super::*;
 use crate::Services;
-use crate::menus::Item;
+use crate::VectorcraftApp;
+use crate::tests::picks::{poll, scripted};
+
+/// Sends `app.open` with `params` through the control channel and returns the reply.
+fn control(app: &mut VectorcraftApp, params: serde_json::Value) -> serde_json::Value {
+    let (req, _rx) = craft::automation::ControlRequest::new("app.open", params);
+    let craft::automation::Reply::Done(r) = crate::control::handle(app, &crate::testing::ui_context(), &req) else { panic!("not done") };
+    r
+}
+
+/// The extensions of the filter named `name` in the last request `requests` holds.
+fn filter_exts(requests: &[craft::host::PickRequest], name: &str) -> Option<Vec<String>> {
+    requests.last()?.filters.iter().find(|f| f.name == name).map(|f| f.extensions.clone())
+}
 
 /// An importer's output: one rectangle from (10, 20) to (110, 70).
 const RECT: &str =
@@ -19,7 +32,8 @@ const RECT: &str =
 
 /// An app that reads files from disk, refusing to read one past the importers' input limit.
 fn app() -> VectorcraftApp {
-    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    // A window, where the dialogs open.
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
     app.services.read = Some(Box::new(|p: &str| match std::fs::metadata(p) {
         Ok(m) if m.len() > vectorcraft_plugins::import::MAX_INPUT_BYTES as u64 => Err("read past the limit".into()),
         _ => std::fs::read(p).map_err(|e| e.to_string()),
@@ -54,9 +68,10 @@ fn open_with_lists_importers_and_opens_a_file_with_one() {
     let mut app = app();
     install(&mut app, &tpl::returning(&tpl::importer("test.ui.svgreader", r#"["svg","tui"]"#, "{}"), RECT));
     let menu = plugin::open_with_menu();
-    let listed = menu.iter().any(|i| match i {
-        Item::Cmd(label, "file.openWith", p) => *label == "Test test.ui.svgreader…" && p["importer"] == "plugin.test.ui.svgreader",
-        _ => false,
+    let listed = menu.iter().any(|n| {
+        matches!(n, craft::menu::Node::Item(item) if item.command.id == "file.openWith"
+            && item.label == "Test test.ui.svgreader…"
+            && item.command.params["importer"] == "plugin.test.ui.svgreader")
     });
     assert!(listed, "{menu:?}");
 
@@ -72,8 +87,7 @@ fn open_with_lists_importers_and_opens_a_file_with_one() {
     assert_eq!(app.session.documents().len(), 2);
     assert_eq!(app.ui.recent_files, std::slice::from_ref(&svg), "Open With adds the file to Open Recent");
     // `app.open {importer}` (MCP's open_file) opens as Open With does.
-    let (req, _rx) = crate::control::ControlRequest::new("app.open", json!({"path": svg, "importer": "plugin.test.ui.svgreader"}));
-    let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
+    let r = control(&mut app, json!({"path": svg, "importer": "plugin.test.ui.svgreader"}));
     assert_eq!(r["result"]["format"], "plugin.test.ui.svgreader", "{r}");
     assert_eq!(app.session.documents().len(), 3);
 
@@ -101,47 +115,44 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     let file = file.to_string_lossy().into_owned();
 
     app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file})).unwrap();
-    assert_eq!(kind(&app), Some(plugin::IMPORT_KIND));
-    let d = app.ui.dialog.as_ref().unwrap();
-    assert_eq!((d.str("__label"), d.fields.get("density")), ("Test test.ui.importparams".to_string(), Some(&json!(4.0))));
+    assert_eq!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
+    assert!(!app.plugin_dialog.as_ref().is_some_and(plugin::PluginDialog::opens_picked), "a named file opens in the pump");
+    assert_eq!(fields(&app)["density"], json!(4.0));
     assert!(app.session.documents().is_empty(), "nothing opened before Open");
     frame(&mut app);
     set(&mut app, "density", json!(7));
-    confirm(&mut app).unwrap();
-    assert!(app.ui.dialog.is_none());
+    try_confirm(&mut app).unwrap();
+    assert!(kind(&app).is_none());
     assert_eq!(app.session.documents().len(), 1);
     assert_eq!(artboard(&app), (10.0, 20.0, 110.0, 70.0));
     assert_eq!(app.ui.recent_files, std::slice::from_ref(&file));
 
-    // Only a file from the picker goes off the UI thread after the dialog: a caller naming `path`
-    // gets the document.
-    app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__open"]["picked"], false);
-    app.ui.dialog = None;
-    let picked = file.clone();
-    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+    // A caller naming `path` gets the document in the pump; a file from the picker is marked to go through
+    // `opening`, off the UI thread where the app can. Tests open at once (`opening::available` is off).
+    let picker = scripted(&mut app);
     app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams"})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["__open"]["picked"], true);
-    app.ui.dialog = None;
+    picker.answer(&[&file]);
+    poll(&mut app, &crate::testing::ui_context());
+    assert_eq!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
+    assert!(app.plugin_dialog.as_ref().is_some_and(plugin::PluginDialog::opens_picked), "a picked file goes through `opening`");
+    frame(&mut app);
+    set(&mut app, "density", json!(7));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(app.session.documents().len(), 2);
 
     let r = app.run("file.openWith", json!({"importer": "plugin.test.ui.importparams", "path": file, "params": {"density": 7}})).unwrap();
     assert_eq!(r["format"], "plugin.test.ui.importparams");
-    assert!(app.ui.dialog.is_none());
-    assert_eq!(app.session.documents().len(), 2);
+    assert!(kind(&app).is_none());
+    assert_eq!(app.session.documents().len(), 3);
 
     // `app.open` (MCP's open_file) passes `params` on, and asks nothing without them.
-    let control = |app: &mut VectorcraftApp, p: serde_json::Value| {
-        let (req, _rx) = crate::control::ControlRequest::new("app.open", p);
-        let crate::control::Outcome::Done(r) = crate::control::handle(app, &egui::Context::default(), &req) else { panic!("not done") };
-        r
-    };
     let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.importparams", "params": {"density": 7}}));
     assert_eq!(r["result"]["format"], "plugin.test.ui.importparams", "{r}");
-    assert_eq!(app.session.documents().len(), 3);
+    assert_eq!(app.session.documents().len(), 4);
     let r = control(&mut app, json!({"path": file, "importer": "plugin.test.ui.importparams"}));
     assert!(r.get("error").is_some(), "the defaults (density 4) don't open the file: {r}");
-    assert_ne!(kind(&app), Some(plugin::IMPORT_KIND));
-    assert_eq!(app.session.documents().len(), 3);
+    assert_ne!(kind(&app).as_deref(), Some(plugin::IMPORT_KIND));
+    assert_eq!(app.session.documents().len(), 4);
 
     // Without `importer`, `params` go to the importer File › Open picks for the file.
     let other = dir.join("b.tup");
@@ -149,7 +160,7 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
     let other = other.to_string_lossy().into_owned();
     let r = control(&mut app, json!({"path": other, "params": {"density": 7}}));
     assert_eq!(r["result"]["format"], "plugin.test.ui.importparams", "{r}");
-    assert_eq!(app.session.documents().len(), 4);
+    assert_eq!(app.session.documents().len(), 5);
     app.run("plugin.remove", json!({"id": "test.ui.importparams"})).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -160,24 +171,26 @@ fn open_with_asks_for_an_importer_s_parameters_and_passes_them_on() {
 fn only_file_open_s_dialog_lists_an_importer_s_files() {
     let mut app = app();
     install(&mut app, &tpl::module(&tpl::importer("test.ui.filters", r#"["tuf"]"#, "{}"), tpl::ECHO, "", 1));
-    let asked: std::rc::Rc<std::cell::RefCell<Vec<crate::FilePick>>> = Default::default();
-    let seen = asked.clone();
-    app.services.pick_open = Some(Box::new(move |pick: &crate::FilePick| {
-        seen.borrow_mut().push(pick.clone());
-        None
-    }));
+    let picker = scripted(&mut app);
     let lists = |filters: &[(String, Vec<String>)]| filters.iter().any(|(_, exts)| exts.iter().any(|e| e == "tuf"));
     let shown = |app: &mut VectorcraftApp, cmd: &str| {
+        let before = picker.requests().len();
         let _ = app.run(cmd, json!({}));
-        let pick = asked.borrow_mut().pop().unwrap_or_else(|| panic!("{cmd} showed no open dialog"));
-        lists(&pick.filters)
+        let requests = picker.requests();
+        assert!(requests.len() > before, "{cmd} showed no open dialog");
+        let filters: Vec<(String, Vec<String>)> =
+            requests.last().map(|r| r.filters.iter().map(|f| (f.name.clone(), f.extensions.clone())).collect()).unwrap_or_default();
+        lists(&filters)
     };
     assert!(shown(&mut app, "file.open"), "File › Open");
     for cmd in ["file.newFromTemplate", "ui.loadCharStyles", "ui.loadParaStyles", "ui.loadAllStyles"] {
         assert!(!shown(&mut app, cmd), "{cmd}");
     }
     for kind in ["swatches", "graphicStyles", "symbols"] {
-        let filters = crate::FilePick::filters(crate::panels::library_panel::library_pick_filters(kind));
+        let filters: Vec<(String, Vec<String>)> = crate::panels::library_panel::library_pick_filters(kind)
+            .into_iter()
+            .map(|(name, exts)| (name.to_owned(), exts.iter().map(|e| (*e).to_owned()).collect()))
+            .collect();
         assert!(!lists(&filters), "{kind}");
     }
     app.run("plugin.remove", json!({"id": "test.ui.filters"})).unwrap();
@@ -194,7 +207,7 @@ fn export_as_lists_exporters_and_not_importers() {
     assert!(listed.contains(&"plugin.test.ui.writes"), "{listed:?}");
     assert!(!listed.contains(&"plugin.test.ui.readonly"), "{listed:?}");
     app.run("file.exportAs", json!({"format": "plugin.test.ui.readonly"})).unwrap();
-    assert_eq!(app.ui.dialog.as_ref().unwrap().str("format"), "png");
+    assert_eq!(fields(&app)["format"], "png");
     app.run("plugin.remove", json!({"id": "test.ui.readonly"})).unwrap();
     app.run("plugin.remove", json!({"id": "test.ui.writes"})).unwrap();
 }
@@ -203,23 +216,22 @@ fn export_as_lists_exporters_and_not_importers() {
 /// extension; a file File › Place reads is still placed on the canvas.
 #[test]
 fn a_dropped_file_only_an_importer_reads_opens() {
-    use crate::place::DropTarget;
+    use crate::place::{DropSpot, DropTarget};
     let mut app = app();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    app.sync_views();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0)));
-    let on_canvas = Some(egui::pos2(400.0, 300.0));
-    let placed = |app: &VectorcraftApp, name, pos| matches!(app.drop_target(name, pos, false), DropTarget::Place(_));
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(800.0, 600.0));
+    let on_canvas = DropSpot::Canvas(vectorcraft_geom::Point::new(400.0, 300.0));
+    let placed = |app: &VectorcraftApp, name, spot| matches!(app.drop_target(name, spot, false), DropTarget::Place(_));
     assert!(placed(&app, "a.tud", on_canvas), "no importer lists the extension yet");
 
     install(&mut app, &tpl::module(&tpl::importer("test.ui.dropped", r#"["tud","tus","png"]"#, "{}"), tpl::ECHO, "", 1));
     install(&mut app, &tpl::module(&tpl::exporter("test.ui.dropshare", r#"["tus"]"#, "{}"), tpl::ECHO, "", 1));
     for name in ["a.tud", "A.TUD", "a.tus"] {
         assert_eq!(app.drop_target(name, on_canvas, false), DropTarget::Open, "{name} on the canvas");
-        assert_eq!(app.drop_target(name, None, false), DropTarget::Open, "{name} without a position");
+        assert_eq!(app.drop_target(name, DropSpot::Unknown, false), DropTarget::Open, "{name} without a position");
     }
     assert!(placed(&app, "a.png", on_canvas), "File › Place reads the extension");
-    assert!(placed(&app, "a.png", None));
+    assert!(placed(&app, "a.png", DropSpot::Unknown));
 
     app.run("plugin.remove", json!({"id": "test.ui.dropped"})).unwrap();
     app.run("plugin.remove", json!({"id": "test.ui.dropshare"})).unwrap();
@@ -253,17 +265,13 @@ fn importer_filters_leave_out_what_file_open_opens_as_something_else() {
     // File › Open's dialog lists an importer's `.tuo` but not its `.ase` (a swatch library there).
     let mut app = app();
     install(&mut app, &tpl::module(&tpl::importer("test.ui.claimed", r#"["tuo","ase"]"#, "{}"), tpl::ECHO, "", 1));
-    let asked: std::rc::Rc<std::cell::RefCell<Option<crate::FilePick>>> = Default::default();
-    let seen = asked.clone();
-    app.services.pick_open = Some(Box::new(move |pick: &crate::FilePick| {
-        *seen.borrow_mut() = Some(pick.clone());
-        None
-    }));
+    let picker = scripted(&mut app);
     let _ = app.run("file.open", json!({}));
-    let pick = asked.borrow_mut().take().expect("File › Open showed its dialog");
-    let own = pick.filters.iter().find(|(label, _)| label == "Test test.ui.claimed").map(|(_, exts)| exts.clone());
-    assert_eq!(own, Some(vec!["tuo".to_string()]), "{:?}", pick.filters);
-    assert!(!pick.filters[0].1.iter().any(|e| e == "ase"), "All readable files: {:?}", pick.filters[0]);
+    let requests = picker.requests();
+    let own = filter_exts(&requests, "Test test.ui.claimed");
+    assert_eq!(own, Some(vec!["tuo".to_string()]), "{:?}", requests.last().map(|r| &r.filters));
+    let all = requests.last().and_then(|r| r.filters.first()).expect("File › Open lists file types");
+    assert!(!all.extensions.iter().any(|e| e == "ase"), "All readable files: {all:?}");
     app.run("plugin.remove", json!({"id": "test.ui.claimed"})).unwrap();
 }
 
