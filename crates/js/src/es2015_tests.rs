@@ -193,6 +193,33 @@ fn global_lexical_bindings_stay_across_runs_and_cannot_be_redeclared() {
 }
 
 #[test]
+fn a_script_stopped_at_the_heap_limit_declares_no_global_lexical_name() {
+    // The `let` names and the variables each fit in the heap at some limits, but not together.
+    // A run that stops at the heap limit adds none of the names, so the same script runs once the
+    // limit is raised.
+    let names = |prefix: &str| (0..100).map(|i| format!("{prefix}{i:0>60}")).collect::<Vec<_>>().join(", ");
+    let src = format!("let {} = 1; var {}; 0", names("l"), names("v"));
+    let mut measure = Realm::with_options(es_options(), Limits::default());
+    measure.interp().collect_garbage();
+    let base = measure.interp().heap.bytes;
+    let mut stopped = 0;
+    for extra in (0..200).map(|k| k * 512) {
+        let heap_bytes = base + extra;
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+        match realm.run(&src) {
+            Ok(v) => assert_eq!(v, JsValue::Number(0.0), "{heap_bytes}"),
+            Err(e) => {
+                assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{heap_bytes}: {e:?}");
+                stopped += 1;
+                realm.set_limits(Limits::default());
+                assert_eq!(realm.run(&src), Ok(JsValue::Number(0.0)), "{heap_bytes}: run again");
+            }
+        }
+    }
+    assert!(stopped > 0, "no limit stopped the script");
+}
+
+#[test]
 fn functions_from_earlier_runs_see_later_global_lexical_bindings() {
     let mut realm = Realm::new();
     let first = realm.run("function read() { return x; } function call(f) { return f(); }");
@@ -212,8 +239,12 @@ fn a_function_eval_declares_on_the_global_object_sees_global_lexical_bindings() 
     let mut realm = es();
     assert_eq!(realm.run("let x = 7; 0"), Ok(JsValue::Number(0.0)));
     realm.set_es2015(false);
-    assert_eq!(realm.run("with ({}) { eval('function read() { return x; }'); } read()"), Ok(JsValue::Number(7.0)));
-    assert_eq!(realm.run("function g() { eval('function inner() { return x; }'); return inner(); } g()"), Ok(JsValue::Number(7.0)));
+    // The `with` object's `x` would be read if the function closed over the eval's lexical
+    // environment.
+    assert_eq!(realm.run("with ({ x: 99 }) { eval('function read() { return x; }'); } read()"), Ok(JsValue::Number(7.0)));
+    // In a function, the variable environment is the function's own, which holds its `var x`.
+    let local = "function g() { var x = 8; with ({ x: 99 }) { eval('function inner() { return x; }'); } return inner(); } g()";
+    assert_eq!(realm.run(local), Ok(JsValue::Number(8.0)));
 }
 
 #[test]
@@ -361,6 +392,50 @@ fn eval_code_keeps_its_let_and_const_to_itself() {
     truth("function f(a = 0) { eval('var a = 2;'); return a; } f() === 2");
     // Nothing is declared when the check fails.
     truth("let a; try { eval('var b; var a;'); } catch (e) {} typeof b === 'undefined'");
+}
+
+#[test]
+fn eval_code_keeps_its_environments_through_collections() {
+    // With a collection on every heap reservation, eval code's own environment and the scope of
+    // its `let` and `const` names stay while its declarations are made: the scope of a function
+    // the code declares leads out to the global scope without coming back to itself.
+    use crate::heap::{Class, Env, Func, key};
+    use crate::value::Value;
+    let cases = [
+        ("function g() { var o = 1; return eval(\"'use strict'; let x = 2; var y = 3; function f() { return x + y + o; } f\"); }", 6.0),
+        ("function g() { return (0, eval)(\"'use strict'; let x = 5; var y = 6; function f() { return x + y; } f\"); }", 11.0),
+        ("function g() { return (0, eval)(\"let x = 7; function f() { return x; } f\"); }", 7.0),
+    ];
+    for (setup, want) in cases {
+        let mut realm = es();
+        crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(true));
+        let made = realm.run(&format!("{setup} var f = g(); 0"));
+        crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(false));
+        assert_eq!(made, Ok(JsValue::Number(0.0)), "{setup}");
+        let interp = realm.interp();
+        let global = interp.global;
+        let f = match interp.get_from(global, &key("f"), &Value::Object(global)) {
+            Ok(Value::Object(f)) => f,
+            other => panic!("{setup}: {other:?}"),
+        };
+        let mut cur = match interp.heap.object(f).map(|o| &o.class) {
+            Some(Class::Function(Func::Closure { env, .. })) => Some(*env),
+            _ => panic!("{setup}: not a closure"),
+        };
+        let mut seen = std::collections::HashSet::new();
+        while let Some(e) = cur {
+            assert!(seen.insert(e), "{setup}: the scope chain comes back to {e:?}");
+            if e == interp.global_lex {
+                break;
+            }
+            cur = match interp.heap.env(e) {
+                Some(Env::Decl { outer, .. } | Env::Obj { outer, .. }) => *outer,
+                None => panic!("{setup}: {e:?} was freed"),
+            };
+        }
+        assert_eq!(cur, Some(interp.global_lex), "{setup}");
+        assert_eq!(realm.run("f()"), Ok(JsValue::Number(want)), "{setup}");
+    }
 }
 
 // ---- arrow functions ----
@@ -574,6 +649,48 @@ fn an_array_s_spread_is_checked_against_the_elements_it_reads() {
 }
 
 #[test]
+fn an_index_setter_without_a_getter_does_not_delay_the_spread_s_check() {
+    // A setter does not run when the elements are read, so the array is still checked when
+    // spread begins, on its own and on its prototype.
+    for setter in ["a", "Array.prototype"] {
+        let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
+        let src = format!("var a = []; a.length = 4294967295; Object.defineProperty({setter}, 0, {{ set: function () {{}} }}); [...a]");
+        let long = realm.run(&src);
+        assert!(is_thrown(&long, "RangeError"), "{setter}: {long:?}");
+    }
+}
+
+#[test]
+fn a_prototype_getter_behind_an_own_element_does_not_delay_the_spread_s_check() {
+    // The array's own element 0 is read instead of the getter on its prototype, so no getter can
+    // shrink it, and it is checked when spread begins.
+    let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
+    let src = "var a = [7]; Object.defineProperty(Array.prototype, 0, { get: function () { a.length = 1; return 0; } }); \
+               a.length = 4294967295; [...a]";
+    let long = realm.run(src);
+    assert!(is_thrown(&long, "RangeError"), "{long:?}");
+    // A getter on the prototype with no own element in front of it is read, and shrinks the array.
+    let shrink = "var a = []; a.length = 4294967295; \
+                  Object.defineProperty(Array.prototype, 0, { get: function () { a.length = 1; return 7; } }); \
+                  var b = [...a]; b.length === 1 && b[0] === 7";
+    truth(shrink);
+}
+
+#[test]
+fn looking_for_index_getters_takes_fuel_for_each_property() {
+    // Each attempt to spread the long array looks at every one of its 10,000 elements, so each
+    // takes at least that much fuel.
+    let fuel = 10_000_000;
+    let mut realm = Realm::with_options(es_options(), Limits { fuel, ..Limits::default() });
+    let setup = "var a = []; for (var i = 0; i < 10000; i++) a[i] = i; a.length = 4294967295; 0";
+    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+    let attempt = "var ok = false; try { [...a]; } catch (e) { ok = e instanceof RangeError; } ok";
+    assert_eq!(realm.run(attempt), Ok(JsValue::Bool(true)));
+    let used = fuel - realm.interp().fuel;
+    assert!(used >= 10_000, "{used}");
+}
+
+#[test]
 fn spread_counts_each_index_name_against_the_heap() {
     // The elements' properties, with their index names and a string's characters, fit in the
     // heap or the run ends with the heap limit, at every limit in the range.
@@ -597,6 +714,41 @@ fn spread_counts_each_index_name_against_the_heap() {
             realm.interp().collect_garbage();
             assert!(realm.interp().heap.bytes <= heap_bytes, "{spread}: {} > {heap_bytes}", realm.interp().heap.bytes);
         }
+    }
+}
+
+#[test]
+fn spread_stops_at_the_heap_limit_before_the_next_step_runs() {
+    // With room for about half the elements, the spread stops with the heap limit while it reads
+    // them. Each run's fuel ends somewhere in the steps just after the spread, so a check made
+    // only at the next step would end the run for lack of fuel first, with the elements over the
+    // limit until a collection.
+    for spread in ["[...a]", "[...s]"] {
+        let setup = "var a = Array(4000); var s = new Array(4001).join('x'); 0";
+        let run = format!("var b = {spread}; 0");
+        let mut measure = Realm::with_options(es_options(), Limits::default());
+        assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+        measure.interp().collect_garbage();
+        let base = measure.interp().heap.bytes;
+        assert_eq!(measure.run(&run), Ok(JsValue::Number(0.0)));
+        let fuel = Limits::default().fuel - measure.interp().fuel;
+        measure.interp().collect_garbage();
+        let need = measure.interp().heap.bytes - base;
+        let heap_bytes = base + need / 2;
+        for f in fuel.saturating_sub(40).max(1)..=fuel {
+            let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+            assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)), "{spread}");
+            realm.interp().collect_garbage();
+            realm.set_limits(Limits { heap_bytes, fuel: f, ..Limits::default() });
+            let e = realm.run(&run).unwrap_err();
+            assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{spread} at fuel {f}: {e:?}");
+            let bytes = realm.interp().settled_heap_bytes();
+            assert!(bytes <= heap_bytes, "{spread} at fuel {f}: {bytes} > {heap_bytes}");
+        }
+        // With room for twice the elements, the spread completes.
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: base + need * 2, ..Limits::default() });
+        assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)), "{spread}");
+        assert_eq!(realm.run(&format!("var b = {spread}; b.length")), Ok(JsValue::Number(4000.0)), "{spread}");
     }
 }
 
@@ -723,6 +875,91 @@ fn a_body_after_default_parameters_checks_the_heap_before_its_scope_is_made() {
         assert!(realm.interp().heap.bytes <= heap_bytes, "{count}: {} > {heap_bytes}", realm.interp().heap.bytes);
     }
     assert!(stopped > 0, "no count reached the heap limit");
+}
+
+#[test]
+fn declarations_are_checked_after_the_let_and_const_names_take_their_room() {
+    // The `let` names and the variables each fit in the heap, but not always together. Each run
+    // stops for lack of fuel at a different point, before a collection could correct the
+    // estimate, and the estimate is within the limit at every one of them: in a body after
+    // default parameters, in a plain function's body and in eval code.
+    let names = |prefix: &str| (0..100).map(|i| format!("{prefix}{i:0>60}")).collect::<Vec<_>>().join(", ");
+    let (lets, vars) = (names("l"), names("v"));
+    let bodies = [
+        format!("function f(a = 0) {{ let {lets}; var {vars}; return 1; }} 0"),
+        format!("function f() {{ let {lets}; var {vars}; return 1; }} 0"),
+        format!("function f() {{ eval('let {lets}; var {vars};'); return 1; }} 0"),
+    ];
+    for setup in &bodies {
+        let mut measure = Realm::with_options(es_options(), Limits::default());
+        assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+        measure.interp().collect_garbage();
+        let base = measure.interp().heap.bytes;
+        assert_eq!(measure.run("f()"), Ok(JsValue::Number(1.0)));
+        let fuel = Limits::default().fuel - measure.interp().fuel;
+        for extra in (0..100).map(|k| k * 2048) {
+            let heap_bytes = base + extra;
+            let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+            if realm.run(setup).is_err() {
+                continue;
+            }
+            // The declarations are made in the last 600 units of fuel, after any parsing, and
+            // the estimate stays past the limit for as many units as variables made after it
+            // passed, so every fourth stop there finds it.
+            for f in (fuel.saturating_sub(600).max(1)..=fuel).step_by(4) {
+                realm.interp().collect_garbage();
+                realm.set_limits(Limits { heap_bytes, fuel: f, ..Limits::default() });
+                let at = &setup[..24];
+                match realm.run("f()") {
+                    Ok(v) => assert_eq!(v, JsValue::Number(1.0), "{at}: {heap_bytes}, {f}"),
+                    Err(e) => assert!(matches!(e.kind, RunErrorKind::Limit(LimitKind::Heap | LimitKind::Fuel)), "{at}: {heap_bytes}, {f}: {e:?}"),
+                }
+                assert!(realm.interp().heap.bytes <= heap_bytes, "{at}: {heap_bytes}, {f}: {}", realm.interp().heap.bytes);
+            }
+        }
+    }
+}
+
+#[test]
+fn the_arguments_object_is_checked_after_the_let_and_const_names_take_their_room() {
+    // The `let` names and the `arguments` object of 1,000 arguments each fit in the heap, but not
+    // always together. Each run stops for lack of fuel at a different point while the variables
+    // after the object are made, before a collection could correct the estimate, and the
+    // estimate is within the limit at every one of them.
+    let names = |prefix: &str, n: usize| (0..n).map(|i| format!("{prefix}{i:0>60}")).collect::<Vec<_>>().join(", ");
+    let (lets, vars) = (names("l", 300), names("v", 100));
+    let zeros = vec!["0"; 1000].join(", ");
+    let setup = format!("function f() {{ let {lets}; var {vars}; return arguments.length; }} function g() {{ return f({zeros}); }} 0");
+    let call = "g()";
+    let mut measure = Realm::with_options(es_options(), Limits::default());
+    assert_eq!(measure.run(&setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let base = measure.interp().heap.bytes;
+    assert_eq!(measure.run(call), Ok(JsValue::Number(1000.0)));
+    let fuel = Limits::default().fuel - measure.interp().fuel;
+    let mut stopped = 0;
+    for extra in (0..150).map(|k| k * 2048) {
+        let heap_bytes = base + extra;
+        let mut realm = Realm::with_options(es_options(), Limits { heap_bytes, ..Limits::default() });
+        if realm.run(&setup).is_err() {
+            continue;
+        }
+        // The variables are made before the body runs its 300 `let` declarations, which take
+        // about 700 units of fuel, so every third stop in the last 800 units finds them.
+        for f in (fuel.saturating_sub(800).max(1)..=fuel).step_by(3) {
+            realm.interp().collect_garbage();
+            realm.set_limits(Limits { heap_bytes, fuel: f, ..Limits::default() });
+            match realm.run(call) {
+                Ok(v) => assert_eq!(v, JsValue::Number(1000.0), "{heap_bytes}, {f}"),
+                Err(e) => {
+                    assert!(matches!(e.kind, RunErrorKind::Limit(LimitKind::Heap | LimitKind::Fuel)), "{heap_bytes}, {f}: {e:?}");
+                    stopped += usize::from(e.kind == RunErrorKind::Limit(LimitKind::Heap));
+                }
+            }
+            assert!(realm.interp().heap.bytes <= heap_bytes, "{heap_bytes}, {f}: {}", realm.interp().heap.bytes);
+        }
+    }
+    assert!(stopped > 0, "no run reached the heap limit");
 }
 
 #[test]

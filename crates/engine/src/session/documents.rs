@@ -118,6 +118,7 @@ impl Session {
             journal_note: Default::default(),
             note_depth: 1,
             journal_query: false,
+            defaults_only_ran: None,
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
@@ -218,9 +219,14 @@ impl Session {
         let _ = self.give_back_tool(view);
         let _ = self.deactivate_tool(view);
         // A batch leaves its interaction open in the document it leaves, to keep or roll back with
-        // the rest of the batch; anything else in progress (a drag) is cancelled.
+        // the rest of the batch; one that keeps on a switch is kept; anything else in progress (a
+        // drag) is cancelled.
         if self.batch_stash.is_none() {
-            let _ = self.cancel_interaction();
+            let _ = if self.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.keep_on_switch) {
+                self.commit_interaction()
+            } else {
+                self.cancel_interaction()
+            };
         }
         self.keep_tool_settings();
         self.tool = self.make_tool(self.tool.id());
@@ -293,7 +299,9 @@ impl Session {
     /// what is fitted to type's bounds (an envelope warping it) would come out differently. That
     /// holds for the type in symbol definitions, pattern tiles, graph designs and opacity masks too,
     /// not only in the layers (#1738).
-    pub(crate) fn refresh_text_bounds(doc: &mut Document) {
+    pub(crate) fn refresh_text_bounds(doc: &mut Document) -> Vec<String> {
+        // The fonts files carried for their type draw it ([`vectorcraft_doc::FileFonts`]).
+        let warnings = vectorcraft_text::FontDb::global().bind_document_file_fonts(doc);
         // Inline graphics in text take their size from their symbols' art (not saved either).
         doc.resolve_inline_art();
         let mut uncached = |t: &TextObject| t.cached_bounds.is_none();
@@ -303,6 +311,7 @@ impl Session {
         // The symbols' type is measured now: the inline graphics showing those symbols take their
         // art's measured size, a symbol's type before the type that shows that symbol inline.
         doc.resolve_inline_art_with(&mut cmd::typecmd::refresh_bounds_for_first_frame);
+        warnings
     }
 
     /// Measure the type in open document `index` that `stale` picks (in its trees as
@@ -344,6 +353,8 @@ impl Session {
         // (importers and the native reader have seen to theirs already, with a warning).
         doc.limit_depth();
         cmd::compositefonts::filter_loaded(&mut doc);
+        // Importers report binding failures; programmatic additions still need owned resources.
+        let _ = vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc);
         // Inline graphics in text take their size from their symbols' art (not saved).
         doc.resolve_inline_art();
         // Ruler guides a reader left in the saved list become nodes on their layers.
@@ -406,6 +417,8 @@ impl Session {
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
+        // What scripts' commands did to the document stays until the person saves it.
+        st.by_script = old.by_script.clone();
         st.save_options = old.save_options.clone();
         // The remembered artboard pick follows the artboards it named when the file read back has
         // the artboards the document had at the save, in the same order and with the same ids (a

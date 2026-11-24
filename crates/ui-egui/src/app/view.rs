@@ -1,4 +1,29 @@
-use super::{Value, VectorcraftApp, View, ViewInfo, panels};
+use craft::behavior::{CanvasView, ZoomScheme};
+use craft::ui::canvas::{NavigationOptions, ViewCommands, ViewRequest, WheelScheme};
+use serde_json::Value;
+use vectorcraft_engine::Prefs;
+
+use super::{VectorcraftApp, View, ViewInfo, panels};
+use crate::state::ViewMove;
+
+/// The canvas's navigation options for `p`: the wheel, Animated Zoom, the trackpad and touch gestures.
+pub(crate) fn navigation(p: &Prefs) -> NavigationOptions {
+    let mut options = NavigationOptions::default();
+    options.wheel = if p.zoom_with_mouse_wheel { WheelScheme::Zoom } else { WheelScheme::Scroll };
+    options.animated_zoom = crate::canvas::animated_zoom(p);
+    options.scrubby_zoom = crate::canvas::animated_zoom(p);
+    options.trackpad_rotate = p.trackpad_rotate_view;
+    options.touch_gestures = p.touch_gestures;
+    options.overscroll = true;
+    options.flick_panning = false;
+    options
+}
+
+/// The zoom rungs and range of the app, with 100 % at the device zoom Display Print Size at 100 %
+/// Zoom gives on a display of `native_ppp` pixels per point.
+pub(crate) fn zoom_scheme(p: &Prefs, native_ppp: f32) -> ZoomScheme {
+    ZoomScheme::ILLUSTRATOR.with_hundred(crate::state::zoom_baseline(p.display_print_size) * f64::from(native_ppp))
+}
 
 impl VectorcraftApp {
     /// Keep `views` aligned with the session's documents (a new one starts at its saved view, and
@@ -25,8 +50,14 @@ impl VectorcraftApp {
         for (view, doc) in self.views.iter_mut().zip(docs) {
             view.artboard = view.artboard.min(doc.doc.artboards.len().saturating_sub(1));
         }
-        self.view_uids = docs.iter().map(|d| d.uid).collect();
-        panels::layers::retain_open_thumbs(&self.view_uids);
+        let uids: Vec<u64> = docs.iter().map(|d| d.uid).collect();
+        if let Some(ctx) = &self.ui_ctx {
+            for closed in self.view_uids.iter().filter(|u| !uids.contains(u)) {
+                panels::layers::forget(ctx, *closed);
+            }
+            panels::layers::retain_open(ctx, &uids);
+        }
+        self.view_uids = uids;
         crate::doc_windows::retain_views(self);
         crate::doc_windows::opened(self);
         // Undo can remove the Artboard tool's active or additionally selected boards. Repair only
@@ -110,16 +141,58 @@ impl VectorcraftApp {
         self.views.get_mut(i)
     }
 
-    /// The mapping between the document and the canvas of the last frame, at the active view (none
-    /// before the canvas is laid out or without a document).
-    pub(crate) fn canvas_xf(&self) -> Option<crate::canvas::Xf> {
-        Some(crate::canvas::Xf::at(self.canvas_rect?, self.view()?, self.canvas_ui_zoom))
+    /// The active view as its canvas last showed it: none before the canvas has laid out with area,
+    /// or without a document.
+    pub fn canvas_view(&self) -> Option<CanvasView> {
+        let v = self.view()?;
+        (v.rect.width() > 0.0 && v.rect.height() > 0.0).then(|| v.canvas(self.ui_scaling(), v.rect))
+    }
+
+    /// Preferences › User Interface › UI Scaling, as the interface applies it.
+    pub(crate) fn ui_scaling(&self) -> f32 {
+        self.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32
+    }
+
+    /// Ask the active view's canvas to run `request` in its next pass; `bounds` are the layers' bounds
+    /// for Fit Layers.
+    pub(crate) fn request_view(&mut self, request: ViewRequest, bounds: Option<vectorcraft_geom::Rect>) {
+        if let Some(v) = self.view_mut() {
+            v.request = Some((request, bounds));
+        }
+    }
+
+    /// The active view was moved by a command since `before`: its canvas eases from `before`.
+    pub(crate) fn ease_view(&mut self, before: View) {
+        let scaling = self.ui_scaling();
+        if let Some(v) = self.view_mut() {
+            v.moved = Some(ViewMove::Ease(before.canvas(scaling, v.rect)));
+        }
+    }
+
+    /// Runs `command` on the active view at once, in the canvas its last pass laid out, and eases the canvas there;
+    /// `bounds` are the layers' bounds for Fit Layers. Without a window, or before the canvas was laid out, the canvas
+    /// runs it in its next pass.
+    pub(crate) fn view_now(&mut self, command: ViewCommands, bounds: Option<vectorcraft_geom::Rect>) {
+        let (Some(ctx), Some(win), Some(_)) = (self.ui_ctx.clone(), crate::doc_windows::current(self), self.canvas_view()) else {
+            return self.request_view(ViewRequest::Command(command), bounds);
+        };
+        let target = crate::canvas::view_target(self, win);
+        let (scaling, ppp) = (self.ui_scaling(), ctx.pixels_per_point());
+        let scheme = zoom_scheme(&self.session.prefs, ppp / ctx.zoom_factor());
+        let Some(v) = self.view_mut() else { return };
+        let before = *v;
+        let mut cv = v.canvas(scaling, v.rect);
+        let layers = move || bounds;
+        if command.apply(&mut cv, &target, Some(&layers), ppp, &scheme) {
+            v.set_canvas(&cv, scaling);
+            self.ease_view(before);
+        }
     }
 
     pub fn view_info(&self) -> ViewInfo {
         ViewInfo {
             // The tools measure their tolerances and widgets in the interface's points.
-            zoom: self.view().map_or(1.0, |v| v.screen_zoom(self.canvas_ui_zoom)),
+            zoom: self.view().map_or(1.0, |v| v.zoom / f64::from(self.ui_scaling())),
             outline: self.outline_view(),
             smart_guides: self.ui.view.smart_guides,
             guides: self.ui.view.guides_shown(),
@@ -135,6 +208,7 @@ impl VectorcraftApp {
             shape_widgets: self.ui.view.shape_widgets,
             screen: self.screen_frame(),
             artboard: self.view().map_or(0, |v| v.artboard),
+            ..ViewInfo::default()
         }
     }
 }
