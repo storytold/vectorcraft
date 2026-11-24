@@ -6932,6 +6932,12 @@ axis	Y Axis	Вісь Y
 @msg	parameter `{name}`: {what}	параметр `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметри модуля мають бути об’єктом JSON
 @msg	the module must export its linear memory as `memory`	модуль має експортувати свою лінійну пам’ять як `memory`
+@msg	the module must export `{name}` with the type {signature}	модуль має експортувати `{name}` з типом {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	модуль має більше ніж один користувацький розділ `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	бюджет пам’яті (початкова пам’ять модуля становить {initial} байтів, межа {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	маніфест у користувацькому розділі `{MANIFEST_SECTION}` має вказувати `abi` як {ABI_VERSION}, версію ABI, яку реалізує цей хост
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	бюджет таблиць (модуль визначає {count} таблиць, найбільша містить {largest} елементів; межа {MAX_TABLES} таблиць по {MAX_TABLE_ELEMENTS} елементів)
+@msg	the module's table section could not be read	не вдалося прочитати розділ таблиць модуля
 @msg	the objects to change are no longer in the document	об’єктів, які треба змінити, більше немає в документі
 @msg	the runtime panicked	середовище виконання аварійно завершилося
 @msg	unexpected host trap	неочікувана пастка (trap) хоста

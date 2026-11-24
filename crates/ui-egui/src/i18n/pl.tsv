@@ -7183,6 +7183,12 @@ axis	Y Axis	Oś Y
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry wtyczki muszą być obiektem JSON
 @msg	the module must export its linear memory as `memory`	moduł musi eksportować swoją pamięć liniową jako `memory`
+@msg	the module must export `{name}` with the type {signature}	moduł musi eksportować `{name}` z typem {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	moduł ma więcej niż jedną sekcję niestandardową `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	budżet pamięci (pamięć początkowa modułu ma {initial} bajtów, limit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifest w sekcji niestandardowej `{MANIFEST_SECTION}` musi podawać `abi` równe {ABI_VERSION}, czyli wersję ABI implementowaną przez ten host
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	budżet tabel (moduł definiuje {count} tabel, największa ma {largest} elementów; limit {MAX_TABLES} tabel po {MAX_TABLE_ELEMENTS} elementów)
+@msg	the module's table section could not be read	nie można odczytać sekcji tabel modułu
 @msg	the objects to change are no longer in the document	obiektów do zmiany nie ma już w dokumencie
 @msg	the runtime panicked	środowisko uruchomieniowe uległo awarii
 @msg	unexpected host trap	nieoczekiwane przerwanie (trap) hosta

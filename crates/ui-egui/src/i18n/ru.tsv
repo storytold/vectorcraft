@@ -6949,6 +6949,12 @@ axis	Y Axis	Ось Y
 @msg	parameter `{name}`: {what}	параметр `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметры модуля должны быть объектом JSON
 @msg	the module must export its linear memory as `memory`	модуль должен экспортировать свою линейную память как `memory`
+@msg	the module must export `{name}` with the type {signature}	модуль должен экспортировать `{name}` с типом {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	в модуле больше одного пользовательского раздела `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	бюджет памяти (начальная память модуля составляет {initial} байт, предел {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	манифест в пользовательском разделе `{MANIFEST_SECTION}` должен указывать `abi` равным {ABI_VERSION}, версии ABI, которую реализует этот хост
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	бюджет таблиц (модуль определяет {count} таблиц, самая большая содержит {largest} элементов; предел {MAX_TABLES} таблиц по {MAX_TABLE_ELEMENTS} элементов)
+@msg	the module's table section could not be read	не удалось прочитать раздел таблиц модуля
 @msg	the objects to change are no longer in the document	изменяемых объектов больше нет в документе
 @msg	the runtime panicked	среда выполнения аварийно завершилась
 @msg	unexpected host trap	непредвиденная ловушка (trap) хоста

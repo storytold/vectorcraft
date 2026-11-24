@@ -7394,6 +7394,12 @@ axis	Y Axis	Y-akseli
 @msg	parameter `{name}`: {what}	parametri `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	laajennuksen parametrien on oltava JSON-objekti
 @msg	the module must export its linear memory as `memory`	moduulin on vietävä lineaarinen muistinsa nimellä `memory`
+@msg	the module must export `{name}` with the type {signature}	moduulin on vietävä `{name}` tyypillä {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	moduulissa on useampi kuin yksi mukautettu osio `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	muistibudjetti (moduulin alkumuisti on {initial} tavua, raja {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	mukautetun osion `{MANIFEST_SECTION}` manifestin on annettava `abi` arvona {ABI_VERSION}, ABI-versio, jonka tämä isäntä toteuttaa
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	taulukkobudjetti (moduuli määrittää {count} taulukkoa, suurin {largest} alkiolla; raja {MAX_TABLES} taulukkoa, kussakin enintään {MAX_TABLE_ELEMENTS} alkiota)
+@msg	the module's table section could not be read	moduulin taulukko-osiota ei voitu lukea
 @msg	the objects to change are no longer in the document	muutettavia objekteja ei enää ole asiakirjassa
 @msg	the runtime panicked	suoritusympäristö kaatui
 @msg	unexpected host trap	odottamaton keskeytys (trap) isännässä

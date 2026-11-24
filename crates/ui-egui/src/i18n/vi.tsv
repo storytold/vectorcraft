@@ -6978,6 +6978,12 @@ axis	Y Axis	Trục Y
 @msg	parameter `{name}`: {what}	tham số `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	tham số plug-in phải là một đối tượng JSON
 @msg	the module must export its linear memory as `memory`	mô-đun phải export bộ nhớ tuyến tính của nó dưới tên `memory`
+@msg	the module must export `{name}` with the type {signature}	mô-đun phải export `{name}` với kiểu {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	mô-đun có nhiều hơn một phần tùy chỉnh `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	ngân sách bộ nhớ (bộ nhớ ban đầu của mô-đun là {initial} byte, giới hạn {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	tệp kê khai trong phần tùy chỉnh `{MANIFEST_SECTION}` phải đặt `abi` là {ABI_VERSION}, phiên bản ABI mà máy chủ này triển khai
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	ngân sách bảng (mô-đun định nghĩa {count} bảng, bảng lớn nhất có {largest} phần tử; giới hạn {MAX_TABLES} bảng, mỗi bảng {MAX_TABLE_ELEMENTS} phần tử)
+@msg	the module's table section could not be read	không thể đọc phần bảng của mô-đun
 @msg	the objects to change are no longer in the document	các đối tượng cần thay đổi không còn trong tài liệu
 @msg	the runtime panicked	môi trường chạy bị lỗi nghiêm trọng
 @msg	unexpected host trap	máy chủ gặp trap không mong muốn

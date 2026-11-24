@@ -9432,6 +9432,12 @@ axis	Y Axis	Y ღერძი
 @msg	parameter `{name}`: {what}	პარამეტრი `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	პლაგინის პარამეტრები JSON ობიექტი უნდა იყოს
 @msg	the module must export its linear memory as `memory`	მოდულმა თავისი წრფივი მეხსიერების ექსპორტი `memory` სახელით უნდა გააკეთოს
+@msg	the module must export `{name}` with the type {signature}	მოდულმა `{name}`-ის ექსპორტი {signature} ტიპით უნდა გააკეთოს
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	მოდულს ერთზე მეტი `{MANIFEST_SECTION}` მორგებული სექცია აქვს
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	მეხსიერების ბიუჯეტი (მოდულის საწყისი მეხსიერება {initial} ბაიტია, ზღვარი {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` მორგებული სექციის მანიფესტში `abi` უნდა იყოს {ABI_VERSION}, ABI-ის ვერსია, რომელსაც ეს ჰოსტი ახორციელებს
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	ცხრილების ბიუჯეტი (მოდული განსაზღვრავს {count} ცხრილს, უდიდესი {largest} ელემენტით; ზღვარი {MAX_TABLES} ცხრილი, თითოეულში {MAX_TABLE_ELEMENTS} ელემენტი)
+@msg	the module's table section could not be read	მოდულის ცხრილების სექციის წაკითხვა ვერ მოხერხდა
 @msg	the objects to change are no longer in the document	შესაცვლელი ობიექტები დოკუმენტში აღარ არის
 @msg	the runtime panicked	გაშვების გარემო ავარიულად შეჩერდა
 @msg	unexpected host trap	ჰოსტის მოულოდნელი ავარიული შეჩერება (trap)

@@ -7317,6 +7317,12 @@ axis	Y Axis	Άξονας Y
 @msg	parameter `{name}`: {what}	παράμετρος `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	οι παράμετροι του προσθέτου πρέπει να είναι αντικείμενο JSON
 @msg	the module must export its linear memory as `memory`	η λειτουργική μονάδα πρέπει να εξάγει τη γραμμική της μνήμη ως `memory`
+@msg	the module must export `{name}` with the type {signature}	η λειτουργική μονάδα πρέπει να εξάγει το `{name}` με τον τύπο {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	η λειτουργική μονάδα έχει περισσότερες από μία προσαρμοσμένες ενότητες `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	προϋπολογισμός μνήμης (η αρχική μνήμη της λειτουργικής μονάδας είναι {initial} byte, όριο {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	το μανιφέστο στην προσαρμοσμένη ενότητα `{MANIFEST_SECTION}` πρέπει να δίνει `abi` ίσο με {ABI_VERSION}, την έκδοση ABI που υλοποιεί αυτός ο κεντρικός υπολογιστής
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	προϋπολογισμός πινάκων (η λειτουργική μονάδα ορίζει {count} πίνακες, ο μεγαλύτερος με {largest} στοιχεία· όριο {MAX_TABLES} πίνακες των {MAX_TABLE_ELEMENTS} στοιχείων)
+@msg	the module's table section could not be read	δεν ήταν δυνατή η ανάγνωση της ενότητας πινάκων της λειτουργικής μονάδας
 @msg	the objects to change are no longer in the document	τα αντικείμενα προς αλλαγή δεν βρίσκονται πια στο έγγραφο
 @msg	the runtime panicked	το περιβάλλον εκτέλεσης κατέρρευσε
 @msg	unexpected host trap	μη αναμενόμενη παγίδευση του κεντρικού υπολογιστή

@@ -7717,6 +7717,12 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON
 @msg	the module must export its linear memory as `memory`	el mòdul ha d’exportar la seva memòria lineal com a `memory`
+@msg	the module must export `{name}` with the type {signature}	el mòdul ha d’exportar `{name}` amb el tipus {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	el mòdul té més d’una secció personalitzada `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	pressupost de memòria (la memòria inicial del mòdul és de {initial} bytes, límit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	el manifest de la secció personalitzada `{MANIFEST_SECTION}` ha de donar `abi` com a {ABI_VERSION}, la versió de l’ABI que implementa aquest amfitrió
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	pressupost de taules (el mòdul defineix {count} taules, la més gran amb {largest} elements; límit {MAX_TABLES} taules de {MAX_TABLE_ELEMENTS} elements)
+@msg	the module's table section could not be read	no s’ha pogut llegir la secció de taules del mòdul
 @msg	the objects to change are no longer in the document	els objectes que calia canviar ja no són al document
 @msg	the runtime panicked	l’entorn d’execució ha fallat
 @msg	unexpected host trap	aturada inesperada (trap) de l’amfitrió

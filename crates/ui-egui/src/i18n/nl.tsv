@@ -405,6 +405,12 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parameters moeten een JSON-object zijn
 @msg	the module must export its linear memory as `memory`	de module moet haar lineaire geheugen exporteren als `memory`
+@msg	the module must export `{name}` with the type {signature}	de module moet `{name}` exporteren met het type {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	de module heeft meer dan één aangepaste sectie `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	geheugenbudget (het begingeheugen van de module is {initial} bytes, limiet {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	het manifest in de aangepaste sectie `{MANIFEST_SECTION}` moet `abi` opgeven als {ABI_VERSION}, de ABI-versie die deze host implementeert
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabelbudget (de module definieert {count} tabellen, de grootste met {largest} elementen; limiet {MAX_TABLES} tabellen van {MAX_TABLE_ELEMENTS} elementen)
+@msg	the module's table section could not be read	de tabelsectie van de module kon niet worden gelezen
 @msg	the objects to change are no longer in the document	de te wijzigen objecten staan niet meer in het document
 @msg	the runtime panicked	de runtime is vastgelopen
 @msg	unexpected host trap	onverwachte trap in de host

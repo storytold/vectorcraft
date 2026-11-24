@@ -7025,6 +7025,12 @@ axis	Y Axis	Y 軸
 @msg	parameter `{name}`: {what}	パラメーター `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	プラグインのパラメーターは JSON オブジェクトにしてください
 @msg	the module must export its linear memory as `memory`	モジュールは線形メモリを `memory` としてエクスポートする必要があります
+@msg	the module must export `{name}` with the type {signature}	モジュールは `{name}` を型 {signature} でエクスポートする必要があります
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	モジュールにカスタムセクション `{MANIFEST_SECTION}` が複数あります
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	メモリ予算 (モジュールの初期メモリは {initial} バイト、上限は {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	カスタムセクション `{MANIFEST_SECTION}` のマニフェストは `abi` に {ABI_VERSION} (このホストが実装する ABI バージョン) を指定する必要があります
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	テーブル予算 (モジュールが定義するテーブルは {count} 個、最大のものは {largest} 要素、上限はテーブル {MAX_TABLES} 個、各 {MAX_TABLE_ELEMENTS} 要素)
+@msg	the module's table section could not be read	モジュールのテーブルセクションを読み取れませんでした
 @msg	the objects to change are no longer in the document	変更するオブジェクトがドキュメントにもうありません
 @msg	the runtime panicked	ランタイムが異常終了しました
 @msg	unexpected host trap	ホストで予期しないトラップが発生しました

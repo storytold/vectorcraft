@@ -9399,6 +9399,12 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the library holds {MAX_ITEMS} items of this kind already	लाइब्रेरी पहले से ही इस तरह के {MAX_ITEMS} आइटम रखता है
 @msg	the library item is damaged	लाइब्रेरी आइटम क्षतिग्रस्त है
 @msg	the module must export its linear memory as `memory`	मॉड्यूल को अपनी रैखिक मेमोरी `memory` के रूप में एक्सपोर्ट करनी चाहिए
+@msg	the module must export `{name}` with the type {signature}	मॉड्यूल को `{name}` को {signature} प्रकार के साथ एक्सपोर्ट करना चाहिए
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	मॉड्यूल में एक से अधिक `{MANIFEST_SECTION}` कस्टम सेक्शन हैं
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	मेमोरी बजट (मॉड्यूल की प्रारंभिक मेमोरी {initial} बाइट है, सीमा {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	`{MANIFEST_SECTION}` कस्टम सेक्शन के मैनिफ़ेस्ट में `abi` का मान {ABI_VERSION} होना चाहिए, वह ABI संस्करण जिसे यह होस्ट लागू करता है
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	टेबल बजट (मॉड्यूल {count} टेबल परिभाषित करता है, सबसे बड़ी में {largest} एलिमेंट; सीमा {MAX_TABLES} टेबल, प्रत्येक में {MAX_TABLE_ELEMENTS} एलिमेंट)
+@msg	the module's table section could not be read	मॉड्यूल का टेबल सेक्शन पढ़ा नहीं जा सका
 @msg	the name is empty	नाम खाली है
 @msg	the object already has an opacity mask	ऑब्जेक्ट पहले से ही एक अपारदर्शिता मास्क है
 @msg	the object has no fill, stroke or effect	ऑब्जेक्ट में कोई भराव, स्ट्रोक या इफ़ेक्ट नहीं होता है

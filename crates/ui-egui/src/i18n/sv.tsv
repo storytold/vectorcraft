@@ -9918,6 +9918,12 @@ digits	Hindi	Hindi
 @msg	the library holds {MAX_GROUPS} groups already	biblioteket innehåller redan {MAX_GROUPS} grupper
 @msg	the library holds {MAX_ITEMS} items of this kind already	biblioteket innehåller redan {MAX_ITEMS} objekt av den här typen
 @msg	the module must export its linear memory as `memory`	modulen måste exportera sitt linjära minne som `memory`
+@msg	the module must export `{name}` with the type {signature}	modulen måste exportera `{name}` med typen {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modulen har mer än ett anpassat avsnitt `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	minnesbudget (modulens startminne är {initial} byte, gräns {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifestet i det anpassade avsnittet `{MANIFEST_SECTION}` måste ange `abi` som {ABI_VERSION}, den ABI-version som den här värden implementerar
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabellbudget (modulen definierar {count} tabeller, den största med {largest} element; gräns {MAX_TABLES} tabeller med {MAX_TABLE_ELEMENTS} element)
+@msg	the module's table section could not be read	modulens tabellavsnitt kunde inte läsas
 @msg	the name is empty	namnet är tomt
 @msg	the object has no fill, stroke or effect	objektet har ingen fyllning, kontur eller effekt
 @msg	the object has no graphic style (pass `name`)	objektet har ingen grafikstil (ange `name`)

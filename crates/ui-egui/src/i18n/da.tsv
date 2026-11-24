@@ -558,6 +558,12 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	parameter `{name}`: {what}	parameteren `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	plug-in-parametrene skal være et JSON-objekt
 @msg	the module must export its linear memory as `memory`	modulet skal eksportere sin lineære hukommelse som `memory`
+@msg	the module must export `{name}` with the type {signature}	modulet skal eksportere `{name}` med typen {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modulet har mere end én brugerdefineret sektion `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	hukommelsesbudget (modulets indledende hukommelse er {initial} byte, grænse {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifestet i den brugerdefinerede sektion `{MANIFEST_SECTION}` skal angive `abi` som {ABI_VERSION}, den ABI-version, denne vært implementerer
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	tabelbudget (modulet definerer {count} tabeller, den største med {largest} elementer; grænse {MAX_TABLES} tabeller med {MAX_TABLE_ELEMENTS} elementer)
+@msg	the module's table section could not be read	modulets tabelsektion kunne ikke læses
 @msg	the objects to change are no longer in the document	de objekter, der skal ændres, er ikke længere i dokumentet
 @msg	the runtime panicked	runtime-miljøet gik i panik
 @msg	unexpected host trap	uventet trap i værten

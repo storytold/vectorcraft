@@ -7328,6 +7328,12 @@ axis	Y Axis	osa Y
 @msg	parameter `{name}`: {what}	parametr `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parametry zásuvného modulu musí být objekt JSON
 @msg	the module must export its linear memory as `memory`	modul musí exportovat svou lineární paměť jako `memory`
+@msg	the module must export `{name}` with the type {signature}	modul musí exportovat `{name}` s typem {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modul má více než jednu vlastní sekci `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	rozpočet paměti (počáteční paměť modulu má {initial} bajtů, limit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifest ve vlastní sekci `{MANIFEST_SECTION}` musí uvádět `abi` jako {ABI_VERSION}, verzi ABI, kterou tento hostitel implementuje
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	rozpočet tabulek (modul definuje {count} tabulek, největší s {largest} prvky; limit {MAX_TABLES} tabulek po {MAX_TABLE_ELEMENTS} prvcích)
+@msg	the module's table section could not be read	sekci tabulek modulu nelze přečíst
 @msg	the objects to change are no longer in the document	objekty ke změně už v dokumentu nejsou
 @msg	the runtime panicked	běhové prostředí havarovalo
 @msg	unexpected host trap	neočekávaná chyba (trap) hostitele

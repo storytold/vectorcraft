@@ -7313,6 +7313,12 @@ axis	Y Axis	Y tengely
 @msg	parameter `{name}`: {what}	`{name}` paraméter: {what}
 @msg	plug-in parameters must be a JSON object	a bővítmény paraméterei JSON-objektumot alkossanak
 @msg	the module must export its linear memory as `memory`	a modulnak `memory` néven kell exportálnia a lineáris memóriáját
+@msg	the module must export `{name}` with the type {signature}	a modulnak a(z) `{name}` elemet {signature} típussal kell exportálnia
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	a modulnak több `{MANIFEST_SECTION}` egyéni szakasza van
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	memóriakeret (a modul kezdeti memóriája {initial} bájt, korlát {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	a(z) `{MANIFEST_SECTION}` egyéni szakasz manifesztjének az `abi` értékét {ABI_VERSION} értékként kell megadnia, amely az e gazdaprogram által megvalósított ABI-verzió
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	táblakeret (a modul {count} táblát definiál, a legnagyobb {largest} elemmel; korlát {MAX_TABLES} tábla, egyenként {MAX_TABLE_ELEMENTS} elem)
+@msg	the module's table section could not be read	a modul táblaszakasza nem olvasható
 @msg	the objects to change are no longer in the document	a módosítandó objektumok már nincsenek a dokumentumban
 @msg	the runtime panicked	a futtatókörnyezet összeomlott
 @msg	unexpected host trap	váratlan megszakítás (trap) a gazdaprogramban

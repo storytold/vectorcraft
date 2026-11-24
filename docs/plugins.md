@@ -367,10 +367,30 @@ pointers are offsets into the module's memory.
 | Export | Signature | Meaning |
 |---|---|---|
 | `memory` | memory | The module's linear memory. |
-| `vc_abi_version` | `() -> i32` | Must return `1`. |
-| `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). |
+| `vc_abi_version` | `() -> i32` | Must return `1`. Needed only by a module without a `vc_manifest` custom section. |
+| `vc_manifest` | `() -> i64` | `(len << 32) \| ptr` of the UTF-8 manifest JSON (≤ 64 KiB). Needed only by a module without a `vc_manifest` custom section. |
 | `vc_alloc` | `(size) -> ptr` | A block of `size` bytes the host may write, or `0` on failure. Never freed: each run gets a fresh instance. |
 | `vc_run` | `(input, input_len, params, params_len) -> i64` | Runs the plug-in on the input JSON with the parameters JSON; returns `(len << 32) \| ptr` of the output JSON, or a negative error code. |
+
+### Manifest section
+
+A module may carry its [manifest](#manifest) in a [custom
+section](https://webassembly.github.io/spec/core/binary/modules.html#custom-section) named `vc_manifest`, holding the
+same UTF-8 JSON that the `vc_manifest` export returns, plus `"abi": 1`, the ABI version that `vc_abi_version` returns.
+The host then reads the manifest from the section and loads the module without instantiating it: no start function,
+`vc_abi_version`, `vc_manifest` or data segment initialization runs when the module is installed, inspected or loaded at
+startup. The host checks the imports against the manifest's permissions, the exports `memory`, `vc_alloc` and `vc_run`
+by their types, that the initial memory fits in the [linear memory limit](#the-sandbox), and that the module defines at
+most 4 tables of at most 100,000 elements each. The module is instantiated for the first time when it runs, and a start
+function then runs at the start of each run.
+
+- A module with more than one `vc_manifest` section, or one longer than 64 KiB, is refused before the section's contents
+  are decoded. A section that is not UTF-8, not JSON or not a valid manifest is refused too, and so is one whose
+  manifest does not give `"abi": 1`.
+- When a module has both the section and a `vc_manifest` export, the section is the manifest and the export is never
+  called. Keep both to load in versions of VectorCraft that read only the export.
+- A module without the section is loaded as before: the host instantiates it and calls `vc_abi_version` and
+  `vc_manifest`.
 
 ### Host imports (API level 2)
 
@@ -868,10 +888,15 @@ crates/plugins/example/build.sh      # cargo build --release --target wasm32-unk
 ```
 
 The script also refreshes `crates/plugins/tests/fixtures/desaturate.wasm`, the test fixture built from that source.
-The crate is not a workspace member. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
+The crate is not a workspace member. It puts its manifest in the [manifest section](#manifest-section) with a byte
+array static marked `#[unsafe(link_section = "vc_manifest")]` (the Rust Reference's
+[`link_section`](https://doc.rust-lang.org/reference/abi.html#the-link_section-attribute)), and keeps the
+`vc_manifest` export for older hosts. Any language that targets core WebAssembly works (C, Zig, AssemblyScript,
 WAT…), as long as the module imports nothing but the host imports: in Rust, `std` on `wasm32-unknown-unknown` is fine as
 long as it never touches WASI. `vectorcraft_plugins::wat::module` is the skeleton of a plug-in in WebAssembly text,
-which the tests build their plug-ins from; `wat::echo_exporter` is an exporter whose file is its input or its parameters
+which the tests build their plug-ins from, and `wat::sectioned` the same plug-in with its manifest in the [manifest
+section](#manifest-section) and no `vc_abi_version` or `vc_manifest` export (in WebAssembly text, a custom section is
+written `(@custom "vc_manifest" "…")`); `wat::echo_exporter` is an exporter whose file is its input or its parameters
 (with a base64 encoder written out in WebAssembly text), which the tests read back what the host hands a plug-in with,
 and `wat::when_given` a plug-in whose output depends on whether its input or parameters hold a given text, which shows
 in a live effect's geometry. `wat::reporting` and `wat::cooperating` build level 2 plug-ins that import the host

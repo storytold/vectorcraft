@@ -6922,6 +6922,12 @@ axis	Y Axis	Y축
 @msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다
 @msg	the module must export its linear memory as `memory`	모듈은 선형 메모리를 `memory`(으)로 내보내야 합니다
+@msg	the module must export `{name}` with the type {signature}	모듈은 `{name}`을(를) {signature} 형식으로 내보내야 합니다
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	모듈에 사용자 지정 섹션 `{MANIFEST_SECTION}`이(가) 둘 이상 있습니다
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	메모리 예산(모듈의 초기 메모리가 {initial}바이트, 한도 {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	사용자 지정 섹션 `{MANIFEST_SECTION}`의 매니페스트는 `abi`를 {ABI_VERSION}(으)로 지정해야 합니다. 이는 이 호스트가 구현하는 ABI 버전입니다
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	테이블 예산(모듈이 테이블 {count}개를 정의하며 가장 큰 테이블의 요소는 {largest}개, 한도는 테이블 {MAX_TABLES}개, 각 {MAX_TABLE_ELEMENTS}개 요소)
+@msg	the module's table section could not be read	모듈의 테이블 섹션을 읽을 수 없습니다
 @msg	the objects to change are no longer in the document	변경할 개체가 더 이상 문서에 없습니다
 @msg	the runtime panicked	런타임이 비정상 종료되었습니다
 @msg	unexpected host trap	호스트에서 예기치 않은 트랩이 발생했습니다

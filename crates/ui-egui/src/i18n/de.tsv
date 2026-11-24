@@ -6911,6 +6911,12 @@ axis	Y Axis	Y-Achse
 @msg	parameter `{name}`: {what}	Parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	die Plug-in-Parameter müssen ein JSON-Objekt sein
 @msg	the module must export its linear memory as `memory`	das Modul muss seinen linearen Speicher als `memory` exportieren
+@msg	the module must export `{name}` with the type {signature}	das Modul muss `{name}` mit dem Typ {signature} exportieren
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	das Modul hat mehr als einen benutzerdefinierten Abschnitt `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	Speicherbudget (der Anfangsspeicher des Moduls ist {initial} Byte groß, Grenze {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	das Manifest im benutzerdefinierten Abschnitt `{MANIFEST_SECTION}` muss `abi` als {ABI_VERSION} angeben, die ABI-Version, die dieser Host unterstützt
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	Tabellenbudget (das Modul definiert {count} Tabellen, die größte mit {largest} Elementen; Grenze {MAX_TABLES} Tabellen mit je {MAX_TABLE_ELEMENTS} Elementen)
+@msg	the module's table section could not be read	der Tabellenabschnitt des Moduls konnte nicht gelesen werden
 @msg	the objects to change are no longer in the document	die zu ändernden Objekte sind nicht mehr im Dokument
 @msg	the runtime panicked	die Laufzeitumgebung ist abgestürzt
 @msg	unexpected host trap	unerwarteter Abbruch (Trap) im Host
