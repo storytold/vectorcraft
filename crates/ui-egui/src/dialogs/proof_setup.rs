@@ -494,29 +494,11 @@ pub fn saved_items() -> Vec<Node> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::DefaultProofView;
     use craft::host::ScriptedFiles;
     use craft::ui::dialog::DialogHost;
     use std::sync::Arc;
     use vectorcraft_engine::Session;
-
-    /// Proof views are process-wide: these tests take turns, and each leaves the default view.
-    static VIEW: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    struct DefaultView<'a>(#[allow(dead_code)] std::sync::MutexGuard<'a, ()>);
-
-    impl DefaultView<'_> {
-        fn new() -> Self {
-            let g = VIEW.lock().unwrap_or_else(|e| e.into_inner());
-            proof::set_view(Default::default());
-            DefaultView(g)
-        }
-    }
-
-    impl Drop for DefaultView<'_> {
-        fn drop(&mut self) {
-            proof::set_view(Default::default());
-        }
-    }
 
     fn app() -> (VectorcraftApp, egui::Context) {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -592,7 +574,7 @@ mod tests {
     /// device, Preserve Numbers, the intent and Simulate Black Ink, and turns Proof Colors on.
     #[test]
     fn customize_sets_the_proof_setup_and_turns_proof_colors_on() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let item = crate::menus::menu_entries(&app).into_iter().find(|e| e.path == ["View", "Proof Setup"] && e.label == "Customize…").unwrap();
         app.run(item.command.as_deref().unwrap(), item.params.clone()).unwrap();
@@ -621,7 +603,7 @@ mod tests {
     /// Cancel (or turning Preview off) puts the earlier proof view back.
     #[test]
     fn preview_shows_the_settings_and_cancel_puts_the_view_back() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         app.run("view.proofSetup", json!({"target": "protanopia"})).unwrap();
         let before = proof::view();
@@ -646,7 +628,7 @@ mod tests {
     /// set, and redraw the documents.
     #[test]
     fn cancel_puts_back_a_view_whose_profile_was_removed() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let name = "Proof Setup Removed RGB";
         cms::register_icc(&cms::icc_bytes(cms::DISPLAY_P3).unwrap(), Some(name.into())).unwrap();
@@ -670,7 +652,7 @@ mod tests {
     /// puts back the view it found the first time.
     #[test]
     fn running_proof_setup_again_keeps_the_open_dialog() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let before = proof::view();
         app.run("ui.proofSetupDialog", json!({})).unwrap();
@@ -686,7 +668,7 @@ mod tests {
     /// the dialog found comes back, and Overprint Preview turned on during the preview stays on.
     #[test]
     fn another_dialog_in_its_place_puts_the_view_back() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let before = proof::view();
         app.run("ui.proofSetupDialog", json!({})).unwrap();
@@ -714,7 +696,7 @@ mod tests {
     /// view it found.
     #[test]
     fn back_from_under_another_dialog_it_previews_again() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let before = proof::view();
         app.run("ui.proofSetupDialog", json!({})).unwrap();
@@ -734,7 +716,7 @@ mod tests {
     /// Preview on shows the dialog's values again, and Cancel puts back the command's view.
     #[test]
     fn a_view_set_while_the_dialog_previews_stays() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         app.run("ui.proofSetupDialog", json!({})).unwrap();
         set(&mut app, &ctx, "device", json!(rgb()));
@@ -752,7 +734,7 @@ mod tests {
     /// stays open with the proof view as it was.
     #[test]
     fn ok_with_an_unknown_device_keeps_the_dialog_open() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let name = "Proof Setup Gone RGB";
         cms::register_icc(&cms::icc_bytes(cms::DISPLAY_P3).unwrap(), Some(name.into())).unwrap();
@@ -774,7 +756,7 @@ mod tests {
     /// applies the setup with Proof Colors on.
     #[test]
     fn save_and_load_keep_a_custom_proof_setup() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let dir = vectorcraft_testkit::TempDir::new("proof-setup-dialog");
         let folder = dir.join("Proof Setups");
@@ -833,7 +815,7 @@ mod tests {
     /// folder stays while the picker is open and when a file is saved in it.
     #[test]
     fn a_canceled_save_leaves_no_folder() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let dir = vectorcraft_testkit::TempDir::new("proof-setup-dialog-cancel");
         let folder = dir.join("Proof Setups");
@@ -869,7 +851,7 @@ mod tests {
     /// folder before; Load… does not make the folder.
     #[test]
     fn load_starts_in_the_folder_once_it_exists() {
-        let _v = DefaultView::new();
+        let _v = DefaultProofView::new();
         let (mut app, ctx) = app();
         let dir = vectorcraft_testkit::TempDir::new("proof-setup-dialog-load-folder");
         let folder = dir.join("Proof Setups");

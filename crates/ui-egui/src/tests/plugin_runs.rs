@@ -3,8 +3,10 @@
 //! done, unless the document changed meanwhile. Cancel stops it; its progress window shows it. A
 //! light filter that reports its progress runs there too.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use craft::host::{Host, ManualJobs};
 use craft::ui::dialog::DialogId;
 use craft::ui::patterns::form_dialogs::HostedParamDialog;
 use egui_kittest::Harness;
@@ -22,6 +24,16 @@ fn app() -> VectorcraftApp {
     app.session.allow_plugin_grants_from_requests();
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     app
+}
+
+/// The window of an [`app`] whose background work waits until the test runs it: a run that OK
+/// started is still running when the frame that started it ends. On threads a fast run could end
+/// before a later pass of that frame, which applies it.
+fn held_window() -> (Harness<'static, VectorcraftApp>, Arc<ManualJobs>) {
+    let mut app = app();
+    let jobs = Arc::new(ManualJobs::new());
+    app.host = Arc::new(Host::builder(app.host.app().clone()).i18n(crate::i18n::shared()).jobs(jobs.clone()).build());
+    (window(app), jobs)
 }
 
 /// A heavy test filter `id` (named "Test `id`") with `params` that counts `steps` down, then adds
@@ -125,7 +137,7 @@ fn installing_a_heavy_filter_asks_first() {
 /// saying so, and its result is one undo step named after it, selected.
 #[test]
 fn a_heavy_filter_runs_off_the_ui_thread_and_applies_as_one_undo_step() {
-    let mut h = window(app());
+    let (mut h, jobs) = held_window();
     let id = "test.ui.heavy.run";
     install(h.state_mut(), id, 1000, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#);
     h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap();
@@ -138,7 +150,7 @@ fn a_heavy_filter_runs_off_the_ui_thread_and_applies_as_one_undo_step() {
     assert_eq!(h.state().plugin_runs.running.len(), 1);
     assert_eq!(h.state().ui.status, format!("Running “Test {id}”…"));
     let app = h.state_mut();
-    wait(app);
+    finish_held(app, &jobs);
     let st = app.session.doc().unwrap();
     assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
     assert_eq!(st.history.undo.last().unwrap().label, format!("Test {id}"));
@@ -258,6 +270,12 @@ fn finish_runs(app: &mut VectorcraftApp) {
     }
 }
 
+/// Runs the jobs [`held_window`] held, then applies the runs' results as the frames would.
+fn finish_held(app: &mut VectorcraftApp, jobs: &ManualJobs) {
+    jobs.run_all();
+    finish_runs(app);
+}
+
 /// A light filter that may report its progress runs off the UI thread when it runs at once, as a
 /// heavy one does: the status bar says so, and its result is one undo step named after it.
 #[test]
@@ -281,7 +299,7 @@ fn a_light_filter_that_reports_progress_runs_off_the_ui_thread() {
 /// run, as for any light filter.
 #[test]
 fn ok_runs_a_light_progress_filter_in_the_background_without_a_preview() {
-    let mut h = window(app());
+    let (mut h, jobs) = held_window();
     let id = "test.ui.light.progress.dialog";
     install_light(h.state_mut(), id, true, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#, "");
     let undo = h.state().session.doc().unwrap().history.undo.len();
@@ -292,7 +310,7 @@ fn ok_runs_a_light_progress_filter_in_the_background_without_a_preview() {
     answer(&mut h, true);
     assert!(none_open(h.state()));
     assert_eq!(h.state().plugin_runs.running.len(), 1, "running in the background");
-    finish_runs(h.state_mut());
+    finish_held(h.state_mut(), &jobs);
     assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 1);
     // Preview on: OK keeps the previewed run, and nothing runs in the background.
     h.state_mut().run("plugin.dialog", json!({"id": id})).unwrap();
@@ -310,7 +328,7 @@ fn ok_runs_a_light_progress_filter_in_the_background_without_a_preview() {
     assert!(!h.state().session.in_interaction(), "the preview was rolled back");
     answer(&mut h, true);
     assert_eq!(h.state().plugin_runs.running.len(), 1, "running in the background");
-    finish_runs(h.state_mut());
+    finish_held(h.state_mut(), &jobs);
     assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 3);
 }
 
@@ -318,7 +336,7 @@ fn ok_runs_a_light_progress_filter_in_the_background_without_a_preview() {
 /// rolls it back and runs the filter in the background instead of again on the UI thread.
 #[test]
 fn ok_after_a_failed_preview_runs_a_light_progress_filter_in_the_background() {
-    let mut h = window(app());
+    let (mut h, jobs) = held_window();
     let id = "test.ui.light.progress.fails";
     install_light(h.state_mut(), id, true, r#"{"size":{"type":"number","min":1,"max":9,"default":3}}"#, "(unreachable)");
     let doc = h.state().session.doc().unwrap().doc.clone();
@@ -330,7 +348,7 @@ fn ok_after_a_failed_preview_runs_a_light_progress_filter_in_the_background() {
     // Only a refused preview is not kept; a kept one would have committed and left no run.
     assert!(!h.state().session.in_interaction(), "the failed preview was rolled back");
     assert_eq!(h.state().plugin_runs.running.len(), 1, "running in the background");
-    finish_runs(h.state_mut());
+    finish_held(h.state_mut(), &jobs);
     assert_eq!(h.state().session.doc().unwrap().doc, doc);
 }
 

@@ -595,6 +595,7 @@ mod tests {
 
     #[test]
     fn ignore_goes_on_through_the_rest_of_the_same_type_object() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let id = text(&mut app, 50.0, &format!("{WORD_B} one {WORD_B} two {WORD_B}"));
         let other = text(&mut app, 100.0, &format!("then {WORD_A}"));
@@ -618,6 +619,7 @@ mod tests {
 
     #[test]
     fn ignore_and_change_all_reach_every_word_of_a_selected_groups_type() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let a = text(&mut app, 50.0, &format!("{WORD_B} {WORD_D} {WORD_B}"));
         let b = text(&mut app, 100.0, &format!("{WORD_D} {WORD_B}"));
@@ -650,6 +652,7 @@ mod tests {
 
     #[test]
     fn change_all_reaches_a_target_past_a_full_check_of_other_words() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         // The second WORD_A comes after a whole check's worth of other unknown words.
         PAGE.with(|p| p.set(2));
@@ -670,6 +673,7 @@ mod tests {
 
     #[test]
     fn change_all_reaches_a_target_past_the_checks_limit_in_one_object() {
+        let _dictionary = crate::testing::custom_dictionary();
         use vectorcraft_engine::cmd::spelling::MAX_WORDS;
         let mut app = app();
         // A target, then the most other words one check lists, then a second target, all in one
@@ -686,6 +690,7 @@ mod tests {
 
     #[test]
     fn text_changed_under_the_dialog_is_checked_again_from_its_start() {
+        let _dictionary = crate::testing::custom_dictionary();
         // A word of its own: Add to Dictionary puts it in the custom dictionary the process shares.
         const STALE: &str = "zqvstaleword";
         for f in steps() {
@@ -704,6 +709,7 @@ mod tests {
 
     #[test]
     fn a_restarted_check_still_skips_the_ignored_occurrences() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let id = text(&mut app, 50.0, &format!("{WORD_A} {WORD_B} {WORD_A}"));
         begin(&mut app);
@@ -717,6 +723,7 @@ mod tests {
 
     #[test]
     fn an_unknown_word_brought_back_before_the_shown_one_is_shown_again() {
+        let _dictionary = crate::testing::custom_dictionary();
         // Words of their own: Add to Dictionary puts one in the custom dictionary the process shares.
         // FIRST has as many bytes as "different", so the second word stays at the bytes shown.
         const FIRST: &str = "zqvbckone";
@@ -741,6 +748,7 @@ mod tests {
 
     #[test]
     fn a_word_taken_out_of_the_custom_dictionary_is_shown_again() {
+        let _dictionary = crate::testing::custom_dictionary();
         // Words of their own: the custom dictionary is shared by the whole process.
         const FIRST: &str = "zqvdictone";
         const SECOND: &str = "zqvdicttwo";
@@ -757,6 +765,7 @@ mod tests {
 
     #[test]
     fn a_shown_object_that_leaves_the_scope_starts_the_scope_again() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let first = text(&mut app, 50.0, &format!("{WORD_A} here"));
         let second = text(&mut app, 100.0, &format!("{WORD_B} there"));
@@ -770,6 +779,7 @@ mod tests {
 
     #[test]
     fn a_selected_object_deleted_under_the_dialog_leaves_the_scope() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let first = text(&mut app, 50.0, &format!("{WORD_A} here"));
         let second = text(&mut app, 100.0, &format!("{WORD_B} there"));
@@ -797,6 +807,7 @@ mod tests {
 
     #[test]
     fn ignore_reaches_the_last_of_more_unknown_words_than_one_check_lists() {
+        let _dictionary = crate::testing::custom_dictionary();
         use vectorcraft_engine::cmd::spelling::MAX_WORDS;
         let mut app = app();
         let id = text(&mut app, 50.0, &vec![WORD_B; MAX_WORDS + 1].join(" "));
@@ -813,6 +824,7 @@ mod tests {
 
     #[test]
     fn ignore_and_change_all_reach_a_selected_groups_type_past_the_checks_limit() {
+        let _dictionary = crate::testing::custom_dictionary();
         use vectorcraft_engine::cmd::spelling::MAX_WORDS;
         let mut app = app();
         let a = text(&mut app, 50.0, &vec![WORD_B; MAX_WORDS].join(" "));
@@ -841,6 +853,7 @@ mod tests {
 
     #[test]
     fn ignore_all_and_add_to_dictionary_go_on_past_each_check() {
+        let _dictionary = crate::testing::custom_dictionary();
         PAGE.with(|p| p.set(2));
         let mut app = app();
         let id = text(&mut app, 50.0, &format!("{WORD_A} {WORD_B} {WORD_A} {WORD_D} {WORD_A}"));
@@ -874,6 +887,7 @@ mod tests {
 
     #[test]
     fn change_to_the_same_word_changes_nothing_and_goes_on() {
+        let _dictionary = crate::testing::custom_dictionary();
         type To = fn(&mut VectorcraftApp, &mut SpellingWalk, &str) -> Result<(), String>;
         for f in [super::change as To, super::change_all] {
             let mut app = app();
@@ -890,6 +904,7 @@ mod tests {
 
     #[test]
     fn a_word_moved_by_another_command_is_not_taken_for_an_ignored_one() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let id = text(&mut app, 50.0, &format!("{WORD_A} {WORD_B} {WORD_A}"));
         begin(&mut app);
@@ -904,6 +919,7 @@ mod tests {
 
     #[test]
     fn change_all_changes_a_whole_checks_worth_of_occurrences_in_one_edit() {
+        let _dictionary = crate::testing::custom_dictionary();
         use vectorcraft_engine::cmd::spelling::MAX_WORDS;
         let mut app = app();
         let id = text(&mut app, 50.0, &vec![WORD_A; MAX_WORDS + 1].join(" "));
@@ -925,6 +941,7 @@ mod tests {
 
     #[test]
     fn a_check_with_all_layers_off_stays_in_the_shown_object() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let a = text(&mut app, 50.0, &format!("{WORD_A} x"));
         let b = text(&mut app, 100.0, &format!("{WORD_A} y"));
@@ -1012,6 +1029,7 @@ mod tests {
 
     #[test]
     fn check_spelling_word_replacement_and_undo_redo() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let id = text(&mut app, 50.0, &format!("Prefix {WORD_A} suffix"));
 
@@ -1028,6 +1046,7 @@ mod tests {
 
     #[test]
     fn check_spelling_change_all_in_one_undo_step() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let a = text(&mut app, 50.0, &format!("First {WORD_B} here and {WORD_B} again"));
         let b = text(&mut app, 100.0, &format!("Second {WORD_B} line"));
@@ -1046,6 +1065,7 @@ mod tests {
 
     #[test]
     fn check_spelling_dictionary_addition() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         forget(&mut app, &[WORD_C]);
         text(&mut app, 50.0, &format!("Look at {WORD_C} here"));
@@ -1086,6 +1106,7 @@ mod tests {
 
     #[test]
     fn check_spelling_refused_on_document_switch() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         text(&mut app, 50.0, &format!("Text {WORD_A} here"));
         begin(&mut app);
@@ -1100,6 +1121,7 @@ mod tests {
 
     #[test]
     fn check_spelling_ignores_uneditable_text() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let editable_id = text(&mut app, 50.0, &format!("Prefix {WORD_A} suffix"));
         let locked_id = text(&mut app, 100.0, &format!("Prefix {WORD_B} suffix"));
@@ -1120,6 +1142,7 @@ mod tests {
 
     #[test]
     fn check_spelling_change_all_containing_target_word_terminates() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         let t1 = text(&mut app, 50.0, &format!("Prefix {WORD_A} suffix"));
 

@@ -681,9 +681,11 @@ fn convert8(t: &craft::color_ui::display::DisplayTransform, rgb: [u8; 3]) -> [u8
     [px[0], px[1], px[2]]
 }
 
-/// Run a test that compares two renders with the color settings that are active when it starts.
-/// A test on another thread can change the process's active settings; this thread keeps its own.
+/// Run a test that compares two renders with the color settings that are active when it starts,
+/// and the default proof view. A test on another thread can change the process's active settings;
+/// this thread keeps its own. The proof view is the whole process's, so it is held still.
 fn keeping_color_settings(test: fn()) {
+    let _view = crate::testing::DefaultProofView::new();
     vectorcraft_color::cms::with_active(vectorcraft_color::cms::active(), test);
 }
 

@@ -198,6 +198,7 @@ mod tests {
     /// applies the list once.
     #[test]
     fn add_and_delete_apply_on_done() {
+        let _dictionary = crate::testing::custom_dictionary();
         let mut app = app();
         forget(&mut app, &[A, B, C]);
         app.run("text.spelling.addWord", json!({ "word": A })).unwrap();
@@ -238,6 +239,7 @@ mod tests {
     /// dictionary as it was.
     #[test]
     fn a_done_that_cant_be_saved_changes_nothing() {
+        let _dictionary = crate::testing::custom_dictionary();
         const P: &str = "zqvdictp";
         const Q: &str = "zqvdictq";
         let mut app = app();
