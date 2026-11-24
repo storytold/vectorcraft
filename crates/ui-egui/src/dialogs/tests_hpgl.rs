@@ -160,6 +160,24 @@ fn pen_table_starts_from_the_art_s_pens_and_comes_back() {
     assert_eq!(pens(&fields(&app)), json!(automatic));
 }
 
+/// A press of Add adds one pen and a press of One Pen per Color sets the table aside, though the rows' body may run
+/// twice in the pass that reads the press.
+#[test]
+fn pen_rows_apply_each_press_once() {
+    let (mut app, _) = app(1);
+    app.run("ui.hpglOptionsDialog", json!({})).unwrap();
+    set(&mut app, "pens", json!(["#ff0000", "#000000"]));
+    frame(&mut app);
+    press_control(&mut app, json!({"name": "Add", "role": "Button"}));
+    frame(&mut app);
+    assert_eq!(pens(&fields(&app)), json!(["#ff0000", "#000000", "#000000"]));
+    press_control(&mut app, json!({"name": "One Pen per Color", "role": "RadioButton"}));
+    frame(&mut app);
+    let d = fields(&app);
+    assert!(pens(&d).is_null());
+    assert_eq!(serde_json::to_value(d.get("__pens")).unwrap(), json!(["#ff0000", "#000000", "#000000"]));
+}
+
 /// Pen Table with options the export refuses keeps One Pen per Color and says why, rather than
 /// starting from one black pen that the corrected options would keep.
 #[test]

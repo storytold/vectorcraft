@@ -17,7 +17,7 @@ use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::{Radio, RadioGroup, Swatch};
 use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::DialogId;
-use craft::ui::layout_components::Stack;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog};
 use craft::ui::runtime::env::Env;
 use craft::ui::style::rgba_color;
@@ -141,52 +141,88 @@ fn pen_key(i: usize) -> String {
 /// Pens: One Pen per Color (`pens` null) or Pen Table (`pens` the colors, pen 1's first), with a
 /// row per pen (its number, color and a Remove button) and Add.
 fn pens_param() -> Param {
-    Param::custom("pens", tl!("Pens:"), |ui, fields, cx| ui.vertical(|ui| pens_ui(ui, fields, cx)).response)
-        .companions([SET_ASIDE, PEN_ERROR])
-        .full_width()
+    Param::custom("pens", tl!("Pens:"), |ui, fields, cx| {
+        take_picked_pens(fields);
+        // The rows draw from the values as they stand here and the edits apply after them: the stack's body may run
+        // twice in a pass.
+        let mut drawn = fields.clone();
+        let mut asked = PensAsked::default();
+        let shown = Stack::new().show(ui, |ui, _| {
+            asked = pens_ui(ui, &drawn, cx);
+            if let Some(p) = &asked.pens {
+                drawn.set("pens", FieldValue::Json(Value::Array(p.clone())));
+            }
+        });
+        // An edit of the rows in any run of the body is in `drawn`; a switch of Pen Table drops it.
+        let edited = table(&drawn).filter(|p| asked.table.is_none() && table(fields).as_ref() != Some(p));
+        match asked.table {
+            Some(true) => cx.request_action("penTable"),
+            Some(false) => {
+                let _ = set_pen_table(fields, false, || Ok(Vec::new()));
+                fields.remove(PEN_ERROR);
+            }
+            None => {}
+        }
+        if let Some(pens) = edited {
+            fields.set("pens", FieldValue::Json(Value::Array(pens)));
+        }
+        shown.output
+    })
+    .companions([SET_ASIDE, PEN_ERROR])
+    .full_width()
+}
+
+/// What the pens rows asked for in one run.
+#[derive(Default)]
+struct PensAsked {
+    /// Pen Table was turned on (`true`) or off.
+    table: Option<bool>,
+    /// The pen table after an edit of its rows.
+    pens: Option<Vec<Value>>,
+}
+
+/// Writes the colors the picker answered into the pen table.
+fn take_picked_pens(fields: &mut DialogFields) {
+    let Some(mut pens) = table(fields).filter(|a| a.len() <= MAX_PENS) else { return };
+    let mut changed = false;
+    for (i, pen) in pens.iter_mut().enumerate() {
+        if let Some([r, g, b]) = fields.color(&pen_key(i)) {
+            let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+            *pen = json!(format!("#{:02x}{:02x}{:02x}", byte(r), byte(g), byte(b)));
+            fields.remove(&pen_key(i));
+            changed = true;
+        }
+    }
+    if changed {
+        fields.set("pens", FieldValue::Json(Value::Array(pens)));
+    }
 }
 
 /// The pens row. Switching to Pen Table asks the host (`penTable`): the table starts from the document's pens, which
 /// this draw cannot reach.
-fn pens_ui(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext) {
-    let mut list = table(fields);
-    let mut changed = false;
-    // Colours the picker answered.
-    if let Some(pens) = list.as_mut() {
-        for (i, pen) in pens.iter_mut().enumerate() {
-            if let Some([r, g, b]) = fields.color(&pen_key(i)) {
-                let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
-                *pen = json!(format!("#{:02x}{:02x}{:02x}", byte(r), byte(g), byte(b)));
-                fields.remove(&pen_key(i));
-                changed = true;
-            }
-        }
-    }
+fn pens_ui(ui: &mut egui::Ui, fields: &DialogFields, cx: &mut CustomContext) -> PensAsked {
+    let mut asked = PensAsked::default();
+    let list = table(fields);
     let mut on = list.is_some();
     RadioGroup::new(tl!("Pens:"), Bind::bound(&mut on)).show(ui, |ui, _| {
         Radio::new(false).label(tl!("One Pen per Color")).show(ui);
         Radio::new(true).label(tl!("Pen Table")).show(ui);
     });
     if on != list.is_some() {
-        if on {
-            cx.request_action("penTable");
-        } else {
-            let _ = set_pen_table(fields, false, || Ok(Vec::new()));
-            fields.remove(PEN_ERROR);
-            list = None;
-        }
+        asked.table = Some(on);
     }
-    if let Some(e) = fields.text(PEN_ERROR) {
+    if let Some(e) = fields.text(PEN_ERROR).filter(|_| asked.table != Some(false)) {
         let error = rgba_color(Env::of(ui).tokens.tokens().color.status.bad.fg);
         ui.colored_label(error, crate::i18n::message(crate::i18n::current(), e));
     }
     // A table longer than a plot takes (set through `ui.dialog.set`) draws no rows: OK refuses it.
-    let Some(mut pens) = list.filter(|a| a.len() <= MAX_PENS) else { return };
+    let Some(mut pens) = list.filter(|a| asked.table.is_none() && a.len() <= MAX_PENS) else { return asked };
+    let mut changed = false;
     let n = pens.len();
     let mut remove = None;
     Stack::new().scroll(Scroll::vertical()).room_height(180.0).show(ui, |ui, _| {
         for (i, pen) in pens.iter_mut().enumerate() {
-            ui.horizontal(|ui| {
+            Row::new().id_salt(("hpgl-pen-row", i)).show(ui, |ui, _| {
                 ui.label((i + 1).to_string());
                 let mut color = pen.as_str().and_then(Rgba::from_hex).unwrap_or(Rgba::rgb(0, 0, 0));
                 if Swatch::new(tl!("Pen color"), Srgba::from(color)).show(ui).clicked {
@@ -216,8 +252,9 @@ fn pens_ui(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext)
         changed = true;
     }
     if changed {
-        fields.set("pens", FieldValue::Json(Value::Array(pens)));
+        asked.pens = Some(pens);
     }
+    asked
 }
 
 /// Starts Pen Table for dialog `id`: the table the export would give the art, or the reason it cannot. It runs from
