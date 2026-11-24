@@ -1027,9 +1027,8 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     // A plug-in installed or removed while the dialog is open changes the window's commands: the dialog takes them,
     // keeping its edits.
     if let Some(window) = commands::keymap(ui.ctx()).filter(|w| current.window.as_ref().is_none_or(|was| !Arc::ptr_eq(was, w))) {
-        // shortcut: the commands are compared by count; a swap of one plug-in for another within a frame needs ids.
         let fresh = match current.keymap.take() {
-            Some(edited) if edited.catalog().len() == window.catalog().len() => edited,
+            Some(edited) if edited.catalog() == window.catalog() => edited,
             edited => {
                 let mut fresh = (*window).clone();
                 if let Some(edited) = edited {
