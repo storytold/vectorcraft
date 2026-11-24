@@ -6445,6 +6445,7 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 개체의 메시가 불완전하거나 숫자가 아닌 값을 포함합니다
 @msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다

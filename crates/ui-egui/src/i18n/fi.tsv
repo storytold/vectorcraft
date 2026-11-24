@@ -6761,6 +6761,7 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D-objektin verkko on puutteellinen tai sisältää arvon, joka ei ole luku
 @msg	give one <filter> element	anna yksi <filter>-elementti
 @msg	the <filter> element needs an id, the filter's name	<filter>-elementti tarvitsee id:n, suotimen nimen
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG-suotimen id on enintään {MAX_NAME} merkkiä

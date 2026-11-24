@@ -6846,6 +6846,7 @@ variable-list-end	{0}, {1}	{0} és {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmit
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	A 3D objektum hálója hiányos, vagy olyan értéket tartalmaz, amely nem szám
 @msg	the <filter> element needs an id, the filter's name	a <filter> elemnek id kell, a szűrő neve
 @msg	an SVG filter's id is at most {MAX_NAME} characters	egy SVG-szűrő id-je legfeljebb {MAX_NAME} karakter
 @msg	<{_1}> isn't an element of an SVG filter	a(z) <{_1}> nem SVG-szűrő eleme

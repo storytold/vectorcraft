@@ -10812,7 +10812,13 @@ fill's, each stroke's, a group's members') is its own mesh, with a two-sided mat
 (a gradient's stops averaged, a pattern gray); a solid with mapped graphics is split into a textured mesh for each face
 that carries them and a plain mesh for the rest, as described below. The mesh holds the solid's faces before they are projected onto the
 page, those turned away from the viewer included, at the object's 3D rotation, y up, about the point the object turns
-about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Files that would share a name get `-2`, `-3` and so on.
+about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Each corner's normal is its face's, except
+where two bands of one bevel meet at a turn of less than 60° (neither band lying flat toward the front or back) and on
+Inflate's puffed front and back: there the normals are smoothed, and an app that reads them shades a rounded bevel or a
+puff without facets ([three-d.md](three-d.md#3d-meshes)). Every corner also has texture coordinates from 0 to 1
+(`vt`, `TEXCOORD_0`, `primvars:st`), laid out for each kind of face as three-d.md describes. A mesh whose lists do not
+match, or that holds a value that is not a number, stops the export with "The 3D object's mesh is incomplete or holds a
+value that is not a number", and nothing is written. Files that would share a name get `-2`, `-3` and so on.
 Graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (`threeD.mapGraphic`) are exported as a PNG
 texture of that face: the face's color with its graphics drawn over it, flat and unlit, on a mesh of the face's own
 triangles with texture coordinates and a material that shows the texture. A face that is not opaque keeps its opacity

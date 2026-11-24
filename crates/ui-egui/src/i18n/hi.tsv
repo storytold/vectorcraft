@@ -9177,6 +9177,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट कुछ नहीं बनाता
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट एक्सपोर्ट करने लायक कुछ नहीं बनाता
 @msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D ऑब्जेक्ट का मेश अधूरा है या उसमें ऐसा मान है जो संख्या नहीं है
 @msg	give one <filter> element	एक <filter> एलिमेंट दें
 @msg	the <filter> element needs an id, the filter's name	<filter> एलिमेंट को एक id चाहिए, जो फ़िल्टर का नाम है
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG फ़िल्टर की id अधिकतम {MAX_NAME} वर्णों की होती है

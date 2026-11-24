@@ -6724,6 +6724,7 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	编组填色或描边上的 3D 效果不绘制任何内容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 对象的网格不完整，或含有非数字的值
 @msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，即滤镜的名称
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 滤镜的 id 最多 {MAX_NAME} 个字符
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 滤镜的元素

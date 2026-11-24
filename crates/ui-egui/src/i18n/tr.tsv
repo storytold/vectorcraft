@@ -6165,6 +6165,7 @@ lighting	Light	Işık
 @msg	a 3D effect on a group's fill or stroke draws nothing	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt hiçbir şey çizmez
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3 boyutlu nesnenin ağı eksik veya sayı olmayan bir değer içeriyor
 @msg	the <filter> element needs an id, the filter's name	<filter> öğesinin, filtrenin adı olan bir id değeri olmalıdır
 @msg	an SVG filter's id is at most {MAX_NAME} characters	bir SVG filtresinin id değeri en fazla {MAX_NAME} karakterdir
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> bir SVG filtresi öğesi değildir

@@ -6338,6 +6338,7 @@ lighting	Light	Ljus
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en grupps fyllning eller linje ritar ingenting
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D-objektets nät är ofullständigt eller innehåller ett värde som inte är ett tal
 @msg	give one <filter> element	ange ett <filter>-element
 @msg	the <filter> element needs an id, the filter's name	<filter>-elementet behöver ett id, filtrets namn
 @msg	an SVG filter's id is at most {MAX_NAME} characters	ett SVG-filters id har högst {MAX_NAME} tecken

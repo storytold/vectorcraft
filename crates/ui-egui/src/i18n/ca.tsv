@@ -7270,6 +7270,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecte 3D al farciment o al traç d’un grup no dibuixa res
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	La malla de l’objecte 3D és incompleta o conté un valor que no és un nombre
 @msg	give one <filter> element	indica un element <filter>
 @msg	the <filter> element needs an id, the filter's name	l’element <filter> necessita un id, el nom del filtre
 @msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG té com a màxim {MAX_NAME} caràcters

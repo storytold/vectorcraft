@@ -6444,6 +6444,7 @@ lighting	Light	Lumière
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien à exporter
 @msg	The 3D object is too complex to export	L’objet 3D est trop complexe pour être exporté
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Le maillage de l’objet 3D est incomplet ou contient une valeur qui n’est pas un nombre
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objet n’a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` doit être un objet ne contenant que `mode`, avec la valeur shaded ou wireframe
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume

@@ -6243,6 +6243,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα για εξαγωγή
 @msg	The 3D object is too complex to export	Το αντικείμενο 3D είναι πολύ σύνθετο για εξαγωγή
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Το πλέγμα του αντικειμένου 3D είναι ελλιπές ή περιέχει τιμή που δεν είναι αριθμός
 @msg	give one <filter> element	δώστε ένα στοιχείο <filter>
 @msg	the <filter> element needs an id, the filter's name	το στοιχείο <filter> χρειάζεται id, το όνομα του φίλτρου
 @msg	an SVG filter's id is at most {MAX_NAME} characters	το id ενός φίλτρου SVG έχει το πολύ {MAX_NAME} χαρακτήρες

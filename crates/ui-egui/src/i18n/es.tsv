@@ -6833,6 +6833,7 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada que exportar
 @msg	The 3D object is too complex to export	El objeto 3D es demasiado complejo para exportarlo
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	La malla del objeto 3D está incompleta o contiene un valor que no es un número
 @msg	give one <filter> element	indique un elemento <filter>
 @msg	the <filter> element needs an id, the filter's name	el elemento <filter> necesita un id, el nombre del filtro
 @msg	an SVG filter's id is at most {MAX_NAME} characters	el id de un filtro SVG tiene como máximo {MAX_NAME} caracteres

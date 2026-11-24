@@ -6455,6 +6455,7 @@ lighting	Light	Світло
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-ефект на заливці або обведенні групи нічого не малює
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-ефект на заливці або обведенні групи не малює нічого для експорту
 @msg	The 3D object is too complex to export	3D-об’єкт надто складний для експорту
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Сітка 3D-об’єкта неповна або містить значення, яке не є числом
 @msg	the <filter> element needs an id, the filter's name	елементу <filter> потрібен id, назва фільтра
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id фільтра SVG містить не більше {MAX_NAME} символів
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> не є елементом фільтра SVG

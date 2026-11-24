@@ -6206,6 +6206,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Lưới của đối tượng 3D chưa đầy đủ hoặc chứa giá trị không phải là số
 @msg	give one <filter> element	hãy chỉ định một phần tử <filter>
 @msg	the <filter> element needs an id, the filter's name	phần tử <filter> cần có id, là tên của bộ lọc
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id của bộ lọc SVG có tối đa {MAX_NAME} ký tự

@@ -8617,6 +8617,7 @@ mark-style	Japanese	Japans
 @msg	a 3D effect on a group's fill or stroke draws nothing	een 3D-effect op de vulling of contour van een groep tekent niets
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	een 3D-effect op de vulling of contour van een groep tekent niets om te exporteren
 @msg	The 3D object is too complex to export	Het 3D-object is te complex om te exporteren
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Het net van het 3D-object is onvolledig of bevat een waarde die geen getal is
 @msg	the <filter> element needs an id, the filter's name	het <filter>-element heeft een id nodig, de naam van het filter
 @msg	an SVG filter's id is at most {MAX_NAME} characters	de id van een SVG-filter is hoogstens {MAX_NAME} tekens lang
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> is geen element van een SVG-filter

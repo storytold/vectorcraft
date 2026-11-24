@@ -8201,6 +8201,7 @@ arrowhead	Feather	ბუმბული
 @msg	a 3D effect on a group's fill or stroke draws nothing	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი არაფერს ხატავს
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D ობიექტის ბადე არასრულია ან შეიცავს მნიშვნელობას, რომელიც რიცხვი არ არის
 @msg	feConvolveMatrix's order	feConvolveMatrix-ის order
 @msg	feMorphology's radius	feMorphology-ის radius
 @msg	a blur's stdDeviation	გაბუნდოვნების stdDeviation

@@ -312,6 +312,7 @@
 @msg	a 3D effect on a group's fill or stroke draws nothing	efek 3D pada isian atau goresan grup tidak menggambar apa pun
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efek 3D pada isian atau goresan grup tidak menggambar apa pun untuk diekspor
 @msg	The 3D object is too complex to export	Objek 3D terlalu rumit untuk diekspor
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Objek 3D memiliki mesh yang tidak lengkap atau berisi nilai yang bukan angka
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objek tidak memiliki efek 3D (Ekstrusi & bevel, Revolusi, Gelembungkan, atau Putar)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` harus berupa objek yang hanya berisi `mode`, bernilai shaded atau wireframe
 @msg	its 3D effect builds no solid	efek 3D-nya tidak membangun bentuk padat

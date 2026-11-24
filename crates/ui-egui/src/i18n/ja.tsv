@@ -6524,6 +6524,7 @@ lighting	Light	ライト
 @msg	a 3D effect on a group's fill or stroke draws nothing	グループの塗りまたは線にある 3D 効果は何も描画しません
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D オブジェクトのメッシュが不完全か、数値でない値を含んでいます
 @msg	the <filter> element needs an id, the filter's name	<filter> 要素には id (フィルターの名前) が必要です
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG フィルターの id は {MAX_NAME} 文字までです
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> は SVG フィルターの要素ではありません
