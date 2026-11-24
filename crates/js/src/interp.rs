@@ -1546,7 +1546,9 @@ impl Interp {
     /// [[GetProperty]]: the property found on the object or its prototype chain, through the
     /// `getOwnPropertyDescriptor` and `getPrototypeOf` traps of the proxies on it.
     pub(crate) fn find_property(&mut self, id: ObjId, k: &[u16]) -> JsResult<Option<Prop>> {
+        // One root slot holds the prototype the walk has reached; each hop replaces it.
         let mark = self.temp_roots.len();
+        self.temp_roots.push(Value::Undefined);
         let r = (|| {
             let mut cur = id;
             loop {
@@ -1558,8 +1560,10 @@ impl Interp {
                             return Ok(Some(prop));
                         }
                         let Some(next) = self.get_prototype_of(p)? else { return Ok(None) };
+                        if let Some(root) = self.temp_roots.get_mut(mark) {
+                            *root = Value::Object(next);
+                        }
                         self.use_fuel()?;
-                        self.temp_roots.push(Value::Object(next));
                         cur = next;
                     }
                 }
@@ -2847,13 +2851,15 @@ impl Interp {
     /// names were listed is skipped, on an ordinary object as on a proxy. A proxy's `has` trap is
     /// not asked. Each proxy on the chain takes a unit of fuel.
     fn for_in_still_has(&mut self, o: ObjId, k: &[u16]) -> JsResult<bool> {
+        // One root slot holds the prototype the walk has reached; each hop replaces it.
         let mark = self.temp_roots.len();
-        let r = self.for_in_still_has_rooted(o, k);
+        self.temp_roots.push(Value::Undefined);
+        let r = self.for_in_still_has_rooted(o, k, mark);
         self.temp_roots.truncate(mark);
         r
     }
 
-    fn for_in_still_has_rooted(&mut self, mut cur: ObjId, k: &[u16]) -> JsResult<bool> {
+    fn for_in_still_has_rooted(&mut self, mut cur: ObjId, k: &[u16], slot: usize) -> JsResult<bool> {
         loop {
             let p = match self.lookup(cur, k)? {
                 Lookup::Found(prop) => return Ok(prop.enumerable()),
@@ -2865,7 +2871,9 @@ impl Interp {
                 return Ok(prop.enumerable());
             }
             let Some(next) = self.get_prototype_of(p)? else { return Ok(false) };
-            self.temp_roots.push(Value::Object(next));
+            if let Some(root) = self.temp_roots.get_mut(slot) {
+                *root = Value::Object(next);
+            }
             cur = next;
         }
     }
@@ -3799,7 +3807,13 @@ impl Interp {
             self.use_fuel()?;
             let Some(fcode) = code.functions.get(*fi as usize).cloned() else { return internal("function out of range") };
             let f = self.make_closure(fcode, scope)?;
-            self.declare(var_env, name, Some(Value::Object(f)), configurable)?;
+            // Declaring it can run a proxy's traps on the global object's prototype chain, and
+            // their script can collect, so the new function is a root until it is declared.
+            let mark = self.temp_roots.len();
+            self.temp_roots.push(Value::Object(f));
+            let declared = self.declare(var_env, name, Some(Value::Object(f)), configurable);
+            self.temp_roots.truncate(mark);
+            declared?;
             if on_global {
                 self.global_vars.insert(name.clone());
             }

@@ -481,6 +481,52 @@ fn for_in_reads_ordinary_and_proxy_names_by_the_same_rules() {
     );
 }
 
+/// A `getPrototypeOf` trap that gives a new proxy of a large array each time it is called, 40
+/// times, and then `null`: the chain it makes holds far more than the heap limit of
+/// [`walk_limits`] at once.
+const FRESH_CHAIN: &str = "var hops = 0;
+     function big() { var t = []; for (var i = 0; i < 3000; i++) t[i] = i; return t; }
+     var tail = { getPrototypeOf: function () { hops++; return hops > 40 ? null : new Proxy(big(), tail); } };";
+
+fn walk_limits() -> Limits {
+    Limits { heap_bytes: 4 << 20, ..Limits::default() }
+}
+
+#[test]
+fn a_prototype_walk_keeps_only_the_prototype_it_has_reached() {
+    // Declaring a function without the option reads the global object's inherited property.
+    let mut realm = Realm::with_options(es_options(), walk_limits());
+    assert_eq!(realm.run(&format!("{FRESH_CHAIN} Reflect.setPrototypeOf(this,new Proxy({{}}, tail)); 0")), Ok(JsValue::Number(0.0)));
+    realm.set_es2015(false);
+    assert_eq!(realm.run("function declared() { return 5; } declared() + hops"), Ok(JsValue::Number(46.0)));
+    // `for-in` reads the chain again for a name deleted during the loop.
+    let mut realm = Realm::with_options(es_options(), walk_limits());
+    let src = format!(
+        "{FRESH_CHAIN}
+         var armed = false;
+         var head = new Proxy({{}}, {{ getPrototypeOf: function () {{ return armed ? new Proxy(big(), tail) : null; }} }});
+         var o = Object.create(head); o.a = 1; o.b = 2;
+         var seen = [];
+         for (var k in o) {{ seen.push(k); if (k === 'a') {{ armed = true; delete o.b; }} }}
+         seen.join() + ' ' + hops"
+    );
+    assert_eq!(realm.run(&src), Ok(JsValue::String("a 41".into())));
+}
+
+#[test]
+fn a_function_stays_reachable_while_a_trap_runs_as_it_is_declared() {
+    let mut realm = es();
+    let proto = "Reflect.setPrototypeOf(this, new Proxy(Object.prototype, {
+                     getOwnPropertyDescriptor: function (t, k) { var junk = [[1], [2], [3]]; return Reflect.getOwnPropertyDescriptor(t, k); } })); 0";
+    assert_eq!(realm.run(proto), Ok(JsValue::Number(0.0)));
+    realm.set_es2015(false);
+    crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(true));
+    let r = realm.run("function declared() { return 5; } declared()");
+    crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(false));
+    assert_eq!(r, Ok(JsValue::Number(5.0)));
+    assert!(realm.interp().heap.collections > 0);
+}
+
 #[test]
 fn spread_lets_a_proxy_shrink_the_array_it_reads() {
     // A proxy's `get` trap answers for the indices the array does not hold, so the length is not

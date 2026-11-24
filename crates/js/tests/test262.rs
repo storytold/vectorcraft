@@ -687,6 +687,15 @@ fn es2015_subset_runs() {
     handle.join().unwrap();
 }
 
+/// The runs that panicked, one line each with the setting of [`Options::es2015`], the test's path
+/// and its mode, taken from the failures without the option and with it.
+fn panic_lines(before: &str, after: &str) -> String {
+    [("without Options::es2015", before), ("with Options::es2015", after)]
+        .into_iter()
+        .flat_map(|(edition, failures)| failures.lines().filter(|l| l.ends_with(": PANIC")).map(move |l| format!("{edition}: {l}\n")))
+        .collect()
+}
+
 /// The counts of the ES2015 subset read with one setting of [`Options::es2015`].
 #[derive(Default)]
 struct Es2015Counts {
@@ -798,7 +807,7 @@ fn run_es2015(dir: &Path) {
         line(&after),
         report.display()
     );
-    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked; see {}", report.display());
+    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked:\n{}", panic_lines(&before.failures, &after.failures));
 }
 
 /// The feature tags of the `Proxy` and `Reflect` tests [`run_proxy_reflect`] runs: the two
@@ -887,7 +896,7 @@ fn run_proxy_reflect(dir: &Path) {
         after.summary(),
         report.display()
     );
-    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked; see {}", report.display());
+    assert_eq!(before.panicked + after.panicked, 0, "the interpreter panicked:\n{}", panic_lines(&before.failures, &after.failures));
 }
 
 #[test]
@@ -1172,4 +1181,12 @@ fn a_file_over_the_limit_is_refused_before_it_is_read() {
     std::fs::File::create(&path).unwrap().set_len(4).unwrap();
     assert_eq!(read_source(&path), Ok("\0\0\0\0".to_string()));
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_panic_without_the_option_is_named_with_its_test_and_mode() {
+    let before = "test/a.js (sloppy): PANIC\ntest/b.js (strict): expected 1\n";
+    let after = "test/c.js (strict): PANIC\n";
+    assert_eq!(panic_lines(before, after), "without Options::es2015: test/a.js (sloppy): PANIC\nwith Options::es2015: test/c.js (strict): PANIC\n");
+    assert_eq!(panic_lines("test/b.js (strict): expected 1\n", ""), "");
 }

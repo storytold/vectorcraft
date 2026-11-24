@@ -12,13 +12,15 @@ use crate::proxy::desc_values;
 use crate::value::Value;
 
 /// Defines `Proxy` and `Reflect` on the global object. With `keep`, for a realm that gets them
-/// after earlier runs, a global of the same name that a script defined stays as it is.
+/// after earlier runs, a global of the same name that a script defined stays as it is. Each
+/// global is defined after its functions, so an install that stops part way leaves no global
+/// that a later install would keep without them.
 pub(super) fn install(interp: &mut Interp, keep: bool) -> JsResult<()> {
     let global = interp.global;
     if !(keep && interp.get_own_property(global, &key("Proxy"))?.is_some()) {
         let proxy = native(interp, "Proxy", proxy_ctor, 2, NativeKind::Plain, true)?;
-        data(interp, global, "Proxy", Value::Object(proxy), HIDDEN)?;
         method(interp, proxy, "revocable", revocable, 2)?;
+        data(interp, global, "Proxy", Value::Object(proxy), HIDDEN)?;
     }
     if !(keep && interp.get_own_property(global, &key("Reflect"))?.is_some()) {
         install_reflect(interp)?;
@@ -32,7 +34,6 @@ fn install_reflect(interp: &mut Interp) -> JsResult<()> {
     let global = interp.global;
     let object_proto = interp.intrinsics.object_proto;
     let reflect = interp.heap.alloc_object(Object::new(Class::Ordinary, Some(object_proto)));
-    data(interp, global, "Reflect", Value::Object(reflect), HIDDEN)?;
     method(interp, reflect, "apply", apply, 3)?;
     method(interp, reflect, "construct", construct, 2)?;
     method(interp, reflect, "defineProperty", define_property, 3)?;
@@ -45,7 +46,8 @@ fn install_reflect(interp: &mut Interp) -> JsResult<()> {
     method(interp, reflect, "ownKeys", own_keys, 1)?;
     method(interp, reflect, "preventExtensions", prevent_extensions, 1)?;
     method(interp, reflect, "set", set, 3)?;
-    method(interp, reflect, "setPrototypeOf", set_prototype_of, 2)
+    method(interp, reflect, "setPrototypeOf", set_prototype_of, 2)?;
+    data(interp, global, "Reflect", Value::Object(reflect), HIDDEN)
 }
 
 // ---- Proxy ----
