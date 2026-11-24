@@ -12,7 +12,6 @@ use craft::ui::menu::PanelRow;
 use craft::ui::primitives::{Glyph, IconSpec, paint_icon};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
 use craft::ui::runtime::env::Direction;
-use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::style::UiTokens;
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, Ui, vec2};
 use serde_json::{Value, json};
@@ -133,7 +132,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mixed = !modes.is_empty() && shared.is_none();
     // Selected members can always take a mode.
     let count = if modes.is_empty() { n } else { n.max(2) };
-    Section::fixed(tl!("Shape Modes:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::subheading(tl!("Shape Modes:")).show(ui, |ui, _| {
         Row::new().gap(Gap::Item).show(ui, |ui, _| {
             for ((icon, label, op), mode) in SHAPE_MODES.into_iter().zip(ShapeMode::ALL) {
                 let glyph = ShapeModeGlyph { icon: IconId::new(icon), mixed };
@@ -154,7 +153,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 .show(ui);
         });
     });
-    Section::fixed(tl!("Pathfinders:")).strength(HeaderStrength::Caption).show(ui, |ui, _| {
+    crate::panels::subheading(tl!("Pathfinders:")).show(ui, |ui, _| {
         Row::new().gap(Gap::Item).show(ui, |ui, _| {
             for (icon, label, op) in PATHFINDERS {
                 IconButton::command(IconSpec::svg(IconId::new(icon)), CommandRef::new(format!("object.pathfinder.{op}")))

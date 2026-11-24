@@ -1103,6 +1103,45 @@ fn a_screenshot_reply_hides_paths_like_any_reply() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.screenshot` is answered from the app's own frames: once the request settles, a kept pass sends
+/// the window's screenshot command, and the image the window gives back is written where the request
+/// asked.
+#[test]
+fn a_screenshot_is_issued_by_the_apps_frames_and_written() {
+    let (mut app, tx, base) = confined("screenshot-frames");
+    let ctx = app.ui_ctx.clone().unwrap();
+    let size = egui::vec2(800.0, 600.0);
+    let raw = || {
+        let mut raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)), ..Default::default() };
+        let root = raw.viewports.entry(egui::ViewportId::ROOT).or_default();
+        root.inner_rect = raw.screen_rect;
+        root.native_pixels_per_point = Some(1.0);
+        raw
+    };
+    let path = base.join("out/shot.png");
+    let (req, reply) = ControlRequest::new("ui.screenshot", json!({"path": s(path.clone()), "focus": false}));
+    tx.send(req).unwrap();
+    // The settle delay runs on the wall clock: frames come until it is over, as an idle window's do.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let callback = loop {
+        let out = crate::testing::app_frame(&mut app, &ctx, raw());
+        let sent = out.viewport_output.get(&egui::ViewportId::ROOT).and_then(|root| {
+            root.commands.iter().find_map(|c| if let egui::ViewportCommand::Screenshot(callback) = c { Some(callback.clone()) } else { None })
+        });
+        if let Some(callback) = sent {
+            break callback;
+        }
+        assert!(reply.try_recv().is_err(), "the screenshot was answered before it was taken");
+        assert!(std::time::Instant::now() < deadline, "no frame issued the screenshot");
+    };
+    callback.complete(std::sync::Arc::new(egui::ColorImage::filled([800, 600], egui::Color32::WHITE)));
+    crate::testing::app_frame(&mut app, &ctx, raw());
+    let r = reply.try_recv().expect("the frame after the image answers");
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(std::fs::metadata(&path).is_ok_and(|m| m.len() > 0), "the PNG was written");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A reply whose only trace of a hidden library's path is a `file:` URL with every separator escaped
 /// shows the file name alone.
 #[test]

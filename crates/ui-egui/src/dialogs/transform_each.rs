@@ -526,7 +526,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(id) = app.object_dialogs.each.as_ref().map(|o| o.id) else { return };
     let Some(dialogs) = app.dialogs() else { return };
     let Some((previewing, fields, action)) =
-        dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone(), d.take_footer_action())))
+        dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone(), d.take_action())))
     else {
         return;
     };

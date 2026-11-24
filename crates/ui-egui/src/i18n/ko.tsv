@@ -6445,6 +6445,7 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	3D 개체의 메시가 불완전하거나 숫자가 아닌 값을 포함합니다
 @msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
 @msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다
@@ -6922,6 +6923,12 @@ axis	Y Axis	Y축
 @msg	parameter `{name}`: {what}	매개변수 `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	플러그인 매개변수는 JSON 개체여야 합니다
 @msg	the module must export its linear memory as `memory`	모듈은 선형 메모리를 `memory`(으)로 내보내야 합니다
+@msg	the module must export `{name}` with the type {signature}	모듈은 `{name}`을(를) {signature} 형식으로 내보내야 합니다
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	모듈에 사용자 지정 섹션 `{MANIFEST_SECTION}`이(가) 둘 이상 있습니다
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	메모리 예산(모듈의 초기 메모리가 {initial}바이트, 한도 {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	사용자 지정 섹션 `{MANIFEST_SECTION}`의 매니페스트는 `abi`를 {ABI_VERSION}(으)로 지정해야 합니다. 이는 이 호스트가 구현하는 ABI 버전입니다
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	테이블 예산(모듈이 테이블 {count}개를 정의하며 가장 큰 테이블의 요소는 {largest}개, 한도는 테이블 {MAX_TABLES}개, 각 {MAX_TABLE_ELEMENTS}개 요소)
+@msg	the module's table section could not be read	모듈의 테이블 섹션을 읽을 수 없습니다
 @msg	the objects to change are no longer in the document	변경할 개체가 더 이상 문서에 없습니다
 @msg	the runtime panicked	런타임이 비정상 종료되었습니다
 @msg	unexpected host trap	호스트에서 예기치 않은 트랩이 발생했습니다
@@ -6991,6 +6998,8 @@ axis	Y Axis	Y축
 @msg	`plates` requires a stop linked to a spot swatch	`plates`에는 별색 견본에 연결된 정지점이 필요합니다
 @msg	the output	출력
 @msg	the path has no anchor points	패스에 앵커 포인트가 없습니다
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	컴파운드 패스 {id}에 숨겨졌거나 잠겼거나 안내선인 멤버가 있어 멤버를 바꿀 수 없습니다
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	컴파운드 패스 {id}에 패스가 아닌 멤버가 있어 멤버를 바꿀 수 없습니다
 @msg	too many anchor points (limit {MAX_ANCHORS})	앵커 포인트가 너무 많습니다(한도 {MAX_ANCHORS})
 @msg	true or false	true 또는 false
 @msg	a number >= {_1}	{_1} 이상인 숫자
@@ -8682,6 +8691,8 @@ breakText	Glyphs	글리프
 @msg	`dataBase64` is larger than the module limit	`dataBase64`이(가) 모듈 한도보다 큽니다
 @msg	`dataBase64` is not valid base64	`dataBase64`이(가) 올바른 base64가 아닙니다
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`은(는) `ids`, `reverse` 또는 `append`와 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`은(는) `ids`, `id` 또는 `item`과 함께 쓸 수 없습니다
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`은(는) `brush`와 함께 쓸 수 없습니다
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth`와 `childLimit`은 요약을 잘라 냅니다: `summary: true`를 전달하세요
 @msg	`design` is a design name, or null for plain columns	`design`은(는) 디자인 이름이며, 일반 막대에는 null입니다
 @msg	`design` is a design name, or null for the default marker	`design`은(는) 디자인 이름이며, 기본 마커에는 null입니다

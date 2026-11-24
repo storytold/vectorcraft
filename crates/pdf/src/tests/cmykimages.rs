@@ -1210,6 +1210,52 @@ fn a_distorted_cmyk_image_and_its_grid_mask_with_the_same_corners_write_it_as_it
     }
 }
 
+/// A distorted CMYK image masked on its pixel grid is resampled for the size its mesh's pieces
+/// share, as it is without the mask, and not for the smaller size its transform places it at:
+/// every piece draws the one image, so a smaller one would lower the resolution of every piece.
+#[test]
+fn a_distorted_cmyk_image_with_its_grid_mask_is_resampled_for_the_size_of_its_pieces() {
+    let side = 400u32;
+    let cmyk_widths = |masked: bool| {
+        let mut d = Document::new_with_mode(400.0, 400.0, ColorMode::Cmyk);
+        let inks = Inks::new(side, side, flat([0u8, 102, 255, 0], (side * side) as usize)).unwrap();
+        d.images.insert("img".into(), ImageBlob::cmyk_tiff(&inks).unwrap());
+        let alpha = image::GrayImage::from_fn(side, side, |x, y| image::Luma([((x + y) % 256) as u8]));
+        d.images.insert("alpha".into(), ImageBlob::new("image/png", png(alpha)));
+        let image = |key: &str| {
+            NodeKind::Image(Box::new(ImageObject {
+                key: key.into(),
+                width: side,
+                height: side,
+                // 50 pt: smaller than the corners below.
+                xf: Affine::scale(0.125),
+                link: None,
+                placement: Default::default(),
+                pixels: None,
+            }))
+        };
+        let q = [(0.0, 0.0), (150.0, 0.0), (125.0, 150.0), (25.0, 150.0)].map(|(x, y)| Point::new(x, y));
+        let mut n = Node::new(d.alloc_id(), image("img"));
+        if masked {
+            let mut art = Node::new(d.alloc_id(), image("alpha"));
+            art.set_image_corners(q).unwrap();
+            n = n.with_mask(Some(Box::new(vectorcraft_doc::OpacityMask::new(art, true))));
+        }
+        n.set_image_corners(q).unwrap();
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let s = json!({"compression": {"color": {"downsample": "bicubic", "ppi": 72.0, "abovePpi": 100.0}}});
+        let out = export_with_report(&d, &opts(s)).unwrap();
+        let w = written(&out.bytes);
+        assert_eq!(w.iter().filter(|w| w.space == "DeviceCMYK" && w.smask).count(), usize::from(masked), "{w:?}");
+        w.iter().filter(|w| w.space == "DeviceCMYK").map(|w| w.width).collect::<Vec<_>>()
+    };
+    let plain = cmyk_widths(false);
+    assert_eq!(plain.len(), 1, "one image for every piece: {plain:?}");
+    assert!(plain[0] > 100 && plain[0] < side, "resampled for the pieces, not for the transform's 50 pt: {plain:?}");
+    assert_eq!(cmyk_widths(true), plain);
+}
+
 /// A color-masked CMYK image with a gray mask of its grid keeps its inks and its hidden colors
 /// hidden: the image's `/SMask` is the mask's alpha times the alpha of the pixels the color mask
 /// shows, so a hidden pixel stays clear where the mask's alpha is not zero, for a distorted image

@@ -5,13 +5,12 @@ use craft::behavior::IconId;
 use craft::keymap::CommandRef;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Trigger, clicked};
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger, clicked};
 use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::Menu;
 use craft::ui::popover::Popover;
-use craft::ui::sections::Section;
 use craft::ui::style::TypeRole;
 use craft::ui::text::{NumberField, TextField};
 use egui::{Response, Ui};
@@ -27,7 +26,7 @@ use crate::panels::{self, appearance, first_selected, stroke};
 /// profile, Opacity and the effect controls.
 pub(super) fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(n) = first_selected(app) else { return };
-    Section::fixed(tl!("Appearance")).show(ui, |ui, _| {
+    super::section(tl!("Appearance")).show(ui, |ui, _| {
         fill_stroke_rows(app, ui);
         width_profile_row(app, ui);
         opacity_row(app, ui, &n);
@@ -45,6 +44,7 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
     Row::new().show(ui, |ui, _| {
         let shown = Some(n.opacity as f64 * 100.0);
         let out = Field::new(tl!("Opacity"))
+            .sizing(Sizing::Content)
             .show(ui, |ui, _| NumberField::new(tl!("Opacity"), Bind::given(shown)).range(0.0..=100.0).unit("%").fixed_decimals(0).show(ui))
             .inner;
         if let Some(out) = out {
@@ -135,8 +135,8 @@ pub(super) fn global_edit_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     // A copy, so the popover's flag does not borrow `app` while its body runs commands.
     let mut open = app.ui.properties_panel.global_edit_open;
     Row::new().show(ui, |ui, _| {
-        // The command's own state gives its title: Start or Stop Global Edit.
-        Button::command("select.globalEdit").show(ui);
+        // The command's own state gives its title: Start or Stop Global Edit. It takes the row up to the options.
+        Button::command("select.globalEdit").sizing(Sizing::FillWidth).show(ui);
         let options = IconButton::new(IconId::new("chevron-down")).label(tl!("Global Edit Options")).enabled(!on).show(ui);
         global_edit_popover(app, ui, &options.response, &mut open);
     });

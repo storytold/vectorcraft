@@ -3,13 +3,16 @@ use craft::host::{AppInfo, Host, Wake};
 use craft::platform::clipboard::{Clipboard, ClipboardProbe, EventClipboard};
 use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
-use craft::ui::contract::Bind;
+use craft::ui::buttons::{ActiveLook, PushButtonLook};
+use craft::ui::contract::{Bind, GlyphColon};
+use craft::ui::menu::MenuTitlePad;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
 use craft::ui::runtime::toast::{self, Toast};
 use craft::ui::runtime::windows::WindowHost;
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
+use craft::ui::text::{NumberLook, NumberPrecision};
 use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 use vectorcraft_engine::cmd::toast::Level;
 
@@ -48,9 +51,12 @@ fn now_secs() -> f64 {
 
 impl VectorcraftApp {
     /// The app around `session`, reaching the platform through `services` (the clipboard, files
-    /// and the like). It starts cataloguing the installed fonts at once, gives Data Recovery the
-    /// host's store and makes a view for each open document.
+    /// and the like). It registers the app's icon sets, starts cataloguing the installed fonts at
+    /// once, gives Data Recovery the host's store and makes a view for each open document.
     pub fn new(mut session: Session, mut services: Services) -> Self {
+        // Every entry point (desktop, web, tests) makes the app before its first pass.
+        craft::ui::primitives::register_app_icons(&super::icons::APP_ICONS);
+        craft::ui::primitives::register_app_icons(&super::cursors::CURSOR_ICONS);
         // The font menus and the first file opened need the installed fonts: catalog them now.
         vectorcraft_text::FontDb::global().scan_in_background();
         if let Some(store) = &services.recovery_store {
@@ -634,9 +640,10 @@ impl VectorcraftApp {
         self.flush_clipboard_out();
         crate::cursors::request_busy(self, &ctx);
         // A pass egui will discard and rerun is not a presented frame: it must not become the
-        // frame-time sample.
+        // frame-time sample, and it must not issue a capture of what it drew.
         if !ctx.will_discard() {
             self.perf.frame_ms = monotonic_ms() - t0;
+            self.issue_captures(&ctx);
             // A hidden window's pass shows nothing, so the step waits for a pass the user sees.
             if step_held && !self.viewport_hidden(&ctx) {
                 crate::panels::actions::playback_shown(self, ctx.cumulative_frame_nr());
@@ -655,8 +662,23 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // A hand-edited preferences file must not scale the interface to nothing.
     let scaling = if prefs.ui_scaling.is_finite() && prefs.ui_scaling > 0.0 { prefs.ui_scaling as f32 } else { 1.0 };
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
+    root.sizes = theme::app_sizes();
     root.values.set(view::zoom_scheme(prefs, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
+    // Number fields as production drew them: the value and its unit one run at the start ("720 pt"), percentages
+    // whole and lengths to a thousandth of a point (357.114 pt).
+    root.values.set(NumberPrecision::Measured);
+    root.values.set(NumberLook::Inline);
+    // Push buttons that ask for no look are filled tiles with no edge at rest, as production's were.
+    root.values.set(PushButtonLook::Filled);
+    // Every icon button that is on (the current tool, Snap, Guides, a panel toggle) shows production's highlight: the
+    // pressed fill (`tool_active`) with no accent edge.
+    root.values.set(ActiveLook::Pressed);
+    // A glyph that stands for a word caption ("X", "W") takes a form's colon as production drew it ("X:"); "#" and
+    // the colour channel letters stay bare.
+    root.values.set(GlyphColon::Form);
+    // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
+    root.values.set(MenuTitlePad::Control);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.

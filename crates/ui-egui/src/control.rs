@@ -38,6 +38,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use craft::automation::control::JobId;
 use craft::automation::dialogs::MAX_DIALOG_FIELDS;
 use craft::automation::protocol::Params;
+use craft::automation::screenshot::ScreenshotParams;
 use craft::automation::synthetic::{self, Click, Move, Release};
 use craft::automation::{ControlRequest, Reply};
 use craft::behavior::CanvasView;
@@ -1508,7 +1509,9 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
             ctx.request_repaint();
-            Reply::screenshot(next_token(), s("path").map(str::to_string), egui::ViewportId::ROOT)
+            let mut shot = ScreenshotParams::default();
+            shot.path = s("path").map(str::to_string);
+            Reply::screenshot(next_token(), shot, egui::ViewportId::ROOT)
         }
         "ui.render" => {
             let given = (|| {

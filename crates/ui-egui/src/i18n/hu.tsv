@@ -6846,6 +6846,7 @@ variable-list-end	{0}, {1}	{0} és {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmit
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	A 3D objektum hálója hiányos, vagy olyan értéket tartalmaz, amely nem szám
 @msg	the <filter> element needs an id, the filter's name	a <filter> elemnek id kell, a szűrő neve
 @msg	an SVG filter's id is at most {MAX_NAME} characters	egy SVG-szűrő id-je legfeljebb {MAX_NAME} karakter
 @msg	<{_1}> isn't an element of an SVG filter	a(z) <{_1}> nem SVG-szűrő eleme
@@ -7313,6 +7314,12 @@ axis	Y Axis	Y tengely
 @msg	parameter `{name}`: {what}	`{name}` paraméter: {what}
 @msg	plug-in parameters must be a JSON object	a bővítmény paraméterei JSON-objektumot alkossanak
 @msg	the module must export its linear memory as `memory`	a modulnak `memory` néven kell exportálnia a lineáris memóriáját
+@msg	the module must export `{name}` with the type {signature}	a modulnak a(z) `{name}` elemet {signature} típussal kell exportálnia
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	a modulnak több `{MANIFEST_SECTION}` egyéni szakasza van
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	memóriakeret (a modul kezdeti memóriája {initial} bájt, korlát {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	a(z) `{MANIFEST_SECTION}` egyéni szakasz manifesztjének az `abi` értékét {ABI_VERSION} értékként kell megadnia, amely az e gazdaprogram által megvalósított ABI-verzió
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	táblakeret (a modul {count} táblát definiál, a legnagyobb {largest} elemmel; korlát {MAX_TABLES} tábla, egyenként {MAX_TABLE_ELEMENTS} elem)
+@msg	the module's table section could not be read	a modul táblaszakasza nem olvasható
 @msg	the objects to change are no longer in the document	a módosítandó objektumok már nincsenek a dokumentumban
 @msg	the runtime panicked	a futtatókörnyezet összeomlott
 @msg	unexpected host trap	váratlan megszakítás (trap) a gazdaprogramban
@@ -7382,6 +7389,8 @@ axis	Y Axis	Y tengely
 @msg	`plates` requires a stop linked to a spot swatch	a `plates` direktszín-színmintához kapcsolt színátmenet-pontot igényel
 @msg	the output	a kimenet
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	a(z) {id} összetett útvonalnak van rejtett, zárolt vagy segédvonal tagja, ezért a tagjai nem cserélhetők le
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	a(z) {id} összetett útvonalnak van olyan tagja, amely nem útvonal, ezért a tagjai nem cserélhetők le
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
 @msg	true or false	true vagy false
 @msg	a number >= {_1}	szám >= {_1}
@@ -8914,6 +8923,8 @@ breakText	Glyphs	Glifák
 @msg	`dataBase64` is larger than the module limit	`dataBase64`: nagyobb a modulok méretkorlátjánál
 @msg	`dataBase64` is not valid base64	`dataBase64`: nem érvényes base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`: nem használható együtt ezekkel: `ids`, `reverse`, `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly`: nem használható együtt ezekkel: `ids`, `id`, `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly`: nem használható együtt ezzel: `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` és `childLimit`: az összegzést szűkítik; add meg ezt: `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design`: diagramminta neve, vagy null az egyszerű oszlopokhoz
 @msg	`design` is a design name, or null for the default marker	`design`: diagramminta neve, vagy null az alapértelmezett jelölőhöz

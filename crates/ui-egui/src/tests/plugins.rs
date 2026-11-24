@@ -410,7 +410,7 @@ fn installing_a_plugin_over_another_module_asks_first() {
     h.state_mut().run("plugin.remove", json!({"id": id})).unwrap();
 }
 
-/// A plug-in with two commands: Grow, which adds a triangle (`_context.command` is `grow`), and
+/// A plug-in with two commands, each of which adds a triangle when run as a command: Grow, and
 /// Size, with a parameter, whose `menu` names another menu.
 fn commands_plugin(id: &str) -> Vec<u8> {
     let manifest = format!(
@@ -418,7 +418,7 @@ fn commands_plugin(id: &str) -> Vec<u8> {
         {{"id":"size","label":"Size","menu":"File","params":{{"by":{{"type":"number","min":0,"max":10,"default":2}}}}}}]}}"#
     );
     let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
-    wat::parse_str(tpl::when_given(&manifest, tpl::Given::Params, r#""command":"grow""#, triangle)).unwrap()
+    wat::parse_str(tpl::when_given(&manifest, tpl::Given::Params, r#""mode":"command""#, triangle)).unwrap()
 }
 
 /// A plug-in's commands are items of Object › Plug-ins › its name (never the menu a manifest

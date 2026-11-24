@@ -170,7 +170,7 @@ mod tests {
             let p = dir.join(if cfg!(windows) { "Editor.exe" } else { "editor" });
             std::fs::write(&p, b"").unwrap();
             #[cfg(unix)]
-            std::os::unix::fs::PermissionsExt::set_mode(&mut std::fs::metadata(&p).unwrap().permissions(), 0o755);
+            std::fs::set_permissions(&p, <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o755)).unwrap();
             p
         };
         path.to_string_lossy().into_owned()

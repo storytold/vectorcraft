@@ -6472,6 +6472,7 @@ lighting	Light	Свет
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-эффект на заливке или обводке группы ничего не рисует
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-эффект на заливке или обводке группы не рисует ничего для экспорта
 @msg	The 3D object is too complex to export	3D-объект слишком сложен для экспорта
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Сетка 3D-объекта неполна или содержит значение, которое не является числом
 @msg	the <filter> element needs an id, the filter's name	элементу <filter> нужен id, имя фильтра
 @msg	an SVG filter's id is at most {MAX_NAME} characters	id фильтра SVG содержит не более {MAX_NAME} символов
 @msg	<{_1}> isn't an element of an SVG filter	<{_1}> не является элементом фильтра SVG
@@ -6949,6 +6950,12 @@ axis	Y Axis	Ось Y
 @msg	parameter `{name}`: {what}	параметр `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	параметры модуля должны быть объектом JSON
 @msg	the module must export its linear memory as `memory`	модуль должен экспортировать свою линейную память как `memory`
+@msg	the module must export `{name}` with the type {signature}	модуль должен экспортировать `{name}` с типом {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	в модуле больше одного пользовательского раздела `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	бюджет памяти (начальная память модуля составляет {initial} байт, предел {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	манифест в пользовательском разделе `{MANIFEST_SECTION}` должен указывать `abi` равным {ABI_VERSION}, версии ABI, которую реализует этот хост
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	бюджет таблиц (модуль определяет {count} таблиц, самая большая содержит {largest} элементов; предел {MAX_TABLES} таблиц по {MAX_TABLE_ELEMENTS} элементов)
+@msg	the module's table section could not be read	не удалось прочитать раздел таблиц модуля
 @msg	the objects to change are no longer in the document	изменяемых объектов больше нет в документе
 @msg	the runtime panicked	среда выполнения аварийно завершилась
 @msg	unexpected host trap	непредвиденная ловушка (trap) хоста
@@ -7019,6 +7026,8 @@ axis	Y Axis	Ось Y
 @msg	`plates` requires a stop linked to a spot swatch	для `plates` нужна точка перехода, связанная с образцом плашечного цвета
 @msg	the output	вывод
 @msg	the path has no anchor points	у контура нет опорных точек
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	у составного контура {id} есть скрытый, заблокированный или направляющий элемент, поэтому его элементы нельзя заменить
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	у составного контура {id} есть элемент, который не является контуром, поэтому его элементы нельзя заменить
 @msg	too many anchor points (limit {MAX_ANCHORS})	слишком много опорных точек (предел {MAX_ANCHORS})
 @msg	true or false	true или false
 @msg	a number >= {_1}	число >= {_1}
@@ -9028,6 +9037,8 @@ shape	Open	Открытый
 @msg	`dataBase64` is larger than the module limit	`dataBase64` больше ограничения для модуля
 @msg	`dataBase64` is not valid base64	`dataBase64` не является допустимым base64
 @msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` нельзя сочетать с `ids`, `reverse` или `append`
+@msg	`defaultsOnly` cannot be combined with `ids`, `id` or `item`	`defaultsOnly` нельзя сочетать с `ids`, `id` или `item`
+@msg	`defaultsOnly` cannot be combined with `brush`	`defaultsOnly` нельзя сочетать с `brush`
 @msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` и `childLimit` ограничивают сводку: передайте `summary: true`
 @msg	`design` is a design name, or null for plain columns	`design` — имя дизайна или null для обычных столбцов
 @msg	`design` is a design name, or null for the default marker	`design` — имя дизайна или null для маркера по умолчанию
