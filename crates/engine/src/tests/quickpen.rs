@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{PathData, Point, SubPath};
-use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+use vectorcraft_tools::{Mods, Overlay, PointerEvent, PointerKind, ToolKey};
 
 use crate::tooling::ViewInfo;
 use crate::*;
@@ -43,13 +43,20 @@ fn pt(x: f64, y: f64) -> Point {
 }
 
 fn press(s: &mut Session, pts: &[(f64, f64)]) {
-    let v = view();
-    s.pointer(&PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1), v).unwrap();
+    press_in(s, pts, view());
+}
+
+fn press_in(s: &mut Session, pts: &[(f64, f64)], v: ViewInfo) {
+    press_with(s, pts, v, Mods::default());
+}
+
+fn press_with(s: &mut Session, pts: &[(f64, f64)], v: ViewInfo, m: Mods) {
+    s.pointer(&PointerEvent::new(PointerKind::Down, pts[0].0, pts[0].1).with_mods(m), v).unwrap();
     for &(x, y) in &pts[1..] {
-        s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, x, y).with_mods(m), v).unwrap();
     }
     let l = pts[pts.len() - 1];
-    s.pointer(&PointerEvent::new(PointerKind::Up, l.0, l.1), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, l.0, l.1).with_mods(m), v).unwrap();
 }
 
 fn click(s: &mut Session, x: f64, y: f64) {
@@ -503,6 +510,338 @@ fn a_click_on_an_open_end_continues_the_path() {
     assert_eq!(all[0].0, id);
     let ends: Vec<Point> = all[0].1.subpaths[0].anchors.iter().map(|a| a.p).collect();
     assert_eq!(ends, [pt(200.0, 100.0), pt(100.0, 100.0), pt(100.0, 200.0)]);
+}
+
+/// With Smart Guides on, a click near another path's anchor puts the point on that anchor; with
+/// them off, the point stays where the click was.
+#[test]
+fn a_point_snaps_to_a_smart_guide() {
+    for (guides, want) in [(true, pt(300.0, 300.0)), (false, pt(302.0, 301.0))] {
+        let mut s = session();
+        s.execute("shape.line", &json!({"x1": 300, "y1": 300, "x2": 500, "y2": 450})).unwrap();
+        s.execute("select.set", &json!({"ids": []})).unwrap();
+        quick_pen(&mut s);
+        let v = ViewInfo { smart_guides: guides, ..Default::default() };
+        press_in(&mut s, &[(100.0, 100.0)], v);
+        press_in(&mut s, &[(302.0, 301.0)], v);
+        let drawn = paths(&s).into_iter().find(|(_, p)| p.subpaths[0].anchors.first().is_some_and(|a| a.p == pt(100.0, 100.0))).unwrap();
+        assert!(drawn.1.subpaths[0].anchors.last().unwrap().p.distance(want) < 1e-9, "{guides}");
+    }
+}
+
+/// A point 100 pt from (200, 100) and 30.5° below the +x direction a path from (100, 100) ends in:
+/// a continuous arc to it sweeps 61°.
+fn arc_end_61() -> Point {
+    let half = 30.5f64.to_radians();
+    pt(200.0 + 100.0 * half.cos(), 100.0 + 100.0 * half.sin())
+}
+
+/// The protractor's 60° tick for the arc to [`arc_end_61`]: on the same circle, a 60° sweep.
+fn tick_60() -> Point {
+    let r = 50.0 / 30.5f64.to_radians().sin();
+    pt(200.0 + r * 30f64.to_radians().cos(), 100.0 + r * 30f64.to_radians().sin())
+}
+
+/// A path from (100, 100) to (200, 100) drawn with Quick Pen, the action then a continuous arc.
+fn continuous_arc_after_a_line(s: &mut Session, v: ViewInfo) {
+    quick_pen(s);
+    press_in(s, &[(100.0, 100.0)], v);
+    press_in(s, &[(200.0, 100.0)], v);
+    key(s, ToolKey::AltTap);
+}
+
+/// The last point of the path the tool drew (any other path is a two-point line).
+fn drawn_end(s: &Session) -> Point {
+    let drawn = paths(s).into_iter().find(|(_, p)| p.subpaths[0].anchors.len() >= 3).unwrap();
+    drawn.1.subpaths[0].anchors.last().unwrap().p
+}
+
+/// A continuous arc dragged to end 61° round goes onto the protractor's 60° tick with Smart Guides
+/// on, also with Shift held, which does not constrain Quick Pen points; with them off it ends at
+/// the pointer. A Smart Guide in reach (another path's anchor) wins over the tick, also with its
+/// label hidden, and so do Snap to Grid and Snap to Pixel.
+#[test]
+fn a_continuous_arc_end_snaps_to_the_protractor() {
+    let at = arc_end_61();
+    let anchor = pt(at.x + 0.2, at.y + 0.15);
+    let fresh = session();
+    let g = &fresh.doc().unwrap().doc.grid;
+    let step = g.spacing / g.subdivisions.max(1) as f64;
+    let on_grid = pt((at.x / step).round() * step, (at.y / step).round() * step);
+    let on_pixel = pt(at.x.round(), at.y.round());
+    let shift = Mods { shift: true, ..Default::default() };
+    // (Smart Guides, the other path, Snap to Grid, Snap to Pixel, Anchor/Path Labels, mods, where
+    // the end goes, the pointer)
+    let cases = [
+        (true, false, false, false, true, Mods::default(), tick_60(), at),
+        (true, false, false, false, true, shift, tick_60(), at),
+        (false, false, false, false, true, Mods::default(), at, at),
+        (true, true, false, false, true, Mods::default(), anchor, at),
+        (true, false, true, false, true, Mods::default(), on_grid, on_grid),
+        (true, false, false, true, true, Mods::default(), on_pixel, on_pixel),
+        // Exactly on the anchor, which shows no guide with the labels off.
+        (true, true, false, false, false, Mods::default(), anchor, anchor),
+    ];
+    for (guides, other, grid, pixel, labels, m, want, pointer) in cases {
+        let mut s = session();
+        s.prefs.anchor_path_labels = labels;
+        if other {
+            s.execute("shape.line", &json!({"x1": anchor.x, "y1": anchor.y, "x2": 600, "y2": anchor.y})).unwrap();
+            s.execute("select.set", &json!({"ids": []})).unwrap();
+        }
+        let v = ViewInfo { smart_guides: guides, snap_to_grid: grid, snap_to_pixel: pixel, ..Default::default() };
+        continuous_arc_after_a_line(&mut s, v);
+        press_with(&mut s, &[(280.0, 140.0), (pointer.x, pointer.y)], v, m);
+        let end = drawn_end(&s);
+        assert!(end.distance(want) < 1e-6, "{guides} {other} {grid} {pixel} {labels} {m:?}: {end:?}");
+    }
+}
+
+/// With Smart Guides on, a click without a drag puts a continuous arc's end on the protractor's
+/// tick; after Alt switches to a sharp-corner arc, a click at the same place puts the end at the
+/// pointer.
+#[test]
+fn a_click_puts_a_continuous_arc_end_on_a_tick() {
+    let at = arc_end_61();
+    let v = ViewInfo::default();
+    for (taps, want) in [(0, tick_60()), (1, at)] {
+        let mut s = session();
+        continuous_arc_after_a_line(&mut s, v);
+        for _ in 0..taps {
+            key(&mut s, ToolKey::AltTap);
+        }
+        press_in(&mut s, &[(at.x, at.y)], v);
+        let end = drawn_end(&s);
+        assert!(end.distance(want) < 1e-6, "{taps}: {end:?}");
+    }
+}
+
+/// Alt tapped during a press moves the end of the piece for the new action at once, with no
+/// further drag: a continuous arc's end on the 60° tick goes to the pointer once the piece is a
+/// sharp-corner arc, after a drag and after a press that has not dragged, and a line's end at the
+/// pointer goes onto the tick once the piece is a continuous arc.
+#[test]
+fn an_alt_tap_during_a_press_moves_the_end_for_the_new_action() {
+    let at = arc_end_61();
+    let v = ViewInfo::default();
+    // (drag first, Alt taps before the press, the end before Alt, the end after it)
+    for (drag, taps, before, after) in [(true, 0, tick_60(), at), (false, 0, tick_60(), at), (true, 2, at, tick_60())] {
+        let mut s = session();
+        continuous_arc_after_a_line(&mut s, v);
+        for _ in 0..taps {
+            key(&mut s, ToolKey::AltTap);
+        }
+        let first = if drag { (280.0, 140.0) } else { (at.x, at.y) };
+        s.pointer(&PointerEvent::new(PointerKind::Down, first.0, first.1), v).unwrap();
+        if drag {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, at.x, at.y), v).unwrap();
+        }
+        assert!(drawn_end(&s).distance(before) < 1e-6, "{drag} {taps}: {:?}", drawn_end(&s));
+        s.tool_key(ToolKey::AltTap, Mods::default(), v).unwrap();
+        assert!(drawn_end(&s).distance(after) < 1e-6, "{drag} {taps} after Alt: {:?}", drawn_end(&s));
+        s.pointer(&PointerEvent::new(PointerKind::Up, at.x, at.y), v).unwrap();
+        assert!(drawn_end(&s).distance(after) < 1e-6, "{drag} {taps} placed: {:?}", drawn_end(&s));
+    }
+}
+
+/// After a click puts a continuous arc's end on a tick away from the pointer, no preview runs from
+/// the placed end back to where the pointer was; the next move shows the preview again.
+#[test]
+fn a_click_on_a_tick_leaves_no_preview_back_to_the_pointer() {
+    let at = arc_end_61();
+    let v = ViewInfo::default();
+    let mut s = session();
+    continuous_arc_after_a_line(&mut s, v);
+    s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), v).unwrap();
+    press_in(&mut s, &[(at.x, at.y)], v);
+    assert!(drawn_end(&s).distance(tick_60()) < 1e-6);
+    let label = |s: &mut Session| s.overlays(v).iter().any(|o| matches!(o, Overlay::Measure { .. }));
+    assert!(!label(&mut s), "no distance label back to the pointer");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 400.0, 300.0), v).unwrap();
+    assert!(label(&mut s));
+}
+
+/// Hovering near a tick as a continuous arc puts the distance label beside the tick; after Alt
+/// switches the action, the same hover puts it beside the pointer.
+#[test]
+fn a_hover_snaps_to_a_tick_only_for_a_continuous_arc() {
+    let at = arc_end_61();
+    let tick = tick_60();
+    let v = ViewInfo::default();
+    let mut s = session();
+    continuous_arc_after_a_line(&mut s, v);
+    s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), v).unwrap();
+    let label = |s: &mut Session| {
+        s.overlays(v).iter().find_map(|o| match o {
+            Overlay::Measure { p, .. } => Some(*p),
+            _ => None,
+        })
+    };
+    let off = label(&mut s).unwrap() - tick;
+    assert!(off.x > 0.0 && (off.x - off.y).abs() < 1e-9, "the label sits diagonally off the tick: {off:?}");
+    for _ in 0..2 {
+        key(&mut s, ToolKey::AltTap);
+        assert!((label(&mut s).unwrap() - off).distance(at) < 1e-9, "{:?}", s.tool_options()["action"]);
+    }
+}
+
+/// A hover made with Smart Guides off shows nothing once they are turned on under the still
+/// pointer, so it shows no tick that a click would not use (another path's anchor under the
+/// pointer takes the click). The next move shows the hover again, its label beside the anchor;
+/// once Smart Guides are turned off again, its guides are hidden with it, also after a click.
+#[test]
+fn a_hover_shows_nothing_after_smart_guides_change() {
+    let at = arc_end_61();
+    let off = ViewInfo { smart_guides: false, ..Default::default() };
+    let on = ViewInfo::default();
+    let mut s = session();
+    s.execute("shape.line", &json!({"x1": at.x, "y1": at.y, "x2": 600, "y2": at.y})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    continuous_arc_after_a_line(&mut s, off);
+    s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), off).unwrap();
+    let label = |s: &mut Session, v: ViewInfo| {
+        s.overlays(v).iter().find_map(|o| match o {
+            Overlay::Measure { p, .. } => Some(*p),
+            _ => None,
+        })
+    };
+    assert!(label(&mut s, off).is_some());
+    assert_eq!(label(&mut s, on), None, "the hover from before the change shows nothing");
+    s.pointer(&PointerEvent::new(PointerKind::Move, at.x, at.y), on).unwrap();
+    let off_anchor = label(&mut s, on).unwrap() - at;
+    assert!(off_anchor.x > 0.0 && (off_anchor.x - off_anchor.y).abs() < 1e-9, "the label sits diagonally off the anchor: {off_anchor:?}");
+    let only_points = |s: &mut Session, v: ViewInfo| s.overlays(v).iter().all(|o| matches!(o, Overlay::CurvePoint { .. }));
+    assert!(!only_points(&mut s, on));
+    assert!(only_points(&mut s, off), "only the path's points show");
+    // A click before the pointer moves does not bring the stale hover back.
+    press_in(&mut s, &[(400.0, 300.0)], off);
+    assert_eq!(label(&mut s, off), None, "no label for the stale hover after the click");
+}
+
+/// While the pointer hovers, the tool asks the canvas to hover it again when the view, the document
+/// or the selection changes under a still pointer, so the snapped point follows the art; a press
+/// stops it until the next move.
+#[test]
+fn a_hover_is_hovered_again_when_the_art_changes() {
+    let mut s = session();
+    continuous_arc_after_a_line(&mut s, view());
+    assert!(!s.tool_wants_rehover());
+    s.pointer(&PointerEvent::new(PointerKind::Move, 280.0, 180.0), view()).unwrap();
+    assert!(s.tool_wants_rehover());
+    s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 180.0), view()).unwrap();
+    assert!(!s.tool_wants_rehover());
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 180.0), view()).unwrap();
+    assert!(!s.tool_wants_rehover());
+}
+
+/// A hover on the path's last point, which another path's anchor shares, shows that anchor's Smart
+/// Guide; after Smart Guides are turned off, a click there adds nothing and the guide stays hidden
+/// while the button is held and after it is let go.
+#[test]
+fn a_click_that_adds_nothing_keeps_a_stale_hover_hidden() {
+    let off = ViewInfo { smart_guides: false, ..Default::default() };
+    let on = ViewInfo::default();
+    let mut s = session();
+    s.execute("shape.line", &json!({"x1": 200, "y1": 100, "x2": 200, "y2": 400})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    continuous_arc_after_a_line(&mut s, on);
+    s.pointer(&PointerEvent::new(PointerKind::Move, 200.0, 100.0), on).unwrap();
+    let only_points = |s: &mut Session, v: ViewInfo| s.overlays(v).iter().all(|o| matches!(o, Overlay::CurvePoint { .. }));
+    assert!(!only_points(&mut s, on), "the anchor's guide shows");
+    assert!(only_points(&mut s, off));
+    let steps = undo_steps(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), off).unwrap();
+    assert!(only_points(&mut s, off), "the guide stays hidden while the button is held");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 100.0), off).unwrap();
+    assert_eq!(undo_steps(&s), steps, "the click adds nothing");
+    assert!(only_points(&mut s, off), "the guide stays hidden");
+}
+
+/// While a press drags an arc, the tool shows its protractor; while it drags a line, it shows none.
+#[test]
+fn an_arc_drag_shows_the_protractor() {
+    let mut s = session();
+    quick_pen(&mut s);
+    let protractors = |s: &mut Session| s.overlays(view()).iter().filter(|o| matches!(o, Overlay::Path { .. })).count();
+    for (action, shown) in [("line", 0), ("continuousArc", 1), ("sharpArc", 1)] {
+        key(&mut s, ToolKey::Escape);
+        s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "line"})).unwrap();
+        click(&mut s, 100.0, 100.0);
+        click(&mut s, 200.0, 100.0);
+        s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": action})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 250.0, 150.0), view()).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 180.0), view()).unwrap();
+        assert_eq!(protractors(&mut s), shown, "{action}");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 180.0), view()).unwrap();
+    }
+}
+
+/// While hovering, the piece the next click adds shows its protractor beside the rubber band, and
+/// neither shows with the Pen tool's rubber band preference off; a line has no protractor. (Smart
+/// Guides are off, so no guide paths show.)
+#[test]
+fn a_hovered_arc_shows_the_protractor_with_the_rubber_band() {
+    for (rubber_band, action, paths) in [(true, "continuousArc", 2), (true, "line", 1), (false, "continuousArc", 0)] {
+        let mut s = session();
+        s.prefs.pen_rubber_band = rubber_band;
+        quick_pen(&mut s);
+        click(&mut s, 100.0, 100.0);
+        click(&mut s, 200.0, 100.0);
+        s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": action})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Move, 280.0, 180.0), view()).unwrap();
+        let shown = s.overlays(view()).iter().filter(|o| matches!(o, Overlay::Path { .. })).count();
+        assert_eq!(shown, paths, "{rubber_band} {action}");
+    }
+}
+
+/// The two arms of a cross centered on `c` among the overlays.
+fn crosses_at(o: &[Overlay], c: Point) -> usize {
+    o.iter().filter(|o| matches!(o, Overlay::Line { a, b, .. } if a.midpoint(*b).distance(c) < 1e-9)).count()
+}
+
+/// While a half circle from (200, 100) to (300, 100) is dragged, or is the piece the next click
+/// adds, the tool shows a cross at its center, (250, 100); while a line is dragged, it shows none.
+#[test]
+fn an_arc_shows_a_cross_at_its_center() {
+    let mut s = session();
+    quick_pen(&mut s);
+    let center = pt(250.0, 100.0);
+    for (action, arms) in [("line", 0), ("sharpArc", 2)] {
+        key(&mut s, ToolKey::Escape);
+        s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "line"})).unwrap();
+        click(&mut s, 100.0, 100.0);
+        click(&mut s, 200.0, 100.0);
+        s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": action})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 100.0), view()).unwrap();
+        assert_eq!(crosses_at(&s.overlays(view()), center), arms, "hovering, {action}");
+        s.pointer(&PointerEvent::new(PointerKind::Down, 280.0, 150.0), view()).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 100.0), view()).unwrap();
+        assert_eq!(crosses_at(&s.overlays(view()), center), arms, "dragging, {action}");
+        s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 100.0), view()).unwrap();
+    }
+}
+
+/// With Measurement Labels on, hovering after the path's last point shows the distance label
+/// beside the pointer; with them off, no label shows.
+#[test]
+fn hovering_shows_the_distance_label() {
+    for labels in [true, false] {
+        let mut s = session();
+        s.prefs.measurement_labels = labels;
+        quick_pen(&mut s);
+        click(&mut s, 100.0, 100.0);
+        click(&mut s, 200.0, 100.0);
+        s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 200.0), view()).unwrap();
+        let o = s.overlays(view());
+        let label = o.iter().find_map(|o| match o {
+            Overlay::Measure { p, .. } => Some(*p),
+            _ => None,
+        });
+        assert_eq!(label.is_some(), labels);
+        if let Some(p) = label {
+            assert!(p.x > 300.0 && p.y > 200.0, "beside the pointer: {p:?}");
+        }
+    }
 }
 
 /// `path.quickPen` makes a new path with the current paint, or a black stroke without any.

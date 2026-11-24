@@ -481,7 +481,7 @@ fn eps_export_still_flattens_a_colorize_paint_on_a_color_image() {
 fn a_colorized_missing_link_placeholder_is_not_flattened() {
     let mut s = session();
     let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() });
     s.edit("Colorize", |d, _| {
         d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
         Ok(())
@@ -502,7 +502,7 @@ fn a_colorized_missing_link_placeholder_is_not_flattened() {
 fn a_fill_color_recolors_a_colorized_missing_link_placeholder() {
     let mut s = session();
     let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() });
     s.edit("Colorize", |d, _| {
         d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
         Ok(())
@@ -523,7 +523,7 @@ fn a_fill_color_recolors_a_colorized_missing_link_placeholder() {
 fn a_colorized_missing_link_placeholder_in_a_spot_color_refuses_a_process_color() {
     let mut s = session();
     let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
-    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() });
     s.execute("swatch.new", &json!({"name": "Ink 2", "color": {"c": 100, "m": 0, "y": 0, "k": 0}, "spot": true})).unwrap();
     s.edit("Colorize", |d, _| {
         let ink = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };
@@ -705,6 +705,131 @@ fn a_color_image_takes_a_fill_item_as_before() {
     s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
     assert_eq!(colorize(&s, id), None);
     assert!(s.doc().unwrap().doc.node(id).unwrap().appearance.fill().is_some(), "a fill item, as before");
+}
+
+#[test]
+fn overprint_fill_makes_a_colorized_images_color_overprint() {
+    let mut s = session();
+    let id = image(&mut s, "gray", gray(false));
+    let overprints = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().colorize_overprints();
+    // Before the image is colorized it has no fill to overprint.
+    let r = s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    assert_eq!(r["changed"], 0);
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    let r = s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    assert_eq!(r["changed"], 1);
+    assert!(overprints(&s));
+    assert_eq!(s.execute("attributes.info", &json!({})).unwrap()["overprintFill"], true);
+    // A second time nothing changes, and no undo step is recorded.
+    let r = s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    assert_eq!(r["changed"], 0);
+
+    // Native files keep it.
+    let d = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(d, false)).unwrap();
+    assert!(back.node(id).unwrap().colorize_overprints());
+
+    // EPS turns overprinting on for the image's ink.
+    let out = s.execute("document.exportEps", &json!({"previewFormat": "none", "useArtboards": false})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(out["dataBase64"].as_str().unwrap()).unwrap();
+    let ps = String::from_utf8_lossy(&bytes);
+    let (Some(on), Some(mask)) = (ps.find("true op"), ps.find("imagemask")) else { panic!("{ps}") };
+    assert!(on < mask, "overprint is on before the image is drawn");
+
+    // A legacy .ai file writes the image mask with its fill overprint, which opens again.
+    let r = s.execute("file.saveCopy", &json!({"format": "ai", "aiVersion": "7"})).unwrap();
+    let mut t = Session::new();
+    t.execute("document.open", &json!({"name": "t.ai", "dataBase64": r["dataBase64"]})).unwrap();
+    let mut opened = vec![];
+    t.doc().unwrap().doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Image(_)) {
+            opened.push(n.colorize_overprints());
+        }
+    });
+    assert_eq!(opened, [true]);
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!overprints(&s), "undo makes it knock out again");
+    assert_eq!(s.execute("attributes.info", &json!({})).unwrap()["overprintFill"], false);
+
+    // Taking the color off drops its overprint, so a new color knocks out.
+    s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    assert!(!s.doc().unwrap().doc.node(id).unwrap().extras().colorize_overprint);
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    assert!(!overprints(&s), "a new color starts knocking out");
+}
+
+/// Overprint Black and Print Ink Fixes' Remove White Overprint treat a colorized image's color as
+/// its fill.
+#[test]
+fn overprint_black_and_print_fixes_reach_a_colorized_images_color() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200, "colorMode": "cmyk"})).unwrap();
+    let id = image(&mut s, "gray", gray(false));
+    let overprints = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().colorize_overprints();
+    s.execute("paint.setFill", &json!({"color": {"c": 0, "m": 0, "y": 0, "k": 100}})).unwrap();
+    let v = s.execute("edit.colors.overprintBlack", &json!({})).unwrap();
+    assert!(overprints(&s), "a black image overprints: {v}");
+    s.execute("paint.setFill", &json!({"color": {"c": 0, "m": 0, "y": 0, "k": 0}})).unwrap();
+    assert!(overprints(&s), "a new color keeps the flag");
+    let v = s.execute("addon.color.printFixes", &json!({"removeWhiteOverprint": true})).unwrap();
+    assert_eq!(v["whiteOverprintRemoved"], 1, "{v}");
+    assert!(!overprints(&s), "white knocks out again");
+}
+
+/// A flattening for a file that writes colorized images in their ink (EPS) keeps the image, and
+/// without Preserve Overprints its color knocks out again, as fills do; with it, the color keeps
+/// overprinting.
+#[test]
+fn flattening_without_preserve_overprints_drops_a_colorized_images_overprint() {
+    let mut s = session();
+    image(&mut s, "gray", gray(false));
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    // A translucent square elsewhere gives the flattener something to flatten.
+    let square = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("transparency.set", &json!({"ids": [square], "opacity": 50})).unwrap();
+    let overprints = |preserve: bool| {
+        let mut options = crate::cmd::flatten::FlattenOptions::preset("low").unwrap();
+        (options.keeps_colorize, options.preserve_overprints) = (true, preserve);
+        let flat = crate::cmd::flatten::flatten_document(&s.doc().unwrap().doc, &options).unwrap().unwrap();
+        let mut found = vec![];
+        flat.walk(|n| {
+            if matches!(n.kind, NodeKind::Image(_)) {
+                found.push(n.colorize_overprints());
+            }
+        });
+        found
+    };
+    assert_eq!(overprints(true), [true]);
+    assert_eq!(overprints(false), [false]);
+}
+
+/// Flattening without Preserve Overprints also clears the overprint an image keeps after its
+/// color was removed, so a color given to it later knocks out.
+#[test]
+fn flattening_without_preserve_overprints_clears_an_uncolored_images_overprint() {
+    let mut s = session();
+    let id = image(&mut s, "gray", gray(false));
+    s.execute("paint.setFill", &json!({"swatch": "Ink"})).unwrap();
+    s.execute("object.setOverprint", &json!({"fill": true})).unwrap();
+    let square = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("transparency.set", &json!({"ids": [square], "opacity": 50})).unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let Some(n) = d.node_mut(id) else { panic!("the image") };
+    n.extras_mut().colorize = None;
+    assert!(n.extras().colorize_overprint && !n.colorize_overprints(), "the flag outlives the color");
+    let mut options = crate::cmd::flatten::FlattenOptions::preset("low").unwrap();
+    (options.keeps_colorize, options.preserve_overprints) = (true, false);
+    let flat = crate::cmd::flatten::flatten_document(&d, &options).unwrap().unwrap();
+    let mut found = vec![];
+    flat.walk(|n| {
+        if matches!(n.kind, NodeKind::Image(_)) {
+            found.push(n.extras().colorize_overprint);
+        }
+    });
+    assert_eq!(found, [false]);
 }
 
 #[test]
