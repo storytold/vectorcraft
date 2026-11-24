@@ -511,12 +511,20 @@ impl<'a> Scene<'a> {
     }
 
     /// Whether a fill or stroke of `paint` marked to overprint (`overprint`) does: not when it is
-    /// white with Discard White Overprint in Output (Document Setup), as in PDF export. On a plate
-    /// the colors are already the plate's coverage, and the plate's document already left out or
-    /// kept each overprinting paint by that setting, so white is not checked there.
+    /// paper white with Discard White Overprint in Output (Document Setup); a spot white still
+    /// overprints ([`Self::spot_ink`]). On a plate the colors are already the plate's coverage, and
+    /// the plate's document already left out or kept each overprinting paint by that setting, so
+    /// white is not checked there.
     fn overprints(&self, overprint: bool, paint: &Paint) -> bool {
-        let discarded = !self.plate && self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(paint);
+        let discarded = !self.plate && self.doc.setup.discard_white_overprint && vectorcraft_doc::overprint::is_white(paint) && !self.spot_ink(paint);
         overprint && !discarded
+    }
+
+    /// Whether `paint` is a tint above 0% of a spot swatch with a solid color, which the page writes
+    /// as a Separation ink of its own ([`Self::spot_space`]); a link is judged by the first swatch of
+    /// its name.
+    fn spot_ink(&self, paint: &Paint) -> bool {
+        matches!(paint, Paint::Solid { swatch: Some(name), tint, .. } if *tint > 0.0 && self.doc.swatch(name).is_some_and(|s| s.spot && s.paint.color().is_some()))
     }
 
     /// Turn overprinting on for one paint (when overprints are preserved); `false` when it stays off

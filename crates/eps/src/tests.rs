@@ -519,6 +519,35 @@ fn white_type_fills_knock_out_with_discard_white_overprint() {
     }
 }
 
+/// Discard White Overprint applies to paper white only: a white fill linked to a spot swatch
+/// still overprints, at 100% and 50%; one linked to a global process swatch, at a 0% tint of a
+/// spot swatch, or to a spot swatch without a color (written as process) knocks out.
+#[test]
+fn spot_white_fills_overprint_with_discard_white_overprint() {
+    let white = Paint::solid(Color::WHITE);
+    let cases = [
+        (true, white.clone(), 1.0, true),
+        (true, white.clone(), 0.5, true),
+        (false, white.clone(), 1.0, false),
+        (true, white.clone(), 0.0, false),
+        (true, Paint::None, 1.0, false),
+    ];
+    for (spot, swatch, tint, overprints) in cases {
+        let mut d = doc_with(|_| vec![]);
+        d.swatches.push(Swatch { name: "White Ink".into(), paint: swatch, global: true, spot });
+        let mut n = red_rect(&mut d);
+        if let Some(AppearanceItem::Fill(f)) = n.appearance.items.first_mut() {
+            f.paint = Paint::Solid { color: Color::WHITE, swatch: Some("White Ink".into()), tint };
+            f.overprint = true;
+        }
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), 0, n).unwrap();
+        assert!(d.setup.discard_white_overprint);
+        let fills = overprint_at_fills(&page_of(&d, &opts(&d)));
+        assert_eq!(fills, vec![overprints], "spot: {spot}, tint: {tint}, expected to overprint: {overprints}");
+    }
+}
+
 const GOLD: Color = Color::Cmyk { c: 0.0, m: 0.2, y: 0.8, k: 0.1 };
 const LEAF: Color = Color::Cmyk { c: 1.0, m: 0.0, y: 1.0, k: 0.0 };
 
