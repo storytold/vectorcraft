@@ -909,21 +909,6 @@ pub fn duplicate_stop(stops: &[GradientStop], i: usize, offset: f32) -> (Vec<Gra
     (v, ni)
 }
 
-/// Swap the colours of stops `a` and `b` (Alt-dropping one stop on another), with their swatch
-/// links and tints; offsets, opacities and midpoints stay. Out-of-range indices leave the stops
-/// unchanged.
-pub fn swap_stop_colors(stops: &[GradientStop], a: usize, b: usize) -> Vec<GradientStop> {
-    let mut v = stops.to_vec();
-    if a < v.len() && b < v.len() && a != b {
-        let (lo, hi) = v.split_at_mut(a.max(b));
-        let (x, y) = (&mut lo[a.min(b)], &mut hi[0]);
-        std::mem::swap(&mut x.color, &mut y.color);
-        std::mem::swap(&mut x.swatch, &mut y.swatch);
-        std::mem::swap(&mut x.tint, &mut y.tint);
-    }
-    v
-}
-
 /// Set the midpoint between stop `i` and `i + 1` (clamped to the diamond's 13–87 %).
 pub fn set_midpoint(stops: &[GradientStop], i: usize, m: f32) -> Vec<GradientStop> {
     let mut v = stops.to_vec();
