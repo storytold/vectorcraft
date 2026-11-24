@@ -1142,8 +1142,7 @@ mod tests {
         std::fs::write(&other, "<svg/>").unwrap();
         std::os::unix::fs::symlink(&secret, &link).unwrap();
         let linked = ScriptGate::real_files([s(link.clone())]);
-        let gate =
-            ScriptGate { read: ScriptScope::default(), write: ScriptScope::default(), documents: vec![], held: vec![], linked, also: None };
+        let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::default(), documents: vec![], held: vec![], linked, also: None };
         assert!(gate.check(&s(link.clone()), Access::Read).is_ok() && gate.check(&s(secret.clone()), Access::Read).is_ok());
         std::fs::remove_file(&link).unwrap();
         std::os::unix::fs::symlink(&other, &link).unwrap();
