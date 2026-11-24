@@ -146,7 +146,7 @@ fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     let mut a = App::new();
     assert_eq!(a.selected(), 1);
     // The W field shows its number, with its unit painted after it.
-    let (id, rect) = a.field("37");
+    let (id, rect) = a.field("37 pt");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);
     a.frame(vec![]);
@@ -154,7 +154,7 @@ fn cmd_a_in_a_panel_field_selects_its_text_and_leaves_the_art() {
     let all = Some((0, "37".chars().count()));
     // The window's Cmd+A (Windows, Linux, the web, macOS without the system menu).
     a.frame(vec![press(Key::End, Modifiers::NONE)]);
-    assert_eq!(a.field_selection(id), Some((2, 2)), "End collapses the selection");
+    assert_eq!(a.field_selection(id), Some((5, 5)), "End collapses the selection");
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);
     assert_eq!(a.field_selection(id), all, "Cmd+A selects the field's text");
     assert_eq!(a.selected(), 1, "and not the art");
@@ -276,7 +276,7 @@ fn the_clipboard_keys_in_a_focused_field_edit_its_text() {
     for _ in 0..3 {
         a.frame(vec![]);
     }
-    for text in ["37", "FFFFFF"] {
+    for text in ["37 pt", "FFFFFF"] {
         let (id, rect) = a.field(text);
         a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
         a.frame(vec![click(rect.center(), false)]);
@@ -519,7 +519,7 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     // Text on the system clipboard.
     super::sysclip::copy_elsewhere(&board, vec![(vectorcraft_engine::cmd::clipboard::TEXT, b"42 pt".to_vec())]);
     a.paste = Some("42 pt".into());
-    let (id, rect) = a.field("37");
+    let (id, rect) = a.field("37 pt");
     a.frame(vec![Event::PointerMoved(rect.center()), click(rect.center(), true)]);
     a.frame(vec![click(rect.center(), false)]);
     let out = a.frame(vec![press(Key::End, Modifiers::NONE)]);
@@ -531,7 +531,7 @@ fn the_in_window_edit_menu_acts_on_the_field_it_was_opened_from() {
     };
     menu(&mut a, select, "All");
     assert!(a.has_keyboard(id), "the field has the keyboard back");
-    assert_eq!(a.field_selection(id), Some((0, 2)), "Select All selected the field's text");
+    assert_eq!(a.field_selection(id), Some((0, 5)), "Select All selected the field's text");
     assert_eq!(a.selected(), 1, "not the art");
     a.frame(vec![press(Key::End, Modifiers::NONE)]);
     a.frame(vec![press(Key::A, Modifiers::COMMAND)]);

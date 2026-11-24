@@ -449,7 +449,7 @@ mod tests {
         run_cmd(&mut app, "transparency.makeOpacityMask", json!({}));
         run_cmd(&mut app, "shape.ellipse", json!({"x": 0, "y": 0, "width": 30, "height": 30}));
         let mut panel = Panel::new(app, show);
-        assert_eq!(panel.value("Opacity").as_deref(), Some("60 %"), "the masked object's opacity, not the mask art's");
+        assert_eq!(panel.value("Opacity").as_deref(), Some("60%"), "the masked object's opacity, not the mask art's");
         assert!(panel.shows("Release"));
         let (info, n) = state(&mut panel.app());
         assert_eq!((info.ids, n.as_ref().map(|n| n.id.0)), (vec![vectorcraft_doc::NodeId(a)], Some(a)));
@@ -533,11 +533,11 @@ mod tests {
         assert!(blank(panel.value("Opacity")) && blank(panel.value("Blend Mode")));
         run_cmd(&mut panel.app(), "select.set", json!({"ids": [a]}));
         panel.frame();
-        assert_eq!((panel.value("Opacity").as_deref(), panel.value("Blend Mode").as_deref()), (Some("50 %"), Some("Screen")));
+        assert_eq!((panel.value("Opacity").as_deref(), panel.value("Blend Mode").as_deref()), (Some("50%"), Some("Screen")));
         // Nothing selected: the defaults for new art, disabled.
         run_cmd(&mut panel.app(), "select.none", json!({}));
         panel.frame();
-        assert_eq!(panel.value("Opacity").as_deref(), Some("100 %"), "a percent field reads its number and its unit");
+        assert_eq!(panel.value("Opacity").as_deref(), Some("100%"), "a percent field reads its number and its unit");
         assert!(panel.shows("No Selection") && !panel.enabled("Opacity"));
     }
 

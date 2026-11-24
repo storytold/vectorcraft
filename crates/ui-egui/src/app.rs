@@ -3,6 +3,7 @@ use craft::host::{AppInfo, Host, Wake};
 use craft::platform::clipboard::{Clipboard, ClipboardProbe, EventClipboard};
 use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
+use craft::ui::buttons::PushButtonLook;
 use craft::ui::contract::Bind;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
@@ -10,7 +11,7 @@ use craft::ui::runtime::toast::{self, Toast};
 use craft::ui::runtime::windows::WindowHost;
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
-use craft::ui::text::NumberPrecision;
+use craft::ui::text::{NumberLook, NumberPrecision};
 use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 use vectorcraft_engine::cmd::toast::Level;
 
@@ -663,8 +664,12 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     root.sizes = theme::app_sizes();
     root.values.set(view::zoom_scheme(prefs, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
-    // Percentages read whole (60 %), lengths to a thousandth of a point (357.114 pt), as production showed them.
+    // Number fields as production drew them: the value and its unit one run at the start ("720 pt"), percentages
+    // whole and lengths to a thousandth of a point (357.114 pt).
     root.values.set(NumberPrecision::Measured);
+    root.values.set(NumberLook::Inline);
+    // Push buttons that ask for no look are filled tiles with no edge at rest, as production's were.
+    root.values.set(PushButtonLook::Filled);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.
