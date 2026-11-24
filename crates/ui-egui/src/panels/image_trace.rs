@@ -16,7 +16,7 @@ use std::sync::Arc;
 // `craft::ui::patterns::presets::*`, `crate::edits` (widgets-w13) and `crate::chrome::rank` (chrome-w16).
 use craft::behavior::IconId;
 use craft::keymap::CommandRef;
-use craft::ui::buttons::{Button, IconButton, SplitButton, ToggleButton};
+use craft::ui::buttons::{Button, IconButton, SplitButton, SplitMenu, ToggleButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Shade, Text};
@@ -545,18 +545,19 @@ fn preset_buttons() -> [(&'static str, &'static str); 6] {
     ]
 }
 
-/// The Image Trace button for a selected image (Control bar, Properties): a click traces it with
-/// the Default preset, its arrow lists the presets to trace it with.
+/// The Image Trace button for a selected image (Control bar, Properties): its main part traces it
+/// with the Default preset, its arrow lists the presets to trace it with.
 pub(crate) fn trace_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     let list = presets(app);
-    let out = SplitButton::new(tl!("Image Trace"), &list.entries)
+    let trace = CommandRef::with_params("imageTrace.make", json!({ "preset": "Default" }));
+    let chosen = SplitButton::command(trace, SplitMenu::Entries(&list.entries))
+        .label(tl!("Image Trace"))
         .arrow_label(tl!("Tracing Presets"))
         .tooltip(tl!("Trace the image with the Default preset"))
-        .show(ui);
-    if let Some(name) = out.chosen {
+        .show(ui)
+        .chosen;
+    if let Some(name) = chosen {
         trace_with(app, &name);
-    } else if craft::ui::contract::clicked(&out.response) {
-        trace_with(app, "Default");
     }
 }
 
