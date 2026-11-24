@@ -1,7 +1,7 @@
 use craft::behavior::CanvasView;
 use craft::behavior::{IconId, Mixed};
 use craft::color_ui::ui::PaintChip;
-use craft::theme::Srgba;
+use craft::theme::{Srgba, Variant};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::canvas_controls::TaskBar;
@@ -469,7 +469,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                             run = Some(("tool.setOption", json!({"tool": "smooth", "values": {"fidelity": x}})));
                         }
                     }
-                } else if Button::new(*label).icon(IconSpec::svg(IconId::new(icon))).show(ui).clicked() {
+                } else if Button::new(*label).variant(Variant::SECONDARY).icon(IconSpec::svg(IconId::new(icon))).show(ui).clicked() {
                     run = Some((*cmd, params.clone()));
                 }
             }
