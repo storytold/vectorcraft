@@ -1,6 +1,8 @@
 use craft::font_catalog::{FaceInfo, Match, Source};
 
 #[cfg(not(target_arch = "wasm32"))]
+use super::MetadataProvider;
+#[cfg(not(target_arch = "wasm32"))]
 use super::PathBuf;
 use super::build::{instanced, style_distance, style_italic, style_weight};
 use super::face::{FALLBACK_FAMILY, FontFace, MAX_LIVE_INSTANCES, Variation, VariationAxis};
@@ -11,8 +13,6 @@ use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, file_face_names, font_files};
 use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
-#[cfg(not(target_arch = "wasm32"))]
-use super::MetadataProvider;
 use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
 
 fn has_file_fonts(n: &vectorcraft_doc::Node) -> bool {
