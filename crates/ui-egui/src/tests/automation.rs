@@ -75,6 +75,8 @@ fn request(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest
     tx.send(req).unwrap();
     for _ in 0..8 {
         app.run_control(&ctx);
+        // Between passes: the empty pass below runs the injected input, with no app UI to answer for it.
+        app.poll_input(&ctx);
         crate::dialogs::host::pump(app, &ctx);
         if let Ok(r) = reply.try_recv() {
             return r;
