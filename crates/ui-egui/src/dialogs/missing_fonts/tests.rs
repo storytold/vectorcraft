@@ -195,6 +195,32 @@ fn the_documents_fonts_folder_is_offered_and_searched_off_the_ui_thread() {
     assert!(is_open::<MissingFontsDialog>(&app), "a failed add keeps the dialog");
 }
 
+/// Find in Folder… closes the dialog and asks for the folder as the app does for Type › Find Font's
+/// Find in Folder…; the dialog comes back searching the folder picked.
+#[test]
+fn find_in_folder_asks_for_the_folder_and_the_dialog_comes_back_searching_it() {
+    let root = folder("pick");
+    std::fs::create_dir_all(root.join("somewhere")).unwrap();
+    let mut app = app_for(&root);
+    let picks = crate::tests::picks::scripted(&mut app);
+    let doc = root.join("doc.vectorcraft");
+    save_doc(&mut app, &doc, "No Such Font Family", false);
+    open(&mut app, &doc);
+    pump(&mut app);
+    let ctx = app.ui_ctx.clone().expect("a window context");
+    let state = host(&app, |h| h.get::<MissingFontsDialog>().map(|d| d.state.clone())).expect("the dialog is open");
+    answer_cancel(&mut app);
+    assert!(!is_open::<MissingFontsDialog>(&app));
+    settle(&mut app, Answer { act: Act::Pick, state });
+    assert_eq!(picks.requests().last().map(|r| r.kind), Some(PickKind::Folder), "the app asks for a folder");
+    assert!(!is_open::<MissingFontsDialog>(&app), "the dialog waits for the answer");
+    picks.answer(&[&root.join("somewhere").to_string_lossy()]);
+    crate::tests::picks::poll(&mut app, &ctx);
+    pump(&mut app);
+    let f = fields(&app).expect("the dialog comes back");
+    assert_eq!(f["folder"], json!(root.join("somewhere").to_string_lossy()), "searching the folder picked: {f}");
+}
+
 /// Find Fonts opens Type › Find Font on the first missing font, to replace it, and the Missing
 /// Fonts dialog doesn't come back for that open.
 #[test]

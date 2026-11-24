@@ -21,7 +21,7 @@
 
 use std::time::Duration;
 
-use craft::host::{Host, PickId, PickKind, PickRequest};
+use craft::host::{PickKind, PickRequest};
 use craft::ui::buttons::Button;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, clicked};
@@ -154,6 +154,8 @@ enum Act {
     Search,
     /// Stop the running search, and stay open.
     Stop,
+    /// Ask for a folder to search: the dialog closes, and comes back searching it.
+    Pick,
 }
 
 /// How the dialog finished: what to do, and the state to open the dialog again with.
@@ -166,22 +168,11 @@ pub(crate) struct Answer {
 pub(crate) struct MissingFontsDialog {
     id: DialogId,
     state: State,
-    /// The folder pick Find in Folder… filed, until its answer comes.
-    ticket: Option<PickId>,
 }
 
 impl MissingFontsDialog {
     fn new(state: State) -> Self {
-        MissingFontsDialog { id: dialog_id(KIND), state, ticket: None }
-    }
-
-    /// Forget the pick the dialog is waiting for.
-    fn release(&mut self, ctx: &Context) {
-        if let Some(ticket) = self.ticket.take()
-            && let Some(host) = Host::try_of_ctx(ctx)
-        {
-            host.files().forget(ticket);
-        }
+        MissingFontsDialog { id: dialog_id(KIND), state }
     }
 }
 
@@ -221,10 +212,6 @@ impl StackDialog for MissingFontsDialog {
         self.state.set(field, value)
     }
 
-    fn cancelled(&mut self, ctx: &Context) {
-        self.release(ctx);
-    }
-
     fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<Answer>> {
         let searching = self.state.searching();
         let can_add = self.state.can_add();
@@ -232,23 +219,14 @@ impl StackDialog for MissingFontsDialog {
         let lines = progress(&Value::Object(self.state.status.clone()));
         let any_found = self.state.found.iter().any(|f| f["files"].as_array().is_some_and(|files| !files.is_empty()));
         let mut act = None;
-        let MissingFontsDialog { state, ticket, .. } = &mut *self;
+        let MissingFontsDialog { state, .. } = &mut *self;
         let State { fonts, next, found, chosen, can_pick, search_folder, .. } = state;
         let shown = FormDialog::new(tl!("Missing Fonts"), Bind::bound(chosen))
             .ok_label(tl!("Add Fonts"))
             .cancel_label(tl!("Close"))
             .ok_enabled(can_add)
             .extra_buttons([FooterButton::new(tl!("Find Fonts"), DialogRole::Other)])
-            .show(ui, |ui, form, chosen| {
-                if let Some(pending) = *ticket
-                    && let Some(answer) = form.take_pick_answer(pending)
-                {
-                    *ticket = None;
-                    if let Some(path) = answer.first_path() {
-                        *search_folder = path.to_string_lossy().into_owned();
-                        act = Some(Act::Search);
-                    }
-                }
+            .show(ui, |ui, _, chosen| {
                 Stack::new().show(ui, |ui, _| {
                     Text::new(tl!("These fonts aren't available. Their text shows in another font.")).shade(Shade::Muted).show(ui);
                     for f in fonts.iter() {
@@ -284,11 +262,9 @@ impl StackDialog for MissingFontsDialog {
                             *search_folder = next.clone();
                             act = Some(Act::Search);
                         }
-                        if *can_pick
-                            && clicked(&Button::new(tl!("Find in Folder…")).id_salt("pick").enabled(!searching).show(ui))
-                            && let Some(host) = form.env.host().cloned()
-                        {
-                            *ticket = Some(host.files().pick(PickRequest::folder("fonts")));
+                        // The app asks for the folder, as Type › Find Font's Find in Folder… does.
+                        if *can_pick && clicked(&Button::new(tl!("Find in Folder…")).id_salt("pick").enabled(!searching).show(ui)) {
+                            act = Some(Act::Pick);
                         }
                         if searching && clicked(&Button::new(tl!("Stop")).id_salt("stop").show(ui)) {
                             act = Some(Act::Stop);
@@ -315,9 +291,6 @@ impl StackDialog for MissingFontsDialog {
             act = Some(Act::Find);
         }
         let closed = act.is_none() && shown.closed.is_some();
-        if act.is_some() || closed {
-            self.release(ui.ctx());
-        }
         match act {
             Some(act) => Some(DialogResult::Ok(Answer { act, state: self.state.clone() })),
             None if closed => Some(DialogResult::Cancel),
@@ -399,6 +372,9 @@ fn settle(app: &mut VectorcraftApp, Answer { act, mut state }: Answer) {
         Act::Find => find_fonts(app, state.uid).map(|()| false),
         // The folder is searched once: one that doesn't start leaves the dialog without it.
         Act::Search => start_search(app, &mut state, &search_folder).map(|()| true),
+        // The app asks for the folder, as Type › Find Font's Find in Folder… does; the dialog comes back
+        // searching it. A question that is cancelled leaves the dialog closed.
+        Act::Pick => find_in_folder_command(app, None).map(|_| false),
         Act::Stop => app.run("text.findFontFiles", json!({ "stop": true })).map(|_| {
             if let Ok(r) = app.session.execute("text.findFontFiles", &json!({})) {
                 let error = follow(&mut state, &r);
