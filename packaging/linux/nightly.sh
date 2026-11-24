@@ -20,6 +20,9 @@ STAGE="$NIGHTLY_WORK/stage"
 mkdir -p "$STAGE"
 cp "$NIGHTLY_GUI" "$STAGE/vectorcraft"
 chmod 755 "$STAGE/vectorcraft"
+# An unpacked tar is isolated too: the launcher starts the GUI with this channel's own profile.
+cp "$ROOT/packaging/linux/nightly-launch.sh" "$STAGE/vectorcraft-nightly"
+chmod 755 "$STAGE/vectorcraft-nightly"
 cp "$ROOT/assets/app-icon/vectorcraft-1024.png" "$STAGE/vectorcraft.png"
 nightly_copy_notices "$STAGE"
 # The private mktemp cwd is the helper authority root, not a CLI path parent.

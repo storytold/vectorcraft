@@ -30,10 +30,11 @@ class ArchivePolicy(unittest.TestCase):
         self.stage.mkdir()
         self.output = self.root / "nightly.tar.gz"
         # The Linux nightly helper's allowlist: the GUI, its icon and the app's notices.
-        self.required = {"vectorcraft", "vectorcraft.png", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE", "ATTRIBUTION.md"}
+        self.required = {"vectorcraft", "vectorcraft-nightly", "vectorcraft.png", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE", "ATTRIBUTION.md"}
         for name in self.required:
             (self.stage / name).write_bytes(b"generated fixture: " + name.encode())
         (self.stage / "vectorcraft").chmod(0o755)
+        (self.stage / "vectorcraft-nightly").chmod(0o755)
 
     def test_flat_regular_ustar_with_all_notices(self):
         (self.stage / "OFL-Font.txt").write_text("generated fixture license", encoding="utf-8")
@@ -43,6 +44,8 @@ class ArchivePolicy(unittest.TestCase):
             self.assertTrue(all(m.isfile() and not m.pax_headers for m in archive))
             self.assertEqual(archive.extractfile("vectorcraft").read(), (self.stage / "vectorcraft").read_bytes())
             self.assertEqual(archive.getmember("vectorcraft").mode & 0o777, 0o755)
+            # The launcher ships beside the GUI and is executable as well.
+            self.assertEqual(archive.getmember("vectorcraft-nightly").mode & 0o777, 0o755)
         with gzip.open(self.output, "rb") as stream:
             while (header := stream.read(512)) != bytes(512):
                 self.assertEqual(len(header), 512)

@@ -44,7 +44,9 @@ nightly_build_gui() {
   nightly_compile_gui
   local actual
   actual="$("$NIGHTLY_GUI" --version)" || nightly_die 'side-effect-free nightly version verification failed'
-  [[ "$actual" == "VectorCraft $VERSION (nightly-v1)" || "$actual" == "vectorcraft "* ]] || nightly_die 'the built version/flavor is not the prepared identity'
+  # Exactly what the flavor prints for a nightly build (apps/vectorcraft: build_flavor::version):
+  # a stable build prints "vectorcraft <cargo version>", which is never the prepared identity.
+  [[ "$actual" == "VectorCraft $VERSION (nightly-v1)" ]] || nightly_die "the built version/flavor is not the prepared identity (got: $actual)"
   [[ "$(git -C "$ROOT" rev-parse HEAD)" == "$VECTORCRAFT_BUILD_SHA" && -z "$(git -C "$ROOT" status --porcelain)" ]] || nightly_die 'source changed during the version query'
 }
 

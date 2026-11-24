@@ -64,17 +64,16 @@ tar -xzf "$TARBALL" -C "$WORK/stage" --strip-components=1
 [[ -x "$WORK/stage/bin/vectorcraft" ]] || { echo "error: $TARBALL has no bin/vectorcraft" >&2; exit 1; }
 if [[ "$FLATPAK_ID" != "$APP_ID" ]]; then
   mv "$WORK/stage/bin/vectorcraft" "$WORK/stage/bin/vectorcraft-bin"
+  # The nightly selects its profile the flavor's way; the Flatpak's own HOME is the sandbox's.
   cat >"$WORK/stage/bin/vectorcraft" <<'WRAPPER'
 #!/bin/sh
 set -eu
 if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
   exec /app/libexec/vectorcraft "$@"
 fi
-if [ -z "${VECTORCRAFT_CONFIG_DIR+x}" ]; then
-  profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.var/app/ai.storyteller.vectorcraft.nightly/data}"
-  export VECTORCRAFT_CONFIG_DIR="$profile_base/profile"
-fi
-exec /app/libexec/vectorcraft "$@"
+profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
+exec /app/libexec/vectorcraft \
+  --launch-profile nightly-v1 --profile-root "$profile_base/vectorcraft-nightly" -- "$@"
 WRAPPER
   chmod 755 "$WORK/stage/bin/vectorcraft"
   sed -e "s|^Icon=$APP_ID$|Icon=$FLATPAK_ID|" \

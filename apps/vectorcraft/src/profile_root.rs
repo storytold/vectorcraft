@@ -217,10 +217,15 @@ fn validate_for(
         // would log to standard error only, so it is never a nightly launch.
         return Err("nightly-v1 cannot inherit VECTORCRAFT_NO_PREFS".to_string());
     }
-    if platform != Platform::Windows && env("FLATPAK_ID").is_some_and(|v| !v.is_empty()) {
-        // These rows are native tar and app-bundle launches, not a Flatpak package. Inheriting its
-        // runtime socket namespace could point another profile at the stable app's socket.
-        return Err("nightly-v1 native packages cannot inherit a Flatpak instance; launch through the native Launcher".to_string());
+    let nightly_flatpak = vectorcraft_ui_egui::os_window::NIGHTLY_PACKAGE_ID;
+    if platform != Platform::Windows
+        && let Some(id) = env("FLATPAK_ID").filter(|value| !value.is_empty())
+        && id.to_string_lossy().as_ref() != nightly_flatpak
+    {
+        // `packaging/linux/flatpak-bundle.sh` builds VectorCraft Nightly as its own Flatpak
+        // (`ai.storyteller.vectorcraft.nightly`), whose sandbox is already a private home. Any other
+        // instance, the stable app's included, would put this profile inside another app's tree.
+        return Err(format!("nightly-v1 can only run inside its own Flatpak instance ({nightly_flatpak}), not {}", id.to_string_lossy()));
     }
     let chosen = canonical_future(root)?;
     if is_portable_layout(root, platform) || is_portable_layout(&chosen, platform) {
@@ -390,6 +395,25 @@ mod tests {
             }
         }
         assert!(!root.exists(), "a refused launch creates nothing");
+    }
+
+    #[test]
+    fn only_the_nightly_s_own_flatpak_instance_may_carry_a_profile() {
+        let fixture = Fixture::new();
+        let root = fixture.root.join("flatpak profile");
+        for (id, accepted) in
+            [(vectorcraft_ui_egui::os_window::NIGHTLY_PACKAGE_ID, true), ("ai.storyteller.vectorcraft", false), ("io.other.App", false)]
+        {
+            let result = validate_for(
+                Platform::Linux,
+                &root,
+                |name| if name == "FLATPAK_ID" { Some(id.into()) } else { fixture.get(name) },
+                Some(&fixture.exe),
+                |_| Ok(()),
+            );
+            assert_eq!(result.is_ok(), accepted, "{id}");
+            let _ = std::fs::remove_dir_all(&root);
+        }
     }
 
     #[test]

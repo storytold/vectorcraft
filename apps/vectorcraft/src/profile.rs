@@ -33,6 +33,8 @@ static DATA_ROOT: OnceLock<PathBuf> = OnceLock::new();
 /// Makes `root` this process's settings folder and everything under it, once, before anything reads
 /// a path. The desktop calls it from `prepare_launch` with the root it validated; the command line
 /// tool never does, so it keeps resolving the user's own folder.
+// The desktop installs it from `prepare_launch`; `vectorcraft-cli` includes this file and never does.
+#[allow(dead_code)]
 pub(crate) fn install_data_root(root: PathBuf) -> Result<(), String> {
     if !root.is_absolute() {
         return Err("the data root must be absolute".to_string());

@@ -45,15 +45,20 @@ expect() {
     exit 1
   fi
 }
-expect "CONFIG=<$HOME/.local/share/vectorcraft-nightly>"
+# The launcher hands the GUI its channel's profile (the Launcher's own protocol), and everything it
+# was given becomes a file after `--`, even a name that looks like an option.
+expect "$(printf 'CONFIG=<>\n<--launch-profile>\n<nightly-v1>\n<--profile-root>\n<%s>\n<-->\n' "$HOME/.local/share/vectorcraft-nightly")"
 export XDG_DATA_HOME="$work/xdg with space"
-expect "$(printf 'CONFIG=<%s>\n<%s>\n<%s>\n' "$XDG_DATA_HOME/vectorcraft-nightly" 'drawing with spaces.svg' '--other-name.svg')" \
+expect "$(printf 'CONFIG=<>\n<--launch-profile>\n<nightly-v1>\n<--profile-root>\n<%s>\n<-->\n<%s>\n<%s>\n' \
+  "$XDG_DATA_HOME/vectorcraft-nightly" 'drawing with spaces.svg' '--other-name.svg')" \
   'drawing with spaces.svg' '--other-name.svg'
+# A version query reaches the binary without a profile: it must answer before any root exists.
 expect "$(printf 'CONFIG=<>\n<--version>\n')" --version
 expect "$(printf 'CONFIG=<>\n<-V>\n')" -V
+# A VECTORCRAFT_CONFIG_DIR in the caller's environment is not consulted: the profile comes from the
+# Launcher's arguments, and the nightly build refuses that variable.
+unset XDG_DATA_HOME
 VECTORCRAFT_CONFIG_DIR="$work/explicit with space" \
-  expect "$(printf 'CONFIG=<%s>\n<%s>\n' "$work/explicit with space" 'sample.svg')" sample.svg
-VECTORCRAFT_CONFIG_DIR="" \
-  expect "$(printf 'CONFIG=<>\n<%s>\n' 'sample.svg')" sample.svg
+  expect "$(printf 'CONFIG=<%s>\n<--launch-profile>\n<nightly-v1>\n<--profile-root>\n<%s>\n<-->\n<%s>\n' "$work/explicit with space" "$HOME/.local/share/vectorcraft-nightly" 'sample.svg')" sample.svg
 
-echo "PASS: Arch Nightly handoff isolates the profile and preserves launch arguments"
+echo "PASS: Arch Nightly handoff passes the nightly profile and preserves launch arguments"

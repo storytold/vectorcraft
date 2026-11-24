@@ -145,21 +145,32 @@ if has deb || has rpm; then
     rm -rf "$NFPM_STAGE"
     cp -R "$STAGE" "$NFPM_STAGE"
     install -Dm755 "$NFPM_STAGE/usr/bin/vectorcraft" "$NFPM_STAGE/usr/lib/vectorcraft-nightly/vectorcraft"
+    # The nightly is started the Launcher's way, with its own profile root: the build refuses
+    # VECTORCRAFT_CONFIG_DIR, so the wrapper passes the profile instead of an environment override.
     cat >"$NFPM_STAGE/usr/bin/$NFPM_BIN" <<'WRAPPER'
 #!/bin/sh
 set -eu
 if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
   exec /usr/lib/vectorcraft-nightly/vectorcraft "$@"
 fi
+profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
+exec /usr/lib/vectorcraft-nightly/vectorcraft \
+  --launch-profile nightly-v1 --profile-root "$profile_base/vectorcraft-nightly" -- "$@"
+WRAPPER
+    chmod 755 "$NFPM_STAGE/usr/bin/$NFPM_BIN"
+    rm -f "$NFPM_STAGE/usr/bin/vectorcraft"
+    # The CLI is a separate program that keeps the environment override: it follows the same folder.
+    install -Dm755 "$NFPM_STAGE/usr/bin/vectorcraft-cli" "$NFPM_STAGE/usr/lib/vectorcraft-nightly/vectorcraft-cli"
+    cat >"$NFPM_STAGE/usr/bin/$NFPM_CLI" <<'CLI_WRAPPER'
+#!/bin/sh
+set -eu
 if [ -z "${VECTORCRAFT_CONFIG_DIR+x}" ]; then
   profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
   export VECTORCRAFT_CONFIG_DIR="$profile_base/vectorcraft-nightly"
 fi
-exec /usr/lib/vectorcraft-nightly/vectorcraft "$@"
-WRAPPER
-    chmod 755 "$NFPM_STAGE/usr/bin/$NFPM_BIN"
-    rm -f "$NFPM_STAGE/usr/bin/vectorcraft"
-    mv "$NFPM_STAGE/usr/bin/vectorcraft-cli" "$NFPM_STAGE/usr/bin/$NFPM_CLI"
+exec /usr/lib/vectorcraft-nightly/vectorcraft-cli "$@"
+CLI_WRAPPER
+    chmod 755 "$NFPM_STAGE/usr/bin/$NFPM_CLI"
     mv "$NFPM_STAGE/usr/share/doc/vectorcraft" "$NFPM_STAGE/usr/share/doc/$NFPM_NAME"
     sed -e "s#^Exec=vectorcraft\([[:space:]]\|$\)#Exec=$NFPM_BIN\1#" \
         -e "s|^TryExec=vectorcraft$|TryExec=$NFPM_BIN|" \
@@ -216,6 +227,7 @@ if has appimage; then
   cp -R "$STAGE" "$APPDIR"
   if [[ "$IS_NIGHTLY" = 1 ]]; then
     APPIMAGE_ID="$APP_ID.nightly-v1"
+    # A script, not a symlink, and the flavor's own way of selecting the profile (see the deb wrapper).
     cat >"$APPDIR/AppRun" <<'WRAPPER'
 #!/bin/sh
 set -eu
@@ -223,11 +235,9 @@ APPDIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
   exec "$APPDIR/usr/bin/vectorcraft" "$@"
 fi
-if [ -z "${VECTORCRAFT_CONFIG_DIR+x}" ]; then
-  profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
-  export VECTORCRAFT_CONFIG_DIR="$profile_base/vectorcraft-nightly"
-fi
-exec "$APPDIR/usr/bin/vectorcraft" "$@"
+profile_base="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}"
+exec "$APPDIR/usr/bin/vectorcraft" \
+  --launch-profile nightly-v1 --profile-root "$profile_base/vectorcraft-nightly" -- "$@"
 WRAPPER
     chmod 755 "$APPDIR/AppRun"
     sed -e "s|^Icon=$APP_ID$|Icon=$APPIMAGE_ID|" \
