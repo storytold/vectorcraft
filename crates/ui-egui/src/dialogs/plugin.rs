@@ -516,6 +516,8 @@ pub(crate) struct InstallPrompt {
     message: String,
     detail: String,
     automated: bool,
+    /// Automation's injected input pressed OK since [`pump_install`] last looked: the question stays open.
+    refused: bool,
 }
 
 impl InstallPrompt {
@@ -526,13 +528,13 @@ impl InstallPrompt {
             message: pending.message.clone(),
             detail: pending.detail.clone(),
             automated: pending.origin == InstallOrigin::Automation,
+            refused: false,
         }
     }
 }
 
 impl StackDialog for InstallPrompt {
-    /// OK was pressed in a pass automation's injected input drove: the answer is read after that pass.
-    type Result = bool;
+    type Result = ();
 
     fn id(&self) -> DialogId {
         self.id
@@ -542,20 +544,26 @@ impl StackDialog for InstallPrompt {
         Some(INSTALL_KIND)
     }
 
-    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<bool>> {
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<()>> {
         let mut prompt = Prompt::new(tl!("Install Plug-in"), self.message.clone()).paragraph(self.detail.clone());
         if self.automated {
             prompt = prompt.paragraph(automation_asked_note());
         }
+        // An OK pressed by the pass's injected input is refused and leaves the question open.
+        let injected = WindowHost::of(ui.ctx()).injected_pass();
         // `Other`: Enter answers only an accepting or destructive answer, and OK must not take it unfocused.
         let shown = prompt
             .answers([
-                FooterButton::new(tl!("OK"), DialogRole::Other).enabled(!self.automated).armed_after(APPROVAL_DELAY),
+                FooterButton::new(tl!("OK"), DialogRole::Other).enabled(!self.automated).armed_after(APPROVAL_DELAY).stays_open(injected),
                 FooterButton::new(tl!("Cancel"), DialogRole::Cancel),
             ])
             .show(ui);
         match shown.picked {
-            Some(0) => Some(DialogResult::Ok(WindowHost::of(ui.ctx()).injected_pass())),
+            Some(0) if injected => {
+                self.refused = true;
+                None
+            }
+            Some(0) => Some(DialogResult::Ok(())),
             Some(1) => Some(DialogResult::Cancel),
             _ => None,
         }
@@ -579,35 +587,41 @@ pub(crate) fn ask_install(app: &mut VectorcraftApp, mut pending: PendingInstall)
     json!({ "pending": INSTALL_KIND })
 }
 
+/// What the status line says when automation pressed the approval's OK.
+const REFUSED: &str = "Only the person at the keyboard can approve installing a plug-in";
+
 /// The answer to the install question: Cancel drops it; OK installs the module the question showed,
-/// when a person pressed it.
+/// when a person pressed it. An OK automation's input pressed leaves the question open and says why.
 fn pump_install(app: &mut VectorcraftApp) {
     let Some(dialogs) = app.dialogs() else { return };
     let question = app.pending_plugin_install.as_ref().and_then(|p| p.question);
-    let answer = dialogs.with(|host| {
+    let (answer, refused) = dialogs.with(|host| {
+        let refused = question.and_then(|id| host.get_mut_by_id::<InstallPrompt>(id)).is_some_and(|p| std::mem::take(&mut p.refused));
         let answer = question.and_then(|id| host.take_by_id::<InstallPrompt>(id));
         // A question a newer one replaced was answered Cancel: that answer is not the pending install's.
         while host.take::<InstallPrompt>().is_some() {}
-        answer
+        (answer, refused)
     });
+    if refused {
+        app.status(REFUSED.to_string());
+    }
     let Some(answer) = answer else { return };
     match answer.ok() {
-        Some(injected) => approve(app, injected),
+        Some(()) => approve(app),
         None => app.pending_plugin_install = None,
     }
 }
 
-/// OK of the install question, `injected` when automation's input pressed it. A question automation
-/// asked has no OK that installs, and automation can't press one: either asks again, a new question
-/// that waits its delay.
-fn approve(app: &mut VectorcraftApp, injected: bool) {
+/// A person's OK of the install question. A question automation asked has no OK that installs, and
+/// a control request can't press one: either asks again, a new question that waits its delay.
+fn approve(app: &mut VectorcraftApp) {
     let Some(pending) = app.pending_plugin_install.take() else { return };
     if pending.origin == InstallOrigin::Automation {
         ask_install(app, pending);
         return;
     }
-    if injected || app.automation_is_acting() {
-        app.status("Only the person at the keyboard can approve installing a plug-in".to_string());
+    if app.automation_is_acting() {
+        app.status(REFUSED.to_string());
         ask_install(app, pending);
         return;
     }

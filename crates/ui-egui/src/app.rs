@@ -565,6 +565,8 @@ impl VectorcraftApp {
             self.session.set_replaying(false);
             self.status(format!("Internal error: {msg} (please report this bug)"));
         }
+        // After the pass's UI, which reads whether the pass carries injected input.
+        self.poll_input(&ctx);
     }
 
     /// [`Self::ui`]'s work, inside its guard: the window's shell with its bars and the panels and

@@ -29,9 +29,9 @@ fn write_automation_file(
 }
 
 impl VectorcraftApp {
-    /// Once per host iteration: answers the finished captures, runs the control requests the
-    /// transport queued, each inside the automation roots, and answers the requests that waited for
-    /// injected input.
+    /// Once per host iteration: answers the finished captures and runs the control requests the
+    /// transport queued, each inside the automation roots. The requests that wait for injected
+    /// input are answered by [`Self::poll_input`].
     pub(crate) fn run_control(&mut self, ctx: &egui::Context) {
         if self.channel.is_none() {
             return;
@@ -75,8 +75,15 @@ impl VectorcraftApp {
             }
         }
         self.answer_pointer_waits(ctx);
+    }
+
+    /// Answers the requests that waited for injected input once the window host has run it, or
+    /// fails them when it withdrew the input. Called at the end of a pass, after its UI, or between
+    /// passes: called earlier in a pass, it would count the step the pass carries as run, and the
+    /// rest of the pass would no longer read as injected (`WindowHost::injected_pass`).
+    pub(crate) fn poll_input(&mut self, ctx: &egui::Context) {
         if let Some(channel) = self.channel.as_mut() {
-            channel.poll_input(&host);
+            channel.poll_input(&WindowHost::of(ctx));
         }
     }
 
