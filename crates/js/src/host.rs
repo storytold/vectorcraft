@@ -321,7 +321,7 @@ impl Interp {
             self.use_fuel()?;
             self.charge_reading(r, k.len().saturating_mul(3).saturating_add(8))?;
             let name = String::from_utf16_lossy(&k);
-            if r.hosted && (name == crate::HOST_REF_KEY || name == crate::FILE_REF_KEY) {
+            if r.hosted && (name == crate::HOST_REF_KEY || name == crate::FILE_REF_KEY || name == crate::FOLDER_REF_KEY) {
                 return Err(self.data_error(r, ErrorType::Type, "is not plain data"));
             }
             r.path.push(Step::Name(k));
@@ -344,6 +344,14 @@ impl Interp {
     pub(crate) fn write_data(&mut self, d: Data, depth: usize, frozen: bool) -> JsResult<Value> {
         if depth > self.data_limits.depth {
             return Err(self.throw(ErrorType::Range, "a host value is nested too deep"));
+        }
+        // A host member's `File` or `Folder` ([`crate::file_ref`], [`crate::folder_ref`]).
+        if self.write_hosted
+            && let Data::Object(items) = &d
+            && let [(k, Data::String(path))] = items.as_slice()
+            && (k == crate::FILE_REF_KEY || k == crate::FOLDER_REF_KEY)
+        {
+            return self.write_fs_ref(path, k == crate::FOLDER_REF_KEY);
         }
         Ok(match d {
             Data::Undefined => Value::Undefined,

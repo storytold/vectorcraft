@@ -130,6 +130,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
+    /// `SaveOptions.SAVECHANGES` read at `line`: a `Document.close` given it saves the document to
+    /// its own file, and the value may reach `close` through a variable or an argument.
+    fn save_changes(&mut self, line: Option<usize>) {
+        self.acc.feature(FeatureId::FileWrite, line);
+        self.acc.outside(OutsideId::FilesWritten, line, None);
+    }
+
     /// A File object's `length`, `hidden` or `readonly` set at `line`: the file changes.
     fn file_setter(&mut self, line: Option<usize>) {
         self.acc.feature(FeatureId::FileWrite, line);
@@ -199,6 +206,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if of(catalog::FOLDER) && catalog::FOLDER_PLACES.contains(&n) {
                 self.acc.feature(FeatureId::FilePlaces, line);
+            }
+            if n == catalog::SAVE_CHANGES {
+                self.save_changes(line);
             }
             if n == catalog::ON_DRAW {
                 self.acc.feature(FeatureId::ScriptuiDrawing, line);
@@ -418,6 +428,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let [h0, h1, h2, _] = self.h;
         if t.text.contains(catalog::ACTION_TEXT) {
             self.acc.feature(FeatureId::Actions, line);
+        }
+        // `SaveOptions['SAVECHANGES']`, or the value written as the string `"SaveOptions.SAVECHANGES"`.
+        let value = unquote(t.text, 32);
+        if value == catalog::SAVE_CHANGES
+            || value.strip_prefix(catalog::SAVE_OPTIONS).and_then(|r| r.strip_prefix('.')) == Some(catalog::SAVE_CHANGES)
+        {
+            self.save_changes(line);
         }
         let compares = h0.is_some_and(|s| s.kind == T::Punct && matches!(s.text, "==" | "===" | "!=" | "!=="));
         if compares && word(h1, "typename") && is(h2, ".") {

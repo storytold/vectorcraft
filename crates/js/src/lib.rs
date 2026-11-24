@@ -81,7 +81,7 @@ pub use ast::{
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
-pub use file_classes::{FILE_REF_KEY, file_ref_path};
+pub use file_classes::{FILE_REF_KEY, FOLDER_REF_KEY, file_ref, file_ref_path, folder_ref};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
 pub use host_classes::{HOST_REF_KEY, HostClass, HostMember, host_ref, host_ref_parts};
 pub use lexer::{Goal, Lexer};

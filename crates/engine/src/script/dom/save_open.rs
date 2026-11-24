@@ -1,5 +1,6 @@
 //! Saving, exporting and opening documents in the script object model: `Document.saveAs`,
-//! `Document.exportFile`, `app.open` and `app.userInteractionLevel`, with the option classes the
+//! `Document.exportFile`, `Document.fullName`, `Document.path`, `Document.saved`,
+//! `Document.close`, `app.open` and `app.userInteractionLevel`, with the option classes the
 //! help pages <https://ai-scripting.docsforadobe.dev/jsobjref/Document/>,
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/Application/>,
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/IllustratorSaveOptions/>,
@@ -29,7 +30,25 @@
 //!   the default its help page gives and throws an error that says it is not available yet at any
 //!   other value; a property the help pages do not list throws an error that names it, unless it is
 //!   `undefined`. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
-//!   keeps the preset's value.
+//!   keeps the preset's value. A `pDFPreset` in square brackets names the built-in preset of the
+//!   name inside them; the default preset's name and `[PDF/X-4:2008]` name VectorCraft Default and
+//!   PDF/X-4:2010.
+//! - `artboardRange` is a string, or a number read as `String(number)`. With
+//!   `saveMultipleArtboards` true, a `.ai` save also writes each artboard of the range (all when it
+//!   is empty) to a file of its own, `<name>-<artboard name>.ai`. An EPS save of a range of two or
+//!   more artboards writes the file at the path and `<name>_<artboard name>.eps` for each of them, and an EPS
+//!   save of one artboard writes only the file at the path, holding that artboard. Without
+//!   `saveMultipleArtboards` the range is not used, but a value that is not written as a range of
+//!   artboard numbers throws.
+//! - `Document.path` is a `Folder` for the folder of the document's file. A document that has no
+//!   file has a `fullName` of a `File` for its name in `Folder.current` and a `path` of `""`.
+//!   `fullName` and `path` of a document whose file the automation read roots do not allow throw
+//!   `Script file access denied`. Setting `Document.saved` runs `document.setSaved`.
+//! - `Document.close` with unsaved changes closes without them with
+//!   `SaveOptions.DONOTSAVECHANGES`, and saves them to the document's file first with
+//!   `SaveOptions.SAVECHANGES`, which throws for a document that has no file (a converted or
+//!   recovered one included). `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws, since a
+//!   script cannot show the prompt.
 //! - `app.open(file, documentColorSpace?, options?)` takes `options` as a `PDFFileOptions` record:
 //!   an object with `pageToOpen` and `pDFCropToBox`, used for that call only. Any other property
 //!   but `typename` and `parent` throws the same error, unless it is `undefined`.
@@ -44,8 +63,8 @@ use serde_json::{Map, Value, json};
 use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostMember};
 
 use super::{
-    Answer, Host, Link, MAX_TEXT_BYTES, NO_ACTIVE_DOCUMENT, arg, boolean, command, current, doc_ref, given, method, named, num, on_doc, property,
-    text, this_doc, whole,
+    Answer, Host, Link, MAX_TEXT_BYTES, NO_ACTIVE_DOCUMENT, arg, boolean, command, current, doc_ref, get, given, method, named, num, on_doc,
+    property, text, this_doc, whole,
 };
 
 /// The most a scale factor of an export takes, in percent.
@@ -86,6 +105,7 @@ pub(super) const ENUMS: &[(&str, &[&str])] = &[
     ("EPSPostScriptLevelEnum", &["LEVEL2", "LEVEL3"]),
     ("PDFOverprint", &["DISCARDPDFOVERPRINT", "PRESERVEPDFOVERPRINT"]),
     ("UserInteractionLevel", &["DISPLAYALERTS", "DONTDISPLAYALERTS"]),
+    ("SaveOptions", &["DONOTSAVECHANGES", "PROMPTTOSAVECHANGES", "SAVECHANGES"]),
 ];
 
 const DISPLAY: &str = "UserInteractionLevel.DISPLAYALERTS";
@@ -165,9 +185,17 @@ fn compatibility(class: &str, d: &Data) -> std::result::Result<(), HostError> {
     }
 }
 
-/// An artboard range: a string, given to the command as `range` unless it is empty.
+/// An artboard range: a string, or a whole number from 1 read as `String(number)` reads it, given to
+/// the command as `range` unless it is empty. Any other number throws.
 fn range(d: &Data, what: &str, p: &mut Map<String, Value>) -> std::result::Result<(), HostError> {
-    let Data::String(s) = d else { return Err(HostError::Type(format!("{what} must be a string"))) };
+    let s = match d {
+        Data::String(s) => s.clone(),
+        Data::Number(n) => {
+            whole(*n).filter(|n| *n >= 1).ok_or_else(|| HostError::Range(format!("{what} must be a whole number from 1 or a range")))?;
+            vectorcraft_js::number_to_string(*n)
+        }
+        _ => return Err(HostError::Type(format!("{what} must be a string or a number"))),
+    };
     if s.len() > MAX_TEXT_BYTES {
         return Err(HostError::Range(format!("{what} is too long")));
     }
@@ -189,17 +217,76 @@ fn ai_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Resu
             compatibility("IllustratorSaveOptions", d)?;
             None
         }
+        "artboardRange" | "saveMultipleArtboards" => return artboards_map("IllustratorSaveOptions", name, d, p),
         _ => return Ok(false),
     };
     Ok(true)
 }
 
+/// `artboardRange` and `saveMultipleArtboards` of a `.ai` or EPS save, as `range` and
+/// [`MULTIPLE`] until [`artboard_files`] reads them together.
+fn artboards_map(class: &str, name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Result<bool, HostError> {
+    let what = format!("{class}.{name}");
+    if name == "artboardRange" {
+        range(d, &what, p)?;
+    } else {
+        p.insert(MULTIPLE.into(), json!(boolean(d, &what)?));
+    }
+    Ok(true)
+}
+
+/// The key [`artboards_map`] keeps `saveMultipleArtboards` under.
+const MULTIPLE: &str = "_multiple";
+
+/// The params of a `.ai` (`format` `ai`) or EPS save for `saveMultipleArtboards` and
+/// `artboardRange`: with `saveMultipleArtboards` true, the range (all when it is empty) goes to
+/// `separateArtboards` of a `.ai` save or `useArtboards` of an EPS save, which write the artboards'
+/// files; otherwise the range is not used, as the help pages say, but one that is not written as a
+/// range ([`written_as_range`]) still throws.
+fn artboard_files(format: &str, q: &mut Map<String, Value>) -> std::result::Result<(), HostError> {
+    let multiple = q.remove(MULTIPLE).and_then(|v| v.as_bool()).unwrap_or(false);
+    if !multiple {
+        if let Some(Value::String(r)) = q.remove("range")
+            && !r.trim().eq_ignore_ascii_case("all")
+            && !written_as_range(&r)
+        {
+            return Err(HostError::Range(format!("artboardRange `{r}` is not a range of artboard numbers")));
+        }
+    } else if format == "ai" {
+        q.insert("separateArtboards".into(), json!(true));
+    } else {
+        q.insert("useArtboards".into(), json!(true));
+    }
+    Ok(())
+}
+
+/// Whether `r` is written as an artboard range, whatever artboards a document has: parts separated
+/// by commas, each a number from 1, or two of them joined by `-` or `–` with either one left out
+/// and the first no greater than the second.
+fn written_as_range(r: &str) -> bool {
+    // A number of digits alone, from 1; past `u64` it counts as the largest.
+    let num = |t: &str| -> Option<Option<u64>> {
+        let t = t.trim();
+        if t.is_empty() {
+            return Some(None);
+        }
+        let n = t.bytes().all(|b| b.is_ascii_digit()).then(|| t.parse::<u64>().unwrap_or(u64::MAX))?;
+        (n >= 1).then_some(Some(n))
+    };
+    r.split(',').map(str::trim).filter(|p| !p.is_empty()).all(|part| match part.replace('\u{2013}', "-").split_once('-') {
+        Some((a, b)) => match (num(a), num(b)) {
+            (Some(Some(a)), Some(Some(b))) => a <= b,
+            (Some(a), Some(b)) => a.is_some() || b.is_some(),
+            _ => false,
+        },
+        None => matches!(num(part), Some(Some(_))),
+    })
+}
+
 const AI_KEPT: &[(&str, Default)] = &[
-    ("artboardRange", Default::Text("")),
     ("embedLinkedFiles", Default::Bool(false)),
     ("flattenOutput", Default::Member("OutputFlattening", "PRESERVEAPPEARANCE")),
     ("fontSubsetThreshold", Default::Num(100.0)),
-    ("saveMultipleArtboards", Default::Bool(false)),
 ];
 
 fn ai_starts() -> Vec<(&'static str, Data)> {
@@ -236,18 +323,17 @@ fn eps_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Res
             p.insert("overprints".into(), json!(if keep { "preserve" } else { "discard" }));
         }
         "compatibility" => compatibility("EPSSaveOptions", d)?,
+        "artboardRange" | "saveMultipleArtboards" => return artboards_map("EPSSaveOptions", name, d, p),
         _ => return Ok(false),
     }
     Ok(true)
 }
 
 const EPS_KEPT: &[(&str, Default)] = &[
-    ("artboardRange", Default::Text("")),
     ("compatibleGradientPrinting", Default::Bool(false)),
     ("embedAllFonts", Default::Bool(false)),
     ("embedLinkedFiles", Default::Unset),
     ("flattenOuput", Default::Unset),
-    ("saveMultipleArtboards", Default::Bool(false)),
 ];
 
 fn eps_starts() -> Vec<(&'static str, Data)> {
@@ -578,6 +664,29 @@ fn plain(real: std::path::PathBuf) -> String {
     crate::cmd::findfiles::plain(real).to_string_lossy().into_owned()
 }
 
+/// The built-in preset names scripts use that VectorCraft's built-in presets name otherwise, and the
+/// preset each one names here.
+const PRESET_ALIASES: &[(&str, &str)] = &[
+    ("Illustrator Default", vectorcraft_pdf::DEFAULT_PRESET), // brand-ok: the preset name scripts use
+    ("PDF/X-4:2008", "PDF/X-4:2010"),
+];
+
+/// A `pDFPreset` in square brackets (`[Smallest File Size]`) names the built-in preset of the name
+/// inside the brackets, or the one [`PRESET_ALIASES`] gives for it. A preset the name already
+/// names, a saved preset called `[Name]` included, is left as it is, and any other name is left for
+/// the save to refuse.
+fn builtin_preset_name(h: &Host, q: &mut Map<String, Value>) {
+    let Some(name) = q.get("preset").and_then(Value::as_str) else { return };
+    let s = h.session.borrow();
+    if crate::cmd::fileio::pdf::find_preset(name, &s.prefs.pdf_presets).is_some() {
+        return;
+    }
+    let Some(inside) = name.trim().strip_prefix('[').and_then(|n| n.strip_suffix(']')) else { return };
+    let inside = PRESET_ALIASES.iter().find(|(alias, _)| alias.eq_ignore_ascii_case(inside.trim())).map_or(inside, |(_, to)| to);
+    let Some(builtin) = vectorcraft_pdf::builtin_preset(inside) else { return };
+    q.insert("preset".into(), json!(builtin.name));
+}
+
 /// `document.saveAs(file, options?)`: `file.saveAs` on the document, in the format the options'
 /// class names (`ai`, `eps`, `pdf`), or without options in the format of the path's extension.
 fn doc_save_as(h: &Host, a: &[Data]) -> Answer {
@@ -594,7 +703,12 @@ fn doc_save_as(h: &Host, a: &[Data]) -> Answer {
         let Some((class, format)) = SAVE_CLASSES.iter().find(|(c, _)| Some(c.name) == name) else {
             return Err(HostError::Type("saveAs options must be IllustratorSaveOptions, EPSSaveOptions or PDFSaveOptions".into()));
         };
-        let q = options_params(class, o)?;
+        let mut q = options_params(class, o)?;
+        if *format == "pdf" {
+            builtin_preset_name(h, &mut q);
+        } else {
+            artboard_files(format, &mut q)?;
+        }
         p.insert("format".into(), json!(format));
         if *format == "ai" {
             p.extend(q);
@@ -717,6 +831,101 @@ fn app_open(h: &Host, a: &[Data]) -> Answer {
     Ok(doc_ref(h, st.uid))
 }
 
+/// The document's file, `None` for a document that has none, or `Script file access denied` with
+/// the document's name when the automation read roots do not allow the file to be named
+/// ([`crate::file_access::check_read`]), as `app.getIsFileOpen` reads them.
+fn shown_file(st: &crate::DocState) -> std::result::Result<Option<&str>, HostError> {
+    match st.path.as_deref() {
+        Some(p) if crate::file_access::check_read(p).is_err() => {
+            Err(HostError::Error(format!("{}: {}", super::super::files::ACCESS_DENIED, st.title())))
+        }
+        p => Ok(p),
+    }
+}
+
+/// `document.fullName`: a `File` for the document's file, or, for a document that has none, a
+/// `File` for its name in `Folder.current`.
+fn doc_full_name(h: &Host, a: &[Data]) -> Answer {
+    let doc = this_doc(h, a)?;
+    super::with_doc(h, doc, |_, st| {
+        Ok(match shown_file(st)? {
+            Some(p) => vectorcraft_js::file_ref(p),
+            None => vectorcraft_js::file_ref(&st.title()),
+        })
+    })
+}
+
+/// `document.path`: a `Folder` for the folder of the document's file, or an empty string for a
+/// document that has none.
+fn doc_path(h: &Host, a: &[Data]) -> Answer {
+    let doc = this_doc(h, a)?;
+    let folder = super::with_doc(h, doc, |_, st| {
+        Ok(shown_file(st)?.and_then(|p| {
+            let parent = std::path::Path::new(p).parent()?.to_string_lossy().into_owned();
+            (!parent.is_empty()).then_some(parent)
+        }))
+    })?;
+    Ok(folder.map_or_else(|| text(""), |f| vectorcraft_js::folder_ref(&f)))
+}
+
+/// `document.saved`: whether the document has no changes since it was opened or last saved.
+fn doc_saved(h: &Host, a: &[Data]) -> Answer {
+    let doc = this_doc(h, a)?;
+    Ok(Data::Bool(super::with_doc(h, doc, |_, st| !st.is_dirty())))
+}
+
+/// `document.saved = value`: `document.setSaved`, which records the document as saved or as having
+/// unsaved changes without saving it.
+fn doc_set_saved(h: &Host, a: &[Data]) -> Answer {
+    let doc = this_doc(h, a)?;
+    let saved = boolean(arg(a, 1), "Document.saved")?;
+    command(h, "document.setSaved", &json!({"index": doc.index, "saved": saved}))?;
+    Ok(Data::Undefined)
+}
+
+/// The error `close` gives for a document with unsaved changes with
+/// `SaveOptions.PROMPTTOSAVECHANGES`.
+const UNSAVED_CHANGES: &str =
+    "the document has unsaved changes: save them first, or close with SaveOptions.SAVECHANGES or SaveOptions.DONOTSAVECHANGES";
+
+/// The error `close(SaveOptions.SAVECHANGES)` gives for a document with unsaved changes that has
+/// no file to save to.
+const NO_FILE_TO_SAVE: &str =
+    "the document has unsaved changes and no file to save them to: save it with saveAs first, or close with SaveOptions.DONOTSAVECHANGES";
+
+/// `document.close(saveOptions?)`: `file.close` of the document. A document without unsaved
+/// changes closes with any `SaveOptions`. With unsaved changes, `SaveOptions.DONOTSAVECHANGES`
+/// closes it without them; `SaveOptions.SAVECHANGES` saves them to the document's file with
+/// `file.saveAs` in the format its extension names, after the write-access check `saveAs` makes of
+/// the path, and then closes it, and throws [`NO_FILE_TO_SAVE`]
+/// for a document that has no file, a converted or recovered one included; and
+/// `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws [`UNSAVED_CHANGES`], since a script
+/// cannot show the prompt.
+fn doc_close(h: &Host, a: &[Data]) -> Answer {
+    let doc = this_doc(h, a)?;
+    let how = match given(arg(a, 1)).filter(|d| !matches!(d, Data::Null)) {
+        Some(d) => member(d, "SaveOptions", &["DONOTSAVECHANGES", "PROMPTTOSAVECHANGES", "SAVECHANGES"], "saveOptions")?,
+        None => "PROMPTTOSAVECHANGES",
+    };
+    let (dirty, file) = super::with_doc(h, doc, |_, st| (st.is_dirty(), st.path.clone().filter(|_| !st.converted && !st.recovered)));
+    if dirty {
+        match how {
+            "DONOTSAVECHANGES" => {}
+            "SAVECHANGES" => {
+                let path = file.ok_or_else(|| HostError::Error(NO_FILE_TO_SAVE.into()))?;
+                // A refusal names the document, as `fullName` does when the read roots hide its file.
+                let name = super::with_doc(h, doc, |_, st| st.title());
+                let real = h.disk.borrow().save_target(&path).map_err(|m| refused(m, &name))?;
+                let p = json!({"path": plain(real)});
+                exactly(h, || on_doc(h, doc.uid, false, |h| command(h, "file.saveAs", &p)))?;
+            }
+            _ => return Err(HostError::Error(UNSAVED_CHANGES.into())),
+        }
+    }
+    command(h, "file.close", &json!({"index": doc.index}))?;
+    Ok(Data::Undefined)
+}
+
 fn app_interaction(h: &Host, _: &[Data]) -> Answer {
     Ok(text(if h.dom.save_options.quiet.get() { QUIET } else { DISPLAY }))
 }
@@ -734,7 +943,14 @@ pub(super) fn application_members(l: &Link) -> Vec<(String, HostMember)> {
 
 /// The members these add to `Document`.
 pub(super) fn document_members(l: &Link) -> Vec<(String, HostMember)> {
-    named(vec![("saveAs", method(l, doc_save_as)), ("exportFile", method(l, doc_export_file))])
+    named(vec![
+        ("saveAs", method(l, doc_save_as)),
+        ("exportFile", method(l, doc_export_file)),
+        ("fullName", get(l, doc_full_name)),
+        ("path", get(l, doc_path)),
+        ("saved", property(l, doc_saved, doc_set_saved)),
+        ("close", method(l, doc_close)),
+    ])
 }
 
 /// The option classes: each `new Name()` gives a record with its `typename` and the defaults its

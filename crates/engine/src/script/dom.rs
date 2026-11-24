@@ -1865,7 +1865,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, doc_selection, doc_set_selection)),
     ]);
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "close"]
+        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );

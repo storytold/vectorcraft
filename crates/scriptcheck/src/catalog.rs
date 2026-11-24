@@ -77,6 +77,12 @@ pub(crate) const DOM_ROOTS: [&str; 4] = ["app", "activeDocument", "documents", "
 // Document methods that write the file they are given: https://ai-scripting.docsforadobe.dev/jsobjref/Document/
 pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportFile", "saveAs"];
 
+// The save option of `Document.close` that saves the document to its own file:
+// https://ai-scripting.docsforadobe.dev/jsobjref/Document/ and
+// https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/ (SaveOptions).
+pub(crate) const SAVE_CHANGES: &str = "SAVECHANGES";
+pub(crate) const SAVE_OPTIONS: &str = "SaveOptions";
+
 // Application methods that page doesn't list, named in public forum posts:
 // https://community.adobe.com/t5/illustrator-discussions/changes-in-cs6/td-p/4173362 (executeMenuCommand,
 // doScript, loadAction, unloadAction) and

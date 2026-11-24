@@ -54,6 +54,11 @@ impl Classes {
 /// plain object a script made that carries the key is refused.
 pub const FILE_REF_KEY: &str = "\u{0}fileRef";
 
+/// The one key of the [`crate::Data`] object a host gives for a `Folder`, with the folder's path in
+/// the host's platform form as its value. A plain object a script made that carries the key is
+/// refused.
+pub const FOLDER_REF_KEY: &str = "\u{0}folderRef";
+
 /// The path of the `File` that `d` stands for ([`FILE_REF_KEY`]).
 pub fn file_ref_path(d: &crate::Data) -> Option<&str> {
     let crate::Data::Object(items) = d else { return None };
@@ -63,7 +68,33 @@ pub fn file_ref_path(d: &crate::Data) -> Option<&str> {
     }
 }
 
+/// What a host gives for a `File` at `path`, in the host's platform form: the script receives a
+/// `File` object for it.
+pub fn file_ref(path: &str) -> crate::Data {
+    crate::Data::Object(vec![(FILE_REF_KEY.to_string(), crate::Data::String(path.to_string()))])
+}
+
+/// What a host gives for a `Folder` at `path`, in the host's platform form: the script receives a
+/// `Folder` object for it.
+pub fn folder_ref(path: &str) -> crate::Data {
+    crate::Data::Object(vec![(FOLDER_REF_KEY.to_string(), crate::Data::String(path.to_string()))])
+}
+
 impl Interp {
+    /// A new `File` (or, with `folder`, a `Folder`) for `path`, a path in the host's platform form
+    /// that a host gave ([`file_ref`], [`folder_ref`]). The host's `parse` reads it from
+    /// `Folder.current`, as it reads the path of `new File()`, so a relative path names a file there.
+    pub(crate) fn write_fs_ref(&mut self, path: &str, folder: bool) -> JsResult<Value> {
+        let c = classes(self)?;
+        let proto = if folder { c.folder_proto } else { c.file_proto };
+        let text = Value::str(path);
+        let fs = self.rooted(std::slice::from_ref(&text), |i| {
+            let p = parse_text(i, text.clone(), true)?;
+            i.rooted(std::slice::from_ref(&p), |i| field(i, &p, "fs"))
+        })?;
+        instance(self, proto, fs)
+    }
+
     /// The [`crate::Data`] for `id` when it is a `File` the `File` class made (its prototype is
     /// `File.prototype` and it holds its path in its [`Class::FsEntry`]), as [`file_ref_path`] reads
     /// it; `None` for any other object, one made with `Object.create(File.prototype)` included.

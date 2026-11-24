@@ -543,6 +543,25 @@ fn save_as_and_export_file_write_a_file() {
     assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
 }
 
+/// `SaveOptions.SAVECHANGES` makes a document's `close` save it to its own file, read directly, in
+/// brackets, as a string or through a variable; closing without it, and the other save options,
+/// write nothing.
+#[test]
+fn closing_with_save_changes_writes_a_file() {
+    let r = report(concat!(
+        "app.activeDocument.close();\n",
+        "app.activeDocument.close(SaveOptions.DONOTSAVECHANGES);\n",
+        "app.activeDocument.close(SaveOptions.PROMPTTOSAVECHANGES);\n",
+        "app.activeDocument.close(SaveOptions.SAVECHANGES);\n",
+        "var how = SaveOptions['SAVECHANGES'];\n",
+        "documents[0].close(how);\n",
+        "documents[1].close('SaveOptions.SAVECHANGES');\n",
+        "var w = new Window('dialog'); w.close(1);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 5, 7][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[4, 5, 7][..])]);
+}
+
 /// `saveAs` and `exportFile` called with their names as string literals in brackets write the file
 /// too; reading the method without calling it does not.
 #[test]

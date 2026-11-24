@@ -2562,7 +2562,8 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
 - `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
   File object's `length`, `hidden` or `readonly` counts too, on any object that may be a File object; only
   `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out; a
-  document's `saveAs` or `exportFile` counts too), `filesOpened` (files opened in other apps), `network`,
+  document's `saveAs` or `exportFile` counts too, and so does `SaveOptions.SAVECHANGES` wherever the script reads it,
+  since `close` given it saves the document to its file), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2700,9 +2701,14 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   https://ai-scripting.docsforadobe.dev/jsobjref/EPSSaveOptions/, https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/);
   without options the path's extension picks it. Without options, `saveAs` to a `.ai`, `.eps` or `.pdf` path and
   `exportFile` as `PNG24`, `JPEG` or `SVG` use the defaults a new options object of that class holds. `saveAs` maps `compressed`, `pdfCompatible`, `embedICCProfile` and
-  `compatibility` (`ILLUSTRATOR17` and `ILLUSTRATOR19`) of `.ai`; `cmykPostScript`, `includeDocumentThumbnails`,
-  `postScript`, `preview`, `overprint` and `compatibility` of EPS; and `pDFPreset`, `compatibility` (`ACROBAT4` to
+  `compatibility` (`ILLUSTRATOR17` and `ILLUSTRATOR19`), `saveMultipleArtboards` and `artboardRange` of `.ai`;
+  `cmykPostScript`, `includeDocumentThumbnails`, `postScript`, `preview`, `overprint`, `compatibility`,
+  `saveMultipleArtboards` and `artboardRange` of EPS; and `pDFPreset`, `compatibility` (`ACROBAT4` to
   `ACROBAT8` as PDF 1.3 to 1.7), `artboardRange`, `preserveEditability`, `acrobatLayers` and `compressArt` of PDF.
+  As the `.ai` and EPS help pages say, `artboardRange` is used only with `saveMultipleArtboards` true, and an
+  empty range means every artboard. `Document.fullName` is a `File` for the document's file, `Document.saved` is
+  true when the document has no unsaved changes and can be set, and `Document.close(saveOptions?)` closes the
+  document with the given `SaveOptions` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/).
   `exportType` is an `ExportType`: `PNG24`, `JPEG` and `SVG` take `new ExportOptionsPNG24()`, `new ExportOptionsJPEG()`
   and `new ExportOptionsSVG()` (https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/,
   https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/, https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/),
@@ -2713,7 +2719,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
   `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
   each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
-  `EPSPostScriptLevelEnum`, `PDFOverprint` and `UserInteractionLevel` hold strings such as `"ExportType.PNG24"`.
+  `EPSPostScriptLevelEnum`, `PDFOverprint`, `SaveOptions` and `UserInteractionLevel` hold strings such as
+  `"ExportType.PNG24"`.
   VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
   command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
   document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
@@ -2729,7 +2736,26 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`. A property the help
   pages do not list throws an error that names it (`PDFFileOptions` also accepts its read-only `typename` and
   `parent`), and an `undefined` one is left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
-  keeps the preset's value. A bad value throws an error before anything is written.
+  keeps the preset's value. A `pDFPreset` in square brackets, such as `[Smallest File Size]`, names the built-in
+  preset of the name inside them; the default preset's name in brackets names VectorCraft Default, and
+  `[PDF/X-4:2008]` names PDF/X-4:2010. Any other name throws `unknown PDF preset`. `artboardRange` takes
+  a whole number from 1 as well as a string, read as `String(number)` reads it; any other number throws. With `saveMultipleArtboards` true, a `.ai` range
+  (every artboard when it is empty) goes to `file.saveAs`'s `separateArtboards`, which also writes each of its
+  artboards to `<name>-<artboard name>.ai`, and an EPS range goes to `useArtboards`, which writes
+  `<name>_<artboard name>.eps` for each of two or more artboards beside the file at the path, and for one artboard
+  writes only the file at the path, holding that artboard. Without `saveMultipleArtboards`, a `.ai` or EPS
+  `artboardRange` is not checked against the document's artboards, but one that is not written as a range of
+  artboard numbers (such as `abc` or `0-`) throws. `Document.path` is a `Folder` for the folder of the document's
+  file. A document that has no file has a `fullName` of a `File` for its name in `Folder.current` and a `path` of
+  `""`. `fullName` and `path` of a document whose file the automation read roots do not allow throw
+  `Script file access denied`. Setting `saved` runs `document.setSaved`: `true` records the document as saved
+  without saving it, so `close()` then closes it, and `false` records it as having unsaved changes; neither adds an
+  undo step. With unsaved changes, `close` closes without them with `SaveOptions.DONOTSAVECHANGES`;
+  `SaveOptions.SAVECHANGES` first saves them to the document's file with `file.saveAs`, in the format its extension
+  names and after the same write-access check of the path as `saveAs`, and throws an error
+  and leaves the document open when the document has no file (a converted or recovered document included); and
+  `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws an error and leaves the document open, since a script cannot
+  show the prompt. A bad value throws an error before anything is written.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -8998,7 +9024,9 @@ document. With no document open they fail with "no document open". `document.act
 the current one. `document.move {from?, to}` reorders open documents the way dragging a document tab along the tab strip
 does: `from` defaults to the current document, `to` is the destination index, documents between them shift by one, the
 current document stays current, and each document keeps its own view (#5663). It is an engine command, so headless and
-remote `command_list` both list it. `file.close {index}` on a document other than the current one leaves the current
+remote `command_list` both list it. `document.setSaved {index?, saved}` records a document as saved (`true`) or as
+having unsaved changes (`false`) without saving it and without an undo step; a script's `Document.saved = value` runs
+it. `file.close {index}` on a document other than the current one leaves the current
 document current, and its tool keeps its state; closing the current document makes the document in the next tab
 current, or the one before it when it was the last tab. In the desktop app a modified document comes to the front first,
 to ask whether to save it.

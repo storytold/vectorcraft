@@ -39,12 +39,15 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
     ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
     ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
+    ("SaveOptions.SAVECHANGES", "app.activeDocument.close(SaveOptions.SAVECHANGES);", "filesWritten"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.close` throws "not available yet". `app.open` reads the file it is given.
+/// documents; `Document.close` closes a document, and saves it to its own file only when it is given
+/// `SaveOptions.SAVECHANGES`, which has its row above. `Document.fullName` and
+/// `Document.path` only name its file and folder. `app.open` reads the file it is given.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -98,9 +101,9 @@ const INSIDE: &[(&str, &str)] = &[
     ("Document.", "prototype"),
     (
         "Document.prototype.",
-        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
+        "activeLayer activeLayer= artboards artboards= close constructor convertCoordinate documentColorSpace fullName \
+         groupItems groupItems= height layers layers= name pageItems parent path pathItems pathItems= rulerOrigin rulerOrigin= \
+         rulerUnits saved saved= selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
          views views= width",
     ),
     ("Layer.", "prototype"),
@@ -132,7 +135,11 @@ const INSIDE: &[(&str, &str)] = &[
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
     // The enumerations of saving, exporting and opening.
-    ("", "Compatibility EPSPostScriptLevelEnum EPSPreview ExportType PDFBoxType PDFCompatibility PDFOverprint UserInteractionLevel"),
+    (
+        "",
+        "Compatibility EPSPostScriptLevelEnum EPSPreview ExportType PDFBoxType PDFCompatibility PDFOverprint SaveOptions \
+         UserInteractionLevel",
+    ),
     (
         "Compatibility.",
         "ILLUSTRATOR10 ILLUSTRATOR11 ILLUSTRATOR12 ILLUSTRATOR13 ILLUSTRATOR14 ILLUSTRATOR15 ILLUSTRATOR16 ILLUSTRATOR17 \
@@ -144,6 +151,7 @@ const INSIDE: &[(&str, &str)] = &[
     ("PDFBoxType.", "PDFARTBOX PDFBLEEDBOX PDFBOUNDINGBOX PDFCROPBOX PDFMEDIABOX PDFTRIMBOX"),
     ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
     ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
+    ("SaveOptions.", "DONOTSAVECHANGES PROMPTTOSAVECHANGES"),
     ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
 ];
 

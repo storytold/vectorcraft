@@ -477,6 +477,7 @@ fn bad_arguments_are_refused_with_an_error() {
     let cases: Vec<(String, &str)> = vec![
         ("app.activeDocument.saveAs('x.svg');".into(), "saveAs needs a File"),
         (format!("app.activeDocument.saveAs({{'\\u0000fileRef': {}}});", quoted(&dir.join("x.svg"))), "is not plain data"),
+        (format!("app.activeDocument.saveAs({{'\\u0000folderRef': {}}});", quoted(&dir)), "is not plain data"),
         (format!("app.activeDocument.saveAs({f}, {{typename: 'Nope'}});"), "saveAs options must be"),
         (format!("app.activeDocument.saveAs({f}, new ExportOptionsSVG());"), "saveAs options must be"),
         (format!("var o = new IllustratorSaveOptions(); o.compressed = 'yes'; app.activeDocument.saveAs({f}, o);"), "must be true or false"),
@@ -622,5 +623,261 @@ fn open_takes_the_page_and_crop_box_of_its_options() {
     logged(&mut s, &base, &undefined);
     assert_eq!(s.documents().len(), 3);
     assert_eq!(s.active().unwrap().doc.artboards.len(), 2, "both pages");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `fullName` and `path` name the document's file and folder once it has one, `saved` follows its
+/// changes, and `close` with `SaveOptions.DONOTSAVECHANGES` closes it.
+#[test]
+fn full_name_path_saved_and_close_follow_the_documents_file() {
+    let base = folder("fullname");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    let out = logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.log([d.fullName instanceof File, d.fullName.name === d.name, d.fullName.fsName === new File(d.name).fsName, d.path === '', d.saved]);\n\
+             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}}); vc.log(d.saved);\n\
+             d.saveAs(new File(dir + '/a.svg'));\n\
+             vc.log([d.fullName instanceof File, d.fullName.fsName, d.fullName.name, d.path instanceof Folder, d.path.fsName, d.saved]);\n\
+             vc.run('shape.rectangle', {{x: 20, y: 20, width: 5, height: 5}}); vc.log(d.saved);\n\
+             var e = ''; try {{ d.close(); }} catch (x) {{ e = String(x); }} vc.log([e, app.documents.length]);\n\
+             var before = new File(dir + '/a.svg').length; d.close(SaveOptions.SAVECHANGES);\n\
+             vc.log([app.documents.length, new File(dir + '/a.svg').length > before]);\n\
+             var n = app.documents.add(DocumentColorSpace.RGB, 200, 100); vc.run('shape.rectangle', {{x: 10, y: 10, width: 5, height: 5}});\n\
+             e = ''; try {{ n.close(SaveOptions.SAVECHANGES); }} catch (x) {{ e = String(x); }} vc.log([e, app.documents.length]);\n\
+             n.close(SaveOptions.DONOTSAVECHANGES); vc.log(app.documents.length);"
+        ),
+    );
+    assert_eq!(out[0], json!([true, true, true, true, true]), "an untouched document that has no file");
+    assert_eq!(out[1], json!(false), "an edit leaves changes to save");
+    let file = dir.join("a.svg");
+    assert_eq!(
+        out[2],
+        json!([true, file.to_string_lossy(), "a.svg", true, dir.to_string_lossy(), true]),
+        "after saveAs the document's file and folder"
+    );
+    assert_eq!(out[3], json!(false));
+    assert!(out[4][0].as_str().unwrap().contains("unsaved changes"), "{}", out[4]);
+    assert_eq!(out[4][1], json!(1), "without SaveOptions the document stays open");
+    assert_eq!(out[5], json!([0, true]), "SAVECHANGES saves the edit to the document's file and closes it");
+    assert!(out[6][0].as_str().unwrap().contains("no file to save"), "{}", out[6]);
+    assert_eq!(out[6][1], json!(1), "SAVECHANGES without a file leaves the document open");
+    assert_eq!(out[7], json!(0));
+    assert!(s.documents().is_empty());
+    let e = failure(&mut s, &base, "app.documents.add(); app.activeDocument.close('DONOTSAVECHANGES');");
+    assert!(e.contains("SaveOptions"), "{e}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A document without unsaved changes closes with `SaveOptions.SAVECHANGES` and with no argument.
+#[test]
+fn a_document_without_unsaved_changes_closes_with_any_save_options() {
+    let base = folder("closeclean");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    let out = logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}}); d.saveAs(new File(dir + '/a.svg'));\n\
+             var e = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.log([d.saved, e.saved, app.documents.length]);\n\
+             d.close(SaveOptions.SAVECHANGES); vc.log(app.documents.length);\n\
+             e.close(); vc.log(app.documents.length);"
+        ),
+    );
+    assert_eq!(out, json!([[true, true, 2], 1, 0]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Setting `Document.saved` records the document's saved state without saving it: `true` lets
+/// `close()` close a document with edits, and `false` makes an untouched one ask.
+#[test]
+fn setting_saved_records_the_saved_state() {
+    let base = folder("setsaved");
+    let mut s = session(&base);
+    data_folder(&mut s, &base);
+    let out = logged(
+        &mut s,
+        &base,
+        "var d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+         vc.run('shape.rectangle', {x: 10, y: 10, width: 50, height: 20});\n\
+         vc.log(d.saved); d.saved = true; vc.log(d.saved); d.close(); vc.log(app.documents.length);\n\
+         var e = app.documents.add(DocumentColorSpace.RGB, 200, 100); vc.log(e.saved); e.saved = false; vc.log(e.saved);\n\
+         var m = ''; try { e.close(); } catch (x) { m = String(x); } vc.log([m, app.documents.length]);\n\
+         m = ''; try { e.saved = 'yes'; } catch (x) { m = String(x); } vc.log(m);",
+    );
+    assert_eq!(out[0], json!(false), "an edit leaves changes to save");
+    assert_eq!(out[1], json!(true));
+    assert_eq!(out[2], json!(0), "close() closes a document set as saved");
+    assert_eq!(out[3], json!(true));
+    assert_eq!(out[4], json!(false));
+    assert!(out[5][0].as_str().unwrap().contains("unsaved changes"), "{}", out[5]);
+    assert_eq!(out[5][1], json!(1), "a document set as unsaved stays open");
+    assert!(out[6].as_str().unwrap().contains("true or false"), "{}", out[6]);
+    assert!(s.active().unwrap().is_dirty(), "the state stays after the run");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// With automation read roots that leave out the document's file, `fullName` and `path` throw
+/// instead of naming another file.
+#[test]
+fn full_name_and_path_leave_out_a_file_outside_the_read_roots() {
+    let base = folder("fullnameroots");
+    let mut s = session(&base);
+    data_folder(&mut s, &base);
+    let file = base.join("outside/hidden.svg");
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("document.save", &json!({"path": file.to_string_lossy()})).unwrap();
+    let query = "var d = app.activeDocument; vc.log([d.fullName.name, d.fullName.fsName, d.path === '' ? '' : d.path.fsName]);";
+    let out = logged(&mut s, &base, query);
+    let outside = base.join("outside");
+    assert_eq!(out[0], json!(["hidden.svg", file.to_string_lossy(), outside.to_string_lossy()]), "no read roots: the whole path");
+    let roots = crate::file_access::AutomationRoots::new(&[&base.join("main"), &base.join("settings")], &[&base.join("settings")]).unwrap().unwrap();
+    let hidden = "var d = app.activeDocument, r = [];\n\
+                  try { r.push(d.fullName.fsName); } catch (e) { r.push(e.message); }\n\
+                  try { r.push(String(d.path)); } catch (e) { r.push(e.message); }\n\
+                  vc.log(r);";
+    let out = crate::file_access::confine(Some(&roots), || logged(&mut s, &base, hidden));
+    for m in out[0].as_array().unwrap() {
+        let m = m.as_str().unwrap();
+        assert!(m.starts_with(DENIED) && m.ends_with("hidden.svg"), "{m}");
+        assert!(!m.contains("outside"), "the folder outside the read roots is not named: {m}");
+    }
+    let before = std::fs::read(&file).unwrap();
+    let e = failure(
+        &mut s,
+        &base,
+        "vc.run('shape.rectangle', {x: 10, y: 10, width: 50, height: 20}); app.activeDocument.close(SaveOptions.SAVECHANGES);",
+    );
+    assert!(e.contains(DENIED) && !e.contains("outside"), "SAVECHANGES does not write a file the script may not: {e}");
+    assert_eq!(std::fs::read(&file).unwrap(), before, "the file is left as it was");
+    assert_eq!(s.documents().len(), 1, "the document stays open");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A `pDFPreset` in square brackets names the built-in preset of the name inside them, and a name
+/// that is not a preset either way is refused.
+#[test]
+fn a_bracketed_pdf_preset_names_the_built_in_preset() {
+    let base = folder("brackets");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}});\n\
+             var o = new PDFSaveOptions(); o.pDFPreset = '[Smallest File Size]'; d.saveAs(new File(dir + '/small.pdf'), o);\n\
+             o.pDFPreset = '[Illustrator Default]'; d.saveAs(new File(dir + '/default.pdf'), o);\n\
+             o.pDFPreset = '[PDF/X-4:2008]'; d.saveAs(new File(dir + '/x4.pdf'), o);"
+        ),
+    );
+    let small = std::fs::read(dir.join("small.pdf")).unwrap();
+    assert!(String::from_utf8_lossy(&small[..200.min(small.len())]).contains("/Linearized 1"), "Smallest File Size writes a linearized file");
+    assert!(dir.join("default.pdf").is_file());
+    let x4 = String::from_utf8_lossy(&std::fs::read(dir.join("x4.pdf")).unwrap()).into_owned();
+    assert!(x4.contains("PDF/X-4"), "the PDF/X-4 preset writes a PDF/X-4 file");
+    for bad in ["[Nope]", "[Basic Default]", "[Ilustrator Default]"] {
+        let e = failure(
+            &mut s,
+            &base,
+            &format!("Folder.userData; var o = new PDFSaveOptions(); o.pDFPreset = '{bad}'; app.activeDocument.saveAs(new File({d} + '/n.pdf'), o);"),
+        );
+        assert!(e.contains("unknown PDF preset"), "{bad}: {e}");
+    }
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A number given as `artboardRange` is read as `String(number)` reads it.
+#[test]
+fn a_number_artboard_range_names_that_artboard() {
+    let base = folder("rangenumber");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.run('artboard.new', {{x: 300, y: 0, width: 60, height: 80}});\n\
+             var o = new PDFSaveOptions(); o.artboardRange = 2; d.saveAs(new File(dir + '/two.pdf'), o);"
+        ),
+    );
+    let pdf = vectorcraft_pdf::import(&std::fs::read(dir.join("two.pdf")).unwrap()).unwrap();
+    assert_eq!(pdf.artboards.len(), 1, "one page");
+    let r = pdf.artboards[0].rect;
+    assert!((r.width() - 60.0).abs() < 0.01 && (r.height() - 80.0).abs() < 0.01, "the second artboard: {r:?}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// With `saveMultipleArtboards`, a `.ai` or EPS save also writes a file for each artboard of
+/// `artboardRange`; without it the range is not used, and only a value that is not written as a
+/// range throws.
+#[test]
+fn save_multiple_artboards_writes_a_file_per_artboard() {
+    let base = folder("multiple");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    let names = |sub: &str| {
+        let mut v: Vec<String> = std::fs::read_dir(dir.join(sub)).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        v.sort();
+        v
+    };
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.run('artboard.new', {{x: 300, y: 0, width: 60, height: 80}});\n\
+             vc.run('shape.rectangle', {{x: 10, y: 10, width: 50, height: 20}});\n\
+             var names = ['ai', 'eps', 'aione', 'epsone', 'aioff'];\n\
+             for (var i = 0; i < names.length; i++) new Folder(dir + '/' + names[i]).create();\n\
+             var a = new IllustratorSaveOptions(); a.saveMultipleArtboards = true; d.saveAs(new File(dir + '/ai/a.ai'), a);\n\
+             var e = new EPSSaveOptions(); e.saveMultipleArtboards = true; d.saveAs(new File(dir + '/eps/a.eps'), e);\n\
+             a.artboardRange = '2'; d.saveAs(new File(dir + '/aione/a.ai'), a);\n\
+             e.artboardRange = 2; d.saveAs(new File(dir + '/epsone/a.eps'), e);\n\
+             a.saveMultipleArtboards = false; d.saveAs(new File(dir + '/aioff/a.ai'), a);"
+        ),
+    );
+    assert_eq!(names("ai"), ["a-Artboard-1.ai", "a-Artboard-2.ai", "a.ai"], "the file and one for each of the two artboards");
+    assert_eq!(names("eps"), ["a.eps", "a_Artboard-1.eps", "a_Artboard-2.eps"], "the central file and one for each of the two artboards");
+    assert_eq!(names("aione"), ["a-Artboard-2.ai", "a.ai"], "the file and one for artboard 2");
+    assert_eq!(names("epsone"), ["a.eps"], "one artboard: its file alone");
+    let eps = String::from_utf8_lossy(&std::fs::read(dir.join("epsone/a.eps")).unwrap()).into_owned();
+    let bbox = eps.lines().find(|l| l.starts_with("%%BoundingBox:")).unwrap_or_default();
+    assert_eq!(bbox.split_whitespace().skip(1).collect::<Vec<_>>(), ["0", "0", "60", "80"], "the file holds artboard 2: {bbox}");
+    assert_eq!(names("aioff"), ["a.ai"], "without saveMultipleArtboards the range is not used");
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var a = new IllustratorSaveOptions(); a.artboardRange = 3; \
+             app.activeDocument.saveAs(new File({d} + '/aioff/c.ai'), a);"
+        ),
+    );
+    assert!(dir.join("aioff/c.ai").is_file(), "a range past the document's artboards is not used and does not stop the save");
+    for bad in ["'abc'", "'0-'", "'3-1'", "'-'", "-1", "2.5", "0"] {
+        let e = failure(
+            &mut s,
+            &base,
+            &format!(
+                "Folder.userData; var a = new IllustratorSaveOptions(); a.artboardRange = {bad}; \
+                 app.activeDocument.saveAs(new File({d} + '/aioff/b.ai'), a);"
+            ),
+        );
+        assert!(e.contains("range"), "{bad}: {e}");
+    }
+    assert!(!dir.join("aioff/b.ai").exists(), "a bad range writes nothing");
     let _ = std::fs::remove_dir_all(base);
 }
