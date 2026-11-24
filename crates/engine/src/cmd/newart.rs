@@ -20,6 +20,18 @@ use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, ColorMode, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeKind, StrokeLayer};
 use vectorcraft_tools::PaintDefaults;
 
+/// The object new art takes its appearance from, with that appearance
+/// ([`Session::new_art_source`]).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NewArtSource {
+    doc: u64,
+    id: vectorcraft_doc::NodeId,
+    appearance: Appearance,
+    opacity: f32,
+    blend: BlendMode,
+    style: Option<String>,
+}
+
 use super::gradient::unplaced;
 use super::paint::SelectionPaints;
 use super::{CommandSpec, Result, Session, always, cmd, switch_or};
@@ -210,16 +222,35 @@ impl Session {
 
     /// After each command: with New Art Has Basic Appearance off, new art takes the appearance of
     /// the first selected object (so the last selection's once nothing is selected). Not while the
-    /// Live Paint Bucket is the active tool: the fill and stroke are the colors it paints with.
+    /// Live Paint Bucket is the active tool: the fill and stroke are the colors it paints with. Nor
+    /// after a command that changed only them (`defaultsOnly`), unless a later step of a batch
+    /// changed what new art would take ([`Session::new_art_source`]).
     pub(crate) fn inherit_new_art(&mut self) {
         if self.prefs.new_art_basic || self.bucket_paints() {
             return;
         }
-        let Some(st) = self.active() else { return };
-        let Some(n) = st.selection.subjects().first().and_then(|id| st.doc.node(*id)) else { return };
-        let style = super::style::linked_style(&st.doc, n).map(|g| g.name.clone());
-        let (ap, opacity, blend) = (super::style::captured(n), n.opacity, n.blend);
-        self.take_new_art(ap, opacity, blend, style, true);
+        let Some(source) = self.new_art_source() else { return };
+        if matches!(&self.defaults_only_ran, Some(Some(ran)) if *ran == source) {
+            return;
+        }
+        let NewArtSource { appearance, opacity, blend, style, .. } = source;
+        self.take_new_art(appearance, opacity, blend, style, true);
+    }
+
+    /// What [`Session::inherit_new_art`] gives new art: the appearance of the active document's
+    /// first selected object, if any.
+    pub(crate) fn new_art_source(&self) -> Option<NewArtSource> {
+        let st = self.active()?;
+        let id = *st.selection.subjects().first()?;
+        let n = st.doc.node(id)?;
+        Some(NewArtSource {
+            doc: st.uid,
+            id,
+            appearance: super::style::captured(n),
+            opacity: n.opacity,
+            blend: n.blend,
+            style: super::style::linked_style(&st.doc, n).map(|g| g.name.clone()),
+        })
     }
 
     /// After a command changed the selection, with New Art Has Basic Appearance on: the fill and
