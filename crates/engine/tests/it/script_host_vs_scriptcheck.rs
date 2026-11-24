@@ -43,10 +43,12 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// Reading a file or a folder, a file dialog, a message to the person and a ScriptUI dialog do not
 /// change anything outside it.
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder Window alert confirm localize prompt toSource"),
+    ("", "$ File Folder UnitValue Window alert confirm localize prompt toSource"),
     ("Window.", "alert confirm length prompt prototype"),
     ("Window.prototype.", "add addEventListener center close constructor findElement hide remove removeEventListener show"),
     ("Object.prototype.", "toSource"),
+    ("UnitValue.", "baseUnit baseUnit= length prototype"),
+    ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
     (

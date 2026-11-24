@@ -4,17 +4,16 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 
 use craft::behavior::IconId;
-use craft::behavior::fit::{FitItem, FitKeep, fit_items};
 use craft::menu::MenuBarUi;
-use craft::ui::buttons::{Button, ButtonChord, IconButton, PopupMark, ToggleButton};
+use craft::ui::buttons::{Button, CommandSearch, IconButton, PopupMark, ToggleButton};
 use craft::ui::contract::{Bind, BodyCx, Props, Show, ShowContainer, Trigger};
 use craft::ui::display::{Divider, Picture};
-use craft::ui::layout::measure_slot;
+use craft::ui::layout_components::Row;
 use craft::ui::menu::{Menu, MenuItem};
-use craft::ui::primitives::{HAlign, IconSpec};
+use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::windows::WindowHost;
 use craft::ui::shell::{Frame, Title, TitleBar};
-use craft::ui::style::Variant;
+use craft::ui::style::{SurfaceKind, Variant};
 use egui::Ui;
 use serde_json::json;
 
@@ -69,18 +68,21 @@ enum Trailing {
 impl Trailing {
     /// The controls in the order they are drawn.
     const SHOWN: [Trailing; 6] = [Trailing::Discord, Trailing::Learn, Trailing::Search, Trailing::Arrange, Trailing::Safe, Trailing::Switcher];
-    /// The controls in the order the fit gives them up, last first: each is also in a menu, so a hidden one goes nowhere.
-    const DROPPED_LAST_FIRST: [Trailing; 6] =
-        [Trailing::Safe, Trailing::Switcher, Trailing::Search, Trailing::Arrange, Trailing::Learn, Trailing::Discord];
 
-    /// Whether the fit may drop it.
-    fn keep(self) -> FitKeep {
-        if matches!(self, Trailing::Safe | Trailing::Switcher) { FitKeep::Pinned } else { FitKeep::Free }
+    /// The rank the bar gives it up in, lowest first: Discord, tutorials, Arrange Documents, then the search. Each is
+    /// also in a menu, so a hidden one goes nowhere. Safe Mode and the switcher always show.
+    fn rank(self) -> Option<u8> {
+        match self {
+            Trailing::Discord => Some(1),
+            Trailing::Learn => Some(2),
+            Trailing::Arrange => Some(3),
+            Trailing::Search => Some(4),
+            Trailing::Safe | Trailing::Switcher => None,
+        }
     }
 
-    /// Shows the control, in its shorter form when `short` (the search as its icon); the fit measures it through the
-    /// same call.
-    fn show(self, app: &mut VectorcraftApp, ui: &mut Ui, short: bool) {
+    /// Shows the control.
+    fn show(self, app: &mut VectorcraftApp, ui: &mut Ui) {
         match self {
             Trailing::Safe => {
                 let shown = Button::new(tl!("Safe Mode")).variant(Variant::GHOST).tooltip(tl!("Safe Mode…")).show(ui);
@@ -97,19 +99,9 @@ impl Trailing {
                     .show(ui);
             }
             Trailing::Arrange => arrange_documents(app, ui),
-            Trailing::Search if short => {
-                IconButton::command(IconId::new("search"), PALETTE).label(tl!("Search commands")).show(ui);
-            }
+            // Named as production's field, not after the command's menu row.
             Trailing::Search => {
-                // PLAN: assumed `Button::command` is bound by a `&str` command id; the command opens the palette.
-                // Named as production's field, not after the command's menu row.
-                Button::command(PALETTE)
-                    .label(tl!("Search commands"))
-                    .icon(IconSpec::svg(IconId::new("search")))
-                    .variant(Variant::SECONDARY)
-                    .align(HAlign::Start)
-                    .chord(ButtonChord::Trailing)
-                    .show(ui);
+                CommandSearch::new(PALETTE, tl!("Search commands")).show(ui);
             }
             // PLAN: assumed `crate::workspaces::switcher(app: &mut VectorcraftApp, ui: &mut Ui)` (chrome-w14's `WorkspaceSwitcher`).
             Trailing::Switcher => crate::workspaces::switcher(app, ui),
@@ -171,29 +163,18 @@ fn leading(ui: &mut Ui, app: &mut VectorcraftApp) {
     }
 }
 
-/// The end of the bar: the controls that fit in the room, the first-listed going last.
+/// The end of the bar: each ranked control in a row of its own, which the fitted title bar gives up whole, lowest rank
+/// first, before the menus narrow.
 fn trailing(ui: &mut Ui, app: &mut VectorcraftApp) {
     let safe = vectorcraft_plugins::safe_mode::active();
-    let order: Vec<Trailing> = Trailing::DROPPED_LAST_FIRST.into_iter().filter(|t| safe || *t != Trailing::Safe).collect();
-    let gap = ui.spacing().item_spacing.x;
-    let room = ui.available_width();
-    let mut measure = |t: Trailing, short: bool| measure_slot(ui, room, |ui| t.show(app, ui, short)).x;
-    let items: Vec<FitItem> = order
-        .iter()
-        .map(|&t| {
-            let item = FitItem::new(measure(t, false), 0, t.keep());
-            // The search narrows to its icon before it goes.
-            if t == Trailing::Search { item.short(measure(t, true)) } else { item }
-        })
-        .collect();
-    let fit = fit_items(&items, room, gap, gap, 0.0);
-    ui.horizontal_centered(|ui| {
-        for t in Trailing::SHOWN {
-            if let Some(at) = order.iter().position(|o| *o == t).filter(|at| fit.shown.contains(at)) {
-                t.show(app, ui, fit.short.contains(&at));
+    for t in Trailing::SHOWN.into_iter().filter(|t| safe || *t != Trailing::Safe) {
+        match t.rank() {
+            Some(rank) => {
+                Row::new().fit_rank(rank).show(ui, |ui, _| t.show(app, ui));
             }
+            None => t.show(app, ui),
         }
-    });
+    }
 }
 
 /// The application bar, the body of the shell's title bar: brand mark, Home and menus, then Discord,
@@ -207,9 +188,9 @@ pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {
     let start = |ui: &mut Ui, _: &mut BodyCx<'_>| leading(ui, &mut app.borrow_mut());
     let end = |ui: &mut Ui, _: &mut BodyCx<'_>| trailing(ui, &mut app.borrow_mut());
     let _ = if titled {
-        TitleBar::new().show_titled(ui, Title::new(tl!("VectorCraft")), start, end)
+        TitleBar::new().surface(SurfaceKind::Background).show_titled(ui, Title::new(tl!("VectorCraft")), start, end)
     } else {
-        TitleBar::new().trailing(end).show(ui, start).output
+        TitleBar::new().surface(SurfaceKind::Background).show_fitted(ui, start, end)
     };
 }
 

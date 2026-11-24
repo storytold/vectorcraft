@@ -46,6 +46,17 @@
 //! those of ECMAScript 5.1 above. XML trees live in the heap, and parsing, copying, comparing and
 //! serializing them, and evaluating XPath on them, use no native recursion and take fuel for each
 //! node.
+//!
+//! With [`Options::es2015`], the parser and the realm also read and run a part of ECMAScript 2015
+//! (<https://262.ecma-international.org/6.0/>): block-scoped `let` and `const` declarations with
+//! their temporal dead zone (section 13.3.1), a new `let` binding for each iteration of a `for`
+//! loop, function declarations in blocks scoped to the block (Annex B.3.3 in sloppy code), arrow
+//! functions (section 14.2), template literals and tagged templates (sections 12.2.9 and
+//! 12.3.7), default and rest parameters (section 14.1) and spread in array literals, calls and
+//! `new` (sections 12.2.5 and 12.3.6.1). Spread reads arrays by index, reading the length again
+//! before each element, strings and `String` objects by code point, and objects with a `length` by
+//! index; other values are a `TypeError`. Destructuring, `for … of`, classes,
+//! generators and modules stay syntax errors.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -70,14 +81,15 @@ mod regexp_vm;
 pub mod scriptui;
 mod string_builtins;
 mod token;
+mod unit_value;
 mod value;
 mod xml;
 mod xml_builtins;
 mod xpath;
 
 pub use ast::{
-    AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LogicalOp, Name, Program, Property,
-    PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LexKind, LogicalOp, Name, Program,
+    Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
@@ -101,11 +113,17 @@ pub struct Options {
     pub max_source_units: usize,
     /// Read and run E4X (ECMA-357). Off, XML syntax is an error and a realm has no XML built-ins.
     pub e4x: bool,
+    /// Read and run the ECMAScript 2015 forms this engine has: `let` and `const`, arrow functions,
+    /// template literals (tagged ones included), default and rest parameters, and spread in array
+    /// literals, calls and `new`, and from ECMAScript 2020 optional chains (`a?.b`, `a?.[k]`,
+    /// `f?.()`) and `??`. Off, they are syntax errors and the language is ES5.1's. Code a
+    /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
+    pub es2015: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false }
+        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false, es2015: false }
     }
 }
 
@@ -204,6 +222,10 @@ impl LineTable {
 #[cfg(test)]
 mod builtins_tests;
 #[cfg(test)]
+mod es2015_tests;
+#[cfg(test)]
+mod es2020_tests;
+#[cfg(test)]
 mod extension_tests;
 #[cfg(test)]
 mod host_tests;
@@ -215,5 +237,7 @@ mod scriptui_tests;
 mod tests;
 #[cfg(test)]
 mod text_tests;
+#[cfg(test)]
+mod unit_value_tests;
 #[cfg(test)]
 mod xml_tests;

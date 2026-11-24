@@ -1311,9 +1311,15 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
     let hand_over = app.dock_rt.hand_over.take();
     let output = {
         let mut panels = Panels { app: &mut *app };
-        let mut area = DockArea::new("Dock", Bind::bound(&mut workspace), &specs, &mut panels, DockConfig::default())
-            .hide(hide)
-            .flyout(Bind::bound(&mut flyout));
+        let mut area = DockArea::new(
+            "Dock",
+            Bind::bound(&mut workspace),
+            &specs,
+            &mut panels,
+            DockConfig::default().panel_menu_always(true).panel_menu_icon(IconId::new("menu")).rail_cards(true),
+        )
+        .hide(hide)
+        .flyout(Bind::bound(&mut flyout));
         if let Some((panel, grab)) = hand_over {
             area = area.continue_move((panel, grab));
         }

@@ -314,6 +314,7 @@
 @msg	a 3D effect on a group's fill or stroke draws nothing	efek 3D pada isian atau goresan grup tidak menggambar apa pun
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efek 3D pada isian atau goresan grup tidak menggambar apa pun untuk diekspor
 @msg	The 3D object is too complex to export	Objek 3D terlalu rumit untuk diekspor
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	Objek 3D memiliki mesh yang tidak lengkap atau berisi nilai yang bukan angka
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objek tidak memiliki efek 3D (Ekstrusi & bevel, Revolusi, Gelembungkan, atau Putar)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` harus berupa objek yang hanya berisi `mode`, bernilai shaded atau wireframe
 @msg	its 3D effect builds no solid	efek 3D-nya tidak membangun bentuk padat
@@ -443,6 +444,12 @@
 @msg	parameter `{name}`: {what}	parameter `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	parameter plug-in harus berupa objek JSON
 @msg	the module must export its linear memory as `memory`	modul harus mengekspor memori liniernya sebagai `memory`
+@msg	the module must export `{name}` with the type {signature}	modul harus mengekspor `{name}` dengan tipe {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	modul memiliki lebih dari satu bagian kustom `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	anggaran memori (memori awal modul {initial} byte, batas {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	manifes di bagian kustom `{MANIFEST_SECTION}` harus memberikan `abi` sebagai {ABI_VERSION}, versi ABI yang diterapkan host ini
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	anggaran tabel (modul mendefinisikan {count} tabel, yang terbesar dengan {largest} elemen; batas {MAX_TABLES} tabel dengan {MAX_TABLE_ELEMENTS} elemen)
+@msg	the module's table section could not be read	bagian tabel modul tidak dapat dibaca
 @msg	the objects to change are no longer in the document	objek yang akan diubah tidak lagi ada di dokumen
 @msg	the runtime panicked	runtime mengalami panik
 @msg	unexpected host trap	trap host yang tidak terduga
@@ -512,6 +519,8 @@
 @msg	`plates` requires a stop linked to a spot swatch	`plates` memerlukan perhentian yang ditautkan ke swatch warna spot
 @msg	the output	keluaran
 @msg	the path has no anchor points	jalur tidak memiliki titik jangkar
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang tersembunyi, terkunci, atau garis panduan, sehingga anggotanya tidak dapat diganti
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	jalur majemuk {id} memiliki anggota yang bukan jalur, sehingga anggotanya tidak dapat diganti
 @msg	too many anchor points (limit {MAX_ANCHORS})	terlalu banyak titik jangkar (batas {MAX_ANCHORS})
 @msg	true or false	true atau false
 @msg	a number >= {_1}	angka >= {_1}

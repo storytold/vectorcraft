@@ -821,7 +821,8 @@ impl<'a> Reader<'a> {
     }
 
     /// Add an image object with the state's transparency, `mask` as its opacity mask and
-    /// `colorize` as the color that colorizes it.
+    /// `colorize` as the color that colorizes it, which overprints while the fill overprint (`O`)
+    /// in force is on.
     fn add_image_colorized(&mut self, im: ImageObject, mask: Option<OpacityMask>, colorize: Option<Paint>, hidden: bool) -> Result<(), String> {
         let gs = self.gs.clone();
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
@@ -829,6 +830,7 @@ impl<'a> Reader<'a> {
         node.blend = gs.blend;
         node.knockout_shape = gs.knockout_shape;
         node.extras_mut().mask = mask.map(Box::new);
+        node.extras_mut().colorize_overprint = colorize.is_some() && gs.overprint_fill;
         node.extras_mut().colorize = colorize.map(Box::new);
         self.add(node, hidden)?;
         self.image_tail = self.after_object;
