@@ -113,6 +113,21 @@ fn each_new_color_is_the_next_pen_and_pens_draw_in_turn() {
 }
 
 #[test]
+fn classic_hpgl_preserves_explicit_pen_gaps_and_path_order() {
+    let d = doc_with(|d| {
+        vec![
+            stroked(d, line((130.0, 70.0), (140.0, 80.0)), Color::rgb8(0, 0, 255)),
+            stroked(d, line((10.0, 20.0), (20.0, 40.0)), Color::rgb8(255, 0, 0)),
+            stroked(d, line((80.0, 60.0), (90.0, 70.0)), Color::rgb8(0, 0, 255)),
+        ]
+    });
+    let out =
+        plot(&d, &HpglOptions { version: Version::Hpgl, origin: Origin::Center, pens: vec![[255, 0, 0], [0, 255, 0], [0, 0, 255]], ..opts(&d) });
+    // The empty green pen must leave the two blue paths on pen three.
+    assert_eq!(out.bytes, b"IN;PU;SP1;PU-1270,423;PD-1129,141;PU;SP3;PU423,-282;PD564,-423;PU-282,-141;PD-141,-282;PU;SP0;");
+}
+
+#[test]
 fn a_filled_path_is_its_closed_outline_and_a_stroke_its_line() {
     let d = doc_with(|d| {
         let mut open = BezPath::new();

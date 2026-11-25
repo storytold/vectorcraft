@@ -76,17 +76,19 @@ pub struct CanvasDropsStyle {
 }
 
 /// A drop target for one payload type `P`: `make` turns the payload into the canvas's own, or refuses it. `seen` is
-/// the operation of the last payload it accepted at the pointer.
+/// the operation of the last payload it accepted at the pointer. Where `covered` (another window lies over the canvas),
+/// it takes nothing: that window's targets take the drop.
 struct Target<'a, F> {
     rect: Rect,
     view: &'a CanvasView,
+    covered: &'a dyn Fn(Pos2) -> bool,
     make: F,
     seen: Cell<Option<DropOperation>>,
 }
 
 impl<'a, F> Target<'a, F> {
-    fn new(rect: Rect, view: &'a CanvasView, make: F) -> Self {
-        Target { rect, view, make, seen: Cell::new(None) }
+    fn new(rect: Rect, view: &'a CanvasView, covered: &'a dyn Fn(Pos2) -> bool, make: F) -> Self {
+        Target { rect, view, covered, make, seen: Cell::new(None) }
     }
 }
 
@@ -94,6 +96,9 @@ impl<P: ?Sized, F: Fn(&P) -> Option<Payload>> DropTarget<P> for Target<'_, F> {
     type Drop = Dropped;
 
     fn accept(&self, payload: &P, at: Pos2, op: DropOperation) -> Option<Dropped> {
+        if (self.covered)(at) {
+            return None;
+        }
         let payload = (self.make)(payload)?;
         self.seen.set(Some(op));
         Some(Dropped { payload, at: self.view.to_doc(at), zoom: self.view.zoom, op })
@@ -121,6 +126,8 @@ pub(crate) struct CanvasDrops<'a> {
     /// has the content the move started from ([`CarriedArt::before`]), and the document a tab rest showed is still the
     /// current one.
     given_up: bool,
+    /// Whether another window lies over the canvas at a point of it: a floating panel's OS window.
+    covered: &'a dyn Fn(Pos2) -> bool,
     out: &'a RefCell<Option<Dropped>>,
     /// The files from the OS the canvas places, and where their drop goes.
     files: (CanvasFiles<'a>, &'a RefCell<Option<CanvasDrop>>),
@@ -150,9 +157,9 @@ impl Component for CanvasDrops<'_> {
 
     fn update(&mut self, cx: &mut Cx<'_, Self>) {
         let rect = cx.rect;
-        let (sources, given_up, view) = (&self.sources, self.given_up, &self.view);
+        let (sources, given_up, view, covered) = (&self.sources, self.given_up, &self.view, self.covered);
         let unchanged = |a: &CarriedArt| given_up || sources.contains(&(a.document, a.revision));
-        let art = Target::new(rect, view, |a: &CarriedArt| unchanged(a).then(|| Payload::Art(a.clone())));
+        let art = Target::new(rect, view, covered, |a: &CarriedArt| unchanged(a).then(|| Payload::Art(a.clone())));
         let mut dropped = cx.drop_target::<CarriedArt, _>(&art);
         if self.kind == BodyKind::Pane
             && let (Some(op), Some((carried, _))) = (art.seen.get(), cx.dragging::<CarriedArt>())
@@ -163,11 +170,11 @@ impl Component for CanvasDrops<'_> {
         }
         if self.kind == BodyKind::Live {
             // The art of this canvas's own document is not accepted as a panel payload: its move resumes.
-            let panel = Target::new(rect, view, |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())));
-            let style = Target::new(rect, view, |d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone())));
-            let symbol = Target::new(rect, view, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
-            let brush = Target::new(rect, view, |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())));
-            let library = Target::new(rect, view, |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())));
+            let panel = Target::new(rect, view, covered, |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())));
+            let style = Target::new(rect, view, covered, |d: &ListDrag<StyleKey>| Some(Payload::Style(d.grabbed.clone())));
+            let symbol = Target::new(rect, view, covered, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
+            let brush = Target::new(rect, view, covered, |d: &ListDrag<BrushKey>| Some(Payload::Brush(d.grabbed.clone())));
+            let library = Target::new(rect, view, covered, |d: &ListDrag<LibraryKey>| Some(Payload::Library(d.grabbed.clone())));
             let panel = cx.drop_target::<PanelDrag, _>(&panel);
             let style = cx.drop_target::<ListDrag<StyleKey>, _>(&style);
             let symbol = cx.drop_target::<ListDrag<SymbolKey>, _>(&symbol);
@@ -215,8 +222,10 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
             && app.session.documents().iter().any(|d| d.uid == a.document && d.same_content(&a.before))
     });
     let (out, files_out) = (RefCell::new(None), RefCell::new(None));
+    let ctx = ui.ctx().clone();
+    let covered = |at: Pos2| crate::panel_docking::os_window_at(app, &ctx, at);
     let files = (CanvasFiles::new(app, rect, &view), &files_out);
-    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, given_up, out: &out, files };
+    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, given_up, covered: &covered, out: &out, files };
     drops.id_salt(("canvas-drops", win)).show_at(ui, rect);
     if let Some(files) = files_out.take() {
         crate::place::canvas_drop(app, ui.ctx(), files);
