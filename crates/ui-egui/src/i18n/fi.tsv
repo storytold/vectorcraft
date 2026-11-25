@@ -6689,6 +6689,9 @@ file-filter	Swatch libraries	Värimallikirjastot
 file-filter	Flattener presets	Litistyksen esiasetukset
 file-filter	PDF presets	PDF-esiasetukset
 file-filter	Print presets	Tulostuksen esiasetukset
+file-filter	Tracing presets	Jäljityksen esiasetukset
+file-filter	Action sets	Toimintosarjat
+file-filter	Composite fonts	Yhdistelmäfontit
 file-filter	Preferences	Asetukset
 file-filter	Export presets	Vientiesiasetukset
 file-filter	SVG Compressed	Pakattu SVG
@@ -7422,6 +7425,10 @@ axis	Y Axis	Y-akseli
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc palautti 0 (muisti loppui)
 @msg	vc_alloc returned a block outside memory	vc_alloc palautti lohkon muistin ulkopuolelta
 @msg	vc_run returned error code {packed}	vc_run palautti virhekoodin {packed}
+@msg	did not finish loading within {secs} s	ei latautunut loppuun {secs} sekunnissa
+@msg	no thread was left to load it	sen lataamiseen ei jäänyt yhtään säiettä
+@msg	panicked while loading	kaatui latauksen aikana
+@msg	panicked while loading: {what}	kaatui latauksen aikana: {what}
 @msg	{_1} is not a file	{_1} ei ole tiedosto
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} on {_2} tavua (raja {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektia (raja {MAX_OBJECTS})
@@ -7581,6 +7588,10 @@ axis	Y Axis	Y-akseli
 @msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
 @msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
 @msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Lukea sille annetut objektit sekä asiakirjan asetukset, piirtoalustat, tasot ja värimallit
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-avaimen on lueteltava eri osiot: settings, artboards, layers tai swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` on suodattimelle tai reaaliaikaiselle tehosteelle, jolla on `commands`, tasolla `api` 3 tai uudempi ja käyttöoikeudella `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	laajennuksen pyytämät asiakirjan tiedot ovat liian suuret luovutettaviksi: enintään {MAX_CONTEXT_ITEMS} piirtoalustaa, tasoa ja värimallia {MAX_CONTEXT_BYTES} tavussa
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	muistibudjetti (objekti {_1} tarvitsee {size} tavua syötettä, jäljellä {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektibudjetti (yli {MAX_OBJECTS} vain luku -objektia)
 @msg	instruction budget	käskybudjetti
@@ -8901,6 +8912,18 @@ breakText	Glyphs	Merkit
 	Margin	Marginaali
 	Box	Kehys
 	Swatch	Värimalli
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing`-arvon on oltava yli 0 ja enintään {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}`-arvon on oltava väliltä 0–{MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}`-arvon on oltava väliltä 0,01–1000 pt
+@msg	select the banner, or mark every artboard	valitse banneri tai merkitse kaikki piirtoalustat
+@msg	the banner has no width or height	bannerilla ei ole leveyttä eikä korkeutta
+@msg	the grommet inset is too large for the banner	purjerenkaiden etäisyys reunasta on liian suuri bannerille
+@msg	the hem is too deep for the banner	päärme on liian syvä bannerille
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	välistyksellä tulisi yli {MAX_GROMMETS} purjerengasta
+@msg	there is no banner to mark	merkittävää banneria ei ole
+@msg	turn on at least one side	ota käyttöön vähintään yksi sivu
+@msg	with no hem and no grommets there is nothing to mark	ilman päärmettä ja purjerenkaita ei ole mitään merkittävää
+@msg	{saving} failed: {e}	{saving} epäonnistui: {e}
 	Banner Hems and Grommets…	Bannerin päärmeet ja purjerenkaat…
 	Banner Hems and Grommets	Bannerin päärmeet ja purjerenkaat
 	Hem	Päärme

@@ -937,6 +937,35 @@ fn tile_menu_rename_opens_the_clicked_assets_inline_field() {
     assert_eq!(assets(&mut p.app())[0]["name"], "Renamed");
 }
 
+/// In a panel narrower than the scale row's fields at their full length, the row's Scale, Suffix, Format and Remove
+/// share the panel's width, and the Save As Preset row under them stays inside it too.
+#[test]
+fn the_scale_row_fits_the_panel_width() {
+    use craft::ui::contract::Role;
+    for width in [300.0, 440.0] {
+        let (mut app, _, [a, b]) = app(true);
+        app.run("assets.add", json!({"ids": [a, b]})).unwrap();
+        let mut p = panel(app);
+        p.room(egui::vec2(width, 1600.0));
+        p.frame();
+        run(&p, "ui.assetExport.savePresetAs", json!({}));
+        p.frame();
+        let controls = [
+            ("Scale", p.rect_role("Scale", Role::COMBO_BOX)),
+            ("Suffix", p.rect("Suffix")),
+            ("Format", p.rect_role("Format", Role::COMBO_BOX)),
+            ("Remove", p.rect("Remove")),
+            ("Name:", p.rect_role("Name:", Role::TEXT_INPUT)),
+            ("Cancel", p.rect("Cancel")),
+        ];
+        // The four controls of the scale row are on one line.
+        assert_eq!(controls[0].1.center().y, controls[3].1.center().y, "one row at {width}");
+        for (name, rect) in controls {
+            assert!(rect.left() >= -0.5 && rect.right() <= width + 0.5, "{name} at {rect:?} is outside a {width} pt panel");
+        }
+    }
+}
+
 /// The menu adds the selected artwork as one asset or one per object (an object that is an asset already keeps its
 /// asset), and is off with no artwork selected.
 #[test]

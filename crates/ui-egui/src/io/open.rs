@@ -268,11 +268,16 @@ pub fn install_plugin(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 }
 
 /// What permission `name` lets a plug-in do, in plain words in the UI language, with the ids of
-/// the `commands` it may call for `commands`; a name the app doesn't know is shown as it is.
-fn permission_words(name: &str, commands: &[String]) -> String {
+/// the `commands` it may call for `commands`, and for `doc.read` of a plug-in whose manifest asks
+/// for document information (`context`), that information too; a name the app doesn't know is
+/// shown as it is.
+fn permission_words(name: &str, commands: &[String], context: bool) -> String {
     let words = match permissions::Permission::parse(name) {
         Some(permissions::Permission::Commands) => {
             return crate::i18n::fmt(tl!("Run these commands on the document: {ids}"), &[("ids", &commands.join(", "))]);
+        }
+        Some(permissions::Permission::DocRead) if context => {
+            tl!("Read the objects it is given, and the document's settings, artboards, layers and swatches")
         }
         Some(permissions::Permission::DocRead) => tl!("Read the objects it is given"),
         Some(permissions::Permission::DocWrite) => tl!("Change, add and delete objects in the document"),
@@ -349,7 +354,8 @@ pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, 
             .as_array()
             .map(|ids| ids.iter().filter_map(Value::as_str).map(|id| permissions::display_text(id, permissions::MAX_SHOWN_FIELD)).collect())
             .unwrap_or_default();
-        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p, &commands))));
+        let context = info["context"].as_array().is_some_and(|c| !c.is_empty());
+        lines.extend(asked.iter().filter_map(Value::as_str).map(|p| format!("• {}", permission_words(p, &commands, context))));
         paragraphs.push(lines.join("\n"));
         install["grant"] = Value::Array(asked.clone());
     }
@@ -396,6 +402,8 @@ fn open_dialog_folder(app: &VectorcraftApp) -> Option<String> {
 
 /// File → Open…: `{pending: "fileDialog"}` while its picker is open.
 pub fn open_dialog(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // The picker lists the extensions of the importer plug-ins the launch is still loading too.
+    app.session.finish_plugin_loads();
     let request = open_request("document", open_dialog_folder(app), fileio::open_filters());
     ask_open(app, request, Owner::Free, |app, path| open_reporting(app, &path))
 }
@@ -564,6 +572,11 @@ pub(crate) fn open_file(app: &mut VectorcraftApp, path: &str, background: bool) 
 /// [`open_file`], a document opening with `document.open`'s params `p`.
 fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Value) -> Result<Value, String> {
     // Automation confined to some folders reaches no file outside them, open in a tab or not.
+    vectorcraft_engine::file_access::check_read(path)?;
+    // A plug-in still loading may be the importer that reads the file, or what installs it.
+    app.session.finish_plugin_loads();
+    // The path is checked again after the wait, so a link replaced while the plug-ins loaded
+    // doesn't lead the read outside the folders.
     vectorcraft_engine::file_access::check_read(path)?;
     // File › Open, Open Recent, the Home screen, a drop and the Finder all focus a document that
     // is already open, or still being read, instead of opening a second copy. While a dialog or
