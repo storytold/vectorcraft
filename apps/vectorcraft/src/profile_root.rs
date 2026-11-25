@@ -70,6 +70,15 @@ fn canonical_future(path: &Path) -> Result<PathBuf, String> {
     Ok(resolved)
 }
 
+/// A stable entry point may be a dangling link once its target is uninstalled. Its own name is still
+/// the fence, so only the folder it lives in is resolved: a link that cannot be resolved would refuse
+/// every launch, a valid private profile included.
+fn canonical_future_entry(path: &Path) -> Result<PathBuf, String> {
+    let parent = path.parent().ok_or_else(|| "an entry point has no folder".to_string())?;
+    let name = path.file_name().ok_or_else(|| "an entry point has no name".to_string())?;
+    Ok(canonical_future(parent)?.join(name))
+}
+
 fn overlaps(a: &Path, b: &Path, platform: Platform) -> bool {
     let parts = |p: &Path| {
         p.components()
@@ -127,7 +136,13 @@ fn forbidden_roots(platform: Platform, env: &impl Fn(&str) -> Option<OsString>, 
             // The eframe window state, under the lowercased window id.
             roots.push(xdg_base(env, "XDG_DATA_HOME", ".local/share")?.join("ai.storyteller.vectorcraft"));
             roots.push(required_base(env, "HOME")?.join(".config").join("VectorCraft"));
-            roots.extend(["/usr/bin/vectorcraft", "/usr/local/bin/vectorcraft", "/opt/vectorcraft"].map(PathBuf::from));
+            // The same folders at their HOME defaults: an XDG override moves this launch's own paths,
+            // not stable's, which stays where a launch without the override finds it.
+            for (directory, app) in
+                [(".config", "vectorcraft"), (".local/share", "vectorcraft"), (".cache", "vectorcraft"), (".local/state", "vectorcraft")]
+            {
+                roots.push(required_base(env, "HOME")?.join(directory).join(app));
+            }
             // The stable Flatpak keeps its data in its own per-app folder.
             roots.push(required_base(env, "HOME")?.join(".var/app/ai.storyteller.vectorcraft"));
             roots
@@ -149,7 +164,13 @@ fn forbidden_roots(platform: Platform, env: &impl Fn(&str) -> Option<OsString>, 
         }
     };
     roots.push(installation_boundary(platform, exe)?);
-    roots.into_iter().map(|p| canonical_future(&p)).collect()
+    let mut fences = roots.into_iter().map(|p| canonical_future(&p)).collect::<Result<Vec<_>, _>>()?;
+    if platform == Platform::Linux {
+        for entry in ["/usr/bin/vectorcraft", "/usr/local/bin/vectorcraft", "/opt/vectorcraft"] {
+            fences.push(canonical_future_entry(Path::new(entry))?);
+        }
+    }
+    Ok(fences)
 }
 
 fn private_subdirectory(root: &Path, name: impl AsRef<Path>, label: &str) -> Result<PathBuf, String> {
@@ -212,7 +233,8 @@ fn validate_for(
     if env("VECTORCRAFT_CONFIG_DIR").is_some_and(|v| !v.is_empty()) {
         return Err("nightly-v1 cannot be combined with VECTORCRAFT_CONFIG_DIR".to_string());
     }
-    if env("VECTORCRAFT_NO_PREFS").is_some_and(|v| !v.is_empty()) {
+    // The app turns preferences off whenever the variable is present, empty value included.
+    if env("VECTORCRAFT_NO_PREFS").is_some() {
         // A run without preferences keeps nothing: its own profile would stay unused and the app
         // would log to standard error only, so it is never a nightly launch.
         return Err("nightly-v1 cannot inherit VECTORCRAFT_NO_PREFS".to_string());
@@ -380,7 +402,13 @@ mod tests {
     fn an_inherited_config_or_no_prefs_override_is_refused() {
         let fixture = Fixture::new();
         let root = fixture.root.join("nightly");
-        for (key, value) in [("VECTORCRAFT_CONFIG_DIR", "/elsewhere"), ("VECTORCRAFT_NO_PREFS", "1"), ("FLATPAK_ID", "ai.storyteller.vectorcraft")] {
+        for (key, value) in [
+            ("VECTORCRAFT_CONFIG_DIR", "/elsewhere"),
+            ("VECTORCRAFT_NO_PREFS", "1"),
+            // The app turns preferences off on presence, so an empty value is a run too.
+            ("VECTORCRAFT_NO_PREFS", ""),
+            ("FLATPAK_ID", "ai.storyteller.vectorcraft"),
+        ] {
             for platform in PLATFORMS {
                 let result = validate_for(
                     platform,
@@ -481,6 +509,44 @@ mod tests {
         std::fs::create_dir_all(dangling.parent().unwrap()).unwrap();
         std::os::unix::fs::symlink(fixture.root.join("missing"), dangling.parent().unwrap().join("nightly")).unwrap();
         assert!(fixture.check(Platform::Linux, &dangling).is_err());
+    }
+
+    #[test]
+    fn a_home_settings_folder_is_fenced_even_when_the_xdg_override_moves_elsewhere() {
+        let fixture = Fixture::new();
+        let xdg = fixture.root.join("override");
+        std::fs::create_dir_all(&xdg).unwrap();
+        let config = fixture.home().join(".config/vectorcraft");
+        let data = fixture.home().join(".local/share/vectorcraft");
+        for stable in [config.clone(), data.clone()] {
+            for candidate in [stable.clone(), stable.join("nested nightly")] {
+                let result = validate_for(
+                    Platform::Linux,
+                    &candidate,
+                    |name| match name {
+                        "XDG_CONFIG_HOME" | "XDG_DATA_HOME" => Some(xdg.clone().into_os_string()),
+                        _ => fixture.get(name),
+                    },
+                    Some(&fixture.exe),
+                    |_| Ok(()),
+                );
+                assert!(result.is_err(), "accepted {candidate:?} with the XDG folders moved to {xdg:?}");
+            }
+        }
+        assert!(!config.exists() && !data.exists(), "a refused root creates nothing");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_entry_point_keeps_its_fence_instead_of_refusing_every_launch() {
+        let fixture = Fixture::new();
+        let bin = fixture.root.join("entry/bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let entry = bin.join("vectorcraft");
+        std::os::unix::fs::symlink(fixture.root.join("uninstalled target"), &entry).unwrap();
+        // The shared resolver refuses the dangling link, as a profile root must be.
+        assert!(canonical_future(&entry).is_err());
+        assert_eq!(canonical_future_entry(&entry).unwrap(), std::fs::canonicalize(&bin).unwrap().join("vectorcraft"));
     }
 
     #[test]

@@ -51,7 +51,8 @@ function Assert-NightlyFlavor([string] $ProductName, [string] $VersionOutput, [s
 }
 
 function Copy-NightlyNotices([string] $RepositoryRoot, [string] $FontRepository, [string] $Destination) {
-  foreach ($name in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md') {
+  # ASSETS.md is the asset manifest ATTRIBUTION.md points at, so it ships beside it.
+  foreach ($name in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md', 'ASSETS.md') {
     $source = Join-Path $RepositoryRoot $name
     if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $Destination }
   }
@@ -83,7 +84,7 @@ try {
   $env:VECTORCRAFT_OVERRIDE_VERSION = $Version
   $env:VECTORCRAFT_REQUIRE_WINRES = '1'
   $env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS = '-C target-feature=+crt-static'
-  cargo build --release --locked -p vectorcraft --target $Target
+  cargo build --release --locked -p vectorcraft --target $Target --target-dir $TargetDir
   if ($LASTEXITCODE -ne 0) { throw "nightly cargo build failed: $LASTEXITCODE" }
 } finally {
   $env:VECTORCRAFT_BUILD_CHANNEL = $oldChannel

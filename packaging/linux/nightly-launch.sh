@@ -32,13 +32,14 @@ done
   exit 2
 }
 
+case "${1:-}" in
+  # These branches need no profile root, so they answer even where HOME is unset.
+  --version | -V | --help | -h | --launch-profile) exec "$real_bin" "$@" ;;
+esac
 profile_root="${XDG_DATA_HOME:-${HOME:?HOME is required}/.local/share}/vectorcraft-nightly"
 if [ "${1:-}" = "--" ]; then
   # The caller supplied the file delimiter already: never send two.
   shift
   exec "$real_bin" --launch-profile nightly-v1 --profile-root "$profile_root" -- "$@"
 fi
-case "${1:-}" in
-  --version | -V | --help | -h | --launch-profile) exec "$real_bin" "$@" ;;
-esac
 exec "$real_bin" --launch-profile nightly-v1 --profile-root "$profile_root" -- "$@"

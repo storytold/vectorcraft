@@ -50,7 +50,7 @@ try {
   $family = Join-Path $fontRepo 'fonts\ExampleFamily'
   $stage = Join-Path $testRoot 'stage'
   New-Item -ItemType Directory -Force -Path $repo, $family, $stage | Out-Null
-  $rootNames = @('README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md')
+  $rootNames = @('README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE', 'ATTRIBUTION.md', 'ASSETS.md')
   foreach ($name in $rootNames) { Set-Content -LiteralPath (Join-Path $repo $name) -Value "root-notice-$name" }
   Set-Content -LiteralPath (Join-Path $family 'OFL.txt') -Value 'font-notice-example'
   Copy-NightlyNotices $repo $fontRepo $stage

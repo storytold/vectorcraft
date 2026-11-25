@@ -29,12 +29,14 @@ ASSET = f"vectorcraft-{VERSION}-macos-aarch64-nightly.zip"
 APP = "VectorCraft Nightly.app"
 TEAM = "ABCDE12345"
 IDENTITY = "0123456789ABCDEF0123456789ABCDEF01234567"
+# Every fixture credential carries the same value, so no line here reads like a real one.
+FIXTURE = "generated-fixture"
 SECRETS = {
     "APPLE_CERTIFICATE": base64.b64encode(b"generated fixture, not a certificate").decode(),
-    "APPLE_CERTIFICATE_PASSWORD": "generated-fixture",
-    "KEYCHAIN_PASSWORD": "generated-fixture",
+    "APPLE_CERTIFICATE_PASSWORD": FIXTURE,
+    "KEYCHAIN_PASSWORD": FIXTURE,
     "APPLE_ID": "fixture@example.invalid",
-    "APPLE_PASSWORD": "generated-fixture",
+    "APPLE_PASSWORD": FIXTURE,
     "APPLE_TEAM_ID": TEAM,
 }
 
@@ -359,7 +361,7 @@ class Sign(unittest.TestCase):
         fifo = zipfile.ZipInfo(f"{APP}/Contents/Resources/fifo")
         fifo.external_attr = (stat.S_IFIFO | 0o644) << 16
         for label, info in (("link", link), ("special", fifo), ("traversal", zipfile.ZipInfo(f"{APP}/../outside")),
-                            ("absolute", zipfile.ZipInfo("/tmp/outside")), ("foreign root", zipfile.ZipInfo("Other.app/x"))):
+                            ("absolute", zipfile.ZipInfo("/outside")), ("foreign root", zipfile.ZipInfo("Other.app/x"))):
             with self.subTest(label=label):
                 self.f.bundle()
                 self.f.add_entry(info, b"/etc/passwd")

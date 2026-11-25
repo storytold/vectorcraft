@@ -83,8 +83,14 @@ $Bin = Join-Path $TargetDir "$Target\release"
 
 # A nightly executable can never be packaged as the stable app: its identity, its updates and its
 # data folder are the nightly ones, and the MSI would install it over the stable installation.
-if ((Get-Item -LiteralPath (Join-Path $Bin 'vectorcraft.exe')).VersionInfo.ProductName -eq 'VectorCraft Nightly') {
+$productName = (Get-Item -LiteralPath (Join-Path $Bin 'vectorcraft.exe')).VersionInfo.ProductName
+if ($productName -eq 'VectorCraft Nightly') {
   throw 'a VectorCraft Nightly executable cannot be packaged as stable (use package.ps1 -Nightly)'
+}
+# No VERSIONINFO at all reads as an empty name, and an executable built without the resource
+# compiler (or taken from another source with -SkipBuild) must not reach the stable MSI that way.
+if ($productName -cne 'VectorCraft') {
+  throw "the executable has no stable VERSIONINFO (ProductName '$productName'); rebuild with the resource compiler available"
 }
 
 # Check both binaries' PE headers before packaging. Machine (COFF header) must match -Arch, so an

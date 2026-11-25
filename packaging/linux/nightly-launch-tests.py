@@ -55,8 +55,10 @@ class Launchers(unittest.TestCase):
         launcher.chmod(0o755)
         return launcher, gui
 
-    def run_launcher(self, launcher, *args, env=None, extra_path=None):
+    def run_launcher(self, launcher, *args, env=None, extra_path=None, unset=()):
         environment = dict(self.env, **(env or {}))
+        for name in unset:
+            environment.pop(name, None)
         if extra_path:
             environment["PATH"] = f"{extra_path}:{environment['PATH']}"
         # Run from somewhere else entirely: the launcher resolves the GUI from its own location.
@@ -71,8 +73,8 @@ class Launchers(unittest.TestCase):
         self.assertEqual(result.returncode, 0, f"{launcher.name} {args}: {result.stderr}")
         return result.stdout.splitlines()
 
-    def expect(self, launcher, expected, *args, env=None, extra_path=None):
-        lines = self.run_launcher(launcher, *args, env=env, extra_path=extra_path)
+    def expect(self, launcher, expected, *args, env=None, extra_path=None, unset=()):
+        lines = self.run_launcher(launcher, *args, env=env, extra_path=extra_path, unset=unset)
         self.assertEqual(lines, expected, f"{launcher} {list(args)}")
 
     def test_every_placement_starts_the_gui_with_the_channel_profile(self):
@@ -112,6 +114,14 @@ class Launchers(unittest.TestCase):
                 with self.subTest(placement=name, query=query):
                     launcher, _ = self.place(name)
                     self.expect(launcher, ["config=<>", f"<{query}>"], query)
+
+    def test_a_version_or_help_query_answers_even_without_a_home(self):
+        # Nothing to build a default profile root from, but a query needs none.
+        for name in PLACEMENTS:
+            for query in ("--version", "--help"):
+                with self.subTest(placement=name, query=query):
+                    launcher, _ = self.place(name)
+                    self.expect(launcher, ["config=<>", f"<{query}>"], query, unset=("HOME", "XDG_DATA_HOME"))
 
     def test_the_launchers_own_protocol_and_delimiter_pass_through(self):
         for name in PLACEMENTS:

@@ -10,16 +10,20 @@ dst="$work/dist"
 base=vectorcraft-0.0.1-nightly.1-linux-x86_64
 mkdir -p "$stage/bin" "$dst" "$work/extract"
 
-# A local argv/env recorder stands in for the compiled binaries. It never opens a UI.
-cat >"$stage/bin/vectorcraft" <<'RECORDER'
+# A local argv/env recorder stands in for the compiled binaries. It never opens a UI. The shape is
+# the one package.sh stages for the handoff: the GUI as `bin/vectorcraft-bin` and the launcher as
+# `bin/vectorcraft`.
+cat >"$stage/bin/vectorcraft-bin" <<'RECORDER'
 #!/bin/sh
 printf 'CONFIG=<%s>\n' "${VECTORCRAFT_CONFIG_DIR:-}"
 for arg in "$@"; do
   printf '<%s>\n' "$arg"
 done
 RECORDER
+chmod 755 "$stage/bin/vectorcraft-bin"
+cp "$stage/bin/vectorcraft-bin" "$stage/bin/vectorcraft-cli"
+cp "$HERE/nightly-launch.sh" "$stage/bin/vectorcraft"
 chmod 755 "$stage/bin/vectorcraft"
-cp "$stage/bin/vectorcraft" "$stage/bin/vectorcraft-cli"
 
 bash "$HERE/nightly-arch-tar.sh" "$stage" "$work/stage" "$dst" "$base"
 tar -xzf "$dst/$base.tar.gz" -C "$work/extract"
@@ -27,7 +31,8 @@ bin="$work/extract/$base/bin"
 # The standard Nightly layout: `bin/vectorcraft` is the launcher and `bin/.vectorcraft-nightly/
 # vectorcraft-bin` the GUI it starts.
 cmp "$HERE/nightly-launch.sh" "$bin/vectorcraft"
-cmp "$stage/bin/vectorcraft" "$bin/.vectorcraft-nightly/vectorcraft-bin"
+cmp "$stage/bin/vectorcraft-bin" "$bin/.vectorcraft-nightly/vectorcraft-bin"
+[[ ! -e "$bin/vectorcraft-bin" ]]
 # Simulate the existing Arch bin-tree copy and public launcher rename.
 mkdir -p "$work/installed"
 cp -R "$bin" "$work/installed/bin"
@@ -35,9 +40,9 @@ bin="$work/installed/bin"
 mv "$bin/vectorcraft" "$bin/vectorcraft-nightly"
 mv "$bin/vectorcraft-cli" "$bin/vectorcraft-nightly-cli"
 
-test ! -e "$stage/bin/.vectorcraft-nightly"
+[[ ! -e "$stage/bin/.vectorcraft-nightly" ]]
 cmp "$HERE/nightly-launch.sh" "$bin/vectorcraft-nightly"
-cmp "$stage/bin/vectorcraft" "$bin/.vectorcraft-nightly/vectorcraft-bin"
+cmp "$stage/bin/vectorcraft-bin" "$bin/.vectorcraft-nightly/vectorcraft-bin"
 cmp "$stage/bin/vectorcraft-cli" "$bin/vectorcraft-nightly-cli"
 export HOME="$work/home with space"
 unset XDG_DATA_HOME VECTORCRAFT_CONFIG_DIR

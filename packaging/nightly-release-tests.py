@@ -35,10 +35,14 @@ def assert_nightly_serialization(source):
             continue
         if not line[0].isspace():
             break
-        row = re.fullmatch(r"  (group|cancel-in-progress): ([^#]+?)(?: +#.*)?", line)
+        row = re.fullmatch(r"  (group|cancel-in-progress): (.+)", line)
         if row is None or row[1] in values:
             raise ValueError("malformed or duplicate nightly concurrency entry")
-        values[row[1]] = row[2].rstrip()
+        # A trailing " #..." is a comment; any other '#' is not a value this contract has.
+        value, _, _comment = row[2].partition(" #")
+        if "#" in value:
+            raise ValueError("malformed nightly concurrency entry")
+        values[row[1]] = value.rstrip()
     if values != {"group": "vectorcraft-nightly-release", "cancel-in-progress": "false"}:
         raise ValueError("nightly serialization must use its stable group and no cancellation")
 

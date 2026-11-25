@@ -921,9 +921,12 @@ fn main() -> std::process::ExitCode {
                 // The previous nightly session did not finish normally: say so once, in the window
                 // that is now up, and only then let a clean exit clear the record.
                 if previous_nightly_unclean {
-                    app.status(
-                        "The previous VectorCraft Nightly session did not finish normally. Nothing has been sent anywhere; Help › About has this build's version for a bug report",
-                    );
+                    // A graphics, plug-in or hang message may be up already: keep it, as above.
+                    if app.ui.status.is_empty() {
+                        app.status(
+                            "The previous VectorCraft Nightly session did not finish normally. Nothing has been sent anywhere; Help › About has this build's version for a bug report",
+                        );
+                    }
                     nightly_session::mark_notice_shown();
                 }
                 let mut control_server = None;
@@ -990,10 +993,11 @@ fn main() -> std::process::ExitCode {
     // The window is gone: later launches start their own app, including the one a graphics
     // failure starts again below. A nightly's session record is finished here, by the controlled
     // return, before a successor can take the profile; on macOS the window's own `on_exit` already
-    // did it (a Dock quit ends the process inside AppKit), so this is then a no-op. A caught panic
-    // is not a controlled return: it keeps the record for the next launch to report, and only
-    // frees the lease for the successor this run may still start.
-    nightly_session::finish_after(outcome.as_ref().is_ok_and(|result| result.is_ok()));
+    // did it (a Dock quit ends the process inside AppKit), so this is then a no-op. A run that
+    // reports a startup error has still returned in a controlled way (that error is logged and
+    // exits FAILURE below), so only a caught panic keeps the record for the next launch to report;
+    // it then also frees the lease for the successor this run may still start.
+    nightly_session::finish_after(outcome.is_ok());
     #[cfg(not(target_os = "macos"))]
     single_instance::resign();
     // The process ends normally from here: this launch didn't stop while a plug-in was loading.

@@ -101,6 +101,15 @@ class ArchivePolicy(unittest.TestCase):
     def test_case_colliding_notices_refuse_before_output(self):
         for name in ["OFL-Font.txt", "OFL-font.txt"]:
             (self.stage / name).write_bytes(b"fixture")
+        first, second = self.stage / "OFL-Font.txt", self.stage / "OFL-font.txt"
+        if first.samefile(second):
+            # This volume ignores case, so the two names are one notice: there is no collision to
+            # refuse, and the archive carries that one.
+            ARCHIVE.linux_archive(self.stage, self.output)
+            with tarfile.open(self.output) as archive:
+                names = [member.name for member in archive]
+            self.assertEqual([name for name in names if name.lower() == "ofl-font.txt"], ["OFL-font.txt"])
+            return
         with self.assertRaisesRegex(ValueError, "case-colliding"):
             ARCHIVE.linux_archive(self.stage, self.output)
         self.assertFalse(self.output.exists())
