@@ -3331,6 +3331,182 @@ fn live_paint_bucket_paint_and_stroke_commands_leave_the_selection_unpainted() {
     assert!(failed.is_empty(), "{failed:#?}");
 }
 
+/// A paint or stroke command that the Live Paint Bucket kept to its own colors is journaled with
+/// `defaultsOnly: true`, also when its params gave `false`. Replaying the entry with the Selection
+/// tool active changes the same defaults and leaves the selection's paint as it was, also with New
+/// Art Has Basic Appearance off. Every command that fails is listed.
+#[test]
+fn live_paint_bucket_commands_replay_from_the_journal_with_another_tool() {
+    let blue = Color::from_hex("#0000ff").unwrap();
+    // A Live Paint group and a rectangle, both selected, a library with a fill color, a radial
+    // gradient as the default fill and a 2 pt default weight.
+    let setup = |s: &mut Session, basic: bool| {
+        s.execute("appearance.setNewArtBasic", &json!({"on": basic})).unwrap();
+        let g = live(s);
+        let art = rect(s, 300.0, 300.0, 40.0, 40.0);
+        s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [art.0]})).unwrap();
+        let lib = s.execute("library.create", &json!({})).unwrap()["id"].as_str().unwrap().to_string();
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        let item = s.execute("library.add", &json!({"library": lib, "kind": "fillColor"})).unwrap()["name"].as_str().unwrap().to_string();
+        s.execute("select.set", &json!({"ids": [g.0, art.0]})).unwrap();
+        s.execute("paint.setFill", &json!({"gradient": {"kind": "radial"}, "defaultsOnly": true})).unwrap();
+        s.paint.stroke_width = 2.0;
+        s.last_solid = blue;
+        (g, art, lib, item)
+    };
+    let cases: Vec<(&str, Value)> = vec![
+        ("paint.setFill", json!({"color": "#00ffff"})),
+        ("paint.setFill", json!({"color": "#00ffff", "defaultsOnly": false})),
+        ("paint.setStroke", json!({"color": "#00ffff"})),
+        ("paint.none", json!({})),
+        ("paint.swap", json!({})),
+        ("paint.default", json!({})),
+        ("paint.lastColor", json!({"stroke": false})),
+        ("paint.lastGradient", json!({"stroke": true})),
+        ("paint.invert", json!({"stroke": false})),
+        ("paint.complement", json!({"stroke": false})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "stroke": true})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "stroke": false, "stop": 0})),
+        ("paint.editGradient", json!({"stroke": false, "angle": 45})),
+        ("gradient.presets.apply", json!({"name": "vignette"})),
+        ("stroke.set", json!({"weight": 5})),
+        ("stroke.weightUp", json!({})),
+        ("stroke.weightDown", json!({})),
+        ("stroke.setAdvanced", json!({"arrowScale": [150, 200]})),
+        ("swatch.library.add", json!({"library": "web-safe-216", "names": ["#FF6600"], "apply": "fill"})),
+        ("library.use", json!({"kind": "fillColor"})),
+    ];
+    let mut failed = vec![];
+    for basic in [true, false] {
+        for (cmd, params) in &cases {
+            let mut params = params.clone();
+            let mut a = session();
+            let (_, _, lib, item) = setup(&mut a, basic);
+            if *cmd == "library.use" {
+                params["library"] = json!(lib);
+                params["item"] = json!(item);
+            }
+            a.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+            let start = a.journal.len();
+            if let Err(e) = a.execute(cmd, &params) {
+                failed.push(format!("{cmd} {params} (basic {basic}): {e}"));
+                continue;
+            }
+            let Some((id, recorded)) = a.journal.since(start).last().cloned() else {
+                failed.push(format!("{cmd} {params} (basic {basic}): not journaled"));
+                continue;
+            };
+            if recorded.get("defaultsOnly") != Some(&json!(true)) {
+                failed.push(format!("{cmd} {params} (basic {basic}): the journal entry {recorded} does not keep the change to the defaults"));
+            }
+            let mut b = session();
+            let (g, art, _, _) = setup(&mut b, basic);
+            let (group, painted) = (node(&b, g), node(&b, art));
+            if let Err(e) = b.replay(&id, &recorded) {
+                failed.push(format!("{cmd} {params} (basic {basic}): the replay failed: {e}"));
+                continue;
+            }
+            if node(&b, g) != group || node(&b, art) != painted {
+                failed.push(format!("{cmd} {params} (basic {basic}): the replay painted the selection"));
+            }
+            if (&b.paint.fill, &b.paint.stroke, b.paint.stroke_width, b.new_art_stroke())
+                != (&a.paint.fill, &a.paint.stroke, a.paint.stroke_width, a.new_art_stroke())
+            {
+                failed.push(format!("{cmd} {params} (basic {basic}): the replay left other defaults"));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{failed:#?}");
+    // In a batch with New Art Has Basic Appearance off, a selection change after a `defaultsOnly`
+    // step still gives new art the new selection's appearance; without one, the defaults stay.
+    let cyan = Paint::solid(Color::from_hex("#00ffff").unwrap());
+    let set_cyan = json!({"command": "paint.setFill", "params": {"color": "#00ffff", "defaultsOnly": true}});
+    let mut s = session();
+    let (_, art, ..) = setup(&mut s, false);
+    s.execute("command.batch", &json!({"commands": [set_cyan.clone()]})).unwrap();
+    assert_eq!(s.paint.fill, cyan, "the defaults keep the batch's fill");
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "defaultsOnly": true})).unwrap();
+    s.execute("command.batch", &json!({"commands": [set_cyan.clone(), {"command": "select.key", "params": {"id": art.0}}]})).unwrap();
+    assert_eq!(s.paint.fill, cyan, "a new key object leaves the objects new art takes its appearance from");
+    s.execute("command.batch", &json!({"commands": [set_cyan.clone(), {"command": "select.set", "params": {"ids": [art.0]}}]})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#00ff00").unwrap()), "new art takes the newly selected fill");
+    // A later step that changes the selected object's appearance gives new art that appearance.
+    s.execute("command.batch", &json!({"commands": [set_cyan, {"command": "transparency.set", "params": {"opacity": 40, "ids": [art.0]}}]})).unwrap();
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    assert_eq!((&s.paint.fill, s.paint.opacity), (&green, 0.4), "new art takes the selection's new opacity, and its fill");
+    // `defaultsOnly: true` with the Selection tool: a canceled preview puts the defaults back, and
+    // each preview starts from the defaults the interaction began with.
+    let mut s = session();
+    let (g, art, ..) = setup(&mut s, true);
+    let (group, painted, fill) = (node(&s, g), node(&s, art), s.paint.fill.clone());
+    s.begin_interaction("Fill Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#123456", "defaultsOnly": true})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#123456").unwrap()));
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.fill, fill, "the canceled color is not kept");
+    s.begin_interaction("Stroke Weight").unwrap();
+    for _ in 0..3 {
+        s.preview("stroke.weightUp", &json!({"defaultsOnly": true})).unwrap();
+    }
+    assert_eq!(s.paint.stroke_width, 3.0, "each preview starts from 2 pt");
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.stroke_width, 2.0);
+    // A preview with `defaultsOnly: true` after one that set the defaults with the selection
+    // starts from the defaults the interaction began with too.
+    s.begin_interaction("Stroke Weight").unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    assert_eq!(s.paint.stroke_width, 7.0);
+    s.preview("paint.setFill", &json!({"color": "#123456", "defaultsOnly": true})).unwrap();
+    assert_eq!(s.paint.stroke_width, 2.0, "the discarded preview's weight is not kept");
+    s.cancel_interaction().unwrap();
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (fill.clone(), 2.0));
+    assert_eq!((node(&s, g), node(&s, art)), (group, painted), "the selection keeps its paint");
+    // A later preview without `defaultsOnly` leaves the interaction one that changed the defaults:
+    // canceling puts them back.
+    s.begin_interaction("Stroke Weight").unwrap();
+    s.preview("stroke.weightUp", &json!({"defaultsOnly": true})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.stroke_width, 2.0, "the canceled interaction's weight is not kept");
+    // With New Art Has Basic Appearance off and an object selected, canceling such an interaction
+    // keeps the defaults it began with, not the selection's appearance.
+    let mut s = session();
+    let (_, art, ..) = setup(&mut s, false);
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "defaultsOnly": true})).unwrap();
+    let (red, selected) = (s.paint.fill.clone(), node(&s, art));
+    s.begin_interaction("Fill Color").unwrap();
+    s.preview("paint.setFill", &json!({"color": "#00ffff", "defaultsOnly": true})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (red, 2.0), "the defaults the interaction began with stay");
+    assert_eq!(node(&s, art), selected, "the selection keeps its paint");
+    // The same when the defaults-only step was inside a batch that a later preview replaced.
+    s.begin_interaction("Fill Color").unwrap();
+    let step = json!({"command": "paint.setFill", "params": {"color": "#00ffff", "defaultsOnly": true}});
+    s.preview("command.batch", &json!({"commands": [step]})).unwrap();
+    s.preview("stroke.set", &json!({"weight": 7})).unwrap();
+    s.cancel_interaction().unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#ff0000").unwrap()), "a batch's defaults-only step is put back");
+    // `defaultsOnly` is a bool, and names no objects or brush.
+    let (g, ..) = setup(&mut s, true);
+    for (cmd, params) in [
+        ("paint.none", json!({"defaultsOnly": true, "ids": [g.0]})),
+        ("paint.none", json!({"defaultsOnly": true, "id": g.0})),
+        ("paint.none", json!({"defaultsOnly": true, "item": null})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "defaultsOnly": true, "id": g.0})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "defaultsOnly": true, "item": null})),
+        ("paint.setFill", json!({"color": "#00ffff", "defaultsOnly": "yes"})),
+        ("paint.setFill", json!({"color": "#00ffff", "defaultsOnly": true, "ids": [g.0]})),
+        ("stroke.set", json!({"weight": 3, "defaultsOnly": true, "item": 0})),
+        ("paint.sampleColor", json!({"color": "#00ffff", "defaultsOnly": true, "ids": [g.0]})),
+        ("paint.none", json!({"defaultsOnly": 1})),
+        ("stroke.setAdvanced", json!({"brush": null, "defaultsOnly": true})),
+        ("stroke.setAdvanced", json!({"brush": "3 pt. Round", "defaultsOnly": true})),
+    ] {
+        assert!(s.execute(cmd, &params).is_err(), "{cmd} {params}");
+    }
+}
+
 /// `paint.editGradient` with an `aspect` and no object to edit (the Live Paint Bucket's gradient,
 /// nothing selected, or a fill edit of a Live Paint group without faces) is an error that leaves the default gradient as it was, since a gradient
 /// fitted to each object has no aspect of its own. Named objects still take the aspect.
@@ -3491,6 +3667,34 @@ fn live_paint_bucket_keeps_its_colors_through_the_stop_eyedropper_and_a_cmd_clic
     }
     assert_eq!(s.doc().unwrap().selection.objects, vec![other], "the Cmd-click selected the other object");
     assert_eq!((s.paint.fill.clone(), s.tool_returns_to()), (fill, None), "the pick ended without a sample");
+}
+
+/// A Cmd-drag of a corner widget with the Live Paint Bucket that is cut short by choosing the
+/// bucket again (the Selection tool it lent cancels the drag as it goes back) leaves the bucket's
+/// colors as they were, with New Art Has Basic Appearance off: the selected object's appearance
+/// does not replace them.
+#[test]
+fn live_paint_bucket_keeps_its_colors_when_a_lent_drag_is_cut_short() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    let rect = rect(&mut s, 300.0, 300.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"color": "#00ff00", "ids": [rect.0]})).unwrap();
+    s.execute("appearance.setNewArtBasic", &json!({"on": false})).unwrap();
+    s.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let fill = s.paint.fill.clone();
+    let st = s.doc().unwrap();
+    let w = vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, v.zoom, false, true, 180.0).expect("corner widgets show");
+    let at = w.visible().next().expect("a widget");
+    let cmd = Mods { cmd: true, ..Mods::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, at.x + 8.0, at.y + 8.0).with_mods(cmd), v).unwrap();
+    assert_eq!(s.tool_id(), "selection", "the bucket lent the Selection tool for the drag");
+    assert!(s.in_interaction(), "the corner widget drag is in progress");
+    s.select_tool("livePaintBucket", v).unwrap();
+    assert_eq!(s.tool_id(), "livePaintBucket");
+    assert_eq!(s.paint.fill, fill, "the bucket's fill stays");
 }
 
 /// A gradient stop selected on the selection's gradient is not selected once the Live Paint
@@ -4628,6 +4832,93 @@ fn live_paint_group_with_only_source_paths_ignores_add_fill_and_add_stroke_of_it
     }
     s.execute("select.none", &json!({})).unwrap();
     assert!(s.execute("appearance.addFill", &json!({"target": "contents"})).is_err(), "no selection is still refused");
+}
+
+/// Whether every face of Live Paint group `g` holds only fill rows and every edge only stroke rows.
+fn parts_hold_their_kind(s: &Session, g: NodeId) -> bool {
+    let (faces, edges) = part_looks(s, g);
+    faces.iter().all(|a| a.items.iter().all(|it| it.is_fill())) && edges.iter().all(|a| a.items.iter().all(|it| !it.is_fill()))
+}
+
+/// A graphic style applied to the contents of a Live Paint group, replacing their appearance or added to it, gives
+/// the faces its fills and the edges its strokes, and the faces and edges are not linked to it.
+#[test]
+fn live_paint_group_contents_take_a_graphic_style_by_kind() {
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    let blue = Paint::solid(Color::from_hex("#0000ff").unwrap());
+    for add in [false, true] {
+        let mut s = session();
+        let g = live(&mut s);
+        let r = rect(&mut s, 400.0, 0.0, 50.0, 50.0);
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+        s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+        s.execute("graphicStyle.new", &json!({"name": "Both", "id": r.0})).unwrap();
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.execute("graphicStyle.apply", &json!({"name": "Both", "target": "contents", "add": add})).unwrap();
+        assert!(parts_hold_their_kind(&s, g), "add {add}: faces hold fills and edges strokes");
+        let (faces, edges) = part_looks(&s, g);
+        assert!(faces.iter().all(|a| a.items.iter().any(|it| *it.paint() == red)), "add {add}: each face takes the style's fill");
+        assert!(edges.iter().all(|a| a.items.iter().any(|it| *it.paint() == blue)), "add {add}: each edge takes the style's stroke");
+        let n = node(&s, g);
+        let mut parts = vectorcraft_tools::builder::faces(&n).into_iter().chain(vectorcraft_tools::builder::edges(&n));
+        assert!(parts.all(|p| p.extras().graphic_style.is_none()), "add {add}: no face or edge is linked");
+    }
+}
+
+/// A fill-only graphic style added to the contents of a Live Paint group without faces changes nothing and records no
+/// undo step.
+#[test]
+fn live_paint_group_contents_without_faces_take_no_fill_only_style() {
+    let mut s = session();
+    let g = live(&mut s);
+    let faces: Vec<NodeId> = vectorcraft_tools::builder::faces(&node(&s, g)).iter().map(|p| p.id).collect();
+    s.edit("t", |d, _| {
+        d.children_mut(Some(g)).unwrap().retain(|c| !faces.contains(&c.id));
+        Ok(())
+    })
+    .unwrap();
+    let r = rect(&mut s, 400.0, 0.0, 50.0, 50.0);
+    s.edit("t", |d, _| {
+        let fill = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::from_hex("#ff0000").unwrap())));
+        d.node_mut(r).unwrap().appearance = vectorcraft_doc::Appearance { items: vec![fill], ..Default::default() }.into();
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graphicStyle.new", &json!({"name": "Fill", "id": r.0})).unwrap();
+    // The edges are linked to a style of their own, which they keep.
+    let edge = vectorcraft_tools::builder::edges(&node(&s, g))[0].id;
+    s.execute("graphicStyle.new", &json!({"name": "Edge", "id": edge.0})).unwrap();
+    assert!(node(&s, g).children().unwrap().iter().any(|c| c.extras().graphic_style.is_some()), "an edge is linked");
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    let (before, undo) = (node(&s, g), s.doc().unwrap().history.undo.len());
+    s.execute("graphicStyle.apply", &json!({"name": "Fill", "target": "contents", "add": true})).unwrap();
+    assert_eq!(node(&s, g), before, "the edges keep their rows and their link");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+}
+
+/// Clear Appearance and Reduce to Basic Appearance on the contents of a Live Paint group leave each face with fill
+/// rows only and each edge with stroke rows only.
+#[test]
+fn live_paint_group_contents_clear_and_reduce_keep_each_part_to_its_kind() {
+    for cmd in ["appearance.clear", "appearance.reduceToBasic"] {
+        let mut s = session();
+        let g = live(&mut s);
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#ff00ff"})).unwrap();
+        s.execute("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+        // A face and an edge given rows of the other kind through their own ids.
+        let n = node(&s, g);
+        let (face, edge) = (vectorcraft_tools::builder::faces(&n)[0].id, vectorcraft_tools::builder::edges(&n)[0].id);
+        s.execute("appearance.addStroke", &json!({"ids": [face.0]})).unwrap();
+        s.execute("appearance.addFill", &json!({"ids": [edge.0]})).unwrap();
+        assert!(!parts_hold_their_kind(&s, g), "{cmd}: the face and the edge hold rows of the other kind");
+        s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+        s.execute(cmd, &json!({"target": "contents"})).unwrap();
+        assert!(parts_hold_their_kind(&s, g), "{cmd}: faces hold fills and edges strokes");
+        let (faces, edges) = part_looks(&s, g);
+        assert!(faces.iter().chain(&edges).all(|a| !a.items.is_empty()), "{cmd}: each face and edge keeps a row");
+    }
 }
 
 /// A selected Live Paint group with no part of the edited kind is still a selection: a stroke edit
