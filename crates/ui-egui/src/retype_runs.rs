@@ -107,7 +107,7 @@ pub fn start(app: &mut VectorcraftApp, command: &str, p: Value, from_panel: bool
             let _ = tx.send(r);
         })
         .map_err(|e| e.to_string())?;
-    let started = export_progress::now();
+    let started = export_progress::now(app);
     app.retype_runs.running = Some(Running { started, run, token, from_panel, steps, done });
     if let Some(ctx) = &app.ui_ctx {
         ctx.request_repaint();

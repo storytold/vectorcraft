@@ -79,6 +79,12 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
     // (Recolor Artwork), opens on the art as the gesture left it.
     let r = app.session.finish_tool_edit();
     crate::canvas::apply_requests(app, r);
+    // So do the plug-ins the launch is still loading, for a command chosen meanwhile that the
+    // engine holds until they install (a plug-in's own command, one that may edit); view commands
+    // and queries go ahead.
+    if vectorcraft_engine::waits_for_plugin_loads(id) {
+        app.session.finish_plugin_loads();
+    }
     // A shortcut or a palette pick on a filter plug-in does nothing while its menu item is dimmed.
     if id == "plugin.dialog" && !enabled(app, id) {
         return;
@@ -88,6 +94,14 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         && p.get("id").is_none()
         && !has_subject(app)
     {
+        return;
+    }
+    // The Artboard tool's Rearrange (its canvas menu) opens Rearrange for the artboards it lists,
+    // whose OK waits for a click on the canvas.
+    if id == "artboard.rearrange"
+        && let Some(indices) = crate::dialogs::rearrange_artboards::menu_indices(&p)
+    {
+        crate::dialogs::rearrange_artboards::open_selected(app, &indices);
         return;
     }
     // Params first: some dialogs' fields take a look through the session (Move's last move).

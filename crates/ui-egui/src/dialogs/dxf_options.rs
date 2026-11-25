@@ -8,7 +8,8 @@
 //! options of `document.exportDxf`. OK remembers the options for next time and writes the file
 //! (asking where when there is no path); bad options keep the dialog open.
 
-use craft::ui::contract::{Bind, Entry, Show as _};
+use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::pickers::Select;
 use craft::ui::text::NumberField;
@@ -142,15 +143,15 @@ pub(crate) fn scale_param(disabled_when: Option<(&str, FieldValue)>) -> Param {
         let mut unit = fields.text("unit").map_or_else(|| Unit::Millimeters.label().to_string(), str::to_string);
         let mut scale = Some(fields.number("scale").unwrap_or(1.0));
         let (lo, hi) = (*vectorcraft_cad::SCALE_RANGE.start(), *vectorcraft_cad::SCALE_RANGE.end());
-        let shown = ui
-            .horizontal(|ui| {
+        let shown = Row::new()
+            .show(ui, |ui, _| {
                 ui.label("1");
                 Select::new(tl!("Unit"), Bind::bound(&mut unit), &units).show(ui);
                 ui.label("=");
                 NumberField::new(tl!("Scale"), Bind::bound(&mut scale)).range(lo..=hi).show(ui);
                 ui.label(tl!("Units"));
             })
-            .response;
+            .output;
         let scale = scale.unwrap_or(1.0);
         if fields.text("unit") != Some(unit.as_str()) {
             fields.set("unit", unit);

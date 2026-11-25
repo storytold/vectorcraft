@@ -162,6 +162,42 @@ fn checked_artboards_read_as_a_range() {
     }
 }
 
+/// The rect the frame `shapes` paint `texture` over; `None` when none paints it.
+fn painted(shapes: &[egui::epaint::ClippedShape], texture: egui::TextureId) -> Option<egui::Rect> {
+    fn walk(shape: &egui::Shape, texture: egui::TextureId, out: &mut Option<egui::Rect>) {
+        match shape {
+            egui::Shape::Vec(all) => all.iter().for_each(|s| walk(s, texture, out)),
+            egui::Shape::Mesh(mesh) if mesh.texture_id == texture => {
+                let at = mesh.calc_bounds();
+                *out = Some(out.map_or(at, |r| r.union(at)));
+            }
+            _ => {}
+        }
+    }
+    let mut out = None;
+    shapes.iter().for_each(|clipped| walk(&clipped.shape, texture, &mut out));
+    out
+}
+
+/// The grid's tiles and the list's thumbnails are square; an artboard of another shape keeps its
+/// proportions in them.
+#[test]
+fn an_artboards_picture_keeps_its_proportions() {
+    let (mut app, _) = app(1, false);
+    open(&mut app);
+    for view in ["grid", "list"] {
+        set(&mut app, "view", json!(view));
+        frame(&mut app);
+        let ctx = app.ui_ctx.clone().expect("a test app has a window");
+        let out = crate::testing::part_frame(&mut app, &ctx, Default::default(), |app, ui| app.ui(ui));
+        let tex = app.canvas.artboard_thumbs.as_ref().and_then(|(_, thumbs)| thumbs.first().cloned().flatten()).expect("the artboard has a picture");
+        let drawn = painted(&out.shapes, tex.id()).expect("the artboard's picture is drawn");
+        let (picture, shown) = (tex.size_vec2(), drawn.size());
+        assert!(picture.x > picture.y, "the 60×40 pt artboard is wider than high");
+        assert!((shown.x / shown.y - picture.x / picture.y).abs() < 0.02, "{view}: a {picture:?} picture is drawn {shown:?}");
+    }
+}
+
 #[test]
 fn opens_with_the_artboards_the_artboard_tool_selected_and_exports_only_them() {
     let (mut app, log) = app(4, true);

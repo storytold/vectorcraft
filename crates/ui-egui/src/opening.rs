@@ -57,9 +57,16 @@ pub fn long_operation_busy(app: &VectorcraftApp) -> bool {
 }
 
 /// Does opening happen off the UI thread here? Not on wasm (no threads), in unit tests (they look
-/// at the document right after asking for it), or with `VECTORCRAFT_SYNC_OPEN` set.
+/// at the document right after asking for it, unless one turns it on: [`tests::with_threads`]), or
+/// with `VECTORCRAFT_SYNC_OPEN` set.
+#[cfg(not(test))]
 pub fn available() -> bool {
-    !(cfg!(target_arch = "wasm32") || cfg!(test) || std::env::var_os("VECTORCRAFT_SYNC_OPEN").is_some())
+    !(cfg!(target_arch = "wasm32") || std::env::var_os("VECTORCRAFT_SYNC_OPEN").is_some())
+}
+
+#[cfg(test)]
+pub fn available() -> bool {
+    tests::threads_on()
 }
 
 /// Decode `bytes`, the file at `path`, read its linked files and lay out its type on a job of its
@@ -71,6 +78,8 @@ pub fn start(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>) -> Value {
 
 /// [`start`] with the `document.open` options in `params` (`importer` and its `params`).
 pub fn start_with(app: &mut VectorcraftApp, path: &str, bytes: Vec<u8>, params: Value) -> Value {
+    // A plug-in still loading may be the importer that reads the file.
+    app.session.finish_plugin_loads();
     let (tx, done) = channel();
     let name = path.to_string();
     // Update Links (Preferences › File Handling) applies there as it is set now.
@@ -130,7 +139,7 @@ pub(crate) fn finish_answered(app: &mut VectorcraftApp, path: &str, file: ReadFi
 /// Lists the file being read for `path` and tells the status bar → `{background: true, status}`.
 fn track(app: &mut VectorcraftApp, path: &str, done: Receiver<Result<ReadFile, String>>, scope: ScopeHandle, token: CancelToken) -> Value {
     let label = format!("Opening {}", fileio::file_name(path));
-    let started = crate::export_progress::now();
+    let started = crate::export_progress::now(app);
     app.opening.pending.push(Pending { path: path.to_string(), label: label.clone(), done, scope, token, hidden: false, started });
     let status = format!("{label}…");
     app.status(status.clone());
@@ -248,4 +257,4 @@ fn finish(app: &mut VectorcraftApp, path: &str, r: Result<ReadFile, String>) {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

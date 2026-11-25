@@ -906,6 +906,7 @@ font-technology	Variable	Değişken
 	Direct Selection Tool	Doğrudan Seçim Aracı
 	Direction Handles	Yön Kolları
 	Disable Auto Add/Delete	Otomatik Ekleme/Silmeyi Devre Dışı Bırak
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete Bağlantı Noktalarını Kaldırır ve Yolları Birleşik Tutar
 	Interpolate Control Points When Moving Anchors	Bağlantı Noktalarını Taşırken Yön Kollarını Enterpole Et
 	Disable Opacity Mask	Opaklık Maskesini Devre Dışı Bırak
 	Discard	At
@@ -2398,6 +2399,7 @@ font-technology	Variable	Değişken
 	One Point Perspective Preset 5	Tek Noktalı Perspektif Ön Ayarı 5
 	Only Web Colors	Yalnızca Web Renkleri
 	Opacity	Opaklık
+	Show Opacity	Opaklığı Göster
 	Opacity & Mask Define Knockout Shape	Opaklık ve Maske Tanımlama Nakavt Şekli
 	Opacity Mask	Opaklık Maskesi
 	Opacity Mask Info	Opaklık Maskesi Bilgisi
@@ -2845,6 +2847,9 @@ digits	Malayalam	Malayalam
 	Scale Artwork with Artboard	Çalışma Yüzeyi ile Resmi Ölçeklendirin
 	Artboards: {n}	Çalışma yüzeyleri: {n}
 	Rearrange All Artboards…	Tüm Çalışma Yüzeylerini Yeniden Düzenleme…
+	Rearrange…	Yeniden Düzenle…
+	Selected Artboards: {n}	Seçili çalışma yüzeyleri: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Çalışma yüzeylerini yerleştirmek için tuvale tıklayın (Esc iptal eder)
 	Recall Selection	Seçimi Geri Çağır
 	RECENT	SON
 	Recent	Son
@@ -3093,6 +3098,7 @@ digits	Malayalam	Malayalam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Bir tuşu basılı tutmak, Klavye Kısayolları'ndaki Basılı tutun sütununda bulunan aracı veya komutu çalıştırır; kısa basış olağan kısayolunu çalıştırır.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Olağan kısayolu yerine basılı tutma kısayolunun çalışması için bir tuşun kaç saniye basılı tutulması gerektiği.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete, seçili bağlantı noktalarını kaldırır ve yolu orada açmak yerine her birinin çevresindeki eğriyi yeniden uydurur.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Bağlantı noktalarını taşıdığınızda, bir ucu taşınan her eğri uçlarına göre şeklini korur.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
 	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
@@ -6697,8 +6703,10 @@ effect	Horizontal	Yatay
 effect	Points	Noktalar
 effect	Regular	Düzenli
 effect	Vertical	Dikey
+file-filter	Action sets	Eylem setleri
 file-filter	All placeable files	Yerleştirilebilir tüm dosyalar
 file-filter	All readable files	Okunabilir tüm dosyalar
+file-filter	Composite fonts	Bileşik fontlar
 file-filter	Export presets	Dışa aktarma önayarları
 file-filter	Flattener presets	Düzleştirici önayarları
 file-filter	PDF presets	PDF önayarları
@@ -6708,6 +6716,7 @@ file-filter	Preferences	Tercihler
 file-filter	SVG Compressed	Sıkıştırılmış SVG
 file-filter	Swatch libraries	Renk örneği kitaplıkları
 file-filter	Templates	Şablonlar
+file-filter	Tracing presets	İzleme önayarları
 file-filter	VectorCraft Template	VectorCraft Şablonu
 gradient-kind	Radial	Radyal
 mark-style	Japanese	Japon
@@ -7181,6 +7190,12 @@ theme	Appearance	Görünüm
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	çözünürlük kullanılamıyor
+	estimated memory {memory}	tahmini bellek {memory}
+	memory unavailable	bellek kullanılamıyor
+	Unknown format	Bilinmeyen biçim
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -7398,6 +7413,8 @@ axis	Y Axis	Y ekseni
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	onay gerekiyor: {0} istiyor; kullanıcı bunu eklentiyi tek başına yüklerken verir
 @msg	not JSON: {e}	JSON değil: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly ikili dosyası değil (\\0asm üst bilgisi eksik)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	bir işlev türü {MAX_FUNC_TYPE_VALUES} parametre sınırını aşıyor
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	bir işlev türü {MAX_FUNC_TYPE_VALUES} sonuç sınırını aşıyor
 @msg	parameter `{k}`: {what}	`{k}` parametresi: {what}
 @msg	parameter `{name}`: {what}	`{name}` parametresi: {what}
 @msg	plug-in parameters must be a JSON object	eklenti parametreleri bir JSON nesnesi olmalıdır
@@ -7415,6 +7432,10 @@ axis	Y Axis	Y ekseni
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc 0 döndürdü (bellek yetersiz)
 @msg	vc_alloc returned a block outside memory	vc_alloc bellek dışında bir blok döndürdü
 @msg	vc_run returned error code {packed}	vc_run {packed} hata kodunu döndürdü
+@msg	did not finish loading within {secs} s	{secs} sn içinde yüklenmeyi bitirmedi
+@msg	no thread was left to load it	onu yükleyecek iş parçacığı kalmadı
+@msg	panicked while loading	yüklenirken çöktü
+@msg	panicked while loading: {what}	yüklenirken çöktü: {what}
 @msg	{_1} is not a file	{_1} bir dosya değil
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} {_2} bayt (sınır {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} nesne (sınır {MAX_OBJECTS})
@@ -7434,6 +7455,11 @@ axis	Y Axis	Y ekseni
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` ve `maxItems` 0-{MAX_LIST} olmalı, `maxItems` en az 1 olmalı ve varsayılan değer bu kadar öğe içermelidir
 @msg	`name` must be a string	`name` bir dize olmalıdır
 @msg	`opacity` must be a number	`opacity` bir sayı olmalıdır
+@msg	`opacity` must be a number from 0 to 100	`opacity` 0 ile 100 arasında bir sayı olmalıdır
+@msg	`opacity` must be true or false	`opacity` true veya false olmalıdır
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	metin karakterlerinin kendi opaklığı yoktur: Görünüm panelindeki Yeni Dolgu Ekle veya Yeni Kontur Ekle ile bir dolgu veya kontur ekleyin
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	bir sembol örneğinde seçilen nesnenin kendi dolgu veya kontur opaklığı yoktur
+@msg	no target has that fill or stroke to take the opacity	hiçbir hedefte opaklığı alacak o dolgu veya kontur yok
 @msg	`type` must be "path" or "compound"	`type` "path" veya "compound" olmalıdır
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 1-{MAX_UNIT} yazdırılabilir karakter olmalıdır
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen`, `{other}` için 1 ile {MAX_CONDITION_VALUES} arasında değer listelemelidir
@@ -7568,6 +7594,10 @@ axis	Y Axis	Y ekseni
 @msg	`inputs` lists `{shown}` twice	`inputs` `{shown}` değerini iki kez listeliyor
 @msg	`inputs` needs `api` 2 or later	`inputs` için `api` 2 veya üstü gerekir
 @msg	`inputs` needs the permission `doc.read`	`inputs` için `doc.read` izni gerekir
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Kendisine verilen nesneleri ve belgenin ayarlarını, çalışma yüzeylerini, katmanlarını ve renk örneklerini okuma
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` farklı bölümleri listelemelidir: settings, artboards, layers veya swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` yalnızca `api` 3 veya sonrasında, `doc.read` izniyle bir filtre ya da `commands` içeren bir canlı efekt içindir
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	eklentinin istediği belge bilgileri aktarılamayacak kadar büyük: {MAX_CONTEXT_BYTES} bayt içinde en fazla {MAX_CONTEXT_ITEMS} çalışma yüzeyi, katman ve renk örneği
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	bellek bütçesi (nesne {_1} için {size} bayt girdi gerekiyor, {left} kaldı)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	nesne bütçesi ({MAX_OBJECTS} adetten fazla salt okunur nesne)
 @msg	instruction budget	talimat bütçesi

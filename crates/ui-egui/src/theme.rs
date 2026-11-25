@@ -146,26 +146,59 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
 }
 
 /// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
-/// where the sets give pills, and the compact set takes the reference app's metrics: 26-point fields and spinners,
-/// 10 points inside panels, 5 between rows, 13-point body type with 12.5-point labels and 11-point captions, 5-point
-/// control corners, 8-point menus and 10-point windows, and 33-point panel tabs.
+/// where the sets give pills, the Home title is 26-point under 60 points of page margin with a 36-point call to
+/// action, Home keeps production's rhythm (its item spacing of 5 plus the room it added: 9 from title to subtitle, 27
+/// to New and Open, 28-point New and Open with 16 points beside their labels and 14 between them, 33 between sections,
+/// 15 under a heading, 24-point link rows 5 apart), and the compact set takes the reference app's metrics:
+/// 26-point fields and spinners, 24-point push buttons, 10 points inside panels, 5 between rows, 16-point glyphs in
+/// icon buttons, 5-point control corners, 8-point menus and 10-point windows, 33-point panel tabs, 310-point dock
+/// columns with 14-point column bars and 38-point icon columns, 29-point menu rows, and dialogs 22 points inside their
+/// edge with 28-point buttons at least 72 points wide.
+/// Its type is the size the reference app draws: it set Inter at 92% of its nominal 13-point body, 12.5-point labels
+/// and 11.5-point captions, so they read at 12, 11.5 and 10.5 points, on the rows those nominal sizes gave.
 const SIZES: &[u8] = br#"{
-    "all": {"radius.button": 4},
+    "all": {
+        "radius.button": 4,
+        "typography.display.size": 26,
+        "typography.display.line_height": 32,
+        "size.page.margin": 60,
+        "size.page.action": 36,
+        "size.page.button": 28,
+        "size.page.button_side": 16,
+        "size.page.gap.title": 9,
+        "size.page.gap.lead": 27,
+        "size.page.gap.actions": 14,
+        "size.page.gap.section": 33,
+        "size.page.gap.heading": 15,
+        "size.page.gap.link": 5,
+        "size.page.link": 24
+    },
     "compact": {
         "size.control.md": 26,
+        "size.button": 24,
+        "size.icon.glyph_md": 16,
+        "size.rail.width": 38,
+        "size.dock.column": 310,
+        "size.bar.column": 14,
         "size.panel_header": 33,
+        "size.bar.tab": 35,
+        "size.bar.tab_large": 44,
         "space.pad.regular": 10,
         "space.gap.row": 5,
         "radius.control": 5,
         "radius.surface": 8,
         "radius.window": 10,
-        "typography.body.size": 13,
+        "size.dialog.button": 72,
+        "size.dialog.button_height": 28,
+        "size.row.menu": 29,
+        "space.pad.dialog": 22,
+        "typography.body.size": 12,
         "typography.body.line_height": 17,
-        "typography.body_strong.size": 13,
+        "typography.body_strong.size": 12,
         "typography.body_strong.line_height": 17,
-        "typography.label.size": 12.5,
+        "typography.label.size": 11.5,
         "typography.label.line_height": 17,
-        "typography.caption.size": 11,
+        "typography.caption.size": 10.5,
         "typography.caption.line_height": 15
     }
 }"#;
