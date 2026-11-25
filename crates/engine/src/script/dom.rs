@@ -367,6 +367,14 @@ fn find_doc(h: &Host, run: f64, uid: f64) -> Option<Doc> {
     s.documents().iter().position(|d| d.uid == uid).map(|index| Doc { index, uid })
 }
 
+/// [`find_doc`] for the handle of an object in a document: none as well when the document was
+/// reverted since the handle was made, as its objects were read again from its file.
+fn find_doc_of_object(h: &Host, run: f64, uid: f64, reverts: f64) -> Option<Doc> {
+    let doc = find_doc(h, run, uid)?;
+    let s = h.session.borrow();
+    (whole(reverts) == Some(s.documents()[doc.index].reverts)).then_some(doc)
+}
+
 /// The document `d` names: a `Document` or a `PageItems` object.
 fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError> {
     let Some(handle) = handle_of(d, class) else { return Err(HostError::Type(format!("this is not a {class}"))) };
@@ -379,8 +387,8 @@ fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError
 /// The page item `d` names, which must still be in its document.
 fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
     let Some(handle) = handle_of(d, "PageItem") else { return Err(HostError::Type("this is not a page item".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let [run, uid, reverts, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
+    let doc = find_doc_of_object(h, *run, *uid, *reverts).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
@@ -418,8 +426,8 @@ fn doc_ref(h: &Host, uid: u64) -> Data {
 fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     match st.doc.node(id) {
         Some(n) => match typename(n) {
-            Some(t) => host_ref(t, &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
-            None => host_ref("Layer", &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
+            Some(t) => host_ref(t, &[float(h.run), float(st.uid), float(st.reverts), id_parts(id)[0], id_parts(id)[1]]),
+            None => host_ref("Layer", &[float(h.run), float(st.uid), float(st.reverts), id_parts(id)[0], id_parts(id)[1]]),
         },
         None => Data::Null,
     }
@@ -653,8 +661,20 @@ fn restore_layer(h: &Host, uid: u64, layer: Option<NodeId>, rows: &[NodeId]) -> 
 /// commands changed it (commands given ids select them first), direct-selected anchors, segments,
 /// ruler guides, slices, the key, a Layers panel target and an object chosen inside a dynamic
 /// symbol instance or an Objects on Path group included, less the objects that are now deleted,
-/// hidden or locked.
+/// hidden or locked. `f`'s commands and the steps that put things back succeed or fail together
+/// ([`atomically`]): when putting back the selection, the layer or the active document fails, `f`'s
+/// changes are undone as well.
 fn on_doc<T>(
+    h: &Host,
+    uid: u64,
+    keep_selection: bool,
+    f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
+) -> std::result::Result<T, HostError> {
+    atomically(h, |h| on_doc_steps(h, uid, keep_selection, f))
+}
+
+/// The steps of [`on_doc`].
+fn on_doc_steps<T>(
     h: &Host,
     uid: u64,
     keep_selection: bool,
@@ -1452,6 +1472,11 @@ fn items_typename(h: &Host, a: &[Data]) -> Answer {
     Ok(text("PageItems"))
 }
 
+fn items_to_string(h: &Host, a: &[Data]) -> Answer {
+    items_doc(h, a)?;
+    Ok(text("[PageItems]"))
+}
+
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
     Ok(doc_ref(h, doc.uid))
@@ -1654,9 +1679,9 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if !(0.0..=100.0).contains(&v) {
         return Err(HostError::Range("opacity must be from 0 to 100".into()));
     }
-    // A value the getter reports for the item's opacity sends the opacity it has, and
-    // `object.setProps` finds the no-op itself: an opacity a graph mark or label already has still
-    // replaces the one the graph keeps for its series or kind.
+    // A value the getter reports for the item's opacity runs no command, unless the item is a graph
+    // mark or label whose graph keeps another opacity for its series or kind: then the opacity the
+    // item has is sent, and replaces the one the graph keeps.
     // The opacity the item already has may be assigned while its layer is hidden or locked, unless
     // it would still replace the opacity a graph keeps for the item's series or kind.
     let item = this_item(h, a)?;
@@ -1671,7 +1696,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     if now.is_none() || keeps_other {
         refuse_in_closed_layer(h, item)?;
     }
-    set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
+    set_props(h, a, |_| now.is_some() && !keeps_other, json!({"opacity": now.unwrap_or(v)}))
 }
 
 fn item_selected(h: &Host, a: &[Data]) -> Answer {
@@ -1715,6 +1740,31 @@ fn item_geometric(h: &Host, a: &[Data]) -> Answer {
 
 fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
+}
+
+/// `controlBounds`: the visible bounds, grown to hold the control points of the item's paths.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = with_doc(h, item.doc, |_, st| {
+        let control = st.doc.node(item.id).and_then(control_points_box);
+        Ok::<_, HostError>((vectorcraft_geom::union_opt(st.doc.bounds_of(&[item.id], true), control), frame(st)?))
+    })?;
+    match r {
+        Some(r) => Ok(f.bounds(h.dom.coords.get(), r)),
+        None => Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])),
+    }
+}
+
+/// The box of the control points of the paths in `n`, the visible members of its groups and
+/// compound paths included; none for other art.
+fn control_points_box(n: &crate::doc::Node) -> Option<Rect> {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        NodeKind::Group { .. } | NodeKind::Compound { .. } => {
+            n.children()?.iter().filter(|c| c.visible).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, control_points_box(c)))
+        }
+        _ => None,
+    }
 }
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {
@@ -1895,13 +1945,13 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
     let handle = handle_of(target, "PageItem").or_else(|| handle_of(target, "Layer"));
-    let Some(&[run, uid, high, low]) = handle.as_deref() else {
+    let Some(&[run, uid, reverts, high, low]) = handle.as_deref() else {
         if handle_of(target, "Document").is_some() {
             return Err(HostError::Error("a document as the relative object is not available yet".into()));
         }
         return Err(HostError::Type("the relative object must be a page item or a layer".into()));
     };
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let doc = find_doc_of_object(h, run, uid, reverts).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     if doc.uid != item.doc.uid {
         return Err(HostError::Error(CROSS_DOCUMENT.into()));
     }
@@ -2069,8 +2119,8 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
 
 fn layer_name(h: &Host, a: &[Data]) -> Answer {
     let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
+    let [run, uid, reverts, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
+    let doc = find_doc_of_object(h, *run, *uid, *reverts).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
     let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
     with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
 }
@@ -2223,7 +2273,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             ("index", method(l, items_index)),
             ("getByName", method(l, items_by_name)),
             ("removeAll", method(l, items_remove_all)),
-            ("toString", class_text("PageItems")),
+            ("toString", method(l, items_to_string)),
         ]),
         Some(function(l, items_at)),
     ));
@@ -2243,7 +2293,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
+        ("controlBounds", get(l, item_control)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),

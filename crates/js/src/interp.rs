@@ -1859,16 +1859,17 @@ impl Interp {
             None => {}
         }
         let proto = self.object(id)?.proto;
-        match proto.map(|p| self.find_property(p, &k)).transpose()?.flatten() {
+        let inherited = match proto.map(|p| self.find_property(p, &k)).transpose()?.flatten() {
             Some(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), &Value::Object(id), &[v]).map(drop),
             Some(Prop::Accessor { set: None, .. }) => return self.reject(throw, &k, "it has only a getter"),
             Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => return self.reject(throw, &k, "it is read-only"),
-            _ => {}
-        }
+            found => found.is_some(),
+        };
         if !self.object(id)?.extensible {
-            // A name that an object of a host class with an indexer lacks is read with the indexer
-            // first, so assigning it throws what reading it throws.
-            if array_index(&k).is_none()
+            // A name that an object of a host class with an indexer lacks, on it and its prototypes,
+            // is read with the indexer first, so assigning it throws what reading it throws.
+            if !inherited
+                && array_index(&k).is_none()
                 && let Some(f) = self.host_indexer(id)?
             {
                 self.host_index(&f, id, Self::indexer_key(&k), false)?;

@@ -2709,7 +2709,7 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  visible bounds, grown to hold the control points of the object's paths), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
   or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
@@ -2761,8 +2761,9 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A command that selects the objects it changes leaves the current layer and the highlighted Layers
-  panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was
-  deleted, or that a named engine kept from an earlier run, throws `Stale page item`. `remove()` on an object that
+  panel rows as they were before the change. A bad value throws an error and changes nothing. A page item that was
+  deleted, or that a named engine kept from an earlier run, throws `Stale page item`, and a document or a page item
+  collection that a named engine kept from an earlier run throws `Stale document`. `remove()` on an object that
   is hidden or locked, is inside a hidden or locked layer or group, or is a group that holds one, and `removeAll()`
   when any object is, throw `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on
   a locked artboard, and `removeAll()` when any object is on one, throw `cannot delete objects on a locked artboard`

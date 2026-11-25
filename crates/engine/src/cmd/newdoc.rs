@@ -1017,11 +1017,13 @@ impl Session {
             match std::fs::symlink_metadata(&path) {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
                 // A link is refused: the script's gate does not check where it leads.
-                Ok(m) if !m.file_type().is_file() => return Err("not a plain file".to_string()),
+                Ok(m) if !m.file_type().is_file() => return Err(crate::store::NOT_PLAIN.to_string()),
                 _ => {}
             }
             crate::file_access::check_read(&file).map_err(denied)?;
-            crate::store::read_capped(&path, MAX_PROFILE_BYTES).map(Some)
+            // Read without following a link, so a link put in the file's place since the check
+            // above is refused too.
+            crate::store::read_capped_plain(&path, MAX_PROFILE_BYTES).map(Some)
         })?;
         let Some(bytes) = read else { return Ok(None) };
         // The color profiles the file carries are installed where missing, as opening it installs

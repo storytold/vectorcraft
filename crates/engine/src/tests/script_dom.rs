@@ -155,6 +155,27 @@ fn page_item_size_setters_on_a_rotated_object_give_the_page_aligned_size() {
     assert_eq!(format!("{:?}", s.active().unwrap().doc.node(b)), other, "the other object stays as it was");
 }
 
+/// `controlBounds` holds a curve's handles, which reach past the curve; for a rectangle it is the
+/// visible bounds.
+#[test]
+fn control_bounds_hold_the_handles_of_a_curve() {
+    let (mut s, _, _) = doc();
+    s.execute("path.create", &json!({"d": "M100 200 C100 100 200 100 200 200"})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems, c = p[0], r = p[1];\
+         function h(b) { return b[1] - b[3]; }\
+         vc.log([h(c.visibleBounds), h(c.controlBounds), c.controlBounds[0] <= c.visibleBounds[0]]);\
+         vc.log(String(r.controlBounds) === String(r.visibleBounds));",
+    );
+    let heights = out[0].as_array().unwrap();
+    let (visible, control) = (heights[0].as_f64().unwrap(), heights[1].as_f64().unwrap());
+    // The curve rises 75 pt and its handles 100 pt; half the stroke's weight reaches above the curve.
+    assert!(control - visible > 20.0 && control - visible <= 25.0 + 1e-6, "{out:?}");
+    assert_eq!(heights[2], json!(true), "{out:?}");
+    assert_eq!(out[1], json!(true), "{out:?}");
+}
+
 #[test]
 fn convert_coordinate_pair_is_inverse_and_y_up() {
     let mut s = Session::new();
@@ -270,6 +291,7 @@ fn assigning_the_reported_opacity_changes_nothing() {
     assert_eq!(out, vec![json!(33.3333)]);
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().opacity, before);
     assert_eq!(undo_steps(&s), steps);
+    assert_eq!(s.script_report().unwrap()["slowestCommands"], json!([]), "the assignment runs no command");
     // A value close to the reported one but not equal to it is still applied.
     s.execute("object.setProps", &json!({"id": a.0, "opacity": 50})).unwrap();
     let (before, steps) = (s.active().unwrap().doc.node(a).unwrap().opacity, undo_steps(&s));
@@ -284,6 +306,14 @@ fn selection_assignment_is_atomic_across_invalid_items() {
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
     let e = failure(&mut s, "var p = app.activeDocument.pageItems; app.activeDocument.selection = [p[0], p[1]];");
     assert!(e.contains("Cannot select PathItem"), "{e}");
+    assert!(s.active().unwrap().selection.objects.is_empty());
+    // With the valid item first and the error caught, the run sees the selection unchanged.
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pageItems; try { d.selection = [p[1], p[0]]; vc.log('assigned'); }\
+         catch (e) { vc.log(String(e).indexOf('Cannot select PathItem') >= 0); } vc.log(d.selection.length);",
+    );
+    assert_eq!(out, vec![json!(true), json!(0)]);
     assert!(s.active().unwrap().selection.objects.is_empty());
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     let out = log(
@@ -680,9 +710,13 @@ fn a_listed_preset_keeps_more_rows_than_artboards() {
 fn stale_documents_throw_on_every_member() {
     let (mut s, _, _) = doc();
     run(&mut s, "#targetengine keep\nvar d = app.activeDocument, p = d.pageItems, l = p[0].parent;").unwrap();
-    for (member, message) in
-        [("d.typename", "Stale document"), ("d.parent", "Stale document"), ("p.typename", "Stale document"), ("l.typename", "Stale")]
-    {
+    for (member, message) in [
+        ("d.typename", "Stale document"),
+        ("d.parent", "Stale document"),
+        ("p.typename", "Stale document"),
+        ("p.toString()", "Stale document"),
+        ("l.typename", "Stale"),
+    ] {
         let e = failure(&mut s, &format!("#targetengine keep\n{member};"));
         assert!(e.contains(message), "{member}: {e}");
     }
@@ -1192,12 +1226,41 @@ fn wrappers_go_stale_after_delete_and_undo() {
     assert!(e.contains("Stale page item"), "{e}");
 }
 
+/// Reverting a document reads its objects again from its file, so the page items and layers taken
+/// before the revert are stale, even where the file has an object under the same id.
+#[test]
+fn page_items_and_layers_go_stale_when_their_document_is_reverted() {
+    let (mut s, _, _) = doc();
+    let path = std::env::temp_dir().join(format!("vc-dom-revert-{}.{}", std::process::id(), vectorcraft_format::EXTENSION));
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    for (taken, read, message) in [("p[0]", "i.name", "Stale page item"), ("p[0].parent", "i.typename", "Stale")] {
+        let source = format!("var p = app.activeDocument.pageItems, i = {taken}; p[1].name = 'x'; vc.run('file.revert', {{}}); {read};");
+        let e = failure(&mut s, &source);
+        assert!(e.contains(message), "{taken}: {e}");
+    }
+    let out = log(
+        &mut s,
+        "app.activeDocument.pageItems[1].name = 'x'; vc.run('file.revert', {}); var p = app.activeDocument.pageItems;\
+         vc.log([p.length, p[0].typename, p[1].name]);",
+    );
+    assert_eq!(out, vec![json!([2, "PathItem", ""])]);
+    let _ = std::fs::remove_file(path);
+}
+
 #[test]
 fn remove_all_refuses_locked_art_before_deleting_anything() {
     let (mut s, a, b) = doc();
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
     let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
     assert!(e.contains(&b.0.to_string()), "{e}");
+    assert_eq!(s.active().unwrap().doc.layers[0].children().unwrap().len(), 2);
+    // With the error caught, the run that goes on still has both objects.
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems; try { p.removeAll(); vc.log('removed'); }\
+         catch (e) { vc.log(String(e).indexOf('cannot delete hidden or locked objects') >= 0); } vc.log(p.length);",
+    );
+    assert_eq!(out, vec![json!(true), json!(2)]);
     assert_eq!(s.active().unwrap().doc.layers[0].children().unwrap().len(), 2);
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     // A locked object inside an unlocked group stops it too.
@@ -1345,8 +1408,9 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let (mut s, _, _) = doc();
     let path = std::env::temp_dir().join(format!("vc-dom-open-{}.svg", std::process::id()));
     s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
-    let p = path.to_string_lossy().replace('\\', "\\\\");
-    let query = format!("vc.log(app.getIsFileOpen('{p}')); vc.log(app.getIsFileOpen('{p}.other'));");
+    let p = path.to_string_lossy();
+    let (saved, other) = (json!(p), json!(format!("{p}.other")));
+    let query = format!("vc.log(app.getIsFileOpen({saved})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
     // Read roots that leave out the document's file: the same path does not count.
@@ -1652,6 +1716,9 @@ fn a_collection_read_with_a_name_gives_the_named_object() {
          vc.log(m);",
     );
     assert_eq!(out, vec![json!([true, "n", true, false, true]), json!([true, true, false]), json!(["Not found", "Not found"])]);
+    // A name the collection inherits is not looked up as an object's name when it is assigned.
+    let out = log(&mut s, "Object.prototype.tag = 1; var p = app.activeDocument.pageItems; p.tag = 2; vc.log(p.tag);");
+    assert_eq!(out, vec![json!(1)]);
 }
 
 /// `opacity`, `hidden`, `locked` and the position and size setters on an object in a hidden or

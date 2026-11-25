@@ -91,6 +91,9 @@ pub(crate) struct Entry {
     parent: Option<u32>,
     /// The names of the members `hasOwnProperty` reports: every member but the unavailable ones.
     own: Rc<HashSet<Key>>,
+    /// The names of the unavailable members, which hide a member of the same name that a parent
+    /// class has.
+    unavailable: Rc<HashSet<Key>>,
 }
 
 impl Entry {
@@ -143,7 +146,8 @@ pub fn host_ref_parts(d: &Data) -> Option<(&str, Vec<f64>)> {
 
 impl Interp {
     /// Whether `k` is a member that `hasOwnProperty` reports on `id`: `id` is an object of a host
-    /// class, and `k` names an available member of that class or of a class it descends from.
+    /// class, and `k` names an available member of the nearest class that declares `k`, that class
+    /// or one it descends from.
     pub(crate) fn is_host_member(&self, id: ObjId, k: &[u16]) -> JsResult<bool> {
         let Class::Host(h) = &self.object(id)?.class else { return Ok(false) };
         let mut class = Some(h.class);
@@ -151,6 +155,9 @@ impl Interp {
             let Some(e) = self.host_classes.get(c as usize) else { return Err(Abrupt::Internal("host class out of range".into())) };
             if e.own.contains(k) {
                 return Ok(true);
+            }
+            if e.unavailable.contains(k) {
+                return Ok(false);
             }
             class = e.parent;
         }
@@ -307,7 +314,7 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     let r = fill_class(i, proto, &class);
     i.temp_roots.truncate(mark);
     let ctor = r?;
-    let members = class.members.iter().filter(|(_, m)| !matches!(m, HostMember::Unavailable(_))).map(|(name, _)| key(name)).collect();
+    let (unavailable, members): (Vec<_>, Vec<_>) = class.members.iter().partition(|(_, m)| matches!(m, HostMember::Unavailable(_)));
     i.host_classes.push(Entry {
         name: class.name.as_str().into(),
         proto,
@@ -315,7 +322,8 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
         index: class.index,
         family,
         parent: parent_class,
-        own: Rc::new(members),
+        own: Rc::new(members.into_iter().map(|(name, _)| key(name)).collect()),
+        unavailable: Rc::new(unavailable.into_iter().map(|(name, _)| key(name)).collect()),
     });
     let global = i.global;
     i.define(global, key(&class.name), Prop::Data { value: Value::Object(ctor), flags: crate::heap::HIDDEN })

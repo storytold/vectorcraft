@@ -187,6 +187,52 @@ fn read_past_cap(path: &Path, max: u64) -> std::io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// What [`read_capped_plain`] tells a path that is not a plain file.
+pub(crate) const NOT_PLAIN: &str = "not a plain file";
+
+/// The content of `path` when it is a plain file of at most `max` bytes. The file is opened without
+/// following a link at `path` (on Windows a junction or other reparse point is opened itself), and
+/// its kind and bytes are read from that open file, so a link put at `path` after an earlier check
+/// is refused with [`NOT_PLAIN`] rather than read.
+pub(crate) fn read_capped_plain(path: &Path, max: u64) -> Result<Vec<u8>, String> {
+    let file = open_no_link(path).map_err(|e| match std::fs::symlink_metadata(path) {
+        Ok(m) if !m.file_type().is_file() || reparse_point(&m) => NOT_PLAIN.to_string(),
+        _ => e.to_string(),
+    })?;
+    let m = file.metadata().map_err(|e| e.to_string())?;
+    if !m.file_type().is_file() || reparse_point(&m) {
+        return Err(NOT_PLAIN.to_string());
+    }
+    let mut bytes = vec![];
+    file.take(max + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > max {
+        return Err(too_large(max));
+    }
+    Ok(bytes)
+}
+
+/// `path` opened for reading, without following a link there. A pipe put in its place does not hold
+/// the open up.
+#[cfg(unix)]
+fn open_no_link(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let flags = rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK;
+    std::fs::OpenOptions::new().read(true).custom_flags(flags.bits() as i32).open(path)
+}
+
+/// `path` opened for reading; a link or junction there is opened itself, not its target.
+#[cfg(windows)]
+fn open_no_link(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    std::fs::OpenOptions::new().read(true).custom_flags(FILE_FLAG_OPEN_REPARSE_POINT).open(path)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn open_no_link(path: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::File::open(path)
+}
+
 /// What a file over its cap is told (a detail after the file's name, in the log or an error).
 fn too_large(max: u64) -> String {
     format!("larger than {max} bytes")
