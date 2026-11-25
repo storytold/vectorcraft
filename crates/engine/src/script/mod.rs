@@ -1075,7 +1075,7 @@ impl Host {
         }
         let bridge = self.bridge.get().saturating_add(bytes);
         self.bridge.set(bridge);
-        if bridge > MAX_BRIDGE_BYTES {
+        if bridge > bridge_bytes() {
             return Err(self.over(OVER_BRIDGE));
         }
         let n = self.calls_this_slice.get() + 1;
@@ -1630,16 +1630,10 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
     const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
-    const APP_MEMBERS: &[&str] = &["activeDocument", "documents", "selection"];
     let message = &e.message;
     let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
     let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));
-    if e.kind == RunErrorKind::Thrown
-        && !e.authored
-        && let Some(member) = first.filter(|f| APP_MEMBERS.contains(f))
-    {
-        format!("{message} (use `app.{member}`)")
-    } else if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
+    if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
         message.to_string()
@@ -2041,7 +2035,7 @@ impl Session {
         // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
         // code the way the script does.
         let es2015 = include::es2015_script(request.file.as_deref());
-        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, ..Options::default() };
+        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, e4x: true, ..Options::default() };
         let strict = options.strict;
         // A kept engine reads each run's code the way that run's script does.
         let mut realm = match realm {
@@ -2621,6 +2615,15 @@ fn growth_bytes() -> u64 {
     GROWTH_BYTES
 }
 
+/// The data a run may pass to and from commands.
+fn bridge_bytes() -> u64 {
+    #[cfg(test)]
+    if let Some(n) = TEST_BRIDGE_BYTES.with(Cell::get) {
+        return n;
+    }
+    MAX_BRIDGE_BYTES
+}
+
 /// The limits of a command's result on its way to the script.
 fn result_limits() -> DataLimits {
     #[cfg(test)]
@@ -2640,6 +2643,8 @@ thread_local! {
     pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the bytes a run may keep in place of [`GROWTH_BYTES`].
     pub(crate) static TEST_GROWTH_BYTES: Cell<Option<u64>> = const { Cell::new(None) };
+    /// Tests: the data a run may pass to and from commands in place of [`MAX_BRIDGE_BYTES`].
+    pub(crate) static TEST_BRIDGE_BYTES: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the heap of a named engine in place of [`ENGINE_HEAP_BYTES`].
     pub(crate) static TEST_ENGINE_HEAP: Cell<Option<usize>> = const { Cell::new(None) };
     /// Tests: the bytes of source maps a named engine keeps, in place of [`KEPT_MAP_BYTES`].

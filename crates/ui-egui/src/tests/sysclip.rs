@@ -315,11 +315,7 @@ pub(super) fn frame(app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui:
         static CTX: egui::Context = crate::testing::ui_context();
     }
     let ctx = CTX.with(Clone::clone);
-    craft::ui::shell::embed::before_input(&ctx, |output| app.frame_input(output));
-    let mut out = crate::testing::app_frame(app, &ctx, egui::RawInput { events, ..Default::default() });
-    craft::ui::shell::embed::before_input(&ctx, |output| app.frame_input(output));
-    out.textures_delta.clear();
-    out
+    crate::testing::app_frame(app, &ctx, egui::RawInput { events, ..Default::default() })
 }
 
 /// The paste egui sends for a clipboard with a picture and no text.

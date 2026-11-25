@@ -109,7 +109,9 @@ impl Interrupt {
     }
 }
 
-/// A value passed between a script and the host. An object is given by its class name.
+/// A value passed between a script and the host. An object is given by its class name, and a
+/// Symbol by its description; a Symbol the host passes in is a new Symbol each time, and one a
+/// host function returns in a realm without [`Options::es2015`] throws a `TypeError`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsValue {
     Undefined,
@@ -118,6 +120,7 @@ pub enum JsValue {
     Number(f64),
     String(String),
     Object(String),
+    Symbol(Option<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -276,6 +279,23 @@ impl Realm {
         interp.finally_marks.clear();
         interp.finally_sites.clear();
         interp.error_mark = None;
+        // The first run with ECMAScript 2015 names the built-in functions; a run whose heap has no
+        // room for the names ends with the heap limit, and the next run tries again.
+        if interp.options.es2015
+            && let Err(e) = crate::builtins::es2015_names(interp)
+        {
+            return match self.outcome(Err(e)) {
+                Err(e) => Err(e),
+                Ok(_) => Err(RunError {
+                    kind: RunErrorKind::Internal,
+                    message: "the built-in function names could not be set".into(),
+                    line: 0,
+                    column: 0,
+                    authored: false,
+                }),
+            };
+        }
+        let interp = &mut self.interp;
         let strict = interp.options.strict;
         interp.evaluated = next_tag(interp.evaluated);
         self.script_tag = interp.evaluated;
@@ -539,6 +559,16 @@ impl Realm {
     /// replaced. A heap too small for them ends with the error the realm's next run would give.
     pub fn define_host_classes(&mut self, classes: Vec<crate::HostClass>, instances: Vec<(String, crate::Data)>) -> Result<(), RunError> {
         match crate::host_classes::install(&mut self.interp, classes, instances) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
+    /// Adds the global properties `globals`: a name, the function that answers a read, and the
+    /// function that answers an assignment, each called with `undefined` as `this` (and the value
+    /// assigned). Assigning one without a setter keeps its value, and throws in strict mode code.
+    pub fn define_host_globals(&mut self, globals: Vec<(String, crate::HostFunction, Option<crate::HostFunction>)>) -> Result<(), RunError> {
+        match crate::host_classes::install_globals(&mut self.interp, globals) {
             Ok(()) => Ok(()),
             Err(e) => self.outcome(Err(e)).map(drop),
         }
