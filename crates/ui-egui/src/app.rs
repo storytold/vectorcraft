@@ -5,7 +5,7 @@ use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{ActiveLook, PushButtonLook};
 use craft::ui::choice::ChoiceLook;
-use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, QuietHeader, SectionRhythm};
+use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, LinkLabelUnderline, QuietHeader, SectionRhythm};
 use craft::ui::docking::IconGroupSeparator;
 use craft::ui::list::CommandHighlight;
 use craft::ui::menu::MenuTitlePad;
@@ -691,6 +691,8 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // A field's label that opens its options ("Opacity:", "Stroke") reads in the normal ink, underlined, as production
     // drew it.
     root.values.set(LinkLabelInk::Neutral);
+    // Its underline stands inside the label's rect, under the text, as production drew it.
+    root.values.set(LinkLabelUnderline::Inside);
     // Other field labels ("X:", "Angle:", "Opacity") read in the normal ink of the values beside them, as production
     // drew them.
     root.values.set(CaptionInk::Normal);
