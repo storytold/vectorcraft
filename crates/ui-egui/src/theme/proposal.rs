@@ -220,7 +220,6 @@ fn quiet(brightness: Brightness) -> Palette {
             accent: 0x3d6fe0,
             strong: 0x3563cc,
             shade: 0xcbced2,
-            ..base
         },
         Brightness::Light => Palette {
             chrome: 0xf3f4f6,
@@ -242,7 +241,6 @@ fn quiet(brightness: Brightness) -> Palette {
             accent: 0x3d6fe0,
             strong: 0x3563cc,
             shade: 0xd9dbdf,
-            ..base
         },
     }
 }
