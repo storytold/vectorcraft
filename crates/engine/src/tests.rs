@@ -54,6 +54,7 @@ mod distort;
 mod docsetup;
 mod document_close;
 mod document_move;
+mod double_click_adds_anchor;
 mod draw2;
 mod dynamic_symbols;
 mod dynamic_text;
