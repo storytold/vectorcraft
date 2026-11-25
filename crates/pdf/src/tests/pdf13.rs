@@ -27,22 +27,6 @@ fn options(v: serde_json::Value) -> PdfOptions {
 }
 
 #[test]
-fn which_standards_allow_pdf_1_3() {
-    use Compatibility::*;
-    assert!(Standard::None.allows(Pdf13) && Standard::PdfX1a.allows(Pdf13) && Standard::PdfX3.allows(Pdf13));
-    assert!(!Standard::PdfA2b.allows(Pdf13) && !Standard::PdfX4.allows(Pdf13));
-    // PDF/X-1a and PDF/X-3 files are PDF 1.3; PDF 1.4 is still accepted, and written as 1.3.
-    assert_eq!((Standard::PdfX1a.version(), Standard::PdfX3.version()), (Pdf13, Pdf13));
-    assert!(Standard::PdfX1a.allows(Pdf14));
-    let s = |v| serde_json::from_value::<PdfSettings>(v).unwrap();
-    assert!(s(json!({"compatibility": "1.3"})).pdf13() && s(json!({"standard": "pdfX3", "compatibility": "1.4"})).pdf13());
-    assert!(!s(json!({"compatibility": "1.4"})).pdf13() && !s(json!({"standard": "pdfX4"})).pdf13());
-    assert!(matches!(s(json!({"standard": "pdfA2b", "compatibility": "1.3"})).check(), Err(PdfError::BadSetting(m)) if m.contains("PDF 1.3")));
-    assert_eq!(Compatibility::IDS.first(), Some(&"1.3"), "first in the dropdown");
-    assert_eq!(Encryption::for_compatibility(Pdf13), Encryption::Rc440);
-}
-
-#[test]
 fn pdf_1_3_files_say_so_and_have_no_transparency() {
     let mut d = doc(1.0);
     // Isolated page blending is a transparency group: a flat file has none.

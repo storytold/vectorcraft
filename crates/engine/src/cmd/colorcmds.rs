@@ -14,7 +14,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::cms::Model;
 use vectorcraft_color::css;
-use vectorcraft_color::harmony::{Guide, GuideOptions, Harmony, Variation};
+use vectorcraft_color::harmony::{self, Guide, GuideOptions, Harmony};
 use vectorcraft_color::{Color, Paint, keep_model};
 use vectorcraft_doc::live::lerp_color;
 use vectorcraft_doc::pattern::PatternDef;
@@ -987,8 +987,8 @@ fn harmony(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "color.harmony";
     let base = p.get("color").and_then(color_value).ok_or_else(|| bad(C, "missing or invalid `color`"))?;
     let rule = text_param(p, "rule", C)?.ok_or_else(|| bad(C, "missing `rule`"))?;
-    let rule = Harmony::parse(rule).ok_or_else(|| {
-        let ids: Vec<String> = Harmony::ALL.iter().map(|h| h.id()).collect();
+    let rule = harmony::parse(rule).ok_or_else(|| {
+        let ids: Vec<&str> = Harmony::ALL.iter().map(|h| h.id()).collect();
         bad(C, format!("unknown rule `{rule}` ({})", ids.join("|")))
     })?;
     check_numbers(p, &["steps", "amount"], C)?;
@@ -997,7 +997,7 @@ fn harmony(s: &mut Session, p: &Value) -> Result<Value> {
         opts.steps = n.min(u32::MAX as u64) as u32;
     }
     if let Some(v) = text_param(p, "variation", C)? {
-        opts.variation = Variation::parse(v).ok_or_else(|| bad(C, format!("unknown variation `{v}` (tintsShades|warmCool|vividMuted)")))?;
+        opts.variation = harmony::parse_variation(v).ok_or_else(|| bad(C, format!("unknown variation `{v}` (tintsShades|warmCool|vividMuted)")))?;
     }
     if let Some(a) = p.get("amount").and_then(Value::as_f64) {
         opts.amount = a as f32;
