@@ -160,7 +160,10 @@ fn ppi_overprint_preview_and_bad_params() {
         json!({"previewMode": "xray"}),
         json!({"artboardLayout": {"layout": "spiral"}}),
         json!({"artboardLayout": {"columns": 0}}),
-        json!({"artboardLayout": {"rows": 2}}),
+        json!({"artboardLayout": {"rows": 0}}),
+        json!({"artboardLayout": {"layout": "gridByColumn", "rows": 1.5}}),
+        json!({"artboardLayout": {"layout": "gridByColumn", "rows": 1001}}),
+        json!({"artboardLayout": {"tiles": 2}}),
         json!({"units": "furlongs"}),
         json!({"width": 160000, "artboards": 1000}),
     ] {
@@ -1033,4 +1036,12 @@ fn the_new_layer_takes_an_id_no_profile_art_has() {
     assert_ne!(d.layers[0].id, vectorcraft_doc::NodeId(next));
     // Ids given out later skip the symbol's art too.
     assert!(d.peek_next_id() > d.layers[0].id.0 && d.peek_next_id() > next);
+}
+
+#[test]
+fn a_saved_presets_rows_are_read_within_the_artboard_limit() {
+    let rows = |n: u32| serde_json::from_value::<crate::cmd::newdoc::DocSettings>(json!({"rows": n})).unwrap().rows;
+    assert_eq!(rows(1001), crate::cmd::newdoc::MAX_ARTBOARDS, "file.new takes the listed rows again");
+    assert_eq!(rows(0), 0, "0 stays: columns in their place");
+    assert_eq!(rows(12), 12, "more rows than artboards stay");
 }

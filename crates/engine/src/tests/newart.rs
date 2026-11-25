@@ -1,6 +1,8 @@
 //! The new-art template (M3.65): Stroke panel options and graphic styles chosen with nothing
 //! selected, New Art Has Basic Appearance and `paint.default`.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, Dash, LineCap, Node};
@@ -339,4 +341,86 @@ fn fill_line_gives_a_new_line_the_current_fill() {
     assert_eq!(node(&s, filled).appearance.fill_paint(), s.paint.fill);
     assert_ne!(s.paint.fill, Paint::None);
     assert!(s.execute("shape.line", &json!({"x1": 0, "y1": 0, "x2": 1, "y2": 1, "fill": "yes"})).is_err());
+}
+
+/// `appearance.setNewArt` sets what the next object gets while the selection keeps its own look.
+#[test]
+fn set_new_art_changes_the_next_object_and_not_the_selection() {
+    let mut s = session();
+    let picked = rect(&mut s, 20.0);
+    run(&mut s, "select.set", json!({"ids": [picked.0]}));
+    let (look, undo, recent, active) = (node(&s, picked).appearance, undo_len(&s), s.recent_colors.clone(), s.fill_active);
+    let r = run(
+        &mut s,
+        "appearance.setNewArt",
+        json!({"fill": {"color": "#ff0000"}, "stroke": {"none": true}, "weight": 4, "cap": "round", "dash": [3, 1], "dashOffset": 1, "fillOverprint": true}),
+    );
+    assert_eq!(r, json!({"changed": true}));
+    assert_eq!(node(&s, picked).appearance, look, "the selected art kept its look");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![picked]);
+    assert_eq!((undo_len(&s), &s.recent_colors, s.fill_active), (undo, &recent, active));
+    run(&mut s, "select.none", json!({}));
+    let id = rect(&mut s, 200.0);
+    let ap = node(&s, id).appearance;
+    let (fill, st) = (ap.fill().unwrap(), ap.stroke().unwrap());
+    assert_eq!(fill.paint, Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)));
+    assert!(fill.overprint);
+    assert_eq!((st.paint.clone(), st.width, st.cap), (Paint::None, 4.0, LineCap::Round));
+    assert_eq!(st.dash, Some(Dash { pattern: vec![3.0, 1.0], offset: 1.0, ..Default::default() }));
+    // The same values again change nothing.
+    assert_eq!(run(&mut s, "appearance.setNewArt", json!({"weight": 4, "cap": "round"})), json!({"changed": false}));
+}
+
+#[test]
+fn set_new_art_refuses_bad_values_with_nothing_changed() {
+    let mut s = session();
+    let before = s.paint.clone();
+    for params in [
+        json!({"weight": -1}),
+        json!({"weight": 1001}),
+        json!({"weight": "3"}),
+        json!({"miterLimit": 0.5}),
+        json!({"cap": "flat"}),
+        json!({"join": 2}),
+        json!({"dash": [0, 0]}),
+        json!({"dash": [-1]}),
+        json!({"dash": "4 2"}),
+        json!({"dashOffset": 2}),
+        json!({"fill": "#ff0000"}),
+        json!({"fill": {}}),
+        json!({"fill": {"color": "#ff0000"}, "weight": -1}),
+        json!({"stroke": {"tint": 50, "color": "#000000"}}),
+        json!({"fillOverprint": "yes"}),
+        json!({"widht": 3}),
+    ] {
+        assert!(s.execute("appearance.setNewArt", &params).is_err(), "accepted {params}");
+        assert_eq!(s.paint, before, "changed new art for {params}");
+    }
+}
+
+#[test]
+fn set_new_art_refuses_a_tint_on_a_pattern_without_a_swatch_entry() {
+    let mut s = session();
+    let id = rect(&mut s, 20.0);
+    let name = run(&mut s, "object.pattern.make", json!({"ids": [id.0], "edit": false}))["name"].as_str().unwrap().to_string();
+    run(&mut s, "select.none", json!({}));
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc).remove_swatch(&name);
+    let before = s.paint.clone();
+    assert!(s.execute("appearance.setNewArt", &json!({"fill": {"swatch": name, "tint": 50}})).is_err(), "accepted a tint on {name}");
+    assert_eq!(s.paint, before);
+    assert_eq!(run(&mut s, "appearance.setNewArt", json!({"fill": {"swatch": name}})), json!({"changed": true}));
+}
+
+#[test]
+fn set_new_art_refuses_while_new_art_takes_the_selected_look() {
+    let mut s = session();
+    let picked = rect(&mut s, 20.0);
+    run(&mut s, "appearance.setNewArtBasic", json!({"on": false}));
+    run(&mut s, "select.set", json!({"ids": [picked.0]}));
+    let before = s.paint.clone();
+    assert!(s.execute("appearance.setNewArt", &json!({"weight": 7})).is_err());
+    assert_eq!(s.paint, before);
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(run(&mut s, "appearance.setNewArt", json!({"weight": 7})), json!({"changed": true}));
+    assert_eq!(s.new_art().stroke().unwrap().width, 7.0);
 }

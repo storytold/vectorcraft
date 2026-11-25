@@ -51,6 +51,7 @@
 pub mod console;
 pub mod dialogs;
 pub mod dollar;
+pub mod dom;
 pub mod include;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
@@ -799,6 +800,8 @@ struct Host {
     dollar: dollar::RunState,
     /// The run's `args`, which `vc.args` gives, and their size as `vc.args` charges it.
     args: RefCell<(Data, u64)>,
+    /// The run's state of the script object model (`app`).
+    dom: dom::State,
     /// The documents open when the run began as the person last left them, each with its own file
     /// and the file it was read from ([`crate::DocState::as_person_left`],
     /// [`crate::cmd::links::LinkBase::of_files`]), until the run's first command takes the files
@@ -1119,6 +1122,8 @@ struct Job {
     name: String,
     /// The file-access scope `script.run` came in, which every slice runs in.
     scope: crate::file_access::ScopeHandle,
+    /// The script has ended, and the run waits for the person's growth answer before it is kept.
+    finished: bool,
 }
 
 /// The `Data` for a JSON value, within `limits`. When it does not fit, the error is the place in
@@ -1263,7 +1268,8 @@ fn note_ids(s: &mut Session) {
 fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value, u64, u64, Option<Savepoint>)> {
     raise_ids(s);
     let mutating = waits_for_tool_edit(id);
-    let save = mutating.then(|| Savepoint::take(s, id));
+    // Inside an object-model call's own savepoint ([`dom`]), that savepoint puts a failure back.
+    let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
     crate::file_access::start_recording_writes();
@@ -1332,6 +1338,22 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
     let bytes = args.iter().map(data_size).sum();
     host.charge_call(bytes)?;
     bump(&host.counts.vc_run);
+    command(host, &id, &params)
+}
+
+/// Runs command `id` for the script as `vc.run` does, its call already charged: it joins the run's
+/// transaction, its growth is counted, and a command that fails, or whose result cannot cross to
+/// the script, is put back. → its result.
+fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
+    command_value(host, id, params).map(|(data, _)| data)
+}
+
+/// [`command`], with the command's result as it gave it as well as the script's copy of it.
+fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
+    // Point changes that wait in the object model are written before any command runs.
+    dom::flush(host)?;
+    let id = id.to_string();
+    let params = params.clone();
     let session = host.session.clone();
     let started = clock();
     let r = {
@@ -1367,12 +1389,16 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
-    crossed
+    if crossed.is_ok() {
+        dom::see_points(host);
+    }
+    crossed.map(|data| (data, value))
 }
 
 /// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits
 /// of a crossing throws a `RangeError`.
 fn vc_document(host: &Host) -> std::result::Result<Data, HostError> {
+    dom::flush(host)?;
     let s = host.session.borrow();
     let Some(st) = s.active() else { return Ok(Data::Null) };
     let ids: Vec<u64> = st.selection.objects.iter().take(1_000).map(|i| i.0).collect();
@@ -1603,11 +1629,17 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// `e`'s message, with what to do about a failure that comes from a script written for another
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
-    const HOST_OBJECTS: &[&str] = &["app", "Window", "BridgeTalk", "activeDocument", "documents"];
+    const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
+    const APP_MEMBERS: &[&str] = &["activeDocument", "documents", "selection"];
     let message = &e.message;
-    let names_host_object =
-        message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
-    if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
+    let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
+    let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));
+    if e.kind == RunErrorKind::Thrown
+        && !e.authored
+        && let Some(member) = first.filter(|f| APP_MEMBERS.contains(f))
+    {
+        format!("{message} (use `app.{member}`)")
+    } else if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
         message.to_string()
@@ -1900,7 +1932,7 @@ impl Session {
                 if h.waiting.replace(false) {
                     h.continues.set(h.continues.get() + 1);
                     h.allowance_objects.set(h.allowance_objects.get().saturating_add(growth_objects()));
-                    h.allowance_bytes.set(h.allowance_bytes.get().saturating_add(GROWTH_BYTES));
+                    h.allowance_bytes.set(h.allowance_bytes.get().saturating_add(growth_bytes()));
                 }
             });
         }
@@ -2043,7 +2075,7 @@ impl Session {
             bytes_kept: Cell::new(0),
             bridge: Cell::new(0),
             allowance_objects: Cell::new(growth_objects()),
-            allowance_bytes: Cell::new(GROWTH_BYTES),
+            allowance_bytes: Cell::new(growth_bytes()),
             continues: Cell::new(0),
             waiting: Cell::new(false),
             log: RefCell::new(Vec::new()),
@@ -2084,6 +2116,7 @@ impl Session {
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
+            dom: dom::State::default(),
             run_docs: RefCell::new(
                 self.docs
                     .iter()
@@ -2130,6 +2163,7 @@ impl Session {
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { dom::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
                         let r = realm.start(&expanded.source);
@@ -2155,7 +2189,7 @@ impl Session {
         }
         let scope = crate::file_access::ScopeHandle::capture();
         let (run, line_name) = (host.run, host.name.clone());
-        let job = Job { realm, host, link, engine, world: World::working(self), start_uids: open, name: name.clone(), scope };
+        let job = Job { realm, host, link, engine, world: World::working(self), start_uids: open, name: name.clone(), scope, finished: false };
         let id = NEXT_JOB.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         JOBS.with(|jobs| jobs.borrow_mut().insert(id, job));
         self.script_key = Some(JobKey { id, run, name: line_name });
@@ -2184,6 +2218,28 @@ impl Session {
             self.script_key = Some(key);
             return None;
         }
+        // A run whose script ended past its growth allowance is kept once the person lets it go on,
+        // and put back when they stop it.
+        if job.finished {
+            if self.script_stop.is_set() {
+                let kind = LimitKind::Interrupted;
+                let e =
+                    RunError { kind: RunErrorKind::Limit(kind), message: format!("limit reached: {kind:?}"), line: 0, column: 0, authored: false };
+                return Some(self.script_failed(job, &e));
+            }
+            // One more allowance may still leave the growth past it: the person is asked again
+            // while they may be, and past that the run ends unkept.
+            if let Err(HostError::Abort(message)) = job.host.charge_growth(0, 0) {
+                let e = RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line: 0, column: 0, authored: false };
+                return Some(self.script_failed(job, &e));
+            }
+            if job.host.waiting.get() {
+                JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
+                self.script_key = Some(key);
+                return None;
+            }
+            return Some(self.script_ended(job));
+        }
         // A stop while a dialog waits ends the run there; the interpreter cannot go on from the call.
         if job.realm.waits() {
             let kind = LimitKind::Interrupted;
@@ -2203,22 +2259,33 @@ impl Session {
                 self.script_key = Some(key);
                 None
             }
-            Ok(Ok(Progress::Done(_))) if job.host.dialogs.unused() > 0 => {
-                let n = job.host.dialogs.unused();
-                let kind = LimitKind::Host;
-                let message = if n == 1 {
-                    format!("`answers` has {n} answer the script did not use")
-                } else {
-                    format!("`answers` has {n} answers the script did not use")
-                };
-                Some(self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0, authored: false }))
+            // The point changes written as the script ended went past the growth allowance.
+            Ok(Ok(Progress::Done(_))) if job.host.waiting.get() => {
+                job.finished = true;
+                JOBS.with(|jobs| jobs.borrow_mut().insert(key.id, job));
+                self.script_key = Some(key);
+                None
             }
-            Ok(Ok(Progress::Done(_))) => {
-                let r = self.script_commit(job);
-                self.trim_histories();
-                Some(r)
-            }
+            Ok(Ok(Progress::Done(_))) => Some(self.script_ended(job)),
         }
+    }
+
+    /// Ends the run whose script has ended: it fails when answers it was given went unused, and is
+    /// kept otherwise.
+    fn script_ended(&mut self, job: Job) -> Result<Value> {
+        let n = job.host.dialogs.unused();
+        if n > 0 {
+            let kind = LimitKind::Host;
+            let message = if n == 1 {
+                format!("`answers` has {n} answer the script did not use")
+            } else {
+                format!("`answers` has {n} answers the script did not use")
+            };
+            return self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0, authored: false });
+        }
+        let r = self.script_commit(job);
+        self.trim_histories();
+        r
     }
 
     fn script_failed(&mut self, job: Job, e: &RunError) -> Result<Value> {
@@ -2500,6 +2567,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     std::mem::swap(s, &mut *cell.borrow_mut());
     let scope = job.scope.clone();
     let realm = &mut job.realm;
+    let host = &job.host;
     let started = clock();
     let r = scope.run(|| {
         guard::catch_panic(|| {
@@ -2507,7 +2575,14 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
             if PANIC_IN_SLICE.with(Cell::get) {
                 panic!("a slice failed");
             }
-            realm.advance(SLICE_FUEL)
+            // Point changes that still wait in the object model are written when the script ends. Between
+            // slices the run's documents are put aside, so they can wait across slices.
+            realm.advance(SLICE_FUEL).and_then(|progress| {
+                if matches!(progress, Progress::Done(_)) {
+                    dom::flush(host).map_err(end_flush_error)?;
+                }
+                Ok(progress)
+            })
         })
     });
     if let Some(started) = started {
@@ -2519,6 +2594,17 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     s.depth = depth;
     s.sync_front_profiles();
     r
+}
+
+/// The error that ends a run when the point changes waiting at the end of its script cannot be
+/// written.
+fn end_flush_error(e: HostError) -> RunError {
+    let message = match e {
+        HostError::Error(m) | HostError::Type(m) | HostError::Range(m) | HostError::Syntax(m) | HostError::Abort(m) => m,
+        HostError::Marked { error, .. } => return end_flush_error(*error),
+        HostError::Wait => "a host function waited for its result where the run cannot pause".into(),
+    };
+    RunError { kind: RunErrorKind::Limit(LimitKind::Host), message, line: 0, column: 0, authored: false }
 }
 
 /// Tests: removes the session's running job while the session keeps its hold on it. → whether a
@@ -2535,6 +2621,15 @@ fn growth_objects() -> u64 {
         return n;
     }
     GROWTH_OBJECTS
+}
+
+/// The bytes of new document data a run may keep before it is asked to continue or stop.
+fn growth_bytes() -> u64 {
+    #[cfg(test)]
+    if let Some(n) = TEST_GROWTH_BYTES.with(Cell::get) {
+        return n;
+    }
+    GROWTH_BYTES
 }
 
 /// The limits of a command's result on its way to the script.
@@ -2554,6 +2649,8 @@ thread_local! {
     pub(crate) static PANIC_IN_SLICE: Cell<bool> = const { Cell::new(false) };
     /// Tests: the objects a run may add in place of [`GROWTH_OBJECTS`].
     pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
+    /// Tests: the bytes a run may keep in place of [`GROWTH_BYTES`].
+    pub(crate) static TEST_GROWTH_BYTES: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the heap of a named engine in place of [`ENGINE_HEAP_BYTES`].
     pub(crate) static TEST_ENGINE_HEAP: Cell<Option<usize>> = const { Cell::new(None) };
     /// Tests: the bytes of source maps a named engine keeps, in place of [`KEPT_MAP_BYTES`].

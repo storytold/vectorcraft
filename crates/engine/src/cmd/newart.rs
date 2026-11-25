@@ -6,7 +6,8 @@
 //! and strokes, effects, opacity and blend mode, and the link to the style) or, with the Appearance
 //! panel's New Art Has Basic Appearance off, the whole appearance of the last selection. With the
 //! option on (the default) an inherited appearance gives new art its top stroke's options only,
-//! and a change of selection loads only the proxies. `paint.default` resets it.
+//! and a change of selection loads only the proxies. `paint.default` resets it, and
+//! `appearance.setNewArt` sets its fill, stroke and stroke options whatever is selected.
 //!
 //! A document whose Default Graphic Style no longer has the shipped look (a New Document profile
 //! redefined it) gives the reset that style's fills, strokes and effects instead, and `file.new`
@@ -34,7 +35,7 @@ pub(crate) struct NewArtSource {
 
 use super::gradient::unplaced;
 use super::paint::SelectionPaints;
-use super::{CommandSpec, Result, Session, always, cmd, switch_or};
+use super::{CommandSpec, Result, Session, always, bad, cmd, switch_or};
 use crate::doc_state::{SelectionRecord, objects_only};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -57,7 +58,167 @@ pub fn specs() -> Vec<CommandSpec> {
             always,
             describe
         ),
+        cmd!(
+            "appearance.setNewArt",
+            "Set New Art Appearance",
+            [],
+            None,
+            "{fill?: {color?, none?, swatch?, tint?, gradient?, keepModel?} (a paint as paint.setFill takes it), stroke?: (a paint, as fill), weight?: 0..1000 pt, cap?: butt|round|square, join?: miter|round|bevel, miterLimit?: 1..500, dash?: [lengths, each 0..1000000 pt, at most 64, not all 0]|null (null: a solid line), dashOffset?: -1000000..1000000 pt (with a dash pattern), fillOverprint?: bool, strokeOverprint?: bool} set the fill, stroke and stroke options the next object drawn gets, whatever is selected: the selection and its art, the active proxy and the recent colors stay as they are. Without `weight` the stored stroke weight stays; a stroke painted on new art without one gets 1 pt only when that stored weight is 0. A bad value is an error with nothing changed, and so is any change while New Art Has Basic Appearance is off and an object is selected (new art takes that object's appearance then) → {changed: whether the next object drawn looks different}",
+            always,
+            set_new_art
+        ),
     ]
+}
+
+/// The most dash and gap lengths `appearance.setNewArt` takes.
+const MAX_DASHES: usize = 64;
+/// The largest dash, gap or dash offset `appearance.setNewArt` takes, in points.
+const MAX_DASH_LENGTH: f64 = 1_000_000.0;
+
+/// What [`dash_fault`] finds wrong with a list of dash and gap lengths.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum DashFault {
+    /// More than [`MAX_DASHES`] lengths.
+    TooMany,
+    /// A length that is not a number from 0 to [`MAX_DASH_LENGTH`].
+    OutOfRange,
+    /// Lengths that are all 0.
+    AllZero,
+}
+
+/// What is wrong with the dash and gap lengths `lengths`, which `appearance.setNewArt` and the
+/// scripts' `strokeDashes` and `defaultStrokeDashes` check the same way; `None` when they are good.
+/// An empty list (a solid line) is good.
+pub(crate) fn dash_fault(lengths: &[f64]) -> Option<DashFault> {
+    if lengths.len() > MAX_DASHES {
+        Some(DashFault::TooMany)
+    } else if !lengths.iter().all(|n| n.is_finite() && (0.0..=MAX_DASH_LENGTH).contains(n)) {
+        Some(DashFault::OutOfRange)
+    } else if !lengths.is_empty() && lengths.iter().all(|n| *n == 0.0) {
+        Some(DashFault::AllZero)
+    } else {
+        None
+    }
+}
+
+/// `c` as `appearance.setNewArt` stores it without `keepModel`: an RGB color in the color mode of
+/// the document in front.
+pub(crate) fn stored_color(s: &Session, c: vectorcraft_color::Color) -> vectorcraft_color::Color {
+    super::paint::new_color(s, &json!({}), c)
+}
+
+/// `appearance.setNewArt`: new art's fill, stroke and stroke options, every value checked before
+/// anything changes.
+fn set_new_art(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "appearance.setNewArt";
+    let paint = |key: &str, fill: bool| -> Result<Option<Paint>> {
+        let Some(v) = p.get(key) else { return Ok(None) };
+        if !v.is_object() {
+            return Err(bad(C, format!("{key} must be a paint object (color, none, swatch or gradient), got {v}")));
+        }
+        let pattern_only = |name: &str| s.doc().is_ok_and(|st| st.doc.swatch(name).is_none() && st.doc.pattern(name).is_some());
+        if v.get("tint").is_some() && v.get("swatch").and_then(Value::as_str).is_none_or(pattern_only) {
+            return Err(bad(C, format!("{key}: `tint` goes with a global or spot `swatch`")));
+        }
+        let given = super::paint::paint_from(s, v)?.ok_or_else(|| bad(C, format!("{key}: give color, none, swatch or gradient")))?;
+        if !fill && matches!(&given, Paint::Gradient(g) if g.gradient.dither) && v.get("swatch").and_then(Value::as_str).is_none() {
+            return Err(bad(C, "`dither` applies to gradient fills"));
+        }
+        Ok(Some(unplaced(&given)))
+    };
+    let (fill, stroke) = (paint("fill", true)?, paint("stroke", false)?);
+    let number = |key: &str, min: f64, max: f64| -> Result<()> {
+        match p.get(key) {
+            None => Ok(()),
+            Some(v) if v.as_f64().is_some_and(|n| n.is_finite() && (min..=max).contains(&n)) => Ok(()),
+            Some(v) => Err(bad(C, format!("{key} must be a number from {min} to {max}, got {v}"))),
+        }
+    };
+    number("weight", 0.0, 1000.0)?;
+    number("miterLimit", 1.0, 500.0)?;
+    number("dashOffset", -MAX_DASH_LENGTH, MAX_DASH_LENGTH)?;
+    for key in ["cap", "join"] {
+        if p.get(key).is_some_and(|v| !v.is_string()) {
+            return Err(bad(C, format!("{key} must be a name")));
+        }
+    }
+    match p.get("dash") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(a)) if a.len() > MAX_DASHES => return Err(bad(C, format!("dash takes at most {MAX_DASHES} lengths"))),
+        Some(Value::Array(a)) => {
+            let lengths: Option<Vec<f64>> = a.iter().map(Value::as_f64).collect();
+            match lengths.map_or(Some(DashFault::OutOfRange), |l| dash_fault(&l)) {
+                None => {}
+                Some(DashFault::TooMany) => return Err(bad(C, format!("dash takes at most {MAX_DASHES} lengths"))),
+                Some(DashFault::OutOfRange) => return Err(bad(C, format!("each dash length must be a number from 0 to {MAX_DASH_LENGTH}"))),
+                Some(DashFault::AllZero) => return Err(bad(C, "dash needs a length that is not 0")),
+            }
+        }
+        Some(v) => return Err(bad(C, format!("dash must be a list of lengths or null, got {v}"))),
+    }
+    let flag = |key: &str| -> Result<Option<bool>> {
+        p.get(key).map(|v| v.as_bool().ok_or_else(|| bad(C, format!("{key} must be true or false, got {v}")))).transpose()
+    };
+    let (fill_overprint, stroke_overprint) = (flag("fillOverprint")?, flag("strokeOverprint")?);
+    let options: serde_json::Map<String, Value> =
+        ["weight", "cap", "join", "miterLimit", "dash", "dashOffset"].iter().filter_map(|k| Some((k.to_string(), p.get(*k)?.clone()))).collect();
+    let change = super::stroke::StrokeChange::parse(&Value::Object(options), C)?;
+    let dashed = match p.get("dash") {
+        Some(Value::Array(a)) => !a.is_empty(),
+        Some(_) => false,
+        None => s.new_art().stroke().is_some_and(|st| st.dash.is_some()),
+    };
+    if p.get("dashOffset").and_then(Value::as_f64).is_some_and(|o| o != 0.0) && !dashed {
+        return Err(bad(C, "dashOffset needs a dash pattern"));
+    }
+    let nothing = fill.is_none() && stroke.is_none() && change.is_empty() && fill_overprint.is_none() && stroke_overprint.is_none();
+    if !nothing && !s.prefs.new_art_basic && !s.bucket_paints() && s.active().is_some_and(|st| !st.selection.subjects().is_empty()) {
+        return Err(bad(
+            C,
+            "with New Art Has Basic Appearance off, new art takes the selected object's appearance: deselect it or turn the option on",
+        ));
+    }
+    let look = |s: &Session| {
+        let (opacity, blend, style) = s.new_art_transparency();
+        (s.new_art(), opacity, blend, style.map(str::to_string))
+    };
+    let (before, was) = (s.paint.clone(), look(s));
+    if let Some(f) = fill {
+        s.paint.fill = f;
+    }
+    if let Some(st) = stroke {
+        if !st.is_none() && s.paint.stroke.is_none() && s.paint.stroke_width == 0.0 {
+            s.paint.stroke_width = 1.0;
+        }
+        s.paint.stroke = st;
+    }
+    if let Some(w) = change.weight {
+        s.paint.stroke_width = w;
+    }
+    if !change.is_empty()
+        && let Some(st) = s.new_art_stroke_mut()
+    {
+        change.apply(st);
+    }
+    if let Some(on) = fill_overprint {
+        let t = s.new_art_template_mut();
+        if t.fill().is_none() {
+            t.items.insert(0, AppearanceItem::Fill(FillLayer::new(Paint::None)));
+        }
+        if let Some(f) = t.fill_mut() {
+            f.overprint = on;
+        }
+    }
+    if let Some(on) = stroke_overprint
+        && let Some(st) = s.new_art_stroke_mut()
+    {
+        st.overprint = on;
+    }
+    let changed = look(s) != was;
+    if !changed {
+        s.paint = before;
+    }
+    Ok(json!({ "changed": changed }))
 }
 
 /// `t` reduced to a basic appearance: an empty fill under its top stroke (options kept, without

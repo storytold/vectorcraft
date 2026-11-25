@@ -41,7 +41,8 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
-/// outside it.
+/// outside it. The document model (`app`, its classes and the enumerations) acts on the open
+/// documents; `Document.saveAs` and `close` throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -72,7 +73,102 @@ const INSIDE: &[(&str, &str)] = &[
         "absoluteURI alias changePath constructor created displayName error error= exists fsName fullName getFiles \
          getRelativeURI localizedName modified name parent path relativeURI resolve selectDlg toString",
     ),
+    (
+        "",
+        "app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
+         DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid Documents ElementPlacement Layer PageItem \
+         PageItems PathItem PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues RulerUnits StrokeCap \
+         StrokeJoin Transformation ZOrderMethod",
+    ),
+    ("Application.", "prototype"),
+    (
+        "Application.prototype.",
+        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
+         selection typename",
+    ),
+    ("DocumentPreset.", "prototype"),
+    (
+        "DocumentPreset.prototype.",
+        "artboardLayout artboardLayout= artboardRowsOrCols artboardRowsOrCols= artboardSpacing artboardSpacing= colorMode \
+         colorMode= constructor documentBleedLink documentBleedLink= documentBleedOffsetRect documentBleedOffsetRect= height \
+         height= numArtboards numArtboards= previewMode previewMode= rasterResolution rasterResolution= title title= \
+         transparencyGrid transparencyGrid= typename units units= width width=",
+    ),
+    ("Documents.", "prototype"),
+    ("Documents.prototype.", "add addDocument constructor getByName index length parent typename"),
+    ("Document.", "prototype"),
+    (
+        "Document.prototype.",
+        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate defaultFillColor \
+         defaultFillColor= defaultFillOverprint defaultFillOverprint= defaultFilled defaultFilled= defaultStrokeCap \
+         defaultStrokeCap= defaultStrokeColor defaultStrokeColor= defaultStrokeDashOffset defaultStrokeDashOffset= \
+         defaultStrokeDashes defaultStrokeDashes= defaultStrokeJoin defaultStrokeJoin= defaultStrokeMiterLimit \
+         defaultStrokeMiterLimit= defaultStrokeOverprint defaultStrokeOverprint= defaultStrokeWidth defaultStrokeWidth= \
+         defaultStroked defaultStroked= documentColorSpace \
+         groupItems groupItems= height layers layers= name pageItems parent pathItems rulerOrigin rulerOrigin= \
+         rulerUnits saveAs saveAs= scaleFactor selection selection= swatches swatches= symbols symbols= textFrames textFrames= typename \
+         views views= width",
+    ),
+    ("Layer.", "prototype"),
+    ("Layer.prototype.", "constructor name typename"),
+    ("PageItems.", "prototype"),
+    ("PageItems.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("PageItem.", "prototype"),
+    (
+        "PageItem.prototype.",
+        "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
+         controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
+         left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= top top= transform \
+         transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
+         width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
+    ),
+    ("PathItems.", "prototype"),
+    ("PathItems.prototype.", "add constructor ellipse getByName index length parent polygon rectangle removeAll roundedRectangle star typename"),
+    ("PathItem.", "prototype"),
+    (
+        "PathItem.prototype.",
+        "area clipping closed closed= constructor evenodd evenodd= fillColor fillColor= fillOverprint fillOverprint= filled \
+         filled= guides guides= length pathPoints polarity polarity= resize resolution resolution= rotate selectedPathPoints \
+         setEntirePath strokeCap strokeCap= strokeColor strokeColor= strokeDashOffset strokeDashOffset= \
+         strokeDashes strokeDashes= strokeJoin strokeJoin= strokeMiterLimit strokeMiterLimit= strokeOverprint strokeOverprint= \
+         strokeWidth strokeWidth= stroked stroked= translate",
+    ),
+    ("PathPoints.", "prototype"),
+    ("PathPoints.prototype.", "add constructor index length parent removeAll typename"),
+    ("PathPoint.", "prototype"),
+    (
+        "PathPoint.prototype.",
+        "anchor anchor= constructor leftDirection leftDirection= parent pointType pointType= remove rightDirection \
+         rightDirection= selected selected= typename",
+    ),
+    ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
+    ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
+    ("DocumentColorSpace.", "CMYK RGB"),
+    ("DocumentPresetType.", "BasicCMYK BasicRGB Mobile Print Video Web"),
+    ("DocumentPreviewMode.", "DefaultPreview OverprintPreview PixelPreview"),
+    ("DocumentRasterResolution.", "HighResolution MediumResolution ScreenResolution"),
+    (
+        "DocumentTransparencyGrid.",
+        "TransparencyGridBlue TransparencyGridDark TransparencyGridGreen TransparencyGridLight TransparencyGridMedium \
+         TransparencyGridNone TransparencyGridOrange TransparencyGridPurple TransparencyGridRed",
+    ),
+    ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
+    ("PathPointSelection.", "ANCHORPOINT LEFTDIRECTION LEFTRIGHTPOINT NOSELECTION RIGHTDIRECTION"),
+    ("PointType.", "CORNER SMOOTH"),
+    ("PolarityValues.", "NEGATIVE POSITIVE"),
+    ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("StrokeCap.", "BUTTENDCAP PROJECTINGENDCAP ROUNDENDCAP"),
+    ("StrokeJoin.", "BEVELENDJOIN MITERENDJOIN ROUNDENDJOIN"),
+    ("Transformation.", "BOTTOM BOTTOMLEFT BOTTOMRIGHT CENTER DOCUMENTORIGIN LEFT RIGHT TOP TOPLEFT TOPRIGHT"),
+    ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
+
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// other than `PathItem`, and the color classes.
+const BARE_CLASSES: &str = "BlendItem CMYKColor CompoundPathItem EnvelopeItem GradientColor GraphItem GrayColor GroupItem \
+     IntertwineItem LabColor MeshItem NoColor PatternColor PlacedDocumentItem PlacedItem RGBColor RasterItem RepeatItem SpotColor \
+     SymbolItem TextFrame cmykColor";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.
@@ -120,7 +216,8 @@ fn language_names() -> BTreeSet<String> {
 
 fn table_names() -> BTreeSet<String> {
     let inside = INSIDE.iter().flat_map(|(prefix, names)| names.split_whitespace().map(move |n| format!("{prefix}{n}")));
-    OUTSIDE.iter().map(|(n, ..)| n.to_string()).chain(inside).chain([NOT_CHECKED.to_string()]).collect()
+    let bare = BARE_CLASSES.split_whitespace().flat_map(|c| [c.to_string(), format!("{c}.prototype"), format!("{c}.prototype.constructor")]);
+    OUTSIDE.iter().map(|(n, ..)| n.to_string()).chain(inside).chain(bare).chain([NOT_CHECKED.to_string()]).collect()
 }
 
 #[test]

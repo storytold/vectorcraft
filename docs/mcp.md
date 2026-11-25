@@ -2686,6 +2686,167 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   throws a `RangeError`.
 - `vc.commands` lists the commands a script may run.
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
+- `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
+  describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
+  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
+  and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
+  which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
+  columns for the other layouts), and `addDocument(startupPreset, presetSettings?, showOptionsDialog?)`, which runs `file.new`
+  with the New Document profile `startupPreset` names (`Print`, `Web`, `Mobile`, `Video`, another profile of
+  `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
+  `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
+  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
+  `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
+  the preset it is given holds one of them with a value other than `null`, and makes no document. A
+  `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
+  `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
+  automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
+  profile and the reason, and makes no document.
+  `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
+  `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
+  destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either collection is true for each
+  entry `[i]` gives. Each page item
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/) has `typename`, `parent`, `name`, `note` (the
+  Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
+  or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
+  were), `opacity` (0 to
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
+  visible bounds), `editable`, `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
+  `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
+  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
+  group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
+  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
+  the undo history as they were before the call. `duplicate` on a path inside a compound path throws
+  `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
+  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that holds a placed image keeps the
+  same object when the image is embedded: the next read gives that object, now a `RasterItem`. The
+  enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
+  `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
+  `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
+  VectorCraft's own rules: documents are listed in tab order, and page items in paint order from the bottom, with the
+  objects inside groups and compound paths after their group and without layers and ruler guides. Script coordinates
+  are points with Y up from the bottom-left corner of the first artboard, or, with
+  `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`
+  is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
+  for kinds the help pages give no class. Each change runs a command and joins the run's one undo step for each
+  changed document. A value that changes nothing runs no command, and a change to another document leaves the active
+  tab as it was. A bad value throws an error and changes nothing. An object that was deleted, or that a named engine
+  kept from an earlier run, throws `Stale page item`. `remove()` on an object that is hidden or locked, is inside a
+  hidden or locked layer or group, or is a group that holds one, and `removeAll()` when any object is, throw
+  `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on a locked artboard, and `removeAll()`
+  when any object is on one, throw `cannot delete objects on a locked artboard` and delete nothing. Setting `width` or `height` scales the object along
+  the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
+  `Not found`; and
+  `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
+  a list of at most 10,000, `null` or `[]`, and an object that cannot be selected throws `Cannot select` with
+  nothing changed. Assigning a page item's `selected` leaves the direct-selected anchors and segments of the other
+  selected objects selected. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
+  the automation read roots allow its file, and that check can look the document's file up on disk. A path with
+  `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  `app.beep`, throw an error that says they are not available yet when they are read or assigned. Other members
+  those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
+  themselves, such as a text frame's `contents`, are not defined yet and read as `undefined`.
+- `Document.pathItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/) lists the document's paths in the
+  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `index(key)`,
+  `getByName(name)`, `removeAll()`, `add()` (a path with no points, from `path.create`, painted as new art; when new
+  art has no fill and no stroke, the path has neither), and the shape creators
+  `rectangle(top, left, width, height, reversed?)`, `roundedRectangle(top, left, width, height, horizontalRadius = 15,
+  verticalRadius = 20, reversed?)`, `ellipse(top = 100, left = 100, width = 50, height = 100, reversed?, inscribed?)`,
+  `polygon(centerX = 200, centerY = 300, radius = 50, sides = 8, reversed?)` and `star(centerX = 200, centerY = 300,
+  radius = 50, innerRadius = 20, points = 5, reversed?)`, which run `shape.rectangle`, `path.create`,
+  `shape.ellipse`, `shape.polygon` and `shape.star` (and `path.reverse` for `reversed`) and paint the new path as new
+  art is painted. `add()` and the shape creators put the new path on top of the active layer whatever the drawing
+  mode, which stays as it was. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
+  `guides`, `clipping`, `selectedPathPoints`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`,
+  `stroked`, `strokeColor`, `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to
+  500), `strokeDashes`, `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)`
+  (counterclockwise for a positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The
+  geometry changes through `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the
+  stroke options through `stroke.set`, the fill rule through `path.setFillRule`, overprint through
+  `object.setOverprint` and the transforms through `object.move`, `object.rotate` and `object.scale`. Changes to the
+  points of a path (`closed`, `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one
+  `path.setAnchors` before the script uses any other member or command, or the points of another path, and when the
+  script ends; a path aligned to the pixel grid, or in an object that is, is written at each change, so its points
+  read as the grid snaps them.
+  `pathPoints`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
+  `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
+  `leftDirection` (the handle into the point), `rightDirection` (the handle out of it), `pointType`, `selected`,
+  `parent` and `remove()`. Assigning `guides` makes the path a guide with `view.guides.make` (`true`) or a path again
+  with `view.guides.release` (`false`), with the selection kept; a value that is not a boolean throws a `TypeError`.
+  `PathPoint.selected` reads `PathPointSelection.ANCHORPOINT` for a selected anchor point and
+  `PathPointSelection.NOSELECTION` otherwise; assigning `ANCHORPOINT` adds the point to the direct-selected anchors and
+  `NOSELECTION` removes it, through `select.anchorsMany`, with the other selected objects and anchors kept.
+  `selectedPathPoints` lists the points that read `ANCHORPOINT`, in the order of `pathPoints`. `new RGBColor()` (0 to
+  255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100 white, as
+  https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/NoColor/) make plain color objects; assigning a `NoColor` removes
+  the fill or stroke. The enumerations `PointType`, `PathPointSelection`, `StrokeCap`, `StrokeJoin`, `PolarityValues`
+  and `Transformation` hold strings such as `"StrokeCap.ROUNDENDCAP"`.
+  VectorCraft's own rules: a point's index counts across the path's subpaths; `closed` is true when every subpath is
+  closed, and assigning it opens or closes them all; `setEntirePath` takes at most 100,000 points and gives corner
+  points with no handles, keeping the path closed when it was; moving `anchor` leaves its handles where they are, and
+  `pointType` changes only the type; `PathPoints.add()` adds a corner point at the last point, or at `[0, 0]`; a point
+  whose index is past the end of its path throws `Stale path point`, and so does a point read before the script removed
+  a point of its path (`remove()`, `removeAll()`) or replaced its points (`setEntirePath`), or before anything other
+  than the object model changed the path's points (a command run with `vc.run`, such as `path.setAnchors`,
+  `object.move` or `edit.undo`); points stay valid through the object model's other changes to the path or to an
+  object that holds it, such as `translate()`. Every point of a path selected as a whole is a selected anchor point,
+  and the endpoints of selected segments are not; a path in a selected group or compound path is selected as a whole.
+  Direction handles are not selected on their own, so assigning `LEFTDIRECTION`, `RIGHTDIRECTION` or `LEFTRIGHTPOINT`
+  to `selected` throws an error that says it is not available yet, and so does assigning `NOSELECTION` to a point of a
+  path in a selected group or compound path. Selecting a point of a path with selected segments replaces that path's
+  segment selection. Changing `selected` adds no undo step. Selecting a point of a path that cannot be selected
+  throws `Cannot select`, and selecting a point of a guide while guides are locked throws an error. A clipping path
+  cannot be made a guide, and `guides = true` on one throws an error. Assigning `guides` the value a path already
+  has runs no command. Assigning the other value throws an error that says it is not available yet on a path inside
+  a compound path, throws `Cannot edit` on a path that is hidden, locked or cannot be selected, and throws an error
+  while guides are locked. Color components left out count as 0, `new
+  cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
+  range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest
+  decimals, at least 4, that give the stored value back, so assigning a color read from a path leaves the path as it
+  was. Reading `fillColor` or `strokeColor` gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
+  global or spot swatch reads as a `SpotColor` with its `tint`); assigning one of those throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
+  art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
+  stroke; a new-art gradient goes on the bounds of the path, or of the compound path or compound shape whose paint
+  it shows, and a new-art pattern with a placement of its own, or one missing from the document, throws an error.
+  `fillOverprint` and `strokeOverprint` read and change the top fill or stroke only. Sizes and
+  radii are finite and not negative, `sides` is a whole number from 3 to 1000, `points` one from 2 to 1000,
+  `strokeWidth` 0 to 1000 points (a `changeLineWidths` that would scale it past 1000 throws), `strokeDashes` at most
+  64 lengths that are not all 0 (`[]` or `{}` for a solid line), and `rotateAbout` and `scaleAbout` default to
+  `Transformation.CENTER`. A transform that leaves the path where it is, such as `rotate(360)` or
+  `resize(100, 100)`, checks its arguments and runs no command, on a path with no points too. The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
+  `changeStrokePattern` given as different values throw an error, and `changeFillGradients` false and `ellipse` with
+  `inscribed` true throw an error that says they are not available yet. A change to the geometry or paint of a path
+  that is hidden or locked, or that is in a hidden or locked layer or group, throws `Cannot edit` with nothing
+  changed. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
+  shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
+  art, the active Fill or Stroke proxy and Recent Colors as they were. `transform`, `polarity` and the gradient stops
+  are not available yet.
+- A `Document`'s default paint members (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) read and set what
+  the next object drawn gets, as `appearance.newArt` reports it, the same for every open document: `defaultFillColor`,
+  `defaultFilled`, `defaultFillOverprint`, `defaultStrokeColor`, `defaultStroked`, `defaultStrokeOverprint`,
+  `defaultStrokeWidth`, `defaultStrokeCap`, `defaultStrokeJoin`, `defaultStrokeMiterLimit`, `defaultStrokeDashes`
+  (`[]` or `{}` for a solid line) and `defaultStrokeDashOffset`. Assigning one runs `appearance.setNewArt`, which
+  leaves the selection, its art, the active Fill or Stroke proxy and Recent Colors as they were and adds no undo step.
+  A value that changes nothing runs no command, and a bad value throws an error with nothing changed. VectorCraft's
+  own rules: assigning a color also makes `defaultFilled` or `defaultStroked` true, and a `NoColor` makes it false;
+  `defaultFilled` or `defaultStroked` set to true with no fill or stroke gives black; an RGB color is stored in the
+  front document's color mode, as `paint.setFill` stores it; `defaultStrokeWidth` is 0 to 1000 points, a dash or gap 0
+  to 1,000,000 points (at most 64, not all 0), and `defaultStrokeDashOffset` -1,000,000 to 1,000,000 points, which
+  needs a dash pattern unless it is 0; while New Art Has Basic Appearance is off and an object is selected, assigning
+  a default throws an error, since new art then takes that object's appearance. `scaleFactor`
+  (https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts lists it as read-only) is always 1, since
+  VectorCraft draws every document at its own size; after an assignment it still reads 1.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -8989,6 +9150,13 @@ colorized) changes nothing. With the option off (`appearance.setNewArtBasic {on:
 whole appearance of the last selected object. `appearance.newArt` reports what the next object gets; `paint.default`
 resets it.
 `appearance.setNewArtBasic` rejects an `on` value that is not a boolean. Omitting `on` toggles the current preference.
+`appearance.setNewArt {fill?, stroke?, weight?, cap?, join?, miterLimit?, dash?, dashOffset?, fillOverprint?,
+strokeOverprint?}` sets new art's fill, stroke and stroke options whatever is selected, and leaves the selection, its
+art, the active proxy and Recent Colors as they were. `fill` and `stroke` take a paint as `paint.setFill` does, and
+`tint` only with a global or spot `swatch`. Without `weight` the stored stroke weight stays; a stroke painted on new
+art without one gets 1 pt only when that stored weight is 0. Every value is checked before
+anything changes, and any change while New Art Has Basic Appearance is off and an object is selected is an error. It
+returns `{changed}`, false when the next object would look the same.
 
 ```json
 {"name":"run_command","arguments":{"command":"select.none","params":{}}}
@@ -9110,7 +9278,11 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
-spacing, rightToLeft}`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
+rows, spacing, rightToLeft}` (`rows`, a whole number from 1 to 1000, gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
+an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are
+fewer artboards, until `columns` without `rows`, or another layout, is given; New Document's Columns shows the columns
+the rows give the current number of artboards, and New Document drops the rows when Columns or the layout changes),
+`bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi` (1 to 2,400; a saved preset's
 value outside that range is read as the nearer end), `previewMode` and `alignNewObjectsToPixelGrid` (see
 [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
 `file.newPresets {category?}` lists the categories and presets (Recent: the last sizes used; Saved: the user's presets,
@@ -9295,7 +9467,9 @@ The profile is read on every `file.new`, so a replayed journal or a recorded act
 runs, as `document.open` reads its file when it runs. A file larger than 64 MiB (VectorCraft's own limit) is not read.
 When the file cannot be read, is too large or is not a native document, or the request's read roots leave out the
 folder (whether or not the file exists), the document starts with the defaults and
-`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar. The
+`file.new`'s result carries `profileError: {profile, reason}`; the desktop app shows the reason in the status bar, and
+a script's `app.documents.addDocument` throws it. Reading the profile's file is not limited to the script's folder (the
+`File` and `Folder` rule in [Script engines](#script-engines)), but the request's automation read roots still apply. The
 reason given when the read roots leave out the folder does not name the folder's path. Color profiles the profile's
 file carries are installed when they are missing, as `document.open` installs them, and each one that can't be used
 adds a line to `file.new`'s `warnings`. The new document's links find their files through relative paths from the
