@@ -241,9 +241,17 @@ pub(crate) fn restore(table: &mut Value) {
 }
 
 /// What the table shows of `table`: its locked, transparent and shifted colours. An entry that is
-/// not a colour is skipped.
+/// not a colour is skipped, and a colour written more than once in a list is listed once.
 pub(crate) fn marks(table: &Value) -> TableMarks {
-    let colors = |key: &str| list(table, key).iter().filter_map(|c| parse(c)).collect();
+    let colors = |key: &str| {
+        let mut out: Vec<[u8; 3]> = Vec::new();
+        for c in list(table, key).iter().filter_map(|c| parse(c)) {
+            if !out.contains(&c) {
+                out.push(c);
+            }
+        }
+        out
+    };
     let shifted = shifts(table).iter().filter_map(|(k, v)| Some((parse(k)?, parse(v.as_str()?)?))).collect();
     // PLAN: TableMarks lacks `web_shifted` (ex.W9 request); the Web Shift/Unshift label needs it.
     let mut marks = TableMarks::default();

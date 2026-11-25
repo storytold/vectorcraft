@@ -279,6 +279,35 @@ fn a_picked_color_becomes_a_shift_and_cancel_shifts_nothing() {
     assert_eq!(app.web_export.table["shifted"], json!({"#0000ff": "#00ff00"}));
 }
 
+/// Done right after the Color Picker's OK, before the dialog draws again, remembers the picked shift.
+#[test]
+fn done_right_after_the_color_picker_remembers_the_shift() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-shift-done");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
+        set(&mut app, k, v);
+    }
+    let ctx = app.ui_ctx.clone().expect("the app has a window");
+    crate::dialogs::host::pump(&mut app, &ctx);
+    let picker = open_cell(&mut app, &ctx, "#0000ff");
+    host(&app).with(|h| h.set_json_field(&ctx, picker, "color", json!("#00ff00"))).unwrap();
+    host(&app).with(|h| h.confirm_by_id(&ctx, picker));
+    // The frame that settles the picker, then Done before the dialog's next pass.
+    app_frame(&mut app, &ctx, vec![]);
+    set(&mut app, "choice", json!("done"));
+    let dialog = id(&app);
+    host(&app).with(|h| h.confirm_by_id(&ctx, dialog));
+    for _ in 0..3 {
+        app_frame(&mut app, &ctx, vec![]);
+    }
+    assert!(host(&app).with(|h| h.get::<craft::ui::patterns::form_dialogs::HostedSaveForWeb>().is_none()), "Done closes the dialog");
+    let remembered = app.session.last_web_settings().color_table.shifted;
+    assert_eq!(remembered.get("#0000ff").map(String::as_str), Some("#00ff00"));
+}
+
 #[test]
 fn restore_brings_back_a_preview_that_failed() {
     let dir = vectorcraft_testkit::temp_dir("sfw-restore-table");
