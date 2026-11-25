@@ -338,6 +338,9 @@ pub struct Session {
     /// The warnings of the previews that settling an interaction applied, while a top-level command
     /// or the tool's actions collect them ([`Session::collect_settled_warnings`]).
     settled_warnings: Option<Vec<String>>,
+    /// The interaction a command from outside the tool set aside while it runs
+    /// ([`Session::outside_interaction`]).
+    held_interaction: Option<HeldInteraction>,
     /// While [`Session::preview`] runs its command: its edits are the interaction's own.
     previewing: bool,
     /// The images Remove Background decoded during the interaction's preview steps, emptied when
@@ -456,7 +459,7 @@ pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
-pub(crate) use interaction::PreviewCopies;
+pub(crate) use interaction::{HeldInteraction, PreviewCopies};
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
 pub use prefs::{DrawMode, KEY_HOLD_DELAY, KEY_HOLD_DELAY_RANGE, PluginBudget, Prefs};
 pub use sanity::TOO_DEEP;

@@ -19,10 +19,12 @@ use vectorcraft_render::encode::quantize::Reduction;
 
 use craft::behavior::PixelSize;
 use craft::host::PickRequest;
+use craft::theme::Srgba;
 use craft::ui::dialog::{DialogId, DialogResult, StackDialog};
 use craft::ui::patterns::form_dialogs::{
     BrowserPreview, ColorTable, ColorTableEdit, ColorTableEvent, HostedSaveForWeb, OptimizeAnswer, OptimizeRequest, OptimizeScope, OptimizeStart,
-    SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebSlices, WebVariant,
+    PALETTE_COLOR_KEY, SaveForWebOptions, SaveForWebResult, WantedVariant, WebDocument, WebFormat, WebPreset, WebPresetEvent, WebSlice, WebSlices,
+    WebVariant,
 };
 use craft::ui::primitives::{Revision, TextureStore, TextureStoreOptions};
 use craft::ui::runtime::requests::PathRequest;
@@ -432,7 +434,7 @@ fn on_dialog<R>(host: &craft::ui::shell::WindowDialogs, f: impl FnOnce(&mut Host
 
 /// Answers the open dialog once per frame: its result when it closed, else its requests.
 /// Colour requests (the matte, a palette cell) are routed by the host-wide colour picker routing;
-/// a palette answer comes back as a `Shift` table event.
+/// a palette cell's pick is applied to the table by [`take_palette_pick`].
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(host) = app.dialogs() else { return };
     match host.with(|h| h.take::<HostedSaveForWeb>()) {
@@ -511,12 +513,7 @@ fn answer_variants(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::
 
 /// Applies the colour table edits the dialog filed. A Delete clears the dialog's colour selection.
 fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::shell::WindowDialogs, asked: &Asked) {
-    let shown = app
-        .session
-        .web_settings(&settings_of(&asked.options, &app.web_export.table, None))
-        .and_then(|s| encoded(app, &s))
-        .map(|o| o.colors.iter().map(|c| c.source).collect::<Vec<[u8; 3]>>());
-    let shown = match shown {
+    let shown = match shown_colors(app, &asked.options) {
         Ok(shown) => shown,
         Err(e) => return app.status(e),
     };
@@ -531,6 +528,36 @@ fn edit_table(app: &mut VectorcraftApp, ctx: &egui::Context, host: &craft::ui::s
         let id = asked.id;
         host.with(|h| h.set_json_field(ctx, id, "colorSelection", json!([])).ok());
     }
+}
+
+/// The source colours of the palette the dialog's settings `options` show, with the table as it stands.
+fn shown_colors(app: &mut VectorcraftApp, options: &SaveForWebOptions) -> Result<Vec<[u8; 3]>, String> {
+    let settings = app.session.web_settings(&settings_of(options, &app.web_export.table, None))?;
+    Ok(encoded(app, &settings)?.colors.iter().map(|c| c.source).collect())
+}
+
+/// The Color Picker's OK for the colour table cell `key` of the open dialog `parent`: the cell's colour `from`
+/// is shifted to `to` in the table at once, so Done or Save in the dialog's next pass keeps the shift. A colour
+/// the palette no longer shows is not shifted, and a refused shift shows in the status line. `false` when
+/// `parent` is not Save for Web or `key` is not its palette, and the picker answers the row instead.
+pub(crate) fn take_palette_pick(app: &mut VectorcraftApp, parent: DialogId, key: &str, from: Srgba, to: Srgba) -> bool {
+    let Some(host) = app.dialogs() else { return false };
+    if key != PALETTE_COLOR_KEY {
+        return false;
+    }
+    let Some(options) = host.with(|h| h.get_mut_by_id::<HostedSaveForWeb>(parent).map(|d| d.current().clone())) else {
+        return false;
+    };
+    let rgb = |c: Srgba| {
+        let [r, g, b, _] = c.to_rgba().0;
+        [r, g, b]
+    };
+    let edit = ColorTableEdit::Shift(rgb(to));
+    let shifted = shown_colors(app, &options).and_then(|shown| color_table::apply(&mut app.web_export.table, &edit, &[rgb(from)], &shown));
+    if let Err(e) = shifted {
+        app.status(e);
+    }
+    true
 }
 
 /// Runs what the preset list asked for and shows a failure in the status line.
