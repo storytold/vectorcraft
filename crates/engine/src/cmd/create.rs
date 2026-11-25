@@ -155,7 +155,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Text",
             [],
             None,
-            "{x, y, text, rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt 0.1..1296 (outside it: an error, and no type is made), font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused; size, font, style and color left out come from [Normal Character Style], the defaults unless the document redefined it), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
+            "{x, y, text, parent?: id (a shown, unlocked layer or group: the type goes on top of its contents, whatever the drawing mode; default: where the Type tools put new type), rotation?: deg clockwise about x, y (0: level), vertical?: bool = false, size?: pt 0.1..1296 (outside it: an error, and no type is made), font?: family, style? (default Regular, or the family's closest style when it has no Regular), color? (#rrggbbaa and #rgba are refused; size, font, style and color left out come from [Normal Character Style], the defaults unless the document redefined it), keepModel?: bool (as paint.setFill), area?: {width, height, fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (as text.areaOptions)}, placeholder?: bool (fill it with placeholder text instead, as the Type tools do with prefs placeholderText), justify?: \"auto\" (default: the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\" (point type: aligned on x, so \"center\" centres each line on the point and \"right\" ends it there; text.setStyle changes it later), leadingModel?: \"romanBaseline\"|\"emBoxTop\", charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (default: emBoxTop and emBoxCenter while the interface is in Japanese, else romanBaseline)} → {id, bounds: {x, y, width, height} (the new type's box as document.inspect reports it, after justify), overflow?: [id] (area type whose text doesn't fit its frame: the lines past it aren't drawn; left out when it fits), warning?: text (the font or style given isn't available: the type is drawn in the fallback font or the family's closest style)}; new area type gets Auto Size (fit autoHeight) when the autoSizeAreaType preference is on",
             has_doc,
             text_create
         ),
@@ -885,7 +885,38 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
     add_look(s, "Pen", path_kind(path, None), look, None)
 }
 
+/// The shown, unlocked layer or group `text.create`'s `parent` names, if it names one.
+fn text_parent(s: &Session, p: &Value) -> Result<Option<NodeId>> {
+    const C: &str = "text.create";
+    let Some(parent) = object_param(p, "parent", C)? else { return Ok(None) };
+    let d = &s.doc()?.doc;
+    let Some(n) = d.node(parent) else { return Err(bad(C, format!("no layer or group {}", parent.0))) };
+    if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) || n.extras().graph.is_some() {
+        return Err(bad(C, format!("{} is not a layer or group", parent.0)));
+    }
+    if !d.is_editable(parent) {
+        return Err(bad(C, "the layer or group is hidden or locked"));
+    }
+    Ok(Some(parent))
+}
+
+/// New type `kind` on top of the contents of `parent`, whatever the drawing mode; selected.
+fn insert_text_into(s: &mut Session, parent: NodeId, kind: NodeKind, bbox_angle: f64) -> Result<Value> {
+    let id = s.edit("Type", |d, sel| {
+        let id = d.alloc_id();
+        let mut n = Node::new(id, kind);
+        NewArt::plain(Appearance::default()).apply(d, &mut n);
+        super::object::align_new_object(d, &mut n);
+        n.bbox_angle = bbox_angle;
+        d.insert(Some(parent), usize::MAX, n)?;
+        sel.set([id]);
+        Ok(id)
+    })?;
+    Ok(json!({ "id": id.0 }))
+}
+
 fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
+    let parent = text_parent(s, p)?;
     let x = f64_req(p, "x", "text.create")?;
     let y = f64_req(p, "y", "text.create")?;
     super::paint::check_keep_model(p, "text.create")?;
@@ -922,8 +953,12 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         // Lays the text out (and sizes an Auto Size frame).
         super::typecmd::refresh_bounds(&mut t);
     }
-    let made =
-        insert_look_turned(s, "Type", NodeKind::Text(Box::new(t)), NewArt::plain(Appearance::default()), None, true, bbox_turn(rotation), true)?;
+    let made = match parent {
+        Some(parent) => insert_text_into(s, parent, NodeKind::Text(Box::new(t)), bbox_turn(rotation))?,
+        None => {
+            insert_look_turned(s, "Type", NodeKind::Text(Box::new(t)), NewArt::plain(Appearance::default()), None, true, bbox_turn(rotation), true)?
+        }
+    };
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
     let made = super::typecmd::with_bounds(s, id, made);
     let mut made = super::typecmd::with_overflow(s, id.as_slice(), made);

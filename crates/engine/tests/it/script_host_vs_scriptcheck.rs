@@ -109,7 +109,7 @@ const INSIDE: &[(&str, &str)] = &[
          dimPlacedImages dimPlacedImages= groupItems hasSelectedArtwork hasSelectedArtwork= isIsolated layers locked \
          locked= move name name= opacity opacity= pageItems parent pathItems pathItems= placedItems placedItems= preview \
          preview= printable printable= rasterItems rasterItems= remove sliced sliced= symbolItems symbolItems= textFrames \
-         textFrames= typename visible visible= zOrder zOrderPosition",
+         typename visible visible= zOrder zOrderPosition",
     ),
     ("Layers.", "prototype"),
     ("Layers.prototype.", "add constructor getByName index length parent removeAll typename"),
@@ -117,7 +117,7 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "GroupItem.prototype.",
         "clipped clipped= compoundPathItems constructor groupItems pageItems pathItems pathItems= placedItems placedItems= \
-         rasterItems rasterItems= symbolItems symbolItems= textFrames textFrames=",
+         rasterItems rasterItems= symbolItems symbolItems= textFrames",
     ),
     ("GroupItems.", "prototype"),
     ("GroupItems.prototype.", "add constructor createFromFile createFromFile= getByName index length parent removeAll typename"),

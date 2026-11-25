@@ -12,8 +12,8 @@
 //!
 //! VectorCraft's own rules, which the help pages do not state:
 //! - `layers` lists layers top first, as the Layers panel shows them. A layer's or group's
-//!   `pageItems`, `groupItems` and `compoundPathItems`, and a compound path's `pathItems`, list the
-//!   objects directly in it, topmost first. The document's `groupItems` and `compoundPathItems`
+//!   `pageItems`, `groupItems`, `compoundPathItems` and `textFrames`, and a compound path's
+//!   `pathItems`, list the objects directly in it, topmost first. The document's `groupItems` and `compoundPathItems`
 //!   hold every group or compound path at any depth, in the order of the document's `pageItems`.
 //! - `layers.add()` on the document makes a layer above every top-level layer; on a layer it makes
 //!   a sublayer on top of that layer's contents. The new layer becomes the current one.
@@ -65,6 +65,8 @@ enum Kind {
     Group,
     /// Compound paths (`CompoundPathItem`).
     Compound,
+    /// Type (`TextFrame`), whose collection's other members are in `text.rs`.
+    Text,
 }
 
 impl Kind {
@@ -73,6 +75,7 @@ impl Kind {
             Kind::Any => "PageItems",
             Kind::Group => "GroupItems",
             Kind::Compound => "CompoundPathItems",
+            Kind::Text => "TextFrames",
         }
     }
 
@@ -81,6 +84,7 @@ impl Kind {
             Kind::Any => typename(n).is_some(),
             Kind::Group => typename(n) == Some("GroupItem"),
             Kind::Compound => typename(n) == Some("CompoundPathItem"),
+            Kind::Text => typename(n) == Some("TextFrame"),
         }
     }
 }
@@ -845,6 +849,20 @@ fn held_compounds(h: &Host, a: &[Data]) -> Answer {
     held(h, a, Kind::Compound)
 }
 
+fn held_text(h: &Host, a: &[Data]) -> Answer {
+    held(h, a, Kind::Text)
+}
+
+/// The document and the layer or group (`None`: the whole document) a `TextFrames` lists.
+pub(super) fn text_scope(h: &Host, d: &Data) -> Result<(Doc, Option<NodeId>)> {
+    art_scope(h, d, Kind::Text.class())
+}
+
+/// The type objects directly in `container`, topmost first.
+pub(super) fn text_list(h: &Host, st: &DocState, container: NodeId) -> Result<Rc<Vec<NodeId>>> {
+    art_list(h, st, Kind::Text, Some(container))
+}
+
 // ---- GroupItem and CompoundPathItem ----
 
 fn this_item_of(h: &Host, a: &[Data], what: &str) -> Result<Item> {
@@ -897,8 +915,9 @@ pub(super) fn members(class: &str, l: &Link) -> Vec<(String, HostMember)> {
                 ("pageItems", get(l, held_page_items)),
                 ("groupItems", get(l, held_groups)),
                 ("compoundPathItems", get(l, held_compounds)),
+                ("textFrames", get(l, held_text)),
             ]);
-            m.extend(["pathItems", "textFrames", "symbolItems", "placedItems", "rasterItems"].map(|m| later(l, "GroupItem", m)));
+            m.extend(["pathItems", "symbolItems", "placedItems", "rasterItems"].map(|m| later(l, "GroupItem", m)));
             m
         }
         "CompoundPathItem" => named(vec![("pathItems", get(l, held_page_items))]),
@@ -1320,6 +1339,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("pageItems", get(l, held_page_items)),
         ("groupItems", get(l, held_groups)),
         ("compoundPathItems", get(l, held_compounds)),
+        ("textFrames", get(l, held_text)),
         ("zOrderPosition", get(l, layer_z_position)),
         ("hasSelectedArtwork", property(l, layer_has_selected, layer_set_has_selected)),
         ("isIsolated", get(l, layer_is_isolated)),
@@ -1328,8 +1348,7 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("zOrder", method(l, layer_z_order)),
     ]);
     layer.extend(
-        ["pathItems", "textFrames", "symbolItems", "placedItems", "rasterItems", "blendingMode", "artworkKnockout", "sliced"]
-            .map(|m| later(l, "Layer", m)),
+        ["pathItems", "symbolItems", "placedItems", "rasterItems", "blendingMode", "artworkKnockout", "sliced"].map(|m| later(l, "Layer", m)),
     );
     vec![
         class("Layer", None, layer, None),

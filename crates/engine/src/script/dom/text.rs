@@ -1,4 +1,4 @@
-//! Type in the script object model: `document.textFrames`, each `TextFrame`, the `TextRange` of its
+//! Type in the script object model: the `textFrames` of a document, a layer and a group, each `TextFrame`, the `TextRange` of its
 //! text with the `characters`, `words` and `paragraphs` in it, their `characterAttributes` and
 //! `paragraphAttributes`, and `app.textFonts`, as the help pages
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/>,
@@ -7,6 +7,9 @@
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/TextFonts/> describe them.
 //!
 //! VectorCraft's own rules, which the help pages do not state:
+//! - A layer's or group's `textFrames` list the type directly in it, topmost first. Their `add()`,
+//!   `pointText`, `areaText` and `pathText` put the new type on top of its contents, and a hidden
+//!   or locked layer or group throws.
 //! - Offsets and lengths count UTF-16 code units, as a JavaScript string does, so
 //!   `frame.contents.length` is `frame.textRange.length`. An offset inside a surrogate pair moves
 //!   out to the whole character. One item of `characters` is one code point.
@@ -1231,32 +1234,46 @@ fn frame_ids(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
     ids
 }
 
+/// The document and the layer or group (`None`: the whole document) a `TextFrames` lists.
+fn frames_scope(h: &Host, a: &[Data]) -> std::result::Result<(Doc, Option<NodeId>), HostError> {
+    super::layers::text_scope(h, arg(a, 0))
+}
+
 fn frames_doc(h: &Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
-    doc_of(h, arg(a, 0), "TextFrames")
+    Ok(frames_scope(h, a)?.0)
+}
+
+/// The type objects a `TextFrames` of `container` lists: the document's ([`frame_ids`]), or those
+/// directly in a layer or group, topmost first.
+fn listed(h: &Host, st: &DocState, container: Option<NodeId>) -> std::result::Result<Rc<Vec<NodeId>>, HostError> {
+    match container {
+        None => Ok(frame_ids(h, st)),
+        Some(c) => super::layers::text_list(h, st, c),
+    }
 }
 
 fn frames_length(h: &Host, a: &[Data]) -> Answer {
-    let doc = frames_doc(h, a)?;
-    Ok(num(float(with_doc(h, doc, |_, st| frame_ids(h, st).len()) as u64)))
+    let (doc, c) = frames_scope(h, a)?;
+    Ok(num(float(with_doc(h, doc, |_, st| listed(h, st, c).map(|l| l.len()))? as u64)))
 }
 
 fn frames_parent(h: &Host, a: &[Data]) -> Answer {
-    let doc = frames_doc(h, a)?;
-    Ok(doc_ref(h, doc.uid))
+    let (doc, c) = frames_scope(h, a)?;
+    Ok(with_doc(h, doc, |_, st| c.map_or_else(|| doc_ref(h, st.uid), |c| item_ref(h, st, c))))
 }
 
 fn frames_at(h: &Host, a: &[Data]) -> Answer {
-    let doc = frames_doc(h, a)?;
+    let (doc, c) = frames_scope(h, a)?;
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = usize_of(*n) else { return Ok(Data::Undefined) };
-    Ok(with_doc(h, doc, |_, st| frame_ids(h, st).get(i).map_or(Data::Undefined, |id| item_ref(h, st, *id))))
+    with_doc(h, doc, |_, st| Ok(listed(h, st, c)?.get(i).map_or(Data::Undefined, |id| item_ref(h, st, *id))))
 }
 
 fn frames_by_name(h: &Host, a: &[Data]) -> Answer {
-    let doc = frames_doc(h, a)?;
+    let (doc, c) = frames_scope(h, a)?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
-        let ids = frame_ids(h, st);
+        let ids = listed(h, st, c)?;
         h.charge_call(ids.len() as u64)?;
         let id = ids.iter().find(|i| st.doc.node(**i).and_then(|n| n.name.as_deref()) == Some(name.as_str()));
         id.map(|id| item_ref(h, st, *id)).ok_or_else(|| HostError::Error(NOT_FOUND.into()))
@@ -1284,29 +1301,40 @@ fn vertical_of(d: &Data) -> std::result::Result<bool, HostError> {
     }
 }
 
-/// Makes point type at `anchor` (script coordinates; `None`: the origin) with `text.create`.
-fn point_text(h: &Host, doc: Doc, anchor: Option<[f64; 2]>, vertical: bool) -> Answer {
+/// Makes point type at `anchor` (script coordinates; `None`: the origin) with `text.create`, on
+/// top of the contents of `container` when there is one.
+fn point_text(h: &Host, (doc, container): (Doc, Option<NodeId>), anchor: Option<[f64; 2]>, vertical: bool) -> Answer {
     let at = with_doc(h, doc, |_, st| Ok::<_, HostError>(frame(st)?.to_document(h.dom.coords.get(), anchor.unwrap_or([0.0, 0.0]))))?;
-    let (_, r) =
-        on_doc(h, doc.uid, true, |h| super::command_value(h, "text.create", &json!({"x": at.x, "y": at.y, "text": "", "vertical": vertical})))?;
+    let mut params = json!({"x": at.x, "y": at.y, "text": "", "vertical": vertical});
+    if let Some(c) = container {
+        check_open(h, doc, c)?;
+        if let Some(o) = params.as_object_mut() {
+            o.insert("parent".into(), json!(c.0));
+        }
+    }
+    let (_, r) = on_doc(h, doc.uid, true, |h| super::command_value(h, "text.create", &params))?;
     new_ref(h, doc, result_id(&r))
 }
 
+/// The error for a layer or group that takes no new type.
+const SHUT_CONTAINER: &str = "the layer or group is hidden or locked";
+
 /// `add()`: empty point type at the origin.
 fn frames_add(h: &Host, a: &[Data]) -> Answer {
-    point_text(h, frames_doc(h, a)?, None, false)
+    point_text(h, frames_scope(h, a)?, None, false)
 }
 
 /// `pointText(anchor, orientation?)`.
 fn frames_point_text(h: &Host, a: &[Data]) -> Answer {
-    let doc = frames_doc(h, a)?;
+    let scope = frames_scope(h, a)?;
     let anchor = point(arg(a, 1), "anchor")?;
-    point_text(h, doc, Some(anchor), vertical_of(arg(a, 2))?)
+    point_text(h, scope, Some(anchor), vertical_of(arg(a, 2))?)
 }
 
-/// Turns the path `d` names into area type or type on a path with `text.createInPath`.
+/// Turns the path `d` names into area type or type on a path with `text.createInPath`, and moves
+/// it on top of the contents of the collection's layer or group when there is one.
 fn in_path(h: &Host, a: &[Data], on_path: bool, rest: &[usize]) -> Answer {
-    let doc = frames_doc(h, a)?;
+    let (doc, container) = frames_scope(h, a)?;
     if handle_of(arg(a, 1), "PathItem").is_none() {
         return Err(HostError::Type("textPath must be a PathItem".into()));
     }
@@ -1321,8 +1349,23 @@ fn in_path(h: &Host, a: &[Data], on_path: bool, rest: &[usize]) -> Answer {
     let vertical = vertical_of(arg(a, orientation))?;
     let mode = if on_path { "onPath" } else { "area" };
     let params = json!({"path": path.id.0, "mode": mode, "text": "", "vertical": vertical});
-    let (_, r) = on_doc(h, doc.uid, true, |h| super::command_value(h, "text.createInPath", &params))?;
-    new_ref(h, doc, result_id(&r))
+    let Some(c) = container else {
+        let (_, r) = on_doc(h, doc.uid, true, |h| super::command_value(h, "text.createInPath", &params))?;
+        return new_ref(h, doc, result_id(&r));
+    };
+    check_open(h, doc, c)?;
+    let id = super::atomically(h, |h| {
+        let (_, r) = on_doc(h, doc.uid, true, |h| super::command_value(h, "text.createInPath", &params))?;
+        let id = result_id(&r).ok_or_else(|| HostError::Error("the command made no object".into()))?;
+        super::place(h, doc, id, &super::Destination { parent: c, beside: None, how: super::Placement::Top })?;
+        Ok(id)
+    })?;
+    new_ref(h, doc, Some(id))
+}
+
+/// Refuses a hidden or locked layer or group as the place for new type.
+fn check_open(h: &Host, doc: Doc, container: NodeId) -> std::result::Result<(), HostError> {
+    if with_doc(h, doc, |_, st| st.doc.is_editable(container)) { Ok(()) } else { Err(HostError::Error(SHUT_CONTAINER.into())) }
 }
 
 /// `areaText(textPath, orientation?, baseFrame?, postFix?)`.
@@ -1335,15 +1378,16 @@ fn frames_path_text(h: &Host, a: &[Data]) -> Answer {
     in_path(h, a, true, &[2, 3, 5, 6])
 }
 
-/// `removeAll()`: deletes every type object in one command; a hidden or locked one stops it first.
+/// `removeAll()`: deletes every type object the collection lists in one command; a hidden or
+/// locked one stops it first.
 fn frames_remove_all(h: &Host, a: &[Data]) -> Answer {
-    let doc = frames_doc(h, a)?;
+    let (doc, c) = frames_scope(h, a)?;
     let (ids, refused) = with_doc(h, doc, |_, st| {
-        let ids = frame_ids(h, st);
+        let ids = listed(h, st, c)?;
         let ok = |id: &NodeId| editable(&st.doc, *id) && st.doc.node(*id).is_some_and(all_editable);
         let refused: Vec<u64> = ids.iter().filter(|i| !ok(i)).map(|i| i.0).take(20).collect();
-        (ids, refused)
-    });
+        Ok::<_, HostError>((ids, refused))
+    })?;
     if !refused.is_empty() {
         let list = refused.iter().map(u64::to_string).collect::<Vec<_>>().join(", ");
         return Err(HostError::Error(format!("cannot delete hidden or locked type: {list}")));

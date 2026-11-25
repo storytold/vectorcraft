@@ -582,6 +582,93 @@ fn type_made_with_a_large_id_is_the_new_type() {
     assert_eq!(plain(&s, NodeId(big)), "");
 }
 
+/// A script that builds a layer `base` holding type `back`, a group `g` (type `g-text` and a
+/// group `gg` holding type `gg-text`) and type `front`, a sublayer `sub` of it holding type
+/// `sub-text`, and a layer `other` holding type `other-text`, which it leaves current.
+const NESTED_TYPE: &str = "var d = app.activeDocument, L0 = d.layers[0]; L0.name = 'base';\
+     function put(c, name, y) { var t = c.textFrames.pointText([20, y]); t.contents = name; t.name = name; return t; }\
+     put(L0, 'back', 20); var g = L0.groupItems.add(); g.name = 'g'; put(g, 'g-text', 40);\
+     var gg = g.groupItems.add(); gg.name = 'gg'; put(gg, 'gg-text', 60); put(L0, 'front', 80);\
+     var sub = L0.layers.add(); sub.name = 'sub'; put(sub, 'sub-text', 100);\
+     var L1 = d.layers.add(); L1.name = 'other'; put(L1, 'other-text', 120); d.activeLayer = L1;\
+     function names(c) { var a = []; for (var i = 0; i < c.length; i++) a.push(c[i].name); return a.join(','); }";
+
+#[test]
+fn a_layers_and_a_groups_text_frames_list_only_their_own_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let out = log(
+        &mut s,
+        &format!(
+            "{NESTED_TYPE} vc.log([names(L0.textFrames), names(g.textFrames), names(sub.textFrames), names(L1.textFrames)]);\
+             vc.log([L0.textFrames.typename, L0.textFrames.parent.name, g.textFrames.parent.typename, g.textFrames.parent.name]);\
+             vc.log([L0.textFrames.getByName('front').name, L0.textFrames.index(1).name, L0.textFrames[2] === undefined]);\
+             vc.log(d.textFrames.length);"
+        ),
+    );
+    assert_eq!(out[0], json!(["front,back", "g-text", "sub-text", "other-text"]));
+    assert_eq!(out[1], json!(["TextFrames", "base", "GroupItem", "g"]));
+    assert_eq!(out[2], json!(["front", "back", true]));
+    assert_eq!(out[3], json!(6));
+    // Type inside the layer's group or sublayer is not the layer's own.
+    let e = failure(&mut s, &format!("{NESTED_TYPE} L0.textFrames.getByName('gg-text');"));
+    assert!(e.contains("Not found"), "{e}");
+}
+
+#[test]
+fn text_frames_of_a_layer_or_group_put_new_type_in_it() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 200, "y": 10, "width": 100, "height": 50})).unwrap();
+    let before = undo_steps(&s);
+    // The rectangle is in the first layer, which becomes `base`; `other` is current while the
+    // collections of `base` and `g` add type.
+    let out = log(
+        &mut s,
+        &format!(
+            "var rect = app.activeDocument.pageItems[0]; {NESTED_TYPE}\
+             var t = L0.textFrames.add(); t.name = 'added';\
+             vc.log([t.layer.name, L0.pageItems[0].name, t.kind, d.activeLayer.name]);\
+             var gt = g.textFrames.add(); gt.name = 'g-added'; vc.log([gt.parent.name, g.pageItems[0].name]);\
+             var at = g.textFrames.areaText(rect); at.name = 'area'; vc.log([at.parent.name, g.pageItems[0].name, at.kind]);\
+             g.textFrames.removeAll(); vc.log([names(g.pageItems), names(L0.textFrames)]);"
+        ),
+    );
+    assert_eq!(out[0], json!(["base", "added", "TextType.POINTTEXT", "other"]));
+    assert_eq!(out[1], json!(["g", "g-added"]));
+    assert_eq!(out[2], json!(["g", "area", "TextType.AREATEXT"]));
+    // removeAll takes the group's own type and leaves the type inside its group.
+    assert_eq!(out[3], json!(["gg", "added,front,back"]));
+    assert_eq!(undo_steps(&s), before + 1);
+    // A locked layer and a hidden group take no new type, and the run changes nothing.
+    let before = undo_steps(&s);
+    let e = failure(&mut s, &format!("{NESTED_TYPE} L0.locked = true; L0.textFrames.add();"));
+    assert!(e.contains("hidden or locked"), "{e}");
+    let e = failure(&mut s, &format!("{NESTED_TYPE} g.hidden = true; g.textFrames.pointText([5, 5]);"));
+    assert!(e.contains("hidden or locked"), "{e}");
+    assert_eq!(undo_steps(&s), before);
+}
+
+#[test]
+fn text_create_puts_type_in_the_layer_or_group_it_names() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let group = s.execute("object.newGroup", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let rect = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    // A new layer is current, and a locked one takes no type.
+    let locked = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().map(NodeId).unwrap();
+    s.execute("layer.setProps", &json!({"id": locked.0, "locked": true})).unwrap();
+    let before = undo_steps(&s);
+    for bad in [json!("1"), json!(rect), json!(9999), json!(locked.0)] {
+        assert!(s.execute("text.create", &json!({"x": 5, "y": 5, "text": "a", "parent": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(undo_steps(&s), before);
+    let id = s.execute("text.create", &json!({"x": 5, "y": 5, "text": "a", "parent": group})).unwrap()["id"].as_u64().unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(NodeId(id)), Some(NodeId(group)));
+    assert_eq!(undo_steps(&s), before + 1);
+}
+
 #[test]
 fn text_members_refuse_objects_of_other_classes() {
     let (mut s, _) = doc_with("abc");

@@ -620,7 +620,7 @@ change nothing; an omitted or null `id` keeps the default. Commands that need an
 `path` keys of `appearance.transfer`, `appearance.copyFrom`, `layer.move`, the `livePaint.*` commands and
 `text.createInPath`) refuse a value that is not a non-negative integer with "`id` must be a whole number", naming the
 key, and report a key left out or null as missing. The optional `group` of `livePaint.fill` and `parent` of
-`node.move` are refused the same way when given; left out, they keep their defaults. `livePaint.info` reads `id` when
+`node.move` and `text.create` are refused the same way when given; left out, they keep their defaults. `livePaint.info` reads `id` when
 `group` is left out or null, and reports a missing group only when both are left out. A command that needs a number
 (`x` of `shape.rectangle`, `pos` of `guide.add`, `index`, `x` and `y` of the `object.mesh.*` and
 `object.envelope.setMeshPoint` point commands, and the others like them) refuses a value that is not a number with
@@ -2772,7 +2772,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   with `text.create`; `areaText(path, orientation?)` and `pathText(path, startTValue?, endTValue?, orientation?)` turn
   a `PathItem` into area type or type on a path with `text.createInPath`, the orientation being a `TextOrientation`
   value; a `startTValue`, `endTValue`, `baseFrame` or `postFix` that is given throws an error that says it is not
-  available yet. A `TextFrame`
+  available yet. A `Layer` and a `GroupItem` have `textFrames` with the same members. VectorCraft's own rules for
+  them: they list the type objects directly in the layer or group, topmost first, and their `add()`, `pointText`,
+  `areaText` and `pathText` put the new type on top of the layer's or group's contents, whatever the current layer.
+  Point type goes there with `text.create`'s `parent`, which takes a shown, unlocked layer or group and ignores the
+  drawing mode, and area type and type on a path go there with `node.move`, in the same undo step. A hidden or
+  locked layer or group throws an error and changes nothing. A `TextFrame`
   (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
   `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
   `createOutline()` (Type › Create Outlines, giving the group of outlines, or `null` when the type has nothing to
