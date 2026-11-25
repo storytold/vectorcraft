@@ -2094,9 +2094,6 @@ fn assign_tab(
             }
         });
     }
-    if rows.is_empty() {
-        Text::new(tl!("No colors to recolor (preserved colors are left out).")).shade(Shade::Muted).show(ui);
-    }
     let columns = vec![
         ColumnSpec::new(
             CURRENT,
@@ -2124,10 +2121,12 @@ fn assign_tab(
     let source = keyed(&keys, |k| *k).with_text(|k| Cow::Owned(names.get(*k).cloned().unwrap_or_default()));
     let edits: RefCell<Vec<RowEdit>> = RefCell::new(Vec::new());
     let shown_rows: &[Value] = rows;
-    let out = Table::<usize>::new(tl!("Colors"), columns).min_rows(5).max_rows(8).selection(Bind::bound(&mut sel)).show_items(
-        ui,
-        &source,
-        &mut |key, icx| {
+    let out = Table::<usize>::new(tl!("Colors"), columns)
+        .min_rows(5)
+        .max_rows(8)
+        .empty(tl!("No colors to recolor (preserved colors are left out)."))
+        .selection(Bind::bound(&mut sel))
+        .show_items(ui, &source, &mut |key, icx| {
             let i = *key;
             let edits = &edits;
             let row = shown_rows.get(i).cloned().unwrap_or_default();
@@ -2161,8 +2160,7 @@ fn assign_tab(
                         edits.borrow_mut().push(RowEdit::Hex(i, *c));
                     }
                 })
-        },
-    );
+        });
     let mut items = sel.items.clone();
     items.sort_unstable();
     items.dedup();
