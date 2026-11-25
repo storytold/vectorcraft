@@ -13,7 +13,7 @@ use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
 use craft::ui::runtime::toast::{self, Toast};
 use craft::ui::runtime::windows::WindowHost;
-use craft::ui::sections::DialogButtonLook;
+use craft::ui::sections::{DialogButtonLook, QuietTitleRow};
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
 use craft::ui::style::TrackFill;
@@ -708,6 +708,9 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // The Properties kind line ("Ellipse") heads the sections under it, so the first draws no divider above it, as
     // production's did.
     root.values.set(QuietHeader::Heads);
+    // Quiet headings (the kind line, "Ellipse Properties:") stand a line of text high over their fields, as
+    // production's did.
+    root.values.set(QuietTitleRow::Text);
     // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
     root.values.set(MenuTitlePad::Control);
     // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
