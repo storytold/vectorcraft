@@ -303,7 +303,7 @@ fn parse_text(units: &[u16]) -> Option<(f64, Unit)> {
         }
     }
     let (number, rest) = text.split_at_checked(k)?;
-    let value = string_to_number(number);
+    let value = string_to_number(number, false);
     let u = rest.iter().position(|&u| !is_str_space(u)).unwrap_or(rest.len());
     let unit = Unit::named(rest.get(u..)?)?;
     value.is_finite().then_some((value, unit))
