@@ -199,14 +199,11 @@ pub fn specs() -> Vec<CommandSpec> {
 
 // ---------- helpers ----------
 
-/// Number param that also accepts strings like `"10 pt"`.
+/// Number param that also accepts a string when all of it is a number (`"10"`, not `"10abc"`).
 pub(crate) fn num_param(p: &Value, key: &str) -> Option<f64> {
     match p.get(key)? {
         Value::Number(n) => n.as_f64(),
-        Value::String(s) => {
-            let t: String = s.trim().chars().take_while(|c| c.is_ascii_digit() || matches!(c, '.' | '-' | '+' | 'e' | 'E')).collect();
-            t.parse().ok()
-        }
+        Value::String(s) => whole_number(s),
         _ => None,
     }
     .filter(|v: &f64| v.is_finite())

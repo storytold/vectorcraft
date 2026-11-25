@@ -1,4 +1,6 @@
-use super::{Path, PathBuf};
+use craft::font_catalog::{Catalog, FontEnv, font_dirs};
+
+use super::{Arc, Path, PathBuf};
 
 /// A font file holding `tables` (tag, data), sorted by tag as table directories are.
 #[cfg(any(test, not(target_arch = "wasm32")))]
@@ -33,19 +35,58 @@ pub type PlatformFontFiles = fn() -> Vec<String>;
 #[cfg(not(target_arch = "wasm32"))]
 static PLATFORM_FONT_FILES: std::sync::OnceLock<PlatformFontFiles> = std::sync::OnceLock::new();
 
-/// Have [`system_font_dirs`] add the font files `list` gives (full paths) outside the font
-/// folders, asked again by each scan and each check for installed fonts
-/// ([`FontDb::installed_fonts_changed`]). The desktop app lists DirectWrite's system font
-/// collection on Windows: fonts a font service such as Adobe Fonts loads in place, from files
-/// outside the font folders and unknown to the registry (#579). On macOS it lists the fonts
-/// CoreText's font manager has available, which apps and font managers can register from any
-/// folder. Only the first call counts.
+/// Have [`system_font_dirs`] and [`FontDb::global`]'s scan add the font files `list` gives (full
+/// paths), asked again by each scan: fonts the platform knows that its font service, which the
+/// scan asks itself, does not list. The desktop app lists on Windows the files of the families GDI
+/// lists that DirectWrite's system collection doesn't name (#1258). Only the first call counts.
 pub fn set_platform_font_files(list: PlatformFontFiles) {
     #[cfg(not(target_arch = "wasm32"))]
     // A second call keeps the first lister, as documented.
     let _ = PLATFORM_FONT_FILES.set(list);
     #[cfg(target_arch = "wasm32")]
     let _ = list;
+}
+
+/// The most files [`platform_font_files`] takes from the lister.
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_PLATFORM_FILES: usize = 1 << 16;
+
+/// The files [`set_platform_font_files`]'s lister gives now: full paths only, each once, at most
+/// [`MAX_PLATFORM_FILES`]. None before it is set, and none on wasm.
+fn platform_font_files() -> Vec<PathBuf> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(list) = PLATFORM_FONT_FILES.get() {
+        let mut files: Vec<PathBuf> = list().into_iter().take(MAX_PLATFORM_FILES).map(PathBuf::from).filter(|p| p.is_absolute()).collect();
+        files.sort();
+        files.dedup();
+        return files;
+    }
+    Vec::new()
+}
+
+/// The catalog of [`FontDb::global`]: the platform's font folders and font service, the font
+/// store, VectorCraft's own folders ([`app_dirs`]) and the files [`set_platform_font_files`] lists.
+pub(super) fn system_catalog() -> Catalog {
+    let catalog = Catalog::new(FontEnv::from_process()).with_lister(Arc::new(platform_font_files));
+    catalog.set_app_dirs(app_dirs());
+    catalog
+}
+
+/// The folders VectorCraft adds to the platform's: its own Fonts folder ([`set_app_font_dir`]),
+/// then the user's ([`set_user_font_dirs`]).
+fn app_dirs() -> Vec<PathBuf> {
+    app_font_dir().map(Path::to_path_buf).into_iter().chain(user_font_dirs()).collect()
+}
+
+/// Hands [`app_dirs`] and [`confined_font_dirs`] to [`FontDb::global`]'s catalog when it has been
+/// made; one made later reads them itself. Its next check for installed fonts
+/// ([`FontDb::installed_fonts_changed`]) reports the change.
+#[cfg(not(target_arch = "wasm32"))]
+fn follow_app_dirs() {
+    if let Some(db) = super::FontDb::global_if_made() {
+        db.catalog.set_app_dirs(app_dirs());
+        db.catalog.set_confined_dirs(confined_font_dirs());
+    }
 }
 
 /// Folders the user adds to the font scan (Preferences › Type › Additional Fonts Folder, #683),
@@ -68,6 +109,7 @@ pub fn set_user_font_dirs_confined(dirs: Vec<PathBuf>, confined: bool) {
     {
         *USER_FONT_DIRS.write().unwrap_or_else(std::sync::PoisonError::into_inner) = dirs;
         USER_FONT_DIRS_CONFINED.store(confined, std::sync::atomic::Ordering::Relaxed);
+        follow_app_dirs();
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (dirs, confined);
@@ -104,9 +146,11 @@ static APP_FONT_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 /// the first scan, as they install [`set_platform_font_files`]. A folder that doesn't exist yet is
 /// read once it does. Only the first call counts. Ignored on wasm.
 pub fn set_app_font_dir(dir: PathBuf) {
-    #[cfg(not(target_arch = "wasm32"))]
     // A second call keeps the first folder, as documented.
-    let _ = APP_FONT_DIR.set(dir);
+    #[cfg(not(target_arch = "wasm32"))]
+    if APP_FONT_DIR.set(dir).is_ok() {
+        follow_app_dirs();
+    }
     #[cfg(target_arch = "wasm32")]
     let _ = dir;
 }
@@ -119,102 +163,17 @@ pub fn app_font_dir() -> Option<&'static Path> {
     None
 }
 
-/// The platform's font folders (the system's and the user's), VectorCraft's own Fonts folder
-/// ([`set_app_font_dir`]), the font files known to the platform outside them (on Windows those
-/// registered with it, and those [`set_platform_font_files`] lists) and the folders the user added
-/// ([`set_user_font_dirs`]), scanned by [`FontDb::global`].
+/// The platform's font folders (the system's and the user's, [`font_dirs`]), VectorCraft's own
+/// Fonts folder ([`set_app_font_dir`]), the font files [`set_platform_font_files`] lists and the
+/// folders the user added ([`set_user_font_dirs`]), scanned by [`FontDb::global`] with the files
+/// the platform's font service and, on Windows, the registry list. None on wasm.
 pub fn system_font_dirs() -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = Vec::new();
     if cfg!(target_arch = "wasm32") {
-        return dirs;
+        return Vec::new();
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    if cfg!(target_os = "macos") {
-        dirs.extend(["/System/Library/Fonts", "/Library/Fonts", "/Network/Library/Fonts"].map(Into::into));
-        if let Some(h) = &home {
-            dirs.push(h.join("Library/Fonts"));
-        }
-        // Fonts macOS downloads on demand (Yu Gothic, Yu Mincho, Tsukushi Maru Gothic…): one
-        // asset folder per font, under a catalog folder whose number changes with macOS.
-        for e in std::fs::read_dir("/System/Library/AssetsV2").into_iter().flatten().flatten() {
-            if e.file_name().to_string_lossy().starts_with("com_apple_MobileAsset_Font") {
-                dirs.push(e.path());
-            }
-        }
-    } else if cfg!(windows) {
-        let root = std::env::var_os("WINDIR").map(PathBuf::from).unwrap_or_else(|| "C:\\Windows".into());
-        dirs.push(root.join("Fonts"));
-        // Fonts installed for the current user only (what Install does without administrator rights).
-        if let Some(l) = std::env::var_os("LOCALAPPDATA") {
-            dirs.push(PathBuf::from(l).join("Microsoft\\Windows\\Fonts"));
-        }
-        #[cfg(windows)]
-        dirs.extend(registered_font_files(&dirs));
-    } else {
-        dirs.extend(["/usr/share/fonts", "/usr/local/share/fonts"].map(Into::into));
-        // The XDG data folders' `fonts` (fontconfig's user folder; Flatpak, Snap, NixOS and Guix
-        // list their own data folders), relative paths ignored as the XDG spec says.
-        let xdg = |var| std::env::var_os(var).map(|v| std::env::split_paths(&v).filter(|p| p.is_absolute()).collect::<Vec<_>>()).unwrap_or_default();
-        let data_home = xdg("XDG_DATA_HOME").into_iter().next().or_else(|| home.as_ref().map(|h| h.join(".local/share")));
-        dirs.extend(data_home.iter().cloned().chain(xdg("XDG_DATA_DIRS")).map(|d| d.join("fonts")));
-        if let Some(h) = &home {
-            dirs.push(h.join(".fonts"));
-        }
-        // In a Flatpak sandbox, the host's fonts (system, local and the user's).
-        dirs.extend(["/run/host/fonts", "/run/host/local-fonts", "/run/host/user-fonts"].map(Into::into));
-        // The folders fontconfig is set up with outside those: packages add their own (TeX fonts
-        // under `/usr/share/texmf/fonts`, #1529), and `fc-list` and other apps show their fonts.
-        let config_home = xdg("XDG_CONFIG_HOME").into_iter().next().or_else(|| home.as_ref().map(|h| h.join(".config")));
-        let places = crate::fontconfig::Places { home: home.clone(), data_home, config_home };
-        for dir in crate::fontconfig::font_dirs(&crate::fontconfig::root(), &places) {
-            if !dirs.iter().any(|known| dir.starts_with(known)) {
-                dirs.push(dir);
-            }
-        }
-    }
+    let mut dirs = font_dirs(&FontEnv::from_process());
     dirs.extend(app_font_dir().map(Path::to_path_buf));
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(list) = PLATFORM_FONT_FILES.get() {
-        let files = fonts_outside(list(), &dirs);
-        dirs.extend(files);
-    }
+    dirs.extend(platform_font_files());
     dirs.extend(user_font_dirs());
     dirs
-}
-
-/// The registry key listing the fonts installed on Windows (for all users under the local
-/// machine's key, for the current user under theirs): one value per face, holding its file's
-/// name in the Windows font folder or its full path.
-#[cfg(windows)]
-const REGISTERED_FONTS: &str = r"Software\Microsoft\Windows NT\CurrentVersion\Fonts";
-
-/// The font files registered with Windows outside `font_dirs` (fonts installed as shortcuts to
-/// where they are, or by programs into their own folders), which apps find by the registry.
-#[cfg(windows)]
-fn registered_font_files(font_dirs: &[PathBuf]) -> Vec<PathBuf> {
-    use windows_registry::{CURRENT_USER, LOCAL_MACHINE};
-    let values = [LOCAL_MACHINE, CURRENT_USER].into_iter().filter_map(|root| root.open(REGISTERED_FONTS).ok()).flat_map(|key| {
-        // A value that isn't a string isn't a font file.
-        key.values().map(|vs| vs.filter_map(|(_, v)| String::try_from(v).ok()).collect::<Vec<_>>()).unwrap_or_default()
-    });
-    fonts_outside(values, font_dirs)
-}
-
-/// The full paths among `registered` (font registrations' data) that aren't in `font_dirs`
-/// (ignoring case, as Windows paths do), sorted and deduplicated. File names alone are files in
-/// the Windows font folder, which is scanned anyway. The count is capped.
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn fonts_outside(registered: impl IntoIterator<Item = String>, font_dirs: &[PathBuf]) -> Vec<PathBuf> {
-    const MAX_REGISTERED: usize = 1 << 16;
-    let lower = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
-    let dirs: Vec<PathBuf> = font_dirs.iter().map(|d| lower(d)).collect();
-    let mut files: Vec<PathBuf> = registered
-        .into_iter()
-        .take(MAX_REGISTERED)
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute() && !dirs.iter().any(|d| lower(p).starts_with(d)))
-        .collect();
-    files.sort();
-    files.dedup();
-    files
 }
