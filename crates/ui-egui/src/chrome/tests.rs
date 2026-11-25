@@ -261,8 +261,7 @@ fn hints_name_keys_as_the_menus_do() {
 }
 
 /// As the window narrows, the app bar gives up its right-hand controls one at a time, each before the one after it:
-/// Discord, Explore tutorials, Arrange Documents, the search and last the workspace switcher; each keeps its whole width
-/// until it goes. Whatever shows lies inside the window. Safe Mode's rows are in `tests/safe_mode.rs`, whose
+/// Discord, the search and last the workspace switcher; each keeps its whole width until it goes. Whatever shows lies inside the window. Safe Mode's rows are in `tests/safe_mode.rs`, whose
 /// process owns the Safe Mode switch.
 #[test]
 fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
@@ -270,9 +269,8 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
     let app = crate::VectorcraftApp::new(Session::new(), Default::default());
     // The bar is the shell's title bar, which only the whole window's frame draws.
     let mut bar = Shown::new(app, egui::vec2(1600.0, 600.0), |app, ui| app.ui(ui));
-    // PLAN: shell-w9 builds Explore tutorials as `IconButton::command(.., "window.learn")`, whose command label is "Learn"; the button keeps production's name "Explore tutorials".
     // In the order the bar gives them up; the search's name goes on with its chord.
-    let controls = ["Discord", "Explore tutorials", "Arrange Documents", "Search commands", "Choose a workspace"];
+    let controls = ["Discord", "Search commands", "Choose a workspace"];
     let mut before: Option<Vec<bool>> = None;
     let mut search_widths = vec![];
     for width in (30..=160).rev().map(|w| w as f32 * 10.0) {
@@ -290,13 +288,13 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
         if let Some(before) = &before {
             assert!(on.iter().zip(before).all(|(now, was)| !now || *was), "{width}: a control came back as the window narrowed: {on:?}");
         }
-        if let Some(search) = shown[3] {
+        if let Some(search) = shown[1] {
             search_widths.push(search.rect.width());
         }
         before = Some(on);
     }
     let (widest, narrowest) = (search_widths.first().copied(), search_widths.last().copied());
-    assert!(widest.zip(narrowest).is_some_and(|(w, n)| n >= w - 0.5), "the search field keeps its width until it goes: {search_widths:?}");
+    assert!(widest.zip(narrowest).is_some_and(|(w, n)| n >= w - 0.5), "the search keeps its width until it goes: {search_widths:?}");
 }
 
 /// A text the status bar painted, with where it lies.
