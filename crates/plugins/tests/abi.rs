@@ -6,6 +6,7 @@
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
+use vectorcraft_plugins::manifest::{MANIFEST_SECTION, MAX_MANIFEST_BYTES};
 use vectorcraft_plugins::storage::{Meter, Storage, StorageError};
 use vectorcraft_plugins::{Error, HEAVY_FUEL, HEAVY_WALL_TIME_MS, Kind, LARGE_FUEL, Limits, Plugin, Report, heavy_terms, registry, wat as tpl};
 
@@ -486,6 +487,145 @@ fn host_imports_are_checked_when_a_module_is_loaded() {
     // A level-2 plug-in that imports nothing runs as a level-1 one does.
     let plain = Plugin::load(&build(&tpl::returning(LEVEL2, INPUT)), Limits::default()).unwrap();
     assert_eq!(plain.run_reporting(INPUT.as_bytes(), b"{}", plain.limits()), (Ok(INPUT.as_bytes().to_vec()), Report::default()));
+}
+
+/// A start function that traps: a load that instantiates the module fails with it.
+const TRAPPING_START: &str = "(func $trap unreachable) (start $trap)";
+
+/// [`MANIFEST`] with the ABI version, as a `vc_manifest` section must give it.
+const SECTION: &str = r#"{"id":"test.plugin","name":"Test","version":"1","kind":"filter","abi":1}"#;
+
+/// `module` with a `vc_manifest` custom section holding `data`.
+fn with_section(module: &str, data: &[u8]) -> String {
+    tpl::with_field(module, &tpl::custom_section(MANIFEST_SECTION, data)).expect("module text")
+}
+
+/// Asserts that each case's module is refused with an error that contains its text, and lists every
+/// case that is not.
+fn assert_refused(cases: &[(&str, String, &str)]) {
+    let wrong: Vec<String> = cases
+        .iter()
+        .filter_map(|(name, src, says)| match Plugin::load(&build(src), Limits::default()) {
+            Err(e) if e.to_string().contains(says) => None,
+            other => Some(format!("{name}: {other:?}")),
+        })
+        .collect();
+    assert!(wrong.is_empty(), "not refused as expected:\n{}", wrong.join("\n"));
+}
+
+/// A module that carries its manifest in a `vc_manifest` custom section loads without any of its
+/// code running: not its start function, not `vc_abi_version` and not `vc_manifest`. Its runs
+/// instantiate it as before.
+#[test]
+fn a_manifest_section_is_read_without_running_the_module() {
+    let exports = r#"(func (export "vc_abi_version") (result i32) unreachable)
+  (func (export "vc_manifest") (result i64) (loop $l (br $l)) (i64.const 0))"#;
+    let p = Plugin::load(&build(&tpl::sectioned(SECTION, tpl::ECHO, &format!("{exports} {TRAPPING_START}"), 1)), Limits::default()).unwrap();
+    assert_eq!(p.id(), "test.plugin");
+    assert!(matches!(p.run(INPUT.as_bytes(), b"{}"), Err(Error::Trap(_))), "a run still runs the start function");
+    let p = Plugin::load(&build(&tpl::sectioned(SECTION, tpl::ECHO, exports, 1)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+}
+
+/// A module with the section needs neither `vc_abi_version` nor `vc_manifest`, and when it also
+/// has a `vc_manifest` export that says otherwise, the section is the manifest.
+#[test]
+fn the_manifest_section_needs_no_manifest_export_and_wins_over_one() {
+    let p = Plugin::load(&build(&tpl::sectioned(SECTION, tpl::ECHO, "", 1)), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    let exported = r#"{"id":"test.exported","name":"Exported","version":"1","kind":"effect"}"#;
+    let p = Plugin::load(&build(&with_section(&tpl::module(exported, tpl::ECHO, "", 1), SECTION.as_bytes())), Limits::default()).unwrap();
+    assert_eq!((p.id(), p.manifest().kind), ("test.plugin", Kind::Filter));
+}
+
+/// A test plug-in asked for no initial memory still gets one page, so its first `vc_alloc` block is
+/// not at 0; a field added to a named module goes after the module's name.
+#[test]
+fn test_modules_with_no_pages_or_a_name_still_build() {
+    for src in [tpl::sectioned(SECTION, tpl::ECHO, "", 0), tpl::module(MANIFEST, tpl::ECHO, "", 0)] {
+        let p = Plugin::load(&build(&src), Limits::default()).unwrap();
+        assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+    }
+    let named = tpl::module(MANIFEST, tpl::ECHO, "", 1).replacen("(module", "(module $named", 1);
+    let p = Plugin::load(&build(&with_section(&named, SECTION.as_bytes())), Limits::default()).unwrap();
+    assert_eq!(p.id(), "test.plugin");
+    assert_eq!(tpl::with_field("(module)", "(memory 1)").as_deref(), Some("(module\n  (memory 1))"));
+}
+
+/// The section's manifest gives the ABI version as `abi`, which the host checks in place of the
+/// `vc_abi_version` export: left out or another version, the module is refused, whatever its
+/// export returns.
+#[test]
+fn a_manifest_section_must_give_the_abi_version() {
+    let says = "must give `abi` as 1";
+    let version_1 = tpl::module(MANIFEST, tpl::ECHO, "", 1);
+    let version_2 = version_1.replace("(result i32) (i32.const 1)", "(result i32) (i32.const 2)");
+    assert!(load_err(&build(&version_2)).contains("vc_abi_version returned 2"));
+    assert_refused(&[
+        ("left out", with_section(&version_1, MANIFEST.as_bytes()), says),
+        ("2", with_section(&version_1, SECTION.replace(r#""abi":1"#, r#""abi":2"#).as_bytes()), says),
+        ("a string", with_section(&version_1, SECTION.replace(r#""abi":1"#, r#""abi":"1""#).as_bytes()), says),
+        ("a fraction", with_section(&version_1, SECTION.replace(r#""abi":1"#, r#""abi":1.5"#).as_bytes()), says),
+    ]);
+    // The section's version is the one the host checks.
+    let p = Plugin::load(&build(&with_section(&version_2, SECTION.as_bytes())), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
+}
+
+/// A `vc_manifest` section that is repeated, too long, not UTF-8, not JSON or not a valid manifest
+/// is refused, even when the module's `vc_manifest` export returns a valid one.
+#[test]
+fn hostile_manifest_sections_are_refused() {
+    let base = tpl::module(MANIFEST, tpl::ECHO, "", 1);
+    let with = |data: &[u8]| with_section(&base, data);
+    let long = format!(r#"{{"id":"test.long","name":"Long","kind":"filter","abi":1,"description":"{}"}}"#, " ".repeat(MAX_MANIFEST_BYTES));
+    for (name, src, says) in [
+        ("repeated", with_section(&with(SECTION.as_bytes()), SECTION.as_bytes()), "more than one"),
+        ("too long", with(long.as_bytes()), "(limit "),
+        ("not UTF-8", with(b"{\"id\":\"\xff\xfe\"}"), "not UTF-8"),
+        ("not JSON", with(br#"{"id":"test.plugin","#), "manifest"),
+        ("empty", with(b""), "manifest"),
+        ("a bad id", with(br#"{"id":"a b","name":"x","kind":"filter","abi":1}"#), "invalid id"),
+        ("an unknown kind", with(br#"{"id":"a","name":"x","kind":"panel","abi":1}"#), "manifest"),
+    ] {
+        match Plugin::load(&build(&src), Limits::default()) {
+            Err(Error::Manifest(e)) => assert!(e.contains(says), "{name}: {e}"),
+            other => panic!("{name}: {other:?}"),
+        }
+    }
+}
+
+/// A module with the section has its imports checked against its manifest, its exports by type,
+/// and its initial memory and tables against the limits its runs have, before any of its code runs
+/// (its start function would trap).
+#[test]
+fn a_sectioned_module_s_imports_and_exports_are_checked_before_it_runs() {
+    let call = r#"(import "env" "vc_call" (func (param i32 i32 i32 i32) (result i32)))"#;
+    let level2 = LEVEL2.replace(r#""api":2"#, r#""api":2,"abi":1"#);
+    let e = load_err(&build(&tpl::sectioned(&level2, tpl::ECHO, &format!("{call} {TRAPPING_START}"), 1)));
+    assert!(e.contains("imports `env.vc_call`") && e.contains("the permission `commands`"), "{e}");
+    let sectioned = tpl::sectioned(SECTION, tpl::ECHO, TRAPPING_START, 1);
+    let tables = |t: &str| tpl::sectioned(SECTION, tpl::ECHO, &format!("{t} {TRAPPING_START}"), 1);
+    assert_refused(&[
+        ("no memory", sectioned.replace(r#"(memory (export "memory") 1)"#, "(memory 1)"), "export its linear memory as `memory`"),
+        (
+            "initial memory past the cap",
+            tpl::sectioned(SECTION, tpl::ECHO, TRAPPING_START, 60_000),
+            "exceeded its memory budget (the module's initial memory",
+        ),
+        ("no vc_alloc", sectioned.replace(r#"(export "vc_alloc")"#, ""), "must export `vc_alloc` with the type (param i32) (result i32)"),
+        (
+            "vc_run of another type",
+            tpl::sectioned(SECTION, "(i32.const 0)", TRAPPING_START, 1).replace("(param $pl i32) (result i64)", "(param $pl i32) (result i32)"),
+            "must export `vc_run` with the type (param i32 i32 i32 i32) (result i64)",
+        ),
+        ("five tables", tables(&"(table 0 funcref) ".repeat(5)), "exceeded its table budget (the module defines 5 tables"),
+        ("a table too large", tables("(table 1 funcref) (table 100001 200000 externref)"), "the largest with 100001 elements"),
+    ]);
+    // At the limits, it loads and runs.
+    let at_limits = tpl::sectioned(SECTION, tpl::ECHO, "(table 100000 funcref) (table 0 funcref) (table 0 externref) (table 2 3 funcref)", 1);
+    let p = Plugin::load(&build(&at_limits), Limits::default()).unwrap();
+    assert_eq!(p.run(INPUT.as_bytes(), b"{}").unwrap(), INPUT.as_bytes());
 }
 
 /// Progress is clamped and passed on to the caller's sink as a share; the run's last report is kept.

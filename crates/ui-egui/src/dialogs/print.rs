@@ -19,7 +19,7 @@
 use std::sync::{Arc, LazyLock, mpsc};
 
 use craft::behavior::{ColumnWidth, EditEvent, EditEvents, IconId, Mixed};
-use craft::print::ui::{HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
+use craft::print::ui::{Destination, HostedPrint, PrintAnswer, PrintFinish, PrintLayout, PrintMode, PrintSection, PrintSheet, Printer, State};
 use craft::ui::buttons::ToggleButton;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
@@ -183,8 +183,9 @@ fn start(
     let ctx = app.ui_ctx.clone().ok_or("no window to show the dialog in")?;
     let (printers, service) = destinations(app);
     let mut state = State::default();
-    state.settings.printer =
-        printers.iter().find(|p| p.default).or(printers.first().filter(|_| service)).map_or_else(|| PDF_FILE.to_string(), |p| p.name.clone());
+    state.settings.destination = Destination::Printer(
+        printers.iter().find(|p| p.default).or(printers.first().filter(|_| service)).map_or_else(|| PDF_FILE.to_string(), |p| p.name.clone()),
+    );
     state.printers = printers;
     let header = if service && cfg!(windows) {
         vec![
@@ -466,8 +467,10 @@ fn accept(app: &mut VectorcraftApp, open: &Open, answer: &PrintAnswer, name: &st
     app.run("print.setup", json!({ "settings": settings }))?;
     match answer.finish {
         PrintFinish::Print => {
-            let to_file = answer.settings.printer == PDF_FILE;
-            let printer = if to_file { "" } else { answer.settings.printer.as_str() };
+            let (printer, to_file) = match &answer.settings.destination {
+                Destination::Printer(name) if name != PDF_FILE => (name.as_str(), false),
+                _ => ("", true),
+            };
             let direct_pdf = answer.fields.bool("directPdf").unwrap_or(false);
             crate::print::run(app, &json!({ "settings": settings, "printer": printer, "toFile": to_file, "directPdf": direct_pdf })).map(|_| ())
         }

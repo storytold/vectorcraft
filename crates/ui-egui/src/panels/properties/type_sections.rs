@@ -1,10 +1,9 @@
 //! The Properties panel's Character and Paragraph sections for the selected text.
 
 use craft::text::ui::character::CharacterRows;
-use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::contract::{LabelScheme, Show as _, ShowContainer as _};
 use craft::ui::display::{Shade, Text};
-use craft::ui::layout_components::Row;
-use craft::ui::sections::Section;
+use craft::ui::layout_components::{Row, Stack};
 use egui::Ui;
 use vectorcraft_doc::NodeKind;
 
@@ -23,8 +22,11 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     if character::text_style(app).is_none() {
         return;
     }
-    Section::fixed(tl!("Character")).show(ui, |ui, _| character::controls(app, ui, CharacterRows::PROPERTIES));
-    Section::fixed(tl!("Paragraph")).show(ui, |ui, _| {
+    // The Character panel's controls as that panel lays them out: the font pickers and the metrics fill the row.
+    super::section(tl!("Character")).show(ui, |ui, _| {
+        Stack::new().fill_width().labels(LabelScheme::Inspector).show(ui, |ui, _| character::controls(app, ui, CharacterRows::PROPERTIES));
+    });
+    super::section(tl!("Paragraph")).show(ui, |ui, _| {
         // As in the Paragraph panel: the seven alignments and Hyphenate (#775), and area type's vertical alignment
         // (#3759); the rest is there.
         Row::new().show(ui, |ui, _| {

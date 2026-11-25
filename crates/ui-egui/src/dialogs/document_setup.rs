@@ -78,7 +78,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     let tabs = tabs(mode, setup, presets, display);
     let dialog = HostedPropertiesDialog::new(KIND, dialog_fields(flatten(map)), move |values| {
-        PropertiesDialog::new(tl!("Document Setup"), tabs.clone(), values)
+        PropertiesDialog::new(KIND, tl!("Document Setup"), tabs.clone(), values)
     });
     super::host::open_held(app, dialog, |app, fields| confirm(app, fields).map(|_| ())).ok_or("no window to show the dialog in")?;
     Ok(Value::Null)

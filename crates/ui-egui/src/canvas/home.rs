@@ -44,7 +44,7 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         .max_recent(6)
         .templates(&templates)
         .links(&links)
-        .section(tl!("Learn"), &mut learn)
+        .app_section(tl!("Learn"), &mut learn)
         .show(&mut child);
     app.ui.home_view = view;
     app.ui.home_sort = sort;

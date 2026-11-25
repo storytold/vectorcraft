@@ -10,7 +10,7 @@
 use craft::behavior::{IconId, Mixed};
 use craft::keymap::CommandRef;
 use craft::text::ui::character::{DirectionRow, ParagraphChange, ParagraphControls, ParagraphDirection, ParagraphValues, TextAlign};
-use craft::ui::buttons::{IconButton, Link, PopupMark, ToggleButton};
+use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, MemoProps, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::form::Field;
@@ -440,7 +440,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     }
     // PLAN: the members' `Row::fit_rank` (ch.K30: toggles out before the link) belongs to chrome-w16's row; `horizontal` stands in until it lands.
     ui.horizontal(|ui| {
-        let link = Link::new(tl!("Paragraph:")).tooltip(tl!("Paragraph options")).show(ui);
+        let link = crate::panels::option_link(tl!("Paragraph:")).tooltip(tl!("Paragraph options")).show(ui);
         Popover::new(tl!("Paragraph"), Bind::kept())
             .overlay(|overlay| overlay.opened_by(&link.response, Trigger::Click))
             .show(ui, |ui, _| show(app, ui));
