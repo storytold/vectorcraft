@@ -10617,6 +10617,16 @@ breakText	Glyphs	Glyphes
 @msg	the paths are too many or too tangled to find where they cross	les tracés sont trop nombreux ou trop enchevêtrés pour trouver où ils se croisent
 @msg	the rectangle or line reaches too many paths to check	le rectangle ou la ligne atteint trop de tracés pour être vérifié
 @msg	{name} must be a number	{name} doit être un nombre
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` doit être compris entre 0,01 et 1000 pt
+@msg	select the banner, or mark every artboard	sélectionnez la banderole ou marquez tous les plans de travail
+@msg	the banner has no width or height	la banderole n’a ni largeur ni hauteur
+@msg	the grommet inset is too large for the banner	la distance des œillets au bord est trop grande pour la banderole
+@msg	the hem is too deep for the banner	l’ourlet est trop profond pour la banderole
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	l’espacement produit plus de {MAX_GROMMETS} œillets
+@msg	there is no banner to mark	il n’y a aucune banderole à marquer
+@msg	turn on at least one side	activez au moins un côté
+@msg	with no hem and no grommets there is nothing to mark	sans ourlet ni œillets, il n’y a rien à marquer
+@msg	{saving} failed: {e}	{saving} : échec : {e}
 	Banner Hems and Grommets…	Ourlets et œillets de banderole…
 	Banner Hems and Grommets	Ourlets et œillets de banderole
 	Hem	Ourlet

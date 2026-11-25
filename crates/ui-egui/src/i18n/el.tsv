@@ -8808,6 +8808,18 @@ breakText	Glyphs	Γλύφοι
 	Margin	Περιθώριο
 	Box	Πλαίσιο
 	Swatch	Δείγμα χρώματος
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	το `spacing` πρέπει να είναι μεγαλύτερο από 0 και το πολύ {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	το `{key}` πρέπει να είναι από 0 έως {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	το `{key}` πρέπει να είναι από 0,01 έως 1000 pt
+@msg	select the banner, or mark every artboard	επιλέξτε το πανό ή σημειώστε όλους τους πίνακες σχεδίασης
+@msg	the banner has no width or height	το πανό δεν έχει πλάτος ή ύψος
+@msg	the grommet inset is too large for the banner	η απόσταση των τρουκς από την άκρη είναι πολύ μεγάλη για το πανό
+@msg	the hem is too deep for the banner	το στρίφωμα είναι πολύ βαθύ για το πανό
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	το διάστημα δημιουργεί περισσότερα από {MAX_GROMMETS} τρουκς
+@msg	there is no banner to mark	δεν υπάρχει πανό για σήμανση
+@msg	turn on at least one side	ενεργοποιήστε τουλάχιστον μία πλευρά
+@msg	with no hem and no grommets there is nothing to mark	χωρίς στρίφωμα και χωρίς τρουκς δεν υπάρχει τίποτα για σήμανση
+@msg	{saving} failed: {e}	{saving}: απέτυχε: {e}
 	Banner Hems and Grommets…	Στριφώματα και τρουκς πανό…
 	Banner Hems and Grommets	Στριφώματα και τρουκς πανό
 	Hem	Στρίφωμα

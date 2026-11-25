@@ -8911,6 +8911,16 @@ breakText	Glyphs	Glifos
 	Margin	Margen
 	Box	Caja
 	Swatch	Muestra
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` debe estar entre 0,01 y 1000 pt
+@msg	select the banner, or mark every artboard	seleccione la pancarta o marque todas las mesas de trabajo
+@msg	the banner has no width or height	la pancarta no tiene anchura ni altura
+@msg	the grommet inset is too large for the banner	la distancia de los ojales al borde es demasiado grande para la pancarta
+@msg	the hem is too deep for the banner	el dobladillo es demasiado profundo para la pancarta
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	el espaciado genera más de {MAX_GROMMETS} ojales
+@msg	there is no banner to mark	no hay ninguna pancarta que marcar
+@msg	turn on at least one side	active al menos un lado
+@msg	with no hem and no grommets there is nothing to mark	sin dobladillo ni ojales no hay nada que marcar
+@msg	{saving} failed: {e}	{saving} falló: {e}
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' y 'arguments' no se pueden usar en funciones en modo estricto
 @msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Se llamó a Boolean.prototype.{name} con un valor que no es un Boolean
 @msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	Las imágenes CMYK cuyas muestras no se pudieron leer en CMYK se importaron en RGB

@@ -8836,6 +8836,18 @@ breakText	Glyphs	Glifs
 	Margin	Marge
 	Box	Caixa
 	Swatch	Mostra
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` ha de ser més gran que 0 i com a màxim {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` ha d’estar entre 0 i {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` ha d’estar entre 0,01 i 1000 pt
+@msg	select the banner, or mark every artboard	seleccioneu la pancarta o marqueu tots els taulers
+@msg	the banner has no width or height	la pancarta no té amplada ni alçada
+@msg	the grommet inset is too large for the banner	la distància dels ullets a la vora és massa gran per a la pancarta
+@msg	the hem is too deep for the banner	la vora és massa profunda per a la pancarta
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	l’espaiat genera més de {MAX_GROMMETS} ullets
+@msg	there is no banner to mark	no hi ha cap pancarta per marcar
+@msg	turn on at least one side	activeu almenys un costat
+@msg	with no hem and no grommets there is nothing to mark	sense vora ni ullets no hi ha res per marcar
+@msg	{saving} failed: {e}	{saving} ha fallat: {e}
 	Banner Hems and Grommets…	Vores i ullets de pancarta…
 	Banner Hems and Grommets	Vores i ullets de pancarta
 	Hem	Vora

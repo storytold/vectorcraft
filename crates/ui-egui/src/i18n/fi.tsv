@@ -8889,6 +8889,18 @@ breakText	Glyphs	Merkit
 	Margin	Marginaali
 	Box	Kehys
 	Swatch	Värimalli
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing`-arvon on oltava yli 0 ja enintään {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}`-arvon on oltava väliltä 0–{MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}`-arvon on oltava väliltä 0,01–1000 pt
+@msg	select the banner, or mark every artboard	valitse banneri tai merkitse kaikki piirtoalustat
+@msg	the banner has no width or height	bannerilla ei ole leveyttä eikä korkeutta
+@msg	the grommet inset is too large for the banner	purjerenkaiden etäisyys reunasta on liian suuri bannerille
+@msg	the hem is too deep for the banner	päärme on liian syvä bannerille
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	välistyksellä tulisi yli {MAX_GROMMETS} purjerengasta
+@msg	there is no banner to mark	merkittävää banneria ei ole
+@msg	turn on at least one side	ota käyttöön vähintään yksi sivu
+@msg	with no hem and no grommets there is nothing to mark	ilman päärmettä ja purjerenkaita ei ole mitään merkittävää
+@msg	{saving} failed: {e}	{saving} epäonnistui: {e}
 	Banner Hems and Grommets…	Bannerin päärmeet ja purjerenkaat…
 	Banner Hems and Grommets	Bannerin päärmeet ja purjerenkaat
 	Hem	Päärme

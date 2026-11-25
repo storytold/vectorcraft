@@ -8508,6 +8508,18 @@ breakText	Glyphs	Glyph
 	Margin	Lề
 	Box	Khung
 	Swatch	Mẫu màu
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` phải lớn hơn 0 và tối đa {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` phải từ 0 đến {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` phải từ 0,01 đến 1000 pt
+@msg	select the banner, or mark every artboard	hãy chọn băng rôn, hoặc đánh dấu mọi bảng vẽ
+@msg	the banner has no width or height	băng rôn không có chiều rộng hoặc chiều cao
+@msg	the grommet inset is too large for the banner	khoảng cách từ mép đến khoen quá lớn so với băng rôn
+@msg	the hem is too deep for the banner	viền gấp quá sâu so với băng rôn
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	khoảng cách này tạo ra hơn {MAX_GROMMETS} khoen
+@msg	there is no banner to mark	không có băng rôn nào để đánh dấu
+@msg	turn on at least one side	hãy bật ít nhất một cạnh
+@msg	with no hem and no grommets there is nothing to mark	không có viền gấp và khoen thì không có gì để đánh dấu
+@msg	{saving} failed: {e}	{saving} thất bại: {e}
 	Banner Hems and Grommets…	Viền gấp và khoen băng rôn…
 	Banner Hems and Grommets	Viền gấp và khoen băng rôn
 	Hem	Viền gấp

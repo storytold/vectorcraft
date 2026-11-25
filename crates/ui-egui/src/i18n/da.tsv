@@ -10841,6 +10841,7 @@ breakText	Glyphs	Glyffer
 	Box	Ramme
 	Swatch	Farveprøve
 	Direction	Retning
+@msg	{saving} failed: {e}	{saving} mislykkedes: {e}
 	Banner Hems and Grommets…	Bannersømme og maljer…
 	Banner Hems and Grommets	Bannersømme og maljer
 	Hem	Søm

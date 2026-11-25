@@ -10235,6 +10235,18 @@ theme	Appearance	अपीयरेंस
 	Margin	मार्जिन
 	Box	बॉक्स
 	Swatch	स्वॉच
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` 0 से अधिक और अधिकतम {MAX_DISTANCE} pt होना चाहिए
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` 0 से {MAX_DISTANCE} pt तक होना चाहिए
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` 0.01 से 1000 pt तक होना चाहिए
+@msg	select the banner, or mark every artboard	बैनर चुनें, या हर आर्टबोर्ड को मार्क करें
+@msg	the banner has no width or height	बैनर की कोई चौड़ाई या ऊँचाई नहीं है
+@msg	the grommet inset is too large for the banner	बैनर के लिए किनारे से आईलेट की दूरी बहुत अधिक है
+@msg	the hem is too deep for the banner	बैनर के लिए हेम बहुत गहरा है
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	इस स्पेसिंग से {MAX_GROMMETS} से अधिक आईलेट बनते हैं
+@msg	there is no banner to mark	मार्क करने के लिए कोई बैनर नहीं है
+@msg	turn on at least one side	कम से कम एक साइड चालू करें
+@msg	with no hem and no grommets there is nothing to mark	बिना हेम और बिना आईलेट के मार्क करने के लिए कुछ नहीं है
+@msg	{saving} failed: {e}	{saving} विफल: {e}
 	Banner Hems and Grommets…	बैनर हेम और आईलेट…
 	Banner Hems and Grommets	बैनर हेम और आईलेट
 	Hem	हेम
