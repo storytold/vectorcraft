@@ -41,6 +41,8 @@ use crate::{DocState, Document, NodeId, NodeKind, Session};
 mod colors;
 mod paths;
 
+pub(super) use colors::of_color as color_data;
+
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
@@ -689,6 +691,13 @@ fn app_coords(h: &Host, _: &[Data]) -> Answer {
 fn app_set_coords(h: &Host, a: &[Data]) -> Answer {
     h.dom.coords.set(coords_of(arg(a, 1))?);
     Ok(Data::Undefined)
+}
+
+/// `app.showColorPicker(color)`: the Color Picker on `color`, which must be an `RGBColor`,
+/// `CMYKColor`, `GrayColor` or `LabColor` ([`super::dialogs::show_color_picker`]).
+fn app_show_color_picker(h: &Host, a: &[Data]) -> Answer {
+    let color = colors::solid(arg(a, 1), "showColorPicker's color")?;
+    super::dialogs::show_color_picker(h, color)
 }
 
 /// A path as `getIsFileOpen` compares it: `\` and `/` alike, and on Windows paths (a drive letter
@@ -1883,6 +1892,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", get(l, app_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("showColorPicker", method(l, app_show_color_picker)),
     ]);
     application.push(later(l, "Application", "beep"));
     let preset = {

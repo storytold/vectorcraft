@@ -1,9 +1,13 @@
 //! A running script, advanced one slice per frame: `script.run` starts it and [`poll`] takes it to
 //! its end, while the app goes on drawing the documents as they were before the run. The status bar
 //! shows it with a Stop button; a run that has added a great deal, or that opened a dialog with
-//! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
+//! `alert`, `confirm`, `prompt`, `app.showColorPicker` or a `File` or `Folder` file dialog, waits
+//! for the person's answer.
+
+use vectorcraft_engine::script::DialogKind;
 
 use crate::VectorcraftApp;
+use crate::dialogs::color_picker;
 use crate::dialogs::script_run::{self, GrowthQuestion, ScriptFiles, ScriptNotice};
 
 /// Advances the running script by one slice, or asks what its growth needs asked.
@@ -47,13 +51,22 @@ fn ask(app: &mut VectorcraftApp) -> bool {
     }
     script_run::forget::<ScriptFiles>(app);
     if let Some(dialog) = app.session.script_dialog() {
-        if !script_run::busy(app) {
+        if dialog.kind == DialogKind::ColorPicker {
+            // A picker that closed this frame answers the run in its own pump.
+            if color_picker::script_picker(app).is_none()
+                && !script_run::busy(app)
+                && let Some(color) = dialog.color
+            {
+                color_picker::open_for_script(app, color);
+            }
+        } else if !script_run::busy(app) {
             script_run::open_notice(app, &dialog);
         }
         return true;
     }
     // A run asked to stop no longer waits at its dialog.
     script_run::forget::<ScriptNotice>(app);
+    script_run::forget_color_picker(app);
     if app.session.script_waiting() {
         if !script_run::busy(app) {
             script_run::open_growth(app);

@@ -177,6 +177,7 @@ fn a_framed_run_waits_at_each_dialog_and_takes_the_persons_answer() {
         error_icon: false,
         no_as_default: true,
         preset: String::new(),
+        color: None,
     };
     assert_eq!(s.script_dialog(), Some(want));
     assert!(!s.script_answer(DialogAnswer::Ok), "an answer for another kind of dialog is refused");
@@ -318,4 +319,75 @@ fn a_dialog_in_a_callback_throws_in_the_app() {
     let r = pump(&mut s).unwrap().unwrap();
     assert!(r["log"][0].as_str().unwrap().contains("callback"), "{r}");
     assert_eq!(r["dialogCount"], 0);
+}
+
+/// `showColorPicker` with an RGB red, the answer, and the run's log line for the color it returns.
+const PICK_RED: &str = "var c = new RGBColor(); c.red = 255; var p = app.showColorPicker(c); vc.log([p.typename, p.red, p.green, p.blue].join());";
+
+#[test]
+fn a_run_with_nobody_to_ask_takes_the_picked_color_from_answers() {
+    let mut s = one_doc();
+    let source = format!("{PICK_RED} var g = new GrayColor(); g.gray = 40; var q = app.showColorPicker(g); vc.log([q.typename, q.gray].join());");
+    let r = headless(&mut s, &source, answers(&[json!({"kind": "colorPicker", "value": "#00FF00"}), json!({"kind": "colorPicker", "value": null})]))
+        .unwrap();
+    assert_eq!(r["log"], json!(["RGBColor,0,255,0", "GrayColor,40"]), "OK gives the picked color, Cancel the color given: {r}");
+    let dialogs = r["dialogs"].as_array().unwrap();
+    assert_eq!(dialogs.len(), 2);
+    assert!(dialogs.iter().all(|d| d["kind"] == "colorPicker" && d["color"].is_object() && d.get("message").is_none()), "{r}");
+    assert_eq!(dialogs[1]["answer"], Value::Null, "Cancel is listed as null");
+    let cmyk = headless(
+        &mut s,
+        "var c = new CMYKColor(); c.cyan = 20; vc.log(app.showColorPicker(c).typename);",
+        answers(&[json!({"kind": "colorPicker", "value": {"c": 0, "m": 100, "y": 100, "k": 0}})]),
+    )
+    .unwrap();
+    assert_eq!(cmyk["log"], json!(["CMYKColor"]), "the picked color keeps its own model: {cmyk}");
+}
+
+#[test]
+fn the_color_picker_ends_the_run_when_no_answer_is_left() {
+    let mut s = one_doc();
+    let before = art(&s);
+    let edit = "vc.run('shape.rectangle', {x: 20, y: 0, width: 5, height: 5});";
+    for (given, says) in [(json!([]), "no answer left"), (answers(&[json!({"kind": "prompt", "value": "x"})]), "is for prompt, not colorPicker")] {
+        let source = format!("{edit} try {{ {PICK_RED} }} catch (e) {{ vc.log('caught'); }}");
+        let e = headless(&mut s, &source, given).unwrap_err().to_string();
+        assert!(e.contains("showColorPicker") && e.contains(says), "{e}");
+        assert_eq!(art(&s), before, "the run's edit goes back");
+        let report = s.script_report().unwrap();
+        assert_eq!(report["log"], json!([]), "a missing answer cannot be caught");
+        assert_eq!(report["dialogs"][0]["answer"], "missing", "{report}");
+    }
+    let a = headless(&mut s, "alert('x');", answers(&[json!({"kind": "colorPicker", "value": null})])).unwrap_err().to_string();
+    assert!(a.contains("is for colorPicker, not alert"), "{a}");
+}
+
+#[test]
+fn the_color_picker_refuses_what_is_not_a_solid_color() {
+    let mut s = one_doc();
+    let source = "var out = []; [undefined, 'red', new NoColor(), {typename: 'SpotColor', tint: 100}].forEach(function (c) {\
+        try { app.showColorPicker(c); out.push('opened'); } catch (e) { out.push(e.name); } });\
+        try { var big = new RGBColor(); big.red = 300; app.showColorPicker(big); } catch (e) { out.push(e.name); } vc.log(out.join());";
+    let r = headless(&mut s, source, json!([])).unwrap();
+    assert_eq!(r["log"], json!(["TypeError,TypeError,TypeError,TypeError,RangeError"]), "{r}");
+    assert_eq!(r["dialogCount"], 0, "no picker opened");
+    for bad in [json!("not a color"), json!([255, 0, 0]), json!({"model": "lab", "l": 120, "a": 0, "b": 0}), json!(true)] {
+        let e = headless(&mut s, PICK_RED, answers(&[json!({"kind": "colorPicker", "value": bad})])).unwrap_err().to_string();
+        assert!(e.contains("color picker's answer"), "{bad}: {e}");
+    }
+}
+
+#[test]
+fn a_framed_run_waits_at_the_color_picker() {
+    let mut s = one_doc();
+    framed(&mut s, &format!("{PICK_RED} var q = app.showColorPicker(p); vc.log(q.green);"));
+    let d = s.script_dialog().unwrap();
+    assert_eq!((d.kind, d.color), (DialogKind::ColorPicker, Some(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0))));
+    assert!(!s.script_answer(DialogAnswer::Ok), "an answer for another kind of dialog is refused");
+    assert!(s.script_answer(DialogAnswer::ColorPicker(Some(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)))));
+    assert!(pump(&mut s).is_none());
+    assert_eq!(s.script_dialog().unwrap().color, Some(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)), "it opens on the color it is given");
+    assert!(s.script_answer(DialogAnswer::ColorPicker(None)));
+    let r = pump(&mut s).unwrap().unwrap();
+    assert_eq!(r["log"], json!(["RGBColor,0,0,255", 0]), "{r}");
 }

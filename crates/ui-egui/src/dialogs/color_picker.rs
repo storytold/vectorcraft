@@ -27,6 +27,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::ColorMode;
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_engine::cmd::swatchlib;
+use vectorcraft_engine::script::DialogAnswer;
 
 use super::preview::LivePreview;
 use crate::panels::color::{WorkingRgb, color_of_values, gamut, model_values};
@@ -45,6 +46,8 @@ pub(crate) enum Target {
     Artboard(usize),
     /// A colour row `key` of the open dialog `parent`.
     Answer { parent: DialogId, key: String },
+    /// The answer to a running script's `app.showColorPicker`, which opened it on this colour.
+    Script(Color),
 }
 
 /// One open Color Picker: what the dialog itself does not know.
@@ -152,28 +155,12 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     let dialogs = app.dialogs().ok_or("no window")?;
     let start = srgba(&color);
-    let mut dialog = ColorPickerDialog::new(
-        match (artboard, stroke) {
-            (Some(_), _) => "artboard",
-            (None, true) => "stroke",
-            (None, false) => "fill",
-        },
-        tl!("Color Picker"),
-        start,
-    )
-    .eyedropper(true)
-    .add_to_swatches(false)
-    .gamut(gamut(app))
-    .working_rgb(WorkingRgb)
-    .swatch_view(swatch_view(app));
-    if app.session.active().is_some_and(|s| s.doc.color_mode == ColorMode::Cmyk)
-        && let Some(converter) = working_cmyk()
-    {
-        dialog = dialog.cmyk(&converter);
-    }
-    if matches!(color, Color::Cmyk { .. } | Color::Lab { .. }) {
-        dialog = dialog.kept(model_values(&color));
-    }
+    let key = match (artboard, stroke) {
+        (Some(_), _) => "artboard",
+        (None, true) => "stroke",
+        (None, false) => "fill",
+    };
+    let mut dialog = picker(app, key, &color);
     // PLAN: assumed the dialog's own `instance` keeps artboards apart; the host replaces a picker only for the same target.
     if let Some((i, _)) = artboard {
         dialog = dialog.instance(i);
@@ -194,6 +181,58 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let keep = artboard.is_some() && p.get("color").is_none();
     app.color_dialogs.pickers.push(Open { id, target, start, keep, preview: LivePreview::default() });
     Ok(Value::Null)
+}
+
+/// The Color Picker with `key` on `color`, with the eyedropper, the gamut warning, the document's
+/// swatches and libraries, and in a CMYK document the working CMYK inks.
+fn picker(app: &VectorcraftApp, key: &str, color: &Color) -> ColorPickerDialog {
+    let mut dialog = ColorPickerDialog::new(key, tl!("Color Picker"), srgba(color))
+        .eyedropper(true)
+        .add_to_swatches(false)
+        .gamut(gamut(app))
+        .working_rgb(WorkingRgb)
+        .swatch_view(swatch_view(app));
+    if app.session.active().is_some_and(|s| s.doc.color_mode == ColorMode::Cmyk)
+        && let Some(converter) = working_cmyk()
+    {
+        dialog = dialog.cmyk(&converter);
+    }
+    if matches!(color, Color::Cmyk { .. } | Color::Lab { .. }) {
+        dialog = dialog.kept(model_values(color));
+    }
+    dialog
+}
+
+/// Opens the Color Picker a running script's `app.showColorPicker` waits at, on `color`. It
+/// previews nothing; its OK and Cancel answer the run ([`finish`]).
+pub(crate) fn open_for_script(app: &mut VectorcraftApp, color: Color) {
+    let Some(dialogs) = app.dialogs() else { return };
+    // The given colour's own values, so that OK can tell an untouched pick from another model's.
+    let dialog = picker(app, SCRIPT_KEY, &color).kept(model_values(&color));
+    let id = dialogs.with(|h| h.open(dialog));
+    app.color_dialogs.pickers.retain(|o| o.id != id);
+    app.color_dialogs.pickers.push(Open { id, target: Target::Script(color), start: srgba(&color), keep: false, preview: LivePreview::default() });
+}
+
+/// The key of the Color Picker a script opens.
+pub(crate) const SCRIPT_KEY: &str = "script";
+
+/// The id of the Color Picker a running script waits at, while it is open or its answer is not
+/// yet given.
+pub(crate) fn script_picker(app: &VectorcraftApp) -> Option<DialogId> {
+    app.color_dialogs.pickers.iter().find(|o| matches!(o.target, Target::Script(_))).map(|o| o.id)
+}
+
+/// Closes the script's Color Picker once the run no longer waits at it, and drops its answer.
+pub(crate) fn forget_script(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let Some(id) = script_picker(app) else { return };
+    app.color_dialogs.pickers.retain(|o| o.id != id);
+    if let Some(dialogs) = app.dialogs() {
+        dialogs.with(|h| {
+            h.cancel_by_id(ctx, id);
+            let _ = h.take_by_id::<ColorPickerDialog>(id);
+        });
+    }
 }
 
 /// Once per frame (after the shell pass): opens a picker for each dialog's colour request, previews
@@ -259,6 +298,15 @@ fn finish(
                 dialogs.with(|h| h.answer_color(*parent, key, r.picked.color));
             }
         }
+        // OK on the colour it opened with, in the model it opened with, gives that colour back.
+        (Some(DialogResult::Ok(r)), Target::Script(given)) => {
+            let untouched = r.picked.color == open.start && r.picked.model == Some(model_values(given));
+            let picked = if untouched { *given } else { in_document_model(app, color_of(&r.picked)) };
+            app.session.script_answer(DialogAnswer::ColorPicker(Some(picked)));
+        }
+        (_, Target::Script(_)) => {
+            app.session.script_answer(DialogAnswer::ColorPicker(None));
+        }
         (Some(DialogResult::Ok(r)), _) => {
             if let Err(e) = commit(app, open, preview, &r.picked) {
                 app.status(e);
@@ -273,7 +321,7 @@ fn paint_command(target: &Target, c: Color) -> (&'static str, Value) {
     match target {
         Target::Artboard(i) => ("artboard.setProps", json!({ "index": i, "color": color_json(&c) })),
         Target::Stroke => ("paint.setStroke", json!({ "color": color_json(&c) })),
-        Target::Fill | Target::Answer { .. } => ("paint.setFill", json!({ "color": color_json(&c) })),
+        Target::Fill | Target::Answer { .. } | Target::Script(_) => ("paint.setFill", json!({ "color": color_json(&c) })),
     }
 }
 
@@ -291,8 +339,9 @@ fn in_document_model(app: &VectorcraftApp, c: Color) -> Color {
 /// preview. Nothing previews until the colour first changes, nor without a selection (the colour
 /// then only becomes the default paint, on OK). An artboard shows it with or without a selection.
 fn preview(app: &mut VectorcraftApp, open: &mut Open, picked: &PickedColor) {
-    // A picker over a command dialog only fills a row; the dialog previews it.
-    if matches!(open.target, Target::Answer { .. }) {
+    // A picker over a command dialog only fills a row; the dialog previews it. A script's picker
+    // only answers the script.
+    if matches!(open.target, Target::Answer { .. } | Target::Script(_)) {
         return;
     }
     let (cmd, params) = paint_command(&open.target, in_document_model(app, color_of(picked)));

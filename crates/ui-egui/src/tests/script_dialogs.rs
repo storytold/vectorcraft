@@ -1,12 +1,14 @@
 //! A script's `alert`, `confirm` and `prompt` in the app: the dialog the run waits at, its buttons,
 //! Enter and Escape, Stop, another dialog in the way, quitting while it waits, and the same answers
-//! given by a run with nobody to ask. The helpers over the dialog host are shared with the other
-//! script tests.
+//! given by a run with nobody to ask; and the Color Picker of `app.showColorPicker`. The helpers
+//! over the dialog host are shared with the other script tests.
 
+use craft::color_ui::ui::{ColorPickerDialog, PickedColor};
 use craft::ui::dialog::{DialogId, StackDialog, StandardPrompt};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
+use crate::dialogs::color_picker;
 use crate::dialogs::script_run::{self, CLOSE_KIND, CloseQuestion, NOTICE_KIND, ScriptNotice};
 use crate::{VectorcraftApp, menus, script_runs};
 
@@ -314,4 +316,105 @@ fn the_app_and_a_run_with_nobody_to_ask_give_the_same_results() {
     assert_eq!(framed["log"], headless["log"]);
     assert_eq!(framed["dialogs"], headless["dialogs"]);
     assert_eq!(framed["log"], json!([true, "p", "done"]));
+}
+
+/// Is the Color Picker of the script's `app.showColorPicker` open?
+fn picker_open(app: &VectorcraftApp) -> bool {
+    let id = color_picker::script_picker(app);
+    id.is_some_and(|id| script_run::with_host(app, |host, _| host.get_by_id::<ColorPickerDialog>(id).is_some()).unwrap())
+}
+
+/// Polls the run until it ends, or until its Color Picker is open (true).
+fn until_picker(app: &mut VectorcraftApp) -> bool {
+    for _ in 0..10_000 {
+        if !app.session.script_running() {
+            return false;
+        }
+        script_runs::poll(app);
+        if picker_open(app) {
+            return true;
+        }
+    }
+    panic!("the script neither ended nor opened the Color Picker");
+}
+
+/// Answers the script's Color Picker with OK (or Cancel), then runs the frame's picker pump.
+fn answer_picker(app: &mut VectorcraftApp, ok: bool) {
+    let id = color_picker::script_picker(app).unwrap();
+    let ctx = app.ui_ctx.clone().unwrap();
+    let done = script_run::with_host(app, |host, ctx| if ok { host.confirm_by_id(ctx, id) } else { host.cancel_by_id(ctx, id) }).unwrap();
+    assert!(done);
+    color_picker::pump(app, &ctx);
+}
+
+#[test]
+fn the_color_picker_waits_and_answers_the_run() {
+    let mut app = app();
+    let gray = "var g = new GrayColor(); g.gray = 40;";
+    start(
+        &mut app,
+        &format!(
+            "{DRAW} var c = new RGBColor(); c.red = 255; var p = app.showColorPicker(c); vc.log([p.typename, p.red, p.green, p.blue].join()); \
+             {gray} var q = app.showColorPicker(g); vc.log([q.typename, q.gray].join()); var r = app.showColorPicker(g); vc.log([r.typename, r.gray].join());"
+        ),
+    );
+    assert!(until_picker(&mut app));
+    assert!(!is_open::<ScriptNotice>(&app), "the picker opens in place of a notice");
+    set(&app, color_picker::SCRIPT_KEY, "color", json!("#00ff00")).unwrap();
+    let ctx = app.ui_ctx.clone().unwrap();
+    color_picker::pump(&mut app, &ctx);
+    assert_ne!(crate::panels::current_paints(&app).0.color().map(|c| c.to_hex()).as_deref(), Some("#00ff00"), "the selection shows no preview");
+    answer_picker(&mut app, true);
+    assert!(until_picker(&mut app), "the next call opens the picker again");
+    answer_picker(&mut app, true);
+    assert!(until_picker(&mut app));
+    answer_picker(&mut app, false);
+    assert!(!until_picker(&mut app));
+    assert_eq!(
+        log(&app),
+        json!(["RGBColor,0,255,0", "GrayColor,40", "GrayColor,40"]),
+        "OK gives the color picked, untouched its own color, Cancel the color given"
+    );
+    assert_ne!(crate::panels::current_paints(&app).0.color().map(|c| c.to_hex()).as_deref(), Some("#00ff00"), "OK paints nothing");
+    let dialogs = app.session.script_report().unwrap()["dialogs"].clone();
+    assert_eq!(dialogs[2]["answer"], Value::Null, "Cancel is listed as null");
+}
+
+#[test]
+fn the_same_color_set_in_another_model_is_a_new_pick() {
+    let mut app = app();
+    start(&mut app, "var g = new GrayColor(); g.gray = 40; var p = app.showColorPicker(g); vc.log(p.typename);");
+    assert!(until_picker(&mut app));
+    // The gray's own sRGB, set as a plain color, as a screen sample sets one.
+    let open = app.color_dialogs.pickers.iter().find(|o| Some(o.id) == color_picker::script_picker(&app)).map(|o| (o.id, o.start)).unwrap();
+    script_run::with_host(&app, |host, _| host.get_mut_by_id::<ColorPickerDialog>(open.0).map(|d| d.set_color(PickedColor::rgb(open.1)))).unwrap();
+    answer_picker(&mut app, true);
+    assert!(!until_picker(&mut app));
+    assert_eq!(log(&app), json!(["RGBColor"]), "the same sRGB as a plain color is an RGB pick, not the gray the script gave");
+}
+
+#[test]
+fn stopping_or_quitting_the_run_closes_its_color_picker() {
+    let source = format!("{DRAW} var c = new RGBColor(); app.showColorPicker(c); vc.log('after');");
+    let mut app = app();
+    start(&mut app, &source);
+    assert!(until_picker(&mut app));
+    assert_eq!(app.run("script.stop", json!({})).unwrap()["stopped"], true);
+    assert!(!until_picker(&mut app));
+    assert!(!picker_open(&app), "no picker is left for the stopped run");
+    assert!(color_picker::script_picker(&app).is_none());
+    assert_eq!(objects(&app), 0, "the run's edit goes back");
+    assert_eq!(log(&app), json!([]));
+    let mut app = self::app();
+    start(&mut app, &source);
+    assert!(until_picker(&mut app));
+    script_run::ask_to_close(&mut app);
+    assert!(is_open::<CloseQuestion>(&app), "quitting asks over the picker");
+    cancel(&mut app, CLOSE_KIND);
+    assert!(picker_open(&app), "Cancel shows the picker again");
+    script_run::ask_to_close(&mut app);
+    assert!(confirm(&mut app, CLOSE_KIND));
+    assert!(!app.session.script_running());
+    assert!(!picker_open(&app), "no picker is left for the abandoned run");
+    assert_eq!(objects(&app), 0);
 }

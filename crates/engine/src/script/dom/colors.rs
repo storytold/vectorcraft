@@ -66,7 +66,7 @@ fn shown(v: f32, scale: f64) -> f64 {
 }
 
 /// The color object for a solid color.
-fn of_color(c: &Color) -> Data {
+pub(in crate::script) fn of_color(c: &Color) -> Data {
     match *c {
         Color::Rgb { r, g, b } => color_object("RGBColor", &[("red", shown(r, 255.0)), ("green", shown(g, 255.0)), ("blue", shown(b, 255.0))]),
         Color::Cmyk { c, m, y, k } => color_object(
@@ -129,6 +129,18 @@ pub(super) fn assigned(d: &Data, what: &str) -> std::result::Result<Option<Color
         l if LATER.contains(&l) => return Err(HostError::Error(format!("assigning a {l} is not available yet"))),
         _ => return Err(HostError::Type(format!("{what} must be a color object"))),
     }))
+}
+
+/// The solid color a script gave `what`, checked as [`assigned`] checks it: a `NoColor`, a
+/// `GradientColor`, a `SpotColor` or a `PatternColor` throws a `TypeError`.
+pub(super) fn solid(d: &Data, what: &str) -> std::result::Result<Color, HostError> {
+    let not_solid = || HostError::Type(format!("{what} must be an RGBColor, CMYKColor, GrayColor or LabColor"));
+    match assigned(d, what) {
+        Ok(Some(c)) => Ok(c),
+        // A NoColor, or one of the LATER classes, which `assigned` refuses with a plain error.
+        Ok(None) | Err(HostError::Error(_)) => Err(not_solid()),
+        Err(e) => Err(e),
+    }
 }
 
 /// `color` as `paint.setFill` and `paint.setStroke` take it.

@@ -5,12 +5,14 @@
 //! it is left out or `undefined` ([`DEFAULT_TITLE`]), and `errorIcon` and `noAsDflt` as the
 //! boolean `Boolean(value)` gives. `alert` returns `undefined`, `confirm` `true` for Yes and
 //! `false` for No, and `prompt` the text in its field for OK and `null` for Cancel.
+//! `app.showColorPicker(color)` ([`show_color_picker`]) opens the Color Picker on a color and
+//! returns the color picked for OK, or a new object of the color it was given for Cancel.
 //!
 //! In the app the run waits at the call for the person's answer, and spends no fuel while it
-//! waits; every dialog also has Stop, which ends the run and puts everything back. A run with
-//! nobody to ask takes its answers, in order, from `script.run`'s `answers`; a call with no
-//! answer left, or with the next answer for another kind of dialog, ends the run. The report's
-//! `dialogs` lists each dialog and its answer.
+//! waits; every dialog but the Color Picker also has Stop, which ends the run and puts
+//! everything back. A run with nobody to ask takes its answers, in order, from `script.run`'s
+//! `answers`; a call with no answer left, or with the next answer for another kind of dialog,
+//! ends the run. The report's `dialogs` lists each dialog and its answer.
 //!
 //! The values here are VectorCraft's own limits: [`MAX_MESSAGE_BYTES`], [`MAX_TITLE_BYTES`],
 //! [`MAX_PROMPT_BYTES`], [`MAX_ANSWERS`], [`MAX_ANSWERS_BYTES`], [`MAX_RECORDS`] and
@@ -21,6 +23,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use serde_json::{Map, Value, json};
+use vectorcraft_color::Color;
 use vectorcraft_js::{Arg, Data, HostError, HostFunction, Realm, RunError};
 
 use super::{Host, console};
@@ -48,21 +51,33 @@ pub enum DialogKind {
     Alert,
     Confirm,
     Prompt,
+    /// `app.showColorPicker`.
+    ColorPicker,
 }
 
 impl DialogKind {
-    /// The function's name, which is also the `kind` of an answer and of a report's dialog.
+    /// The `kind` of an answer and of a report's dialog, which is also the function's name for
+    /// `alert`, `confirm` and `prompt`.
     pub fn id(self) -> &'static str {
         match self {
             Self::Alert => "alert",
             Self::Confirm => "confirm",
             Self::Prompt => "prompt",
+            Self::ColorPicker => "colorPicker",
+        }
+    }
+
+    /// The function's name, as its errors give it.
+    fn function(self) -> &'static str {
+        match self {
+            Self::ColorPicker => "showColorPicker",
+            k => k.id(),
         }
     }
 }
 
 /// A dialog a script opened, which waits for its answer.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ScriptDialog {
     pub kind: DialogKind,
     pub message: String,
@@ -74,10 +89,12 @@ pub struct ScriptDialog {
     pub no_as_default: bool,
     /// `prompt`: the text its field starts with.
     pub preset: String,
+    /// `showColorPicker`: the color the picker starts with. `None` for the other dialogs.
+    pub color: Option<Color>,
 }
 
 /// The answer to a [`ScriptDialog`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DialogAnswer {
     /// OK, for `alert`.
     Ok,
@@ -85,6 +102,8 @@ pub enum DialogAnswer {
     Confirm(bool),
     /// OK with the field's text, or Cancel (`None`), for `prompt`.
     Prompt(Option<String>),
+    /// OK with the color picked, or Cancel (`None`), for `showColorPicker`.
+    ColorPicker(Option<Color>),
 }
 
 impl DialogAnswer {
@@ -93,26 +112,48 @@ impl DialogAnswer {
             Self::Ok => DialogKind::Alert,
             Self::Confirm(_) => DialogKind::Confirm,
             Self::Prompt(_) => DialogKind::Prompt,
+            Self::ColorPicker(_) => DialogKind::ColorPicker,
         }
     }
 
-    /// What the function returns.
-    fn data(&self) -> Data {
+    /// What the function returns for dialog `d`: for Cancel in the Color Picker, the color it
+    /// started with.
+    fn data(&self, d: &ScriptDialog) -> Data {
         match self {
             Self::Ok => Data::Undefined,
             Self::Confirm(b) => Data::Bool(*b),
             Self::Prompt(Some(t)) => Data::String(t.clone()),
             Self::Prompt(None) => Data::Null,
+            Self::ColorPicker(picked) => picked.or(d.color).as_ref().map_or(Data::Null, super::dom::color_data),
         }
     }
 
-    /// The answer as a report gives it: `"ok"`, a boolean, a string or `null`.
+    /// The answer as a report gives it: `"ok"`, a boolean, a string, a color as the paint commands
+    /// take it, or `null`.
     fn json(&self) -> Value {
         match self {
             Self::Ok => json!("ok"),
             Self::Confirm(b) => json!(b),
             Self::Prompt(t) => json!(t),
+            Self::ColorPicker(c) => c.as_ref().map_or(Value::Null, color_json),
         }
+    }
+}
+
+/// `c` as the paint commands take it.
+fn color_json(c: &Color) -> Value {
+    serde_json::to_value(c).unwrap_or(Value::Null)
+}
+
+/// Are `c`'s components in their ranges: 0 to 1, and for Lab, L from 0 to 100 and a and b from
+/// -128 to 128, as a script's `LabColor` takes them?
+fn in_range(c: &Color) -> bool {
+    let unit = |v: &[f32]| v.iter().all(|x| (0.0..=1.0).contains(x));
+    match *c {
+        Color::Rgb { r, g, b } => unit(&[r, g, b]),
+        Color::Cmyk { c, m, y, k } => unit(&[c, m, y, k]),
+        Color::Gray { k } => unit(&[k]),
+        Color::Lab { l, a, b } => (0.0..=100.0).contains(&l) && [a, b].iter().all(|x| (-128.0..=128.0).contains(x)),
     }
 }
 
@@ -148,7 +189,8 @@ pub fn cut_to(text: &str, max: usize) -> &str {
 }
 
 /// `script.run`'s `answers`: a list of `{kind: "alert", value: "ok"}`, `{kind: "confirm", value:
-/// true | false}` and `{kind: "prompt", value: text | null}`. An empty object, which the parameter
+/// true | false}`, `{kind: "prompt", value: text | null}` and `{kind: "colorPicker", value: color |
+/// null}`, the color in any form the paint commands take. An empty object, which the parameter
 /// took before dialogs existed, is an empty list.
 pub(crate) fn parse_answers(v: Option<&Value>) -> Result<Vec<DialogAnswer>, String> {
     let list = match v {
@@ -180,7 +222,12 @@ fn answer(a: &Value) -> Result<DialogAnswer, &'static str> {
         (Some("prompt"), Value::String(s)) if s.len() <= MAX_PROMPT_BYTES => Ok(DialogAnswer::Prompt(Some(s.clone()))),
         (Some("prompt"), Value::String(_)) => Err("is longer than 16 KiB"),
         (Some("prompt"), _) => Err("is a prompt's answer, whose `value` must be a string or null"),
-        _ => Err("must have `kind` alert, confirm or prompt"),
+        (Some("colorPicker"), Value::Null) => Ok(DialogAnswer::ColorPicker(None)),
+        (Some("colorPicker"), v) => match crate::cmd::color_value(v).filter(in_range) {
+            Some(c) => Ok(DialogAnswer::ColorPicker(Some(c))),
+            None => Err("is a color picker's answer, whose `value` must be a color or null"),
+        },
+        _ => Err("must have `kind` alert, confirm, prompt or colorPicker"),
     }
 }
 
@@ -245,8 +292,9 @@ impl Dialogs {
         let mut waiting = self.waiting.borrow_mut();
         let Some(d) = waiting.as_ref().filter(|d| d.kind == answer.kind() && fits) else { return false };
         self.record(d, answer.json());
+        let data = answer.data(d);
         *waiting = None;
-        if let Err(e) = realm.answer(answer.data()) {
+        if let Err(e) = realm.answer(data) {
             *self.failed.borrow_mut() = Some(e);
         }
         true
@@ -263,12 +311,15 @@ impl Dialogs {
         self.count.set(self.count.get().saturating_add(1));
         let mut r = Map::new();
         r.insert("kind".into(), json!(d.kind.id()));
-        r.insert("message".into(), json!(d.message));
-        r.insert("title".into(), json!(d.title.as_deref().unwrap_or(DEFAULT_TITLE)));
+        if d.kind != DialogKind::ColorPicker {
+            r.insert("message".into(), json!(d.message));
+            r.insert("title".into(), json!(d.title.as_deref().unwrap_or(DEFAULT_TITLE)));
+        }
         match d.kind {
             DialogKind::Alert => r.insert("errorIcon".into(), json!(d.error_icon)),
             DialogKind::Confirm => r.insert("noAsDefault".into(), json!(d.no_as_default)),
             DialogKind::Prompt => r.insert("preset".into(), json!(d.preset)),
+            DialogKind::ColorPicker => r.insert("color".into(), d.color.as_ref().map_or(Value::Null, color_json)),
         };
         r.insert("answer".into(), answer);
         let r = Value::Object(r);
@@ -319,7 +370,8 @@ fn open(host: &Host, kind: DialogKind, args: &[Data]) -> Result<Data, HostError>
     host.charge_call(args.iter().map(super::data_size).sum())?;
     let Some(message) = text(args, 0) else { return Err(HostError::Type(format!("{name}: give a message"))) };
     let (title, error_icon, no_as_default, preset) = match kind {
-        DialogKind::Alert => (text(args, 1), flag(args, 2), false, String::new()),
+        // `showColorPicker` opens through `show_color_picker`, not here.
+        DialogKind::Alert | DialogKind::ColorPicker => (text(args, 1), flag(args, 2), false, String::new()),
         DialogKind::Confirm => (text(args, 2), false, flag(args, 1), String::new()),
         DialogKind::Prompt => {
             let Some(preset) = text(args, 1) else { return Err(HostError::Type(format!("{name}: give the text the field starts with"))) };
@@ -335,7 +387,29 @@ fn open(host: &Host, kind: DialogKind, args: &[Data]) -> Result<Data, HostError>
     if preset.len() > MAX_PROMPT_BYTES {
         return Err(HostError::Range(format!("{name}: the text the field starts with is longer than 16 KiB")));
     }
-    let dialog = ScriptDialog { kind, message, title, error_icon, no_as_default, preset };
+    wait_or_answer(host, ScriptDialog { kind, message, title, error_icon, no_as_default, preset, color: None })
+}
+
+/// `app.showColorPicker(color)`: the Color Picker on `color`. It returns the color picked for OK,
+/// and a new object of `color` for Cancel.
+pub(super) fn show_color_picker(host: &Host, color: Color) -> Result<Data, HostError> {
+    let dialog = ScriptDialog {
+        kind: DialogKind::ColorPicker,
+        message: String::new(),
+        title: None,
+        error_icon: false,
+        no_as_default: false,
+        preset: String::new(),
+        color: Some(color),
+    };
+    wait_or_answer(host, dialog)
+}
+
+/// Opens `dialog`: in the app the run waits at it, and a run with nobody to ask takes the next of
+/// `answers`.
+fn wait_or_answer(host: &Host, dialog: ScriptDialog) -> Result<Data, HostError> {
+    let kind = dialog.kind;
+    let name = kind.function();
     let d = &host.dialogs;
     if d.framed {
         if !d.can_wait.get() {
@@ -350,11 +424,11 @@ fn open(host: &Host, kind: DialogKind, args: &[Data]) -> Result<Data, HostError>
     match next {
         Some(a) if a.kind() == kind => {
             d.record(&dialog, a.json());
-            Ok(a.data())
+            Ok(a.data(&dialog))
         }
         Some(a) => {
             d.record(&dialog, json!("missing"));
-            Err(HostError::Abort(format!("{name}: the next answer in `answers` is for {}, not {name}", a.kind().id())))
+            Err(HostError::Abort(format!("{name}: the next answer in `answers` is for {}, not {}", a.kind().id(), kind.id())))
         }
         None => {
             d.record(&dialog, json!("missing"));

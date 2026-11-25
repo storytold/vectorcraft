@@ -2667,7 +2667,8 @@ app through the global object `vc`, and writes to the Script Console and runs ot
 - `vc.log(value)` adds a value to the report and a line to the Script Console.
 - `app` is the application object the help page https://ai-scripting.docsforadobe.dev/jsobjref/Application/
   describes: `app.documents`, `app.activeDocument` (assigning an open document makes it the active one),
-  `app.selection`, `app.coordinateSystem` and `app.getIsFileOpen(path)`. `app.documents`
+  `app.selection`, `app.coordinateSystem`, `app.getIsFileOpen(path)` and `app.showColorPicker(color)`, described
+  with the dialogs below. `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
@@ -3048,7 +3049,9 @@ app's own errors, syntax errors and limits. The status bar shows a `script` mess
 - `dialogs` lists the run's dialogs in the order they opened, as `{kind, message, title, errorIcon, answer}` for
   `alert`, `{kind, message, title, noAsDefault, answer}` for `confirm` and `{kind, message, title, preset, answer}`
   for `prompt`. `answer` is `"ok"`, `true`, `false`, the prompt's text, `null` for Cancel, `"stop"` for a dialog the
-  run ended at, or `"missing"` for a dialog `answers` had no answer for. `dialogCount` counts every dialog, and
+  run ended at, or `"missing"` for a dialog `answers` had no answer for. `app.showColorPicker` is listed as `{kind:
+  "colorPicker", color, answer}`, with the color it opened on and the color picked, `null` for Cancel or
+  `"missing"`, each color as `paint.setFill` takes it. `dialogCount` counts every dialog, and
   `dialogsTruncated` is true when the list stopped at its limit.
 
 ```json
@@ -3095,6 +3098,17 @@ left, when the next answer is for another kind of dialog, or when the script end
 `script.run` refuses a list that is malformed, longer than 10,000 answers or larger than 1 MiB before the run starts,
 and refuses any answers for a run in the app, where the person answers. An omitted `answers`, an empty list and an
 empty object are the same.
+
+`app.showColorPicker(color)` opens the Color Picker on `color` and returns a color, as the type definitions at
+https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts describe it. `color` must be an `RGBColor`,
+`CMYKColor`, `GrayColor` or `LabColor`; anything else throws a `TypeError`, and a component out of its range throws a
+`RangeError`. The rest of this paragraph gives VectorCraft's own rules. OK returns the color picked; in a CMYK
+document an RGB pick is returned as CMYK. OK with the color unchanged and Cancel return a new object of the color the
+script gave. The picker shows no preview on the selection and has no Stop button: the status bar's Stop and quitting
+end the run as they do at the other dialogs, and close the picker. A run with nobody to ask takes `{kind:
+"colorPicker", value: color}` from `answers`, with the color in any form `paint.setFill` takes, each component in its
+range, or `{kind: "colorPicker", value: null}` for Cancel. In the app, the picker's dialog key is `script`, and
+`ui.dialog.set` and `ui.dialog.confirm` answer it as they answer any Color Picker.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "if (confirm(\"Add a frame?\")) vc.log(prompt(\"Name\", \"Frame\"));", "answers": [{"kind": "confirm", "value": true}, {"kind": "prompt", "value": "Border"}]}'
