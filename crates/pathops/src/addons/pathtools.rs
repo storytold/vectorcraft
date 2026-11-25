@@ -6,13 +6,15 @@
 //! their path ([`slide`]), touching edges merged ([`shared_edge`]), paths divided into dashes
 //! ([`divide_dashes`]), two circles joined by a smooth bridge ([`smooth_bridge`]) or many circles
 //! joined to their neighbors ([`bridge_many`]), the common tangents of two convex outlines
-//! ([`common_tangents`]), the Parametric Shape Tool's shapes ([`shapes`]) and the circles that touch
-//! two or three shapes ([`tangent_circles`]).
+//! ([`common_tangents`]), the Parametric Shape Tool's shapes ([`shapes`]), the circles that touch
+//! two or three shapes ([`tangent_circles`]) and the largest circle inside a shape
+//! ([`inscribed_circle`]).
 
 mod bridge;
 mod crossings;
 mod dashes;
 mod extend;
+mod inscribed;
 pub mod shapes;
 mod shared_edge;
 mod slide;
@@ -33,6 +35,10 @@ pub use bridge::{
 pub use crossings::{MAX_CROSSED_BY_SEGMENTS, MAX_CROSSING_SEGMENTS, Place, Work, crossings, crossings_on, crossings_on_within, insert_at};
 pub use dashes::{DashSpec, Piece, divide_dashes};
 pub use extend::{ExtendMode, extend_length_to, extend_open};
+pub use inscribed::{
+    INSCRIBED_PRECISION, Inscribed, InscribedError, MAX_INSCRIBED_CELLS, MAX_INSCRIBED_EDGES, MAX_INSCRIBED_WORK, inscribed_circle,
+    inscribed_circle_within,
+};
 pub use shared_edge::{
     COINCIDENCE, EndSide, Follow, MAX_COINCIDENCE, MergePlan, MergePreview, Stretch, apply_merge, ends_at, merge_preview, stretches_at,
 };

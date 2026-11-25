@@ -235,6 +235,7 @@ impl Source {
             }
             Value::String(s) => self.quoted(interp, &s.flat()),
             Value::Object(id) => self.object(interp, *id),
+            Value::Symbol(_) => Err(interp.type_error("toSource: a Symbol cannot be written as source")),
         }
     }
 
@@ -280,13 +281,18 @@ impl Source {
         // only, so an array with other properties, an object with another prototype and a property
         // that is not enumerable are refused.
         let enumerable = o.props.iter().all(|(_, p)| p.enumerable());
+        let has_symbols = o.syms.as_ref().is_some_and(|m| m.len() > 0);
         let shape = match &o.class {
             Class::Array { length, .. }
-                if o.proto == Some(array_proto) && enumerable && o.props.iter().all(|(k, _)| array_index(k).is_some_and(|i| i < *length)) =>
+                if o.proto == Some(array_proto)
+                    && enumerable
+                    && !has_symbols
+                    && o.props.iter().all(|(k, _)| array_index(k).is_some_and(|i| i < *length)) =>
             {
                 Some(Err(*length))
             }
             Class::Array { .. } => return Err(interp.type_error(NOT_PLAIN_ARRAY)),
+            Class::Ordinary if has_symbols => return Err(interp.type_error("toSource: an object with a Symbol property cannot be written as source")),
             Class::Ordinary if o.proto == Some(object_proto) && enumerable => {
                 Some(Ok(o.props.iter().map(|(k, p)| (k.clone(), p.clone())).collect::<Vec<_>>()))
             }
@@ -410,12 +416,16 @@ const STACK_FRAMES: usize = 64;
 const STACK_NAME_UNITS: usize = 64;
 
 /// The script's frames, outermost first, one a line: the function's name and the line it is at,
-/// as `name:line`, or as `name@file:line` with the file the realm's locator names.
+/// as `name:line`, or as `name@file:line` with the file the realm's locator names. A first line
+/// `[script]` names the running script when the realm has its name.
 fn stack(interp: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let frames: Vec<(Rc<Code>, usize, bool)> = interp.script_frames().map(|(c, pc, f)| (c.clone(), pc, f)).collect();
     let skip = frames.len().saturating_sub(STACK_FRAMES);
     let locator = interp.locator.clone();
     let mut text = String::new();
+    if let Some(script) = &interp.script_name {
+        text.push_str(&format!("[{script}]\n"));
+    }
     if skip > 0 {
         text.push_str("…\n");
     }
