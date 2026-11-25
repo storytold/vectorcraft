@@ -4,8 +4,8 @@ use super::path_ops::PathOp;
 use super::simplify_slider::StripKind;
 use super::{
     blend_options, dimension, flare_options, graph_data, graph_design, graph_type, indexed_color, live_paint_gaps, object_mosaic, option_form,
-    path_ops, perspective_grid, perspective_presets, saved_names, shapes, simplify_slider, slices, smooth_slider, step_repeat, transform, transform_each,
-    width_point,
+    path_ops, perspective_grid, perspective_presets, saved_names, shapes, simplify_slider, slices, smooth_slider, step_repeat, transform,
+    transform_each, width_point,
 };
 use crate::VectorcraftApp;
 use crate::dialogs::preview::LivePreview;

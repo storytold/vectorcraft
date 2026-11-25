@@ -31,7 +31,7 @@ fn cut_options(app: &VectorcraftApp) -> Vec<(String, Label)> {
         let Some(n) = st.doc.node(*id) else { continue };
         out.push((id.0.to_string(), Label::from(n.display_name())));
         if single {
-            for c in &n.children {
+            for c in n.children().into_iter().flatten() {
                 out.push((c.id.0.to_string(), Label::from(c.display_name())));
             }
         }
@@ -40,7 +40,7 @@ fn cut_options(app: &VectorcraftApp) -> Vec<(String, Label)> {
 }
 
 fn rows(lengths: LengthUnits, cuts: Vec<(String, Label)>) -> Vec<Param> {
-    let len = |key: &str, label: &'static str| Param::number(key, label, 0.0, 1.0, 2).length(lengths.clone());
+    let len = |key: &str, label: &'static str| Param::number(key, label, 0.0, 1.0, 2).length(lengths);
     vec![
         Param::new("rows", tl!("Rows"), ParamKind::int(Some(1), Some(500), 2)).enabled_when("fill", false),
         Param::new("columns", tl!("Columns"), ParamKind::int(Some(1), Some(500), 2)).enabled_when("fill", false),
@@ -96,13 +96,17 @@ fn params(f: &DialogFields) -> Value {
     Value::Object(p)
 }
 
-pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+pub(crate) fn open(app: &mut VectorcraftApp) {
+    let _ = try_open(app);
+}
+
+fn try_open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let lengths = LengthUnits::new(UnitKind::Points, super::rearrange_artboards::length_kind(app.session.general_unit()), 72.0);
     let lengths = crate::fields::bare_points(lengths, app.session.prefs.numbers_without_units_are_points);
     let cuts = cut_options(app);
     let dialog = HostedParamDialog::command(&ctx, CMD, fields(), move |fields| {
-        ParamDialog::command(CMD, tl!("Step and Repeat"), rows(lengths.clone(), cuts.clone())).previews(true).values(Bind::bound(fields))
+        ParamDialog::command(CMD, tl!("Step and Repeat"), rows(lengths, cuts.clone())).previews(true).values(Bind::bound(fields))
     });
     let ok = |app: &mut VectorcraftApp, result: &ParamResult| {
         let mut open = app.object_dialogs.step.take().ok_or("the dialog is closed")?;
@@ -124,9 +128,8 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let Some(mut open) = app.object_dialogs.step.take() else { return };
-    let shown = app.dialogs().and_then(|host| {
-        host.with(|h| h.get_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), params(d.fields()))))
-    });
+    let shown =
+        app.dialogs().and_then(|host| host.with(|h| h.get_by_id::<HostedParamDialog>(open.id).map(|d| (d.is_previewing(), params(d.fields())))));
     if let Some((on, p)) = shown {
         let _ = open.preview.run(app, on, "Step and Repeat", CMD, &p);
     }
